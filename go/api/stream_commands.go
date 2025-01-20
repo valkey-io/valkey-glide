@@ -152,4 +152,8 @@ type StreamCommands interface {
 	XGroupSetId(key string, group string, id string) (string, error)
 
 	XGroupSetIdWithOptions(key string, group string, id string, opts *options.XGroupSetIdOptions) (string, error)
+
+	XGroupCreate(key string, group string, id string) (string, error)
+
+	XGroupCreateWithOptions(key string, group string, id string, opts *options.XGroupCreateOptions) (string, error)
 }

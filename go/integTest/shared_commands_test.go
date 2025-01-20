@@ -1139,7 +1139,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		// Check for empty set.
 		resCursor, resCollection, err := client.HScan(key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, initialCursor, resCursor)
 		assert.Empty(t, resCollection)
 
 		// Negative cursor check.
@@ -1148,7 +1148,7 @@ func (suite *GlideTestSuite) TestHScan() {
 			assert.NotEmpty(t, err)
 		} else {
 			resCursor, resCollection, _ = client.HScan(key1, "-1")
-			assert.Equal(t, initialCursor, resCursor.Value())
+			assert.Equal(t, initialCursor, resCursor)
 			assert.Empty(t, resCollection)
 		}
 
@@ -1157,27 +1157,27 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.Equal(t, int64(len(charMembers)), hsetResult)
 
 		resCursor, resCollection, _ = client.HScan(key1, initialCursor)
-		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, initialCursor, resCursor)
 		// Length includes the score which is twice the map size
 		assert.Equal(t, len(charMap)*2, len(resCollection))
 
-		resultKeys := make([]api.Result[string], 0)
-		resultValues := make([]api.Result[string], 0)
+		resultKeys := make([]string, 0)
+		resultValues := make([]string, 0)
 
 		for i := 0; i < len(resCollection); i += 2 {
 			resultKeys = append(resultKeys, resCollection[i])
 			resultValues = append(resultValues, resCollection[i+1])
 		}
-		keysList, valuesList := convertMapKeysAndValuesToResultList(charMap)
+		keysList, valuesList := convertMapKeysAndValuesToLists(charMap)
 		assert.True(t, isSubset(resultKeys, keysList) && isSubset(keysList, resultKeys))
 		assert.True(t, isSubset(resultValues, valuesList) && isSubset(valuesList, resultValues))
 
 		opts := options.NewHashScanOptionsBuilder().SetMatch("a")
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
-		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, initialCursor, resCursor)
 		assert.Equal(t, len(resCollection), 2)
-		assert.Equal(t, resCollection[0].Value(), "a")
-		assert.Equal(t, resCollection[1].Value(), "0")
+		assert.Equal(t, resCollection[0], "a")
+		assert.Equal(t, resCollection[1], "0")
 
 		// Result contains a subset of the key
 		combinedMap := make(map[string]string)
@@ -1191,12 +1191,12 @@ func (suite *GlideTestSuite) TestHScan() {
 		hsetResult, _ = client.HSet(key1, combinedMap)
 		assert.Equal(t, int64(len(numberMap)), hsetResult)
 		resultCursor := "0"
-		secondResultAllKeys := make([]api.Result[string], 0)
-		secondResultAllValues := make([]api.Result[string], 0)
+		secondResultAllKeys := make([]string, 0)
+		secondResultAllValues := make([]string, 0)
 		isFirstLoop := true
 		for {
 			resCursor, resCollection, _ = client.HScan(key1, resultCursor)
-			resultCursor = resCursor.Value()
+			resultCursor = resCursor
 			for i := 0; i < len(resCollection); i += 2 {
 				secondResultAllKeys = append(secondResultAllKeys, resCollection[i])
 				secondResultAllValues = append(secondResultAllValues, resCollection[i+1])
@@ -1211,7 +1211,7 @@ func (suite *GlideTestSuite) TestHScan() {
 			// Scan with result cursor to get the next set of data.
 			newResultCursor, secondResult, _ := client.HScan(key1, resultCursor)
 			assert.NotEqual(t, resultCursor, newResultCursor)
-			resultCursor = newResultCursor.Value()
+			resultCursor = newResultCursor
 			assert.False(t, reflect.DeepEqual(secondResult, resCollection))
 			for i := 0; i < len(secondResult); i += 2 {
 				secondResultAllKeys = append(secondResultAllKeys, secondResult[i])
@@ -1223,41 +1223,41 @@ func (suite *GlideTestSuite) TestHScan() {
 				break
 			}
 		}
-		numberKeysList, numberValuesList := convertMapKeysAndValuesToResultList(numberMap)
+		numberKeysList, numberValuesList := convertMapKeysAndValuesToLists(numberMap)
 		assert.True(t, isSubset(numberKeysList, secondResultAllKeys))
 		assert.True(t, isSubset(numberValuesList, secondResultAllValues))
 
 		// Test match pattern
 		opts = options.NewHashScanOptionsBuilder().SetMatch("*")
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
-		resCursorInt, _ := strconv.Atoi(resCursor.Value())
+		resCursorInt, _ := strconv.Atoi(resCursor)
 		assert.True(t, resCursorInt >= 0)
 		assert.True(t, int(len(resCollection)) >= defaultCount)
 
 		// Test count
 		opts = options.NewHashScanOptionsBuilder().SetCount(int64(20))
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
-		resCursorInt, _ = strconv.Atoi(resCursor.Value())
+		resCursorInt, _ = strconv.Atoi(resCursor)
 		assert.True(t, resCursorInt >= 0)
 		assert.True(t, len(resCollection) >= 20)
 
 		// Test count with match returns a non-empty list
 		opts = options.NewHashScanOptionsBuilder().SetMatch("1*").SetCount(int64(20))
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
-		resCursorInt, _ = strconv.Atoi(resCursor.Value())
+		resCursorInt, _ = strconv.Atoi(resCursor)
 		assert.True(t, resCursorInt >= 0)
 		assert.True(t, len(resCollection) >= 0)
 
 		if suite.serverVersion >= "8.0.0" {
 			opts = options.NewHashScanOptionsBuilder().SetNoValue(true)
 			resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
-			resCursorInt, _ = strconv.Atoi(resCursor.Value())
+			resCursorInt, _ = strconv.Atoi(resCursor)
 			assert.True(t, resCursorInt >= 0)
 
 			// Check if all fields don't start with "num"
 			containsElementsWithNumKeyword := false
 			for i := 0; i < len(resCollection); i++ {
-				if strings.Contains(resCollection[i].Value(), "num") {
+				if strings.Contains(resCollection[i], "num") {
 					containsElementsWithNumKeyword = true
 					break
 				}
@@ -2317,34 +2317,27 @@ func (suite *GlideTestSuite) TestSScan() {
 		defaultCount := 10
 		// use large dataset to force an iterative cursor.
 		numMembers := make([]string, 50000)
-		numMembersResult := make([]api.Result[string], 50000)
+		numMembersResult := make([]string, 50000)
 		charMembers := []string{"a", "b", "c", "d", "e"}
-		charMembersResult := []api.Result[string]{
-			api.CreateStringResult("a"),
-			api.CreateStringResult("b"),
-			api.CreateStringResult("c"),
-			api.CreateStringResult("d"),
-			api.CreateStringResult("e"),
-		}
 		t := suite.T()
 
 		// populate the dataset slice
 		for i := 0; i < 50000; i++ {
 			numMembers[i] = strconv.Itoa(i)
-			numMembersResult[i] = api.CreateStringResult(strconv.Itoa(i))
+			numMembersResult[i] = strconv.Itoa(i)
 		}
 
 		// empty set
 		resCursor, resCollection, err := client.SScan(key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, initialCursor, resCursor)
 		assert.Empty(t, resCollection)
 
 		// negative cursor
 		if suite.serverVersion < "8.0.0" {
 			resCursor, resCollection, err = client.SScan(key1, "-1")
 			assert.NoError(t, err)
-			assert.Equal(t, initialCursor, resCursor.Value())
+			assert.Equal(t, initialCursor, resCursor)
 			assert.Empty(t, resCollection)
 		} else {
 			_, _, err = client.SScan(key1, "-1")
@@ -2358,15 +2351,15 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.Equal(t, int64(len(charMembers)), res)
 		resCursor, resCollection, err = client.SScan(key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, initialCursor, resCursor)
 		assert.Equal(t, len(charMembers), len(resCollection))
-		assert.True(t, isSubset(resCollection, charMembersResult))
+		assert.True(t, isSubset(resCollection, charMembers))
 
 		opts := options.NewBaseScanOptionsBuilder().SetMatch("a")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor.Value())
-		assert.True(t, isSubset(resCollection, []api.Result[string]{api.CreateStringResult("a")}))
+		assert.Equal(t, initialCursor, resCursor)
+		assert.True(t, isSubset(resCollection, []string{"a"}))
 
 		// result contains a subset of the key
 		res, err = client.SAdd(key1, numMembers)
@@ -2377,8 +2370,8 @@ func (suite *GlideTestSuite) TestSScan() {
 		resultCollection := resCollection
 
 		// 0 is returned for the cursor of the last iteration
-		for resCursor.Value() != "0" {
-			nextCursor, nextCol, err := client.SScan(key1, resCursor.Value())
+		for resCursor != "0" {
+			nextCursor, nextCol, err := client.SScan(key1, resCursor)
 			assert.NoError(t, err)
 			assert.NotEqual(t, nextCursor, resCursor)
 			assert.False(t, isSubset(resultCollection, nextCol))
@@ -2387,27 +2380,27 @@ func (suite *GlideTestSuite) TestSScan() {
 		}
 		assert.NotEmpty(t, resultCollection)
 		assert.True(t, isSubset(numMembersResult, resultCollection))
-		assert.True(t, isSubset(charMembersResult, resultCollection))
+		assert.True(t, isSubset(charMembers, resultCollection))
 
 		// test match pattern
 		opts = options.NewBaseScanOptionsBuilder().SetMatch("*")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), defaultCount)
 
 		// test count
 		opts = options.NewBaseScanOptionsBuilder().SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), 20)
 
 		// test count with match, returns a non-empty array
 		opts = options.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), 0)
 
 		// exceptions
@@ -3817,6 +3810,225 @@ func (suite *GlideTestSuite) TestPfCount_NoExistingKeys() {
 		resCount, err := client.PfCount([]string{key1, key2})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), resCount)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortWithOptions_AscendingOrder() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"b", "a", "c"})
+
+		options := options.NewSortOptions().
+			SetOrderBy(options.ASC).
+			SetIsAlpha(true)
+
+		sortResult, err := client.SortWithOptions(key, options)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+		}
+		assert.Equal(suite.T(), resultList, sortResult)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortWithOptions_DescendingOrder() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"b", "a", "c"})
+
+		options := options.NewSortOptions().
+			SetOrderBy(options.DESC).
+			SetIsAlpha(true).
+			SetSortLimit(0, 3)
+
+		sortResult, err := client.SortWithOptions(key, options)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("c"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("a"),
+		}
+
+		assert.Equal(suite.T(), resultList, sortResult)
+	})
+}
+
+func (suite *GlideTestSuite) TestSort_SuccessfulSort() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"3", "1", "2"})
+
+		sortResult, err := client.Sort(key)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("1"),
+			api.CreateStringResult("2"),
+			api.CreateStringResult("3"),
+		}
+
+		assert.Equal(suite.T(), resultList, sortResult)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortStore_BasicSorting() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{listKey}" + uuid.New().String()
+		sortedKey := "{listKey}" + uuid.New().String()
+		client.LPush(key, []string{"10", "2", "5", "1", "4"})
+
+		result, err := client.SortStore(key, sortedKey)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), result)
+		assert.Equal(suite.T(), int64(5), result.Value())
+
+		sortedValues, err := client.LRange(sortedKey, 0, -1)
+		resultList := []api.Result[string]{
+			api.CreateStringResult("1"),
+			api.CreateStringResult("2"),
+			api.CreateStringResult("4"),
+			api.CreateStringResult("5"),
+			api.CreateStringResult("10"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultList, sortedValues)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortStore_ErrorHandling() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		result, err := client.SortStore("{listKey}nonExistingKey", "{listKey}mydestinationKey")
+
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestSortStoreWithOptions_DescendingOrder() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{key}" + uuid.New().String()
+		sortedKey := "{key}" + uuid.New().String()
+		client.LPush(key, []string{"30", "20", "10", "40", "50"})
+
+		options := options.NewSortOptions().SetOrderBy(options.DESC).SetIsAlpha(false)
+		result, err := client.SortStoreWithOptions(key, sortedKey, options)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), result)
+		assert.Equal(suite.T(), int64(5), result.Value())
+
+		sortedValues, err := client.LRange(sortedKey, 0, -1)
+		resultList := []api.Result[string]{
+			api.CreateStringResult("50"),
+			api.CreateStringResult("40"),
+			api.CreateStringResult("30"),
+			api.CreateStringResult("20"),
+			api.CreateStringResult("10"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultList, sortedValues)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortStoreWithOptions_AlphaSorting() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{listKey}" + uuid.New().String()
+		sortedKey := "{listKey}" + uuid.New().String()
+		client.LPush(key, []string{"apple", "banana", "cherry", "date", "elderberry"})
+
+		options := options.NewSortOptions().SetIsAlpha(true)
+		result, err := client.SortStoreWithOptions(key, sortedKey, options)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), result)
+		assert.Equal(suite.T(), int64(5), result.Value())
+
+		sortedValues, err := client.LRange(sortedKey, 0, -1)
+		resultList := []api.Result[string]{
+			api.CreateStringResult("apple"),
+			api.CreateStringResult("banana"),
+			api.CreateStringResult("cherry"),
+			api.CreateStringResult("date"),
+			api.CreateStringResult("elderberry"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultList, sortedValues)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortStoreWithOptions_Limit() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{listKey}" + uuid.New().String()
+		sortedKey := "{listKey}" + uuid.New().String()
+		client.LPush(key, []string{"10", "20", "30", "40", "50"})
+
+		options := options.NewSortOptions().SetSortLimit(1, 3)
+		result, err := client.SortStoreWithOptions(key, sortedKey, options)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), result)
+		assert.Equal(suite.T(), int64(3), result.Value())
+
+		sortedValues, err := client.LRange(sortedKey, 0, -1)
+		resultList := []api.Result[string]{
+			api.CreateStringResult("20"),
+			api.CreateStringResult("30"),
+			api.CreateStringResult("40"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultList, sortedValues)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortReadOnly_SuccessfulSort() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"3", "1", "2"})
+
+		sortResult, err := client.SortReadOnly(key)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("1"),
+			api.CreateStringResult("2"),
+			api.CreateStringResult("3"),
+		}
+
+		assert.Equal(suite.T(), resultList, sortResult)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortReadyOnlyWithOptions_DescendingOrder() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"b", "a", "c"})
+
+		options := options.NewSortOptions().
+			SetOrderBy(options.DESC).
+			SetIsAlpha(true).
+			SetSortLimit(0, 3)
+
+		sortResult, err := client.SortReadOnlyWithOptions(key, options)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("c"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("a"),
+		}
+		assert.Equal(suite.T(), resultList, sortResult)
 	})
 }
 
@@ -5397,30 +5609,23 @@ func (suite *GlideTestSuite) TestZScan() {
 
 		// Set up test data - use a large number of entries to force an iterative cursor
 		numberMap := make(map[string]float64)
-		numMembersResult := make([]api.Result[string], 50000)
+		numMembers := make([]string, 50000)
 		charMembers := []string{"a", "b", "c", "d", "e"}
-		charMembersResult := []api.Result[string]{
-			api.CreateStringResult("a"),
-			api.CreateStringResult("b"),
-			api.CreateStringResult("c"),
-			api.CreateStringResult("d"),
-			api.CreateStringResult("e"),
-		}
 		for i := 0; i < 50000; i++ {
 			numberMap["member"+strconv.Itoa(i)] = float64(i)
-			numMembersResult[i] = api.CreateStringResult("member" + strconv.Itoa(i))
+			numMembers[i] = "member" + strconv.Itoa(i)
 		}
 		charMap := make(map[string]float64)
-		charMapValues := []api.Result[string]{}
+		charMapValues := []string{}
 		for i, val := range charMembers {
 			charMap[val] = float64(i)
-			charMapValues = append(charMapValues, api.CreateStringResult(strconv.Itoa(i)))
+			charMapValues = append(charMapValues, strconv.Itoa(i))
 		}
 
 		// Empty set
 		resCursor, resCollection, err := client.ZScan(key1, initialCursor)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), initialCursor, resCursor.Value())
+		assert.Equal(suite.T(), initialCursor, resCursor)
 		assert.Empty(suite.T(), resCollection)
 
 		// Negative cursor
@@ -5431,7 +5636,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		} else {
 			resCursor, resCollection, err = client.ZScan(key1, "-1")
 			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), initialCursor, resCursor.Value())
+			assert.Equal(suite.T(), initialCursor, resCursor)
 			assert.Empty(suite.T(), resCollection)
 		}
 
@@ -5442,11 +5647,11 @@ func (suite *GlideTestSuite) TestZScan() {
 
 		resCursor, resCollection, err = client.ZScan(key1, initialCursor)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), initialCursor, resCursor.Value())
+		assert.Equal(suite.T(), initialCursor, resCursor)
 		assert.Equal(suite.T(), len(charMap)*2, len(resCollection))
 
-		resultKeySet := make([]api.Result[string], 0, len(charMap))
-		resultValueSet := make([]api.Result[string], 0, len(charMap))
+		resultKeySet := make([]string, 0, len(charMap))
+		resultValueSet := make([]string, 0, len(charMap))
 
 		// Iterate through array taking pairs of items
 		for i := 0; i < len(resCollection); i += 2 {
@@ -5455,7 +5660,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		}
 
 		// Verify all expected keys exist in result
-		assert.True(suite.T(), isSubset(charMembersResult, resultKeySet))
+		assert.True(suite.T(), isSubset(charMembers, resultKeySet))
 
 		// Scores come back as integers converted to a string when the fraction is zero.
 		assert.True(suite.T(), isSubset(charMapValues, resultValueSet))
@@ -5463,8 +5668,8 @@ func (suite *GlideTestSuite) TestZScan() {
 		opts := options.NewZScanOptionsBuilder().SetMatch("a")
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), initialCursor, resCursor.Value())
-		assert.Equal(suite.T(), resCollection, []api.Result[string]{api.CreateStringResult("a"), api.CreateStringResult("0")})
+		assert.Equal(suite.T(), initialCursor, resCursor)
+		assert.Equal(suite.T(), resCollection, []string{"a", "0"})
 
 		// Result contains a subset of the key
 		res, err = client.ZAdd(key1, numberMap)
@@ -5474,11 +5679,11 @@ func (suite *GlideTestSuite) TestZScan() {
 		resCursor, resCollection, err = client.ZScan(key1, "0")
 		assert.NoError(suite.T(), err)
 		resultCollection := resCollection
-		resKeys := []api.Result[string]{}
+		resKeys := []string{}
 
 		// 0 is returned for the cursor of the last iteration
-		for resCursor.Value() != "0" {
-			nextCursor, nextCol, err := client.ZScan(key1, resCursor.Value())
+		for resCursor != "0" {
+			nextCursor, nextCol, err := client.ZScan(key1, resCursor)
 			assert.NoError(suite.T(), err)
 			assert.NotEqual(suite.T(), nextCursor, resCursor)
 			assert.False(suite.T(), isSubset(resultCollection, nextCol))
@@ -5492,27 +5697,27 @@ func (suite *GlideTestSuite) TestZScan() {
 
 		assert.NotEmpty(suite.T(), resultCollection)
 		// Verify we got all keys and values
-		assert.True(suite.T(), isSubset(numMembersResult, resKeys))
+		assert.True(suite.T(), isSubset(numMembers, resKeys))
 
 		// Test match pattern
 		opts = options.NewZScanOptionsBuilder().SetMatch("*")
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
-		assert.NotEqual(suite.T(), initialCursor, resCursor.Value())
+		assert.NotEqual(suite.T(), initialCursor, resCursor)
 		assert.GreaterOrEqual(suite.T(), len(resCollection), defaultCount)
 
 		// test count
 		opts = options.NewZScanOptionsBuilder().SetCount(20)
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
-		assert.NotEqual(suite.T(), initialCursor, resCursor.Value())
+		assert.NotEqual(suite.T(), initialCursor, resCursor)
 		assert.GreaterOrEqual(suite.T(), len(resCollection), 20)
 
 		// test count with match, returns a non-empty array
 		opts = options.NewZScanOptionsBuilder().SetMatch("1*").SetCount(20)
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
-		assert.NotEqual(suite.T(), initialCursor, resCursor.Value())
+		assert.NotEqual(suite.T(), initialCursor, resCursor)
 		assert.GreaterOrEqual(suite.T(), len(resCollection), 0)
 
 		// Test NoScores option for Redis 8.0.0+
@@ -5520,13 +5725,13 @@ func (suite *GlideTestSuite) TestZScan() {
 			opts = options.NewZScanOptionsBuilder().SetNoScores(true)
 			resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 			assert.NoError(suite.T(), err)
-			cursor, err := strconv.ParseInt(resCursor.Value(), 10, 64)
+			cursor, err := strconv.ParseInt(resCursor, 10, 64)
 			assert.NoError(suite.T(), err)
 			assert.GreaterOrEqual(suite.T(), cursor, int64(0))
 
 			// Verify all fields start with "member"
 			for _, field := range resCollection {
-				assert.True(suite.T(), strings.HasPrefix(field.Value(), "member"))
+				assert.True(suite.T(), strings.HasPrefix(field, "member"))
 			}
 		}
 
@@ -5748,14 +5953,12 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			consumer1 := "consumer-1-" + uuid.New().String()
 			invalidConsumer := "invalid-consumer-" + uuid.New().String()
 
-			command := []string{"XGroup", "Create", key, groupName, zeroStreamId, "MKSTREAM"}
+			suite.verifyOK(
+				client.XGroupCreateWithOptions(key, groupName, zeroStreamId, options.NewXGroupCreateOptions().SetMakeStream()),
+			)
 
+			command := []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
 			resp, err := client.CustomCommand(command)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), "OK", resp.(string))
-
-			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
-			resp, err = client.CustomCommand(command)
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.(bool))
 
@@ -5900,14 +6103,12 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			consumer1 := "consumer-1-" + uuid.New().String()
 			invalidConsumer := "invalid-consumer-" + uuid.New().String()
 
-			command := []string{"XGroup", "Create", key, groupName, zeroStreamId, "MKSTREAM"}
+			suite.verifyOK(
+				client.XGroupCreateWithOptions(key, groupName, zeroStreamId, options.NewXGroupCreateOptions().SetMakeStream()),
+			)
 
+			command := []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
 			resp, err := client.CustomCommand(command)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), "OK", resp.Value().(string))
-
-			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
-			resp, err = client.CustomCommand(command)
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.Value().(bool))
 
@@ -6053,6 +6254,49 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 		case api.GlideClusterClient:
 			execCluster(c)
 		}
+	})
+}
+
+// TODO add XGroupDestroy tests there
+func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		group1 := uuid.NewString()
+		group2 := uuid.NewString()
+		id := "0-1"
+
+		// Stream not created results in error
+		_, err := client.XGroupCreate(key, group1, id)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// Stream with option to create creates stream & Group
+		opts := options.NewXGroupCreateOptions().SetMakeStream()
+		suite.verifyOK(client.XGroupCreateWithOptions(key, group1, id, opts))
+
+		// ...and again results in BUSYGROUP error, because group names must be unique
+		_, err = client.XGroupCreate(key, group1, id)
+		assert.ErrorContains(suite.T(), err, "BUSYGROUP")
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// TODO add XGroupDestroy tests there
+
+		// ENTRIESREAD option was added in valkey 7.0.0
+		opts = options.NewXGroupCreateOptions().SetEntriesRead(100)
+		if suite.serverVersion >= "7.0.0" {
+			suite.verifyOK(client.XGroupCreateWithOptions(key, group2, id, opts))
+		} else {
+			_, err = client.XGroupCreateWithOptions(key, group2, id, opts)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+		}
+
+		// key is not a stream
+		key = uuid.NewString()
+		suite.verifyOK(client.Set(key, id))
+		_, err = client.XGroupCreate(key, group1, id)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
 
@@ -6331,5 +6575,224 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 		)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestObjectIdleTime() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		defaultClient := suite.defaultClient()
+		key := "testKey1_" + uuid.New().String()
+		value := "hello"
+		sleepSec := int64(5)
+		t := suite.T()
+		suite.verifyOK(defaultClient.Set(key, value))
+		keyValueMap := map[string]string{
+			"maxmemory-policy": "noeviction",
+		}
+		suite.verifyOK(defaultClient.ConfigSet(keyValueMap))
+		key1 := api.CreateStringResult("maxmemory-policy")
+		value1 := api.CreateStringResult("noeviction")
+		resultConfigMap := map[api.Result[string]]api.Result[string]{key1: value1}
+		resultConfig, err := defaultClient.ConfigGet([]string{"maxmemory-policy"})
+		assert.Nil(t, err, "Failed to get configuration")
+		assert.Equal(t, resultConfigMap, resultConfig, "Configuration mismatch for maxmemory-policy")
+		resultGet, err := defaultClient.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet.Value())
+		time.Sleep(time.Duration(sleepSec) * time.Second)
+		resultIdleTime, err := defaultClient.ObjectIdleTime(key)
+		assert.Nil(t, err)
+		assert.GreaterOrEqual(t, resultIdleTime.Value(), sleepSec)
+	})
+}
+
+func (suite *GlideTestSuite) TestObjectRefCount() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "testKey1_" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(client.Set(key, value))
+		resultGetRestoreKey, err := client.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGetRestoreKey.Value())
+		resultObjectRefCount, err := client.ObjectRefCount(key)
+		assert.Nil(t, err)
+		assert.GreaterOrEqual(t, resultObjectRefCount.Value(), int64(1))
+	})
+}
+
+func (suite *GlideTestSuite) TestObjectFreq() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		defaultClient := suite.defaultClient()
+		key := "testKey1_" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(defaultClient.Set(key, value))
+		keyValueMap := map[string]string{
+			"maxmemory-policy": "volatile-lfu",
+		}
+		suite.verifyOK(defaultClient.ConfigSet(keyValueMap))
+		key1 := api.CreateStringResult("maxmemory-policy")
+		value1 := api.CreateStringResult("volatile-lfu")
+		resultConfigMap := map[api.Result[string]]api.Result[string]{key1: value1}
+		resultConfig, err := defaultClient.ConfigGet([]string{"maxmemory-policy"})
+		assert.Nil(t, err, "Failed to get configuration")
+		assert.Equal(t, resultConfigMap, resultConfig, "Configuration mismatch for maxmemory-policy")
+		sleepSec := int64(5)
+		time.Sleep(time.Duration(sleepSec) * time.Second)
+		resultGet, err := defaultClient.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet.Value())
+		resultGet2, err := defaultClient.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet2.Value())
+		resultObjFreq, err := defaultClient.ObjectFreq(key)
+		assert.Nil(t, err)
+		assert.GreaterOrEqual(t, resultObjFreq.Value(), int64(2))
+	})
+}
+
+func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
+	suite.SkipIfServerVersionLowerThanBy("8.1.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"item1", "item2", "item3"})
+
+		client.Set("weight_item1", "3")
+		client.Set("weight_item2", "1")
+		client.Set("weight_item3", "2")
+
+		options := options.NewSortOptions().
+			SetByPattern("weight_*").
+			SetOrderBy(options.ASC).
+			SetIsAlpha(false)
+
+		sortResult, err := client.SortWithOptions(key, options)
+
+		assert.Nil(suite.T(), err)
+		resultList := []api.Result[string]{
+			api.CreateStringResult("item2"),
+			api.CreateStringResult("item3"),
+			api.CreateStringResult("item1"),
+		}
+
+		assert.Equal(suite.T(), resultList, sortResult)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
+	suite.SkipIfServerVersionLowerThanBy("8.1.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"item1", "item2", "item3"})
+
+		client.Set("object_item1", "Object_1")
+		client.Set("object_item2", "Object_2")
+		client.Set("object_item3", "Object_3")
+
+		options := options.NewSortOptions().
+			SetByPattern("weight_*").
+			SetOrderBy(options.ASC).
+			SetIsAlpha(false).
+			AddGetPattern("object_*")
+
+		sortResult, err := client.SortWithOptions(key, options)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("Object_2"),
+			api.CreateStringResult("Object_3"),
+			api.CreateStringResult("Object_1"),
+		}
+
+		assert.Equal(suite.T(), resultList, sortResult)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() {
+	suite.SkipIfServerVersionLowerThanBy("8.1.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"item1", "item2", "item3"})
+
+		client.Set("weight_item1", "10")
+		client.Set("weight_item2", "5")
+		client.Set("weight_item3", "15")
+
+		client.Set("object_item1", "Object 1")
+		client.Set("object_item2", "Object 2")
+		client.Set("object_item3", "Object 3")
+
+		options := options.NewSortOptions().
+			SetOrderBy(options.ASC).
+			SetIsAlpha(false).
+			SetByPattern("weight_*").
+			AddGetPattern("object_*").
+			AddGetPattern("#")
+
+		sortResult, err := client.SortWithOptions(key, options)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("Object 2"),
+			api.CreateStringResult("item2"),
+			api.CreateStringResult("Object 1"),
+			api.CreateStringResult("item1"),
+			api.CreateStringResult("Object 3"),
+			api.CreateStringResult("item3"),
+		}
+
+		assert.Equal(suite.T(), resultList, sortResult)
+
+		objectItem2, err := client.Get("object_item2")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "Object 2", objectItem2.Value())
+
+		objectItem1, err := client.Get("object_item1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "Object 1", objectItem1.Value())
+
+		objectItem3, err := client.Get("object_item3")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "Object 3", objectItem3.Value())
+
+		assert.Equal(suite.T(), "item2", sortResult[1].Value())
+		assert.Equal(suite.T(), "item1", sortResult[3].Value())
+		assert.Equal(suite.T(), "item3", sortResult[5].Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestSortStoreWithOptions_ByPattern() {
+	suite.SkipIfServerVersionLowerThanBy("8.1.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{listKey}" + uuid.New().String()
+		sortedKey := "{listKey}" + uuid.New().String()
+		client.LPush(key, []string{"a", "b", "c", "d", "e"})
+		client.Set("{listKey}weight_a", "5")
+		client.Set("{listKey}weight_b", "2")
+		client.Set("{listKey}weight_c", "3")
+		client.Set("{listKey}weight_d", "1")
+		client.Set("{listKey}weight_e", "4")
+
+		options := options.NewSortOptions().SetByPattern("{listKey}weight_*")
+
+		result, err := client.SortStoreWithOptions(key, sortedKey, options)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), result)
+		assert.Equal(suite.T(), int64(5), result.Value())
+
+		sortedValues, err := client.LRange(sortedKey, 0, -1)
+		resultList := []api.Result[string]{
+			api.CreateStringResult("d"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+			api.CreateStringResult("e"),
+			api.CreateStringResult("a"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultList, sortedValues)
 	})
 }
