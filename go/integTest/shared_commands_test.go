@@ -6768,9 +6768,12 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		// xreadgroup should return one empty stream and one non-empty stream
 		resp, err := client.XReadGroup(groupName, consumerName, map[string]string{key: zeroStreamId})
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), 2, len(resp[key]))
-		assert.Nil(suite.T(), resp[key][streamId1.Value()])
-		assert.True(suite.T(), reflect.DeepEqual([][]string{{"field2", "value2"}}, resp[key][streamId2.Value()]))
+		assert.Equal(suite.T(), map[string]map[string][][]string {
+			key: {
+				streamId1.Value(): nil,
+				streamId2.Value(): {{"field2", "value2"}},
+			},
+		}, resp))
 
 		fmt.Printf("resp: %v\n", resp)
 		fmt.Printf("resp: %v\n", resp[key][streamId2.Value()])
