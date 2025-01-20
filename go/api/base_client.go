@@ -2013,7 +2013,10 @@ func (client *baseClient) XPendingWithOptions(
 //
 // Example:
 //
-//	client.XGroupCreate("mystream", "mygroup", "0-0")
+//	ok, err := client.XGroupCreate("mystream", "mygroup", "0-0")
+//	if ok != "OK" || err != nil {
+//		// handle error
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupCreate(key string, group string, id string) (string, error) {
@@ -2039,7 +2042,10 @@ func (client *baseClient) XGroupCreate(key string, group string, id string) (str
 // Example:
 //
 //	opts := options.NewXGroupCreateOptions().SetMakeStream()
-//	client.XGroupCreateWithOptions("mystream", "mygroup", "0-0", opts)
+//	ok, err := client.XGroupCreateWithOptions("mystream", "mygroup", "0-0", opts)
+//	if ok != "OK" || err != nil {
+//		// handle error
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupCreateWithOptions(
