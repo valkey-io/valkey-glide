@@ -5813,3 +5813,73 @@ func (client *baseClient) SortStoreWithOptions(
 	}
 	return handleIntOrNilResponse(result)
 }
+
+// XGroupCreateConsumer creates a consumer named `consumer` in the consumer group `group` for the
+// stream stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The newly created consumer.
+//
+// Return value:
+//
+//	Returns `true` if the consumer is created. Otherwise, returns `false`.
+//
+// Example:
+//
+//	//Creates the consumer "myconsumer" in consumer group "mygroup"
+//	success, err := client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer")
+//	if err == nil && success {
+//	 fmt.Println("Consumer created")
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-createconsumer/
+func (client *baseClient) XGroupCreateConsumer(
+	key string,
+	group string,
+	consumer string,
+) (bool, error) {
+	result, err := client.executeCommand(C.XGroupCreateConsumer, []string{key, group, consumer})
+	if err != nil {
+		return false, err
+	}
+	return handleBoolResponse(result)
+}
+
+// XGroupDelConsumer deletes a consumer named `consumer` in the consumer group `group`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The consumer to delete.
+//
+// Returns the number of pending messages the `consumer` had before it was deleted.
+//
+// Example:
+//
+//	// Deletes the consumer "myconsumer" in consumer group "mygroup"
+//	pendingMsgCount, err := client.XGroupDelConsumer("mystream", "mygroup", "myconsumer")
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Printf("Consumer 'myconsumer' had %d pending messages unclaimed.\n", pendingMsgCount)
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-delconsumer/
+func (client *baseClient) XGroupDelConsumer(
+	key string,
+	group string,
+	consumer string,
+) (int64, error) {
+	result, err := client.executeCommand(C.XGroupDelConsumer, []string{key, group, consumer})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
