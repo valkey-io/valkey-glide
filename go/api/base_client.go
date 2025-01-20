@@ -2451,7 +2451,10 @@ func (client *baseClient) Echo(message string) (Result[string], error) {
 //
 // Example:
 //
-//	client.XGroupSetId("mystream", "mygroup", "0-0")
+//	ok, err := client.XGroupSetId("mystream", "mygroup", "0-0")
+//	if ok != "OK" || err != nil {
+//		// handle error
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupSetId(key string, group string, id string) (string, error) {
@@ -2476,7 +2479,10 @@ func (client *baseClient) XGroupSetId(key string, group string, id string) (stri
 // Example:
 //
 //	opts := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(42)
-//	client.XGroupSetIdWithOptions("mystream", "mygroup", "0-0", opts)
+//	ok, err := client.XGroupSetIdWithOptions("mystream", "mygroup", "0-0", opts)
+//	if ok != "OK" || err != nil {
+//		// handle error
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupSetIdWithOptions(
