@@ -262,3 +262,43 @@ func (xpo *XPendingOptions) ToArgs() ([]string, error) {
 
 	return args, nil
 }
+
+// Optional arguments for `XGroupCreate` in [StreamCommands]
+type XGroupCreateOptions struct {
+	mkStream    bool
+	entriesRead int64
+}
+
+// Create new empty `XGroupCreateOptions`
+func NewXGroupCreateOptions() *XGroupCreateOptions {
+	return &XGroupCreateOptions{false, -1}
+}
+
+// Once set and if the stream doesn't exist, creates a new stream with a length of `0`.
+func (xgco *XGroupCreateOptions) SetMakeStream() *XGroupCreateOptions {
+	xgco.mkStream = true
+	return xgco
+}
+
+// A value representing the number of stream entries already read by the group.
+//
+// Since Valkey version 7.0.0.
+func (xgco *XGroupCreateOptions) SetEntriesRead(entriesRead int64) *XGroupCreateOptions {
+	xgco.entriesRead = entriesRead
+	return xgco
+}
+
+func (xgco *XGroupCreateOptions) ToArgs() ([]string, error) {
+	var args []string
+
+	// if minIdleTime is set, we need to add an `IDLE` argument along with the minIdleTime
+	if xgco.mkStream {
+		args = append(args, "MKSTREAM")
+	}
+
+	if xgco.entriesRead > -1 {
+		args = append(args, "ENTRIESREAD", utils.IntToString(xgco.entriesRead))
+	}
+
+	return args, nil
+}
