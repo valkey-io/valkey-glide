@@ -8,24 +8,23 @@ package api
 //
 // [valkey.io]: https://valkey.io/commands/#list
 type ListCommands interface {
-
 	LPush(key string, elements []string) (int64, error)
 
 	LPop(key string) (Result[string], error)
 
-	LPopCount(key string, count int64) ([]Result[string], error)
+	LPopCount(key string, count int64) ([]string, error)
 
 	LPos(key string, element string) (Result[int64], error)
 
 	LPosWithOptions(key string, element string, options *LPosOptions) (Result[int64], error)
 
-	LPosCount(key string, element string, count int64) ([]Result[int64], error)
+	LPosCount(key string, element string, count int64) ([]int64, error)
 
-	LPosCountWithOptions(key string, element string, count int64, options *LPosOptions) ([]Result[int64], error)
+	LPosCountWithOptions(key string, element string, count int64, options *LPosOptions) ([]int64, error)
 
 	RPush(key string, elements []string) (int64, error)
 
-	LRange(key string, start int64, end int64) ([]Result[string], error)
+	LRange(key string, start int64, end int64) ([]string, error)
 
 	LIndex(key string, index int64) (Result[string], error)
 
@@ -37,13 +36,13 @@ type ListCommands interface {
 
 	RPop(key string) (Result[string], error)
 
-	RPopCount(key string, count int64) ([]Result[string], error)
+	RPopCount(key string, count int64) ([]string, error)
 
 	LInsert(key string, insertPosition InsertPosition, pivot string, element string) (int64, error)
 
-	BLPop(keys []string, timeoutSecs float64) ([]Result[string], error)
+	BLPop(keys []string, timeoutSecs float64) ([]string, error)
 
-	BRPop(keys []string, timeoutSecs float64) ([]Result[string], error)
+	BRPop(keys []string, timeoutSecs float64) ([]string, error)
 
 	RPushX(key string, elements []string) (int64, error)
 

@@ -24,11 +24,11 @@ type HashCommands interface {
 
 	HLen(key string) (int64, error)
 
-	HVals(key string) ([]Result[string], error)
+	HVals(key string) ([]string, error)
 
 	HExists(key string, field string) (bool, error)
 
-	HKeys(key string) ([]Result[string], error)
+	HKeys(key string) ([]string, error)
 
 	HStrLen(key string, field string) (int64, error)
 

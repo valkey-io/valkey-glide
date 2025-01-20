@@ -37,7 +37,7 @@ type SortedSetCommands interface {
 
 	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
 
-	ZRange(key string, rangeQuery options.ZRangeQuery) ([]Result[string], error)
+	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
 	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[Result[string]]Result[float64], error)
 
