@@ -376,7 +376,7 @@ func (client *baseClient) HGet(key string, field string) (Result[string], error)
 	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) HGetAll(key string) (map[Result[string]]Result[string], error) {
+func (client *baseClient) HGetAll(key string) (map[string]string, error) {
 	result, err := client.executeCommand(C.HGetAll, []string{key})
 	if err != nil {
 		return nil, err
@@ -672,7 +672,7 @@ func (client *baseClient) SUnionStore(destination string, keys []string) (int64,
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) SMembers(key string) (map[Result[string]]struct{}, error) {
+func (client *baseClient) SMembers(key string) (map[string]struct{}, error) {
 	result, err := client.executeCommand(C.SMembers, []string{key})
 	if err != nil {
 		return nil, err
@@ -699,7 +699,7 @@ func (client *baseClient) SIsMember(key string, member string) (bool, error) {
 	return handleBoolResponse(result)
 }
 
-func (client *baseClient) SDiff(keys []string) (map[Result[string]]struct{}, error) {
+func (client *baseClient) SDiff(keys []string) (map[string]struct{}, error) {
 	result, err := client.executeCommand(C.SDiff, keys)
 	if err != nil {
 		return nil, err
@@ -717,7 +717,7 @@ func (client *baseClient) SDiffStore(destination string, keys []string) (int64, 
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) SInter(keys []string) (map[Result[string]]struct{}, error) {
+func (client *baseClient) SInter(keys []string) (map[string]struct{}, error) {
 	result, err := client.executeCommand(C.SInter, keys)
 	if err != nil {
 		return nil, err
@@ -782,7 +782,7 @@ func (client *baseClient) SMIsMember(key string, members []string) ([]bool, erro
 	return handleBoolArrayResponse(result)
 }
 
-func (client *baseClient) SUnion(keys []string) (map[Result[string]]struct{}, error) {
+func (client *baseClient) SUnion(keys []string) (map[string]struct{}, error) {
 	result, err := client.executeCommand(C.SUnion, keys)
 	if err != nil {
 		return nil, err
@@ -1025,7 +1025,7 @@ func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map[Result[string]][]Result[string], error) {
+func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.toString()
 	if err != nil {
 		return nil, err
@@ -1046,14 +1046,14 @@ func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNullResponse(result)
+	return handleStringToStringArrayMapOrNilResponse(result)
 }
 
 func (client *baseClient) LMPopCount(
 	keys []string,
 	listDirection ListDirection,
 	count int64,
-) (map[Result[string]][]Result[string], error) {
+) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.toString()
 	if err != nil {
 		return nil, err
@@ -1074,14 +1074,14 @@ func (client *baseClient) LMPopCount(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNullResponse(result)
+	return handleStringToStringArrayMapOrNilResponse(result)
 }
 
 func (client *baseClient) BLMPop(
 	keys []string,
 	listDirection ListDirection,
 	timeoutSecs float64,
-) (map[Result[string]][]Result[string], error) {
+) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.toString()
 	if err != nil {
 		return nil, err
@@ -1102,7 +1102,7 @@ func (client *baseClient) BLMPop(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNullResponse(result)
+	return handleStringToStringArrayMapOrNilResponse(result)
 }
 
 func (client *baseClient) BLMPopCount(
@@ -1110,7 +1110,7 @@ func (client *baseClient) BLMPopCount(
 	listDirection ListDirection,
 	count int64,
 	timeoutSecs float64,
-) (map[Result[string]][]Result[string], error) {
+) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.toString()
 	if err != nil {
 		return nil, err
@@ -1131,7 +1131,7 @@ func (client *baseClient) BLMPopCount(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNullResponse(result)
+	return handleStringToStringArrayMapOrNilResponse(result)
 }
 
 func (client *baseClient) LSet(key string, index int64, element string) (string, error) {
@@ -1754,7 +1754,7 @@ func (client *baseClient) ZIncrBy(key string, increment float64, member string) 
 	return handleFloatResponse(result)
 }
 
-func (client *baseClient) ZPopMin(key string) (map[Result[string]]Result[float64], error) {
+func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 	result, err := client.executeCommand(C.ZPopMin, []string{key})
 	if err != nil {
 		return nil, err
@@ -1762,7 +1762,7 @@ func (client *baseClient) ZPopMin(key string) (map[Result[string]]Result[float64
 	return handleStringDoubleMapResponse(result)
 }
 
-func (client *baseClient) ZPopMinWithCount(key string, count int64) (map[Result[string]]Result[float64], error) {
+func (client *baseClient) ZPopMinWithCount(key string, count int64) (map[string]float64, error) {
 	result, err := client.executeCommand(C.ZPopMin, []string{key, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
@@ -1770,7 +1770,7 @@ func (client *baseClient) ZPopMinWithCount(key string, count int64) (map[Result[
 	return handleStringDoubleMapResponse(result)
 }
 
-func (client *baseClient) ZPopMax(key string) (map[Result[string]]Result[float64], error) {
+func (client *baseClient) ZPopMax(key string) (map[string]float64, error) {
 	result, err := client.executeCommand(C.ZPopMax, []string{key})
 	if err != nil {
 		return nil, err
@@ -1778,7 +1778,7 @@ func (client *baseClient) ZPopMax(key string) (map[Result[string]]Result[float64
 	return handleStringDoubleMapResponse(result)
 }
 
-func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[float64], error) {
+func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[string]float64, error) {
 	result, err := client.executeCommand(C.ZPopMax, []string{key, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
@@ -1892,7 +1892,7 @@ func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]
 func (client *baseClient) ZRangeWithScores(
 	key string,
 	rangeQuery options.ZRangeQueryWithScores,
-) (map[Result[string]]Result[float64], error) {
+) (map[string]float64, error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 	args = append(args, rangeQuery.ToArgs()...)

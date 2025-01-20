@@ -180,11 +180,7 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_multipleArgs() {
 		suite.T().Skip("This feature is added in version 7")
 	}
 	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
-	key1 := api.CreateStringResult("timeout")
-	value1 := api.CreateStringResult("1000")
-	key2 := api.CreateStringResult("maxmemory")
-	value2 := api.CreateStringResult("1073741824")
-	resultConfigMap := map[api.Result[string]]api.Result[string]{key1: value1, key2: value2}
+	resultConfigMap := map[string]string{"timeout": "1000", "maxmemory": "1073741824"}
 	suite.verifyOK(client.ConfigSet(configMap))
 
 	result2, err := client.ConfigGet([]string{"timeout", "maxmemory"})
@@ -217,7 +213,7 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
 	assert.IsType(suite.T(), &api.RequestError{}, err)
 
 	result2, err := client.ConfigGet([]string{"time"})
-	assert.Equal(suite.T(), map[api.Result[string]]api.Result[string]{}, result2)
+	assert.Equal(suite.T(), map[string]string{}, result2)
 	assert.Nil(suite.T(), err)
 }
 
