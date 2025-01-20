@@ -6708,3 +6708,115 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_ByPattern() {
 		assert.Equal(suite.T(), resultList, sortedValues)
 	})
 }
+
+func (suite *GlideTestSuite) TestXGroupStreamCommands() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		stringKey := uuid.New().String()
+		groupName := "group" + uuid.New().String()
+		zeroStreamId := "0"
+		consumerName := "consumer-" + uuid.New().String()
+
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "create", key, groupName, zeroStreamId, "MKSTREAM"},
+			"Can't send XGROUP CREATE as a custom command",
+		)
+		respBool, err := client.XGroupCreateConsumer(key, groupName, consumerName)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), respBool)
+
+		// create a consumer for a group that doesn't exist should result in a NOGROUP error
+		_, err = client.XGroupCreateConsumer(key, "non-existent-group", consumerName)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.True(suite.T(), strings.Contains(err.Error(), "NOGROUP"))
+
+		// create consumer that already exists should return false
+		respBool, err = client.XGroupCreateConsumer(key, groupName, consumerName)
+		assert.NoError(suite.T(), err)
+		assert.False(suite.T(), respBool)
+
+		// Delete a consumer that hasn't been created should return 0
+		respInt64, err := client.XGroupDelConsumer(key, groupName, "non-existent-consumer")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), respInt64)
+
+		// Add two stream entries
+		streamId1, err := client.XAdd(key, [][]string{{"field1", "value1"}})
+		assert.NoError(suite.T(), err)
+		streamId2, err := client.XAdd(key, [][]string{{"field2", "value2"}})
+		assert.NoError(suite.T(), err)
+
+		// read the stream for the consumer and mark messages as pending
+		expectedGroup := map[string]map[string][][]string{
+			key: {streamId1.Value(): {{"field1", "value1"}}, streamId2.Value(): {{"field2", "value2"}}},
+		}
+		actualGroup, err := client.XReadGroup(groupName, consumerName, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), reflect.DeepEqual(expectedGroup, actualGroup),
+			"Expected and actual results do not match",
+		)
+
+		// delete one of the streams using XDel
+		respInt64, err = client.XDel(key, []string{streamId1.Value()})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), respInt64)
+
+		// xreadgroup should return one empty stream and one non-empty stream
+		resp, err := client.XReadGroup(groupName, consumerName, map[string]string{key: zeroStreamId})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]map[string][][]string{
+			key: {
+				streamId1.Value(): nil,
+				streamId2.Value(): {{"field2", "value2"}},
+			},
+		}, resp)
+
+		// add a new stream entry
+		streamId3, err := client.XAdd(key, [][]string{{"field3", "value3"}})
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), streamId3)
+
+		// xack that streamid1 and streamid2 have been processed
+		command := []string{"XAck", key, groupName, streamId1.Value(), streamId2.Value()}
+		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+
+		// Delete the consumer group and expect 0 pending messages
+		respInt64, err = client.XGroupDelConsumer(key, groupName, consumerName)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), respInt64)
+
+		// TODO: Use XAck when it is added to the Go client
+		// xack streamid_1, and streamid_2 already received returns 0L
+		command = []string{"XAck", key, groupName, streamId1.Value(), streamId2.Value()}
+		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+
+		// Consume the last message with the previously deleted consumer (creates the consumer anew)
+		resp, err = client.XReadGroup(groupName, consumerName, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 1, len(resp[key]))
+
+		// TODO: Use XAck when it is added to the Go client
+		// Use non existent group, so xack streamid_3 returns 0
+		command = []string{"XAck", key, "non-existent-group", streamId3.Value()}
+		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+
+		// Delete the consumer group and expect 1 pending message
+		respInt64, err = client.XGroupDelConsumer(key, groupName, consumerName)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), respInt64)
+
+		// Set a string key, and expect an error when you try to create or delete a consumer group
+		_, err = client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		_, err = client.XGroupCreateConsumer(stringKey, groupName, consumerName)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		_, err = client.XGroupDelConsumer(stringKey, groupName, consumerName)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
