@@ -2770,8 +2770,7 @@ func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
 // Example:
 //
 //	result, err := client.SetBit("key", 1, 1)
-//	result.Value(): 1
-//	result.IsNil(): false
+//	result: 1
 //
 // [valkey.io]: https://valkey.io/commands/setbit/
 func (client *baseClient) SetBit(key string, offset int64, value int64) (int64, error) {
@@ -2798,8 +2797,7 @@ func (client *baseClient) SetBit(key string, offset int64, value int64) (int64, 
 // Example:
 //
 //	result, err := client.GetBit("key1", 1, 1)
-//	result.Value(): 1
-//	result.IsNil(): false
+//	result: 1
 //
 // [valkey.io]: https://valkey.io/commands/getbit/
 func (client *baseClient) GetBit(key string, offset int64) (int64, error) {
@@ -2833,12 +2831,6 @@ func (client *baseClient) GetBit(key string, offset int64) (int64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/wait/
 func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (int64, error) {
-	if numberOfReplicas <= 0 {
-		return defaultIntResponse, fmt.Errorf("number of replicas should be greater than 0")
-	}
-	if timeout < 0 {
-		return defaultIntResponse, fmt.Errorf("timeout cannot be lesser than 0")
-	}
 	result, err := client.executeCommand(C.Wait, []string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout)})
 	if err != nil {
 		return defaultIntResponse, err
@@ -2879,8 +2871,8 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 //
 // Parameters:
 //
-//		key - The key for the string to count the set bits of.
-//	 options - The offset options - see [options.BitOffsetOptions].
+//	key - The key for the string to count the set bits of.
+//	options - The offset options - see [options.BitOffsetOptions].
 //
 // Return value:
 // The number of set bits in the string interval specified by start, end, and options.
@@ -2888,13 +2880,13 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 //
 // Example:
 //
-//	 opts := NewBitCountOptionsBuilder()
-//		opts.SetStart(1)
-//		opts, err := opts.SetEnd(1)
-//		opts, err = opts.SetBitmapIndexType(options.BYTE)
-//	 result, err := client.BitCount("mykey",options)
-//	 result.Value(): 6
-//	 result.IsNil(): false
+//	opts := NewBitCountOptionsBuilder()
+//	opts.SetStart(1)
+//	opts, err := opts.SetEnd(1)
+//	opts, err = opts.SetBitmapIndexType(options.BYTE)
+//	result, err := client.BitCount("mykey",options)
+//	result.Value(): 6
+//	result.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
 func (client *baseClient) BitCountWithOptions(key string, opts *options.BitCountOptions) (int64, error) {

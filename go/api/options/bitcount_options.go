@@ -15,9 +15,9 @@ const (
 
 // Optional arguments to `BitCount` in [BitMapCommands]
 type BitCountOptions struct {
-	Start           *int64
-	End             *int64
-	BitMapIndexType BitmapIndexType
+	start           *int64
+	end             *int64
+	bitMapIndexType BitmapIndexType
 }
 
 func NewBitCountOptionsBuilder() *BitCountOptions {
@@ -26,19 +26,19 @@ func NewBitCountOptionsBuilder() *BitCountOptions {
 
 // SetStart defines start byte to calculate bitcount in bitcount command.
 func (options *BitCountOptions) SetStart(start int64) *BitCountOptions {
-	options.Start = &start
+	options.start = &start
 	return options
 }
 
 // SetEnd defines start byte to calculate bitcount in bitcount command.
 func (options *BitCountOptions) SetEnd(end int64) *BitCountOptions {
-	options.End = &end
+	options.end = &end
 	return options
 }
 
 // SetBitmapIndexType to specify start and end are in BYTE or BIT
 func (options *BitCountOptions) SetBitmapIndexType(bitMapIndexType BitmapIndexType) *BitCountOptions {
-	options.BitMapIndexType = bitMapIndexType
+	options.bitMapIndexType = bitMapIndexType
 	return options
 }
 
@@ -47,13 +47,13 @@ func (opts *BitCountOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 
-	if opts.Start != nil {
-		args = append(args, utils.IntToString(*opts.Start))
-		if opts.End != nil {
-			args = append(args, utils.IntToString(*opts.End))
-			if opts.BitMapIndexType != "" {
-				if opts.BitMapIndexType == BIT || opts.BitMapIndexType == BYTE {
-					args = append(args, string(opts.BitMapIndexType))
+	if opts.start != nil {
+		args = append(args, utils.IntToString(*opts.start))
+		if opts.end != nil {
+			args = append(args, utils.IntToString(*opts.end))
+			if opts.bitMapIndexType != "" {
+				if opts.bitMapIndexType == BIT || opts.bitMapIndexType == BYTE {
+					args = append(args, string(opts.bitMapIndexType))
 				}
 			}
 		}
