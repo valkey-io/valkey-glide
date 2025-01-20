@@ -290,63 +290,13 @@ type HashCommands interface {
 	// [valkey.io]: https://valkey.io/commands/hincrbyfloat/
 	HIncrByFloat(key string, field string, increment float64) (float64, error)
 
-	// Iterates fields of Hash types and their associated values. This definition of HSCAN command does not include the
-	// optional arguments of the command.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	// 	key - The key of the hash.
-	// 	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
-	//
-	// Return value:
-	//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-	//  The second element is always an array of the subset of the set held in `key`. The array in the
-	//  second element is always a flattened series of String pairs, where the key is at even indices
-	//  and the value is at odd indices.
-	//
-	// Example:
-	//  // Assume key contains a hash {{"a": "1"}, {"b", "2"}}
-	//	resCursor, resCollection, err = client.HScan(key, initialCursor)
-	//  // resCursor = {0 false}
-	//  // resCollection = [{a false} {1 false} {b false} {2 false}]
-	//
-	// [valkey.io]: https://valkey.io/commands/hscan/
-	HScan(key string, cursor string) (Result[string], []Result[string], error)
-
-	// Iterates fields of Hash types and their associated values. This definition of HSCAN includes optional arguments of the
-	// command.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	// 	key - The key of the hash.
-	// 	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
-	//  options - The [api.HashScanOptions].
-	//
-	// Return value:
-	//  An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-	//  The second element is always an array of the subset of the set held in `key`. The array in the
-	//  second element is always a flattened series of String pairs, where the key is at even indices
-	//  and the value is at odd indices.
-	//
-	// Example:
-	//  // Assume key contains a hash {{"a": "1"}, {"b", "2"}}
-	//	opts := options.NewHashScanOptionsBuilder().SetMatch("a")
-	//	resCursor, resCollection, err = client.HScan(key, initialCursor, opts)
-	//  // resCursor = {0 false}
-	//  // resCollection = [{a false} {1 false}]
-	//  // The resCollection only contains the hash map entry that matches with the match option provided with the command
-	//  // input.
-	//
-	// [valkey.io]: https://valkey.io/commands/hscan/
-	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (Result[string], []Result[string], error)
+	HScan(key string, cursor string) (string, []string, error)
 
 	HRandField(key string) (Result[string], error)
 
 	HRandFieldWithCount(key string, count int64) ([]string, error)
 
 	HRandFieldWithCountWithValues(key string, count int64) ([][]string, error)
+
+	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (string, []string, error)
 }
