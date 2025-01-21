@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"strconv"
@@ -1263,6 +1264,77 @@ func (suite *GlideTestSuite) TestHScan() {
 		opts = options.NewHashScanOptionsBuilder().SetCount(int64(-1))
 		_, _, err = client.HScanWithOptions(key1, initialCursor, opts)
 		assert.NotEmpty(t, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestHRandField() {
+	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		// key does not exist
+		res, err := client.HRandField(key)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), res.IsNil())
+		resc, err := client.HRandFieldWithCount(key, 5)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), resc)
+		rescv, err := client.HRandFieldWithCountWithValues(key, 5)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), rescv)
+
+		data := map[string]string{"f1": "v1", "f2": "v2", "f3": "v3"}
+		hset, err := client.HSet(key, data)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), hset)
+
+		fields := make([]string, 0, len(data))
+		for k := range data {
+			fields = append(fields, k)
+		}
+		res, err = client.HRandField(key)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), fields, res.Value())
+
+		// With Count - positive count
+		resc, err = client.HRandFieldWithCount(key, 5)
+		assert.NoError(suite.T(), err)
+		assert.ElementsMatch(suite.T(), fields, resc)
+
+		// With Count - negative count
+		resc, err = client.HRandFieldWithCount(key, -5)
+		assert.NoError(suite.T(), err)
+		assert.Len(suite.T(), resc, 5)
+		for _, field := range resc {
+			assert.Contains(suite.T(), fields, field)
+		}
+
+		// With values - positive count
+		rescv, err = client.HRandFieldWithCountWithValues(key, 5)
+		assert.NoError(suite.T(), err)
+		resvMap := make(map[string]string)
+		for _, pair := range rescv {
+			resvMap[pair[0]] = pair[1]
+		}
+		assert.Equal(suite.T(), data, resvMap)
+
+		// With values - negative count
+		rescv, err = client.HRandFieldWithCountWithValues(key, -5)
+		assert.NoError(suite.T(), err)
+		assert.Len(suite.T(), resc, 5)
+		for _, pair := range rescv {
+			assert.Contains(suite.T(), fields, pair[0])
+		}
+
+		// key exists but holds non hash type value
+		key = uuid.NewString()
+		suite.verifyOK(client.Set(key, "HRandField"))
+		_, err = client.HRandField(key)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		_, err = client.HRandFieldWithCount(key, 42)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		_, err = client.HRandFieldWithCountWithValues(key, 42)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
 
@@ -4425,6 +4497,94 @@ func (suite *GlideTestSuite) TestXRead() {
 	})
 }
 
+func (suite *GlideTestSuite) TestXGroupSetId() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		group := uuid.NewString()
+		consumer := uuid.NewString()
+
+		// Setup: Create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries List
+		xadd, err := client.XAddWithOptions(
+			key,
+			[][]string{{"f0", "v0"}},
+			options.NewXAddOptions().SetId("1-0"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "1-0", xadd.Value())
+		xadd, err = client.XAddWithOptions(
+			key,
+			[][]string{{"f1", "v1"}},
+			options.NewXAddOptions().SetId("1-1"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "1-1", xadd.Value())
+		xadd, err = client.XAddWithOptions(
+			key,
+			[][]string{{"f2", "v2"}},
+			options.NewXAddOptions().SetId("1-2"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "1-2", xadd.Value())
+
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "create", key, group, "0"},
+			"Can't send XGROUP CREATE as a custom command",
+		)
+
+		xreadgroup, err := client.XReadGroup(group, consumer, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]map[string][][]string{
+			key: {
+				"1-0": {{"f0", "v0"}},
+				"1-1": {{"f1", "v1"}},
+				"1-2": {{"f2", "v2"}},
+			},
+		}, xreadgroup)
+
+		// Sanity check: xreadgroup should not return more entries since they're all already in the
+		// Pending Entries List.
+		xreadgroup, err = client.XReadGroup(group, consumer, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		assert.Nil(suite.T(), xreadgroup)
+
+		// Reset the last delivered ID for the consumer group to "1-1"
+		if suite.serverVersion < "7.0.0" {
+			suite.verifyOK(client.XGroupSetId(key, group, "1-1"))
+		} else {
+			opts := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(42)
+			suite.verifyOK(client.XGroupSetIdWithOptions(key, group, "1-1", opts))
+		}
+
+		// xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
+		xreadgroup, err = client.XReadGroup(group, consumer, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]map[string][][]string{
+			key: {
+				"1-2": {{"f2", "v2"}},
+			},
+		}, xreadgroup)
+
+		// An error is raised if XGROUP SETID is called with a non-existing key
+		_, err = client.XGroupSetId(uuid.NewString(), group, "1-1")
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// An error is raised if XGROUP SETID is called with a non-existing group
+		_, err = client.XGroupSetId(key, uuid.NewString(), "1-1")
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// Setting the ID to a non-existing ID is allowed
+		suite.verifyOK(client.XGroupSetId(key, group, "99-99"))
+
+		// key exists, but is not a stream
+		key = uuid.NewString()
+		suite.verifyOK(client.Set(key, "xgroup setid"))
+		_, err = client.XGroupSetId(key, group, "1-1")
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
@@ -5900,36 +6060,42 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 	})
 }
 
-// TODO add XGroupDestroy tests there
 func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.NewString()
-		group1 := uuid.NewString()
-		group2 := uuid.NewString()
+		group := uuid.NewString()
 		id := "0-1"
 
 		// Stream not created results in error
-		_, err := client.XGroupCreate(key, group1, id)
+		_, err := client.XGroupCreate(key, group, id)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
 		// Stream with option to create creates stream & Group
 		opts := options.NewXGroupCreateOptions().SetMakeStream()
-		suite.verifyOK(client.XGroupCreateWithOptions(key, group1, id, opts))
+		suite.verifyOK(client.XGroupCreateWithOptions(key, group, id, opts))
 
 		// ...and again results in BUSYGROUP error, because group names must be unique
-		_, err = client.XGroupCreate(key, group1, id)
+		_, err = client.XGroupCreate(key, group, id)
 		assert.ErrorContains(suite.T(), err, "BUSYGROUP")
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
-		// TODO add XGroupDestroy tests there
+		// Stream Group can be destroyed returns: true
+		destroyed, err := client.XGroupDestroy(key, group)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), destroyed)
+
+		// ...and again results in: false
+		destroyed, err = client.XGroupDestroy(key, group)
+		assert.NoError(suite.T(), err)
+		assert.False(suite.T(), destroyed)
 
 		// ENTRIESREAD option was added in valkey 7.0.0
 		opts = options.NewXGroupCreateOptions().SetEntriesRead(100)
 		if suite.serverVersion >= "7.0.0" {
-			suite.verifyOK(client.XGroupCreateWithOptions(key, group2, id, opts))
+			suite.verifyOK(client.XGroupCreateWithOptions(key, group, id, opts))
 		} else {
-			_, err = client.XGroupCreateWithOptions(key, group2, id, opts)
+			_, err = client.XGroupCreateWithOptions(key, group, id, opts)
 			assert.Error(suite.T(), err)
 			assert.IsType(suite.T(), &api.RequestError{}, err)
 		}
@@ -5937,7 +6103,7 @@ func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 		// key is not a stream
 		key = uuid.NewString()
 		suite.verifyOK(client.Set(key, id))
-		_, err = client.XGroupCreate(key, group1, id)
+		_, err = client.XGroupCreate(key, group, id)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
@@ -6498,28 +6664,29 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.NotNil(suite.T(), streamId3)
 
 		// xack that streamid1 and streamid2 have been processed
-		command := []string{"XAck", key, groupName, streamId1.Value(), streamId2.Value()}
-		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+		xackResult, err := client.XAck(key, groupName, []string{streamId1.Value(), streamId2.Value()})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), xackResult)
 
 		// Delete the consumer group and expect 0 pending messages
 		respInt64, err = client.XGroupDelConsumer(key, groupName, consumerName)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), respInt64)
 
-		// TODO: Use XAck when it is added to the Go client
 		// xack streamid_1, and streamid_2 already received returns 0L
-		command = []string{"XAck", key, groupName, streamId1.Value(), streamId2.Value()}
-		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+		xackResult, err = client.XAck(key, groupName, []string{streamId1.Value(), streamId2.Value()})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), xackResult)
 
 		// Consume the last message with the previously deleted consumer (creates the consumer anew)
 		resp, err = client.XReadGroup(groupName, consumerName, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1, len(resp[key]))
 
-		// TODO: Use XAck when it is added to the Go client
 		// Use non existent group, so xack streamid_3 returns 0
-		command = []string{"XAck", key, "non-existent-group", streamId3.Value()}
-		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+		xackResult, err = client.XAck(key, "non-existent-group", []string{streamId3.Value()})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), xackResult)
 
 		// Delete the consumer group and expect 1 pending message
 		respInt64, err = client.XGroupDelConsumer(key, groupName, consumerName)
@@ -6536,5 +6703,192 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		_, err = client.XGroupDelConsumer(stringKey, groupName, consumerName)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestSetBit_SetSingleBit() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		var resultInt64 int64
+		resultInt64, err := client.SetBit(key, 7, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
+
+		result, err := client.Get(key)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), result.Value(), "\x01")
+	})
+}
+
+func (suite *GlideTestSuite) TestSetBit_SetAndCheckPreviousBit() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		var resultInt64 int64
+		resultInt64, err := client.SetBit(key, 7, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
+
+		resultInt64, err = client.SetBit(key, 7, 0)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), resultInt64)
+	})
+}
+
+func (suite *GlideTestSuite) TestSetBit_SetMultipleBits() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		var resultInt64 int64
+
+		resultInt64, err := client.SetBit(key, 3, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
+
+		resultInt64, err = client.SetBit(key, 5, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
+
+		result, err := client.Get(key)
+		assert.NoError(suite.T(), err)
+		value := result.Value()
+
+		binaryString := fmt.Sprintf("%08b", value[0])
+
+		assert.Equal(suite.T(), "00010100", binaryString)
+	})
+}
+
+func (suite *GlideTestSuite) TestWait() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "test")
+		// Test 1:  numberOfReplicas (2)
+		resultInt64, err := client.Wait(2, 2000)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), resultInt64 >= 2)
+
+		// Test 2: Invalid timeout (negative)
+		_, err = client.Wait(2, -1)
+
+		// Assert error and message for invalid timeout
+		assert.NotNil(suite.T(), err)
+	})
+}
+
+func (suite *GlideTestSuite) TestGetBit_ExistingKey_ValidOffset() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		offset := int64(7)
+		value := int64(1)
+
+		client.SetBit(key, offset, value)
+
+		result, err := client.GetBit(key, offset)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), value, result)
+	})
+}
+
+func (suite *GlideTestSuite) TestGetBit_NonExistentKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		offset := int64(10)
+
+		result, err := client.GetBit(key, offset)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestGetBit_InvalidOffset() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		invalidOffset := int64(-1)
+
+		_, err := client.GetBit(key, invalidOffset)
+		assert.NotNil(suite.T(), err)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitCount_ExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		for i := int64(0); i < 8; i++ {
+			client.SetBit(key, i, 1)
+		}
+
+		result, err := client.BitCount(key)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(8), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitCount_ZeroBits() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		result, err := client.BitCount(key)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitCountWithOptions_StartEnd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value := "TestBitCountWithOptions_StartEnd"
+
+		client.Set(key, value)
+
+		start := int64(1)
+		end := int64(5)
+		opts := &options.BitCountOptions{}
+		opts.SetStart(start)
+		opts.SetEnd(end)
+
+		result, err := client.BitCountWithOptions(key, opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(19), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndByte() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value := "TestBitCountWithOptions_StartEnd"
+
+		client.Set(key, value)
+
+		start := int64(1)
+		end := int64(5)
+		opts := &options.BitCountOptions{}
+		opts.SetStart(start)
+		opts.SetEnd(end)
+		opts.SetBitmapIndexType(options.BYTE)
+
+		result, err := client.BitCountWithOptions(key, opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(19), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value := "TestBitCountWithOptions_StartEnd"
+
+		client.Set(key, value)
+
+		start := int64(1)
+		end := int64(5)
+		opts := &options.BitCountOptions{}
+		opts.SetStart(start)
+		opts.SetEnd(end)
+		opts.SetBitmapIndexType(options.BIT)
+
+		result, err := client.BitCountWithOptions(key, opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), result)
 	})
 }

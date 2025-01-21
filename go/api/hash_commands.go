@@ -38,5 +38,11 @@ type HashCommands interface {
 
 	HScan(key string, cursor string) (string, []string, error)
 
+	HRandField(key string) (Result[string], error)
+
+	HRandFieldWithCount(key string, count int64) ([]string, error)
+
+	HRandFieldWithCountWithValues(key string, count int64) ([][]string, error)
+
 	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (string, []string, error)
 }

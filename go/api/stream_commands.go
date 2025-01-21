@@ -65,11 +65,19 @@ type StreamCommands interface {
 
 	XPendingWithOptions(key string, group string, options *options.XPendingOptions) ([]XPendingDetail, error)
 
+	XGroupSetId(key string, group string, id string) (string, error)
+
+	XGroupSetIdWithOptions(key string, group string, id string, opts *options.XGroupSetIdOptions) (string, error)
+
 	XGroupCreate(key string, group string, id string) (string, error)
 
 	XGroupCreateWithOptions(key string, group string, id string, opts *options.XGroupCreateOptions) (string, error)
 
+	XGroupDestroy(key string, group string) (bool, error)
+
 	XGroupCreateConsumer(key string, group string, consumer string) (bool, error)
 
 	XGroupDelConsumer(key string, group string, consumer string) (int64, error)
+
+	XAck(key string, group string, ids []string) (int64, error)
 }

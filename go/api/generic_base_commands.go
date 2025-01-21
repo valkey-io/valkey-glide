@@ -75,4 +75,6 @@ type GenericBaseCommands interface {
 	SortReadOnly(key string) ([]Result[string], error)
 
 	SortReadOnlyWithOptions(key string, sortOptions *options.SortOptions) ([]Result[string], error)
+
+	Wait(numberOfReplicas int64, timeout int64) (int64, error)
 }
