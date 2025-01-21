@@ -588,6 +588,7 @@ type mapConverter[T any] struct {
 	canBeNil bool
 }
 
+// Converts an untyped map into a map[string]T
 func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
 	if data == nil {
 		if node.canBeNil {
@@ -598,14 +599,17 @@ func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
 	}
 	result := make(map[string]T)
 
+	// Iterate over the map and convert each value to T
 	for key, value := range data.(map[string]interface{}) {
 		if node.next == nil {
+			// try direct conversion to T when there is no next converter
 			valueT, ok := value.(T)
 			if !ok {
 				return nil, &RequestError{fmt.Sprintf("Unexpected type of map element: %T, expected: %v", value, getType[T]())}
 			}
 			result[key] = valueT
 		} else {
+			// nested iteration when there is a next converter
 			val, err := node.next.convert(value)
 			if err != nil {
 				return nil, err
@@ -615,6 +619,7 @@ func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
 				result[key] = null
 				continue
 			}
+			// convert to T
 			valueT, ok := val.(T)
 			if !ok {
 				return nil, &RequestError{fmt.Sprintf("Unexpected type of map element: %T, expected: %v", val, getType[T]())}
@@ -673,6 +678,38 @@ func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
 }
 
 // TODO: convert sets
+
+func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (map[string][][]string, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	mapData, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := mapConverter[[][]string]{
+		arrayConverter[[]string]{
+			arrayConverter[string]{
+				nil,
+				false,
+			},
+			false,
+		},
+		false,
+	}.convert(mapData)
+	if err != nil {
+		return nil, err
+	}
+	claimedEntries, ok := converted.(map[string][][]string)
+	if !ok {
+		return nil, &RequestError{fmt.Sprintf("unexpected type of second element: %T", converted)}
+	}
+
+	return claimedEntries, nil
+}
 
 func handleXAutoClaimResponse(response *C.struct_CommandResponse) (XAutoClaimResponse, error) {
 	defer C.free_command_response(response)
