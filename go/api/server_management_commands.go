@@ -37,11 +37,11 @@ type ServerManagementCommands interface {
 	//
 	// For example:
 	//	result, err := client.ConfigGet([]string{"timeout" , "maxmemory"})
-	//	result[api.CreateStringResult("timeout")] = api.CreateStringResult("1000")
-	//	result[api.CreateStringResult"maxmemory")] = api.CreateStringResult("1GB")
+	//	// result["timeout"] = "1000"
+	//	// result["maxmemory"] = "1GB"
 	//
 	// [valkey.io]: https://valkey.io/commands/config-get/
-	ConfigGet(args []string) (map[Result[string]]Result[string], error)
+	ConfigGet(args []string) (map[string]string, error)
 
 	// Sets configuration parameters to the specified values.
 	//
