@@ -704,6 +704,8 @@ type GenericBaseCommands interface {
 	// [valkey.io]: https://valkey.io/commands/sort/
 	SortReadOnlyWithOptions(key string, sortOptions *options.SortOptions) ([]Result[string], error)
 
+	Wait(numberOfReplicas int64, timeout int64) (int64, error)
+
 	Copy(source string, destination string) (bool, error)
 
 	CopyWithOptions(source string, destination string, option *CopyOptions) (bool, error)
