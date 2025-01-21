@@ -2935,8 +2935,8 @@ func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeB
 //
 // Return value:
 //
-//		A string representing a random member from the sorted set.
-//	   If the sorted set does not exist or is empty, the response will be `nil`.
+//	A string representing a random member from the sorted set.
+//	If the sorted set does not exist or is empty, the response will be `nil`.
 //
 // Example:
 //
