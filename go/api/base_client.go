@@ -1561,7 +1561,7 @@ func (client *baseClient) XReadWithOptions(
 //
 // Return value:
 // A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-// a key does not exist or does not contain requiested entries.
+// a key does not exist or does not contain requested entries.
 //
 // For example:
 //
@@ -2634,6 +2634,71 @@ func (client *baseClient) Echo(message string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
+}
+
+// Sets the last delivered ID for a consumer group.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The newly created consumer group name.
+//	id - The stream entry ID that should be set as the last delivered ID for the consumer group.
+//
+// Return value:
+//
+//	`"OK"`.
+//
+// Example:
+//
+//	ok, err := client.XGroupSetId("mystream", "mygroup", "0-0")
+//	if ok != "OK" || err != nil {
+//		// handle error
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-create/
+func (client *baseClient) XGroupSetId(key string, group string, id string) (string, error) {
+	return client.XGroupSetIdWithOptions(key, group, id, options.NewXGroupSetIdOptionsOptions())
+}
+
+// Sets the last delivered ID for a consumer group.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The newly created consumer group name.
+//	id - The stream entry ID that should be set as the last delivered ID for the consumer group.
+//	opts - The options for the command. See [options.XGroupSetIdOptions] for details.
+//
+// Return value:
+//
+//	`"OK"`.
+//
+// Example:
+//
+//	opts := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(42)
+//	ok, err := client.XGroupSetIdWithOptions("mystream", "mygroup", "0-0", opts)
+//	if ok != "OK" || err != nil {
+//		// handle error
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-create/
+func (client *baseClient) XGroupSetIdWithOptions(
+	key string,
+	group string,
+	id string,
+	opts *options.XGroupSetIdOptions,
+) (string, error) {
+	optionArgs, _ := opts.ToArgs()
+	args := append([]string{key, group, id}, optionArgs...)
+	result, err := client.executeCommand(C.XGroupSetId, args)
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(result)
 }
 
 // Removes all elements in the sorted set stored at `key` with a lexicographical order
