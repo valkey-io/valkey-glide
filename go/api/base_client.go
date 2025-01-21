@@ -2953,16 +2953,15 @@ func (client *baseClient) XGroupDelConsumer(
 //
 // Return value:
 //
-//	 true if source was copied
-//		false if source was not copied.
+//	`true` if source was copied, `false` if source was not copied.
 //
 // Example:
 //
-//	 result, err := client.Copy([]string{"source, destination"})
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result) // Output: true
+//	result, err := client.Copy([]string{"source, destination"})
+//	if err != nil {
+//	   // handle error
+//	}
+//	fmt.Println(result) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/copy/
 func (client *baseClient) Copy(source string, destination string) (bool, error) {
@@ -2987,17 +2986,16 @@ func (client *baseClient) Copy(source string, destination string) (bool, error) 
 
 // Return value:
 //
-//	 true if source was copied
-//		false if source was not copied.
+//	`true` if source was copied, `false` if source was not copied.
 //
 // Example:
 //
-//	 copyOptions := api.NewCopyOptionsBuilder().SetDBDestination(2).SetReplace()
-//	 result, err := client.Copy([]string{"source, destination",copyOptions})
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result) // Output: true
+//	copyOptions := api.NewCopyOptionsBuilder().SetDBDestination(2).SetReplace()
+//	result, err := client.Copy([]string{"source, destination",copyOptions})
+//	if err != nil {
+//	   // handle error
+//	}
+//	fmt.Println(result) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/copy/
 func (client *baseClient) CopyWithOptions(source string, destination string,

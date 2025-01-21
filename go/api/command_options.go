@@ -388,7 +388,7 @@ func (opts *CopyOptions) toArgs() ([]string, error) {
 	if opts.replace != "" {
 		args = append(args, string(opts.replace))
 	}
-	if opts.dbDestination != 0 {
+	if opts.dbDestination != -0 {
 		args = append(args, "DB", utils.IntToString(opts.dbDestination))
 	}
 	return args, err
