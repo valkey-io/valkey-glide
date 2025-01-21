@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"strconv"
@@ -6702,5 +6703,192 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		_, err = client.XGroupDelConsumer(stringKey, groupName, consumerName)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestSetBit_SetSingleBit() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		var resultInt64 int64
+		resultInt64, err := client.SetBit(key, 7, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
+
+		result, err := client.Get(key)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), result.Value(), "\x01")
+	})
+}
+
+func (suite *GlideTestSuite) TestSetBit_SetAndCheckPreviousBit() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		var resultInt64 int64
+		resultInt64, err := client.SetBit(key, 7, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
+
+		resultInt64, err = client.SetBit(key, 7, 0)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), resultInt64)
+	})
+}
+
+func (suite *GlideTestSuite) TestSetBit_SetMultipleBits() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		var resultInt64 int64
+
+		resultInt64, err := client.SetBit(key, 3, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
+
+		resultInt64, err = client.SetBit(key, 5, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
+
+		result, err := client.Get(key)
+		assert.NoError(suite.T(), err)
+		value := result.Value()
+
+		binaryString := fmt.Sprintf("%08b", value[0])
+
+		assert.Equal(suite.T(), "00010100", binaryString)
+	})
+}
+
+func (suite *GlideTestSuite) TestWait() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "test")
+		// Test 1:  numberOfReplicas (2)
+		resultInt64, err := client.Wait(2, 2000)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), resultInt64 >= 2)
+
+		// Test 2: Invalid timeout (negative)
+		_, err = client.Wait(2, -1)
+
+		// Assert error and message for invalid timeout
+		assert.NotNil(suite.T(), err)
+	})
+}
+
+func (suite *GlideTestSuite) TestGetBit_ExistingKey_ValidOffset() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		offset := int64(7)
+		value := int64(1)
+
+		client.SetBit(key, offset, value)
+
+		result, err := client.GetBit(key, offset)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), value, result)
+	})
+}
+
+func (suite *GlideTestSuite) TestGetBit_NonExistentKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		offset := int64(10)
+
+		result, err := client.GetBit(key, offset)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestGetBit_InvalidOffset() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		invalidOffset := int64(-1)
+
+		_, err := client.GetBit(key, invalidOffset)
+		assert.NotNil(suite.T(), err)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitCount_ExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		for i := int64(0); i < 8; i++ {
+			client.SetBit(key, i, 1)
+		}
+
+		result, err := client.BitCount(key)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(8), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitCount_ZeroBits() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		result, err := client.BitCount(key)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitCountWithOptions_StartEnd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value := "TestBitCountWithOptions_StartEnd"
+
+		client.Set(key, value)
+
+		start := int64(1)
+		end := int64(5)
+		opts := &options.BitCountOptions{}
+		opts.SetStart(start)
+		opts.SetEnd(end)
+
+		result, err := client.BitCountWithOptions(key, opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(19), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndByte() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value := "TestBitCountWithOptions_StartEnd"
+
+		client.Set(key, value)
+
+		start := int64(1)
+		end := int64(5)
+		opts := &options.BitCountOptions{}
+		opts.SetStart(start)
+		opts.SetEnd(end)
+		opts.SetBitmapIndexType(options.BYTE)
+
+		result, err := client.BitCountWithOptions(key, opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(19), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value := "TestBitCountWithOptions_StartEnd"
+
+		client.Set(key, value)
+
+		start := int64(1)
+		end := int64(5)
+		opts := &options.BitCountOptions{}
+		opts.SetStart(start)
+		opts.SetEnd(end)
+		opts.SetBitmapIndexType(options.BIT)
+
+		result, err := client.BitCountWithOptions(key, opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), result)
 	})
 }
