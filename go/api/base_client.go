@@ -3317,11 +3317,11 @@ func (client *baseClient) BitCountWithOptions(key string, opts *options.BitCount
 //
 // Parameters:
 //
-//	key      - The key of the stream.
-//	group    - The name of the consumer group.
-//	consumer - The name of the consumer.
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
 //	minIdleTime - The minimum idle time in milliseconds.
-//	ids        - The ids of the entries to claim.
+//	ids         - The ids of the entries to claim.
 //
 // Return value:
 //
@@ -3350,12 +3350,12 @@ func (client *baseClient) XClaim(
 //
 // Parameters:
 //
-//	key      - The key of the stream.
-//	group    - The name of the consumer group.
-//	consumer - The name of the consumer.
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
 //	minIdleTime - The minimum idle time in milliseconds.
-//	ids        - The ids of the entries to claim.
-//	options    - Stream claim options.
+//	ids         - The ids of the entries to claim.
+//	options     - Stream claim options.
 //
 // Return value:
 //
@@ -3405,12 +3405,12 @@ func (client *baseClient) XClaimWithOptions(
 //
 // Parameters:
 //
-//	key      - The key of the stream.
-//	group    - The name of the consumer group.
-//	consumer - The name of the consumer.
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
 //	minIdleTime - The minimum idle time in milliseconds.
-//	ids        - The ids of the entries to claim.
-//	options    - Stream claim options.
+//	ids         - The ids of the entries to claim.
+//	options     - Stream claim options.
 //
 // Return value:
 //
@@ -3445,12 +3445,12 @@ func (client *baseClient) XClaimJustId(
 //
 // Parameters:
 //
-//	key      - The key of the stream.
-//	group    - The name of the consumer group.
-//	consumer - The name of the consumer.
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
 //	minIdleTime - The minimum idle time in milliseconds.
-//	ids        - The ids of the entries to claim.
-//	options    - Stream claim options.
+//	ids         - The ids of the entries to claim.
+//	options     - Stream claim options.
 //
 // Return value:
 //
