@@ -2947,9 +2947,9 @@ func (client *baseClient) XGroupDelConsumer(
 //
 // Parameters:
 //
-//	key      - The key of the stream.
-//	group    - he consumer group name.
-//	ids      - Stream entry IDs to acknowledge and purge messages.
+//	key   - The key of the stream.
+//	group - he consumer group name.
+//	ids   - Stream entry IDs to acknowledge and purge messages.
 //
 // Return value:
 //
