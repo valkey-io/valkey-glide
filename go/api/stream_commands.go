@@ -164,4 +164,32 @@ type StreamCommands interface {
 	XGroupDelConsumer(key string, group string, consumer string) (int64, error)
 
 	XAck(key string, group string, ids []string) (int64, error)
+
+	XClaim(
+		key string,
+		group string,
+		consumer string,
+		minIdleTime int64,
+		ids []string,
+	) (map[string][][]string, error)
+
+	XClaimWithOptions(
+		key string,
+		group string,
+		consumer string,
+		minIdleTime int64,
+		ids []string,
+		options *options.StreamClaimOptions,
+	) (map[string][][]string, error)
+
+	XClaimJustId(key string, group string, consumer string, minIdleTime int64, ids []string) ([]string, error)
+
+	XClaimJustIdWithOptions(
+		key string,
+		group string,
+		consumer string,
+		minIdleTime int64,
+		ids []string,
+		options *options.StreamClaimOptions,
+	) ([]string, error)
 }

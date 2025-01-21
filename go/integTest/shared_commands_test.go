@@ -5757,7 +5757,12 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			invalidConsumer := "invalid-consumer-" + uuid.New().String()
 
 			suite.verifyOK(
-				client.XGroupCreateWithOptions(key, groupName, zeroStreamId, options.NewXGroupCreateOptions().SetMakeStream()),
+				client.XGroupCreateWithOptions(
+					key,
+					groupName,
+					zeroStreamId,
+					options.NewXGroupCreateOptions().SetMakeStream(),
+				),
 			)
 
 			command := []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
@@ -6890,5 +6895,318 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
 		result, err := client.BitCountWithOptions(key, opts)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestXPendingAndXClaim() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// 1. Arrange the data
+		key := uuid.New().String()
+		groupName := "group" + uuid.New().String()
+		zeroStreamId := "0"
+		consumer1 := "consumer-1-" + uuid.New().String()
+		consumer2 := "consumer-2-" + uuid.New().String()
+
+		resp, err := client.XGroupCreateWithOptions(
+			key,
+			groupName,
+			zeroStreamId,
+			options.NewXGroupCreateOptions().SetMakeStream(),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", resp)
+
+		respBool, err := client.XGroupCreateConsumer(key, groupName, consumer1)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), respBool)
+
+		respBool, err = client.XGroupCreateConsumer(key, groupName, consumer2)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), respBool)
+
+		// Add two stream entries for consumer 1
+		streamid_1, err := client.XAdd(key, [][]string{{"field1", "value1"}})
+		assert.NoError(suite.T(), err)
+		streamid_2, err := client.XAdd(key, [][]string{{"field2", "value2"}})
+		assert.NoError(suite.T(), err)
+
+		// Read the stream entries for consumer 1 and mark messages as pending
+		xReadGroupResult1, err := client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		expectedResult := map[string]map[string][][]string{
+			key: {
+				streamid_1.Value(): {{"field1", "value1"}},
+				streamid_2.Value(): {{"field2", "value2"}},
+			},
+		}
+		assert.Equal(suite.T(), expectedResult, xReadGroupResult1)
+
+		// Add 3 more stream entries for consumer 2
+		streamid_3, err := client.XAdd(key, [][]string{{"field3", "value3"}})
+		assert.NoError(suite.T(), err)
+		streamid_4, err := client.XAdd(key, [][]string{{"field4", "value4"}})
+		assert.NoError(suite.T(), err)
+		streamid_5, err := client.XAdd(key, [][]string{{"field5", "value5"}})
+		assert.NoError(suite.T(), err)
+
+		// read the entire stream for consumer 2 and mark messages as pending
+		xReadGroupResult2, err := client.XReadGroup(groupName, consumer2, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		expectedResult2 := map[string]map[string][][]string{
+			key: {
+				streamid_3.Value(): {{"field3", "value3"}},
+				streamid_4.Value(): {{"field4", "value4"}},
+				streamid_5.Value(): {{"field5", "value5"}},
+			},
+		}
+		assert.Equal(suite.T(), expectedResult2, xReadGroupResult2)
+
+		expectedSummary := api.XPendingSummary{
+			NumOfMessages: 5,
+			StartId:       streamid_1,
+			EndId:         streamid_5,
+			ConsumerMessages: []api.ConsumerPendingMessage{
+				{ConsumerName: consumer1, MessageCount: 2},
+				{ConsumerName: consumer2, MessageCount: 3},
+			},
+		}
+		summaryResult, err := client.XPending(key, groupName)
+		assert.NoError(suite.T(), err)
+		assert.True(
+			suite.T(),
+			reflect.DeepEqual(expectedSummary, summaryResult),
+			"Expected and actual results do not match",
+		)
+
+		// ensure idle time > 0
+		time.Sleep(2000 * time.Millisecond)
+		pendingResultExtended, err := client.XPendingWithOptions(
+			key,
+			groupName,
+			options.NewXPendingOptions("-", "+", 10),
+		)
+		assert.NoError(suite.T(), err)
+
+		assert.Greater(suite.T(), len(pendingResultExtended), 2)
+		// because of the idle time return, we have to exclude it from the expected result
+		// and check separately
+		assert.Equal(suite.T(), pendingResultExtended[0].Id, streamid_1.Value())
+		assert.Equal(suite.T(), pendingResultExtended[0].ConsumerName, consumer1)
+		assert.GreaterOrEqual(suite.T(), pendingResultExtended[0].DeliveryCount, int64(0))
+
+		assert.Equal(suite.T(), pendingResultExtended[1].Id, streamid_2.Value())
+		assert.Equal(suite.T(), pendingResultExtended[1].ConsumerName, consumer1)
+		assert.GreaterOrEqual(suite.T(), pendingResultExtended[1].DeliveryCount, int64(0))
+
+		assert.Equal(suite.T(), pendingResultExtended[2].Id, streamid_3.Value())
+		assert.Equal(suite.T(), pendingResultExtended[2].ConsumerName, consumer2)
+		assert.GreaterOrEqual(suite.T(), pendingResultExtended[2].DeliveryCount, int64(0))
+
+		assert.Equal(suite.T(), pendingResultExtended[3].Id, streamid_4.Value())
+		assert.Equal(suite.T(), pendingResultExtended[3].ConsumerName, consumer2)
+		assert.GreaterOrEqual(suite.T(), pendingResultExtended[3].DeliveryCount, int64(0))
+
+		assert.Equal(suite.T(), pendingResultExtended[4].Id, streamid_5.Value())
+		assert.Equal(suite.T(), pendingResultExtended[4].ConsumerName, consumer2)
+		assert.GreaterOrEqual(suite.T(), pendingResultExtended[4].DeliveryCount, int64(0))
+
+		// use claim to claim stream 3 and 5 for consumer 1
+		claimResult, err := client.XClaim(
+			key,
+			groupName,
+			consumer1,
+			int64(0),
+			[]string{streamid_3.Value(), streamid_5.Value()},
+		)
+		assert.NoError(suite.T(), err)
+		expectedClaimResult := map[string][][]string{
+			streamid_3.Value(): {{"field3", "value3"}},
+			streamid_5.Value(): {{"field5", "value5"}},
+		}
+		assert.Equal(suite.T(), expectedClaimResult, claimResult)
+
+		claimResultJustId, err := client.XClaimJustId(
+			key,
+			groupName,
+			consumer1,
+			int64(0),
+			[]string{streamid_3.Value(), streamid_5.Value()},
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{streamid_3.Value(), streamid_5.Value()}, claimResultJustId)
+
+		// add one more stream
+		streamid_6, err := client.XAdd(key, [][]string{{"field6", "value6"}})
+		assert.NoError(suite.T(), err)
+
+		// using force, we can xclaim the message without reading it
+		claimResult, err = client.XClaimWithOptions(
+			key,
+			groupName,
+			consumer1,
+			int64(0),
+			[]string{streamid_6.Value()},
+			options.NewStreamClaimOptions().SetForce().SetRetryCount(99),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string][][]string{streamid_6.Value(): {{"field6", "value6"}}}, claimResult)
+
+		forcePendingResult, err := client.XPendingWithOptions(
+			key,
+			groupName,
+			options.NewXPendingOptions(streamid_6.Value(), streamid_6.Value(), 1),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 1, len(forcePendingResult))
+		assert.Equal(suite.T(), streamid_6.Value(), forcePendingResult[0].Id)
+		assert.Equal(suite.T(), consumer1, forcePendingResult[0].ConsumerName)
+		assert.Equal(suite.T(), int64(99), forcePendingResult[0].DeliveryCount)
+
+		// acknowledge streams 2, 3, 4 and 6 and remove them from xpending results
+		xackResult, err := client.XAck(
+			key, groupName,
+			[]string{streamid_2.Value(), streamid_3.Value(), streamid_4.Value(), streamid_6.Value()})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), xackResult)
+
+		pendingResultExtended, err = client.XPendingWithOptions(
+			key,
+			groupName,
+			options.NewXPendingOptions(streamid_3.Value(), "+", 10),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 1, len(pendingResultExtended))
+		assert.Equal(suite.T(), streamid_5.Value(), pendingResultExtended[0].Id)
+		assert.Equal(suite.T(), consumer1, pendingResultExtended[0].ConsumerName)
+
+		pendingResultExtended, err = client.XPendingWithOptions(
+			key,
+			groupName,
+			options.NewXPendingOptions("-", "("+streamid_5.Value(), 10),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 1, len(pendingResultExtended))
+		assert.Equal(suite.T(), streamid_1.Value(), pendingResultExtended[0].Id)
+		assert.Equal(suite.T(), consumer1, pendingResultExtended[0].ConsumerName)
+
+		pendingResultExtended, err = client.XPendingWithOptions(
+			key,
+			groupName,
+			options.NewXPendingOptions("-", "+", 10).SetMinIdleTime(1).SetConsumer(consumer1),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 2, len(pendingResultExtended))
+	})
+}
+
+func (suite *GlideTestSuite) TestXClaimFailure() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		stringKey := "string-key-" + uuid.New().String()
+		groupName := "group" + uuid.New().String()
+		zeroStreamId := "0"
+		consumer1 := "consumer-1-" + uuid.New().String()
+
+		// create group and consumer for the group
+		groupCreateResult, err := client.XGroupCreateWithOptions(
+			key,
+			groupName,
+			zeroStreamId,
+			options.NewXGroupCreateOptions().SetMakeStream(),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", groupCreateResult)
+
+		consumerCreateResult, err := client.XGroupCreateConsumer(key, groupName, consumer1)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), consumerCreateResult)
+
+		// Add stream entry and mark as pending
+		streamid_1, err := client.XAdd(key, [][]string{{"field1", "value1"}})
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), streamid_1)
+
+		readGroupResult, err := client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), readGroupResult)
+
+		// claim with invalid stream entry IDs
+		_, err = client.XClaimJustId(key, groupName, consumer1, int64(1), []string{"invalid-stream-id"})
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// claim with empty stream entry IDs returns empty map
+		claimResult, err := client.XClaimJustId(key, groupName, consumer1, int64(1), []string{})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{}, claimResult)
+
+		// non existent key causes a RequestError
+		claimOptions := options.NewStreamClaimOptions().SetIdleTime(1)
+		_, err = client.XClaim(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.Contains(suite.T(), err.Error(), "NOGROUP")
+
+		_, err = client.XClaimWithOptions(
+			stringKey,
+			groupName,
+			consumer1,
+			int64(1),
+			[]string{streamid_1.Value()},
+			claimOptions,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.Contains(suite.T(), err.Error(), "NOGROUP")
+
+		_, err = client.XClaimJustId(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.Contains(suite.T(), err.Error(), "NOGROUP")
+
+		_, err = client.XClaimJustIdWithOptions(
+			stringKey,
+			groupName,
+			consumer1,
+			int64(1),
+			[]string{streamid_1.Value()},
+			claimOptions,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.Contains(suite.T(), err.Error(), "NOGROUP")
+
+		// key exists, but is not a stream
+		_, err = client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		_, err = client.XClaim(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		_, err = client.XClaimWithOptions(
+			stringKey,
+			groupName,
+			consumer1,
+			int64(1),
+			[]string{streamid_1.Value()},
+			claimOptions,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		_, err = client.XClaimJustId(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		_, err = client.XClaimJustIdWithOptions(
+			stringKey,
+			groupName,
+			consumer1,
+			int64(1),
+			[]string{streamid_1.Value()},
+			claimOptions,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
