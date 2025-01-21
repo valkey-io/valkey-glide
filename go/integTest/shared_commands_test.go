@@ -4100,7 +4100,7 @@ func sendWithCustomCommand(suite *GlideTestSuite, client api.BaseClient, args []
 	switch c := client.(type) {
 	case api.IGlideClient:
 		res, err = c.CustomCommand(args)
-	case api.GlideClusterClient:
+	case api.IGlideClusterClient:
 		res, err = c.CustomCommand(args)
 	default:
 		suite.FailNow(errMsg)
@@ -5486,7 +5486,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			assert.Equal(suite.T(), streamid_2.Value(), detailResult[1].Id)
 		}
 
-		execCluster := func(client api.GlideClusterClient) {
+		execCluster := func(client api.IGlideClusterClient) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			groupName := "group" + uuid.New().String()
@@ -5570,7 +5570,7 @@ func (suite *GlideTestSuite) TestXPending() {
 		switch c := client.(type) {
 		case api.IGlideClient:
 			execStandalone(c)
-		case api.GlideClusterClient:
+		case api.IGlideClusterClient:
 			execCluster(c)
 		}
 	})
@@ -5736,7 +5736,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.True(suite.T(), strings.Contains(err.Error(), "WRONGTYPE"))
 		}
 
-		execCluster := func(client api.GlideClusterClient) {
+		execCluster := func(client api.IGlideClusterClient) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			missingKey := uuid.New().String()
@@ -5894,7 +5894,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 		switch c := client.(type) {
 		case api.IGlideClient:
 			execStandalone(c)
-		case api.GlideClusterClient:
+		case api.IGlideClusterClient:
 			execCluster(c)
 		}
 	})

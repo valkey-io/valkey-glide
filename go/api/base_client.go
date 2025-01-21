@@ -22,7 +22,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// BaseClient defines an interface for methods common to both [IGlideClient] and [GlideClusterClient].
+// BaseClient defines an interface for methods common to both [IGlideClient] and [IGlideClusterClient].
 type BaseClient interface {
 	StringCommands
 	HashCommands
@@ -1275,8 +1275,8 @@ func (client *baseClient) HScan(key string, cursor string) (string, []string, er
 //	// Assume key contains a hash {{"a": "1"}, {"b", "2"}}
 //	opts := options.NewHashScanOptionsBuilder().SetMatch("a")
 //	resCursor, resCollection, err = client.HScan(key, initialCursor, opts)
-//	// resCursor = {0 false}
-//	// resCollection = [{a false} {1 false}]
+//	// resCursor = 0
+//	// resCollection = [a 1]
 //	// The resCollection only contains the hash map entry that matches with the match option provided with the command
 //	// input.
 //

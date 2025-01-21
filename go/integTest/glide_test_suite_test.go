@@ -25,7 +25,7 @@ type GlideTestSuite struct {
 	tls             bool
 	serverVersion   string
 	clients         []api.IGlideClient
-	clusterClients  []api.GlideClusterClient
+	clusterClients  []api.IGlideClusterClient
 }
 
 var (
@@ -245,7 +245,7 @@ func (suite *GlideTestSuite) client(config *api.GlideClientConfiguration) api.IG
 	return client
 }
 
-func (suite *GlideTestSuite) defaultClusterClient() api.GlideClusterClient {
+func (suite *GlideTestSuite) defaultClusterClient() api.IGlideClusterClient {
 	config := api.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
@@ -253,7 +253,7 @@ func (suite *GlideTestSuite) defaultClusterClient() api.GlideClusterClient {
 	return suite.clusterClient(config)
 }
 
-func (suite *GlideTestSuite) clusterClient(config *api.GlideClusterClientConfiguration) api.GlideClusterClient {
+func (suite *GlideTestSuite) clusterClient(config *api.GlideClusterClientConfiguration) api.IGlideClusterClient {
 	client, err := api.NewGlideClusterClient(config)
 
 	assert.Nil(suite.T(), err)

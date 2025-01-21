@@ -7,27 +7,27 @@ package api
 import "C"
 
 // GlideClusterClient interface compliance check.
-var _ GlideClusterClient = (*glideClusterClient)(nil)
+var _ IGlideClusterClient = (*GlideClusterClient)(nil)
 
-// GlideClusterClient is a client used for connection in cluster mode.
-type GlideClusterClient interface {
+// IGlideClusterClient is a client used for connection in cluster mode.
+type IGlideClusterClient interface {
 	BaseClient
 	GenericClusterCommands
 }
 
-// glideClusterClient implements cluster mode operations by extending baseClient functionality.
-type glideClusterClient struct {
+// GlideClusterClient implements cluster mode operations by extending baseClient functionality.
+type GlideClusterClient struct {
 	*baseClient
 }
 
-// NewGlideClusterClient creates a [GlideClusterClient] in cluster mode using the given [GlideClusterClientConfiguration].
-func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideClusterClient, error) {
+// NewGlideClusterClient creates a [IGlideClusterClient] in cluster mode using the given [GlideClusterClientConfiguration].
+func NewGlideClusterClient(config *GlideClusterClientConfiguration) (IGlideClusterClient, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err
 	}
 
-	return &glideClusterClient{client}, nil
+	return &GlideClusterClient{client}, nil
 }
 
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
@@ -57,7 +57,7 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 //	result.Value().(string): "PONG"
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *glideClusterClient) CustomCommand(args []string) (ClusterValue[interface{}], error) {
+func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[interface{}], error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
 	if err != nil {
 		return CreateEmptyClusterValue(), err
