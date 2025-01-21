@@ -663,13 +663,13 @@ func (client *baseClient) Strlen(key string) (int64, error) {
 //	The length of the string stored at `key` after it was modified.
 //
 // For example:
-//  1. result, err := client.SetRange("key", 6, "GLIDE");
+//  1. result, err := client.SetRange("key", 6, "GLIDE")
 //     result: 11 (New key created with length of 11 bytes)
 //     value, err  := client.Get("key")
 //     value.Value(): "\x00\x00\x00\x00\x00\x00GLIDE"
 //  2. "key": "愛" (value char takes 3 bytes)
-//     result, err = client.SetRange("key", 1, "a")
-//     result.Value(): �a� // (becomes an invalid UTF-8 string)
+//     result, err := client.SetRange("key", 1, "a")
+//     result: 3
 //
 // [valkey.io]: https://valkey.io/commands/setrange/
 func (client *baseClient) SetRange(key string, offset int, value string) (int64, error) {
@@ -962,11 +962,9 @@ func (client *baseClient) HSet(key string, values map[string]string) (int64, err
 // For example:
 //
 //	payload1, err := client.HSetNX("myHash", "field", "value")
-//	// payload1.Value(): true
-//	// payload1.IsNil(): false
+//	// payload1: true
 //	payload2, err := client.HSetNX("myHash", "field", "newValue")
-//	// payload2.Value(): false
-//	// payload2.IsNil(): false
+//	// payload2: false
 //
 // [valkey.io]: https://valkey.io/commands/hsetnx/
 func (client *baseClient) HSetNX(key string, field string, value string) (bool, error) {
@@ -1081,11 +1079,9 @@ func (client *baseClient) HVals(key string) ([]string, error) {
 // For example:
 //
 //	exists, err := client.HExists("my_hash", "field1")
-//	// exists.Value(): true
-//	// exists.IsNil(): false
+//	// exists: true
 //	exists, err = client.HExists("my_hash", "non_existent_field")
-//	// exists.Value(): false
-//	// exists.IsNil(): false
+//	// exists: false
 //
 // [valkey.io]: https://valkey.io/commands/hexists/
 func (client *baseClient) HExists(key string, field string) (bool, error) {
@@ -1141,8 +1137,7 @@ func (client *baseClient) HKeys(key string) ([]string, error) {
 // For example:
 //
 //	strlen, err := client.HStrLen("my_hash", "my_field")
-//	// strlen.Value(): 10
-//	// strlen.IsNil(): false
+//	// strlen: 10
 //
 // [valkey.io]: https://valkey.io/commands/hstrlen/
 func (client *baseClient) HStrLen(key string, field string) (int64, error) {
@@ -1473,12 +1468,12 @@ func (client *baseClient) LPop(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	An array of the popped elements as Result[string] will be returned depending on the list's length
+//	An array of the popped elements as strings will be returned depending on the list's length
 //	If key does not exist, nil will be returned.
 //
 // For example:
 //  1. result, err := client.LPopCount("my_list", 2)
-//     result: []api.Result[string]{api.CreateStringResult("value1"), api.CreateStringResult("value2")}
+//     result: []string{"value1", "value2"}
 //  2. result, err := client.LPopCount("non_existent")
 //     result: nil
 //
@@ -1825,10 +1820,10 @@ func (client *baseClient) SCard(key string) (int64, error) {
 // Example:
 //
 //	result1, err := client.SIsMember("mySet", "member1")
-//	// result1.Value(): true
+//	// result1: true
 //	// Indicates that "member1" exists in the set "mySet".
 //	result2, err := client.SIsMember("mySet", "nonExistingMember")
-//	// result2.Value(): false
+//	// result2: false
 //	// Indicates that "nonExistingMember" does not exist in the set "mySet".
 //
 // [valkey.io]: https://valkey.io/commands/sismember/
@@ -2122,11 +2117,11 @@ func (client *baseClient) SPop(key string) (Result[string], error) {
 //
 //	client.SAdd("myKey", []string{"one", "two"})
 //	value1, err := client.SMIsMember("myKey", []string{"two", "three"})
-//	// value1[0].Value(): true
-//	// value1[1].Value(): false
+//	// value1[0]: true
+//	// value1[1]: false
 //	// err: nil
-//	value2, err := client.SPop("nonExistingKey", []string{"one"})
-//	// value2[0].Value(): false
+//	value2, err := client.SMIsMember("nonExistingKey", []string{"one"})
+//	// value2[0]: false
 //	// err: nil
 //
 // [valkey.io]: https://valkey.io/commands/smismember/
@@ -2532,12 +2527,12 @@ func (client *baseClient) RPop(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	An array of popped elements as Result[string] will be returned depending on the list's length.
+//	An array of popped elements as strings will be returned depending on the list's length.
 //	If key does not exist, nil will be returned.
 //
 // For example:
 //  1. result, err := client.RPopCount("my_list", 2)
-//     result: []api.Result[string]{api.CreateStringResult("value1"), api.CreateStringResult("value2")}
+//     result: []string{"value1", "value2"}
 //  2. result, err := client.RPop("non_exiting_key")
 //     result: nil
 //
@@ -2849,8 +2844,7 @@ func (client *baseClient) LMPopCount(
 //
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [api.ListDirection].
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block
-//	indefinitely.
+//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
@@ -3205,11 +3199,13 @@ func (client *baseClient) Del(keys []string) (int64, error) {
 // keys - One or more keys to check if they exist.
 //
 // Return value:
-// Returns the number of existing keys.
+//
+//	Returns the number of existing keys.
 //
 // Example:
-// result, err := client.Exists([]string{"key1", "key2", "key3"})
-// result: 2
+//
+//	result, err := client.Exists([]string{"key1", "key2", "key3"})
+//	result: 2
 //
 // [valkey.io]: https://valkey.io/commands/exists/
 func (client *baseClient) Exists(keys []string) (int64, error) {
@@ -3221,11 +3217,11 @@ func (client *baseClient) Exists(keys []string) (int64, error) {
 	return handleIntResponse(result)
 }
 
-// Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted
+// Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted.
 //
 // If key already has an existing expire set, the time to live is updated to the new value.
 // If seconds is a non-positive number, the key will be deleted rather than expired.
-// The timeout will only be cleared by commands that delete or overwrite the contents of key
+// The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // Parameters:
 // key - The key to expire.
@@ -3453,10 +3449,9 @@ func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int6
 
 // Sets a timeout on key. It takes an absolute Unix timestamp (milliseconds since
 // January 1, 1970) instead of specifying the number of milliseconds.
-// A timestamp in the past will delete the key immediately. After the timeout has
-// expired, the key will automatically be deleted
-// If key already has an existing expire set, the time to live is
-// updated to the new value/
+// A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be
+// deleted.
+// If key already has an existing expire set, the time to live is updated to the new value.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 //
 // Parameters:
@@ -3736,7 +3731,7 @@ func (client *baseClient) Type(key string) (string, error) {
 //
 // Parameters:
 //
-//	The keys to update last access time.
+//	keys - The keys to update last access time.
 //
 // Return value:
 //
@@ -3770,8 +3765,8 @@ func (client *baseClient) Touch(keys []string) (int64, error) {
 //
 // Parameters:
 //
-//	key to rename.
-//	newKey The new name of the key.
+//	key - The key to rename.
+//	newKey - The new name of the key.
 //
 // Return value:
 // If the key was successfully renamed, return "OK". If key does not exist, an error is thrown.
@@ -3801,12 +3796,12 @@ func (client *baseClient) Rename(key string, newKey string) (string, error) {
 //
 // Parameters:
 //
-//	key to rename.
-//	newKey The new name of the key.
+//	key - The key to rename.
+//	newKey - The new name of the key.
 //
 // Return value:
 //
-//	`true` if k`ey was renamed to `newKey`, `false` if `newKey` already exists.
+//	`true` if key was renamed to `newKey`, `false` if `newKey` already exists.
 //
 // Example:
 //
@@ -4158,8 +4153,11 @@ func (client *baseClient) ZAdd(
 //
 // Example:
 //
-//	res, err := client.ZAddWithOptions(key, map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0},
-//										options.NewZAddOptionsBuilder().SetChanged(true).Build())
+//	res, err := client.ZAddWithOptions(
+//		key,
+//		map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0},
+//		options.NewZAddOptionsBuilder().SetChanged(true).Build()
+//	)
 //	fmt.Println(res) // Output: 3
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
@@ -4272,7 +4270,7 @@ func (client *baseClient) ZAddIncrWithOptions(
 // If key does not exist, a new sorted set with the specified member as its sole member
 // is created.
 //
-// see [valkey.io] for details.
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -4843,15 +4841,15 @@ func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[i
 // For example:
 //
 //	 xAddResult, err = client.XAddWithOptions(
-//			"key1",
-//			[][]string{{field1, "foo4"}, {field2, "bar4"}},
-//			options.NewXAddOptions().SetTrimOptions(
-//				options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
-//			),
-//		)
-//		xTrimResult, err := client.XTrim(
-//			"key1",
-//			options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
+//		"key1",
+//		[][]string{{field1, "foo4"}, {field2, "bar4"}},
+//		options.NewXAddOptions().SetTrimOptions(
+//			options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
+//		),
+//	 )
+//	 xTrimResult, err := client.XTrim(
+//		"key1",
+//		options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
 //	 )
 //	 fmt.Println(xTrimResult) // Output: 1
 //
@@ -4882,14 +4880,14 @@ func (client *baseClient) XTrim(key string, options *options.XTrimOptions) (int6
 //
 // For example:
 //
-//		xAddResult, err = client.XAddWithOptions(
-//			"key1",
-//			[][]string{{field1, "foo4"}, {field2, "bar4"}},
-//			options.NewXAddOptions().SetTrimOptions(
-//				options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
-//			),
-//		)
-//		xLenResult, err = client.XLen("key1")
+//	 xAddResult, err = client.XAddWithOptions(
+//		"key1",
+//		[][]string{{field1, "foo4"}, {field2, "bar4"}},
+//		options.NewXAddOptions().SetTrimOptions(
+//			options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
+//		),
+//	 )
+//	 xLenResult, err = client.XLen("key1")
 //	 fmt.Println(xLenResult) // Output: 2
 //
 // [valkey.io]: https://valkey.io/commands/xlen/
@@ -5478,10 +5476,11 @@ func (client *baseClient) XGroupCreateWithOptions(
 //	Return OK if successfully create a key with a value </code>.
 //
 // Example:
-// result, err := client.Restore("key",ttl, value)
+//
+//	result, err := client.Restore("key",ttl, value)
 //
 //	if err != nil {
-//	    // handle error
+//	   // handle error
 //	}
 //	fmt.Println(result.Value()) // Output: OK
 //
@@ -5505,11 +5504,12 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (Result[s
 //	Return OK if successfully create a key with a value.
 //
 // Example:
-// restoreOptions := api.NewRestoreOptionsBuilder().SetReplace().SetABSTTL().SetEviction(api.FREQ, 10)
-// resultRestoreOpt, err := client.RestoreWithOptions(key, ttl, value, restoreOptions)
+//
+//	restoreOptions := api.NewRestoreOptionsBuilder().SetReplace().SetABSTTL().SetEviction(api.FREQ, 10)
+//	resultRestoreOpt, err := client.RestoreWithOptions(key, ttl, value, restoreOptions)
 //
 //	if err != nil {
-//	    // handle error
+//	   // handle error
 //	}
 //	fmt.Println(result.Value()) // Output: OK
 //
@@ -5575,7 +5575,8 @@ func (client *baseClient) Dump(key string) (Result[string], error) {
 //	key as a String. Otherwise, returns null.
 //
 // Example:
-// result, err := client.ObjectEncoding("mykeyRenamenx")
+//
+//	result, err := client.ObjectEncoding("mykeyRenamenx")
 //
 //	if err != nil {
 //	    // handle error
