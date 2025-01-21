@@ -2957,7 +2957,7 @@ func (client *baseClient) XGroupDelConsumer(
 //
 // Example:
 //
-//	//Assuming streamId1 and streamId2 already exist.
+//	// Assuming streamId1 and streamId2 already exist.
 //	xackResult, err := client.XAck("key", "groupName", []string{"streamId1", "streamId2"})
 //	fmt.Println(xackResult) // 2
 //
