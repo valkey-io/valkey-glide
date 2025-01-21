@@ -67,3 +67,11 @@ func (client *glideClient) Select(index int64) (string, error) {
 
 	return handleStringResponse(result)
 }
+
+func (client *glideClient) DBSize() (int64, error) {
+	result, err := client.executeCommandWithRoute(C.DBSize, []string{})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}

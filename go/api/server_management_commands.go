@@ -61,4 +61,6 @@ type ServerManagementCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/config-set/
 	ConfigSet(parameters map[string]string) (string, error)
+
+	DBSize() (int64, error)
 }

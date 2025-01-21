@@ -388,3 +388,12 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 	assert.Equal(suite.T(), "item1", sortResult[3].Value())
 	assert.Equal(suite.T(), "item3", sortResult[5].Value())
 }
+
+func (suite *GlideTestSuite) DBSize_Success() {
+	client := suite.defaultClient()
+
+	result, err := client.DBSize()
+
+	assert.Nil(suite.T(), err)
+	assert.Greater(suite.T(), result, 0)
+}

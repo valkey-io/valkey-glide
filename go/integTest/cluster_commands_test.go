@@ -27,3 +27,16 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 	// ECHO is routed to a single random node
 	assert.Equal(suite.T(), "GO GLIDE GO", result.Value().(string))
 }
+
+func (suite *GlideTestSuite) TestDBSize_RandomRoute() {
+	client := suite.defaultClusterClient()
+	route := api.RandomRoute
+
+	result, err := client.DBSize(route)
+
+	assert.NoError(suite.T(), err)
+	assert.NotNil(suite.T(), result)
+	assert.NotEmpty(suite.T(), result.Value())
+	assert.IsType(suite.T(), "", result.Value()[0])
+	assert.Equal(suite.T(), 2, len(result.Value()))
+}
