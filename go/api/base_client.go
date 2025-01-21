@@ -2955,7 +2955,7 @@ func (client *baseClient) XGroupDelConsumer(
 //
 //	The number of messages that were successfully acknowledged.
 //
-// For example:
+// Example:
 //
 //	//Assuming streamId1 and streamId2 already exist.
 //	xackResult, err := client.XAck("key", "groupName", []string{"streamId1", "streamId2"})
