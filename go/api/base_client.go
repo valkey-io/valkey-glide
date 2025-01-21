@@ -3310,3 +3310,185 @@ func (client *baseClient) BitCountWithOptions(key string, opts *options.BitCount
 	}
 	return handleIntResponse(result)
 }
+
+// Changes the ownership of a pending message.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
+//	minIdleTime - The minimum idle time in milliseconds.
+//	ids         - The ids of the entries to claim.
+//
+// Return value:
+//
+//	A `map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
+//	the consumer.
+//
+// Example:
+//
+//	result, err := client.XClaim("key", "group", "consumer", 1000, []string{"streamId1", "streamId2"})
+//	fmt.Println(result) // Output: map[streamId1:[["entry1", "data1"], ["entry2", "data2"]] streamId2:[["entry3", "data3"]]]
+//
+// [valkey.io]: https://valkey.io/commands/xclaim/
+func (client *baseClient) XClaim(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+) (map[string][][]string, error) {
+	return client.XClaimWithOptions(key, group, consumer, minIdleTime, ids, nil)
+}
+
+// Changes the ownership of a pending message.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
+//	minIdleTime - The minimum idle time in milliseconds.
+//	ids         - The ids of the entries to claim.
+//	options     - Stream claim options.
+//
+// Return value:
+//
+//	A `map` of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
+//	the consumer.
+//
+// Example:
+//
+//	result, err := client.XClaimWithOptions(
+//		"key",
+//		"group",
+//		"consumer",
+//		1000,
+//		[]string{"streamId1", "streamId2"},
+//		options.NewStreamClaimOptions().SetIdleTime(1),
+//	)
+//	fmt.Println(result) // Output: map[streamId1:[["entry1", "data1"], ["entry2", "data2"]] streamId2:[["entry3", "data3"]]]
+//
+// [valkey.io]: https://valkey.io/commands/xclaim/
+func (client *baseClient) XClaimWithOptions(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+	opts *options.StreamClaimOptions,
+) (map[string][][]string, error) {
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
+	}
+	result, err := client.executeCommand(C.XClaim, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleMapOfArrayOfStringArrayResponse(result)
+}
+
+// Changes the ownership of a pending message. This function returns an `array` with
+// only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
+//	minIdleTime - The minimum idle time in milliseconds.
+//	ids         - The ids of the entries to claim.
+//	options     - Stream claim options.
+//
+// Return value:
+//
+//	An array of the ids of the entries that were claimed by the consumer.
+//
+// Example:
+//
+//	result, err := client.XClaimJustId(
+//		"key",
+//		"group",
+//		"consumer",
+//		1000,
+//		[]string{"streamId1", "streamId2"},
+//	)
+//	fmt.Println(result) // Output: ["streamId1", "streamId2"]
+//
+// [valkey.io]: https://valkey.io/commands/xclaim/
+func (client *baseClient) XClaimJustId(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+) ([]string, error) {
+	return client.XClaimJustIdWithOptions(key, group, consumer, minIdleTime, ids, nil)
+}
+
+// Changes the ownership of a pending message. This function returns an `array` with
+// only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
+//	minIdleTime - The minimum idle time in milliseconds.
+//	ids         - The ids of the entries to claim.
+//	options     - Stream claim options.
+//
+// Return value:
+//
+//	An array of the ids of the entries that were claimed by the consumer.
+//
+// Example:
+//
+//	result, err := client.XClaimJustIdWithOptions(
+//		"key",
+//		"group",
+//		"consumer",
+//		1000,
+//		[]string{"streamId1", "streamId2"},
+//		options.NewStreamClaimOptions().SetIdleTime(1),
+//	)
+//	fmt.Println(result) // Output: ["streamId1", "streamId2"]
+//
+// [valkey.io]: https://valkey.io/commands/xclaim/
+func (client *baseClient) XClaimJustIdWithOptions(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+	opts *options.StreamClaimOptions,
+) ([]string, error) {
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
+	}
+	args = append(args, options.JUST_ID_VALKEY_API)
+	result, err := client.executeCommand(C.XClaim, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
