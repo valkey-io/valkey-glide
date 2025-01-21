@@ -391,4 +391,10 @@ type SortedSetCommands interface {
 	ZRemRangeByRank(key string, start int64, stop int64) (int64, error)
 
 	ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error)
+
+	ZRandMember(key string) (Result[string], error)
+
+	ZRandMemberWithCount(key string, count int64) ([]string, error)
+
+	ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error)
 }

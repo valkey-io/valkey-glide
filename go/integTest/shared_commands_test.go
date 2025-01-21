@@ -6221,6 +6221,68 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 	})
 }
 
+func (suite *GlideTestSuite) TestZRandMember() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key1 := uuid.NewString()
+		key2 := uuid.NewString()
+		members := []string{"one", "two"}
+
+		zadd, err := client.ZAdd(key1, map[string]float64{"one": 1.0, "two": 2.0})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), zadd)
+
+		randomMember, err := client.ZRandMember(key1)
+		assert.NoError(t, err)
+		assert.Contains(t, members, randomMember.Value())
+
+		// unique values are expected as count is positive
+		randomMembers, err := client.ZRandMemberWithCount(key1, 4)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, members, randomMembers)
+
+		membersAndScores, err := client.ZRandMemberWithCountWithScores(key1, 4)
+		expectedMembersAndScores := []api.MemberAndScore{{Member: "one", Score: 1}, {Member: "two", Score: 2}}
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expectedMembersAndScores, membersAndScores)
+
+		// Duplicate values are expected as count is negative
+		randomMembers, err = client.ZRandMemberWithCount(key1, -4)
+		assert.NoError(t, err)
+		assert.Len(t, randomMembers, 4)
+		for _, member := range randomMembers {
+			assert.Contains(t, members, member)
+		}
+
+		membersAndScores, err = client.ZRandMemberWithCountWithScores(key1, -4)
+		assert.NoError(t, err)
+		assert.Len(t, membersAndScores, 4)
+		for _, memberAndScore := range membersAndScores {
+			assert.Contains(t, expectedMembersAndScores, memberAndScore)
+		}
+
+		// non existing key should return null or empty array
+		randomMember, err = client.ZRandMember(key2)
+		assert.NoError(t, err)
+		assert.True(t, randomMember.IsNil())
+		randomMembers, err = client.ZRandMemberWithCount(key2, -4)
+		assert.NoError(t, err)
+		assert.Len(t, randomMembers, 0)
+		membersAndScores, err = client.ZRandMemberWithCountWithScores(key2, -4)
+		assert.NoError(t, err)
+		assert.Len(t, membersAndScores, 0)
+
+		// Key exists, but is not a set
+		suite.verifyOK(client.Set(key2, "ZRandMember"))
+		_, err = client.ZRandMember(key2)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		_, err = client.ZRandMemberWithCount(key2, 2)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		_, err = client.ZRandMemberWithCountWithScores(key2, 2)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestObjectIdleTime() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		defaultClient := suite.defaultClient()

@@ -23,6 +23,12 @@ type KeyWithMemberAndScore struct {
 	Score  float64
 }
 
+// MemberAndScore is used by ZRANDMEMBER, which return an object consisting of the sorted set member, and its score.
+type MemberAndScore struct {
+	Member string
+	Score  float64
+}
+
 // Response type of [XAutoClaim] command.
 type XAutoClaimResponse struct {
 	NextEntry       string

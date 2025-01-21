@@ -2731,6 +2731,88 @@ func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeB
 	return handleIntResponse(result)
 }
 
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//
+// Return value:
+//
+//		A string representing a random member from the sorted set.
+//	   If the sorted set does not exist or is empty, the response will be `nil`.
+//
+// Example:
+//
+//	member, err := client.ZRandMember("key1")
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMember(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//		An array of members from the sorted set.
+//	   If the sorted set does not exist or is empty, the response will be an empty array.
+//
+// Example:
+//
+//	members, err := client.ZRandMemberWithCount("key1", -5)
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMemberWithCount(key string, count int64) ([]string, error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//		An array of `MemberAndScore` objects, which store member names and their respective scores.
+//	   If the sorted set does not exist or is empty, the response will be an empty array.
+//
+// Example:
+//
+//	membersAndScores, err := client.ZRandMemberWithCountWithScores("key1", 5)
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key, utils.IntToString(count), options.WithScores})
+	if err != nil {
+		return nil, err
+	}
+	return handleMemberAndScoreArrayResponse(result)
+}
+
 // Returns the logarithmic access frequency counter of a Valkey object stored at key.
 //
 // Parameters:
