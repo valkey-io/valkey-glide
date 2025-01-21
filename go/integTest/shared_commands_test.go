@@ -7147,7 +7147,14 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 		assert.Contains(suite.T(), err.Error(), "NOGROUP")
 
-		_, err = client.XClaimWithOptions(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()}, claimOptions)
+		_, err = client.XClaimWithOptions(
+			stringKey,
+			groupName,
+			consumer1,
+			int64(1),
+			[]string{streamid_1.Value()},
+			claimOptions,
+		)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 		assert.Contains(suite.T(), err.Error(), "NOGROUP")
@@ -7157,7 +7164,14 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 		assert.Contains(suite.T(), err.Error(), "NOGROUP")
 
-		_, err = client.XClaimJustIdWithOptions(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()}, claimOptions)
+		_, err = client.XClaimJustIdWithOptions(
+			stringKey,
+			groupName,
+			consumer1,
+			int64(1),
+			[]string{streamid_1.Value()},
+			claimOptions,
+		)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 		assert.Contains(suite.T(), err.Error(), "NOGROUP")
