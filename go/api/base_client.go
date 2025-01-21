@@ -3138,10 +3138,10 @@ func (client *baseClient) GetBit(key string, offset int64) (int64, error) {
 // Example:
 //
 //	 result, err := client.Wait(1, 1000)
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: 1 // if cluster has 2 replicasets
+//	 if err != nil {
+//		// handle error
+//	 }
+//	 fmt.Println(result.Value()) // Output: 1 // if cluster has 2 replicasets
 //
 // [valkey.io]: https://valkey.io/commands/wait/
 func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (int64, error) {
@@ -3165,8 +3165,7 @@ func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (int64, er
 // Example:
 //
 //	result, err := client.BitCount("mykey")
-//	result.Value(): 26
-//	result.IsNil(): false
+//	result: 26
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
 func (client *baseClient) BitCount(key string) (int64, error) {
@@ -3194,13 +3193,9 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 //
 // Example:
 //
-//	opts := NewBitCountOptionsBuilder()
-//	opts.SetStart(1)
-//	opts, err := opts.SetEnd(1)
-//	opts, err = opts.SetBitmapIndexType(options.BYTE)
+//	opts := NewBitCountOptionsBuilder().SetStart(1).SetEnd(1).SetBitmapIndexType(options.BYTE)
 //	result, err := client.BitCount("mykey",options)
-//	result.Value(): 6
-//	result.IsNil(): false
+//	result: 6
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
 func (client *baseClient) BitCountWithOptions(key string, opts *options.BitCountOptions) (int64, error) {
