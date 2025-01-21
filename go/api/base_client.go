@@ -2769,8 +2769,8 @@ func (client *baseClient) ZRandMember(key string) (Result[string], error) {
 //
 // Return value:
 //
-//		An array of members from the sorted set.
-//	   If the sorted set does not exist or is empty, the response will be an empty array.
+//	An array of members from the sorted set.
+//	If the sorted set does not exist or is empty, the response will be an empty array.
 //
 // Example:
 //
@@ -2797,8 +2797,8 @@ func (client *baseClient) ZRandMemberWithCount(key string, count int64) ([]strin
 //
 // Return value:
 //
-//		An array of `MemberAndScore` objects, which store member names and their respective scores.
-//	   If the sorted set does not exist or is empty, the response will be an empty array.
+//	An array of `MemberAndScore` objects, which store member names and their respective scores.
+//	If the sorted set does not exist or is empty, the response will be an empty array.
 //
 // Example:
 //
