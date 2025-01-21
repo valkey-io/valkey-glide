@@ -3330,6 +3330,9 @@ func (client *baseClient) BitCountWithOptions(key string, opts *options.BitCount
 //
 // Example:
 //
+//	result, err := client.XClaim("key", "group", "consumer", 1000, []string{"streamId1", "streamId2"})
+//	fmt.Println(result) // Output: map[streamId1:[["entry1", "data1"], ["entry2", "data2"]] streamId2:[["entry3", "data3"]]]
+//
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaim(
 	key string,
@@ -3338,14 +3341,7 @@ func (client *baseClient) XClaim(
 	minIdleTime int64,
 	ids []string,
 ) (map[string][][]string, error) {
-	result, err := client.executeCommand(
-		C.XClaim,
-		append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...),
-	)
-	if err != nil {
-		return nil, err
-	}
-	return handleMapOfArrayOfStringArrayResponse(result)
+	return client.XClaimWithOptions(key, group, consumer, minIdleTime, ids, nil)
 }
 
 // Changes the ownership of a pending message.
@@ -3368,7 +3364,15 @@ func (client *baseClient) XClaim(
 //
 // Example:
 //
-//	result, err := ...
+//	result, err := client.XClaimWithOptions(
+//		"key",
+//		"group",
+//		"consumer",
+//		1000,
+//		[]string{"streamId1", "streamId2"},
+//		options.NewStreamClaimOptions().SetIdleTime(1),
+//	)
+//	fmt.Println(result) // Output: map[streamId1:[["entry1", "data1"], ["entry2", "data2"]] streamId2:[["entry3", "data3"]]]
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimWithOptions(
@@ -3380,11 +3384,13 @@ func (client *baseClient) XClaimWithOptions(
 	opts *options.StreamClaimOptions,
 ) (map[string][][]string, error) {
 	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
-	optionArgs, err := opts.ToArgs()
-	if err != nil {
-		return nil, err
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
 	}
-	args = append(args, optionArgs...)
 	result, err := client.executeCommand(C.XClaim, args)
 	if err != nil {
 		return nil, err
@@ -3412,7 +3418,14 @@ func (client *baseClient) XClaimWithOptions(
 //
 // Example:
 //
-//	result, err := ...
+//	result, err := client.XClaimJustId(
+//		"key",
+//		"group",
+//		"consumer",
+//		1000,
+//		[]string{"streamId1", "streamId2"},
+//	)
+//	fmt.Println(result) // Output: ["streamId1", "streamId2"]
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimJustId(
@@ -3422,13 +3435,7 @@ func (client *baseClient) XClaimJustId(
 	minIdleTime int64,
 	ids []string,
 ) ([]string, error) {
-	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
-	args = append(args, options.JUST_ID_VALKEY_API)
-	result, err := client.executeCommand(C.XClaim, args)
-	if err != nil {
-		return nil, err
-	}
-	return handleStringArrayResponse(result)
+	return client.XClaimJustIdWithOptions(key, group, consumer, minIdleTime, ids, nil)
 }
 
 // Changes the ownership of a pending message. This function returns an `array` with
@@ -3451,7 +3458,15 @@ func (client *baseClient) XClaimJustId(
 //
 // Example:
 //
-//	result, err := ...
+//	result, err := client.XClaimJustIdWithOptions(
+//		"key",
+//		"group",
+//		"consumer",
+//		1000,
+//		[]string{"streamId1", "streamId2"},
+//		options.NewStreamClaimOptions().SetIdleTime(1),
+//	)
+//	fmt.Println(result) // Output: ["streamId1", "streamId2"]
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimJustIdWithOptions(
@@ -3463,11 +3478,13 @@ func (client *baseClient) XClaimJustIdWithOptions(
 	opts *options.StreamClaimOptions,
 ) ([]string, error) {
 	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
-	optionArgs, err := opts.ToArgs()
-	if err != nil {
-		return nil, err
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
 	}
-	args = append(args, optionArgs...)
 	args = append(args, options.JUST_ID_VALKEY_API)
 	result, err := client.executeCommand(C.XClaim, args)
 	if err != nil {
