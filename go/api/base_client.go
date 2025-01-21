@@ -3371,13 +3371,15 @@ func (client *baseClient) Copy(source string, destination string) (bool, error) 
 //
 // [valkey.io]: https://valkey.io/commands/copy/
 func (client *baseClient) CopyWithOptions(source string, destination string,
-	options *CopyOptions) (bool, error) {
+	options *CopyOptions,
+) (bool, error) {
 	optionArgs, err := options.toArgs()
 	if err != nil {
 		return defaultBoolResponse, err
 	}
 	result, err := client.executeCommand(C.Copy, append([]string{
-		source, destination}, optionArgs...))
+		source, destination,
+	}, optionArgs...))
 	if err != nil {
 		return defaultBoolResponse, err
 	}
