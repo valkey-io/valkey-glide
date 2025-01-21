@@ -186,6 +186,56 @@ func convertStringOrNilArray(response *C.struct_CommandResponse) ([]Result[strin
 	return slice, nil
 }
 
+func handle2DStringArrayResponse(response *C.struct_CommandResponse) ([][]string, error) {
+	defer C.free_command_response(response)
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	array, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := arrayConverter[[]string]{
+		arrayConverter[string]{
+			nil,
+			false,
+		},
+		false,
+	}.convert(array)
+	if err != nil {
+		return nil, err
+	}
+	res, ok := converted.([][]string)
+	if !ok {
+		return nil, &RequestError{fmt.Sprintf("unexpected type: %T", converted)}
+	}
+	return res, nil
+}
+
+func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	if response.response_type == C.Null {
+		return nil, nil
+	}
+
+	slice := make([]Result[string], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		res, err := convertCharArrayToString(&v, true)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, res)
+	}
+	return slice, nil
+}
+
 // array could be nillable, but strings - aren't
 func convertStringArray(response *C.struct_CommandResponse, isNilable bool) ([]string, error) {
 	typeErr := checkResponseType(response, C.Array, isNilable)
