@@ -6498,28 +6498,29 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.NotNil(suite.T(), streamId3)
 
 		// xack that streamid1 and streamid2 have been processed
-		command := []string{"XAck", key, groupName, streamId1.Value(), streamId2.Value()}
-		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+		xackResult, err := client.XAck(key, groupName, []string{streamId1.Value(), streamId2.Value()})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), xackResult)
 
 		// Delete the consumer group and expect 0 pending messages
 		respInt64, err = client.XGroupDelConsumer(key, groupName, consumerName)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), respInt64)
 
-		// TODO: Use XAck when it is added to the Go client
 		// xack streamid_1, and streamid_2 already received returns 0L
-		command = []string{"XAck", key, groupName, streamId1.Value(), streamId2.Value()}
-		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+		xackResult, err = client.XAck(key, groupName, []string{streamId1.Value(), streamId2.Value()})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), xackResult)
 
 		// Consume the last message with the previously deleted consumer (creates the consumer anew)
 		resp, err = client.XReadGroup(groupName, consumerName, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1, len(resp[key]))
 
-		// TODO: Use XAck when it is added to the Go client
 		// Use non existent group, so xack streamid_3 returns 0
-		command = []string{"XAck", key, "non-existent-group", streamId3.Value()}
-		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+		xackResult, err = client.XAck(key, "non-existent-group", []string{streamId3.Value()})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), xackResult)
 
 		// Delete the consumer group and expect 1 pending message
 		respInt64, err = client.XGroupDelConsumer(key, groupName, consumerName)
