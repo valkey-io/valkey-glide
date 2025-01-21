@@ -682,14 +682,13 @@ func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
 func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (map[string][][]string, error) {
 	defer C.free_command_response(response)
 
-	var null map[string][][]string // default response
 	typeErr := checkResponseType(response, C.Map, false)
 	if typeErr != nil {
-		return null, typeErr
+		return nil, typeErr
 	}
 	mapData, err := parseMap(response)
 	if err != nil {
-		return null, err
+		return nil, err
 	}
 	converted, err := mapConverter[[][]string]{
 		arrayConverter[[]string]{
@@ -702,11 +701,11 @@ func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (
 		false,
 	}.convert(mapData)
 	if err != nil {
-		return null, err
+		return nil, err
 	}
 	claimedEntries, ok := converted.(map[string][][]string)
 	if !ok {
-		return null, &RequestError{fmt.Sprintf("unexpected type of second element: %T", converted)}
+		return nil, &RequestError{fmt.Sprintf("unexpected type of second element: %T", converted)}
 	}
 
 	return claimedEntries, nil

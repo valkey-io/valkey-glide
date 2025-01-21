@@ -6931,7 +6931,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.NoError(suite.T(), err)
 
 		// Read the stream entries for consumer 1 and mark messages as pending
-		result1, err := client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
+		xReadGroupResult1, err := client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
 		expectedResult := map[string]map[string][][]string{
 			key: {
@@ -6939,7 +6939,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 				streamid_2.Value(): {{"field2", "value2"}},
 			},
 		}
-		assert.Equal(suite.T(), expectedResult, result1)
+		assert.Equal(suite.T(), expectedResult, xReadGroupResult1)
 
 		// Add 3 more stream entries for consumer 2
 		streamid_3, err := client.XAdd(key, [][]string{{"field3", "value3"}})
@@ -6950,7 +6950,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.NoError(suite.T(), err)
 
 		// read the entire stream for consumer 2 and mark messages as pending
-		result2, err := client.XReadGroup(groupName, consumer2, map[string]string{key: ">"})
+		xReadGroupResult2, err := client.XReadGroup(groupName, consumer2, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
 		expectedResult2 := map[string]map[string][][]string{
 			key: {
@@ -6959,7 +6959,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 				streamid_5.Value(): {{"field5", "value5"}},
 			},
 		}
-		assert.Equal(suite.T(), expectedResult2, result2)
+		assert.Equal(suite.T(), expectedResult2, xReadGroupResult2)
 
 		expectedSummary := api.XPendingSummary{
 			NumOfMessages: 5,
