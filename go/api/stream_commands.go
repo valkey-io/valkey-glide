@@ -157,6 +157,8 @@ type StreamCommands interface {
 
 	XGroupCreateWithOptions(key string, group string, id string, opts *options.XGroupCreateOptions) (string, error)
 
+	XGroupDestroy(key string, group string) (bool, error)
+
 	XGroupCreateConsumer(key string, group string, consumer string) (bool, error)
 
 	XGroupDelConsumer(key string, group string, consumer string) (int64, error)
