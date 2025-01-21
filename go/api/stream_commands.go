@@ -156,4 +156,6 @@ type StreamCommands interface {
 	XGroupCreateConsumer(key string, group string, consumer string) (bool, error)
 
 	XGroupDelConsumer(key string, group string, consumer string) (int64, error)
+
+	XAck(key string, group string, ids []string) (int64, error)
 }
