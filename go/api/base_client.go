@@ -2504,7 +2504,7 @@ func (client *baseClient) XPendingWithOptions(
 	return handleXPendingDetailResponse(result)
 }
 
-// Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+// Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -2531,7 +2531,7 @@ func (client *baseClient) XGroupCreate(key string, group string, id string) (str
 	return client.XGroupCreateWithOptions(key, group, id, options.NewXGroupCreateOptions())
 }
 
-// Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+// Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -2636,6 +2636,35 @@ func (client *baseClient) Echo(message string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
+// Destroys the consumer group `group` for the stream stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name to delete.
+//
+// Return value:
+//
+//	`true` if the consumer group is destroyed. Otherwise, `false`.
+//
+// Example:
+//
+//	ok, err := client.XGroupDestroy("mystream", "mygroup")
+//	if !ok || err != nil {
+//		// handle errors
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-destroy/
+func (client *baseClient) XGroupDestroy(key string, group string) (bool, error) {
+	result, err := client.executeCommand(C.XGroupDestroy, []string{key, group})
+	if err != nil {
+		return defaultBoolResponse, err
+	}
+	return handleBoolResponse(result)
+}
+
 // Sets the last delivered ID for a consumer group.
 //
 // See [valkey.io] for details.
@@ -2643,7 +2672,7 @@ func (client *baseClient) Echo(message string) (Result[string], error) {
 // Parameters:
 //
 //	key - The key of the stream.
-//	group - The newly created consumer group name.
+//	group - The consumer group name.
 //	id - The stream entry ID that should be set as the last delivered ID for the consumer group.
 //
 // Return value:
@@ -2669,7 +2698,7 @@ func (client *baseClient) XGroupSetId(key string, group string, id string) (stri
 // Parameters:
 //
 //	key - The key of the stream.
-//	group - The newly created consumer group name.
+//	group - The consumer group name.
 //	id - The stream entry ID that should be set as the last delivered ID for the consumer group.
 //	opts - The options for the command. See [options.XGroupSetIdOptions] for details.
 //
@@ -2710,7 +2739,6 @@ func (client *baseClient) XGroupSetIdWithOptions(
 //
 //	key - The key of the sorted set.
 //	rangeQuery - The range query object representing the minimum and maximum bound of the lexicographical range.
-//	  can be an implementation of [options.LexBoundary].
 //
 // Return value:
 //
