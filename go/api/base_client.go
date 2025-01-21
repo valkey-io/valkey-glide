@@ -624,13 +624,7 @@ func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string
 	if err != nil {
 		return nil, err
 	}
-	// TODO remove that after merging with https://github.com/valkey-io/valkey-glide/pull/2965
-	data, err := handleStringArrayResponse(result)
-	var res []string
-	for _, val := range data {
-		res = append(res, val.Value())
-	}
-	return res, err
+	return handleStringArrayResponse(result)
 }
 
 // Retrieves up to `count` random field names along with their values from the hash

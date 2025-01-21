@@ -186,12 +186,6 @@ func convertStringOrNilArray(response *C.struct_CommandResponse) ([]Result[strin
 	return slice, nil
 }
 
-func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
-	defer C.free_command_response(response)
-
-	return convertStringArray(response, false)
-}
-
 func handle2DStringArrayResponse(response *C.struct_CommandResponse) ([][]string, error) {
 	defer C.free_command_response(response)
 	typeErr := checkResponseType(response, C.Array, false)
@@ -222,7 +216,24 @@ func handle2DStringArrayResponse(response *C.struct_CommandResponse) ([][]string
 func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
 	defer C.free_command_response(response)
 
-	return convertStringArray(response, true)
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	if response.response_type == C.Null {
+		return nil, nil
+	}
+
+	slice := make([]Result[string], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		res, err := convertCharArrayToString(&v, true)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, res)
+	}
+	return slice, nil
 }
 
 // array could be nillable, but strings - aren't
