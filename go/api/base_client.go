@@ -94,7 +94,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
-		return nil, &errors.ConnectionError{message}
+		return nil, &errors.ConnectionError{Msg: message}
 	}
 
 	return &baseClient{cResponse.conn_ptr}, nil
@@ -120,7 +120,7 @@ func (client *baseClient) executeCommandWithRoute(
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
 	if client.coreClient == nil {
-		return nil, &errors.ClosingError{"ExecuteCommand failed. The client is closed."}
+		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
 	}
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
