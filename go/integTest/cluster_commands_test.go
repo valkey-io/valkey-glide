@@ -6,7 +6,8 @@ import (
 	"strings"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/config"
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 )
 
 func (suite *GlideTestSuite) TestClusterCustomCommandInfo() {
@@ -31,9 +32,9 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 
 func (suite *GlideTestSuite) TestTime_RandomRoute() {
 	client := suite.defaultClusterClient()
-	route := api.RandomRoute
-
-	result, err := client.Time(route)
+	route := config.SimpleNodeRoute(config.RandomRoute)
+	options := options.NewTimeOptionsBuilder().SetRoute(route)
+	result, err := client.TimeWithOptions(options)
 
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), result)
@@ -44,10 +45,9 @@ func (suite *GlideTestSuite) TestTime_RandomRoute() {
 
 func (suite *GlideTestSuite) TestTime_AllNodes_MultipleValues() {
 	client := suite.defaultClusterClient()
-	route := api.AllNodes
-
-	result, err := client.Time(route)
-
+	route := config.AllNodes
+	options := options.NewTimeOptionsBuilder().SetRoute(route)
+	result, err := client.TimeWithOptions(options)
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), result)
 	assert.NotEmpty(suite.T(), result.Value())
@@ -61,9 +61,10 @@ func (suite *GlideTestSuite) TestTime_AllNodes_MultipleValues() {
 
 func (suite *GlideTestSuite) TestTime_ErrorHandling() {
 	client := suite.defaultClusterClient()
-	invalidRoute := api.NewByAddressRoute("invalidHost", 9999)
+	invalidRoute := config.NewByAddressRoute("invalidHost", 9999)
 
-	result, err := client.Time(invalidRoute)
+	options := options.NewTimeOptionsBuilder().SetRoute(invalidRoute)
+	result, err := client.TimeWithOptions(options)
 
 	assert.NotNil(suite.T(), err)
 	assert.Empty(suite.T(), result.Value())

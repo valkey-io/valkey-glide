@@ -5,6 +5,7 @@ package api
 // #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../lib.h"
 import "C"
+import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 
 // GlideClusterClient interface compliance check.
 var _ GlideClusterClient = (*glideClusterClient)(nil)
@@ -49,8 +50,7 @@ func (client *glideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //
 // Parameters:
 //
-//	route - Specifies the routing configuration for the command. The client will route the
-//			 command to the nodes defined by route.
+//	options - The TimeOptions type.
 //
 // Return value:
 //
@@ -61,41 +61,15 @@ func (client *glideClusterClient) CustomCommand(args []string) (ClusterValue[int
 // Example:
 //
 //	route := api.SimpleNodeRoute(api.RandomRoute)
-//	result, err := client.Time(route)
-//
+//	options := options.NewTimeOptionsBuilder().SetRoute(route)
+//	result, err := client.TimeWithOptions(route)
 //	fmt.Println(result.Value()) // Output: [1737285074 67888]
 //
 // [valkey.io]: https://valkey.io/commands/time/
-func (client *glideClusterClient) Time(route route) (ClusterValue[[]string], error) {
-	res, err := client.executeCommandWithRoute(C.Time, []string{}, route)
+func (client *glideClusterClient) TimeWithOptions(opts *options.TimeOptions) (ClusterValue[[]string], error) {
+	result, err := client.executeCommandWithRoute(C.Time, []string{}, opts.Route)
 	if err != nil {
-		return ClusterValue[[]string]{
-			value: Result[[]string]{isNil: true},
-		}, err
+		return CreateEmptyStringArrayClusterValue(), err
 	}
-
-	if err := checkResponseType(res, C.Map, true); err == nil {
-
-		// Multi-node response
-		mapData, err := handleRawStringArrayMapResponse(res)
-		if err != nil {
-			return ClusterValue[[]string]{
-				value: Result[[]string]{isNil: true},
-			}, err
-		}
-		var times []string
-		for _, nodeTimes := range mapData {
-			times = append(times, nodeTimes...)
-		}
-		return CreateClusterMultiValue(times), nil
-	}
-
-	// Single node response
-	data, err := handleRawStringArrayResponse(res)
-	if err != nil {
-		return ClusterValue[[]string]{
-			value: Result[[]string]{isNil: true},
-		}, err
-	}
-	return CreateClusterSingleValue(data), nil
+	return handleTimeClusterResponse(result)
 }

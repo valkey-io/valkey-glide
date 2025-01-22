@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 
 	"github.com/stretchr/testify/assert"
@@ -152,7 +153,7 @@ func (suite *GlideTestSuite) TestCustomCommand_invalidCommand() {
 
 	assert.Nil(suite.T(), result)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.RequestError{}, err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestCustomCommand_invalidArgs() {
@@ -161,7 +162,7 @@ func (suite *GlideTestSuite) TestCustomCommand_invalidArgs() {
 
 	assert.Nil(suite.T(), result)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.RequestError{}, err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestCustomCommand_closedClient() {
@@ -172,7 +173,7 @@ func (suite *GlideTestSuite) TestCustomCommand_closedClient() {
 
 	assert.Nil(suite.T(), result)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.ClosingError{}, err)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
 
 func (suite *GlideTestSuite) TestConfigSetAndGet_multipleArgs() {
@@ -197,12 +198,12 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_noArgs() {
 
 	_, err := client.ConfigSet(configMap)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.RequestError{}, err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 	result2, err := client.ConfigGet([]string{})
 	assert.Nil(suite.T(), result2)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.RequestError{}, err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
@@ -212,7 +213,7 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
 
 	_, err := client.ConfigSet(configMap)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.RequestError{}, err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 	result2, err := client.ConfigGet([]string{"time"})
 	assert.Equal(suite.T(), map[string]string{}, result2)
@@ -415,5 +416,5 @@ func (suite *GlideTestSuite) TestTime_Error() {
 
 	assert.NotNil(suite.T(), err)
 	assert.Nil(suite.T(), results)
-	assert.IsType(suite.T(), &api.ClosingError{}, err)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
