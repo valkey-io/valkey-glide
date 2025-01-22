@@ -3370,7 +3370,9 @@ func (client *baseClient) Copy(source string, destination string) (bool, error) 
 //	fmt.Println(result) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/copy/
-func (client *baseClient) CopyWithOptions(source string, destination string,
+func (client *baseClient) CopyWithOptions(
+	source string,
+	destination string,
 	options *CopyOptions,
 ) (bool, error) {
 	optionArgs, err := options.toArgs()
