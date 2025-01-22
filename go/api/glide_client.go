@@ -84,7 +84,7 @@ func (client *glideClient) Select(index int64) (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
 func (client *glideClient) DBSize() (int64, error) {
-	result, err := client.executeCommandWithRoute(C.DBSize, []string{})
+	result, err := client.executeCommand(C.DBSize, []string{})
 	if err != nil {
 		return defaultIntResponse, err
 	}
