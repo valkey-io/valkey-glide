@@ -20,7 +20,8 @@ type GlideClusterClient struct {
 	*baseClient
 }
 
-// NewGlideClusterClient creates a [GlideClusterClientCommands] in cluster mode using the given [GlideClusterClientConfiguration].
+// NewGlideClusterClient creates a [GlideClusterClientCommands] in cluster mode using the given
+// [GlideClusterClientConfiguration].
 func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
