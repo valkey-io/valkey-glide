@@ -49,21 +49,6 @@ type ClosingError struct {
 
 func (e *ClosingError) Error() string { return e.Msg }
 
-// func GoError(cErrorType C.RequestErrorType, cErrorMessage *C.char) error {
-// 	defer C.free_error_message(cErrorMessage)
-// 	msg := C.GoString(cErrorMessage)
-// 	switch cErrorType {
-// 	case C.ExecAbort:
-// 		return &ExecAbortError{msg}
-// 	case C.Timeout:
-// 		return &TimeoutError{msg}
-// 	case C.Disconnect:
-// 		return &DisconnectError{msg}
-// 	default:
-// 		return &RequestError{msg}
-// 	}
-// }
-
 func GoError(cErrorType uint32, errorMessage string) error {
 	switch cErrorType {
 	case C.ExecAbort:

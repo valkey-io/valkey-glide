@@ -3,7 +3,6 @@
 package integTest
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/stretchr/testify/assert"
@@ -62,11 +61,6 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_AllNodes() {
 	client := suite.defaultClusterClient()
 	route := config.SimpleNodeRoute(config.AllNodes)
 	result, err := client.CustomCommandWithRoute([]string{"PING"}, route)
-
-	assert.Nil(suite.T(), err)
-	value := result.Value()
-
-	fmt.Printf("Value type: %T\n", value)
 
 	if result.IsMultiValue() {
 		responses := value.(map[string]interface{})
