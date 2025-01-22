@@ -712,7 +712,7 @@ func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (
 }
 
 func handleMapOfArrayOfStringArrayOrNilResponse(response *C.struct_CommandResponse) (map[string][][]string, error) {
-	if response == nil || response.response_type == uint32(C.Null) {
+	if response.response_type == uint32(C.Null) {
 		return nil, nil
 	}
 

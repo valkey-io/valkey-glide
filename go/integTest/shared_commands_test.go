@@ -7258,6 +7258,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		key := uuid.New().String()
 		key2 := uuid.New().String()
 		stringKey := uuid.New().String()
+		positiveInfinity := options.NewInfiniteStreamBoundary(options.PositiveInfinity)
+		negativeInfinity := options.NewInfiniteStreamBoundary(options.NegativeInfinity)
 
 		// add stream entries
 		streamId1, err := client.XAdd(
@@ -7281,8 +7283,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// get everything from the stream
 		xrangeResult, err := client.XRange(
 			key,
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+			negativeInfinity,
+			positiveInfinity,
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -7294,8 +7296,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// get everything from the stream in reverse
 		xrevrangeResult, err := client.XRevRange(
 			key,
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+			positiveInfinity,
+			negativeInfinity,
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -7307,8 +7309,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// returns empty map if + before -
 		xrangeResult, err = client.XRange(
 			key,
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+			positiveInfinity,
+			negativeInfinity,
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrangeResult)
@@ -7316,8 +7318,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// rev search returns empty if - before +
 		xrevrangeResult, err = client.XRevRange(
 			key,
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+			negativeInfinity,
+			positiveInfinity,
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrevrangeResult)
@@ -7333,7 +7335,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		xrangeResult, err = client.XRangeWithCount(
 			key,
 			options.NewStreamBoundary(streamId2.Value(), false),
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+			positiveInfinity,
 			1,
 		)
 		assert.NoError(suite.T(), err)
@@ -7346,7 +7348,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// doing the same with rev search
 		xrevrangeResult, err = client.XRevRangeWithCount(
 			key,
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+			positiveInfinity,
 			options.NewStreamBoundary(streamId2.Value(), false),
 			1,
 		)
@@ -7360,8 +7362,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// both xrange and xrevrange return nil with a zero/negative count
 		xrangeResult, err = client.XRangeWithCount(
 			key,
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+			negativeInfinity,
+			positiveInfinity,
 			0,
 		)
 		assert.NoError(suite.T(), err)
@@ -7369,8 +7371,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 
 		xrevrangeResult, err = client.XRevRangeWithCount(
 			key,
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+			positiveInfinity,
+			negativeInfinity,
 			-1,
 		)
 		assert.NoError(suite.T(), err)
@@ -7383,16 +7385,16 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 
 		xrangeResult, err = client.XRange(
 			key,
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+			negativeInfinity,
+			positiveInfinity,
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrangeResult)
 
 		xrevrangeResult, err = client.XRevRange(
 			key,
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+			positiveInfinity,
+			negativeInfinity,
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrevrangeResult)
@@ -7400,16 +7402,16 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// xrange and xrevrange against a non-existent stream
 		xrangeResult, err = client.XRange(
 			key2,
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+			negativeInfinity,
+			positiveInfinity,
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrangeResult)
 
 		xrevrangeResult, err = client.XRevRange(
 			key2,
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+			positiveInfinity,
+			negativeInfinity,
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrevrangeResult)
@@ -7419,16 +7421,16 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		_, err = client.XRange(
 			stringKey,
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+			negativeInfinity,
+			positiveInfinity,
 		)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
 		_, err = client.XRevRange(
 			stringKey,
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+			positiveInfinity,
+			negativeInfinity,
 		)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
@@ -7437,7 +7439,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		_, err = client.XRange(
 			key,
 			options.NewStreamBoundary("invalid-id", false),
-			options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+			positiveInfinity,
 		)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
@@ -7445,7 +7447,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		_, err = client.XRevRange(
 			key,
 			options.NewStreamBoundary("invalid-id", false),
-			options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+			negativeInfinity,
 		)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
