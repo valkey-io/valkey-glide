@@ -1314,11 +1314,11 @@ func (suite *GlideTestSuite) TestHRandField() {
 		key = uuid.NewString()
 		suite.verifyOK(client.Set(key, "HRandField"))
 		_, err = client.HRandField(key)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 		_, err = client.HRandFieldWithCount(key, 42)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 		_, err = client.HRandFieldWithCountWithValues(key, 42)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 	})
 }
 
@@ -4552,11 +4552,11 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 
 		// An error is raised if XGROUP SETID is called with a non-existing key
 		_, err = client.XGroupSetId(uuid.NewString(), group, "1-1")
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		// An error is raised if XGROUP SETID is called with a non-existing group
 		_, err = client.XGroupSetId(key, uuid.NewString(), "1-1")
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		// Setting the ID to a non-existing ID is allowed
 		suite.verifyOK(client.XGroupSetId(key, group, "99-99"))
@@ -4565,7 +4565,7 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		key = uuid.NewString()
 		suite.verifyOK(client.Set(key, "xgroup setid"))
 		_, err = client.XGroupSetId(key, group, "1-1")
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 	})
 }
 
@@ -7106,7 +7106,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		// claim with invalid stream entry IDs
 		_, err = client.XClaimJustId(key, groupName, consumer1, int64(1), []string{"invalid-stream-id"})
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		// claim with empty stream entry IDs returns empty map
 		claimResult, err := client.XClaimJustId(key, groupName, consumer1, int64(1), []string{})
@@ -7117,7 +7117,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		claimOptions := options.NewStreamClaimOptions().SetIdleTime(1)
 		_, err = client.XClaim(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 		assert.Contains(suite.T(), err.Error(), "NOGROUP")
 
 		_, err = client.XClaimWithOptions(
@@ -7129,12 +7129,12 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			claimOptions,
 		)
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 		assert.Contains(suite.T(), err.Error(), "NOGROUP")
 
 		_, err = client.XClaimJustId(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 		assert.Contains(suite.T(), err.Error(), "NOGROUP")
 
 		_, err = client.XClaimJustIdWithOptions(
@@ -7146,7 +7146,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			claimOptions,
 		)
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 		assert.Contains(suite.T(), err.Error(), "NOGROUP")
 
 		// key exists, but is not a stream
@@ -7154,7 +7154,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		assert.NoError(suite.T(), err)
 		_, err = client.XClaim(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		_, err = client.XClaimWithOptions(
 			stringKey,
@@ -7165,11 +7165,11 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			claimOptions,
 		)
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		_, err = client.XClaimJustId(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		_, err = client.XClaimJustIdWithOptions(
 			stringKey,
@@ -7180,6 +7180,6 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			claimOptions,
 		)
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 	})
 }

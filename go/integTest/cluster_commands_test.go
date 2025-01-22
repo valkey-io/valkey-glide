@@ -60,7 +60,8 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_InvalidRoute() {
 func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_AllNodes() {
 	client := suite.defaultClusterClient()
 	route := config.SimpleNodeRoute(config.AllNodes)
-	result, err := client.CustomCommandWithRoute([]string{"PING"}, route)
+	result, _ := client.CustomCommandWithRoute([]string{"PING"}, route)
+	value := result.Value()
 
 	if result.IsMultiValue() {
 		responses := value.(map[string]interface{})
