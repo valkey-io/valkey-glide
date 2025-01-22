@@ -15,6 +15,9 @@ function loadNativeBinding() {
     let nativeBinding = [];
     let nativeStr = process.env.native_binding;
     console.log(nativeStr);
+    if (scope == "@scope") {
+        scope = "@valkey/"
+    }
     if (nativeStr == undefined) {
         switch (platform) {
             case "linux":
