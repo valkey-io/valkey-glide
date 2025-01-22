@@ -7233,8 +7233,8 @@ func (suite *GlideTestSuite) TestCopy() {
 
 func (suite *GlideTestSuite) TestCopyWithOptions() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "testKey1_" + uuid.New().String()
-		key2 := "testKey2_" + uuid.New().String()
+		key := "{key}" + uuid.New().String()
+		key2 := "{key}" + uuid.New().String()
 		value := "hello"
 		t := suite.T()
 		suite.verifyOK(client.Set(key, value))
