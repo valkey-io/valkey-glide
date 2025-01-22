@@ -398,3 +398,18 @@ func (sco *StreamClaimOptions) ToArgs() ([]string, error) {
 
 	return optionArgs, nil
 }
+
+type StreamBoundary string
+
+// Create a new stream boundary.
+func NewStreamBoundary(streamId string, isInclusive bool) StreamBoundary {
+	if !isInclusive {
+		return StreamBoundary("(" + streamId)
+	}
+	return StreamBoundary("[" + streamId)
+}
+
+// Create a new stream boundary defined by an infinity.
+func NewInfiniteStreamBoundary(bound InfBoundary) StreamBoundary {
+	return StreamBoundary(string(bound))
+}

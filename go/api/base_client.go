@@ -3571,3 +3571,197 @@ func (client *baseClient) CopyWithOptions(
 	}
 	return handleBoolResponse(result)
 }
+
+// Returns stream entries matching a given range of IDs.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key   - The key of the stream.
+//	start - The start position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
+//	end   - The end position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
+//
+// Return value:
+// A `map` of key to stream entry data, where entry data is an array of
+// pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
+//
+// Example:
+//
+//	// Retrieve all stream entries
+//	res, err := client.XRange(
+//		"key",
+//		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+//		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+//	)
+//	fmt.Println(res) // Output: map[key:[["field1", "entry1"], ["field2", "entry2"]]]
+//
+//	// Retrieve exactly one stream entry by id
+//	res, err := client.XRange(
+//		"key",
+//		options.NewStreamBoundary(streamId, true),
+//		options.NewStreamBoundary(streamId, true),
+//	)
+//	fmt.Println(res) // Output: map[key:[["field1", "entry1"]]
+//
+// [valkey.io]: https://valkey.io/commands/xrange/
+func (client *baseClient) XRange(
+	key string,
+	start options.StreamBoundary,
+	end options.StreamBoundary,
+) (map[string][][]string, error) {
+	args := []string{key, string(start), string(end)}
+	result, err := client.executeCommand(C.XRange, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+}
+
+// Returns stream entries matching a given range of IDs.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key   - The key of the stream.
+//	start - The start position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
+//	end   - The end position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
+//	count - The number of entries to return.
+//
+// Return value:
+// A `map` of key to stream entry data, where entry data is an array of
+// pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
+//
+// Example:
+//
+//	// Retrieve all stream entries
+//	res, err := client.XRangeWithCount(
+//		"key",
+//		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+//		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+//		10,
+//	)
+//	fmt.Println(res) // Output: map[key:[["field1", "entry1"], ["field2", "entry2"]]]
+//
+//	// Retrieve exactly one stream entry by id
+//	res, err := client.XRangeWithCount(
+//		"key",
+//		options.NewStreamBoundary(streamId, true),
+//		options.NewStreamBoundary(streamId, true),
+//		1,
+//	)
+//	fmt.Println(res) // Output: map[key:[["field1", "entry1"]]
+//
+// [valkey.io]: https://valkey.io/commands/xrange/
+func (client *baseClient) XRangeWithCount(
+	key string,
+	start options.StreamBoundary,
+	end options.StreamBoundary,
+	count int64,
+) (map[string][][]string, error) {
+	args := []string{key, string(start), string(end), options.CountKeyword, utils.IntToString(count)}
+	result, err := client.executeCommand(C.XRange, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+}
+
+// Returns stream entries matching a given range of IDs in reverse order.
+// Equivalent to `XRange` but returns entries in reverse order.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key   - The key of the stream.
+//	start - The start position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
+//	end   - The end position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
+//
+// Return value:
+// A `map` of key to stream entry data, where entry data is an array of
+// pairings with format `[[field, entry], [field, entry], ...]`.
+//
+// Example:
+//
+//	// Retrieve all stream entries
+//	res, err := client.XRevRange(
+//		"key",
+//		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+//		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+//	)
+//	fmt.Println(res) // Output: map[key:[["field2", "entry2"], ["field1", "entry1"]]]
+//
+// [valkey.io]: https://valkey.io/commands/xrevrange/
+func (client *baseClient) XRevRange(
+	key string,
+	start options.StreamBoundary,
+	end options.StreamBoundary,
+) (map[string][][]string, error) {
+	args := []string{key, string(start), string(end)}
+	result, err := client.executeCommand(C.XRevRange, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+}
+
+// Returns stream entries matching a given range of IDs in reverse order.
+// Equivalent to `XRange` but returns entries in reverse order.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key   - The key of the stream.
+//	start - The start position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
+//	end   - The end position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
+//	count - The number of entries to return.
+//
+// Return value:
+// A `map` of key to stream entry data, where entry data is an array of
+// pairings with format `[[field, entry], [field, entry], ...]`.
+// Returns `nil` if `count` is non-positive.
+//
+// Example:
+//
+//	// Retrieve all stream entries
+//	res, err := client.XRevRangeWithCount(
+//		"key",
+//		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+//		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+//		10,
+//	)
+//	fmt.Println(res) // Output: map[key:[["field2", "entry2"], ["field1", "entry1"]]]
+//
+// [valkey.io]: https://valkey.io/commands/xrevrange/
+func (client *baseClient) XRevRangeWithCount(
+	key string,
+	start options.StreamBoundary,
+	end options.StreamBoundary,
+	count int64,
+) (map[string][][]string, error) {
+	args := []string{key, string(start), string(end), options.CountKeyword, utils.IntToString(count)}
+	result, err := client.executeCommand(C.XRevRange, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+}

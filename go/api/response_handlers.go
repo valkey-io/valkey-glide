@@ -711,6 +711,14 @@ func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (
 	return claimedEntries, nil
 }
 
+func handleMapOfArrayOfStringArrayOrNilResponse(response *C.struct_CommandResponse) (map[string][][]string, error) {
+	if response == nil || response.response_type == uint32(C.Null) {
+		return nil, nil
+	}
+
+	return handleMapOfArrayOfStringArrayResponse(response)
+}
+
 func handleXAutoClaimResponse(response *C.struct_CommandResponse) (XAutoClaimResponse, error) {
 	defer C.free_command_response(response)
 	var null XAutoClaimResponse // default response
