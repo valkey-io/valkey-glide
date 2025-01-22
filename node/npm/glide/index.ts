@@ -11,12 +11,10 @@ let globalObject = global as unknown;
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 function loadNativeBinding() {
-    console.log("@scope");
     let scope = process.env.scope || "@scope";
-    //console.log(process.env);
     let nativeBinding = [];
     let nativeStr = process.env.native_binding;
-
+    console.log(nativeStr);
     if (nativeStr == undefined) {
         switch (platform) {
             case "linux":
