@@ -120,7 +120,8 @@ jobs:
                   envsubst < package.json.tmpl > "package.json"
                   cat package.json
                   # Fix index.ts based on the scope variable
-                  sed -i 's/@scope/'+${scope}+'/g' index.ts
+                  sed -i'' "s/@scope/${scope}/g" index.ts
+
                   npm install
               env:
                   NPM_SCOPE: ${{ vars.NPM_SCOPE }}
