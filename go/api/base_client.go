@@ -33,6 +33,7 @@ type BaseClient interface {
 	SortedSetCommands
 	HyperLogLogCommands
 	GenericBaseCommands
+	BitmapCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -565,6 +566,106 @@ func (client *baseClient) HScanWithOptions(
 		return "", nil, err
 	}
 	return handleScanResponse(result)
+}
+
+// Returns a random field name from the hash value stored at `key`.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the hash.
+//
+// Return value:
+//
+//	A random field name from the hash stored at `key`, or `nil` when
+//	  the key does not exist.
+//
+// Example:
+//
+//	field, err := client.HRandField("my_hash")
+//
+// [valkey.io]: https://valkey.io/commands/hrandfield/
+func (client *baseClient) HRandField(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.HRandField, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+// Retrieves up to `count` random field names from the hash value stored at `key`.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the hash.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//	An array of random field names from the hash stored at `key`,
+//	   or an empty array when the key does not exist.
+//
+// Example:
+//
+//	fields, err := client.HRandFieldWithCount("my_hash", -5)
+//
+// [valkey.io]: https://valkey.io/commands/hrandfield/
+func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string, error) {
+	result, err := client.executeCommand(C.HRandField, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Retrieves up to `count` random field names along with their values from the hash
+// value stored at `key`.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the hash.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//	A 2D `array` of `[field, value]` arrays, where `field` is a random
+//	  field name from the hash and `value` is the associated value of the field name.
+//	  If the hash does not exist or is empty, the response will be an empty array.
+//
+// Example:
+//
+//	fieldsAndValues, err := client.HRandFieldWithCountWithValues("my_hash", -5)
+//	for _, pair := range fieldsAndValues {
+//		field := pair[0]
+//		value := pair[1]
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/hrandfield/
+func (client *baseClient) HRandFieldWithCountWithValues(key string, count int64) ([][]string, error) {
+	result, err := client.executeCommand(C.HRandField, []string{key, utils.IntToString(count), options.WithValues})
+	if err != nil {
+		return nil, err
+	}
+	return handle2DStringArrayResponse(result)
 }
 
 func (client *baseClient) LPush(key string, elements []string) (int64, error) {
@@ -1543,7 +1644,7 @@ func (client *baseClient) XReadWithOptions(
 //
 // Return value:
 // A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-// a key does not exist or does not contain requiested entries.
+// a key does not exist or does not contain requested entries.
 //
 // For example:
 //
@@ -2486,7 +2587,7 @@ func (client *baseClient) XPendingWithOptions(
 	return handleXPendingDetailResponse(result)
 }
 
-// Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+// Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -2513,7 +2614,7 @@ func (client *baseClient) XGroupCreate(key string, group string, id string) (str
 	return client.XGroupCreateWithOptions(key, group, id, options.NewXGroupCreateOptions())
 }
 
-// Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+// Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -2590,6 +2691,100 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
+// Destroys the consumer group `group` for the stream stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name to delete.
+//
+// Return value:
+//
+//	`true` if the consumer group is destroyed. Otherwise, `false`.
+//
+// Example:
+//
+//	ok, err := client.XGroupDestroy("mystream", "mygroup")
+//	if !ok || err != nil {
+//		// handle errors
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-destroy/
+func (client *baseClient) XGroupDestroy(key string, group string) (bool, error) {
+	result, err := client.executeCommand(C.XGroupDestroy, []string{key, group})
+	if err != nil {
+		return defaultBoolResponse, err
+	}
+	return handleBoolResponse(result)
+}
+
+// Sets the last delivered ID for a consumer group.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	id - The stream entry ID that should be set as the last delivered ID for the consumer group.
+//
+// Return value:
+//
+//	`"OK"`.
+//
+// Example:
+//
+//	ok, err := client.XGroupSetId("mystream", "mygroup", "0-0")
+//	if ok != "OK" || err != nil {
+//		// handle error
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-create/
+func (client *baseClient) XGroupSetId(key string, group string, id string) (string, error) {
+	return client.XGroupSetIdWithOptions(key, group, id, options.NewXGroupSetIdOptionsOptions())
+}
+
+// Sets the last delivered ID for a consumer group.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	id - The stream entry ID that should be set as the last delivered ID for the consumer group.
+//	opts - The options for the command. See [options.XGroupSetIdOptions] for details.
+//
+// Return value:
+//
+//	`"OK"`.
+//
+// Example:
+//
+//	opts := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(42)
+//	ok, err := client.XGroupSetIdWithOptions("mystream", "mygroup", "0-0", opts)
+//	if ok != "OK" || err != nil {
+//		// handle error
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-create/
+func (client *baseClient) XGroupSetIdWithOptions(
+	key string,
+	group string,
+	id string,
+	opts *options.XGroupSetIdOptions,
+) (string, error) {
+	optionArgs, _ := opts.ToArgs()
+	args := append([]string{key, group, id}, optionArgs...)
+	result, err := client.executeCommand(C.XGroupSetId, args)
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Removes all elements in the sorted set stored at `key` with a lexicographical order
 // between `rangeQuery.Start` and `rangeQuery.End`.
 //
@@ -2599,7 +2794,6 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 //
 //	key - The key of the sorted set.
 //	rangeQuery - The range query object representing the minimum and maximum bound of the lexicographical range.
-//	  can be an implementation of [options.LexBoundary].
 //
 // Return value:
 //
@@ -2922,4 +3116,333 @@ func (client *baseClient) XAck(key string, group string, ids []string) (int64, e
 		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
+}
+
+// Sets or clears the bit at offset in the string value stored at key.
+// The offset is a zero-based index, with `0` being the first element of
+// the list, `1` being the next element, and so on. The offset must be
+// less than `2^32` and greater than or equal to `0` If a key is
+// non-existent then the bit at offset is set to value and the preceding
+// bits are set to `0`.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	offset - The index of the bit to be set.
+//	value - The bit value to set at offset The value must be `0` or `1`.
+//
+// Return value:
+//
+//	The bit value that was previously stored at offset.
+//
+// Example:
+//
+//	result, err := client.SetBit("key", 1, 1)
+//	result: 1
+//
+// [valkey.io]: https://valkey.io/commands/setbit/
+func (client *baseClient) SetBit(key string, offset int64, value int64) (int64, error) {
+	result, err := client.executeCommand(C.SetBit, []string{key, utils.IntToString(offset), utils.IntToString(value)})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns the bit value at offset in the string value stored at key.
+//
+//	offset should be greater than or equal to zero.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	offset - The index of the bit to return.
+//
+// Return value:
+// The bit at offset of the string. Returns zero if the key is empty or if the positive
+// offset exceeds the length of the string.
+//
+// Example:
+//
+//	result, err := client.GetBit("key1", 1, 1)
+//	result: 1
+//
+// [valkey.io]: https://valkey.io/commands/getbit/
+func (client *baseClient) GetBit(key string, offset int64) (int64, error) {
+	result, err := client.executeCommand(C.GetBit, []string{key, utils.IntToString(offset)})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Wait blocks the current client until all the previous write commands are successfully
+// transferred and acknowledged by at least the specified number of replicas or if the timeout is reached,
+// whichever is earlier
+//
+// Parameters:
+//
+//	numberOfReplicas - The number of replicas to reach.
+//	timeout - The timeout value specified in milliseconds. A value of `0` will
+//	block indefinitely.
+//
+// Return value:
+// The number of replicas reached by all the writes performed in the context of the current connection.
+//
+// Example:
+//
+//	 result, err := client.Wait(1, 1000)
+//	 if err != nil {
+//		// handle error
+//	 }
+//	 fmt.Println(result.Value()) // Output: 1 // if cluster has 2 replicasets
+//
+// [valkey.io]: https://valkey.io/commands/wait/
+func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (int64, error) {
+	result, err := client.executeCommand(C.Wait, []string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout)})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Counts the number of set bits (population counting) in a string stored at key.
+//
+// Parameters:
+//
+//	key - The key for the string to count the set bits of.
+//
+// Return value:
+// The number of set bits in the string. Returns zero if the key is missing as it is
+// treated as an empty string.
+//
+// Example:
+//
+//	result, err := client.BitCount("mykey")
+//	result: 26
+//
+// [valkey.io]: https://valkey.io/commands/bitcount/
+func (client *baseClient) BitCount(key string) (int64, error) {
+	result, err := client.executeCommand(C.BitCount, []string{key})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Counts the number of set bits (population counting) in a string stored at key. The
+// offsets start and end are zero-based indexes, with `0` being the first element of the
+// list, `1` being the next element and so on. These offsets can also be negative numbers
+// indicating offsets starting at the end of the list, with `-1` being the last element
+// of the list, `-2` being the penultimate, and so on.
+//
+// Parameters:
+//
+//	key - The key for the string to count the set bits of.
+//	options - The offset options - see [options.BitOffsetOptions].
+//
+// Return value:
+// The number of set bits in the string interval specified by start, end, and options.
+// Returns zero if the key is missing as it is treated as an empty string.
+//
+// Example:
+//
+//	opts := NewBitCountOptionsBuilder().SetStart(1).SetEnd(1).SetBitmapIndexType(options.BYTE)
+//	result, err := client.BitCount("mykey",options)
+//	result: 6
+//
+// [valkey.io]: https://valkey.io/commands/bitcount/
+func (client *baseClient) BitCountWithOptions(key string, opts *options.BitCountOptions) (int64, error) {
+	optionArgs, err := opts.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	commandArgs := append([]string{key}, optionArgs...)
+	result, err := client.executeCommand(C.BitCount, commandArgs)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Changes the ownership of a pending message.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
+//	minIdleTime - The minimum idle time in milliseconds.
+//	ids         - The ids of the entries to claim.
+//
+// Return value:
+//
+//	A `map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
+//	the consumer.
+//
+// Example:
+//
+//	result, err := client.XClaim("key", "group", "consumer", 1000, []string{"streamId1", "streamId2"})
+//	fmt.Println(result) // Output: map[streamId1:[["entry1", "data1"], ["entry2", "data2"]] streamId2:[["entry3", "data3"]]]
+//
+// [valkey.io]: https://valkey.io/commands/xclaim/
+func (client *baseClient) XClaim(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+) (map[string][][]string, error) {
+	return client.XClaimWithOptions(key, group, consumer, minIdleTime, ids, nil)
+}
+
+// Changes the ownership of a pending message.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
+//	minIdleTime - The minimum idle time in milliseconds.
+//	ids         - The ids of the entries to claim.
+//	options     - Stream claim options.
+//
+// Return value:
+//
+//	A `map` of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
+//	the consumer.
+//
+// Example:
+//
+//	result, err := client.XClaimWithOptions(
+//		"key",
+//		"group",
+//		"consumer",
+//		1000,
+//		[]string{"streamId1", "streamId2"},
+//		options.NewStreamClaimOptions().SetIdleTime(1),
+//	)
+//	fmt.Println(result) // Output: map[streamId1:[["entry1", "data1"], ["entry2", "data2"]] streamId2:[["entry3", "data3"]]]
+//
+// [valkey.io]: https://valkey.io/commands/xclaim/
+func (client *baseClient) XClaimWithOptions(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+	opts *options.StreamClaimOptions,
+) (map[string][][]string, error) {
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
+	}
+	result, err := client.executeCommand(C.XClaim, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleMapOfArrayOfStringArrayResponse(result)
+}
+
+// Changes the ownership of a pending message. This function returns an `array` with
+// only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
+//	minIdleTime - The minimum idle time in milliseconds.
+//	ids         - The ids of the entries to claim.
+//	options     - Stream claim options.
+//
+// Return value:
+//
+//	An array of the ids of the entries that were claimed by the consumer.
+//
+// Example:
+//
+//	result, err := client.XClaimJustId(
+//		"key",
+//		"group",
+//		"consumer",
+//		1000,
+//		[]string{"streamId1", "streamId2"},
+//	)
+//	fmt.Println(result) // Output: ["streamId1", "streamId2"]
+//
+// [valkey.io]: https://valkey.io/commands/xclaim/
+func (client *baseClient) XClaimJustId(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+) ([]string, error) {
+	return client.XClaimJustIdWithOptions(key, group, consumer, minIdleTime, ids, nil)
+}
+
+// Changes the ownership of a pending message. This function returns an `array` with
+// only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key         - The key of the stream.
+//	group       - The name of the consumer group.
+//	consumer    - The name of the consumer.
+//	minIdleTime - The minimum idle time in milliseconds.
+//	ids         - The ids of the entries to claim.
+//	options     - Stream claim options.
+//
+// Return value:
+//
+//	An array of the ids of the entries that were claimed by the consumer.
+//
+// Example:
+//
+//	result, err := client.XClaimJustIdWithOptions(
+//		"key",
+//		"group",
+//		"consumer",
+//		1000,
+//		[]string{"streamId1", "streamId2"},
+//		options.NewStreamClaimOptions().SetIdleTime(1),
+//	)
+//	fmt.Println(result) // Output: ["streamId1", "streamId2"]
+//
+// [valkey.io]: https://valkey.io/commands/xclaim/
+func (client *baseClient) XClaimJustIdWithOptions(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+	opts *options.StreamClaimOptions,
+) ([]string, error) {
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
+	}
+	args = append(args, options.JUST_ID_VALKEY_API)
+	result, err := client.executeCommand(C.XClaim, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
 }
