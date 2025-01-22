@@ -29,7 +29,7 @@ public final class SetOptions {
      */
     private final ConditionalSet conditionalSet;
 
-    /** Value to compare when <code>IFEQ comparison-value</code> is set. */
+    /** Value to compare when {@link ConditionalSet#ONLY_IF_EQUAL} is set. */
     private final String comparisonValue;
 
     /**
@@ -54,8 +54,8 @@ public final class SetOptions {
          */
         ONLY_IF_DOES_NOT_EXIST("NX"),
         /**
-         * Only set the key if the current value equals the provided comparison value. Equivalent to
-         * <code>IFEQ comparison-value</code> in the Valkey API.
+         * Only set the key if the current value of key equals the {@link SetOptions#comparisonValue}.
+         * Equivalent to <code>IFEQ comparison-value</code> in the Valkey API.
          */
         ONLY_IF_EQUAL("IFEQ");
 
@@ -163,8 +163,14 @@ public final class SetOptions {
 
         // Add comparison value if ONLY_IF_EQUAL is selected
         if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
-            assert comparisonValue != null : "comparisonValue must be set for ONLY_IF_EQUAL condition.";
+            if (comparisonValue == null) {
+                throw new IllegalArgumentException(
+                        "comparisonValue must be set when conditionalSet is ONLY_IF_EQUAL.");
+            }
             optionArgs.add(comparisonValue);
+        } else if (comparisonValue != null) {
+            throw new IllegalArgumentException(
+                    "comparisonValue can only be set when conditionalSet is ONLY_IF_EQUAL.");
         }
 
         if (returnOldValue) {
