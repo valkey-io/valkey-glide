@@ -210,7 +210,7 @@ func handle2DStringArrayResponse(response *C.struct_CommandResponse) ([][]string
 	}
 	res, ok := converted.([][]string)
 	if !ok {
-		return nil, &RequestError{fmt.Sprintf("unexpected type: %T", converted)}
+		return nil, &errors.RequestError{fmt.Sprintf("unexpected type: %T", converted)}
 	}
 	return res, nil
 }
@@ -607,7 +607,9 @@ func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
 			// try direct conversion to T when there is no next converter
 			valueT, ok := value.(T)
 			if !ok {
-				return nil, &errors.RequestError{fmt.Sprintf("Unexpected type of map element: %T, expected: %v", value, getType[T]())}
+				return nil, &errors.RequestError{
+					fmt.Sprintf("Unexpected type of map element: %T, expected: %v", value, getType[T]()),
+				}
 			}
 			result[key] = valueT
 		} else {
@@ -707,7 +709,7 @@ func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (
 	}
 	claimedEntries, ok := converted.(map[string][][]string)
 	if !ok {
-		return nil, &RequestError{fmt.Sprintf("unexpected type of second element: %T", converted)}
+		return nil, &errors.RequestError{fmt.Sprintf("unexpected type of second element: %T", converted)}
 	}
 
 	return claimedEntries, nil

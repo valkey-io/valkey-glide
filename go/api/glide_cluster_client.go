@@ -5,6 +5,7 @@ package api
 // #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../lib.h"
 import "C"
+
 import (
 	"github.com/valkey-io/valkey-glide/go/glide/api/config"
 	"github.com/valkey-io/valkey-glide/go/glide/api/options"
@@ -70,7 +71,10 @@ func (client *glideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //	result.Value().(string): "PONG"
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *glideClusterClient) CustomCommandWithRoute(args []string, route config.Route) (ClusterValue[interface{}], error) {
+func (client *glideClusterClient) CustomCommandWithRoute(
+	args []string,
+	route config.Route,
+) (ClusterValue[interface{}], error) {
 	res, err := client.executeCommandWithRoute(C.CustomCommand, args, route)
 	if err != nil {
 		return CreateEmptyClusterValue(), err
