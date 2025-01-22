@@ -7,10 +7,10 @@ package api
 import "C"
 
 // GlideClusterClient interface compliance check.
-var _ IGlideClusterClient = (*GlideClusterClient)(nil)
+var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
 
-// IGlideClusterClient is a client used for connection in cluster mode.
-type IGlideClusterClient interface {
+// GlideClusterClientCommands is a client used for connection in cluster mode.
+type GlideClusterClientCommands interface {
 	BaseClient
 	GenericClusterCommands
 }
@@ -20,8 +20,8 @@ type GlideClusterClient struct {
 	*baseClient
 }
 
-// NewGlideClusterClient creates a [IGlideClusterClient] in cluster mode using the given [GlideClusterClientConfiguration].
-func NewGlideClusterClient(config *GlideClusterClientConfiguration) (IGlideClusterClient, error) {
+// NewGlideClusterClient creates a [GlideClusterClientCommands] in cluster mode using the given [GlideClusterClientConfiguration].
+func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err

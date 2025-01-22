@@ -11,10 +11,10 @@ import (
 )
 
 // GlideClient interface compliance check.
-var _ IGlideClient = (*GlideClient)(nil)
+var _ GlideClientCommands = (*GlideClient)(nil)
 
-// IGlideClient is a client used for connection in Standalone mode.
-type IGlideClient interface {
+// GlideClientCommands is a client used for connection in Standalone mode.
+type GlideClientCommands interface {
 	BaseClient
 	GenericCommands
 	ServerManagementCommands
@@ -25,8 +25,8 @@ type GlideClient struct {
 	*baseClient
 }
 
-// NewGlideClient creates a [IGlideClient] in standalone mode using the given [GlideClientConfiguration].
-func NewGlideClient(config *GlideClientConfiguration) (IGlideClient, error) {
+// NewGlideClient creates a [GlideClientCommands] in standalone mode using the given [GlideClientConfiguration].
+func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err

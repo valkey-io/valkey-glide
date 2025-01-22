@@ -22,7 +22,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// BaseClient defines an interface for methods common to both [IGlideClient] and [IGlideClusterClient].
+// BaseClient defines an interface for methods common to both [GlideClientCommands] and [GlideClusterClientCommands].
 type BaseClient interface {
 	StringCommands
 	HashCommands
