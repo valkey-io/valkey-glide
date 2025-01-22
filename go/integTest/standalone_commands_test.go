@@ -391,9 +391,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 
 func (suite *GlideTestSuite) DBSize_Success() {
 	client := suite.defaultClient()
-
 	result, err := client.DBSize()
-
 	assert.Nil(suite.T(), err)
-	assert.Greater(suite.T(), result, 0)
+	assert.Greater(suite.T(), result, -0)
 }

@@ -41,11 +41,3 @@ func (client *glideClusterClient) CustomCommand(args []string) (ClusterValue[int
 	}
 	return CreateClusterValue(data), nil
 }
-
-func (client *glideClusterClient) DBSize(route route) (int64, error) {
-	result, err := client.executeCommand(C.DBSize, []string{}, route)
-	if err != nil {
-		return defaultIntResponse, err
-	}
-	return handleIntResponse(result)
-}
