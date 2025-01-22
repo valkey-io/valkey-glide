@@ -149,9 +149,8 @@ func getServerVersion(suite *GlideTestSuite) string {
 		client, err := api.NewGlideClient(config)
 		if err == nil && client != nil {
 			defer client.Close()
-			// TODO use info command
-			info, _ := client.CustomCommand([]string{"info", "server"})
-			return extractServerVersion(suite, info.(string))
+			info, _ := client.InfoWithOptions(api.InfoOptions{Sections: []api.Section{api.Server}})
+			return extractServerVersion(suite, info)
 		}
 	}
 	if len(suite.clusterHosts) == 0 {
@@ -169,11 +168,14 @@ func getServerVersion(suite *GlideTestSuite) string {
 	client, err := api.NewGlideClusterClient(config)
 	if err == nil && client != nil {
 		defer client.Close()
-		// TODO use info command with route
-		info, _ := client.CustomCommand([]string{"info", "server"})
-		for _, value := range info.Value().(map[string]interface{}) {
-			return extractServerVersion(suite, value.(string))
-		}
+
+		info, _ := client.InfoWithOptions(
+			api.ClusterInfoOptions{
+				InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}},
+				Route:       api.RandomRoute.ToPtr(),
+			},
+		)
+		return extractServerVersion(suite, info.SingleValue())
 	}
 	suite.T().Fatalf("Can't connect to any server to get version: %s", err.Error())
 	return ""

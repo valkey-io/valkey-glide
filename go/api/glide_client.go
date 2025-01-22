@@ -46,7 +46,7 @@ func (client *glideClient) CustomCommand(args []string) (interface{}, error) {
 func (client *glideClient) ConfigSet(parameters map[string]string) (string, error) {
 	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
-		return "", err
+		return defaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -62,7 +62,59 @@ func (client *glideClient) ConfigGet(args []string) (map[string]string, error) {
 func (client *glideClient) Select(index int64) (string, error) {
 	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
 	if err != nil {
-		return "", err
+		return defaultStringResponse, err
+	}
+
+	return handleStringResponse(result)
+}
+
+// Gets information and statistics about the server.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	A string with the information for the default sections.
+//
+// Example:
+//
+//	response, err := standaloneClient.Info(opts)
+//	if err != nil {
+//		// handle error
+//	}
+//	fmt.Println(response)
+//
+// [valkey.io]: https://valkey.io/commands/info/
+func (client *glideClient) Info() (string, error) {
+	return client.InfoWithOptions(InfoOptions{[]Section{}})
+}
+
+// Gets information and statistics about the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	options - Additional command parameters, see [InfoOptions] for more details.
+//
+// Return value:
+//
+//	A string containing the information for the sections requested.
+//
+// Example:
+//
+//	opts := api.InfoOptions{Sections: []api.Section{api.Server}}
+//	response, err := standaloneClient.InfoWithOptions(opts)
+//	if err != nil {
+//		// handle error
+//	}
+//	fmt.Println(response)
+//
+// [valkey.io]: https://valkey.io/commands/info/
+func (client *glideClient) InfoWithOptions(options InfoOptions) (string, error) {
+	result, err := client.executeCommand(C.Info, options.toArgs())
+	if err != nil {
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)

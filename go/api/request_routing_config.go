@@ -17,6 +17,7 @@ import (
 // - [api.ByAddressRoute]
 type route interface {
 	toRoutesProtobuf() (*protobuf.Routes, error)
+	isMultiNode() bool
 }
 
 type SimpleNodeRoute int
@@ -44,6 +45,15 @@ func (simpleNodeRoute SimpleNodeRoute) toRoutesProtobuf() (*protobuf.Routes, err
 		},
 	}
 	return request, nil
+}
+
+func (route SimpleNodeRoute) isMultiNode() bool {
+	return route != RandomRoute
+}
+
+func (snr SimpleNodeRoute) ToPtr() *route {
+	a := route(snr)
+	return &a
 }
 
 func mapSimpleNodeRoute(simpleNodeRoute SimpleNodeRoute) (protobuf.SimpleRoutes, error) {
@@ -111,6 +121,10 @@ func (slotIdRoute *SlotIdRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
 	return request, nil
 }
 
+func (route *SlotIdRoute) isMultiNode() bool {
+	return false
+}
+
 // Request routing configuration overrides the [api.ReadFrom] connection configuration.
 // If SlotTypeReplica is used, the request will be routed to a replica, even if the strategy is ReadFrom [api.PreferReplica].
 type SlotKeyRoute struct {
@@ -139,6 +153,10 @@ func (slotKeyRoute *SlotKeyRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
 		},
 	}
 	return request, nil
+}
+
+func (route *SlotKeyRoute) isMultiNode() bool {
+	return false
 }
 
 // Routes a request to a node by its address.
@@ -188,4 +206,8 @@ func (byAddressRoute *ByAddressRoute) toRoutesProtobuf() (*protobuf.Routes, erro
 		},
 	}
 	return request, nil
+}
+
+func (route *ByAddressRoute) isMultiNode() bool {
+	return false
 }

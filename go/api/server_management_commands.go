@@ -2,7 +2,7 @@
 
 package api
 
-// ServerManagementCommands supports commands and transactions for the "Server Management" group for a standalone client.
+// ServerManagementCommands supports commands for the "Server Management" group for a standalone client.
 //
 // See [valkey.io] for details.
 //
@@ -61,4 +61,8 @@ type ServerManagementCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/config-set/
 	ConfigSet(parameters map[string]string) (string, error)
+
+	Info() (string, error)
+
+	InfoWithOptions(options InfoOptions) (string, error)
 }
