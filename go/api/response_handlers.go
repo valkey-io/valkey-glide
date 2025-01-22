@@ -168,7 +168,8 @@ func handleStringOrNilResponse(response *C.struct_CommandResponse) (Result[strin
 	return convertCharArrayToString(response, true)
 }
 
-func convertStringArray(response *C.struct_CommandResponse) ([]Result[string], error) {
+// Fix after merging with https://github.com/valkey-io/valkey-glide/pull/2964
+func convertStringOrNilArray(response *C.struct_CommandResponse) ([]Result[string], error) {
 	typeErr := checkResponseType(response, C.Array, false)
 	if typeErr != nil {
 		return nil, typeErr
@@ -185,10 +186,31 @@ func convertStringArray(response *C.struct_CommandResponse) ([]Result[string], e
 	return slice, nil
 }
 
-func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
+func handle2DStringArrayResponse(response *C.struct_CommandResponse) ([][]string, error) {
 	defer C.free_command_response(response)
-
-	return convertStringArray(response)
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	array, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := arrayConverter[[]string]{
+		arrayConverter[string]{
+			nil,
+			false,
+		},
+		false,
+	}.convert(array)
+	if err != nil {
+		return nil, err
+	}
+	res, ok := converted.([][]string)
+	if !ok {
+		return nil, &RequestError{fmt.Sprintf("unexpected type: %T", converted)}
+	}
+	return res, nil
 }
 
 func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
@@ -212,6 +234,46 @@ func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Resu
 		slice = append(slice, res)
 	}
 	return slice, nil
+}
+
+// array could be nillable, but strings - aren't
+func convertStringArray(response *C.struct_CommandResponse, isNilable bool) ([]string, error) {
+	typeErr := checkResponseType(response, C.Array, isNilable)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	if isNilable && response.array_value == nil {
+		return nil, nil
+	}
+
+	slice := make([]string, 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		res, err := convertCharArrayToString(&v, false)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, res.Value())
+	}
+	return slice, nil
+}
+
+func handleStringOrNilArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
+	defer C.free_command_response(response)
+
+	return convertStringOrNilArray(response)
+}
+
+func handleStringArrayResponse(response *C.struct_CommandResponse) ([]string, error) {
+	defer C.free_command_response(response)
+
+	return convertStringArray(response, false)
+}
+
+func handleStringArrayOrNilResponse(response *C.struct_CommandResponse) ([]string, error) {
+	defer C.free_command_response(response)
+
+	return convertStringArray(response, true)
 }
 
 func handleIntResponse(response *C.struct_CommandResponse) (int64, error) {
@@ -240,7 +302,7 @@ func handleIntOrNilResponse(response *C.struct_CommandResponse) (Result[int64], 
 	return CreateInt64Result(int64(response.int_value)), nil
 }
 
-func handleIntArrayResponse(response *C.struct_CommandResponse) ([]Result[int64], error) {
+func handleIntArrayResponse(response *C.struct_CommandResponse) ([]int64, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, false)
@@ -248,13 +310,13 @@ func handleIntArrayResponse(response *C.struct_CommandResponse) ([]Result[int64]
 		return nil, typeErr
 	}
 
-	slice := make([]Result[int64], 0, response.array_value_len)
+	slice := make([]int64, 0, response.array_value_len)
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		err := checkResponseType(&v, C.Int, false)
 		if err != nil {
 			return nil, err
 		}
-		slice = append(slice, CreateInt64Result(int64(v.int_value)))
+		slice = append(slice, int64(v.int_value))
 	}
 	return slice, nil
 }
@@ -339,7 +401,7 @@ func handleBoolArrayResponse(response *C.struct_CommandResponse) ([]bool, error)
 	return slice, nil
 }
 
-func handleStringDoubleMapResponse(response *C.struct_CommandResponse) (map[Result[string]]Result[float64], error) {
+func handleStringDoubleMapResponse(response *C.struct_CommandResponse) (map[string]float64, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Map, false)
@@ -347,23 +409,26 @@ func handleStringDoubleMapResponse(response *C.struct_CommandResponse) (map[Resu
 		return nil, typeErr
 	}
 
-	m := make(map[Result[string]]Result[float64], response.array_value_len)
-	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
-		key, err := convertCharArrayToString(v.map_key, true)
-		if err != nil {
-			return nil, err
-		}
-		typeErr := checkResponseType(v.map_value, C.Float, false)
-		if typeErr != nil {
-			return nil, typeErr
-		}
-		value := CreateFloat64Result(float64(v.map_value.float_value))
-		m[key] = value
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
 	}
-	return m, nil
+	aMap := data.(map[string]interface{})
+
+	converted, err := mapConverter[float64]{
+		nil, false,
+	}.convert(aMap)
+	if err != nil {
+		return nil, err
+	}
+	result, ok := converted.(map[string]float64)
+	if !ok {
+		return nil, &RequestError{fmt.Sprintf("unexpected type of map: %T", converted)}
+	}
+	return result, nil
 }
 
-func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[Result[string]]Result[string], error) {
+func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[string]string, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Map, false)
@@ -371,25 +436,28 @@ func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[Re
 		return nil, typeErr
 	}
 
-	m := make(map[Result[string]]Result[string], response.array_value_len)
-	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
-		key, err := convertCharArrayToString(v.map_key, true)
-		if err != nil {
-			return nil, err
-		}
-		value, err := convertCharArrayToString(v.map_value, true)
-		if err != nil {
-			return nil, err
-		}
-		m[key] = value
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
 	}
+	aMap := data.(map[string]interface{})
 
-	return m, nil
+	converted, err := mapConverter[string]{
+		nil, false,
+	}.convert(aMap)
+	if err != nil {
+		return nil, err
+	}
+	result, ok := converted.(map[string]string)
+	if !ok {
+		return nil, &RequestError{fmt.Sprintf("unexpected type of map: %T", converted)}
+	}
+	return result, nil
 }
 
-func handleStringToStringArrayMapOrNullResponse(
+func handleStringToStringArrayMapOrNilResponse(
 	response *C.struct_CommandResponse,
-) (map[Result[string]][]Result[string], error) {
+) (map[string][]string, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Map, true)
@@ -401,23 +469,28 @@ func handleStringToStringArrayMapOrNullResponse(
 		return nil, nil
 	}
 
-	m := make(map[Result[string]][]Result[string], response.array_value_len)
-	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
-		key, err := convertCharArrayToString(v.map_key, true)
-		if err != nil {
-			return nil, err
-		}
-		value, err := convertStringArray(v.map_value)
-		if err != nil {
-			return nil, err
-		}
-		m[key] = value
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
 	}
 
-	return m, nil
+	converters := mapConverter[[]string]{
+		arrayConverter[string]{},
+		false,
+	}
+
+	res, err := converters.convert(data)
+	if err != nil {
+		return nil, err
+	}
+	if result, ok := res.(map[string][]string); ok {
+		return result, nil
+	}
+
+	return nil, &RequestError{fmt.Sprintf("unexpected type received: %T", res)}
 }
 
-func handleStringSetResponse(response *C.struct_CommandResponse) (map[Result[string]]struct{}, error) {
+func handleStringSetResponse(response *C.struct_CommandResponse) (map[string]struct{}, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Sets, false)
@@ -425,13 +498,13 @@ func handleStringSetResponse(response *C.struct_CommandResponse) (map[Result[str
 		return nil, typeErr
 	}
 
-	slice := make(map[Result[string]]struct{}, response.sets_value_len)
+	slice := make(map[string]struct{}, response.sets_value_len)
 	for _, v := range unsafe.Slice(response.sets_value, response.sets_value_len) {
 		res, err := convertCharArrayToString(&v, true)
 		if err != nil {
 			return nil, err
 		}
-		slice[res] = struct{}{}
+		slice[res.Value()] = struct{}{}
 	}
 
 	return slice, nil
@@ -515,6 +588,7 @@ type mapConverter[T any] struct {
 	canBeNil bool
 }
 
+// Converts an untyped map into a map[string]T
 func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
 	if data == nil {
 		if node.canBeNil {
@@ -525,14 +599,17 @@ func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
 	}
 	result := make(map[string]T)
 
+	// Iterate over the map and convert each value to T
 	for key, value := range data.(map[string]interface{}) {
 		if node.next == nil {
+			// try direct conversion to T when there is no next converter
 			valueT, ok := value.(T)
 			if !ok {
 				return nil, &RequestError{fmt.Sprintf("Unexpected type of map element: %T, expected: %v", value, getType[T]())}
 			}
 			result[key] = valueT
 		} else {
+			// nested iteration when there is a next converter
 			val, err := node.next.convert(value)
 			if err != nil {
 				return nil, err
@@ -542,6 +619,7 @@ func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
 				result[key] = null
 				continue
 			}
+			// convert to T
 			valueT, ok := val.(T)
 			if !ok {
 				return nil, &RequestError{fmt.Sprintf("Unexpected type of map element: %T, expected: %v", val, getType[T]())}
@@ -600,6 +678,38 @@ func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
 }
 
 // TODO: convert sets
+
+func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (map[string][][]string, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	mapData, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := mapConverter[[][]string]{
+		arrayConverter[[]string]{
+			arrayConverter[string]{
+				nil,
+				false,
+			},
+			false,
+		},
+		false,
+	}.convert(mapData)
+	if err != nil {
+		return nil, err
+	}
+	claimedEntries, ok := converted.(map[string][][]string)
+	if !ok {
+		return nil, &RequestError{fmt.Sprintf("unexpected type of second element: %T", converted)}
+	}
+
+	return claimedEntries, nil
+}
 
 func handleXAutoClaimResponse(response *C.struct_CommandResponse) (XAutoClaimResponse, error) {
 	defer C.free_command_response(response)

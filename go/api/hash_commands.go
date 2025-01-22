@@ -46,14 +46,10 @@ type HashCommands interface {
 	//
 	// For example:
 	//  fieldValueMap, err := client.HGetAll("my_hash")
-	//  // field1 equals api.CreateStringResult("field1")
-	//  // value1 equals api.CreateStringResult("value1")
-	//  // field2 equals api.CreateStringResult("field2")
-	//  // value2 equals api.CreateStringResult("value2")
-	//  // fieldValueMap equals map[api.Result[string]]api.Result[string]{field1: value1, field2: value2}
+	//  // fieldValueMap equals map[string]string{field1: value1, field2: value2}
 	//
 	// [valkey.io]: https://valkey.io/commands/hgetall/
-	HGetAll(key string) (map[Result[string]]Result[string], error)
+	HGetAll(key string) (map[string]string, error)
 
 	// HMGet returns the values associated with the specified fields in the hash stored at key.
 	//
@@ -172,17 +168,14 @@ type HashCommands interface {
 	//  key - The key of the hash.
 	//
 	// Return value:
-	//  A slice of Result[string]s containing all the values in the hash, or an empty slice when key does not exist.
+	//  A slice containing all the values in the hash, or an empty slice when key does not exist.
 	//
 	// For example:
 	//  values, err := client.HVals("myHash")
-	//  // value1 equals api.CreateStringResult("value1")
-	//  // value2 equals api.CreateStringResult("value2")
-	//  // value3 equals api.CreateStringResult("value3")
-	//  // values equals []api.Result[string]{value1, value2, value3}
+	//  values: []string{"value1", "value2", "value3"}
 	//
 	// [valkey.io]: https://valkey.io/commands/hvals/
-	HVals(key string) ([]Result[string], error)
+	HVals(key string) ([]string, error)
 
 	// HExists returns if field is an existing field in the hash stored at key.
 	//
@@ -215,16 +208,14 @@ type HashCommands interface {
 	//  key - The key of the hash.
 	//
 	// Return value:
-	//  A slice of Result[string]s containing all the field names in the hash, or an empty slice when key does not exist.
+	//  A slice containing all the field names in the hash, or an empty slice when key does not exist.
 	//
 	// For example:
 	//  names, err := client.HKeys("my_hash")
-	//  // field1 equals api.CreateStringResult("field_1")
-	//  // field2 equals api.CreateStringResult("field_2")
-	//  // names equals []api.Result[string]{field1, field2}
+	//  names: []string{"field1", "field2"}
 	//
 	// [valkey.io]: https://valkey.io/commands/hkeys/
-	HKeys(key string) ([]Result[string], error)
+	HKeys(key string) ([]string, error)
 
 	// HStrLen returns the string length of the value associated with field in the hash stored at key.
 	// If the key or the field do not exist, 0 is returned.
@@ -291,6 +282,12 @@ type HashCommands interface {
 	HIncrByFloat(key string, field string, increment float64) (float64, error)
 
 	HScan(key string, cursor string) (string, []string, error)
+
+	HRandField(key string) (Result[string], error)
+
+	HRandFieldWithCount(key string, count int64) ([]string, error)
+
+	HRandFieldWithCountWithValues(key string, count int64) ([][]string, error)
 
 	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (string, []string, error)
 }
