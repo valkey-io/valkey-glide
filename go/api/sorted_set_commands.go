@@ -127,10 +127,10 @@ type SortedSetCommands interface {
 	//
 	// Example:
 	//   res, err := client.zpopmin("mySortedSet")
-	//   fmt.Println(res.Value()) // Output: map["member1":5.0]
+	//   fmt.Println(res) // Output: map["member1": 5.0]
 	//
 	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMin(key string) (map[Result[string]]Result[float64], error)
+	ZPopMin(key string) (map[string]float64, error)
 
 	// Removes and returns up to `count` members with the lowest scores from the sorted set
 	// stored at the specified `key`.
@@ -148,10 +148,10 @@ type SortedSetCommands interface {
 	//
 	// Example:
 	//   res, err := client.ZPopMinWithCount("mySortedSet", 2)
-	//   fmt.Println(res.Value()) // Output: map["member1":5.0, "member2":6.0]
+	//   fmt.Println(res) // Output: map["member1": 5.0, "member2": 6.0]
 	//
 	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMinWithCount(key string, count int64) (map[Result[string]]Result[float64], error)
+	ZPopMinWithCount(key string, count int64) (map[string]float64, error)
 
 	// Removes and returns the member with the highest score from the sorted set stored at the
 	// specified `key`.
@@ -168,10 +168,10 @@ type SortedSetCommands interface {
 	//
 	// Example:
 	//   res, err := client.zpopmax("mySortedSet")
-	//   fmt.Println(res.Value()) // Output: map["member2":8.0]
+	//   fmt.Println(res) // Output: map["member2": 8.0]
 	//
 	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMax(key string) (map[Result[string]]Result[float64], error)
+	ZPopMax(key string) (map[string]float64, error)
 
 	// Removes and returns up to `count` members with the highest scores from the sorted set
 	// stored at the specified `key`.
@@ -189,10 +189,10 @@ type SortedSetCommands interface {
 	//
 	// Example:
 	//   res, err := client.ZPopMaxWithCount("mySortedSet", 2)
-	//   fmt.Println(res.Value()) // Output: map["member1":5.0, "member2":6.0]
+	//   fmt.Println(res) // Output: map["member1": 5.0, "member2": 6.0]
 	//
 	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[float64], error)
+	ZPopMaxWithCount(key string, count int64) (map[string]float64, error)
 
 	// Removes the specified members from the sorted set stored at `key`.
 	// Specified members that are not a member of this set are ignored.
@@ -264,9 +264,9 @@ type SortedSetCommands interface {
 	// [blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
 
-	ZRange(key string, rangeQuery options.ZRangeQuery) ([]Result[string], error)
+	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
-	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[Result[string]]Result[float64], error)
+	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[string]float64, error)
 
 	// Returns the rank of `member` in the sorted set stored at `key`, with
 	// scores ordered from low to high, starting from `0`.
@@ -377,4 +377,18 @@ type SortedSetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/zrevrank/
 	ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error)
+
+	ZScore(key string, member string) (Result[float64], error)
+
+	ZCount(key string, rangeOptions *options.ZCountRange) (int64, error)
+
+	ZScan(key string, cursor string) (string, []string, error)
+
+	ZScanWithOptions(key string, cursor string, options *options.ZScanOptions) (string, []string, error)
+
+	ZRemRangeByLex(key string, rangeQuery options.RangeByLex) (int64, error)
+
+	ZRemRangeByRank(key string, start int64, stop int64) (int64, error)
+
+	ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error)
 }

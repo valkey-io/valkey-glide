@@ -71,7 +71,7 @@ type ListCommands interface {
 	//     result: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/lpop/
-	LPopCount(key string, count int64) ([]Result[string], error)
+	LPopCount(key string, count int64) ([]string, error)
 
 	// Returns the index of the first occurrence of element inside the list specified by key. If no match is found,
 	// [api.CreateNilInt64Result()] is returned.
@@ -132,13 +132,12 @@ type ListCommands interface {
 	//  An array that holds the indices of the matching elements within the list.
 	//
 	// For example:
-	//  result, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	//  _, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
 	//  result, err := client.LPosCount("my_list", "e", int64(3))
-	//  result: []api.Result[int64]{api.CreateInt64Result(4), api.CreateInt64Result(5), api.CreateInt64Result(6)}
-	//
+	//  result: []int64{ 4, 5, 6 }
 	//
 	// [valkey.io]: https://valkey.io/commands/lpos/
-	LPosCount(key string, element string, count int64) ([]Result[int64], error)
+	LPosCount(key string, element string, count int64) ([]int64, error)
 
 	// Returns an array of indices of matching elements within a list based on the given options. If no match is found, an
 	// empty array is returned.
@@ -155,21 +154,21 @@ type ListCommands interface {
 	//  An array that holds the indices of the matching elements within the list.
 	//
 	// For example:
-	//  1. result, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	//  1. _, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
 	//     result, err := client.LPosWithOptions("my_list", "e", int64(1), api.NewLPosOptionsBuilder().SetRank(2))
-	//     result: []api.Result[int64]{api.CreateInt64Result(5)}
-	//  2. result, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	//     result: []int64{ 5 }
+	//  2. _, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
 	//     result, err := client.LPosWithOptions(
 	//             "my_list",
 	//             "e",
 	//             int64(3),
 	//             api.NewLPosOptionsBuilder().SetRank(2).SetMaxLen(1000),
 	//            )
-	//     result: []api.Result[int64]{api.CreateInt64Result(5), api.CreateInt64Result(6)}
+	//     result: []int64{ 5, 6 }
 	//
 	//
 	// [valkey.io]: https://valkey.io/commands/lpos/
-	LPosCountWithOptions(key string, element string, count int64, options *LPosOptions) ([]Result[int64], error)
+	LPosCountWithOptions(key string, element string, count int64, options *LPosOptions) ([]int64, error)
 
 	// Inserts all the specified values at the tail of the list stored at key.
 	// elements are inserted one after the other to the tail of the list, from the leftmost element to the rightmost element.
@@ -211,15 +210,14 @@ type ListCommands interface {
 	//
 	// For example:
 	//  1. result, err := client.LRange("my_list", 0, 2)
-	// result: []api.Result[string]{api.CreateStringResult("value1"), api.CreateStringResult("value2"),
-	// api.CreateStringResult("value3")}
+	//     result: []string{ "value1", "value2", "value3" }
 	//  2. result, err := client.LRange("my_list", -2, -1)
-	//     result: []api.Result[string]{api.CreateStringResult("value2"), api.CreateStringResult("value3")}
+	//     result: []string{ "value2", "value3" }
 	//  3. result, err := client.LRange("non_existent_key", 0, 2)
-	//     result: []api.Result[string]{}
+	//     result: []string{}
 	//
 	// [valkey.io]: https://valkey.io/commands/lrange/
-	LRange(key string, start int64, end int64) ([]Result[string], error)
+	LRange(key string, start int64, end int64) ([]string, error)
 
 	// Returns the element at index from the list stored at key.
 	// The index is zero-based, so 0 means the first element, 1 the second element and so on. Negative indices can be used to
@@ -260,19 +258,18 @@ type ListCommands interface {
 	//  end   - The end of the range.
 	//
 	// Return value:
-	//  The Result[string] containing always "OK".
-	// If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes
-	// key to be removed).
+	//  Always `"OK"`.
+	//  If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes
+	//  key to be removed).
 	//  If end exceeds the actual end of the list, it will be treated like the last element of the list.
-	//  If key does not exist, OK will be returned without changes to the database.
+	//  If key does not exist, `"OK"` will be returned without changes to the database.
 	//
 	// For example:
 	//  result, err := client.LTrim("my_list", 0, 1)
-	//  result.Value(): "OK"
-	//  result.IsNil(): false
+	//  result: "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/ltrim/
-	LTrim(key string, start int64, end int64) (Result[string], error)
+	LTrim(key string, start int64, end int64) (string, error)
 
 	// Returns the length of the list stored at key.
 	//
@@ -358,7 +355,7 @@ type ListCommands interface {
 	//     result: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/rpop/
-	RPopCount(key string, count int64) ([]Result[string], error)
+	RPopCount(key string, count int64) ([]string, error)
 
 	// Inserts element in the list at key either before or after the pivot.
 	//
@@ -398,17 +395,17 @@ type ListCommands interface {
 	//  timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 	//
 	// Return value:
-	//  A two-element array of Result[string] containing the key from which the element was popped and the value of the popped
+	//  A two-element array containing the key from which the element was popped and the value of the popped
 	//  element, formatted as [key, value].
-	//  If no element could be popped and the timeout expired, returns nil.
+	//  If no element could be popped and the timeout expired, returns `nil`.
 	//
 	// For example:
 	//  result, err := client.BLPop("list1", "list2", 0.5)
-	//  result: []api.Result[string]{api.CreateStringResult("list1"), api.CreateStringResult("element")}
+	//  result: []string{ "list1", "element" }
 	//
 	// [valkey.io]: https://valkey.io/commands/blpop/
 	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-	BLPop(keys []string, timeoutSecs float64) ([]Result[string], error)
+	BLPop(keys []string, timeoutSecs float64) ([]string, error)
 
 	// Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the order that
 	// they are given.
@@ -425,17 +422,17 @@ type ListCommands interface {
 	//  timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 	//
 	// Return value:
-	//  A two-element array of Result[string] containing the key from which the element was popped and the value of the popped
+	//  A two-element array containing the key from which the element was popped and the value of the popped
 	//  element, formatted as [key, value].
-	//  If no element could be popped and the timeoutSecs expired, returns nil.
+	//  If no element could be popped and the timeoutSecs expired, returns `nil`.
 	//
 	// For example:
 	//  result, err := client.BRPop("list1", "list2", 0.5)
-	//  result: []api.Result[string]{api.CreateStringResult("list1"), api.CreateStringResult("element")}
+	//  result: []string{ "list1", "element" }
 	//
 	// [valkey.io]: https://valkey.io/commands/brpop/
 	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-	BRPop(keys []string, timeoutSecs float64) ([]Result[string], error)
+	BRPop(keys []string, timeoutSecs float64) ([]string, error)
 
 	// Inserts all the specified values at the tail of the list stored at key, only if key exists and holds a list. If key is
 	// not a list, this performs no operation.
@@ -494,10 +491,10 @@ type ListCommands interface {
 	// For example:
 	//  result, err := client.LPush("my_list", []string{"one", "two", "three"})
 	//  result, err := client.LMPop([]string{"my_list"}, api.Left)
-	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//  result["my_list"] = []string{"three"}
 	//
 	// [valkey.io]: https://valkey.io/commands/lmpop/
-	LMPop(keys []string, listDirection ListDirection) (map[Result[string]][]Result[string], error)
+	LMPop(keys []string, listDirection ListDirection) (map[string][]string, error)
 
 	// Pops one or more elements from the first non-empty list from the provided keys.
 	//
@@ -517,10 +514,10 @@ type ListCommands interface {
 	// For example:
 	//  result, err := client.LPush("my_list", []string{"one", "two", "three"})
 	//  result, err := client.LMPopCount([]string{"my_list"}, api.Left, int64(1))
-	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//  result["my_list"] = []string{"three"}
 	//
 	// [valkey.io]: https://valkey.io/commands/lmpop/
-	LMPopCount(keys []string, listDirection ListDirection, count int64) (map[Result[string]][]Result[string], error)
+	LMPopCount(keys []string, listDirection ListDirection, count int64) (map[string][]string, error)
 
 	// Blocks the connection until it pops one element from the first non-empty list from the provided keys. BLMPop is the
 	// blocking variant of [api.LMPop].
@@ -547,11 +544,11 @@ type ListCommands interface {
 	// For example:
 	//  result, err := client.LPush("my_list", []string{"one", "two", "three"})
 	//  result, err := client.BLMPop([]string{"my_list"}, api.Left, float64(0.1))
-	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//  result["my_list"] = []string{"three"}
 	//
 	// [valkey.io]: https://valkey.io/commands/blmpop/
 	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-	BLMPop(keys []string, listDirection ListDirection, timeoutSecs float64) (map[Result[string]][]Result[string], error)
+	BLMPop(keys []string, listDirection ListDirection, timeoutSecs float64) (map[string][]string, error)
 
 	// Blocks the connection until it pops one or more elements from the first non-empty list from the provided keys.
 	// BLMPopCount is the blocking variant of [api.LMPopCount].
@@ -579,7 +576,7 @@ type ListCommands interface {
 	// For example:
 	//  result, err: client.LPush("my_list", []string{"one", "two", "three"})
 	//  result, err := client.BLMPopCount([]string{"my_list"}, api.Left, int64(1), float64(0.1))
-	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//  result["my_list"] = []string{"three"}
 	//
 	// [valkey.io]: https://valkey.io/commands/blmpop/
 	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -588,7 +585,7 @@ type ListCommands interface {
 		listDirection ListDirection,
 		count int64,
 		timeoutSecs float64,
-	) (map[Result[string]][]Result[string], error)
+	) (map[string][]string, error)
 
 	// Sets the list element at index to element.
 	// The index is zero-based, so 0 means the first element,1 the second element and so on. Negative indices can be used to
@@ -603,14 +600,14 @@ type ListCommands interface {
 	//  element - The element to be set.
 	//
 	// Return value:
-	//  A Result[string] containing "OK".
+	//  `"OK"`.
 	//
 	// For example:
 	//  result, err: client.LSet("my_list", int64(1), "two")
-	//  result.Value(): "OK"
+	//  result: "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/lset/
-	LSet(key string, index int64, element string) (Result[string], error)
+	LSet(key string, index int64, element string) (string, error)
 
 	// Atomically pops and removes the left/right-most element to the list stored at source depending on whereFrom, and pushes
 	// the element at the first/last element of the list stored at destination depending on whereTo.
@@ -633,9 +630,8 @@ type ListCommands interface {
 	//  result.Value(): "one"
 	//  updatedList1, err: client.LRange("my_list1", int64(0), int64(-1))
 	//  updatedList2, err: client.LRange("my_list2", int64(0), int64(-1))
-	//  updatedList1: []api.Result[string]{api.CreateStringResult("two")}
-	//  updatedList2: []api.Result[string]{api.CreateStringResult("one"), api.CreateStringResult("three"),
-	//  api.CreateStringResult("four")}
+	//  updatedList1: []string{ "two" }
+	//  updatedList2: []string{ "one", "three", "four" }
 	//
 	// [valkey.io]: https://valkey.io/commands/lmove/
 	LMove(source string, destination string, whereFrom ListDirection, whereTo ListDirection) (Result[string], error)
@@ -672,9 +668,8 @@ type ListCommands interface {
 	//  result.Value(): "one"
 	//  updatedList1, err: client.LRange("my_list1", int64(0), int64(-1))
 	//  updatedList2, err: client.LRange("my_list2", int64(0), int64(-1))
-	//  updatedList1: []api.Result[string]{api.CreateStringResult("two")}
-	//  updatedList2: []api.Result[string]{api.CreateStringResult("one"), api.CreateStringResult("three"),
-	//  api.CreateStringResult("four")}
+	//  updatedList1: []string{ "two" }
+	//  updatedList2: []string{ "one", "three", "four" }
 	//
 	// [valkey.io]: https://valkey.io/commands/blmove/
 	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands

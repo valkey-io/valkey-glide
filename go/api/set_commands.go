@@ -54,20 +54,16 @@ type SetCommands interface {
 	//   key - The key from which to retrieve the set members.
 	//
 	// Return value:
-	//   A map[Result[string]]struct{} containing all members of the set.
-	//   Returns an empty map if key does not exist.
+	//   A `map[string]struct{}` containing all members of the set.
+	//   Returns an empty collection if key does not exist.
 	//
 	// For example:
 	//   // Assume set "my_set" contains: "member1", "member2"
 	//   result, err := client.SMembers("my_set")
-	//   // result equals:
-	//   // map[Result[string]]struct{}{
-	//   //   api.CreateStringResult("member1"): {},
-	//   //   api.CreateStringResult("member2"): {}
-	//   // }
+	//   // result: map[string]struct{}{ "member1": {}, "member2": {} }
 	//
 	// [valkey.io]: https://valkey.io/commands/smembers/
-	SMembers(key string) (map[Result[string]]struct{}, error)
+	SMembers(key string) (map[string]struct{}, error)
 
 	// SCard retrieves the set cardinality (number of elements) of the set stored at key.
 	//
@@ -119,19 +115,16 @@ type SetCommands interface {
 	//   keys - The keys of the sets to diff.
 	//
 	// Return value:
-	//   A map[Result[string]]struct{} representing the difference between the sets.
+	//   A `map[string]struct{}` representing the difference between the sets.
 	//   If a key does not exist, it is treated as an empty set.
 	//
 	// Example:
 	//   result, err := client.SDiff([]string{"set1", "set2"})
-	//   // result might contain:
-	//   // map[Result[string]]struct{}{
-	//   //   api.CreateStringResult("element"): {},
-	//   // }
+	//   // result: map[string]struct{}{ "element": {} }
 	//   // Indicates that "element" is present in "set1", but missing in "set2"
 	//
 	// [valkey.io]: https://valkey.io/commands/sdiff/
-	SDiff(keys []string) (map[Result[string]]struct{}, error)
+	SDiff(keys []string) (map[string]struct{}, error)
 
 	// SDiffStore stores the difference between the first set and all the successive sets in keys
 	// into a new set at destination.
@@ -165,20 +158,16 @@ type SetCommands interface {
 	//   keys - The keys of the sets to intersect.
 	//
 	// Return value:
-	//   A map[Result[string]]struct{} containing members which are present in all given sets.
-	//   If one or more sets do not exist, an empty map will be returned.
-	//
+	//   A `map[string]struct{}` containing members which are present in all given sets.
+	//   If one or more sets do not exist, an empty collection will be returned.
 	//
 	// Example:
 	//   result, err := client.SInter([]string{"set1", "set2"})
-	//   // result might contain:
-	//   // map[Result[string]]struct{}{
-	//   //   api.CreateStringResult("element"): {},
-	//   // }
+	//   // result: map[string]struct{}{ "element": {} }
 	//   // Indicates that "element" is present in both "set1" and "set2"
 	//
 	// [valkey.io]: https://valkey.io/commands/sinter/
-	SInter(keys []string) (map[Result[string]]struct{}, error)
+	SInter(keys []string) (map[string]struct{}, error)
 
 	// Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`
 	//
@@ -353,9 +342,8 @@ type SetCommands interface {
 	//   keys - The keys of the sets.
 	//
 	// Return value:
-	//   A map[Result[string]]struct{} of members which are present in at least one of the given sets.
-	//   If none of the sets exist, an empty map will be returned.
-	//
+	//   A `map[string]struct{}` of members which are present in at least one of the given sets.
+	//   If none of the sets exist, an empty collection will be returned.
 	//
 	// Example:
 	//  result1, err := client.SAdd("my_set1", []string {"member1", "member2"})
@@ -367,89 +355,19 @@ type SetCommands interface {
 	//  // result.IsNil(): false
 	//
 	//  result3, err := client.SUnion([]string {"my_set1", "my_set2"})
-	//  // result3.Value(): "{'member1', 'member2', 'member3'}"
+	//  // result3: "{'member1', 'member2', 'member3'}"
 	//  // err: nil
 	//
 	//  result4, err := client.SUnion([]string {"my_set1", "non_existing_set"})
-	//  // result4.Value(): "{'member1', 'member2'}"
+	//  // result4: "{'member1', 'member2'}"
 	//  // err: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/sunion/
-	SUnion(keys []string) (map[Result[string]]struct{}, error)
+	SUnion(keys []string) (map[string]struct{}, error)
 
-	// Iterates incrementally over a set.
-	//
-	// Note: When in cluster mode, all keys must map to the same hash slot.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the set.
-	//   cursor - The cursor that points to the next iteration of results.
-	//            A value of `"0"` indicates the start of the search.
-	//            For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
-	//
-	// Return value:
-	//  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-	//  The second element is always an array of the subset of the set held in `key`.
-	//
-	// Example:
-	//	 // assume "key" contains a set
-	// 	 resCursor, resCol, err := client.sscan("key", "0")
-	//   for resCursor != "0" {
-	// 	 	resCursor, resCol, err = client.sscan("key", "0")
-	//   	fmt.Println("Cursor: ", resCursor.Value())
-	//   	fmt.Println("Members: ", resCol.Value())
-	//   }
-	//   // Output:
-	// 	 // Cursor:  48
-	//   // Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
-	//   // Cursor:  24
-	//   // Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
-	//   // Cursor:  0
-	//   // Members:  ['47', '122', '1', '53', '10', '14', '80']
-	//
-	// [valkey.io]: https://valkey.io/commands/sscan/
-	SScan(key string, cursor string) (Result[string], []Result[string], error)
+	SScan(key string, cursor string) (string, []string, error)
 
-	// Iterates incrementally over a set.
-	//
-	// Note: When in cluster mode, all keys must map to the same hash slot.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the set.
-	//   cursor - The cursor that points to the next iteration of results.
-	//            A value of `"0"` indicates the start of the search.
-	//            For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
-	//   options - [options.BaseScanOptions]
-	//
-	// Return value:
-	//  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-	//  The second element is always an array of the subset of the set held in `key`.
-	//
-	// Example:
-	//	 // assume "key" contains a set
-	//   resCursor resCol, err := client.sscan("key", "0", opts)
-	//   for resCursor != "0" {
-	//   	opts := options.NewBaseScanOptionsBuilder().SetMatch("*")
-	// 	 	resCursor, resCol, err = client.sscan("key", "0", opts)
-	//   	fmt.Println("Cursor: ", resCursor.Value())
-	//   	fmt.Println("Members: ", resCol.Value())
-	//   }
-	//   // Output:
-	// 	 // Cursor:  48
-	//   // Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
-	//   // Cursor:  24
-	//   // Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
-	//   // Cursor:  0
-	//   // Members:  ['47', '122', '1', '53', '10', '14', '80']
-	//
-	// [valkey.io]: https://valkey.io/commands/sscan/
-	SScanWithOptions(key string, cursor string, options *options.BaseScanOptions) (Result[string], []Result[string], error)
+	SScanWithOptions(key string, cursor string, options *options.BaseScanOptions) (string, []string, error)
 
 	// Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
 	// Creates a new destination set if needed. The operation is atomic.
