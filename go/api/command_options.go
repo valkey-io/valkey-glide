@@ -5,6 +5,7 @@ package api
 import (
 	"strconv"
 
+	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
 
@@ -63,7 +64,7 @@ func (opts *SetOptions) toArgs() ([]string, error) {
 		case KeepExisting:
 			args = append(args, string(opts.Expiry.Type))
 		default:
-			err = &RequestError{"Invalid expiry type"}
+			err = &errors.RequestError{"Invalid expiry type"}
 		}
 	}
 
@@ -101,7 +102,7 @@ func (opts *GetExOptions) toArgs() ([]string, error) {
 		case Persist:
 			args = append(args, string(opts.Expiry.Type))
 		default:
-			err = &RequestError{"Invalid expiry type"}
+			err = &errors.RequestError{"Invalid expiry type"}
 		}
 	}
 
@@ -144,7 +145,7 @@ func (expireCondition ExpireCondition) toString() (string, error) {
 	case NewExpiryLessThanCurrent:
 		return string(NewExpiryLessThanCurrent), nil
 	default:
-		return "", &RequestError{"Invalid expire condition"}
+		return "", &errors.RequestError{"Invalid expire condition"}
 	}
 }
 
@@ -254,7 +255,7 @@ func (insertPosition InsertPosition) toString() (string, error) {
 	case After:
 		return string(After), nil
 	default:
-		return "", &RequestError{"Invalid insert position"}
+		return "", &errors.RequestError{"Invalid insert position"}
 	}
 }
 
@@ -275,7 +276,7 @@ func (listDirection ListDirection) toString() (string, error) {
 	case Right:
 		return string(Right), nil
 	default:
-		return "", &RequestError{"Invalid list direction"}
+		return "", &errors.RequestError{"Invalid list direction"}
 	}
 }
 

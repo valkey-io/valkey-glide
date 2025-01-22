@@ -7,6 +7,8 @@ package api
 import "C"
 
 import (
+	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
 
@@ -18,6 +20,7 @@ type GlideClient interface {
 	BaseClient
 	GenericCommands
 	ServerManagementCommands
+	ConnectionManagementCommands
 }
 
 // glideClient implements standalone mode operations by extending baseClient functionality.
@@ -63,6 +66,86 @@ func (client *glideClient) Select(index int64) (string, error) {
 	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
 	if err != nil {
 		return "", err
+	}
+
+	return handleStringResponse(result)
+}
+
+// Echo the provided message back.
+// The command will be routed a random node.
+//
+// Parameters:
+//
+//	message - The provided message.
+//
+// Return value:
+//
+//	The provided message
+//
+// For example:
+//
+//	 result, err := client.Echo("Hello World")
+//		if err != nil {
+//		    // handle error
+//		}
+//		fmt.Println(result.Value()) // Output: Hello World
+//
+// [valkey.io]: https://valkey.io/commands/echo/
+func (client *baseClient) Echo(message string) (Result[string], error) {
+	result, err := client.executeCommand(C.Echo, []string{message})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+// Pings the server.
+//
+// Return value:
+//
+//	Returns "PONG".
+//
+// For example:
+//
+//	result, err := client.Ping()
+//
+// [valkey.io]: https://valkey.io/commands/ping/
+func (client *glideClient) Ping() (string, error) {
+	result, err := client.executeCommand(C.Ping, []string{})
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Pings the server.
+//
+// Parameters:
+//
+//	pingOptions - The PingOptions type.
+//
+// Return value:
+//
+//	Returns "PONG" or the copy of message.
+//
+// For example:
+//
+//	options := options.NewPingOptionsBuilder().SetMessage("hello")
+//	result, err := client.PingWithOptions(options)
+//	result: "hello"
+//
+// [valkey.io]: https://valkey.io/commands/ping/
+func (client *glideClient) PingWithOptions(opts *options.PingOptions) (string, error) {
+	if opts != nil && opts.Route != nil {
+		return defaultStringResponse, &errors.RequestError{"Route option is only available in cluster mode"}
+	}
+	args, err := opts.ToArgs()
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	result, err := client.executeCommand(C.Ping, append([]string{}, args...))
+	if err != nil {
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)

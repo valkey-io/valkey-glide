@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/config"
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 )
 
 func (suite *GlideTestSuite) TestClusterCustomCommandInfo() {
@@ -30,64 +32,9 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 	assert.Equal(suite.T(), "GO GLIDE GO", result.Value().(string))
 }
 
-func (suite *GlideTestSuite) TestPingWithRoute_ValidRoute() {
-	client := suite.defaultClusterClient()
-	route := api.SimpleNodeRoute(api.RandomRoute)
-	result, err := client.PingWithRoute(route)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", result)
-}
-
-func (suite *GlideTestSuite) TestPingWithRoute_InvalidRoute() {
-	client := suite.defaultClusterClient()
-	invalidRoute := api.NewByAddressRoute("invalidHost", 9999)
-
-	result, err := client.PingWithRoute(invalidRoute)
-
-	assert.NotNil(suite.T(), err)
-	assert.Empty(suite.T(), result)
-}
-
-func (suite *GlideTestSuite) TestPingWithMessageRoute_ValidRoute_ValidMessage() {
-	client := suite.defaultClusterClient()
-	route := api.SimpleNodeRoute(api.RandomRoute)
-
-	customMessage := "Hello Glide"
-
-	result, err := client.PingWithMessageRoute(customMessage, route)
-
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), customMessage, result)
-}
-
-func (suite *GlideTestSuite) TestPingWithMessageRoute_EmptyMessage() {
-	client := suite.defaultClusterClient()
-	route := api.SimpleNodeRoute(api.RandomRoute)
-
-	customMessage := ""
-
-	result, err := client.PingWithMessageRoute(customMessage, route)
-
-	assert.NoError(suite.T(), err)
-
-	assert.Equal(suite.T(), customMessage, result)
-}
-
-func (suite *GlideTestSuite) TestPingWithMessageRoute_InvalidRoute() {
-	client := suite.defaultClusterClient()
-	invalidRoute := api.NewByAddressRoute("invalidHost", 9999)
-
-	customMessage := "Hello Glide"
-
-	result, err := client.PingWithMessageRoute(customMessage, invalidRoute)
-
-	assert.NotNil(suite.T(), err)
-	assert.Empty(suite.T(), result)
-}
-
 func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_Info() {
 	client := suite.defaultClusterClient()
-	route := api.SimpleNodeRoute(api.AllPrimaries)
+	route := config.SimpleNodeRoute(config.AllPrimaries)
 	result, err := client.CustomCommandWithRoute([]string{"INFO"}, route)
 	assert.Nil(suite.T(), err)
 	for _, value := range result.Value().(map[string]interface{}) {
@@ -97,7 +44,7 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_Info() {
 
 func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_Echo() {
 	client := suite.defaultClusterClient()
-	route := api.SimpleNodeRoute(api.RandomRoute)
+	route := config.SimpleNodeRoute(config.RandomRoute)
 	result, err := client.CustomCommandWithRoute([]string{"ECHO", "GO GLIDE GO"}, route)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "GO GLIDE GO", result.Value().(string))
@@ -105,7 +52,7 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_Echo() {
 
 func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_InvalidRoute() {
 	client := suite.defaultClusterClient()
-	invalidRoute := api.NewByAddressRoute("invalidHost", 9999)
+	invalidRoute := config.NewByAddressRoute("invalidHost", 9999)
 	result, err := client.CustomCommandWithRoute([]string{"PING"}, invalidRoute)
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), api.CreateEmptyClusterValue(), result)
@@ -113,7 +60,7 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_InvalidRoute() {
 
 func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_AllNodes() {
 	client := suite.defaultClusterClient()
-	route := api.SimpleNodeRoute(api.AllNodes)
+	route := config.SimpleNodeRoute(config.AllNodes)
 	result, err := client.CustomCommandWithRoute([]string{"PING"}, route)
 
 	assert.Nil(suite.T(), err)
@@ -130,4 +77,51 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_AllNodes() {
 	} else {
 		assert.Equal(suite.T(), "PONG", value.(string))
 	}
+}
+
+func (suite *GlideTestSuite) TestPingWithOptions_OnlyRoute() {
+	client := suite.defaultClusterClient()
+	route := config.SimpleNodeRoute(config.RandomRoute)
+	options := options.NewPingOptionsBuilder().
+		SetRoute(route)
+
+	result, err := client.PingWithOptions(options)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "PONG", result) // Default response when no message is set
+}
+
+func (suite *GlideTestSuite) TestPingWithOptions_BasicPing() {
+	client := suite.defaultClusterClient()
+	route := config.SimpleNodeRoute(config.RandomRoute)
+	options := options.NewPingOptionsBuilder().
+		SetRoute(route).
+		SetMessage("hello")
+
+	result, err := client.PingWithOptions(options)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "hello", result)
+}
+
+func (suite *GlideTestSuite) TestPingWithOptions_AllNodes() {
+	client := suite.defaultClusterClient()
+	route := config.SimpleNodeRoute(config.AllNodes)
+	options := options.NewPingOptionsBuilder().
+		SetRoute(route).
+		SetMessage("hello")
+
+	result, err := client.PingWithOptions(options)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "hello", result)
+}
+
+func (suite *GlideTestSuite) TestPingWithOptions_InvalidRoute() {
+	client := suite.defaultClusterClient()
+	invalidRoute := config.NewByAddressRoute("invalidHost", 9999)
+	options := options.NewPingOptionsBuilder().
+		SetRoute(invalidRoute).
+		SetMessage("hello")
+
+	result, err := client.PingWithOptions(options)
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result)
 }

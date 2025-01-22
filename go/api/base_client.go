@@ -10,12 +10,13 @@ package api
 import "C"
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
 	"unsafe"
 
+	"github.com/valkey-io/valkey-glide/go/glide/api/config"
+	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
@@ -30,7 +31,6 @@ type BaseClient interface {
 	SetCommands
 	StreamCommands
 	SortedSetCommands
-	ConnectionManagementCommands
 	HyperLogLogCommands
 	GenericBaseCommands
 	// Close terminates the client by closing all associated resources.
@@ -53,8 +53,10 @@ func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandRespo
 
 //export failureCallback
 func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
+	defer C.free_error_message(cErrorMessage)
+	msg := C.GoString(cErrorMessage)
 	resultChannel := *(*chan payload)(channelPtr)
-	resultChannel <- payload{value: nil, error: goError(cErrorType, cErrorMessage)}
+	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
 }
 
 type clientConfiguration interface {
@@ -91,7 +93,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
-		return nil, &ConnectionError{message}
+		return nil, &errors.ConnectionError{message}
 	}
 
 	return &baseClient{cResponse.conn_ptr}, nil
@@ -114,10 +116,10 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 func (client *baseClient) executeCommandWithRoute(
 	requestType C.RequestType,
 	args []string,
-	route route,
+	route config.Route,
 ) (*C.struct_CommandResponse, error) {
 	if client.coreClient == nil {
-		return nil, &ClosingError{"ExecuteCommand failed. The client is closed."}
+		return nil, &errors.ClosingError{"ExecuteCommand failed. The client is closed."}
 	}
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
@@ -133,9 +135,9 @@ func (client *baseClient) executeCommandWithRoute(
 	var routeBytesPtr *C.uchar = nil
 	var routeBytesCount C.uintptr_t = 0
 	if route != nil {
-		routeProto, err := route.toRoutesProtobuf()
+		routeProto, err := route.ToRoutesProtobuf()
 		if err != nil {
-			return nil, &RequestError{"ExecuteCommand failed due to invalid route"}
+			return nil, &errors.RequestError{"ExecuteCommand failed due to invalid route"}
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
@@ -356,7 +358,7 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 
 func (client *baseClient) GetDel(key string) (Result[string], error) {
 	if key == "" {
-		return CreateNilStringResult(), errors.New("key is required")
+		return CreateNilStringResult(), &errors.RequestError{"key is required"}
 	}
 
 	result, err := client.executeCommand(C.GetDel, []string{key})
@@ -1033,7 +1035,7 @@ func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-2 {
-		return nil, &RequestError{"Length overflow for the provided keys"}
+		return nil, &errors.RequestError{"Length overflow for the provided keys"}
 	}
 
 	// args slice will have 2 more arguments with the keys provided.
@@ -1061,7 +1063,7 @@ func (client *baseClient) LMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-4 {
-		return nil, &RequestError{"Length overflow for the provided keys"}
+		return nil, &errors.RequestError{"Length overflow for the provided keys"}
 	}
 
 	// args slice will have 4 more arguments with the keys provided.
@@ -1089,7 +1091,7 @@ func (client *baseClient) BLMPop(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return nil, &RequestError{"Length overflow for the provided keys"}
+		return nil, &errors.RequestError{"Length overflow for the provided keys"}
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
@@ -1118,7 +1120,7 @@ func (client *baseClient) BLMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return nil, &RequestError{"Length overflow for the provided keys"}
+		return nil, &errors.RequestError{"Length overflow for the provided keys"}
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
@@ -1191,26 +1193,6 @@ func (client *baseClient) BLMove(
 	}
 
 	return handleStringOrNilResponse(result)
-}
-
-func (client *baseClient) Ping() (string, error) {
-	result, err := client.executeCommand(C.Ping, []string{})
-	if err != nil {
-		return defaultStringResponse, err
-	}
-
-	return handleStringResponse(result)
-}
-
-func (client *baseClient) PingWithMessage(message string) (string, error) {
-	args := []string{message}
-
-	result, err := client.executeCommand(C.Ping, args)
-	if err != nil {
-		return defaultStringResponse, err
-	}
-
-	return handleStringResponse(result)
 }
 
 func (client *baseClient) Del(keys []string) (int64, error) {
@@ -2602,34 +2584,6 @@ func (client *baseClient) Dump(key string) (Result[string], error) {
 
 func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.ObjectEncoding, []string{key})
-	if err != nil {
-		return CreateNilStringResult(), err
-	}
-	return handleStringOrNilResponse(result)
-}
-
-// Echo the provided message back.
-// The command will be routed a random node.
-//
-// Parameters:
-//
-//	message - The provided message.
-//
-// Return value:
-//
-//	The provided message
-//
-// For example:
-//
-//	 result, err := client.Echo("Hello World")
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: Hello World
-//
-// [valkey.io]: https://valkey.io/commands/echo/
-func (client *baseClient) Echo(message string) (Result[string], error) {
-	result, err := client.executeCommand(C.Echo, []string{message})
 	if err != nil {
 		return CreateNilStringResult(), err
 	}

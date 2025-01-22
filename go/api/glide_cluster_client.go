@@ -5,6 +5,10 @@ package api
 // #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../lib.h"
 import "C"
+import (
+	"github.com/valkey-io/valkey-glide/go/glide/api/config"
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
+)
 
 // GlideClusterClient interface compliance check.
 var _ GlideClusterClient = (*glideClusterClient)(nil)
@@ -45,10 +49,7 @@ func (client *glideClusterClient) CustomCommand(args []string) (ClusterValue[int
 
 // CustomCommandWithRoute executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
-// the executed
-// command.
-//
-// The command will be routed automatically based on the passed command's default request policy.
+// the executed command.
 //
 // See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
 //
@@ -56,7 +57,7 @@ func (client *glideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //
 //	args  - Arguments for the custom command including the command name.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	   command to the nodes defined by route.
+//	        command to the nodes defined by route.
 //
 // Return value:
 //
@@ -64,12 +65,12 @@ func (client *glideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //
 // For example:
 //
-//	route := api.SimpleNodeRoute(api.RandomRoute)
+//	route := config.SimpleNodeRoute(config.RandomRoute)
 //	result, err := client.CustomCommand([]string{"ping"}, route)
 //	result.Value().(string): "PONG"
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *glideClusterClient) CustomCommandWithRoute(args []string, route route) (ClusterValue[interface{}], error) {
+func (client *glideClusterClient) CustomCommandWithRoute(args []string, route config.Route) (ClusterValue[interface{}], error) {
 	res, err := client.executeCommandWithRoute(C.CustomCommand, args, route)
 	if err != nil {
 		return CreateEmptyClusterValue(), err
@@ -85,51 +86,29 @@ func (client *glideClusterClient) CustomCommandWithRoute(args []string, route ro
 //
 // Parameters:
 //
-//	route - Specifies the routing configuration for the command.
-//	 The client will route the command to the nodes defined by route.
+//	pingOptions - The PingOptions type.
 //
 // Return value:
 //
-//	Returns "PONG".
+//	Returns "PONG" or the copy of message.
 //
 // For example:
 //
-//	 route := api.SimpleNodeRoute(api.RandomRoute)
-//	 result, err := client.Ping(route)
-//		fmt.Println(result) // Output: "PONG"
+//	route := config.SimpleNodeRoute(config.RandomRoute)
+//	options := options.NewPingOptionsBuilder().SetRoute(route).SetMessage("Hello")
+//	result, err := client.PingWithOptions(options)
+//	fmt.Println(result) // Output: "Hello"
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *glideClusterClient) PingWithRoute(route route) (string, error) {
-	res, err := client.executeCommandWithRoute(C.Ping, []string{}, route)
+func (client *glideClusterClient) PingWithOptions(opts *options.PingOptions) (string, error) {
+	args, err := opts.ToArgs()
 	if err != nil {
 		return defaultStringResponse, err
 	}
-	return handleStringResponse(res)
-}
+	result, err := client.executeCommandWithRoute(C.Ping, args, opts.Route)
+	if err != nil {
+		return defaultStringResponse, err
+	}
 
-// Pings the server with a custom message.
-//
-// Parameters:
-//
-//	message - A message to include in the `PING` command.
-//	route - Specifies the routing configuration for the command.
-//	  The client will route the command to the nodes defined by route.
-//
-// Return value:
-//
-//	Returns the copy of message.
-//
-// For example:
-//
-//	 route := api.SimpleNodeRoute(api.RandomRoute)
-//	 result, err := client.PingWithMessage("Hello", route)
-//		fmt.Println(result) // Output: "Hello"
-//
-// [valkey.io]: https://valkey.io/commands/ping/
-func (client *glideClusterClient) PingWithMessageRoute(message string, route route) (string, error) {
-	res, err := client.executeCommandWithRoute(C.Ping, []string{message}, route)
-	if err != nil {
-		return defaultStringResponse, err
-	}
-	return handleStringResponse(res)
+	return handleStringResponse(result)
 }
