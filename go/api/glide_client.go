@@ -137,7 +137,7 @@ func (client *glideClient) Ping() (string, error) {
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *glideClient) PingWithOptions(opts *options.PingOptions) (string, error) {
 	if opts != nil && opts.Route != nil {
-		return defaultStringResponse, &errors.RequestError{"Route option is only available in cluster mode"}
+		return defaultStringResponse, &errors.RequestError{Msg: "Route option is only available in cluster mode"}
 	}
 	args, err := opts.ToArgs()
 	if err != nil {

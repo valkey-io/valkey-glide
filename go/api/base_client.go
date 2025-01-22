@@ -138,7 +138,7 @@ func (client *baseClient) executeCommandWithRoute(
 	if route != nil {
 		routeProto, err := route.ToRoutesProtobuf()
 		if err != nil {
-			return nil, &errors.RequestError{"ExecuteCommand failed due to invalid route"}
+			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
@@ -359,7 +359,7 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 
 func (client *baseClient) GetDel(key string) (Result[string], error) {
 	if key == "" {
-		return CreateNilStringResult(), &errors.RequestError{"key is required"}
+		return CreateNilStringResult(), &errors.RequestError{Msg: "key is required"}
 	}
 
 	result, err := client.executeCommand(C.GetDel, []string{key})
@@ -1136,7 +1136,7 @@ func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-2 {
-		return nil, &errors.RequestError{"Length overflow for the provided keys"}
+		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
 	}
 
 	// args slice will have 2 more arguments with the keys provided.
@@ -1164,7 +1164,7 @@ func (client *baseClient) LMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-4 {
-		return nil, &errors.RequestError{"Length overflow for the provided keys"}
+		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
 	}
 
 	// args slice will have 4 more arguments with the keys provided.
@@ -1192,7 +1192,7 @@ func (client *baseClient) BLMPop(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return nil, &errors.RequestError{"Length overflow for the provided keys"}
+		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
@@ -1221,7 +1221,7 @@ func (client *baseClient) BLMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return nil, &errors.RequestError{"Length overflow for the provided keys"}
+		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
 	}
 
 	// args slice will have 5 more arguments with the keys provided.

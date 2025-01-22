@@ -56,7 +56,7 @@ func mapSimpleNodeRoute(simpleNodeRoute SimpleNodeRoute) (protobuf.SimpleRoutes,
 	case RandomRoute:
 		return protobuf.SimpleRoutes_Random, nil
 	default:
-		return protobuf.SimpleRoutes_Random, &errors.RequestError{"Invalid simple node route"}
+		return protobuf.SimpleRoutes_Random, &errors.RequestError{Msg: "Invalid simple node route"}
 	}
 }
 
@@ -77,7 +77,7 @@ func mapSlotType(slotType SlotType) (protobuf.SlotTypes, error) {
 	case SlotTypeReplica:
 		return protobuf.SlotTypes_Replica, nil
 	default:
-		return protobuf.SlotTypes_Primary, &errors.RequestError{"Invalid slot type"}
+		return protobuf.SlotTypes_Primary, &errors.RequestError{Msg: "Invalid slot type"}
 	}
 }
 
@@ -161,7 +161,7 @@ func NewByAddressRouteWithHost(host string) (*ByAddressRoute, error) {
 	split := strings.Split(host, ":")
 	if len(split) != 2 {
 		return nil, &errors.RequestError{
-			fmt.Sprintf(
+			Msg: fmt.Sprintf(
 				"no port provided, or host is not in the expected format 'hostname:port'. Received: %s", host,
 			),
 		}
@@ -170,7 +170,7 @@ func NewByAddressRouteWithHost(host string) (*ByAddressRoute, error) {
 	port, err := strconv.ParseInt(split[1], 10, 32)
 	if err != nil {
 		return nil, &errors.RequestError{
-			fmt.Sprintf(
+			Msg: fmt.Sprintf(
 				"port must be a valid integer. Received: %s", split[1],
 			),
 		}
