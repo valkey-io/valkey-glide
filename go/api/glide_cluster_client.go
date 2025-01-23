@@ -41,3 +41,37 @@ func (client *glideClusterClient) CustomCommand(args []string) (ClusterValue[int
 	}
 	return CreateClusterValue(data), nil
 }
+
+// Echoes the provided message back.
+//
+// Parameters:
+//
+//	echoOptions - The EchoOptions type.
+//
+// Return value:
+//
+//	Returns "PONG" or the copy of message.
+//
+// For example:
+//
+//	route := config.SimpleNodeRoute(config.RandomRoute)
+//	options := options.NewEchoOptionsBuilder().SetRoute(route).SetMessage("Hello")
+//	result, err := client.EchoWithOptions(options)
+//	fmt.Println(result) // Output: "Hello"
+//
+// [valkey.io]: https://valkey.io/commands/echo/
+func (client *glideClusterClient) EchoWithOptions(opts *options.EchoOptions) (ClusterValue[interface{}], error) {
+	args, err := opts.ToArgs()
+	if err != nil {
+		return CreateEmptyClusterValue(), err
+	}
+	res, err := client.executeCommandWithRoute(C.Echo, args, opts.Route)
+	if err != nil {
+		return CreateEmptyClusterValue(), err
+	}
+	data, err := handleInterfaceResponse(res)
+	if err != nil {
+		return CreateEmptyClusterValue(), err
+	}
+	return CreateClusterValue(data), nil
+}

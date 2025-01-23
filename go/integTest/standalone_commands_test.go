@@ -384,3 +384,15 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 	assert.Equal(suite.T(), "item1", sortResult[3].Value())
 	assert.Equal(suite.T(), "item3", sortResult[5].Value())
 }
+
+func (suite *GlideTestSuite) TestEchoWithOptions_WithRoute() {
+	client := suite.defaultClient()
+	options := options.NewEchoOptionsBuilder().
+		SetRoute(config.SimpleNodeRoute(config.RandomRoute))
+
+	result, err := client.EchoWithOptions(options)
+
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+}

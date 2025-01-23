@@ -51,4 +51,6 @@ type ConnectionManagementCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/echo/
 	Echo(message string) (Result[string], error)
+
+	EchoWithOptions(echoOptions *options.EchoOptions) (string, error)
 }
