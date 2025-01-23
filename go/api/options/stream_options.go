@@ -406,7 +406,7 @@ func NewStreamBoundary(streamId string, isInclusive bool) StreamBoundary {
 	if !isInclusive {
 		return StreamBoundary("(" + streamId)
 	}
-	return StreamBoundary("[" + streamId)
+	return StreamBoundary(streamId)
 }
 
 // Create a new stream boundary defined by an infinity.

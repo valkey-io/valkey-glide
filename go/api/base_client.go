@@ -3587,8 +3587,9 @@ func (client *baseClient) CopyWithOptions(
 //	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
 //
 // Return value:
-// A `map` of key to stream entry data, where entry data is an array of
-// pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
+//
+//	A `map` of key to stream entry data, where entry data is an array of
+//	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
 // Example:
 //
@@ -3638,8 +3639,9 @@ func (client *baseClient) XRange(
 //	count - The number of entries to return.
 //
 // Return value:
-// A `map` of key to stream entry data, where entry data is an array of
-// pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
+//
+//	A `map` of key to stream entry data, where entry data is an array of
+//	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
 // Example:
 //
@@ -3692,8 +3694,9 @@ func (client *baseClient) XRangeWithCount(
 //	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
 //
 // Return value:
-// A `map` of key to stream entry data, where entry data is an array of
-// pairings with format `[[field, entry], [field, entry], ...]`.
+//
+//	A `map` of key to stream entry data, where entry data is an array of
+//	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // Example:
 //
@@ -3736,9 +3739,10 @@ func (client *baseClient) XRevRange(
 //	count - The number of entries to return.
 //
 // Return value:
-// A `map` of key to stream entry data, where entry data is an array of
-// pairings with format `[[field, entry], [field, entry], ...]`.
-// Returns `nil` if `count` is non-positive.
+//
+//	A `map` of key to stream entry data, where entry data is an array of
+//	pairings with format `[[field, entry], [field, entry], ...]`.
+//	Returns `nil` if `count` is non-positive.
 //
 // Example:
 //
