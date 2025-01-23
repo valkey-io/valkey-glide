@@ -3636,7 +3636,7 @@ func (client *baseClient) XRange(
 //	end   - The end position.
 //	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
 //	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
-//	count - The number of entries to return.
+//	opts  - Stream range options.
 //
 // Return value:
 //
@@ -3650,7 +3650,7 @@ func (client *baseClient) XRange(
 //		"key",
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
-//		10,
+//		options.NewStreamRangeOptions().SetCount(10),
 //	)
 //	fmt.Println(res) // Output: map[key:[["field1", "entry1"], ["field2", "entry2"]]]
 //
@@ -3659,18 +3659,25 @@ func (client *baseClient) XRange(
 //		"key",
 //		options.NewStreamBoundary(streamId, true),
 //		options.NewStreamBoundary(streamId, true),
-//		1,
+//		options.NewStreamRangeOptions().SetCount(1),
 //	)
 //	fmt.Println(res) // Output: map[key:[["field1", "entry1"]]
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
-func (client *baseClient) XRangeWithCount(
+func (client *baseClient) XRangeWithOptions(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-	count int64,
+	opts *options.StreamRangeOptions,
 ) (map[string][][]string, error) {
-	args := []string{key, string(start), string(end), options.CountKeyword, utils.IntToString(count)}
+	args := []string{key, string(start), string(end)}
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
+	}
 	result, err := client.executeCommand(C.XRange, args)
 	if err != nil {
 		return nil, err
@@ -3736,7 +3743,7 @@ func (client *baseClient) XRevRange(
 //	end   - The end position.
 //	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
 //	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
-//	count - The number of entries to return.
+//	opts  - Stream range options.
 //
 // Return value:
 //
@@ -3751,18 +3758,25 @@ func (client *baseClient) XRevRange(
 //		"key",
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-//		10,
+//		options.NewStreamRangeOptions().SetCount(10),
 //	)
 //	fmt.Println(res) // Output: map[key:[["field2", "entry2"], ["field1", "entry1"]]]
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
-func (client *baseClient) XRevRangeWithCount(
+func (client *baseClient) XRevRangeWithOptions(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-	count int64,
+	opts *options.StreamRangeOptions,
 ) (map[string][][]string, error) {
-	args := []string{key, string(start), string(end), options.CountKeyword, utils.IntToString(count)}
+	args := []string{key, string(start), string(end)}
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
+	}
 	result, err := client.executeCommand(C.XRevRange, args)
 	if err != nil {
 		return nil, err

@@ -7332,11 +7332,11 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NotNil(suite.T(), streamId3)
 
 		// get the newest stream entry
-		xrangeResult, err = client.XRangeWithCount(
+		xrangeResult, err = client.XRangeWithOptions(
 			key,
 			options.NewStreamBoundary(streamId2.Value(), false),
 			positiveInfinity,
-			1,
+			options.NewStreamRangeOptions().SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -7346,11 +7346,11 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		)
 
 		// doing the same with rev search
-		xrevrangeResult, err = client.XRevRangeWithCount(
+		xrevrangeResult, err = client.XRevRangeWithOptions(
 			key,
 			positiveInfinity,
 			options.NewStreamBoundary(streamId2.Value(), false),
-			1,
+			options.NewStreamRangeOptions().SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -7360,20 +7360,20 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		)
 
 		// both xrange and xrevrange return nil with a zero/negative count
-		xrangeResult, err = client.XRangeWithCount(
+		xrangeResult, err = client.XRangeWithOptions(
 			key,
 			negativeInfinity,
 			positiveInfinity,
-			0,
+			options.NewStreamRangeOptions().SetCount(0),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrangeResult)
 
-		xrevrangeResult, err = client.XRevRangeWithCount(
+		xrevrangeResult, err = client.XRevRangeWithOptions(
 			key,
 			positiveInfinity,
 			negativeInfinity,
-			-1,
+			options.NewStreamRangeOptions().SetCount(-1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrevrangeResult)

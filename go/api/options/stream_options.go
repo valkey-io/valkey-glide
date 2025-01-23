@@ -413,3 +413,30 @@ func NewStreamBoundary(streamId string, isInclusive bool) StreamBoundary {
 func NewInfiniteStreamBoundary(bound InfBoundary) StreamBoundary {
 	return StreamBoundary(string(bound))
 }
+
+// Optional arguments for `XRange` and `XRevRange` in [StreamCommands]
+type StreamRangeOptions struct {
+	count      int64
+	countIsSet bool
+}
+
+func NewStreamRangeOptions() *StreamRangeOptions {
+	return &StreamRangeOptions{}
+}
+
+// Set the count.
+func (sro *StreamRangeOptions) SetCount(count int64) *StreamRangeOptions {
+	sro.count = count
+	sro.countIsSet = true
+	return sro
+}
+
+func (sro *StreamRangeOptions) ToArgs() ([]string, error) {
+	var args []string
+
+	if sro.countIsSet {
+		args = append(args, "COUNT", utils.IntToString(sro.count))
+	}
+
+	return args, nil
+}

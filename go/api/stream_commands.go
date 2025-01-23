@@ -195,19 +195,19 @@ type StreamCommands interface {
 
 	XRange(key string, start options.StreamBoundary, end options.StreamBoundary) (map[string][][]string, error)
 
-	XRangeWithCount(
+	XRangeWithOptions(
 		key string,
 		start options.StreamBoundary,
 		end options.StreamBoundary,
-		count int64,
+		options *options.StreamRangeOptions,
 	) (map[string][][]string, error)
 
 	XRevRange(key string, start options.StreamBoundary, end options.StreamBoundary) (map[string][][]string, error)
 
-	XRevRangeWithCount(
+	XRevRangeWithOptions(
 		key string,
 		start options.StreamBoundary,
 		end options.StreamBoundary,
-		count int64,
+		options *options.StreamRangeOptions,
 	) (map[string][][]string, error)
 }
