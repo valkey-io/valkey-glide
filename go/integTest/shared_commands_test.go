@@ -7210,3 +7210,202 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestBitField_GetAndIncrBy() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		// First INCRBY operation
+		opts := options.NewBitFieldOptionsBuilder().
+			AddIncrBy(options.SignedInt, 5, 100, 1)
+
+		result1, err := client.BitField(key, opts)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), result1, 1)
+		firstValue := result1[0]
+
+		// Second INCRBY operation - should be incremented by 1
+		result2, err := client.BitField(key, opts)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), result2, 1)
+		assert.Equal(suite.T(), firstValue+1, result2[0], "Second value should be incremented by 1")
+
+		// Verify GET operation separately
+		getOpts := options.NewBitFieldOptionsBuilder().
+			AddGet(options.SignedInt, 5, 100)
+
+		getResult, err := client.BitField(key, getOpts)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), getResult, 1)
+		assert.Equal(suite.T(), result2[0], getResult[0], "GET should return last incremented value")
+	})
+}
+
+func (suite *GlideTestSuite) TestBitField_Overflow() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		// Test SAT overflow with u2 (max value is 3)
+		opts := options.NewBitFieldOptionsBuilder().
+			SetOverflow(options.SAT).
+			AddIncrBy(options.UnsignedInt, 2, 0, 2)
+
+		result1, err := client.BitField(key, opts)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), result1, 1)
+
+		// Try to increment beyond max value
+		result2, err := client.BitField(key, opts)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), result2, 1)
+		assert.LessOrEqual(suite.T(), result2[0], int64(3), "Should not exceed max value for u2")
+
+		// Test WRAP overflow
+		wrapOpts := options.NewBitFieldOptionsBuilder().
+			SetOverflow(options.WRAP).
+			AddIncrBy(options.UnsignedInt, 2, 100, 4)
+
+		wrapResult, err := client.BitField(key, wrapOpts)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), wrapResult, 1)
+		assert.Equal(suite.T(), int64(0), wrapResult[0], "Should wrap around to 0")
+	})
+}
+
+func (suite *GlideTestSuite) TestBitFieldRO() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value := int64(42)
+
+		// Set initial value
+		setOpts := options.NewBitFieldOptionsBuilder().
+			AddSet(options.SignedInt, 8, 16, value).
+			UseHashNotation()
+
+		_, err := client.BitField(key, setOpts)
+		assert.Nil(suite.T(), err)
+
+		// Read with normal BITFIELD
+		getOpts := options.NewBitFieldOptionsBuilder().
+			AddGet(options.SignedInt, 8, 16).
+			UseHashNotation()
+
+		getNormal, err := client.BitField(key, getOpts)
+		assert.Nil(suite.T(), err)
+
+		// Read with BITFIELD_RO
+		roOpts := options.NewBitFieldROOptionsBuilder().
+			AddGet(options.SignedInt, 8, 16).
+			UseHashNotation()
+
+		getRO, err := client.BitFieldRO(key, roOpts)
+		assert.Nil(suite.T(), err)
+
+		// Both reads should return same value
+		assert.Equal(suite.T(), getNormal[0], getRO[0])
+		assert.Equal(suite.T(), value, getRO[0])
+	})
+}
+
+func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value1 := int64(42)
+		value2 := int64(43)
+
+		// Set multiple values
+		setOpts := options.NewBitFieldOptionsBuilder().
+			AddSet(options.SignedInt, 8, 0, value1).
+			AddSet(options.SignedInt, 8, 8, value2)
+
+		_, err := client.BitField(key, setOpts)
+		assert.Nil(suite.T(), err)
+
+		// Verify with normal BITFIELD first
+		getOpts := options.NewBitFieldOptionsBuilder().
+			AddGet(options.SignedInt, 8, 0).
+			AddGet(options.SignedInt, 8, 8)
+
+		getNormal, err := client.BitField(key, getOpts)
+		assert.Nil(suite.T(), err)
+
+		// Now verify with BITFIELD_RO
+		roOpts := options.NewBitFieldROOptionsBuilder().
+			AddGet(options.SignedInt, 8, 0).
+			AddGet(options.SignedInt, 8, 8)
+
+		getRO, err := client.BitFieldRO(key, roOpts)
+		assert.Nil(suite.T(), err)
+
+		// Compare results
+		assert.Equal(suite.T(), getNormal, getRO)
+		assert.Equal(suite.T(), []int64{value1, value2}, getRO)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitField_Failures() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		// Test invalid bit size for unsigned (>63)
+		invalidBitsOpts := options.NewBitFieldOptionsBuilder().
+			AddGet(options.UnsignedInt, 64, 0)
+
+		_, err := client.BitField(key, invalidBitsOpts)
+		assert.NotNil(suite.T(), err)
+
+		// Test invalid bit size for signed (>64)
+		invalidSignedOpts := options.NewBitFieldOptionsBuilder().
+			AddGet(options.SignedInt, 65, 0)
+
+		_, err = client.BitField(key, invalidSignedOpts)
+		assert.NotNil(suite.T(), err)
+
+		// Test RO with write operation (should fail)
+		roOpts := options.NewBitFieldROOptionsBuilder().
+			AddGet(options.SignedInt, 8, 0)
+
+		// Try to use SET with RO
+		setResult, err := client.BitFieldRO(key, roOpts)
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), setResult)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitField_OverflowTypes() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		// Test SAT overflow
+		satOpts := options.NewBitFieldOptionsBuilder().
+			SetOverflow(options.SAT).
+			AddIncrBy(options.UnsignedInt, 2, 0, 2). // First increment
+			AddIncrBy(options.UnsignedInt, 2, 0, 2)  // Should saturate at 3
+
+		satResult, err := client.BitField(key, satOpts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []int64{2, 3}, satResult)
+
+		// Test FAIL overflow - start with new key
+		key2 := uuid.New().String()
+		failOpts := options.NewBitFieldOptionsBuilder().
+			SetOverflow(options.FAIL).
+			AddIncrBy(options.UnsignedInt, 2, 0, 3). // Set to 3
+			AddIncrBy(options.UnsignedInt, 2, 0, 1)  // Try to increment beyond max
+
+		failResult, err := client.BitField(key2, failOpts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []int64{3, 0}, failResult)
+
+		// Test WRAP overflow - start with new key
+		key3 := uuid.New().String()
+		wrapOpts := options.NewBitFieldOptionsBuilder().
+			SetOverflow(options.WRAP).
+			AddIncrBy(options.UnsignedInt, 2, 0, 3). // Set to 3
+			AddIncrBy(options.UnsignedInt, 2, 0, 1)  // Should wrap to 0
+
+		wrapResult, err := client.BitField(key3, wrapOpts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []int64{3, 0}, wrapResult)
+	})
+}

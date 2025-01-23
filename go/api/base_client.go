@@ -3492,3 +3492,76 @@ func (client *baseClient) XClaimJustIdWithOptions(
 	}
 	return handleStringArrayResponse(result)
 }
+
+// Reads or modifies the array of bits representing the string that is held at key
+// based on the specified <code>subCommands</code>.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key     - The key of the string.
+//	options - The [options.BitfieldOptions]
+//
+// Return value:
+//
+//	An array of results from the executed subcommands.
+//	  - BitFieldGetOpts returns the value at the specified encType, bits and offset
+//	  - BitFieldSetOpts returns the old value at the specified encType, bits and offset
+//	  - BitFieldIncrOpts returns the new value after incrementing at the specified encType, bits and offset by increment
+//	  - OverflowType (WRAP|SAT|FAIL) determines the behaviour of SET and INCRBY operations
+//	      when overflow occurs. OVERFLOW does not return a value and does not contribute to the array response.
+//	  - Hash notation (#) multiplies the offset by the width of the integer type
+//
+// Example:
+//
+//	 options := options.NewBitFieldOptionsBuilder().
+//			     AddIncrBy(options.SignedInt, 5, 100, 1).
+//			     AddGet(options.UnsignedInt, 4, 0)
+//	 result, err := client.BitField("key",options)
+//	 fmt.Println(result) // Output: [7 13]
+//
+// [valkey.io]: https://valkey.io/commands/bitfield/
+func (client *baseClient) BitField(key string, options *options.BitFieldOptions) ([]int64, error) {
+	optionArgs := options.ToArgs()
+	result, err := client.executeCommand(C.BitField, append([]string{key}, optionArgs...))
+	if err != nil {
+		return nil, err
+	}
+	return handleIntOrNilArrayResponse(result)
+}
+
+// Reads the array of bits representing the string that is held at key based on the
+// specified subCommands.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key     - The key of the string.
+//	options - The [options.BitFieldROOptions]
+//
+// Return value:
+//
+// An array of results from the GET subcommands.
+//   - BitFieldGetOpts returns the value at the specified encType, bits and offset
+//   - Read-only operation that can be safely used in read-only replicas
+//   - Hash notation (#) multiplies the offset by the width of the integer type
+//
+// Example:
+//
+//	 options := options.NewBitFieldROOptionsBuilder().
+//			     AddGet(options.SignedInt, 8, 16)).
+//			     UseHashNotation()
+//	 result, err := client.BitFieldRO("key",options)
+//	 fmt.Println(result) // Output: [42]
+//
+// [valkey.io]: https://valkey.io/commands/bitfield_ro/
+func (client *baseClient) BitFieldRO(key string, options *options.BitFieldROOptions) ([]int64, error) {
+	optionArgs := options.ToArgs()
+	result, err := client.executeCommand(C.BitFieldReadOnly, append([]string{key}, optionArgs...))
+	if err != nil {
+		return nil, err
+	}
+	return handleIntOrNilArrayResponse(result)
+}

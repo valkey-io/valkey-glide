@@ -321,6 +321,29 @@ func handleIntArrayResponse(response *C.struct_CommandResponse) ([]int64, error)
 	return slice, nil
 }
 
+func handleIntOrNilArrayResponse(response *C.struct_CommandResponse) ([]int64, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice := make([]int64, 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		if v.response_type == C.Null {
+			slice = append(slice, 0)
+			continue
+		}
+		err := checkResponseType(&v, C.Int, false)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, int64(v.int_value))
+	}
+	return slice, nil
+}
+
 func handleFloatResponse(response *C.struct_CommandResponse) (float64, error) {
 	defer C.free_command_response(response)
 
