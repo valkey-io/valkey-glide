@@ -965,3 +965,18 @@ func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendin
 
 	return pendingDetails, nil
 }
+
+func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[string]any, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	result, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	return result.(map[string]any), nil
+}

@@ -6711,6 +6711,57 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 	})
 }
 
+func (suite *GlideTestSuite) TestXInfoStream() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		group := uuid.NewString()
+		consumer := uuid.NewString()
+
+		xadd, err := client.XAddWithOptions(key, [][]string{{"a", "b"}, {"c", "d"}}, options.NewXAddOptions().SetId("1-0"))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "1-0", xadd.Value())
+
+		suite.verifyOK(client.XGroupCreate(key, group, "0-0"))
+
+		_, err = client.XReadGroup(group, consumer, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+
+		infoSmall, err := client.XInfoStream(key)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), infoSmall["length"])
+		assert.Equal(suite.T(), int64(1), infoSmall["groups"])
+		expectedEntry := []any{"1-0", []any{"a", "b", "c", "d"}}
+		assert.Equal(suite.T(), expectedEntry, infoSmall["first-entry"])
+		assert.Equal(suite.T(), expectedEntry, infoSmall["last-entry"])
+
+		xadd, err = client.XAddWithOptions(key, [][]string{{"e", "f"}}, options.NewXAddOptions().SetId("1-1"))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "1-1", xadd.Value())
+
+		infoFull, err := client.XInfoStreamWithOptions(key, options.NewXInfoStreamOptionsOptions().SetCount(1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), infoFull["length"])
+
+		if suite.serverVersion >= "7.0.0" {
+			assert.Equal(suite.T(), "1-0", infoFull["recorded-first-entry-id"])
+		} else {
+			assert.NotContains(suite.T(), infoFull, "recorded-first-entry-id")
+			assert.NotContains(suite.T(), infoFull, "max-deleted-entry-id")
+			assert.NotContains(suite.T(), infoFull, "entries-added")
+			assert.NotContains(suite.T(), infoFull["groups"].([]any)[0], "entries-read")
+			assert.NotContains(suite.T(), infoFull["groups"].([]any)[0], "lag")
+		}
+		// first consumer of first group
+		cns := infoFull["groups"].([]any)[0].(map[string]any)["consumers"].([]any)[0]
+		assert.Contains(suite.T(), cns, "seen-time")
+		if suite.serverVersion >= "7.2.0" {
+			assert.Contains(suite.T(), cns, "active-time")
+		} else {
+			assert.NotContains(suite.T(), cns, "active-time")
+		}
+	})
+}
+
 func (suite *GlideTestSuite) TestSetBit_SetSingleBit() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()

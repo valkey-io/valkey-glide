@@ -192,4 +192,8 @@ type StreamCommands interface {
 		ids []string,
 		options *options.StreamClaimOptions,
 	) ([]string, error)
+
+	XInfoStream(key string) (map[string]any, error)
+
+	XInfoStreamWithOptions(key string, options *options.XInfoStreamOptions) (map[string]any, error)
 }
