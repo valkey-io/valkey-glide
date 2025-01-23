@@ -62,6 +62,27 @@ public final class SetOptions {
         private final String valkeyApi;
     }
 
+    // Builder class for SetOptions
+    public static class SetOptionsBuilder {
+        private ConditionalSet conditionalSet;
+        private String comparisonValue;
+
+        /**
+         * Set the condition to ONLY_IF_EQUAL and specify the comparison value
+         *
+         * @param value the value to compare
+         * @return this builder instance
+         */
+        public SetOptionsBuilder conditionalSetIfEqualTo(String value) {
+            if (value == null || value.isEmpty()) {
+                throw new IllegalArgumentException("comparisonValue cannot be null or empty.");
+            }
+            this.conditionalSet = ConditionalSet.ONLY_IF_EQUAL;
+            this.comparisonValue = value;
+            return this;
+        }
+    }
+
     /** Configuration of value lifetime. */
     public static final class Expiry {
 
