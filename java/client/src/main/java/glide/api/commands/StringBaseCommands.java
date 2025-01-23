@@ -226,7 +226,7 @@ public interface StringBaseCommands {
      * }</pre>
      *     <pre>{@code
      * client.set("key", "value").get();
-     * SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EQUAL).comparisonValue("value")).build();
+     * SetOptions options = SetOptions.builder().conditionalSetIfEqualTo("value").build();
      * String value = client.set("key", "newValue", options).get();
      * assert value.equals("OK");
      * }</pre>
