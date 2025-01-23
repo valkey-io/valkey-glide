@@ -3599,7 +3599,7 @@ func (client *baseClient) CopyWithOptions(
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //	)
-//	fmt.Println(res) // Output: map[key:[["field1", "entry1"], ["field2", "entry2"]]]
+//	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
 //
 //	// Retrieve exactly one stream entry by id
 //	res, err := client.XRange(
@@ -3607,7 +3607,7 @@ func (client *baseClient) CopyWithOptions(
 //		options.NewStreamBoundary(streamId, true),
 //		options.NewStreamBoundary(streamId, true),
 //	)
-//	fmt.Println(res) // Output: map[key:[["field1", "entry1"]]
+//	fmt.Println(res) // map[key:[["field1", "entry1"]]
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(
@@ -3615,12 +3615,7 @@ func (client *baseClient) XRange(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 ) (map[string][][]string, error) {
-	args := []string{key, string(start), string(end)}
-	result, err := client.executeCommand(C.XRange, args)
-	if err != nil {
-		return nil, err
-	}
-	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+	return client.XRangeWithOptions(key, start, end, nil)
 }
 
 // Returns stream entries matching a given range of IDs.
@@ -3652,7 +3647,7 @@ func (client *baseClient) XRange(
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //		options.NewStreamRangeOptions().SetCount(10),
 //	)
-//	fmt.Println(res) // Output: map[key:[["field1", "entry1"], ["field2", "entry2"]]]
+//	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
 //
 //	// Retrieve exactly one stream entry by id
 //	res, err := client.XRangeWithCount(
@@ -3661,7 +3656,7 @@ func (client *baseClient) XRange(
 //		options.NewStreamBoundary(streamId, true),
 //		options.NewStreamRangeOptions().SetCount(1),
 //	)
-//	fmt.Println(res) // Output: map[key:[["field1", "entry1"]]
+//	fmt.Println(res) // map[key:[["field1", "entry1"]]
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRangeWithOptions(
@@ -3713,7 +3708,7 @@ func (client *baseClient) XRangeWithOptions(
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //	)
-//	fmt.Println(res) // Output: map[key:[["field2", "entry2"], ["field1", "entry1"]]]
+//	fmt.Println(res) // map[key:[["field2", "entry2"], ["field1", "entry1"]]]
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (client *baseClient) XRevRange(
@@ -3721,12 +3716,7 @@ func (client *baseClient) XRevRange(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 ) (map[string][][]string, error) {
-	args := []string{key, string(start), string(end)}
-	result, err := client.executeCommand(C.XRevRange, args)
-	if err != nil {
-		return nil, err
-	}
-	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+	return client.XRevRangeWithOptions(key, start, end, nil)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -3760,7 +3750,7 @@ func (client *baseClient) XRevRange(
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //		options.NewStreamRangeOptions().SetCount(10),
 //	)
-//	fmt.Println(res) // Output: map[key:[["field2", "entry2"], ["field1", "entry1"]]]
+//	fmt.Println(res) // map[key:[["field2", "entry2"], ["field1", "entry1"]]]
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (client *baseClient) XRevRangeWithOptions(
