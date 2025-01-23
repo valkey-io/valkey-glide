@@ -68,3 +68,26 @@ func (client *glideClient) Select(index int64) (string, error) {
 
 	return handleStringResponse(result)
 }
+
+// Returns the number of keys in the currently selected database.
+//
+// Return value:
+//
+//	The number of keys in the currently selected database.
+//
+// Example:
+//
+//	result, err := client.DBSize()
+//	if err != nil {
+//		// handle error
+//	}
+//	fmt.Println(result) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/dbsize/
+func (client *glideClient) DBSize() (int64, error) {
+	result, err := client.executeCommand(C.DBSize, []string{})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
