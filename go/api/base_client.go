@@ -3511,7 +3511,7 @@ func (client *baseClient) XClaimJustIdWithOptions(
 //
 // Example:
 //
-//	result, err := client.Copy([]string{"source, destination"})
+//	result, err := client.Copy("source, destination")
 //	if err != nil {
 //	   // handle error
 //	}
@@ -3531,13 +3531,15 @@ func (client *baseClient) Copy(source string, destination string) (bool, error) 
 // exists, otherwise performs no action.
 //
 // Note:
-//	 When in cluster mode, both source and destination must map to the same hash slot.
+//
+//	When in cluster mode, both source and destination must map to the same hash slot.
 //
 // Parameters:
-//   source - The key to the source value.
-//   destination - The key where the value should be copied to.
-//   copyOptions - Set copy options with replace and DB destination-db
-
+//
+//	source - The key to the source value.
+//	destination - The key where the value should be copied to.
+//	copyOptions - Set copy options with replace and DB destination-db
+//
 // Return value:
 //
 //	`true` if source was copied, `false` if source was not copied.
@@ -3545,7 +3547,7 @@ func (client *baseClient) Copy(source string, destination string) (bool, error) 
 // Example:
 //
 //	copyOptions := api.NewCopyOptionsBuilder().SetDBDestination(2).SetReplace()
-//	result, err := client.Copy([]string{"source, destination",copyOptions})
+//	result, err := client.CopyWithOptions(source, destination",copyOptions)
 //	if err != nil {
 //	   // handle error
 //	}

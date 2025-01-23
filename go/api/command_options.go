@@ -377,9 +377,9 @@ func (restoreOption *CopyOptions) SetReplace() *CopyOptions {
 }
 
 // Custom setter methods to allows specifying an alternative logical database index for the destination key.
-func (restoreOption *CopyOptions) SetDBDestination(destinationDB int64) *CopyOptions {
-	restoreOption.dbDestination = destinationDB
-	return restoreOption
+func (copyOption *CopyOptions) SetDBDestination(destinationDB int64) *CopyOptions {
+	copyOption.dbDestination = destinationDB
+	return copyOption
 }
 
 func (opts *CopyOptions) toArgs() ([]string, error) {
@@ -388,7 +388,7 @@ func (opts *CopyOptions) toArgs() ([]string, error) {
 	if opts.replace {
 		args = append(args, string("REPLACE"))
 	}
-	if opts.dbDestination != -0 {
+	if opts.dbDestination >= 0 {
 		args = append(args, "DB", utils.IntToString(opts.dbDestination))
 	}
 	return args, err
