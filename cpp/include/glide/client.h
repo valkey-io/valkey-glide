@@ -54,6 +54,16 @@ class Client {
    */
   std::string get(const std::string& key);
 
+     /**
+   * Gets a value associated with the given string `key` and deletes the key.
+   * configuration.
+   *
+   * @param key The key whose associated value is to be returned.
+   * @return The value associated with the specified key, or an empty string if
+   * the key is not found or an error occurs.
+   */
+  std::string getdel(const std::string& key);
+
   /**
    * Executes a command with the given request type and arguments.
    *

@@ -39,6 +39,14 @@ std::string Client::get(const std::string& key) {
 }
 
 /**
+ * Retrieves the value associated with the given key from the client's
+ * configuration.
+ */
+std::string Client::getdel(const std::string& key) {
+  return command_.getdel(*this, key);
+}
+
+/**
  * Executes a command with the given request type and arguments.
  */
 void Client::exec_command(glide::RequestType type,

@@ -54,6 +54,8 @@ Before starting this step, make sure you've installed all software requirements.
     cmake .. -DDEBUG_MODE=ON
     make generate-proto
     make generate-cbinding
+    export GLIDE_VERSION="dev"
+    export GLIDE_NAME="glide"
     make prebuild
     ```
 5. Build the C++ wrapper:

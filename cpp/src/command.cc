@@ -37,4 +37,21 @@ std::string Command::get(Client& client, const std::string& key) {
                      channel.value->string_value_len);
 }
 
+std::string Command::getdel(Client& client, const std::string& key) {
+
+std::vector<std::string> args = {key};
+  CommandResponseData channel;
+  client.exec_command(glide::RequestType::GetDel, args, channel);
+
+  // Wait for the response to be received.
+  channel.wait();
+  if (channel.is_error) {
+    return "";
+  }
+  return std::string(channel.value->string_value,
+                     channel.value->string_value_len);
+
+  }
+
+
 }  // namespace glide

@@ -22,5 +22,6 @@ int main() {
   }
 
   std::cout << "get: " << c.get("test") << std::endl;
+
   return 0;
 }
