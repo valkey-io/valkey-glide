@@ -1,22 +1,23 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package config
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
 )
 
 // Request routing basic interface. Please use one of the following:
-// - [api.SimpleNodeRoute]
-// - [api.SlotIdRoute]
-// - [api.SlotKeyRoute]
-// - [api.ByAddressRoute]
-type route interface {
-	toRoutesProtobuf() (*protobuf.Routes, error)
+// - [config.SimpleNodeRoute]
+// - [config.SlotIdRoute]
+// - [config.SlotKeyRoute]
+// - [config.ByAddressRoute]
+type Route interface {
+	ToRoutesProtobuf() (*protobuf.Routes, error)
 }
 
 type SimpleNodeRoute int
@@ -32,7 +33,7 @@ const (
 	RandomRoute
 )
 
-func (simpleNodeRoute SimpleNodeRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
+func (simpleNodeRoute SimpleNodeRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
 	simpleRouteProto, err := mapSimpleNodeRoute(simpleNodeRoute)
 	if err != nil {
 		return nil, err
@@ -55,7 +56,7 @@ func mapSimpleNodeRoute(simpleNodeRoute SimpleNodeRoute) (protobuf.SimpleRoutes,
 	case RandomRoute:
 		return protobuf.SimpleRoutes_Random, nil
 	default:
-		return protobuf.SimpleRoutes_Random, &RequestError{"Invalid simple node route"}
+		return protobuf.SimpleRoutes_Random, &errors.RequestError{Msg: "Invalid simple node route"}
 	}
 }
 
@@ -76,7 +77,7 @@ func mapSlotType(slotType SlotType) (protobuf.SlotTypes, error) {
 	case SlotTypeReplica:
 		return protobuf.SlotTypes_Replica, nil
 	default:
-		return protobuf.SlotTypes_Primary, &RequestError{"Invalid slot type"}
+		return protobuf.SlotTypes_Primary, &errors.RequestError{Msg: "Invalid slot type"}
 	}
 }
 
@@ -94,7 +95,7 @@ func NewSlotIdRoute(slotType SlotType, slotId int32) *SlotIdRoute {
 	return &SlotIdRoute{slotType: slotType, slotID: slotId}
 }
 
-func (slotIdRoute *SlotIdRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
+func (slotIdRoute *SlotIdRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
 	slotType, err := mapSlotType(slotIdRoute.slotType)
 	if err != nil {
 		return nil, err
@@ -124,7 +125,7 @@ func NewSlotKeyRoute(slotType SlotType, slotKey string) *SlotKeyRoute {
 	return &SlotKeyRoute{slotType: slotType, slotKey: slotKey}
 }
 
-func (slotKeyRoute *SlotKeyRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
+func (slotKeyRoute *SlotKeyRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
 	slotType, err := mapSlotType(slotKeyRoute.slotType)
 	if err != nil {
 		return nil, err
@@ -159,8 +160,8 @@ func NewByAddressRoute(host string, port int32) *ByAddressRoute {
 func NewByAddressRouteWithHost(host string) (*ByAddressRoute, error) {
 	split := strings.Split(host, ":")
 	if len(split) != 2 {
-		return nil, &RequestError{
-			fmt.Sprintf(
+		return nil, &errors.RequestError{
+			Msg: fmt.Sprintf(
 				"no port provided, or host is not in the expected format 'hostname:port'. Received: %s", host,
 			),
 		}
@@ -168,8 +169,8 @@ func NewByAddressRouteWithHost(host string) (*ByAddressRoute, error) {
 
 	port, err := strconv.ParseInt(split[1], 10, 32)
 	if err != nil {
-		return nil, &RequestError{
-			fmt.Sprintf(
+		return nil, &errors.RequestError{
+			Msg: fmt.Sprintf(
 				"port must be a valid integer. Received: %s", split[1],
 			),
 		}
@@ -178,7 +179,7 @@ func NewByAddressRouteWithHost(host string) (*ByAddressRoute, error) {
 	return &ByAddressRoute{host: split[0], port: int32(port)}, nil
 }
 
-func (byAddressRoute *ByAddressRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
+func (byAddressRoute *ByAddressRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
 	request := &protobuf.Routes{
 		Value: &protobuf.Routes_ByAddressRoute{
 			ByAddressRoute: &protobuf.ByAddressRoute{
