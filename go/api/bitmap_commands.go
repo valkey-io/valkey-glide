@@ -18,7 +18,7 @@ type BitmapCommands interface {
 
 	BitCountWithOptions(key string, options *options.BitCountOptions) (int64, error)
 
-	BitField(key string, subCommands []options.BitFieldSubCommands) ([]int64, error)
+	BitField(key string, subCommands []options.BitFieldSubCommands) ([]Result[int64], error)
 
-	BitFieldRO(key string, commands []options.BitFieldROCommands) ([]int64, error)
+	BitFieldRO(key string, commands []options.BitFieldROCommands) ([]Result[int64], error)
 }

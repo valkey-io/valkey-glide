@@ -6838,7 +6838,7 @@ func (client *baseClient) XRevRangeWithOptions(
 //
 // Return value:
 //
-//	An array of results from the executed subcommands.
+//	Result from the executed subcommands.
 //	  - BitFieldGet returns the value in the binary representation of the string.
 //	  - BitFieldSet returns the previous value before setting the new value in the binary representation.
 //	  - BitFieldIncrBy returns the updated value after increasing or decreasing the bits.
@@ -6847,17 +6847,17 @@ func (client *baseClient) XRevRangeWithOptions(
 //
 // Example:
 //
-//		commands := []options.BitFieldSubCommands{
-//		  options.BitFieldGet(options.SignedInt, 8, 16),
-//		  options.BitFieldOverflow(options.SAT),
-//	      options.NewBitFieldSet(options.UnsignedInt, 4, 0, 7),
-//		  options.BitFieldIncrBy(options.SignedInt, 5, 100, 1),
-//		 }
-//		result, err := client.BitField("mykey", commands)
-//		fmt.Println(result) // [0 7 15]
+//	commands := []options.BitFieldSubCommands{
+//		options.BitFieldGet(options.SignedInt, 8, 16),
+//		options.BitFieldOverflow(options.SAT),
+//		options.NewBitFieldSet(options.UnsignedInt, 4, 0, 7),
+//	    options.BitFieldIncrBy(options.SignedInt, 5, 100, 1),
+//	}
+//	result, err := client.BitField("mykey", commands)
+//	result: [{0 false} {7 false} {15 false}]
 //
 // [valkey.io]: https://valkey.io/commands/bitfield/
-func (client *baseClient) BitField(key string, subCommands []options.BitFieldSubCommands) ([]int64, error) {
+func (client *baseClient) BitField(key string, subCommands []options.BitFieldSubCommands) ([]Result[int64], error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 
@@ -6891,19 +6891,19 @@ func (client *baseClient) BitField(key string, subCommands []options.BitFieldSub
 //
 // Return value:
 //
-//	An array of results from the executed GET subcommands.
+//	Result from the executed GET subcommands.
 //	  - BitFieldGet returns the value in the binary representation of the string.
 //
 // Example:
 //
-//	commands := []options.BitFieldROCommands{
-//	  options.BitFieldGet(options.SignedInt, 8, 16),
-//	}
-//	result, err := client.BitFieldRO("mykey", commands)
-//	fmt.Println(result) // [42]
+//	 commands := []options.BitFieldROCommands{
+//		options.BitFieldGet(options.SignedInt, 8, 16),
+//	  }
+//	 result, err := client.BitFieldRO("mykey", commands)
+//	 result: [{42 false}]
 //
 // [valkey.io]: https://valkey.io/commands/bitfield_ro/
-func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCommands) ([]int64, error) {
+func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCommands) ([]Result[int64], error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 
