@@ -9,6 +9,7 @@ import "C"
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"unsafe"
 
@@ -534,6 +535,57 @@ func handleKeyWithMemberAndScoreResponse(response *C.struct_CommandResponse) (Re
 	member := arr[1].(string)
 	score := arr[2].(float64)
 	return CreateKeyWithMemberAndScoreResult(KeyWithMemberAndScore{key, member, score}), nil
+}
+
+func handleKeyWithArrayOfMembersAndScoresResponse(
+	response *C.struct_CommandResponse,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	defer C.free_command_response(response)
+
+	if response == nil || response.response_type == uint32(C.Null) {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), nil
+	}
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), typeErr
+	}
+
+	slice, err := parseArray(response)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	arr := slice.([]interface{})
+	key := arr[0].(string)
+	converted, err := mapConverter[float64]{
+		nil,
+		false,
+	}.convert(arr[1])
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+	res, ok := converted.(map[string]float64)
+
+	if !ok {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
+			Msg: fmt.Sprintf("unexpected type of second element: %T", converted),
+		}
+	}
+	memberAndScoreArray := make([]MemberAndScore, len(res))
+
+	idx := 0
+	for k, v := range res {
+		memberAndScoreArray[idx] = MemberAndScore{k, v}
+		idx++
+	}
+
+	// Ensure consistent output
+	sort.Slice(memberAndScoreArray, func(i, j int) bool {
+		return memberAndScoreArray[i].Score < memberAndScoreArray[j].Score
+	})
+
+	return CreateKeyWithArrayOfMembersAndScoresResult(KeyWithArrayOfMembersAndScores{key, memberAndScoreArray}), nil
 }
 
 func handleScanResponse(response *C.struct_CommandResponse) (string, []string, error) {

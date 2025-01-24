@@ -280,6 +280,25 @@ func (listDirection ListDirection) toString() (string, error) {
 	}
 }
 
+// Enumeration representing which elements to pop from the sorted set.
+type ScoreFilter string
+
+const (
+	MAX ScoreFilter = "MAX"
+	MIN ScoreFilter = "MIN"
+)
+
+func (scoreFilter ScoreFilter) toString() (string, error) {
+	switch scoreFilter {
+	case MAX:
+		return string(MAX), nil
+	case MIN:
+		return string(MIN), nil
+	default:
+		return "", &errors.RequestError{Msg: "Invalid score filter"}
+	}
+}
+
 // Optional arguments to Restore(key string, ttl int64, value string, option *RestoreOptions)
 //
 // Note IDLETIME and FREQ modifiers cannot be set at the same time.

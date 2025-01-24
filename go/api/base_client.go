@@ -2954,6 +2954,136 @@ func (client *baseClient) BLMPopCount(
 	return handleStringToStringArrayMapOrNilResponse(result)
 }
 
+// Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
+// given keys being checked in the order they are provided.
+// BZMPop is the blocking variant of [api.ZMPop].
+//
+// Note:
+//   - When in cluster mode, all keys must map to the same hash slot.
+//   - BZMPop is a client blocking command, see [Blocking Commands] for more details and best practices.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys          - An array of keys to lists.
+//	scoreFilter - The element pop criteria - either MIN or MAX to pop members with the lowest/highest scores accordingly.
+//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	- The key name of the set from which the element was popped
+//	- An array of member scores of the popped elements in ascending order.
+//	Returns nil if no member could be popped and the timeout expired.
+//
+// For example:
+//
+//	result, err := client.ZAdd("my_list", map[string]float64{"five": 5.0, "six": 6.0})
+//	result, err := client.BZMPop([]string{"my_list"}, api.MAX, float64(0.1))
+//	result["my_list"] = []MemberAndScore{{Member: "six", Score: 6.0}}
+//
+// [valkey.io]: https://valkey.io/commands/bzmpop/
+// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+func (client *baseClient) BZMPop(
+	keys []string,
+	scoreFilter ScoreFilter,
+	timeoutSecs float64,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.toString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-3 {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
+			Msg: "Length overflow for the provided keys",
+		}
+	}
+
+	// args slice will have 3 more arguments with the keys provided.
+	args := make([]string, 0, len(keys)+3)
+	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, scoreFilterStr)
+	result, err := client.executeCommand(C.BZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
+}
+
+// Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
+// given keys being checked in the order they are provided.
+// BZMPop is the blocking variant of [api.ZMPop].
+//
+// Note:
+//   - When in cluster mode, all keys must map to the same hash slot.
+//   - BZMPop is a client blocking command, see [Blocking Commands] for more details and best practices.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys          - An array of keys to lists.
+//	scoreFilter   - The element pop criteria - either MIN or MAX to pop members with the lowest/highest scores accordingly.
+//	count         - The maximum number of popped elements.
+//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	- The key name of the set from which the element was popped
+//	- An array of member scores of the popped elements in ascending order.
+//	Returns nil if no member could be popped and the timeout expired.
+//
+// For example:
+//
+//	result, err := client.ZAdd("my_list", map[string]float64{"five": 5.0, "six": 6.0})
+//	result, err := client.BZMPopCount([]string{"my_list"}, api.MAX, 2, 0.1)
+//	result["my_list"] = []MemberAndScore{{Member: "six", Score: 6.0}, {Member: "five", Score 5.0}}
+//
+// [valkey.io]: https://valkey.io/commands/lmpop/
+func (client *baseClient) BZMPopCount(
+	keys []string,
+	scoreFilter ScoreFilter,
+	count int64,
+	timeoutSecs float64,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.toString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-5 {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
+			Msg: "Length overflow for the provided keys",
+		}
+	}
+
+	// args slice will have 5 more arguments with the keys provided.
+	args := make([]string, 0, len(keys)+5)
+	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, scoreFilterStr, CountKeyword, utils.IntToString(count))
+	result, err := client.executeCommand(C.BZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
+}
+
 // Sets the list element at index to element.
 // The index is zero-based, so 0 means the first element,1 the second element and so on. Negative indices can be used to
 // designate elements starting at the tail of the list. Here, -1 means the last element, -2 means the penultimate and so

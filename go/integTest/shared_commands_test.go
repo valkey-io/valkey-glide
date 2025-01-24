@@ -2886,6 +2886,91 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 	})
 }
 
+func (suite *GlideTestSuite) TestBZMPopAndBZMPopCount() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		key3 := "{key}-3" + uuid.NewString()
+
+		res1, err := client.BZMPop([]string{key1}, api.MIN, float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res1.IsNil())
+
+		membersScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+
+		res3, err := client.ZAdd(key1, membersScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res3)
+		res4, err := client.ZAdd(key2, membersScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res4)
+
+		// Try to pop the top 2 elements from key1
+		res5, err := client.BZMPopCount([]string{key1}, api.MAX, int64(2), float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			api.CreateKeyWithArrayOfMembersAndScoresResult(
+				api.KeyWithArrayOfMembersAndScores{
+					Key: key1,
+					MembersAndScores: []api.MemberAndScore{
+						{Member: "two", Score: 2.0},
+						{Member: "three", Score: 3.0},
+					},
+				},
+			),
+			res5,
+		)
+
+		// Try to pop the minimum value from key2
+		res6, err := client.BZMPop([]string{key2}, api.MIN, float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			api.CreateKeyWithArrayOfMembersAndScoresResult(
+				api.KeyWithArrayOfMembersAndScores{
+					Key: key2,
+					MembersAndScores: []api.MemberAndScore{
+						{Member: "one", Score: 1.0},
+					},
+				},
+			),
+			res6,
+		)
+
+		// Pop the minimum value from multiple keys
+		res7, err := client.BZMPop([]string{key1, key2}, api.MIN, float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			api.CreateKeyWithArrayOfMembersAndScoresResult(
+				api.KeyWithArrayOfMembersAndScores{
+					Key: key1,
+					MembersAndScores: []api.MemberAndScore{
+						{Member: "one", Score: 1.0},
+					},
+				},
+			),
+			res7,
+		)
+
+		suite.verifyOK(client.Set(key3, "value"))
+
+		// Popping a non-existent value in key3
+		res8, err := client.BZMPop([]string{key3}, api.MIN, float64(0.1))
+		assert.True(suite.T(), res8.IsNil())
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestLSet() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.NewString()
