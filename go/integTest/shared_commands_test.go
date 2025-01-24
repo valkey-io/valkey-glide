@@ -7252,3 +7252,204 @@ func (suite *GlideTestSuite) TestCopyWithOptions() {
 		assert.Equal(t, value, resultGet.Value())
 	})
 }
+
+func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		key2 := uuid.New().String()
+		stringKey := uuid.New().String()
+		positiveInfinity := options.NewInfiniteStreamBoundary(options.PositiveInfinity)
+		negativeInfinity := options.NewInfiniteStreamBoundary(options.NegativeInfinity)
+
+		// add stream entries
+		streamId1, err := client.XAdd(
+			key,
+			[][]string{{"field1", "value1"}},
+		)
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), streamId1)
+
+		streamId2, err := client.XAdd(
+			key,
+			[][]string{{"field2", "value2"}},
+		)
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), streamId2)
+
+		xlenResult, err := client.XLen(key)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), xlenResult)
+
+		// get everything from the stream
+		xrangeResult, err := client.XRange(
+			key,
+			negativeInfinity,
+			positiveInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[string][][]string{streamId1.Value(): {{"field1", "value1"}}, streamId2.Value(): {{"field2", "value2"}}},
+			xrangeResult,
+		)
+
+		// get everything from the stream in reverse
+		xrevrangeResult, err := client.XRevRange(
+			key,
+			positiveInfinity,
+			negativeInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[string][][]string{streamId2.Value(): {{"field2", "value2"}}, streamId1.Value(): {{"field1", "value1"}}},
+			xrevrangeResult,
+		)
+
+		// returns empty map if + before -
+		xrangeResult, err = client.XRange(
+			key,
+			positiveInfinity,
+			negativeInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrangeResult)
+
+		// rev search returns empty if - before +
+		xrevrangeResult, err = client.XRevRange(
+			key,
+			negativeInfinity,
+			positiveInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrevrangeResult)
+
+		streamId3, err := client.XAdd(
+			key,
+			[][]string{{"field3", "value3"}},
+		)
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), streamId3)
+
+		// get the newest stream entry
+		xrangeResult, err = client.XRangeWithOptions(
+			key,
+			options.NewStreamBoundary(streamId2.Value(), false),
+			positiveInfinity,
+			options.NewStreamRangeOptions().SetCount(1),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[string][][]string{streamId3.Value(): {{"field3", "value3"}}},
+			xrangeResult,
+		)
+
+		// doing the same with rev search
+		xrevrangeResult, err = client.XRevRangeWithOptions(
+			key,
+			positiveInfinity,
+			options.NewStreamBoundary(streamId2.Value(), false),
+			options.NewStreamRangeOptions().SetCount(1),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[string][][]string{streamId3.Value(): {{"field3", "value3"}}},
+			xrevrangeResult,
+		)
+
+		// both xrange and xrevrange return nil with a zero/negative count
+		xrangeResult, err = client.XRangeWithOptions(
+			key,
+			negativeInfinity,
+			positiveInfinity,
+			options.NewStreamRangeOptions().SetCount(0),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrangeResult)
+
+		xrevrangeResult, err = client.XRevRangeWithOptions(
+			key,
+			positiveInfinity,
+			negativeInfinity,
+			options.NewStreamRangeOptions().SetCount(-1),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrevrangeResult)
+
+		// xrange and xrevrange against an empty stream
+		xdelResult, err := client.XDel(key, []string{streamId1.Value(), streamId2.Value(), streamId3.Value()})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), xdelResult)
+
+		xrangeResult, err = client.XRange(
+			key,
+			negativeInfinity,
+			positiveInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrangeResult)
+
+		xrevrangeResult, err = client.XRevRange(
+			key,
+			positiveInfinity,
+			negativeInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrevrangeResult)
+
+		// xrange and xrevrange against a non-existent stream
+		xrangeResult, err = client.XRange(
+			key2,
+			negativeInfinity,
+			positiveInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrangeResult)
+
+		xrevrangeResult, err = client.XRevRange(
+			key2,
+			positiveInfinity,
+			negativeInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrevrangeResult)
+
+		// xrange and xrevrange against a non-stream key
+		_, err = client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		_, err = client.XRange(
+			stringKey,
+			negativeInfinity,
+			positiveInfinity,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		_, err = client.XRevRange(
+			stringKey,
+			positiveInfinity,
+			negativeInfinity,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// xrange and xrevrange when range bound is not a valid id
+		_, err = client.XRange(
+			key,
+			options.NewStreamBoundary("invalid-id", false),
+			positiveInfinity,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		_, err = client.XRevRange(
+			key,
+			options.NewStreamBoundary("invalid-id", false),
+			negativeInfinity,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
