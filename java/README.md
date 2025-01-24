@@ -118,6 +118,24 @@ Maven:
    <classifier>linux-x86_64</classifier>
    <version>[1.0.0,2.0.0)</version>
 </dependency>
+
+<!--with os-maven-plugin-->
+<build>
+    <extensions>
+        <extension>
+            <groupId>kr.motd.maven</groupId>
+            <artifactId>os-maven-plugin</artifactId>
+        </extension>
+    </extensions>
+</build>
+<dependencies>
+    <dependency>
+        <groupId>io.valkey</groupId>
+        <artifactId>valkey-glide</artifactId>
+        <classifier>${os.detected.classifier}</classifier>
+        <version>[1.0.0,2.0.0)</version>
+    </dependency>
+</dependencies>
 ```
 
 SBT:
