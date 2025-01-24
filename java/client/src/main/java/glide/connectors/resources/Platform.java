@@ -64,6 +64,13 @@ public class Platform {
             return EpollResource::new;
         }
         // TODO support IO-Uring and NIO
-        throw new RuntimeException("Current platform supports no known thread pool resources");
+        String errorMessage =
+                "Cannot load Netty native components for the current os version and arch: "
+                        + System.getProperty("os.name")
+                        + " "
+                        + System.getProperty("os.version")
+                        + " "
+                        + System.getProperty("os.arch");
+        throw new RuntimeException(errorMessage);
     }
 }
