@@ -3641,7 +3641,7 @@ func (client *baseClient) XRange(
 // Example:
 //
 //	// Retrieve all stream entries
-//	res, err := client.XRangeWithCount(
+//	res, err := client.XRangeWithOptions(
 //		"key",
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
@@ -3650,7 +3650,7 @@ func (client *baseClient) XRange(
 //	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
 //
 //	// Retrieve exactly one stream entry by id
-//	res, err := client.XRangeWithCount(
+//	res, err := client.XRangeWithOptions(
 //		"key",
 //		options.NewStreamBoundary(streamId, true),
 //		options.NewStreamBoundary(streamId, true),
@@ -3744,7 +3744,7 @@ func (client *baseClient) XRevRange(
 // Example:
 //
 //	// Retrieve all stream entries
-//	res, err := client.XRevRangeWithCount(
+//	res, err := client.XRevRangeWithOptions(
 //		"key",
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
