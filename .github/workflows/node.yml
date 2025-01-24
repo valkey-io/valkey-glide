@@ -116,8 +116,10 @@ jobs:
 
                   export package_version=${R_VERSION}
                   export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
-                  mv package.json package.json.tmpl
                   envsubst < package.json.tmpl > "package.json"
+
+                  #   mv package.json package.json.tmpl
+                  #   envsubst < package.json.tmpl > "package.json"
                   cat package.json
                   # Fix index.ts based on the scope variable
                   # sed -i "s/\@scope/${scope}/g" index.ts
