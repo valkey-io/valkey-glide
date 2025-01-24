@@ -165,7 +165,7 @@ func (client *GlideClient) Select(index int64) (string, error) {
 //	fmt.Println(result) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
-func (client *glideClient) DBSize() (int64, error) {
+func (client *GlideClient) DBSize() (int64, error) {
 	result, err := client.executeCommand(C.DBSize, []string{})
 	if err != nil {
 		return defaultIntResponse, err
