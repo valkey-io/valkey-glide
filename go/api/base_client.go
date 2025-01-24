@@ -6820,11 +6820,48 @@ func (client *baseClient) XRevRangeWithOptions(
 	return handleMapOfArrayOfStringArrayOrNilResponse(result)
 }
 
-func (client *baseClient) BitField(key string, subcommands []options.BitFieldSubCommand) ([]int64, error) {
+// Reads or modifies the array of bits representing the string that is held at key
+// based on the specified sub commands.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key          -  The key of the string.
+//	subCommands  -  The subCommands to be performed on the binary value of the string at
+//	                key, which could be any of the following:
+//	                BitFieldGet, BitFieldSet, BitFieldIncrby, BitFieldOverflow.
+//		            Use `options.NewBitFieldGet()` to specify a  BitField GET command.
+//		            Use `options.NewBitFieldSet()` to specify a BitField SET command.
+//		            Use `options.NewBitFieldIncrby()` to specify a BitField INCRYBY command.
+//		            Use `options.BitFieldOverflow()` to specify a BitField OVERFLOW command.
+//
+// Return value:
+//
+//	An array of results from the executed subcommands.
+//	  - BitFieldGet returns the value in the binary representation of the string.
+//	  - BitFieldSet returns the previous value before setting the new value in the binary representation.
+//	  - BitFieldIncrBy returns the updated value after increasing or decreasing the bits.
+//	  - BitFieldOverflow controls the behavior of subsequent operations and returns
+//	    a result based on the specified overflow type (WRAP, SAT, FAIL).
+//
+// Example:
+//
+//		commands := []options.BitFieldSubCommands{
+//		  options.BitFieldGet(options.SignedInt, 8, 16),
+//		  options.BitFieldOverflow(options.SAT),
+//	      options.NewBitFieldSet(options.UnsignedInt, 4, 0, 7),
+//		  options.BitFieldIncrBy(options.SignedInt, 5, 100, 1),
+//		 }
+//		result, err := client.BitField("mykey", commands)
+//		fmt.Println(result) // [0 7 15]
+//
+// [valkey.io]: https://valkey.io/commands/bitfield/
+func (client *baseClient) BitField(key string, subCommands []options.BitFieldSubCommands) ([]int64, error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 
-	for _, cmd := range subcommands {
+	for _, cmd := range subCommands {
 		cmdArgs, err := cmd.ToArgs()
 		if err != nil {
 			return nil, err
@@ -6839,7 +6876,34 @@ func (client *baseClient) BitField(key string, subcommands []options.BitFieldSub
 	return handleIntOrNilArrayResponse(result)
 }
 
-func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCommand) ([]int64, error) {
+// Reads the array of bits representing the string that is held at key
+// based on the specified  sub commands.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key          -  The key of the string.
+//	subCommands  -  The read-only subCommands to be performed on the binary value
+//	                of the string at key, which could be:
+//	                BitFieldGet.
+//		            Use `options.NewBitFieldGet()` to specify a BitField GET command.
+//
+// Return value:
+//
+//	An array of results from the executed GET subcommands.
+//	  - BitFieldGet returns the value in the binary representation of the string.
+//
+// Example:
+//
+//	commands := []options.BitFieldROCommands{
+//	  options.BitFieldGet(options.SignedInt, 8, 16),
+//	}
+//	result, err := client.BitFieldRO("mykey", commands)
+//	fmt.Println(result) // [42]
+//
+// [valkey.io]: https://valkey.io/commands/bitfield_ro/
+func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCommands) ([]int64, error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 

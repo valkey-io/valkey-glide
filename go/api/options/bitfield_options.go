@@ -4,13 +4,13 @@ import (
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
 
-// BitFieldSubCommand interface for all BITFIELD commands
-type BitFieldSubCommand interface {
+// Subcommands for bitfield operations.
+type BitFieldSubCommands interface {
 	ToArgs() ([]string, error)
 }
 
-// BitFieldROCommand for read-only operations
-type BitFieldROCommand interface {
+// Subcommands for bitfieldReadOnly.
+type BitFieldROCommands interface {
 	dummy()
 	ToArgs() ([]string, error)
 }
@@ -30,7 +30,8 @@ const (
 	FAIL OverflowType = "FAIL"
 )
 
-// GET implementation
+// BitFieldGet represents a GET operation to get the value in the binary
+// representation of the string stored in key based on EncType and Offset.
 type BitFieldGet struct {
 	EncType EncType
 	Bits    int64
@@ -38,6 +39,7 @@ type BitFieldGet struct {
 	UseHash bool
 }
 
+// NewBitFieldGet creates a new BitField GET command
 func NewBitFieldGet(encType EncType, bits int64, offset int64) *BitFieldGet {
 	return &BitFieldGet{
 		EncType: encType,
@@ -46,6 +48,7 @@ func NewBitFieldGet(encType EncType, bits int64, offset int64) *BitFieldGet {
 	}
 }
 
+// ToArgs converts the GET command to arguments
 func (cmd *BitFieldGet) ToArgs() ([]string, error) {
 	args := []string{"GET"}
 	args = append(args, string(cmd.EncType)+utils.IntToString(cmd.Bits))
@@ -59,7 +62,8 @@ func (cmd *BitFieldGet) ToArgs() ([]string, error) {
 
 func (cmd *BitFieldGet) dummy() {}
 
-// SET implementation
+// BitFieldSet represents a SET operation to set the bits in the binary
+// representation of the string stored in key based on EncType and Offset.
 type BitFieldSet struct {
 	EncType EncType
 	Bits    int64
@@ -68,6 +72,7 @@ type BitFieldSet struct {
 	UseHash bool
 }
 
+// NewBitFieldSet creates a new BitField SET command
 func NewBitFieldSet(encType EncType, bits int64, offset int64, value int64) *BitFieldSet {
 	return &BitFieldSet{
 		EncType: encType,
@@ -77,6 +82,7 @@ func NewBitFieldSet(encType EncType, bits int64, offset int64, value int64) *Bit
 	}
 }
 
+// ToArgs converts the SET command to arguments
 func (cmd *BitFieldSet) ToArgs() ([]string, error) {
 	args := []string{"SET"}
 	args = append(args, string(cmd.EncType)+utils.IntToString(cmd.Bits))
@@ -89,7 +95,8 @@ func (cmd *BitFieldSet) ToArgs() ([]string, error) {
 	return args, nil
 }
 
-// INCRBY implementation
+// BitFieldIncrBy represents a INCRBY subcommand for increasing or decreasing the bits in the binary
+// representation of the string stored in key based on EncType and Offset.
 type BitFieldIncrBy struct {
 	EncType   EncType
 	Bits      int64
@@ -98,6 +105,7 @@ type BitFieldIncrBy struct {
 	UseHash   bool
 }
 
+// NewBitFieldIncrBy creates a new BitField INCRBY command
 func NewBitFieldIncrBy(encType EncType, bits int64, offset int64, increment int64) *BitFieldIncrBy {
 	return &BitFieldIncrBy{
 		EncType:   encType,
@@ -107,6 +115,7 @@ func NewBitFieldIncrBy(encType EncType, bits int64, offset int64, increment int6
 	}
 }
 
+// ToArgs converts the INCRBY command to arguments
 func (cmd *BitFieldIncrBy) ToArgs() ([]string, error) {
 	args := []string{"INCRBY"}
 	args = append(args, string(cmd.EncType)+utils.IntToString(cmd.Bits))
@@ -119,17 +128,20 @@ func (cmd *BitFieldIncrBy) ToArgs() ([]string, error) {
 	return args, nil
 }
 
-// OVERFLOW implementation
+// BitFieldOverflow represents a OVERFLOW subcommand that determines the result of the SET
+// or INCRBY commands when an under or overflow occurs.
 type BitFieldOverflow struct {
 	Overflow OverflowType
 }
 
+// NewBitFieldOverflow creates a new BitField OVERFLOW command
 func NewBitFieldOverflow(overflow OverflowType) *BitFieldOverflow {
 	return &BitFieldOverflow{
 		Overflow: overflow,
 	}
 }
 
+// ToArgs converts the OVERFLOW command to arguments
 func (cmd *BitFieldOverflow) ToArgs() ([]string, error) {
 	return []string{"OVERFLOW", string(cmd.Overflow)}, nil
 }

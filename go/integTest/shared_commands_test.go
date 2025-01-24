@@ -7459,7 +7459,7 @@ func (suite *GlideTestSuite) TestBitField_GetAndIncrBy() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 
-		commands := []options.BitFieldSubCommand{
+		commands := []options.BitFieldSubCommands{
 			options.NewBitFieldIncrBy(options.SignedInt, 5, 100, 1),
 		}
 
@@ -7473,7 +7473,7 @@ func (suite *GlideTestSuite) TestBitField_GetAndIncrBy() {
 		assert.Len(suite.T(), result2, 1)
 		assert.Equal(suite.T(), firstValue+1, result2[0])
 
-		getCommands := []options.BitFieldSubCommand{
+		getCommands := []options.BitFieldSubCommands{
 			options.NewBitFieldGet(options.SignedInt, 5, 100),
 		}
 
@@ -7488,7 +7488,7 @@ func (suite *GlideTestSuite) TestBitField_Overflow() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// SAT (Saturate) Overflow Test
 		key1 := uuid.New().String()
-		satCommands := []options.BitFieldSubCommand{
+		satCommands := []options.BitFieldSubCommands{
 			options.NewBitFieldOverflow(options.SAT),
 			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 2),
 			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 2),
@@ -7504,7 +7504,7 @@ func (suite *GlideTestSuite) TestBitField_Overflow() {
 
 		// WRAP Overflow Test
 		key2 := uuid.New().String()
-		wrapCommands := []options.BitFieldSubCommand{
+		wrapCommands := []options.BitFieldSubCommands{
 			options.NewBitFieldOverflow(options.WRAP),
 			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 3),
 			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 1),
@@ -7520,7 +7520,7 @@ func (suite *GlideTestSuite) TestBitField_Overflow() {
 
 		// FAIL Overflow Test
 		key3 := uuid.New().String()
-		failCommands := []options.BitFieldSubCommand{
+		failCommands := []options.BitFieldSubCommands{
 			options.NewBitFieldOverflow(options.FAIL),
 			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 3),
 			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 1),
@@ -7541,7 +7541,7 @@ func (suite *GlideTestSuite) TestBitField_MultipleOperations() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 
-		commands := []options.BitFieldSubCommand{
+		commands := []options.BitFieldSubCommands{
 			options.NewBitFieldSet(options.UnsignedInt, 8, 0, 10),
 			options.NewBitFieldGet(options.UnsignedInt, 8, 0),
 			options.NewBitFieldIncrBy(options.UnsignedInt, 8, 0, 5),
@@ -7565,7 +7565,7 @@ func (suite *GlideTestSuite) TestBitField_Failures() {
 		key := uuid.New().String()
 
 		// Test invalid bit size for unsigned (>63)
-		invalidUnsignedCommands := []options.BitFieldSubCommand{
+		invalidUnsignedCommands := []options.BitFieldSubCommands{
 			options.NewBitFieldGet(options.UnsignedInt, 64, 0),
 		}
 
@@ -7573,7 +7573,7 @@ func (suite *GlideTestSuite) TestBitField_Failures() {
 		assert.NotNil(suite.T(), err)
 
 		// Test invalid bit size for signed (>64)
-		invalidSignedCommands := []options.BitFieldSubCommand{
+		invalidSignedCommands := []options.BitFieldSubCommands{
 			options.NewBitFieldGet(options.SignedInt, 65, 0),
 		}
 
@@ -7587,19 +7587,19 @@ func (suite *GlideTestSuite) TestBitFieldRO_BasicOperation() {
 		key := uuid.New().String()
 		value := int64(42)
 
-		setCommands := []options.BitFieldSubCommand{
+		setCommands := []options.BitFieldSubCommands{
 			options.NewBitFieldSet(options.SignedInt, 8, 16, value),
 		}
 		_, err := client.BitField(key, setCommands)
 		assert.Nil(suite.T(), err)
 
-		getNormalCommands := []options.BitFieldSubCommand{
+		getNormalCommands := []options.BitFieldSubCommands{
 			options.NewBitFieldGet(options.SignedInt, 8, 16),
 		}
 		getNormal, err := client.BitField(key, getNormalCommands)
 		assert.Nil(suite.T(), err)
 
-		getROCommands := []options.BitFieldROCommand{
+		getROCommands := []options.BitFieldROCommands{
 			options.NewBitFieldGet(options.SignedInt, 8, 16),
 		}
 		getRO, err := client.BitFieldRO(key, getROCommands)
@@ -7616,7 +7616,7 @@ func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
 		value1 := int64(42)
 		value2 := int64(43)
 
-		setCommands := []options.BitFieldSubCommand{
+		setCommands := []options.BitFieldSubCommands{
 			options.NewBitFieldSet(options.SignedInt, 8, 0, value1),
 			options.NewBitFieldSet(options.SignedInt, 8, 8, value2),
 		}
@@ -7624,7 +7624,7 @@ func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
 		_, err := client.BitField(key, setCommands)
 		assert.Nil(suite.T(), err)
 
-		getNormalCommands := []options.BitFieldSubCommand{
+		getNormalCommands := []options.BitFieldSubCommands{
 			options.NewBitFieldGet(options.SignedInt, 8, 0),
 			options.NewBitFieldGet(options.SignedInt, 8, 8),
 		}
@@ -7632,7 +7632,7 @@ func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
 		getNormal, err := client.BitField(key, getNormalCommands)
 		assert.Nil(suite.T(), err)
 
-		getROCommands := []options.BitFieldROCommand{
+		getROCommands := []options.BitFieldROCommands{
 			options.NewBitFieldGet(options.SignedInt, 8, 0),
 			options.NewBitFieldGet(options.SignedInt, 8, 8),
 		}
