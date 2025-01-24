@@ -1,10 +1,19 @@
-// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-
 package options
 
 import (
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
+
+// BitFieldSubCommand interface for all BITFIELD commands
+type BitFieldSubCommand interface {
+	ToArgs() ([]string, error)
+}
+
+// BitFieldROCommand for read-only operations
+type BitFieldROCommand interface {
+	dummy()
+	ToArgs() ([]string, error)
+}
 
 type EncType string
 
@@ -12,39 +21,6 @@ const (
 	SignedInt   EncType = "i"
 	UnsignedInt EncType = "u"
 )
-
-type BitFieldGetOpts struct {
-	encType EncType
-	bits    *int64
-	offset  *int64
-	useHash bool
-}
-
-// BitFieldOptions represents options for BITFIELD command
-type BitFieldOptions struct {
-	gets     []BitFieldGetOpts
-	overflow OverflowType
-	sets     []BitFieldSetOpts
-	incrs    []BitFieldIncrOpts
-}
-
-// BitFieldSetOpts represents options for SET subcommand
-type BitFieldSetOpts struct {
-	encType EncType
-	bits    *int64
-	offset  *int64
-	value   *int64
-	useHash bool
-}
-
-// BitFieldIncrOpts represents options for INCRBY subcommand
-type BitFieldIncrOpts struct {
-	encType   EncType
-	bits      *int64
-	offset    *int64
-	increment *int64
-	useHash   bool
-}
 
 type OverflowType string
 
@@ -54,147 +30,106 @@ const (
 	FAIL OverflowType = "FAIL"
 )
 
-func NewBitFieldOptionsBuilder() *BitFieldOptions {
-	return &BitFieldOptions{}
+// GET implementation
+type BitFieldGet struct {
+	EncType EncType
+	Bits    int64
+	Offset  int64
+	UseHash bool
 }
 
-// AddGet adds a GET subcommand
-func (opts *BitFieldOptions) AddGet(encType EncType, bits int64, offset int64) *BitFieldOptions {
-	opts.gets = append(opts.gets, BitFieldGetOpts{
-		encType: encType,
-		bits:    &bits,
-		offset:  &offset,
-	})
-	return opts
-}
-
-// SetOverflow sets overflow behavior for following SET and INCRBY operations
-func (opts *BitFieldOptions) SetOverflow(overflow OverflowType) *BitFieldOptions {
-	opts.overflow = overflow
-	return opts
-}
-
-// AddSet adds a SET subcommand
-func (opts *BitFieldOptions) AddSet(encType EncType, bits int64, offset int64, value int64) *BitFieldOptions {
-	opts.sets = append(opts.sets, BitFieldSetOpts{
-		encType: encType,
-		bits:    &bits,
-		offset:  &offset,
-		value:   &value,
-	})
-	return opts
-}
-
-// AddIncrBy adds an INCRBY subcommand
-func (opts *BitFieldOptions) AddIncrBy(encType EncType, bits int64, offset int64, increment int64) *BitFieldOptions {
-	opts.incrs = append(opts.incrs, BitFieldIncrOpts{
-		encType:   encType,
-		bits:      &bits,
-		offset:    &offset,
-		increment: &increment,
-	})
-	return opts
-}
-
-// UseHashNotation sets hash notation for the last added operation
-func (opts *BitFieldOptions) UseHashNotation() *BitFieldOptions {
-	if len(opts.gets) > 0 {
-		last := len(opts.gets) - 1
-		opts.gets[last].useHash = true
+func NewBitFieldGet(encType EncType, bits int64, offset int64) *BitFieldGet {
+	return &BitFieldGet{
+		EncType: encType,
+		Bits:    bits,
+		Offset:  offset,
 	}
-	if len(opts.sets) > 0 {
-		last := len(opts.sets) - 1
-		opts.sets[last].useHash = true
-	}
-	if len(opts.incrs) > 0 {
-		last := len(opts.incrs) - 1
-		opts.incrs[last].useHash = true
-	}
-	return opts
 }
 
-func (opts *BitFieldOptions) ToArgs() []string {
-	var args []string
-
-	for _, get := range opts.gets {
-		args = append(args, "GET")
-		args = append(args, string(get.encType)+utils.IntToString(*get.bits))
-		if get.useHash {
-			args = append(args, "#"+utils.IntToString(*get.offset))
-		} else {
-			args = append(args, utils.IntToString(*get.offset))
-		}
+func (cmd *BitFieldGet) ToArgs() ([]string, error) {
+	args := []string{"GET"}
+	args = append(args, string(cmd.EncType)+utils.IntToString(cmd.Bits))
+	if cmd.UseHash {
+		args = append(args, "#"+utils.IntToString(cmd.Offset))
+	} else {
+		args = append(args, utils.IntToString(cmd.Offset))
 	}
-
-	if opts.overflow != "" {
-		args = append(args, "OVERFLOW", string(opts.overflow))
-	}
-
-	for _, set := range opts.sets {
-		args = append(args, "SET")
-		args = append(args, string(set.encType)+utils.IntToString(*set.bits))
-		if set.useHash {
-			args = append(args, "#"+utils.IntToString(*set.offset))
-		} else {
-			args = append(args, utils.IntToString(*set.offset))
-		}
-		args = append(args, utils.IntToString(*set.value))
-	}
-
-	for _, incr := range opts.incrs {
-		args = append(args, "INCRBY")
-		args = append(args, string(incr.encType)+utils.IntToString(*incr.bits))
-		if incr.useHash {
-			args = append(args, "#"+utils.IntToString(*incr.offset))
-		} else {
-			args = append(args, utils.IntToString(*incr.offset))
-		}
-		args = append(args, utils.IntToString(*incr.increment))
-	}
-
-	return args
+	return args, nil
 }
 
-// BitFieldROOptions represents options for BITFIELD_RO command
-type BitFieldROOptions struct {
-	gets []BitFieldGetOpts
+func (cmd *BitFieldGet) dummy() {}
+
+// SET implementation
+type BitFieldSet struct {
+	EncType EncType
+	Bits    int64
+	Offset  int64
+	Value   int64
+	UseHash bool
 }
 
-func NewBitFieldROOptionsBuilder() *BitFieldROOptions {
-	return &BitFieldROOptions{}
-}
-
-// AddGet adds a GET subcommand for BITFIELD_RO
-func (opts *BitFieldROOptions) AddGet(encType EncType, bits int64, offset int64) *BitFieldROOptions {
-	opts.gets = append(opts.gets, BitFieldGetOpts{
-		encType: encType,
-		bits:    &bits,
-		offset:  &offset,
-	})
-	return opts
-}
-
-// UseHashNotation sets hash notation for the last added GET operation
-func (opts *BitFieldROOptions) UseHashNotation() *BitFieldROOptions {
-	if len(opts.gets) > 0 {
-		last := len(opts.gets) - 1
-		opts.gets[last].useHash = true
+func NewBitFieldSet(encType EncType, bits int64, offset int64, value int64) *BitFieldSet {
+	return &BitFieldSet{
+		EncType: encType,
+		Bits:    bits,
+		Offset:  offset,
+		Value:   value,
 	}
-	return opts
 }
 
-func (opts *BitFieldROOptions) ToArgs() []string {
-	var args []string
-
-	for _, get := range opts.gets {
-		args = append(args, "GET")
-		args = append(args, string(get.encType)+utils.IntToString(*get.bits))
-		if get.useHash {
-			args = append(args, "#"+utils.IntToString(*get.offset))
-		} else {
-			args = append(args, utils.IntToString(*get.offset))
-		}
+func (cmd *BitFieldSet) ToArgs() ([]string, error) {
+	args := []string{"SET"}
+	args = append(args, string(cmd.EncType)+utils.IntToString(cmd.Bits))
+	if cmd.UseHash {
+		args = append(args, "#"+utils.IntToString(cmd.Offset))
+	} else {
+		args = append(args, utils.IntToString(cmd.Offset))
 	}
+	args = append(args, utils.IntToString(cmd.Value))
+	return args, nil
+}
 
-	return args
+// INCRBY implementation
+type BitFieldIncrBy struct {
+	EncType   EncType
+	Bits      int64
+	Offset    int64
+	Increment int64
+	UseHash   bool
+}
+
+func NewBitFieldIncrBy(encType EncType, bits int64, offset int64, increment int64) *BitFieldIncrBy {
+	return &BitFieldIncrBy{
+		EncType:   encType,
+		Bits:      bits,
+		Offset:    offset,
+		Increment: increment,
+	}
+}
+
+func (cmd *BitFieldIncrBy) ToArgs() ([]string, error) {
+	args := []string{"INCRBY"}
+	args = append(args, string(cmd.EncType)+utils.IntToString(cmd.Bits))
+	if cmd.UseHash {
+		args = append(args, "#"+utils.IntToString(cmd.Offset))
+	} else {
+		args = append(args, utils.IntToString(cmd.Offset))
+	}
+	args = append(args, utils.IntToString(cmd.Increment))
+	return args, nil
+}
+
+// OVERFLOW implementation
+type BitFieldOverflow struct {
+	Overflow OverflowType
+}
+
+func NewBitFieldOverflow(overflow OverflowType) *BitFieldOverflow {
+	return &BitFieldOverflow{
+		Overflow: overflow,
+	}
+}
+
+func (cmd *BitFieldOverflow) ToArgs() ([]string, error) {
+	return []string{"OVERFLOW", string(cmd.Overflow)}, nil
 }
