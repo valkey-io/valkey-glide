@@ -116,7 +116,7 @@ jobs:
 
                   export package_version=${R_VERSION}
                   export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
-                  envsubst < package.json.tmpl > "package.json"
+                  envsubst < package.json.temp > "package.json"
 
                   #   mv package.json package.json.tmpl
                   #   envsubst < package.json.tmpl > "package.json"
