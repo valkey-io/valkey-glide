@@ -39,16 +39,8 @@ type RangeByLex struct {
 }
 
 type (
-	InfBoundary   string
 	scoreBoundary string
 	lexBoundary   string
-)
-
-const (
-	// The highest bound in the sorted set
-	PositiveInfinity InfBoundary = "+"
-	// The lowest bound in the sorted set
-	NegativeInfinity InfBoundary = "-"
 )
 
 // Create a new inclusive score boundary.

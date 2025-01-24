@@ -108,4 +108,22 @@ type StreamCommands interface {
 		ids []string,
 		options *options.StreamClaimOptions,
 	) ([]string, error)
+
+	XRange(key string, start options.StreamBoundary, end options.StreamBoundary) (map[string][][]string, error)
+
+	XRangeWithOptions(
+		key string,
+		start options.StreamBoundary,
+		end options.StreamBoundary,
+		options *options.StreamRangeOptions,
+	) (map[string][][]string, error)
+
+	XRevRange(key string, start options.StreamBoundary, end options.StreamBoundary) (map[string][][]string, error)
+
+	XRevRangeWithOptions(
+		key string,
+		start options.StreamBoundary,
+		end options.StreamBoundary,
+		options *options.StreamRangeOptions,
+	) (map[string][][]string, error)
 }

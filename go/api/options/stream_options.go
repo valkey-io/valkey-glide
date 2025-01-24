@@ -398,3 +398,45 @@ func (sco *StreamClaimOptions) ToArgs() ([]string, error) {
 
 	return optionArgs, nil
 }
+
+type StreamBoundary string
+
+// Create a new stream boundary.
+func NewStreamBoundary(streamId string, isInclusive bool) StreamBoundary {
+	if !isInclusive {
+		return StreamBoundary("(" + streamId)
+	}
+	return StreamBoundary(streamId)
+}
+
+// Create a new stream boundary defined by an infinity.
+func NewInfiniteStreamBoundary(bound InfBoundary) StreamBoundary {
+	return StreamBoundary(string(bound))
+}
+
+// Optional arguments for `XRange` and `XRevRange` in [StreamCommands]
+type StreamRangeOptions struct {
+	count      int64
+	countIsSet bool
+}
+
+func NewStreamRangeOptions() *StreamRangeOptions {
+	return &StreamRangeOptions{}
+}
+
+// Set the count.
+func (sro *StreamRangeOptions) SetCount(count int64) *StreamRangeOptions {
+	sro.count = count
+	sro.countIsSet = true
+	return sro
+}
+
+func (sro *StreamRangeOptions) ToArgs() ([]string, error) {
+	var args []string
+
+	if sro.countIsSet {
+		args = append(args, "COUNT", utils.IntToString(sro.count))
+	}
+
+	return args, nil
+}
