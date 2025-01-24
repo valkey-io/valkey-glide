@@ -7426,7 +7426,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			positiveInfinity,
 		)
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		_, err = client.XRevRange(
 			stringKey,
@@ -7434,7 +7434,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			negativeInfinity,
 		)
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		// xrange and xrevrange when range bound is not a valid id
 		_, err = client.XRange(
@@ -7443,7 +7443,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			positiveInfinity,
 		)
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		_, err = client.XRevRange(
 			key,
@@ -7451,6 +7451,6 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			negativeInfinity,
 		)
 		assert.Error(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 	})
 }
