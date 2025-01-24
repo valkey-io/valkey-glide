@@ -92,7 +92,7 @@ dependencies {
 ```
 
 Maven:
-- **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the pom.xml file.
+- **IMPORTANT** must include a `classifier`. Please use this dependency block, or both the dependency and the extension blocks if you're using `os-maven-plugin`, and add it to the pom.xml file.
 ```xml
 
 <!--osx-aarch_64-->
