@@ -280,11 +280,14 @@ func (listDirection ListDirection) toString() (string, error) {
 	}
 }
 
-// Enumeration representing which elements to pop from the sorted set.
+// Mandatory option for [ZMPop] and for [BZMPop].
+// Defines which elements to pop from the sorted set.
 type ScoreFilter string
 
 const (
+	// Pop elements with the highest scores.
 	MAX ScoreFilter = "MAX"
+	// Pop elements with the lowest scores.
 	MIN ScoreFilter = "MIN"
 )
 

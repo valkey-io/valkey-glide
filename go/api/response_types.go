@@ -23,7 +23,7 @@ type KeyWithMemberAndScore struct {
 	Score  float64
 }
 
-// Response of [BZMPop] command.
+// Response of the [ZMPop] and [BZMPop] command.
 type KeyWithArrayOfMembersAndScores struct {
 	Key              string
 	MembersAndScores []MemberAndScore
