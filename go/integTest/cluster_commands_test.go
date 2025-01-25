@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/config"
 )
 
 func (suite *GlideTestSuite) TestClusterCustomCommandInfo() {
@@ -77,7 +78,7 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	// same sections with random route
 	opts = api.ClusterInfoOptions{
 		InfoOptions: &api.InfoOptions{Sections: sections},
-		Route:       api.RandomRoute.ToPtr(),
+		Route:       config.RandomRoute.ToPtr(),
 	}
 	response, err = client.InfoWithOptions(opts)
 	assert.NoError(t, err)
@@ -94,7 +95,7 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	// default sections, multi node route
 	opts = api.ClusterInfoOptions{
 		InfoOptions: nil,
-		Route:       api.AllPrimaries.ToPtr(),
+		Route:       config.AllPrimaries.ToPtr(),
 	}
 	response, err = client.InfoWithOptions(opts)
 	assert.NoError(t, err)

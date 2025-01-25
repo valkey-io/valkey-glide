@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/config"
 )
 
 type GlideTestSuite struct {
@@ -141,12 +142,12 @@ func runClusterManager(suite *GlideTestSuite, args []string, ignoreExitCode bool
 func getServerVersion(suite *GlideTestSuite) string {
 	var err error = nil
 	if len(suite.standaloneHosts) > 0 {
-		config := api.NewGlideClientConfiguration().
+		clientConfig := api.NewGlideClientConfiguration().
 			WithAddress(&suite.standaloneHosts[0]).
 			WithUseTLS(suite.tls).
 			WithRequestTimeout(5000)
 
-		client, err := api.NewGlideClient(config)
+		client, err := api.NewGlideClient(clientConfig)
 		if err == nil && client != nil {
 			defer client.Close()
 			info, _ := client.InfoWithOptions(api.InfoOptions{Sections: []api.Section{api.Server}})
@@ -160,19 +161,19 @@ func getServerVersion(suite *GlideTestSuite) string {
 		suite.T().Fatal("No server hosts configured")
 	}
 
-	config := api.NewGlideClusterClientConfiguration().
+	clientConfig := api.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5000)
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := api.NewGlideClusterClient(clientConfig)
 	if err == nil && client != nil {
 		defer client.Close()
 
 		info, _ := client.InfoWithOptions(
 			api.ClusterInfoOptions{
 				InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}},
-				Route:       api.RandomRoute.ToPtr(),
+				Route:       config.RandomRoute.ToPtr(),
 			},
 		)
 		return extractServerVersion(suite, info.SingleValue())
