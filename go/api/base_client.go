@@ -5811,6 +5811,36 @@ func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeB
 	return handleIntResponse(result)
 }
 
+// Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Parameters:
+//
+//	key     - The key of the sorted set.
+//	members - A list of members in the sorted set.
+//
+// Return value:
+//
+//		An array of scores corresponding to `members`.
+//	 If a member does not exist in the sorted set, the corresponding value in the list will be `nil`.
+//
+// Example:
+//
+//	result, err := client.ZMScore(key, []string{"member1", "non_existent_member", "member2"})
+//	result: [{1.0 false} {0 true} {2.0 false}]
+//
+// [valkey.io]: https://valkey.io/commands/zmscore/
+func (client *baseClient) ZMScore(key string, members []string) ([]Result[float64], error) {
+	response, err := client.executeCommand(C.ZMScore, append([]string{key}, members...))
+	if err != nil {
+		return nil, err
+	}
+	return handleFloatOrNilArrayResponse(response)
+}
+
 // Returns the logarithmic access frequency counter of a Valkey object stored at key.
 //
 // Parameters:

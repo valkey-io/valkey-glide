@@ -6393,6 +6393,56 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 	})
 }
 
+func (suite *GlideTestSuite) TestZMScore() {
+	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		zAddResult, err := client.ZAdd(key, map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zAddResult)
+
+		res, err := client.ZMScore(key, []string{"one", "three", "two"})
+		expected := []api.Result[float64]{
+			api.CreateFloat64Result(1),
+			api.CreateFloat64Result(3),
+			api.CreateFloat64Result(2),
+		}
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+
+		// not existing members
+		res, err = client.ZMScore(key, []string{"nonExistingMember", "two", "nonExistingMember"})
+		expected = []api.Result[float64]{
+			api.CreateNilFloat64Result(),
+			api.CreateFloat64Result(2),
+			api.CreateNilFloat64Result(),
+		}
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+
+		// not existing key
+		res, err = client.ZMScore(uuid.NewString(), []string{"one", "three", "two"})
+		expected = []api.Result[float64]{
+			api.CreateNilFloat64Result(),
+			api.CreateNilFloat64Result(),
+			api.CreateNilFloat64Result(),
+		}
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+
+		// invalid arg - member list must not be empty
+		_, err = client.ZMScore(key, []string{})
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// key exists, but it is not a sorted set
+		key2 := uuid.NewString()
+		suite.verifyOK(client.Set(key2, "ZMScore"))
+		_, err = client.ZMScore(key2, []string{"one"})
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestObjectIdleTime() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		defaultClient := suite.defaultClient()

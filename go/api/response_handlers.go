@@ -347,6 +347,33 @@ func handleFloatOrNilResponse(response *C.struct_CommandResponse) (Result[float6
 	return CreateFloat64Result(float64(response.float_value)), nil
 }
 
+// elements in the array could be `null`, but array isn't
+func handleFloatOrNilArrayResponse(response *C.struct_CommandResponse) ([]Result[float64], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice := make([]Result[float64], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		if v.response_type == C.Null {
+			slice = append(slice, CreateNilFloat64Result())
+			continue
+		}
+
+		err := checkResponseType(&v, C.Float, false)
+		if err != nil {
+			return nil, err
+		}
+
+		slice = append(slice, CreateFloat64Result(float64(v.float_value)))
+	}
+
+	return slice, nil
+}
+
 func handleLongAndDoubleOrNullResponse(response *C.struct_CommandResponse) (Result[int64], Result[float64], error) {
 	defer C.free_command_response(response)
 
