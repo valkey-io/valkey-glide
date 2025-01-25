@@ -22,7 +22,8 @@ type Route interface {
 }
 
 type notMultiNode struct{}
-func (_ *notMultiNode) IsMultiNode() bool { return false }
+
+func (*notMultiNode) IsMultiNode() bool { return false }
 
 type SimpleNodeRoute int
 
@@ -156,7 +157,6 @@ func (slotKeyRoute *SlotKeyRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
 	}
 	return request, nil
 }
-
 
 // Routes a request to a node by its address.
 type ByAddressRoute struct {
