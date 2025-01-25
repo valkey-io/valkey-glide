@@ -4543,8 +4543,8 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 // Return value:
 //
 //	An object containing the following elements:
-//	- The key name of the set from which the element was popped
-//	- An array of member scores of the popped elements in ascending order.
+//	- The key name of the set from which the element was popped.
+//	- An array of member scores of the popped elements.
 //	Returns `nil` if no member could be popped and the timeout expired.
 //
 // For example:
@@ -4609,8 +4609,8 @@ func (client *baseClient) BZMPop(
 // Return value:
 //
 //	An object containing the following elements:
-//	- The key name of the set from which the element was popped
-//	- An array of member scores of the popped elements in ascending order.
+//	- The key name of the set from which the element was popped.
+//	- An array of member scores of the popped elements.
 //	Returns `nil` if no member could be popped and the timeout expired.
 //
 // For example:

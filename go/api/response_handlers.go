@@ -9,7 +9,6 @@ import "C"
 import (
 	"fmt"
 	"reflect"
-	"sort"
 	"strconv"
 	"unsafe"
 
@@ -577,11 +576,6 @@ func handleKeyWithArrayOfMembersAndScoresResponse(
 	for k, v := range res {
 		memberAndScoreArray = append(memberAndScoreArray, MemberAndScore{k, v})
 	}
-
-	// Ensure consistent output
-	sort.Slice(memberAndScoreArray, func(i, j int) bool {
-		return memberAndScoreArray[i].Score < memberAndScoreArray[j].Score
-	})
 
 	return CreateKeyWithArrayOfMembersAndScoresResult(KeyWithArrayOfMembersAndScores{key, memberAndScoreArray}), nil
 }

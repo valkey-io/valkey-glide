@@ -2915,18 +2915,14 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		// Try to pop the top 2 elements from key1
 		res5, err := client.BZMPopWithOptions([]string{key1}, api.MAX, float64(0.1), options.NewZMPopOptions().SetCount(2))
 		assert.Nil(suite.T(), err)
-		assert.Equal(
+		assert.Equal(suite.T(), key1, res5.Value().Key)
+		assert.ElementsMatch(
 			suite.T(),
-			api.CreateKeyWithArrayOfMembersAndScoresResult(
-				api.KeyWithArrayOfMembersAndScores{
-					Key: key1,
-					MembersAndScores: []api.MemberAndScore{
-						{Member: "two", Score: 2.0},
-						{Member: "three", Score: 3.0},
-					},
-				},
-			),
-			res5,
+			[]api.MemberAndScore{
+				{Member: "three", Score: 3.0},
+				{Member: "two", Score: 2.0},
+			},
+			res5.Value().MembersAndScores,
 		)
 
 		// Try to pop the minimum value from key2
