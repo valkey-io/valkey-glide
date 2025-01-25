@@ -4535,8 +4535,10 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 // Parameters:
 //
 //	keys          - An array of keys to lists.
-//	scoreFilter   - The element pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest scores accordingly.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	scoreFilter   - The element pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest
+//					scores accordingly.
+//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
+//					indefinitely.
 //
 // Return value:
 //
@@ -4599,7 +4601,8 @@ func (client *baseClient) BZMPop(
 // Parameters:
 //
 //	keys          - An array of keys to lists.
-//	scoreFilter   - The element pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest scores accordingly.
+//	scoreFilter   - The element pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest
+//					scores accordingly.
 //	count         - The maximum number of popped elements.
 //	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
@@ -4613,16 +4616,16 @@ func (client *baseClient) BZMPop(
 // For example:
 //
 //	result, err := client.ZAdd("my_list", map[string]float64{"five": 5.0, "six": 6.0})
-//	result, err := client.BZMPopCount([]string{"my_list"}, api.MAX, 2, 0.1)
+//	result, err := client.BZMPopWithOptions([]string{"my_list"}, api.MAX, 0.1, options.NewZMPopOptions().SetCount(2))
 //	result["my_list"] = []MemberAndScore{{Member: "six", Score: 6.0}, {Member: "five", Score 5.0}}
 //
 // [valkey.io]: https://valkey.io/commands/bzmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (client *baseClient) BZMPopCount(
+func (client *baseClient) BZMPopWithOptions(
 	keys []string,
 	scoreFilter ScoreFilter,
-	count int64,
 	timeoutSecs float64,
+	opts *options.ZMPopOptions,
 ) (Result[KeyWithArrayOfMembersAndScores], error) {
 	scoreFilterStr, err := scoreFilter.toString()
 	if err != nil {
@@ -4640,7 +4643,14 @@ func (client *baseClient) BZMPopCount(
 	args := make([]string, 0, len(keys)+5)
 	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
-	args = append(args, scoreFilterStr, CountKeyword, utils.IntToString(count))
+	args = append(args, scoreFilterStr)
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		}
+		args = append(args, optionArgs...)
+	}
 	result, err := client.executeCommand(C.BZMPop, args)
 	if err != nil {
 		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err

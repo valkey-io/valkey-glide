@@ -2886,7 +2886,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 	})
 }
 
-func (suite *GlideTestSuite) TestBZMPopAndBZMPopCount() {
+func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 	if suite.serverVersion < "7.0.0" {
 		suite.T().Skip("This feature is added in version 7")
 	}
@@ -2913,7 +2913,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopCount() {
 		assert.Equal(suite.T(), int64(3), res4)
 
 		// Try to pop the top 2 elements from key1
-		res5, err := client.BZMPopCount([]string{key1}, api.MAX, int64(2), float64(0.1))
+		res5, err := client.BZMPopWithOptions([]string{key1}, api.MAX, float64(0.1), options.NewZMPopOptions().SetCount(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(
 			suite.T(),

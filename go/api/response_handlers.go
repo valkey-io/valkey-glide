@@ -542,7 +542,7 @@ func handleKeyWithArrayOfMembersAndScoresResponse(
 ) (Result[KeyWithArrayOfMembersAndScores], error) {
 	defer C.free_command_response(response)
 
-	if response == nil || response.response_type == uint32(C.Null) {
+	if response.response_type == uint32(C.Null) {
 		return CreateNilKeyWithArrayOfMembersAndScoresResult(), nil
 	}
 
@@ -572,12 +572,10 @@ func handleKeyWithArrayOfMembersAndScoresResponse(
 			Msg: fmt.Sprintf("unexpected type of second element: %T", converted),
 		}
 	}
-	memberAndScoreArray := make([]MemberAndScore, len(res))
+	memberAndScoreArray := make([]MemberAndScore, 0, len(res))
 
-	idx := 0
 	for k, v := range res {
-		memberAndScoreArray[idx] = MemberAndScore{k, v}
-		idx++
+		memberAndScoreArray = append(memberAndScoreArray, MemberAndScore{k, v})
 	}
 
 	// Ensure consistent output

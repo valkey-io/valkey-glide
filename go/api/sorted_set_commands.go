@@ -38,11 +38,11 @@ type SortedSetCommands interface {
 
 	BZMPop(keys []string, scoreFilter ScoreFilter, timeoutSecs float64) (Result[KeyWithArrayOfMembersAndScores], error)
 
-	BZMPopCount(
+	BZMPopWithOptions(
 		keys []string,
 		scoreFilter ScoreFilter,
-		count int64,
 		timeoutSecs float64,
+		options *options.ZMPopOptions,
 	) (Result[KeyWithArrayOfMembersAndScores], error)
 
 	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
