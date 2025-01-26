@@ -1022,7 +1022,7 @@ public class GlideClientTest {
         // Attempt to set `key` to `newValue` with the wrong condition
         SetOptions wrongConditionOptions =
                 SetOptions.builder()
-                        .conditionalSetIfEqualTo(newValue) // Incorrect condition: current value of key is `value`
+                        .conditionalSetIfEqualTo(newValue) // Incorrect: current value of key is `value`
                         .expiry(Expiry.UnixSeconds(60L))
                         .build();
 
