@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -68,15 +69,29 @@ public final class SetOptions {
         private String comparisonValue;
 
         /**
+         * Set the condition for the value to be set
+         *
+         * @param conditionalSet the condition to set (ONLY_IF_EXISTS, ONLY_IF_DOES_NOT_EXIST)
+         * @return this builder instance
+         * @throws IllegalArgumentException if the conditionalSet is ONLY_IF_EQUAL
+         */
+        public SetOptionsBuilder conditionalSet(ConditionalSet conditionalSet) {
+            if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
+                throw new IllegalArgumentException(
+                        "For ONLY_IF_EQUAL, use the conditionalSetIfEqualTo(String value) method.");
+            }
+            this.conditionalSet = conditionalSet;
+            this.comparisonValue = null; // Clear comparisonValue when not using ONLY_IF_EQUAL
+            return this;
+        }
+
+        /**
          * Set the condition to ONLY_IF_EQUAL and specify the comparison value
          *
          * @param value the value to compare
          * @return this builder instance
          */
-        public SetOptionsBuilder conditionalSetIfEqualTo(String value) {
-            if (value == null || value.isEmpty()) {
-                throw new IllegalArgumentException("comparisonValue cannot be null or empty.");
-            }
+        public SetOptionsBuilder conditionalSetIfEqualTo(@NonNull String value) {
             this.conditionalSet = ConditionalSet.ONLY_IF_EQUAL;
             this.comparisonValue = value;
             return this;
@@ -180,18 +195,9 @@ public final class SetOptions {
         List<String> optionArgs = new ArrayList<>();
         if (conditionalSet != null) {
             optionArgs.add(conditionalSet.valkeyApi);
-        }
-
-        // Add comparison value if ONLY_IF_EQUAL is selected
-        if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
-            if (comparisonValue == null) {
-                throw new IllegalArgumentException(
-                        "comparisonValue must be set when conditionalSet is ONLY_IF_EQUAL.");
+            if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
+                optionArgs.add(comparisonValue);
             }
-            optionArgs.add(comparisonValue);
-        } else if (comparisonValue != null) {
-            throw new IllegalArgumentException(
-                    "comparisonValue can only be set when conditionalSet is ONLY_IF_EQUAL.");
         }
 
         if (returnOldValue) {

@@ -209,7 +209,6 @@ public interface StringBaseCommands {
     /**
      * Sets the given key with the given value. Return value is dependent on the passed options.
      *
-     * @since Valkey 8.1 and above
      * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The key to store.
      * @param value The value to store with the given key.
