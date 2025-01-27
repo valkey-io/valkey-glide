@@ -99,7 +99,7 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //	result.Value().(string): "PONG"
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *glideClusterClient) CustomCommandWithRoute(
+func (client *GlideClusterClient) CustomCommandWithRoute(
 	args []string,
 	route config.Route,
 ) (ClusterValue[interface{}], error) {
@@ -116,6 +116,25 @@ func (client *glideClusterClient) CustomCommandWithRoute(
 
 // Pings the server.
 //
+// Return value:
+//
+//	Returns "PONG".
+//
+// For example:
+//
+//	result, err := clusterClient.Ping()
+//
+// [valkey.io]: https://valkey.io/commands/ping/
+func (client *GlideClusterClient) Ping() (string, error) {
+	result, err := client.executeCommand(C.Ping, []string{})
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Pings the server.
+//
 // Parameters:
 //
 //	pingOptions - The PingOptions type.
@@ -126,21 +145,39 @@ func (client *glideClusterClient) CustomCommandWithRoute(
 //
 // For example:
 //
-//	route := config.SimpleNodeRoute(config.RandomRoute)
-//	options := options.NewPingOptionsBuilder().SetRoute(route).SetMessage("Hello")
-//	result, err := client.PingWithOptions(options)
-//	fmt.Println(result) // Output: "Hello"
+//	route := config.Route(config.RandomRoute)
+//  opts := options.ClusterPingOptions{
+//		PingOptions: &options.PingOptions{
+//			Message: "Hello",
+//		},
+//		Route: &route,
+//	}
+//	result, err := clusterClient.PingWithOptions(opts)
+//	fmt.Println(result.Value()) // Output: Hello
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *glideClusterClient) PingWithOptions(opts *options.PingOptions) (string, error) {
-	args, err := opts.ToArgs()
-	if err != nil {
-		return defaultStringResponse, err
-	}
-	result, err := client.executeCommandWithRoute(C.Ping, args, opts.Route)
-	if err != nil {
-		return defaultStringResponse, err
+
+func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (ClusterValue[string], error) {
+	if pingOptions.Route == nil {
+		response, err := client.executeCommand(C.Ping, pingOptions.ToArgs())
+		if err != nil {
+			return CreateEmptyStringClusterValue(), err
+		}
+		data, err := handleStringResponse(response)
+		if err != nil {
+			return CreateEmptyStringClusterValue(), err
+		}
+		return CreateClusterValue(data), nil
 	}
 
-	return handleStringResponse(result)
+	response, err := client.executeCommandWithRoute(C.Ping, pingOptions.ToArgs(), *pingOptions.Route)
+	if err != nil {
+		return CreateEmptyStringClusterValue(), err
+	}
+
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return CreateEmptyStringClusterValue(), err
+	}
+	return CreateClusterValue(data), nil
 }

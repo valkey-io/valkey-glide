@@ -7,29 +7,24 @@ import (
 )
 
 type PingOptions struct {
-	message string
-	Route   config.Route
+	Message string
 }
 
-func NewPingOptionsBuilder() *PingOptions {
-	return &PingOptions{}
+type ClusterPingOptions struct {
+	*PingOptions
+	// Specifies the routing configuration for the command.
+	// The client will route the command to the nodes defined by *Route*.
+	// The command will be routed to all primary nodes, unless *Route* is provided.
+	Route *config.Route
 }
 
-func (pingOptions *PingOptions) SetMessage(msg string) *PingOptions {
-	pingOptions.message = msg
-	return pingOptions
-}
-
-func (pingOptions *PingOptions) SetRoute(route config.Route) *PingOptions {
-	pingOptions.Route = route
-	return pingOptions
-}
-
-func (opts *PingOptions) ToArgs() ([]string, error) {
-	args := []string{}
-
-	if opts.message != "" {
-		args = append(args, opts.message)
+func (opts *PingOptions) ToArgs() []string {
+	if opts == nil {
+		return []string{}
 	}
-	return args, nil
+	args := []string{}
+	if opts.Message != "" {
+		args = append(args, opts.Message)
+	}
+	return args
 }

@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
-	"github.com/valkey-io/valkey-glide/go/glide/api/config"
 	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 
@@ -423,25 +422,27 @@ func (suite *GlideTestSuite) TestPing_ClosedClient() {
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
 
-func (suite *GlideTestSuite) TestPingWithOptions_CustomMessage() {
+func (suite *GlideTestSuite) TestPingWithOptions_WithMessage() {
 	client := suite.defaultClient()
-	options := options.NewPingOptionsBuilder().
-		SetMessage("hello")
+	options := options.PingOptions{
+		Message: "hello",
+	}
 
 	result, err := client.PingWithOptions(options)
-
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "hello", result)
 }
 
-func (suite *GlideTestSuite) TestPingWithOptions_WithRoute() {
+func (suite *GlideTestSuite) TestPingWithOptions_ClosedClient() {
 	client := suite.defaultClient()
-	options := options.NewPingOptionsBuilder().
-		SetRoute(config.SimpleNodeRoute(config.RandomRoute))
+	client.Close()
+
+	options := options.PingOptions{
+		Message: "hello",
+	}
 
 	result, err := client.PingWithOptions(options)
-
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
-	assert.IsType(suite.T(), &errors.RequestError{}, err)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }

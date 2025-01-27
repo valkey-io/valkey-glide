@@ -7,7 +7,6 @@ package api
 import "C"
 
 import (
-	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
@@ -196,7 +195,7 @@ func (client *GlideClient) DBSize() (int64, error) {
 //		fmt.Println(result.Value()) // Output: Hello World
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *baseClient) Echo(message string) (Result[string], error) {
+func (client *GlideClient) Echo(message string) (Result[string], error) {
 	result, err := client.executeCommand(C.Echo, []string{message})
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -215,12 +214,8 @@ func (client *baseClient) Echo(message string) (Result[string], error) {
 //	result, err := client.Ping()
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *glideClient) Ping() (string, error) {
-	result, err := client.executeCommand(C.Ping, []string{})
-	if err != nil {
-		return defaultStringResponse, err
-	}
-	return handleStringResponse(result)
+func (client *GlideClient) Ping() (string, error) {
+	return client.PingWithOptions(options.PingOptions{})
 }
 
 // Pings the server.
@@ -240,18 +235,10 @@ func (client *glideClient) Ping() (string, error) {
 //	result: "hello"
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *glideClient) PingWithOptions(opts *options.PingOptions) (string, error) {
-	if opts != nil && opts.Route != nil {
-		return defaultStringResponse, &errors.RequestError{Msg: "Route option is only available in cluster mode"}
-	}
-	args, err := opts.ToArgs()
+func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
+	result, err := client.executeCommand(C.Ping, pingOptions.ToArgs())
 	if err != nil {
 		return defaultStringResponse, err
 	}
-	result, err := client.executeCommand(C.Ping, append([]string{}, args...))
-	if err != nil {
-		return defaultStringResponse, err
-	}
-
 	return handleStringResponse(result)
 }

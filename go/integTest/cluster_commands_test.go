@@ -74,49 +74,46 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_AllNodes() {
 	}
 }
 
-func (suite *GlideTestSuite) TestPingWithOptions_OnlyRoute() {
+func (suite *GlideTestSuite) TestPingWithOptions_NoRoute() {
 	client := suite.defaultClusterClient()
-	route := config.SimpleNodeRoute(config.RandomRoute)
-	options := options.NewPingOptionsBuilder().
-		SetRoute(route)
+	options := options.ClusterPingOptions{
+		PingOptions: &options.PingOptions{
+			Message: "hello",
+		},
+		Route: nil,
+	}
 
 	result, err := client.PingWithOptions(options)
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", result) // Default response when no message is set
+	assert.Equal(suite.T(), "hello", result.Value())
 }
 
-func (suite *GlideTestSuite) TestPingWithOptions_BasicPing() {
+func (suite *GlideTestSuite) TestPingWithOptions_WithRoute() {
 	client := suite.defaultClusterClient()
-	route := config.SimpleNodeRoute(config.RandomRoute)
-	options := options.NewPingOptionsBuilder().
-		SetRoute(route).
-		SetMessage("hello")
+	route := config.Route(config.AllNodes)
+	options := options.ClusterPingOptions{
+		PingOptions: &options.PingOptions{
+			Message: "hello",
+		},
+		Route: &route,
+	}
 
 	result, err := client.PingWithOptions(options)
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), "hello", result)
-}
-
-func (suite *GlideTestSuite) TestPingWithOptions_AllNodes() {
-	client := suite.defaultClusterClient()
-	route := config.SimpleNodeRoute(config.AllNodes)
-	options := options.NewPingOptionsBuilder().
-		SetRoute(route).
-		SetMessage("hello")
-
-	result, err := client.PingWithOptions(options)
-	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), "hello", result)
+	assert.Equal(suite.T(), "hello", result.Value())
 }
 
 func (suite *GlideTestSuite) TestPingWithOptions_InvalidRoute() {
 	client := suite.defaultClusterClient()
-	invalidRoute := config.NewByAddressRoute("invalidHost", 9999)
-	options := options.NewPingOptionsBuilder().
-		SetRoute(invalidRoute).
-		SetMessage("hello")
+	invalidRoute := config.Route(config.NewByAddressRoute("invalidHost", 9999))
+	options := options.ClusterPingOptions{
+		PingOptions: &options.PingOptions{
+			Message: "hello",
+		},
+		Route: &invalidRoute,
+	}
 
 	result, err := client.PingWithOptions(options)
 	assert.NotNil(suite.T(), err)
-	assert.Equal(suite.T(), "", result)
+	assert.True(suite.T(), result.IsEmpty())
 }

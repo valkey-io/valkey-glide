@@ -12,7 +12,7 @@ import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 type ConnectionManagementCommands interface {
 	Ping() (string, error)
 
-	PingWithOptions(pingOptions *options.PingOptions) (string, error)
+	PingWithOptions(pingOptions options.PingOptions) (string, error)
 
 	Echo(message string) (Result[string], error)
 }
