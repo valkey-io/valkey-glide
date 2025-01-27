@@ -135,6 +135,7 @@ func (client *GlideClusterClient) Ping() (string, error) {
 }
 
 // Pings the server.
+// The command will be routed to all primary nodes
 //
 // Parameters:
 //
@@ -154,31 +155,23 @@ func (client *GlideClusterClient) Ping() (string, error) {
 //		Route: &route,
 //	}
 //	result, err := clusterClient.PingWithOptions(opts)
-//	fmt.Println(result.Value()) // Output: Hello
+//	fmt.Println(result) // Output: Hello
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 
-func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (ClusterValue[string], error) {
+func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (string, error) {
 	if pingOptions.Route == nil {
 		response, err := client.executeCommand(C.Ping, pingOptions.ToArgs())
 		if err != nil {
-			return CreateEmptyStringClusterValue(), err
+			return defaultStringResponse, err
 		}
-		data, err := handleStringResponse(response)
-		if err != nil {
-			return CreateEmptyStringClusterValue(), err
-		}
-		return CreateClusterValue(data), nil
+		return handleStringResponse(response)
 	}
 
 	response, err := client.executeCommandWithRoute(C.Ping, pingOptions.ToArgs(), *pingOptions.Route)
 	if err != nil {
-		return CreateEmptyStringClusterValue(), err
+		return defaultStringResponse, err
 	}
 
-	data, err := handleStringResponse(response)
-	if err != nil {
-		return CreateEmptyStringClusterValue(), err
-	}
-	return CreateClusterValue(data), nil
+	return handleStringResponse(response)
 }

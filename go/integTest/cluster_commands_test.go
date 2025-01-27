@@ -85,7 +85,7 @@ func (suite *GlideTestSuite) TestPingWithOptions_NoRoute() {
 
 	result, err := client.PingWithOptions(options)
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), "hello", result.Value())
+	assert.Equal(suite.T(), "hello", result)
 }
 
 func (suite *GlideTestSuite) TestPingWithOptions_WithRoute() {
@@ -100,7 +100,7 @@ func (suite *GlideTestSuite) TestPingWithOptions_WithRoute() {
 
 	result, err := client.PingWithOptions(options)
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), "hello", result.Value())
+	assert.Equal(suite.T(), "hello", result)
 }
 
 func (suite *GlideTestSuite) TestPingWithOptions_InvalidRoute() {
@@ -115,5 +115,5 @@ func (suite *GlideTestSuite) TestPingWithOptions_InvalidRoute() {
 
 	result, err := client.PingWithOptions(options)
 	assert.NotNil(suite.T(), err)
-	assert.True(suite.T(), result.IsEmpty())
+	assert.Empty(suite.T(), result)
 }

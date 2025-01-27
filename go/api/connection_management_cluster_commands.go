@@ -12,5 +12,5 @@ import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 type ConnectionManagementClusterCommands interface {
 	Ping() (string, error)
 
-	PingWithOptions(pingOptions options.ClusterPingOptions) (ClusterValue[string], error)
+	PingWithOptions(pingOptions options.ClusterPingOptions) (string, error)
 }
