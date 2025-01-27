@@ -830,18 +830,9 @@ func (client *baseClient) GetDel(key string) (Result[string], error) {
 //	field - The field in the hash stored at key to retrieve from the database.
 //
 // Return value:
-// The Result[string] associated with field, or [api.NilResult[string]](api.CreateNilStringResult()) when field is not
-// present in the hash or key does not exist.
 //
-// For example:
-//
-//	Assume we have the following hash:
-//	my_hash := map[string]string{"field1": "value", "field2": "another_value"}
-//	payload, err := client.HGet("my_hash", "field1")
-//	// payload.Value(): "value"
-//	// payload.IsNil(): false
-//	payload, err = client.HGet("my_hash", "nonexistent_field")
-//	// payload equals api.CreateNilStringResult()
+//	The Result[string] associated with field, or [api.NilResult[string]](api.CreateNilStringResult()) when field is not
+//	present in the hash or key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hget/
 func (client *baseClient) HGet(key string, field string) (Result[string], error) {
@@ -864,11 +855,6 @@ func (client *baseClient) HGet(key string, field string) (Result[string], error)
 // Return value:
 //
 //	A map of all fields and their values as Result[string] in the hash, or an empty map when key does not exist.
-//
-// For example:
-//
-//	fieldValueMap, err := client.HGetAll("my_hash")
-//	// fieldValueMap equals map[string]string{field1: value1, field2: value2}
 //
 // [valkey.io]: https://valkey.io/commands/hgetall/
 func (client *baseClient) HGetAll(key string) (map[string]string, error) {
@@ -898,13 +884,6 @@ func (client *baseClient) HGetAll(key string) (map[string]string, error) {
 //
 //	If key does not exist, returns an empty string array.
 //
-// For example:
-//
-//	values, err := client.HMGet("my_hash", []string{"field1", "field2"})
-//	// value1 equals api.CreateStringResult("value1")
-//	// value2 equals api.CreateStringResult("value2")
-//	// values equals []api.Result[string]{value1, value2}
-//
 // [valkey.io]: https://valkey.io/commands/hmget/
 func (client *baseClient) HMGet(key string, fields []string) ([]Result[string], error) {
 	result, err := client.executeCommand(C.HMGet, append([]string{key}, fields...))
@@ -929,11 +908,6 @@ func (client *baseClient) HMGet(key string, fields []string) ([]Result[string], 
 // Return value:
 //
 //	The number of fields that were added or updated.
-//
-// For example:
-//
-//	num, err := client.HSet("my_hash", map[string]string{"field": "value", "field2": "value2"})
-//	// num: 2
 //
 // [valkey.io]: https://valkey.io/commands/hset/
 func (client *baseClient) HSet(key string, values map[string]string) (int64, error) {
@@ -962,13 +936,6 @@ func (client *baseClient) HSet(key string, values map[string]string) (int64, err
 //	A bool containing true if field is a new field in the hash and value was set.
 //	false if field already exists in the hash and no operation was performed.
 //
-// For example:
-//
-//	payload1, err := client.HSetNX("myHash", "field", "value")
-//	// payload1: true
-//	payload2, err := client.HSetNX("myHash", "field", "newValue")
-//	// payload2: false
-//
 // [valkey.io]: https://valkey.io/commands/hsetnx/
 func (client *baseClient) HSetNX(key string, field string, value string) (bool, error) {
 	result, err := client.executeCommand(C.HSetNX, []string{key, field, value})
@@ -991,12 +958,8 @@ func (client *baseClient) HSetNX(key string, field string, value string) (bool, 
 //	fields - The fields to remove from the hash stored at key.
 //
 // Return value:
-// The number of fields that were removed from the hash, not including specified but non-existing fields.
 //
-// For example:
-//
-//	num, err := client.HDel("my_hash", []string{"field_1", "field_2"})
-//	// num: 2
+//	The number of fields that were removed from the hash, not including specified but non-existing fields.
 //
 // [valkey.io]: https://valkey.io/commands/hdel/
 func (client *baseClient) HDel(key string, fields []string) (int64, error) {
@@ -1021,13 +984,6 @@ func (client *baseClient) HDel(key string, fields []string) (int64, error) {
 //	The number of fields in the hash, or `0` when key does not exist.
 //	If key holds a value that is not a hash, an error is returned.
 //
-// For example:
-//
-//	num1, err := client.HLen("myHash")
-//	// num: 3
-//	num2, err := client.HLen("nonExistingKey")
-//	// num: 0
-//
 // [valkey.io]: https://valkey.io/commands/hlen/
 func (client *baseClient) HLen(key string) (int64, error) {
 	result, err := client.executeCommand(C.HLen, []string{key})
@@ -1049,11 +1005,6 @@ func (client *baseClient) HLen(key string) (int64, error) {
 // Return value:
 //
 //	A slice containing all the values in the hash, or an empty slice when key does not exist.
-//
-// For example:
-//
-//	values, err := client.HVals("myHash")
-//	values: []string{"value1", "value2", "value3"}
 //
 // [valkey.io]: https://valkey.io/commands/hvals/
 func (client *baseClient) HVals(key string) ([]string, error) {
@@ -1079,13 +1030,6 @@ func (client *baseClient) HVals(key string) ([]string, error) {
 //	A bool containing true if the hash contains the specified field.
 //	false if the hash does not contain the field, or if the key does not exist.
 //
-// For example:
-//
-//	exists, err := client.HExists("my_hash", "field1")
-//	// exists: true
-//	exists, err = client.HExists("my_hash", "non_existent_field")
-//	// exists: false
-//
 // [valkey.io]: https://valkey.io/commands/hexists/
 func (client *baseClient) HExists(key string, field string) (bool, error) {
 	result, err := client.executeCommand(C.HExists, []string{key, field})
@@ -1107,11 +1051,6 @@ func (client *baseClient) HExists(key string, field string) (bool, error) {
 // Return value:
 //
 //	A slice containing all the field names in the hash, or an empty slice when key does not exist.
-//
-// For example:
-//
-//	names, err := client.HKeys("my_hash")
-//	names: []string{"field1", "field2"}
 //
 // [valkey.io]: https://valkey.io/commands/hkeys/
 func (client *baseClient) HKeys(key string) ([]string, error) {
@@ -1136,11 +1075,6 @@ func (client *baseClient) HKeys(key string) ([]string, error) {
 // Return value:
 //
 //	The length of the string value associated with field, or `0` when field or key do not exist.
-//
-// For example:
-//
-//	strlen, err := client.HStrLen("my_hash", "my_field")
-//	// strlen: 10
 //
 // [valkey.io]: https://valkey.io/commands/hstrlen/
 func (client *baseClient) HStrLen(key string, field string) (int64, error) {
@@ -1168,12 +1102,6 @@ func (client *baseClient) HStrLen(key string, field string) (int64, error) {
 //
 //	The value of `field` in the hash stored at `key` after the increment.
 //
-// Example:
-//
-//	_, err := client.HSet("key", map[string]string{"field": "10"})
-//	hincrByResult, err := client.HIncrBy("key", "field", 1)
-//	// hincrByResult: 11
-//
 // [valkey.io]: https://valkey.io/commands/hincrby/
 func (client *baseClient) HIncrBy(key string, field string, increment int64) (int64, error) {
 	result, err := client.executeCommand(C.HIncrBy, []string{key, field, utils.IntToString(increment)})
@@ -1199,12 +1127,6 @@ func (client *baseClient) HIncrBy(key string, field string, increment int64) (in
 // Return value:
 //
 //	The value of `field` in the hash stored at `key` after the increment.
-//
-// Example:
-//
-//	_, err := client.HSet("key", map[string]string{"field": "10"})
-//	hincrByFloatResult, err := client.HIncrByFloat("key", "field", 1.5)
-//	// hincrByFloatResult: 11.5
 //
 // [valkey.io]: https://valkey.io/commands/hincrbyfloat/
 func (client *baseClient) HIncrByFloat(key string, field string, increment float64) (float64, error) {
@@ -1234,13 +1156,6 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 //	second element is always a flattened series of String pairs, where the key is at even indices
 //	and the value is at odd indices.
 //
-// Example:
-//
-//	// Assume key contains a hash {{"a": "1"}, {"b", "2"}}
-//	resCursor, resCollection, err = client.HScan(key, initialCursor)
-//	resCursor = {0 false}
-//	resCollection = [{a false} {1 false} {b false} {2 false}]
-//
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.HScan, []string{key, cursor})
@@ -1268,16 +1183,6 @@ func (client *baseClient) HScan(key string, cursor string) (string, []string, er
 //	The second element is always an array of the subset of the set held in `key`. The array in the
 //	second element is always a flattened series of String pairs, where the key is at even indices
 //	and the value is at odd indices.
-//
-// Example:
-//
-//	// Assume key contains a hash {{"a": "1"}, {"b", "2"}}
-//	opts := options.NewHashScanOptionsBuilder().SetMatch("a")
-//	resCursor, resCollection, err = client.HScan(key, initialCursor, opts)
-//	// resCursor = 0
-//	// resCollection = [a 1]
-//	// The resCollection only contains the hash map entry that matches with the match option provided with the command
-//	// input.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScanWithOptions(
@@ -1314,10 +1219,6 @@ func (client *baseClient) HScanWithOptions(
 //	A random field name from the hash stored at `key`, or `nil` when
 //	  the key does not exist.
 //
-// Example:
-//
-//	field, err := client.HRandField("my_hash")
-//
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandField(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.HRandField, []string{key})
@@ -1345,10 +1246,6 @@ func (client *baseClient) HRandField(key string) (Result[string], error) {
 //
 //	An array of random field names from the hash stored at `key`,
 //	   or an empty array when the key does not exist.
-//
-// Example:
-//
-//	fields, err := client.HRandFieldWithCount("my_hash", -5)
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string, error) {
@@ -1379,14 +1276,6 @@ func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string
 //	A 2D `array` of `[field, value]` arrays, where `field` is a random
 //	  field name from the hash and `value` is the associated value of the field name.
 //	  If the hash does not exist or is empty, the response will be an empty array.
-//
-// Example:
-//
-//	fieldsAndValues, err := client.HRandFieldWithCountWithValues("my_hash", -5)
-//	for _, pair := range fieldsAndValues {
-//		field := pair[0]
-//		value := pair[1]
-//	}
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCountWithValues(key string, count int64) ([][]string, error) {
