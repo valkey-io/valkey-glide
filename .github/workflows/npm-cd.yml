@@ -237,6 +237,7 @@ jobs:
               working-directory: ./node/npm/glide
               run: |
                   export pkg_name=valkey-glide
+                  
                   echo "The workflow is: ${{env.EVENT_NAME}}"
                   if ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
                     R_VERSION="${{ env.INPUT_VERSION }}"
