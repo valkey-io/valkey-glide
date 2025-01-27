@@ -83,6 +83,7 @@ type ValueType int
 const (
 	SingleValue ValueType = 1
 	MultiValue  ValueType = 2
+	NoValue     ValueType = 3
 )
 
 // Enum-like structure which stores either a single-node response or multi-node response.
@@ -107,18 +108,19 @@ const (
 //	response := value.SingleValue()
 //	// `response` stores the command output from a cluster node
 type ClusterValue[T any] struct {
-	valueType ValueType
-	value     Result[any]
+	valueType   ValueType
+	singleValue T
+	mutiValue   map[string]T
 }
 
 // Get the single value stored (value returned by a single cluster node).
 func (value ClusterValue[T]) SingleValue() T {
-	return value.value.Value().(T)
+	return value.singleValue
 }
 
 // Get the multi value stored (value returned by multiple cluster nodes).
 func (value ClusterValue[T]) MultiValue() map[string]T {
-	return value.value.Value().(map[string]T)
+	return value.mutiValue
 }
 
 // Get the value type
@@ -135,7 +137,7 @@ func (value ClusterValue[T]) IsMultiValue() bool {
 }
 
 func (value ClusterValue[T]) IsEmpty() bool {
-	return value.value.IsNil()
+	return value.valueType == NoValue
 }
 
 func createClusterValue[T any](data any) ClusterValue[T] {
@@ -149,22 +151,21 @@ func createClusterValue[T any](data any) ClusterValue[T] {
 
 func createClusterSingleValue[T any](data T) ClusterValue[T] {
 	return ClusterValue[T]{
-		valueType: SingleValue,
-		value:     Result[any]{val: data, isNil: false},
+		valueType:   SingleValue,
+		singleValue: data,
 	}
 }
 
 func createClusterMultiValue[T any](data map[string]T) ClusterValue[T] {
 	return ClusterValue[T]{
 		valueType: MultiValue,
-		value:     Result[any]{val: data, isNil: false},
+		mutiValue: data,
 	}
 }
 
 func createEmptyClusterValue[T any]() ClusterValue[T] {
-	var empty T
 	return ClusterValue[T]{
-		value: Result[any]{val: empty, isNil: true},
+		valueType: NoValue,
 	}
 }
 
