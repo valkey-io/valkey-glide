@@ -51,9 +51,11 @@ func (client *glideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //
 // Example:
 //
-//	result, err := client.DBSDBSizeWithOptionsize()
+//	route := api.SimpleNodeRoute(api.RandomRoute)
+//	options := options.NewDBOptionsBuilder().SetRoute(route)
+//	result, err := client.DBSDBSizeWithOptionsize(route)
 //	if err != nil {
-//		// handle error
+//	  // handle error
 //	}
 //	fmt.Println(result) // Output: 1
 //
