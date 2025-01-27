@@ -51,7 +51,7 @@ func (client *glideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //
 // Example:
 //
-//	result, err := client.DBSize()
+//	result, err := client.DBSDBSizeWithOptionsize()
 //	if err != nil {
 //		// handle error
 //	}
