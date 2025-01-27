@@ -226,7 +226,7 @@ func (client *GlideClient) Ping() (string, error) {
 //
 // Return value:
 //
-//	Returns "PONG" or the copy of message.
+//	Returns the copy of message.
 //
 // For example:
 //

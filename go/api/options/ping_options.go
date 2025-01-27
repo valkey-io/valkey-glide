@@ -6,15 +6,16 @@ import (
 	"github.com/valkey-io/valkey-glide/go/glide/api/config"
 )
 
+// Optional arguments for `Ping` for standalone client
 type PingOptions struct {
 	Message string
 }
 
+// Optional arguments for `Ping` for cluster client
 type ClusterPingOptions struct {
 	*PingOptions
 	// Specifies the routing configuration for the command.
 	// The client will route the command to the nodes defined by *Route*.
-	// The command will be routed to all primary nodes, unless *Route* is provided.
 	Route *config.Route
 }
 
