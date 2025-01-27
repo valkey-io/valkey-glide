@@ -1525,3 +1525,84 @@ func ExampleGlideClusterClient_ZUnionStoreWithOptions() {
 
 	// Output: 3
 }
+
+func ExampleGlideClient_BZPopMax() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	// Add members to the sorted set
+	client.ZAdd("mySortedSet", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0})
+
+	// Pop the highest score member
+	res, err := client.BZPopMax([]string{"mySortedSet"}, 1.0)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(res.Value())
+
+	// Output: {Key: "mySortedSet", Member: "c", Score: 3.0}
+}
+
+func ExampleGlideClusterClient_BZPopMax() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.ZAdd("{key}SortedSet", map[string]float64{"x": 5.0, "y": 6.0})
+
+	res, err := client.BZPopMax([]string{"{key}SortedSet"}, 1.0)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(res.Value())
+
+	// Output: {Key: "{key}SortedSet", Member: "y", Score: 6.0}
+}
+
+func ExampleGlideClient_ZMPop() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	// Add members to the sorted set
+	client.ZAdd("mySortedSet", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0})
+
+	// Pop the maximum score members
+	res, err := client.ZMPop([]string{"mySortedSet"}, MAX)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(res.Value())
+
+	// Output: {Key: "mySortedSet", MembersAndScores: [{Member: "c", Score: 3.0}]}
+}
+
+func ExampleGlideClient_ZMPopWithCount() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	// Add members to the sorted set
+	client.ZAdd("mySortedSet", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+
+	// Pop the top 2 highest-score members
+	res, err := client.ZMPopWithCount([]string{"mySortedSet"}, MAX, 2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(res.Value())
+
+	// Output: {Key: "mySortedSet", MembersAndScores: [{Member: "d", Score: 4.0}, {Member: "c", Score: 3.0}]}
+}
+
+func ExampleGlideClusterClient_ZMPopWithCount() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.ZAdd("{key}SortedSet", map[string]float64{"p": 10.0, "q": 20.0, "r": 30.0})
+
+	res, err := client.ZMPopWithCount([]string{"{key}SortedSet"}, MAX, 2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(res.Value())
+
+	// Output: {Key: "{key}SortedSet", MembersAndScores: [{Member: "r", Score: 30.0}, {Member: "q", Score: 20.0}]}
+}
