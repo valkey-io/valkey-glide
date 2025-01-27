@@ -68,7 +68,8 @@ Before starting this step, make sure you've installed all software requirements.
 To run tests, use the following command:
 
 ```bash
-make test
+    cd cpp/build/test
+    ctest --output-on-failure
 ```
 
 For memory check, use the following command:

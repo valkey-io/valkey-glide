@@ -41,7 +41,7 @@ target_link_libraries(
 )
 target_link_directories(
     ${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/target/release/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../target/release/
 )
 export(TARGETS glide-cpp FILE ${CMAKE_BINARY_DIR}/glide-cpp-targets.cmake)
 
@@ -85,3 +85,5 @@ add_custom_target(prebuild
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Building Rust library (glide_rs) with Cargo"
 )
+
+add_subdirectory(tests)
