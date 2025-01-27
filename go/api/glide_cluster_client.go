@@ -123,6 +123,7 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 // For example:
 //
 //	result, err := clusterClient.Ping()
+//	fmt.Println(result) // Output: PONG
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) Ping() (string, error) {

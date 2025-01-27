@@ -189,10 +189,10 @@ func (client *GlideClient) DBSize() (int64, error) {
 // For example:
 //
 //	 result, err := client.Echo("Hello World")
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: Hello World
+//	 if err != nil {
+//		// handle error
+//	 }
+//	 fmt.Println(result.Value()) // Output: Hello World
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClient) Echo(message string) (Result[string], error) {
@@ -212,6 +212,7 @@ func (client *GlideClient) Echo(message string) (Result[string], error) {
 // For example:
 //
 //	result, err := client.Ping()
+//	fmt.Println(result) // Output: PONG
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClient) Ping() (string, error) {
