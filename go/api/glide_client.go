@@ -18,6 +18,7 @@ type GlideClientCommands interface {
 	BaseClient
 	GenericCommands
 	ServerManagementCommands
+	BitmapCommands
 }
 
 // GlideClient implements standalone mode operations by extending baseClient functionality.
