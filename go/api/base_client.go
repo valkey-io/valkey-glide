@@ -3100,10 +3100,6 @@ func (client *baseClient) BLMove(
 //
 //	Returns "PONG".
 //
-// For example:
-//
-//	result, err := client.Ping()
-//
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *baseClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
@@ -3123,10 +3119,6 @@ func (client *baseClient) Ping() (string, error) {
 // Return value:
 //
 //	Returns the copy of message.
-//
-// For example:
-//
-//	result, err := client.PingWithMessage("Hello")
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *baseClient) PingWithMessage(message string) (string, error) {
@@ -3159,14 +3151,6 @@ func (client *baseClient) PingWithMessage(message string) (string, error) {
 //
 //	Returns the number of keys that were removed.
 //
-// Example:
-//
-//	result, err := client.Del([]string{"key1", "key2", "key3"})
-//	if err != nil {
-//	    // handle error
-//	}
-//	fmt.Println(result) // Output: 2
-//
 // [valkey.io]: https://valkey.io/commands/del/
 func (client *baseClient) Del(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Del, keys)
@@ -3195,11 +3179,6 @@ func (client *baseClient) Del(keys []string) (int64, error) {
 //
 //	Returns the number of existing keys.
 //
-// Example:
-//
-//	result, err := client.Exists([]string{"key1", "key2", "key3"})
-//	result: 2
-//
 // [valkey.io]: https://valkey.io/commands/exists/
 func (client *baseClient) Exists(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Exists, keys)
@@ -3217,17 +3196,14 @@ func (client *baseClient) Exists(keys []string) (int64, error) {
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // Parameters:
-// key - The key to expire.
-// seconds - Time in seconds for the key to expire
+//
+//	key - The key to expire.
+//	seconds - Time in seconds for the key to expire
 //
 // Return value:
 //
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
-//
-// Example:
-// result, err := client.Expire("key", 1)
-// result: true
 //
 // [valkey.io]: https://valkey.io/commands/expire/
 func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
@@ -3246,18 +3222,15 @@ func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 //
 // Parameters:
-// key - The key to expire.
-// seconds - Time in seconds for the key to expire
-// option - The option  to set expiry - NX, XX, GT, LT
+//
+//	key - The key to expire.
+//	seconds - Time in seconds for the key to expire
+//	option - The option  to set expiry - NX, XX, GT, LT
 //
 // Return value:
 //
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
-//
-// Example:
-// result, err := client.Expire("key", 1, api.OnlyIfDoesNotExist)
-// result: true
 //
 // [valkey.io]: https://valkey.io/commands/expire/
 func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (bool, error) {
@@ -3282,17 +3255,14 @@ func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCon
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 //
 // Parameters:
-// key - The key to expire.
-// unixTimestampInSeconds - Absolute Unix timestamp
+//
+//	key - The key to expire.
+//	unixTimestampInSeconds - Absolute Unix timestamp
 //
 // Return value:
 //
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
-//
-// Example:
-// result, err := client.ExpireAt("key", time.Now().Unix())
-// result: true
 //
 // [valkey.io]: https://valkey.io/commands/expireat/
 func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (bool, error) {
@@ -3314,18 +3284,15 @@ func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (bo
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 //
 // Parameters:
-// key - The key to expire.
-// unixTimestampInSeconds - Absolute Unix timestamp
-// option - The option  to set expiry - NX, XX, GT, LT
+//
+//	key - The key to expire.
+//	unixTimestampInSeconds - Absolute Unix timestamp
+//	option - The option  to set expiry - NX, XX, GT, LT
 //
 // Return value:
 //
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
-//
-// Example:
-// result, err := client.ExpireAt("key", time.Now().Unix(), api.OnlyIfDoesNotExist)
-// result: true
 //
 // [valkey.io]: https://valkey.io/commands/expireat/
 func (client *baseClient) ExpireAtWithOptions(
@@ -3353,19 +3320,16 @@ func (client *baseClient) ExpireAtWithOptions(
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 
 // Parameters:
-// key - The key to set timeout on it.
-// milliseconds - The timeout in milliseconds.
+//
+//	key - The key to set timeout on it.
+//	milliseconds - The timeout in milliseconds.
 //
 // Return value:
 //
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
-// Example:
-// result, err := client.PExpire("key", int64(5 * 1000))
-// result: true
-//
-//	[valkey.io]: https://valkey.io/commands/pexpire/
+// [valkey.io]: https://valkey.io/commands/pexpire/
 func (client *baseClient) PExpire(key string, milliseconds int64) (bool, error) {
 	result, err := client.executeCommand(C.PExpire, []string{key, utils.IntToString(milliseconds)})
 	if err != nil {
@@ -3380,18 +3344,15 @@ func (client *baseClient) PExpire(key string, milliseconds int64) (bool, error) 
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // Parameters:
-// key - The key to set timeout on it.
-// milliseconds - The timeout in milliseconds.
-// option - The option  to set expiry - NX, XX, GT, LT
+//
+//	key - The key to set timeout on it.
+//	milliseconds - The timeout in milliseconds.
+//	option - The option  to set expiry - NX, XX, GT, LT
 //
 // Return value:
 //
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
-//
-// Example:
-// result, err := client.PExpire("key", int64(5 * 1000), api.OnlyIfDoesNotExist)
-// result: true
 //
 //	[valkey.io]: https://valkey.io/commands/pexpire/
 func (client *baseClient) PExpireWithOptions(
@@ -3419,19 +3380,16 @@ func (client *baseClient) PExpireWithOptions(
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 //
 // Parameters:
-// key - The key to set timeout on it.
-// unixMilliseconds - The timeout in an absolute Unix timestamp.
+//
+//	key - The key to set timeout on it.
+//	unixMilliseconds - The timeout in an absolute Unix timestamp.
 //
 // Return value:
 //
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
-// Example:
-// result, err := client.PExpire("key", time.Now().Unix()*1000)
-// result: true
-//
-//	[valkey.io]: https://valkey.io/commands/pexpireat/
+// [valkey.io]: https://valkey.io/commands/pexpireat/
 func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error) {
 	result, err := client.executeCommand(C.PExpireAt, []string{key, utils.IntToString(unixTimestampInMilliSeconds)})
 	if err != nil {
@@ -3448,20 +3406,17 @@ func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int6
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 //
 // Parameters:
-// key - The key to set timeout on it.
-// unixMilliseconds - The timeout in an absolute Unix timestamp.
-// option - The option  to set expiry - NX, XX, GT, LT
+//
+//	key - The key to set timeout on it.
+//	unixMilliseconds - The timeout in an absolute Unix timestamp.
+//	option - The option  to set expiry - NX, XX, GT, LT
 //
 // Return value:
 //
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
-// Example:
-// result, err := client.PExpire("key", time.Now().Unix()*1000, api.OnlyIfDoesNotExist)
-// result: true
-//
-//	[valkey.io]: https://valkey.io/commands/pexpireat/
+// [valkey.io]: https://valkey.io/commands/pexpireat/
 func (client *baseClient) PExpireAtWithOptions(
 	key string,
 	unixTimestampInMilliSeconds int64,
@@ -3485,16 +3440,13 @@ func (client *baseClient) PExpireAtWithOptions(
 // will expire, in seconds.
 //
 // Parameters:
-// key - The key to determine the expiration value of.
+//
+//	key - The key to determine the expiration value of.
 //
 // Return value:
-// The expiration Unix timestamp in seconds.
-// `-2` if key does not exist or `-1` is key exists but has no associated expiration.
 //
-// Example:
-//
-// result, err := client.ExpireTime("key")
-// result: 1732118030
+//	The expiration Unix timestamp in seconds.
+//	`-2` if key does not exist or `-1` is key exists but has no associated expiration.
 //
 // [valkey.io]: https://valkey.io/commands/expiretime/
 func (client *baseClient) ExpireTime(key string) (int64, error) {
@@ -3510,16 +3462,13 @@ func (client *baseClient) ExpireTime(key string) (int64, error) {
 // will expire, in milliseconds.
 //
 // Parameters:
-// key - The key to determine the expiration value of.
+//
+//	key - The key to determine the expiration value of.
 //
 // Return value:
-// The expiration Unix timestamp in milliseconds.
-// `-2` if key does not exist or `-1` is key exists but has no associated expiration.
 //
-// Example:
-//
-// result, err := client.PExpireTime("key")
-// result: 33177117420000
+//	The expiration Unix timestamp in milliseconds.
+//	`-2` if key does not exist or `-1` is key exists but has no associated expiration.
 //
 // [valkey.io]: https://valkey.io/commands/pexpiretime/
 func (client *baseClient) PExpireTime(key string) (int64, error) {
@@ -3534,16 +3483,13 @@ func (client *baseClient) PExpireTime(key string) (int64, error) {
 // TTL returns the remaining time to live of key that has a timeout, in seconds.
 //
 // Parameters:
-// key - The key to return its timeout.
+//
+//	key - The key to return its timeout.
 //
 // Return value:
-// Returns TTL in seconds,
-// `-2` if key does not exist, or `-1` if key exists but has no associated expiration.
 //
-// Example:
-//
-// result, err := client.TTL("key")
-// result: 3
+//	Returns TTL in seconds,
+//	`-2` if key does not exist, or `-1` if key exists but has no associated expiration.
 //
 // [valkey.io]: https://valkey.io/commands/ttl/
 func (client *baseClient) TTL(key string) (int64, error) {
@@ -3558,16 +3504,13 @@ func (client *baseClient) TTL(key string) (int64, error) {
 // PTTL returns the remaining time to live of key that has a timeout, in milliseconds.
 //
 // Parameters:
-// key - The key to return its timeout.
+//
+//	key - The key to return its timeout.
 //
 // Return value:
-// Returns TTL in milliseconds,
-// `-2` if key does not exist, or `-1` if key exists but has no associated expiration.
 //
-// Example:
-//
-// result, err := client.PTTL("key")
-// result: 1000
+//	Returns TTL in milliseconds,
+//	`-2` if key does not exist, or `-1` if key exists but has no associated expiration.
 //
 // [valkey.io]: https://valkey.io/commands/pttl/
 func (client *baseClient) PTTL(key string) (int64, error) {
@@ -3665,14 +3608,6 @@ func (client *baseClient) PfCount(keys []string) (int64, error) {
 //
 //	Return the number of keys that were unlinked.
 //
-// Example:
-//
-//	result, err := client.Unlink([]string{"key1", "key2", "key3"})
-//	if err != nil {
-//	    // handle error
-//	}
-//	fmt.Println(result) // Output: 3
-//
 // [valkey.io]: Https://valkey.io/commands/unlink/
 func (client *baseClient) Unlink(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Unlink, keys)
@@ -3693,14 +3628,6 @@ func (client *baseClient) Unlink(keys []string) (int64, error) {
 // Return value:
 //
 //	If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
-//
-// Example:
-//
-//	result, err := client.Type([]string{"key"})
-//	if err != nil {
-//	    // handle error
-//	}
-//	fmt.Println(result) // Output: string
 //
 // [valkey.io]: Https://valkey.io/commands/type/
 func (client *baseClient) Type(key string) (string, error) {
@@ -3730,14 +3657,6 @@ func (client *baseClient) Type(key string) (string, error) {
 //
 //	The number of keys that were updated.
 //
-// Example:
-//
-//	result, err := client.Touch([]string{"key1", "key2", "key3"})
-//	if err != nil {
-//	    // handle error
-//	}
-//	fmt.Println(result) // Output: 3
-//
 // [valkey.io]: Https://valkey.io/commands/touch/
 func (client *baseClient) Touch(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Touch, keys)
@@ -3762,15 +3681,8 @@ func (client *baseClient) Touch(keys []string) (int64, error) {
 //	newKey - The new name of the key.
 //
 // Return value:
-// If the key was successfully renamed, return "OK". If key does not exist, an error is thrown.
 //
-// Example:
-//
-//	result, err := client.Rename([]string{"key", "newkey"})
-//	if err != nil {
-//	    // handle error
-//	}
-//	fmt.Println(result) // Output: OK
+//	If the key was successfully renamed, return "OK". If key does not exist, an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/rename/
 func (client *baseClient) Rename(key string, newKey string) (string, error) {
@@ -3795,14 +3707,6 @@ func (client *baseClient) Rename(key string, newKey string) (string, error) {
 // Return value:
 //
 //	`true` if key was renamed to `newKey`, `false` if `newKey` already exists.
-//
-// Example:
-//
-//	result, err := client.Renamenx([]string{"key", "newkey"})
-//	if err != nil {
-//	    // handle error
-//	}
-//	fmt.Println(result) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/renamenx/
 func (client *baseClient) Renamenx(key string, newKey string) (bool, error) {
@@ -4611,14 +4515,6 @@ func (client *baseClient) ZRangeWithScores(
 // Return value:
 //
 //	`false` if key does not exist or does not have an associated timeout, `true` if the timeout has been removed.
-//
-// Example:
-//
-//	result, err := client.Persist([]string{"key"})
-//	if err != nil {
-//	    // handle error
-//	}
-//	fmt.Println(result) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/persist/
 func (client *baseClient) Persist(key string) (bool, error) {
@@ -5468,15 +5364,6 @@ func (client *baseClient) XGroupCreateWithOptions(
 //
 //	Return OK if successfully create a key with a value </code>.
 //
-// Example:
-//
-//	result, err := client.Restore("key",ttl, value)
-//
-//	if err != nil {
-//	   // handle error
-//	}
-//	fmt.Println(result.Value()) // Output: OK
-//
 // [valkey.io]: https://valkey.io/commands/restore/
 func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
 	return client.RestoreWithOptions(key, ttl, value, NewRestoreOptionsBuilder())
@@ -5495,16 +5382,6 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (Result[s
 // Return value:
 //
 //	Return OK if successfully create a key with a value.
-//
-// Example:
-//
-//	restoreOptions := api.NewRestoreOptionsBuilder().SetReplace().SetABSTTL().SetEviction(api.FREQ, 10)
-//	resultRestoreOpt, err := client.RestoreWithOptions(key, ttl, value, restoreOptions)
-//
-//	if err != nil {
-//	   // handle error
-//	}
-//	fmt.Println(result.Value()) // Output: OK
 //
 // [valkey.io]: https://valkey.io/commands/restore/
 func (client *baseClient) RestoreWithOptions(key string, ttl int64,
@@ -5535,14 +5412,6 @@ func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 //	The serialized value of the data stored at key
 //	If key does not exist, null will be returned.
 //
-// Example:
-//
-//	result, err := client.Dump([]string{"key"})
-//	if err != nil {
-//	    // handle error
-//	}
-//	fmt.Println(result.Value()) // Output: (Serialized Value)
-//
 // [valkey.io]: https://valkey.io/commands/dump/
 func (client *baseClient) Dump(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.Dump, []string{key})
@@ -5567,15 +5436,6 @@ func (client *baseClient) Dump(key string) (Result[string], error) {
 //	If key exists, returns the internal encoding of the object stored at
 //	key as a String. Otherwise, returns null.
 //
-// Example:
-//
-//	result, err := client.ObjectEncoding("mykeyRenamenx")
-//
-//	if err != nil {
-//	    // handle error
-//	}
-//	fmt.Println(result.Value()) // Output: embstr
-//
 // [valkey.io]: https://valkey.io/commands/object-encoding/
 func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.ObjectEncoding, []string{key})
@@ -5595,14 +5455,6 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 // Return value:
 //
 //	The provided message
-//
-// For example:
-//
-//	 result, err := client.Echo("Hello World")
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: Hello World
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *baseClient) Echo(message string) (Result[string], error) {
@@ -5812,14 +5664,6 @@ func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeB
 //	If key exists, returns the logarithmic access frequency counter of the
 //	object stored at key as a long. Otherwise, returns `nil`.
 //
-// Example:
-//
-//	result, err := client.ObjectFreq(key)
-//	if err != nil {
-//		// handle error
-//	}
-//	fmt.Println(result.Value()) // Output: 1
-//
 // [valkey.io]: https://valkey.io/commands/object-freq/
 func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
 	result, err := client.executeCommand(C.ObjectFreq, []string{key})
@@ -5838,14 +5682,6 @@ func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
 // Return value:
 //
 //	If key exists, returns the idle time in seconds. Otherwise, returns `nil`.
-//
-// Example:
-//
-//	result, err := client.ObjectIdleTime(key)
-//	if err != nil {
-//		// handle error
-//	}
-//	fmt.Println(result.Value()) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/object-idletime/
 func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
@@ -5867,14 +5703,6 @@ func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
 //	If key exists, returns the reference count of the object stored at key.
 //	Otherwise, returns `nil`.
 //
-// Example:
-//
-//	result, err := client.ObjectRefCount(key)
-//	if err != nil {
-//	  // handle error
-//	}
-//	fmt.Println(result.Value()) // Output: 1
-//
 // [valkey.io]: https://valkey.io/commands/object-refcount/
 func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
 	result, err := client.executeCommand(C.ObjectRefCount, []string{key})
@@ -5890,16 +5718,12 @@ func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
 // To store the result into a new key, see the sortStore function.
 //
 // Parameters:
-// key - The key of the list, set, or sorted set to be sorted.
+//
+//	key - The key of the list, set, or sorted set to be sorted.
 //
 // Return value:
-// An Array of sorted elements.
 //
-// Example:
-//
-// result, err := client.Sort("key")
-// result.Value(): [{1 false} {2 false} {3 false}]
-// result.IsNil(): false
+//	An Array of sorted elements.
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) Sort(key string) ([]Result[string], error) {
@@ -5927,18 +5751,13 @@ func (client *baseClient) Sort(key string) ([]Result[string], error) {
 //	supported since Valkey version 8.0.
 //
 // Parameters:
-// key - The key of the list, set, or sorted set to be sorted.
-// sortOptions - The SortOptions type.
+//
+//	key - The key of the list, set, or sorted set to be sorted.
+//	sortOptions - The SortOptions type.
 //
 // Return value:
-// An Array of sorted elements.
 //
-// Example:
-//
-// options := api.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
-// result, err := client.Sort("key", options)
-// result.Value(): [{Object_3 false} {c false} {Object_1 false} {a false} {Object_2 false} {b false}]
-// result.IsNil(): false
+//	An Array of sorted elements.
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
@@ -5956,16 +5775,12 @@ func (client *baseClient) SortWithOptions(key string, options *options.SortOptio
 // This command is routed depending on the client's ReadFrom strategy.
 //
 // Parameters:
-// key - The key of the list, set, or sorted set to be sorted.
+//
+//	key - The key of the list, set, or sorted set to be sorted.
 //
 // Return value:
-// An Array of sorted elements.
 //
-// Example:
-//
-// result, err := client.SortReadOnly("key")
-// result.Value(): [{1 false} {2 false} {3 false}]
-// result.IsNil(): false
+//	An Array of sorted elements.
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
@@ -5993,18 +5808,13 @@ func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
 //	supported since Valkey version 8.0.
 //
 // Parameters:
-// key - The key of the list, set, or sorted set to be sorted.
-// sortOptions - The SortOptions type.
+//
+//	key - The key of the list, set, or sorted set to be sorted.
+//	sortOptions - The SortOptions type.
 //
 // Return value:
-// An Array of sorted elements.
 //
-// Example:
-//
-// options := api.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
-// result, err := client.SortReadOnly("key", options)
-// result.Value(): [{Object_3 false} {c false} {Object_1 false} {a false} {Object_2 false} {b false}]
-// result.IsNil(): false
+//	An Array of sorted elements.
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortReadOnlyWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
@@ -6033,16 +5843,13 @@ func (client *baseClient) SortReadOnlyWithOptions(key string, options *options.S
 //	the request into sub-requests per slot to ensure atomicity.
 //
 // Parameters:
-// key - The key of the list, set, or sorted set to be sorted.
-// destination - The key where the sorted result will be stored.
+//
+//	key - The key of the list, set, or sorted set to be sorted.
+//	destination - The key where the sorted result will be stored.
 //
 // Return value:
-// The number of elements in the sorted key stored at destination.
 //
-// Example:
-//
-// result, err := client.SortStore("key","destkey")
-// result: 1
+//	The number of elements in the sorted key stored at destination.
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortStore(key string, destination string) (int64, error) {
@@ -6072,18 +5879,14 @@ func (client *baseClient) SortStore(key string, destination string) (int64, erro
 //	in cluster mode is supported since Valkey version 8.0.
 //
 // Parameters:
-// key - The key of the list, set, or sorted set to be sorted.
-// destination - The key where the sorted result will be stored.
-// sortOptions - The SortOptions type.
+//
+//	key - The key of the list, set, or sorted set to be sorted.
+//	destination - The key where the sorted result will be stored.
+//	sortOptions - The SortOptions type.
 //
 // Return value:
-// The number of elements in the sorted key stored at destination.
 //
-// Example:
-//
-// options := api.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
-// result, err := client.SortStore("key","destkey",options)
-// result: 1
+//	The number of elements in the sorted key stored at destination.
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortStoreWithOptions(
@@ -6269,15 +6072,8 @@ func (client *baseClient) GetBit(key string, offset int64) (int64, error) {
 //	block indefinitely.
 //
 // Return value:
-// The number of replicas reached by all the writes performed in the context of the current connection.
 //
-// Example:
-//
-//	 result, err := client.Wait(1, 1000)
-//	 if err != nil {
-//		// handle error
-//	 }
-//	 fmt.Println(result.Value()) // Output: 1 // if cluster has 2 replicasets
+//	The number of replicas reached by all the writes performed in the context of the current connection.
 //
 // [valkey.io]: https://valkey.io/commands/wait/
 func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (int64, error) {
@@ -6545,14 +6341,6 @@ func (client *baseClient) XClaimJustIdWithOptions(
 //
 //	`true` if source was copied, `false` if source was not copied.
 //
-// Example:
-//
-//	result, err := client.Copy("source, destination")
-//	if err != nil {
-//	   // handle error
-//	}
-//	fmt.Println(result) // Output: true
-//
 // [valkey.io]: https://valkey.io/commands/copy/
 func (client *baseClient) Copy(source string, destination string) (bool, error) {
 	result, err := client.executeCommand(C.Copy, []string{source, destination})
@@ -6579,15 +6367,6 @@ func (client *baseClient) Copy(source string, destination string) (bool, error) 
 // Return value:
 //
 //	`true` if source was copied, `false` if source was not copied.
-//
-// Example:
-//
-//	copyOptions := api.NewCopyOptionsBuilder().SetDBDestination(2).SetReplace()
-//	result, err := client.CopyWithOptions(source, destination",copyOptions)
-//	if err != nil {
-//	   // handle error
-//	}
-//	fmt.Println(result) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/copy/
 func (client *baseClient) CopyWithOptions(
