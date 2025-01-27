@@ -45,7 +45,7 @@
         "@typescript-eslint/parser": "^5.48.0",
         "eslint": "^8.31.0",
         "typescript": "^4.9.4",
-        "${scope}valkey-glide-linux-x64": "../.."
+        "${scope}valkey-glide-${platform}-${arch}": "../.."
     },
     "optionalDependencies": {
         "${scope}valkey-glide-darwin-arm64": "${package_version}",
