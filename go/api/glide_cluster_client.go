@@ -5,7 +5,9 @@ package api
 // #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../lib.h"
 import "C"
-import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+import (
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
+)
 
 // GlideClusterClient interface compliance check.
 var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
@@ -89,15 +91,25 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 // Example:
 //
 //	route := api.SimpleNodeRoute(api.RandomRoute)
-//	options := options.NewTimeOptionsBuilder().SetRoute(route)
-//	result, err := client.TimeWithOptions(route)
-//	fmt.Println(result.Value()) // Output: [1737285074 67888]
+//	route := config.Route(config.AllNodes)
+//	opts  := options.ClusterTimeOptions{
+//		  Route: &route,
+//	}
+//	fmt.Println(clusterResponse.Value()) // Output: [1737994354 547816 1737994354 547856]
 //
 // [valkey.io]: https://valkey.io/commands/time/
-func (client *glideClusterClient) TimeWithOptions(opts *options.TimeOptions) (ClusterValue[[]string], error) {
-	result, err := client.executeCommandWithRoute(C.Time, []string{}, opts.Route)
-	if err != nil {
-		return CreateEmptyStringArrayClusterValue(), err
+func (client *GlideClusterClient) TimeWithOptions(opts options.ClusterTimeOptions) (ClusterValue[[]string], error) {
+	if opts.Route == nil {
+		response, err := client.executeCommand(C.Time, []string{})
+		if err != nil {
+			return CreateEmptyStringArrayClusterValue(), err
+		}
+		return handleTimeClusterResponse(response)
+	} else {
+		result, err := client.executeCommandWithRoute(C.Time, []string{}, *opts.Route)
+		if err != nil {
+			return CreateEmptyStringArrayClusterValue(), err
+		}
+		return handleTimeClusterResponse(result)
 	}
-	return handleTimeClusterResponse(result)
 }

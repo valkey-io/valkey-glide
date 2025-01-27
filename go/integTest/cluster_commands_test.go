@@ -30,10 +30,9 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 	assert.Equal(suite.T(), "GO GLIDE GO", result.Value().(string))
 }
 
-func (suite *GlideTestSuite) TestTime_RandomRoute() {
+func (suite *GlideTestSuite) TestTimeWithoutRoute() {
 	client := suite.defaultClusterClient()
-	route := config.SimpleNodeRoute(config.RandomRoute)
-	options := options.NewTimeOptionsBuilder().SetRoute(route)
+	options := options.ClusterTimeOptions{Route: nil}
 	result, err := client.TimeWithOptions(options)
 
 	assert.NoError(suite.T(), err)
@@ -43,15 +42,15 @@ func (suite *GlideTestSuite) TestTime_RandomRoute() {
 	assert.Equal(suite.T(), 2, len(result.Value()))
 }
 
-func (suite *GlideTestSuite) TestTime_AllNodes_MultipleValues() {
+func (suite *GlideTestSuite) TestTimeWithAllNodesRoute() {
 	client := suite.defaultClusterClient()
-	route := config.AllNodes
-	options := options.NewTimeOptionsBuilder().SetRoute(route)
+	route := config.Route(config.AllNodes)
+	options := options.ClusterTimeOptions{Route: &route}
 	result, err := client.TimeWithOptions(options)
+
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), result)
 	assert.NotEmpty(suite.T(), result.Value())
-
 	assert.Greater(suite.T(), len(result.Value()), 1)
 
 	for _, timeStr := range result.Value() {
@@ -59,11 +58,23 @@ func (suite *GlideTestSuite) TestTime_AllNodes_MultipleValues() {
 	}
 }
 
-func (suite *GlideTestSuite) TestTime_ErrorHandling() {
+func (suite *GlideTestSuite) TestTimeWithRandomRoute() {
 	client := suite.defaultClusterClient()
-	invalidRoute := config.NewByAddressRoute("invalidHost", 9999)
+	route := config.Route(config.RandomRoute)
+	options := options.ClusterTimeOptions{Route: &route}
+	result, err := client.TimeWithOptions(options)
 
-	options := options.NewTimeOptionsBuilder().SetRoute(invalidRoute)
+	assert.NoError(suite.T(), err)
+	assert.NotNil(suite.T(), result)
+	assert.NotEmpty(suite.T(), result.Value())
+	assert.IsType(suite.T(), "", result.Value()[0])
+	assert.Equal(suite.T(), 2, len(result.Value()))
+}
+
+func (suite *GlideTestSuite) TestTimeWithInvalidRoute() {
+	client := suite.defaultClusterClient()
+	invalidRoute := config.Route(config.NewByAddressRoute("invalidHost", 9999))
+	options := options.ClusterTimeOptions{Route: &invalidRoute}
 	result, err := client.TimeWithOptions(options)
 
 	assert.NotNil(suite.T(), err)
