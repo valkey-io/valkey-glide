@@ -114,7 +114,7 @@ jobs:
                   fi
                   echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
                   export arch="${{ matrix.host.ARCH }}"
-                  export platform="${{ matrix.host.TARGET }}"
+                  export named_os="${{ matrix.host.NAMED_OS }}"
                   export package_version=${R_VERSION}
                   export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
                   envsubst < package.json.temp > "package.json"
