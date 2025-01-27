@@ -5,6 +5,7 @@ package api
 // #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../lib.h"
 import "C"
+
 import (
 	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 )
