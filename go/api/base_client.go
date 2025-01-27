@@ -6830,7 +6830,10 @@ func (client *baseClient) XRevRangeWithOptions(
 //	key          -  The key of the string.
 //	subCommands  -  The subCommands to be performed on the binary value of the string at
 //	                key, which could be any of the following:
-//	                BitFieldGet, BitFieldSet, BitFieldIncrby, BitFieldOverflow.
+//	                  - [BitFieldGet].
+//	                  - [BitFieldSet].
+//	                  - [BitFieldIncrby].
+//	                  - [BitFieldOverflow].
 //		            Use `options.NewBitFieldGet()` to specify a  BitField GET command.
 //		            Use `options.NewBitFieldSet()` to specify a BitField SET command.
 //		            Use `options.NewBitFieldIncrby()` to specify a BitField INCRYBY command.
@@ -6886,7 +6889,7 @@ func (client *baseClient) BitField(key string, subCommands []options.BitFieldSub
 //	key          -  The key of the string.
 //	subCommands  -  The read-only subCommands to be performed on the binary value
 //	                of the string at key, which could be:
-//	                BitFieldGet.
+//	                  - [BitFieldGet].
 //		            Use `options.NewBitFieldGet()` to specify a BitField GET command.
 //
 // Return value:
