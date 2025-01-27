@@ -4171,9 +4171,9 @@ func sendWithCustomCommand(suite *GlideTestSuite, client api.BaseClient, args []
 	var res any
 	var err error
 	switch c := client.(type) {
-	case api.GlideClient:
+	case api.GlideClientCommands:
 		res, err = c.CustomCommand(args)
-	case api.GlideClusterClient:
+	case api.GlideClusterClientCommands:
 		res, err = c.CustomCommand(args)
 	default:
 		suite.FailNow(errMsg)
@@ -4469,7 +4469,7 @@ func (suite *GlideTestSuite) TestXRead() {
 
 		// ensure that commands doesn't time out even if timeout > request timeout
 		var testClient api.BaseClient
-		if _, ok := client.(api.GlideClient); ok {
+		if _, ok := client.(api.GlideClientCommands); ok {
 			testClient = suite.client(api.NewGlideClientConfiguration().
 				WithAddress(&suite.standaloneHosts[0]).
 				WithUseTLS(suite.tls))
@@ -5573,7 +5573,7 @@ func (suite *GlideTestSuite) TestXPending() {
 		// each use of CustomCommand would make the tests difficult to read and maintain. These tests can be
 		// collapsed once the native commands are added in a subsequent release.
 
-		execStandalone := func(client api.GlideClient) {
+		execStandalone := func(client api.GlideClientCommands) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			groupName := "group" + uuid.New().String()
@@ -5647,7 +5647,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			assert.Equal(suite.T(), streamid_2.Value(), detailResult[1].Id)
 		}
 
-		execCluster := func(client api.GlideClusterClient) {
+		execCluster := func(client api.GlideClusterClientCommands) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			groupName := "group" + uuid.New().String()
@@ -5729,9 +5729,9 @@ func (suite *GlideTestSuite) TestXPending() {
 		// this is only needed in order to be able to use custom commands.
 		// Once the native commands are added, this logic will be refactored.
 		switch c := client.(type) {
-		case api.GlideClient:
+		case api.GlideClientCommands:
 			execStandalone(c)
-		case api.GlideClusterClient:
+		case api.GlideClusterClientCommands:
 			execCluster(c)
 		}
 	})
@@ -5747,7 +5747,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 		// each use of CustomCommand would make the tests difficult to read and maintain. These tests can be
 		// collapsed once the native commands are added in a subsequent release.
 
-		execStandalone := func(client api.GlideClient) {
+		execStandalone := func(client api.GlideClientCommands) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			missingKey := uuid.New().String()
@@ -5902,7 +5902,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.True(suite.T(), strings.Contains(err.Error(), "WRONGTYPE"))
 		}
 
-		execCluster := func(client api.GlideClusterClient) {
+		execCluster := func(client api.GlideClusterClientCommands) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			missingKey := uuid.New().String()
@@ -6058,9 +6058,9 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 		// this is only needed in order to be able to use custom commands.
 		// Once the native commands are added, this logic will be refactored.
 		switch c := client.(type) {
-		case api.GlideClient:
+		case api.GlideClientCommands:
 			execStandalone(c)
-		case api.GlideClusterClient:
+		case api.GlideClusterClientCommands:
 			execCluster(c)
 		}
 	})
@@ -7206,6 +7206,249 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			int64(1),
 			[]string{streamid_1.Value()},
 			claimOptions,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestCopy() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{key}" + uuid.New().String()
+		key2 := "{key}" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(client.Set(key, value))
+
+		// Test 1: Check the copy command
+		resultCopy, err := client.Copy(key, key2)
+		assert.Nil(t, err)
+		assert.True(t, resultCopy)
+
+		// Test 2: Check if the value stored at the source is same with destination key.
+		resultGet, err := client.Get(key2)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestCopyWithOptions() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{key}" + uuid.New().String()
+		key2 := "{key}" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(client.Set(key, value))
+		suite.verifyOK(client.Set(key2, "World"))
+
+		// Test 1: Check the copy command with options
+		optsCopy := api.NewCopyOptionsBuilder().SetReplace()
+		resultCopy, err := client.CopyWithOptions(key, key2, optsCopy)
+		assert.Nil(t, err)
+		assert.True(t, resultCopy)
+
+		// Test 2: Check if the value stored at the source is same with destination key.
+		resultGet, err := client.Get(key2)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		key2 := uuid.New().String()
+		stringKey := uuid.New().String()
+		positiveInfinity := options.NewInfiniteStreamBoundary(options.PositiveInfinity)
+		negativeInfinity := options.NewInfiniteStreamBoundary(options.NegativeInfinity)
+
+		// add stream entries
+		streamId1, err := client.XAdd(
+			key,
+			[][]string{{"field1", "value1"}},
+		)
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), streamId1)
+
+		streamId2, err := client.XAdd(
+			key,
+			[][]string{{"field2", "value2"}},
+		)
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), streamId2)
+
+		xlenResult, err := client.XLen(key)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), xlenResult)
+
+		// get everything from the stream
+		xrangeResult, err := client.XRange(
+			key,
+			negativeInfinity,
+			positiveInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[string][][]string{streamId1.Value(): {{"field1", "value1"}}, streamId2.Value(): {{"field2", "value2"}}},
+			xrangeResult,
+		)
+
+		// get everything from the stream in reverse
+		xrevrangeResult, err := client.XRevRange(
+			key,
+			positiveInfinity,
+			negativeInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[string][][]string{streamId2.Value(): {{"field2", "value2"}}, streamId1.Value(): {{"field1", "value1"}}},
+			xrevrangeResult,
+		)
+
+		// returns empty map if + before -
+		xrangeResult, err = client.XRange(
+			key,
+			positiveInfinity,
+			negativeInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrangeResult)
+
+		// rev search returns empty if - before +
+		xrevrangeResult, err = client.XRevRange(
+			key,
+			negativeInfinity,
+			positiveInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrevrangeResult)
+
+		streamId3, err := client.XAdd(
+			key,
+			[][]string{{"field3", "value3"}},
+		)
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), streamId3)
+
+		// get the newest stream entry
+		xrangeResult, err = client.XRangeWithOptions(
+			key,
+			options.NewStreamBoundary(streamId2.Value(), false),
+			positiveInfinity,
+			options.NewStreamRangeOptions().SetCount(1),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[string][][]string{streamId3.Value(): {{"field3", "value3"}}},
+			xrangeResult,
+		)
+
+		// doing the same with rev search
+		xrevrangeResult, err = client.XRevRangeWithOptions(
+			key,
+			positiveInfinity,
+			options.NewStreamBoundary(streamId2.Value(), false),
+			options.NewStreamRangeOptions().SetCount(1),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[string][][]string{streamId3.Value(): {{"field3", "value3"}}},
+			xrevrangeResult,
+		)
+
+		// both xrange and xrevrange return nil with a zero/negative count
+		xrangeResult, err = client.XRangeWithOptions(
+			key,
+			negativeInfinity,
+			positiveInfinity,
+			options.NewStreamRangeOptions().SetCount(0),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrangeResult)
+
+		xrevrangeResult, err = client.XRevRangeWithOptions(
+			key,
+			positiveInfinity,
+			negativeInfinity,
+			options.NewStreamRangeOptions().SetCount(-1),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrevrangeResult)
+
+		// xrange and xrevrange against an empty stream
+		xdelResult, err := client.XDel(key, []string{streamId1.Value(), streamId2.Value(), streamId3.Value()})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), xdelResult)
+
+		xrangeResult, err = client.XRange(
+			key,
+			negativeInfinity,
+			positiveInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrangeResult)
+
+		xrevrangeResult, err = client.XRevRange(
+			key,
+			positiveInfinity,
+			negativeInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrevrangeResult)
+
+		// xrange and xrevrange against a non-existent stream
+		xrangeResult, err = client.XRange(
+			key2,
+			negativeInfinity,
+			positiveInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrangeResult)
+
+		xrevrangeResult, err = client.XRevRange(
+			key2,
+			positiveInfinity,
+			negativeInfinity,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xrevrangeResult)
+
+		// xrange and xrevrange against a non-stream key
+		_, err = client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		_, err = client.XRange(
+			stringKey,
+			negativeInfinity,
+			positiveInfinity,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		_, err = client.XRevRange(
+			stringKey,
+			positiveInfinity,
+			negativeInfinity,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// xrange and xrevrange when range bound is not a valid id
+		_, err = client.XRange(
+			key,
+			options.NewStreamBoundary("invalid-id", false),
+			positiveInfinity,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		_, err = client.XRevRange(
+			key,
+			options.NewStreamBoundary("invalid-id", false),
+			negativeInfinity,
 		)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
