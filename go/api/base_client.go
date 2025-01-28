@@ -6923,7 +6923,10 @@ func (client *baseClient) XInfoStream(key string) (map[string]interface{}, error
 //	consumer := infoFull["groups"].([]any)[0].(map[string]any)["consumers"].([]any)[0]
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
-func (client *baseClient) XInfoStreamFullWithOptions(key string, opts *options.XInfoStreamOptions) (map[string]interface{}, error) {
+func (client *baseClient) XInfoStreamFullWithOptions(
+	key string,
+	opts *options.XInfoStreamOptions,
+) (map[string]interface{}, error) {
 	args := []string{key, options.FullKeyword}
 	if opts != nil {
 		optionArgs, err := opts.ToArgs()
