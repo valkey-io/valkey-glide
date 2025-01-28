@@ -165,11 +165,11 @@ func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (C
 	return createClusterSingleValue[string](data), nil
 }
 
-// Returns the number of keys in the currently selected database.
+// Returns the number of keys in the database.
 //
 // Return value:
 //
-//	The number of keys in the currently selected database.
+//	The number of keys in the database.
 //
 // Example:
 //
