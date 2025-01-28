@@ -5,6 +5,7 @@ package api
 import (
 	"strconv"
 
+	"github.com/valkey-io/valkey-glide/go/glide/api/config"
 	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
@@ -355,6 +356,73 @@ func (opts *RestoreOptions) toArgs() ([]string, error) {
 		args = append(args, string(opts.eviction.Type), utils.IntToString(opts.eviction.Count))
 	}
 	return args, err
+}
+
+type Section string
+
+const (
+	// SERVER: General information about the server
+	Server Section = "server"
+	// CLIENTS: Client connections section
+	Clients Section = "clients"
+	// MEMORY: Memory consumption related information
+	Memory Section = "memory"
+	// PERSISTENCE: RDB and AOF related information
+	Persistence Section = "persistence"
+	// STATS: General statistics
+	Stats Section = "stats"
+	// REPLICATION: Master/replica replication information
+	Replication Section = "replication"
+	// CPU: CPU consumption statistics
+	Cpu Section = "cpu"
+	// COMMANDSTATS: Valkey command statistics
+	Commandstats Section = "commandstats"
+	// LATENCYSTATS: Valkey command latency percentile distribution statistics
+	Latencystats Section = "latencystats"
+	// SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
+	Sentinel Section = "sentinel"
+	// CLUSTER: Valkey Cluster section
+	Cluster Section = "cluster"
+	// MODULES: Modules section
+	Modules Section = "modules"
+	// KEYSPACE: Database related statistics
+	Keyspace Section = "keyspace"
+	// ERRORSTATS: Valkey error statistics
+	Errorstats Section = "errorstats"
+	// ALL: Return all sections (excluding module generated ones)
+	All Section = "all"
+	// DEFAULT: Return only the default set of sections
+	Default Section = "default"
+	// EVERYTHING: Includes all and modules
+	Everything Section = "everything"
+)
+
+// Optional arguments for `Info` for standalone client
+type InfoOptions struct {
+	// A list of [Section] values specifying which sections of information to retrieve.
+	// When no parameter is provided, [Section.Default] is assumed.
+	// Starting with server version 7.0.0 `INFO` command supports multiple sections.
+	Sections []Section
+}
+
+// Optional arguments for `Info` for cluster client
+type ClusterInfoOptions struct {
+	*InfoOptions
+	// Specifies the routing configuration for the command.
+	// The client will route the command to the nodes defined by `Route`.
+	// The command will be routed to all primary nodes, unless `Route` is provided.
+	Route *config.Route
+}
+
+func (opts *InfoOptions) toArgs() []string {
+	if opts == nil {
+		return []string{}
+	}
+	args := make([]string, 0, len(opts.Sections))
+	for _, section := range opts.Sections {
+		args = append(args, string(section))
+	}
+	return args
 }
 
 // Optional arguments to Copy(source string, destination string, option *CopyOptions)
