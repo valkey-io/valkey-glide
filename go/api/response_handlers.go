@@ -1004,7 +1004,7 @@ func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendin
 	return pendingDetails, nil
 }
 
-func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[string]any, error) {
+func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[string]interface{}, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Map, false)
@@ -1016,5 +1016,5 @@ func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[strin
 	if err != nil {
 		return nil, err
 	}
-	return result.(map[string]any), nil
+	return result.(map[string]interface{}), nil
 }

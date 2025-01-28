@@ -462,7 +462,7 @@ func (sro *StreamRangeOptions) ToArgs() ([]string, error) {
 	var args []string
 
 	if sro.countIsSet {
-		args = append(args, "COUNT", utils.IntToString(sro.count))
+		args = append(args, CountKeyword, utils.IntToString(sro.count))
 	}
 
 	return args, nil

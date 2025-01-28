@@ -6854,7 +6854,7 @@ func (client *baseClient) XRevRangeWithOptions(
 //	// }
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
-func (client *baseClient) XInfoStream(key string) (map[string]any, error) {
+func (client *baseClient) XInfoStream(key string) (map[string]interface{}, error) {
 	result, err := client.executeCommand(C.XInfoStream, []string{key})
 	if err != nil {
 		return nil, err
@@ -6868,8 +6868,8 @@ func (client *baseClient) XInfoStream(key string) (map[string]any, error) {
 //
 // Parameters:
 //
-//	key     - The key of the stream.
-//	options - Stream info options.
+//	key  - The key of the stream.
+//	opts - Stream info options.
 //
 // Return value:
 //
@@ -6923,10 +6923,10 @@ func (client *baseClient) XInfoStream(key string) (map[string]any, error) {
 //	consumer := infoFull["groups"].([]any)[0].(map[string]any)["consumers"].([]any)[0]
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
-func (client *baseClient) XInfoStreamWithOptions(key string, options *options.XInfoStreamOptions) (map[string]any, error) {
-	args := []string{key, "FULL"}
-	if options != nil {
-		optionArgs, err := options.ToArgs()
+func (client *baseClient) XInfoStreamFullWithOptions(key string, opts *options.XInfoStreamOptions) (map[string]interface{}, error) {
+	args := []string{key, options.FullKeyword}
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
 		if err != nil {
 			return nil, err
 		}

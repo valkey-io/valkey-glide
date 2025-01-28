@@ -111,7 +111,7 @@ type StreamCommands interface {
 
 	XInfoStream(key string) (map[string]any, error)
 
-	XInfoStreamWithOptions(key string, options *options.XInfoStreamOptions) (map[string]any, error)
+	XInfoStreamFullWithOptions(key string, options *options.XInfoStreamOptions) (map[string]any, error)
 
 	XRange(key string, start options.StreamBoundary, end options.StreamBoundary) (map[string][][]string, error)
 
