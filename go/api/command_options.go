@@ -452,7 +452,7 @@ type ClusterEchoOptions struct {
 	Route *config.Route
 }
 
-func (opts *EchoOptions) toArgs() []string {
+func (opts *EchoOptions) ToArgs() []string {
 	if opts == nil {
 		return []string{}
 	}

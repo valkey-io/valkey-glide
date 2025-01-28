@@ -8,7 +8,5 @@ package api
 //
 // [valkey.io]: https://valkey.io/commands/#connection
 type ConnectionManagementClusterCommands interface {
-	Echo(message string) (Result[string], error)
-
 	EchoWithOptions(options ClusterEchoOptions) (ClusterValue[string], error)
 }

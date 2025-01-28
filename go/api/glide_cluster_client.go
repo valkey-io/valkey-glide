@@ -6,6 +6,10 @@ package api
 // #include "../lib.h"
 import "C"
 
+import (
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
+)
+
 // GlideClusterClient interface compliance check.
 var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
 
@@ -13,6 +17,7 @@ var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
 type GlideClusterClientCommands interface {
 	BaseClient
 	GenericClusterCommands
+	ServerManagementClusterCommands
 }
 
 // GlideClusterClient implements cluster mode operations by extending baseClient functionality.
@@ -83,7 +88,7 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //
 // For example:
 //
-//	response, err := clusterClient.Echo(opts)
+//	response, err := clusterClient.EchoWithOptions(opts)
 //	if err != nil {
 //		// handle error
 //	}
@@ -92,32 +97,33 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *GlideClusterClient) EchoWithOptions(options ClusterEchoOptions) (ClusterValue[string], error) {
+func (client *GlideClusterClient) EchoWithOptions(opts *options.EchoOptions) (ClusterValue[string], error) {
+	args, err := opts.ToArgs()
 	if options.Route == nil {
-		response, err := client.executeCommand(C.Echo, options.toArgs())
+		response, err := client.executeCommand(C.Echo, args)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return CreateEmptyClusterValue[string](), err
 		}
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return CreateEmptyClusterValue[string](), err
 		}
-		return createClusterMultiValue[string](data), nil
+		return CreateClusterMultiValue[string](data), nil
 	}
-	response, err := client.executeCommandWithRoute(C.Echo, options.toArgs(), *options.Route)
+	response, err := client.executeCommandWithRoute(C.Echo, args, *options.Route)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return CreateEmptyClusterValue[string](), err
 	}
 	if (*options.Route).IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return CreateEmptyClusterValue[string](), err
 		}
-		return createClusterMultiValue[string](data), nil
+		return CreateClusterMultiValue[string](data), nil
 	}
 	data, err := handleStringResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return CreateEmptyClusterValue[string](), err
 	}
 	return createClusterSingleValue[string](data), nil
 }
