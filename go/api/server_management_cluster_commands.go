@@ -10,5 +10,5 @@ import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 //
 // [valkey.io]: https://valkey.io/commands/#server
 type ServerManagementClusterCommands interface {
-	DBSizeWithOptions(dbSizeOptions *options.DBSizeOptions) (int64, error)
+	DBSizeWithOptions(routeOption *options.RouteOption) (int64, error)
 }
