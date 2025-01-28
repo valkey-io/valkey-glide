@@ -85,14 +85,14 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //
 //	route := api.SimpleNodeRoute(api.RandomRoute)
 //	options := options.NewDBOptionsBuilder().SetRoute(route)
-//	result, err := client.DBSDBSizeWithOptionsize(route)
+//	result, err := client.DBSizeWithOption(route)
 //	if err != nil {
 //	  // handle error
 //	}
 //	fmt.Println(result) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
-func (client *GlideClusterClient) DBSizeWithOptions(opts *options.DBSizeOptions) (int64, error) {
+func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (int64, error) {
 	result, err := client.executeCommandWithRoute(C.DBSize, []string{}, opts.Route)
 	if err != nil {
 		return defaultIntResponse, err

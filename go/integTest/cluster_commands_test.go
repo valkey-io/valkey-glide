@@ -38,8 +38,7 @@ func (suite *GlideTestSuite) TestDBSizeRandomRoute() {
 
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), result)
-	assert.NotEmpty(suite.T(), result.Value())
-	assert.IsType(suite.T(), "", result.Value()[0])
-	//assert.Equal(suite.T(), 2, len(result.Value()))
+	assert.NotEmpty(suite.T(), result)
+	assert.IsType(suite.T(), "", result)
 	assert.Greater(suite.T(), result, int64(0))
 }
