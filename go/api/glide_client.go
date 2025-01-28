@@ -19,6 +19,7 @@ type GlideClientCommands interface {
 	BaseClient
 	GenericCommands
 	ServerManagementCommands
+	BitmapCommands
 	ConnectionManagementCommands
 }
 

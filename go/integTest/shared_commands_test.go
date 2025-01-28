@@ -7426,3 +7426,190 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestBitField_GetAndIncrBy() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		commands := []options.BitFieldSubCommands{
+			options.NewBitFieldIncrBy(options.SignedInt, 5, 100, 1),
+		}
+
+		result1, err := client.BitField(key, commands)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), result1, 1)
+		firstValue := result1[0].Value()
+
+		result2, err := client.BitField(key, commands)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), result2, 1)
+		assert.Equal(suite.T(), firstValue+1, result2[0].Value())
+
+		getCommands := []options.BitFieldSubCommands{
+			options.NewBitFieldGet(options.SignedInt, 5, 100),
+		}
+
+		getResult, err := client.BitField(key, getCommands)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), getResult, 1)
+		assert.Equal(suite.T(), result2[0].Value(), getResult[0].Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitField_Overflow() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// SAT (Saturate) Overflow Test
+		key1 := uuid.New().String()
+		satCommands := []options.BitFieldSubCommands{
+			options.NewBitFieldOverflow(options.SAT),
+			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 2),
+			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 2),
+		}
+
+		satResult, err := client.BitField(key1, satCommands)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), satResult, 2)
+
+		assert.Equal(suite.T(), int64(2), satResult[0].Value())
+		assert.LessOrEqual(suite.T(), satResult[1].Value(), int64(3))
+
+		// WRAP Overflow Test
+		key2 := uuid.New().String()
+		wrapCommands := []options.BitFieldSubCommands{
+			options.NewBitFieldOverflow(options.WRAP),
+			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 3),
+			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 1),
+		}
+
+		wrapResult, err := client.BitField(key2, wrapCommands)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), wrapResult, 2)
+
+		assert.Equal(suite.T(), int64(3), wrapResult[0].Value())
+		assert.Equal(suite.T(), int64(0), wrapResult[1].Value())
+
+		// FAIL Overflow Test
+		key3 := uuid.New().String()
+		failCommands := []options.BitFieldSubCommands{
+			options.NewBitFieldOverflow(options.FAIL),
+			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 3),
+			options.NewBitFieldIncrBy(options.UnsignedInt, 2, 0, 1),
+		}
+
+		failResult, err := client.BitField(key3, failCommands)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), failResult, 2)
+
+		assert.Equal(suite.T(), int64(3), failResult[0].Value())
+		assert.True(suite.T(), failResult[1].IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitField_MultipleOperations() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		commands := []options.BitFieldSubCommands{
+			options.NewBitFieldSet(options.UnsignedInt, 8, 0, 10),
+			options.NewBitFieldGet(options.UnsignedInt, 8, 0),
+			options.NewBitFieldIncrBy(options.UnsignedInt, 8, 0, 5),
+		}
+
+		result, err := client.BitField(key, commands)
+
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), result, 3)
+
+		assert.LessOrEqual(suite.T(), result[0].Value(), int64(10))
+		assert.Equal(suite.T(), int64(10), result[1].Value())
+		assert.Equal(suite.T(), int64(15), result[2].Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitField_Failures() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		// Test invalid bit size for unsigned
+		invalidUnsignedCommands := []options.BitFieldSubCommands{
+			options.NewBitFieldGet(options.UnsignedInt, 64, 0),
+		}
+
+		_, err := client.BitField(key, invalidUnsignedCommands)
+		assert.NotNil(suite.T(), err)
+
+		// Test invalid bit size for signed
+		invalidSignedCommands := []options.BitFieldSubCommands{
+			options.NewBitFieldGet(options.SignedInt, 65, 0),
+		}
+
+		_, err = client.BitField(key, invalidSignedCommands)
+		assert.NotNil(suite.T(), err)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitFieldRO_BasicOperation() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value := int64(42)
+
+		setCommands := []options.BitFieldSubCommands{
+			options.NewBitFieldSet(options.SignedInt, 8, 16, value),
+		}
+		_, err := client.BitField(key, setCommands)
+		assert.Nil(suite.T(), err)
+
+		getNormalCommands := []options.BitFieldSubCommands{
+			options.NewBitFieldGet(options.SignedInt, 8, 16),
+		}
+		getNormal, err := client.BitField(key, getNormalCommands)
+		assert.Nil(suite.T(), err)
+
+		getROCommands := []options.BitFieldROCommands{
+			options.NewBitFieldGet(options.SignedInt, 8, 16),
+		}
+		getRO, err := client.BitFieldRO(key, getROCommands)
+		assert.Nil(suite.T(), err)
+
+		assert.Equal(suite.T(), getNormal[0].Value(), getRO[0].Value())
+		assert.Equal(suite.T(), value, getRO[0].Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value1 := int64(42)
+		value2 := int64(43)
+
+		setCommands := []options.BitFieldSubCommands{
+			options.NewBitFieldSet(options.SignedInt, 8, 0, value1),
+			options.NewBitFieldSet(options.SignedInt, 8, 8, value2),
+		}
+
+		_, err := client.BitField(key, setCommands)
+		assert.Nil(suite.T(), err)
+
+		getNormalCommands := []options.BitFieldSubCommands{
+			options.NewBitFieldGet(options.SignedInt, 8, 0),
+			options.NewBitFieldGet(options.SignedInt, 8, 8),
+		}
+
+		getNormal, err := client.BitField(key, getNormalCommands)
+		assert.Nil(suite.T(), err)
+
+		getROCommands := []options.BitFieldROCommands{
+			options.NewBitFieldGet(options.SignedInt, 8, 0),
+			options.NewBitFieldGet(options.SignedInt, 8, 8),
+		}
+
+		getRO, err := client.BitFieldRO(key, getROCommands)
+		assert.Nil(suite.T(), err)
+
+		assert.Equal(suite.T(),
+			[]int64{getNormal[0].Value(), getNormal[1].Value()},
+			[]int64{getRO[0].Value(), getRO[1].Value()},
+		)
+		assert.Equal(suite.T(), []int64{value1, value2}, []int64{getRO[0].Value(), getRO[1].Value()})
+	})
+}
