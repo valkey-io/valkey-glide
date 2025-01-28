@@ -5,7 +5,10 @@ package api
 // #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../lib.h"
 import "C"
-import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+
+import (
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
+)
 
 // GlideClusterClient interface compliance check.
 var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
@@ -14,6 +17,7 @@ var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
 type GlideClusterClientCommands interface {
 	BaseClient
 	GenericClusterCommands
+	ServerManagementClusterCommands
 }
 
 // GlideClusterClient implements cluster mode operations by extending baseClient functionality.
@@ -88,7 +92,7 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //	fmt.Println(result) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
-func (client *glideClusterClient) DBSizeWithOptions(opts *options.DBSizeOptions) (int64, error) {
+func (client *GlideClusterClient) DBSizeWithOptions(opts *options.DBSizeOptions) (int64, error) {
 	result, err := client.executeCommandWithRoute(C.DBSize, []string{}, opts.Route)
 	if err != nil {
 		return handleIntOrNilResponse, err
