@@ -652,17 +652,6 @@ export interface BaseClientConfiguration {
      * ```
      */
     clientAz?: string;
-    /**
-     * Configs for OpenTelemetry if exits.
-     */
-    openTelemetryConfigs?: {
-        collectorEndPoint: string;
-        /**
-         * The duration in milliseconds the data will export to the collector.
-         * If interval isn't supplied, 500 will be used
-         */
-        spanFlushInterval?: number;
-    }
 }
 
 /**
@@ -675,10 +664,20 @@ export interface BaseClientConfiguration {
  *
  * - **Connection Timeout**: The `connectionTimeout` property specifies the duration (in milliseconds) the client should wait for a connection to be established.
  *
+ * ### OpenTelemetry
+ *
+ * - **openTelemetryConfigs**: Use the `openTelemetryConfigs` property to specify the endpoint of the collector to export the measurments.
+ *   - **Collector EndPoint**: Set `collectorEndPoint` to specify the endpoint of the collector to export the measurments.
+ *   - **Span Flush Interval**: Set `spanFlushInterval` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 500 will be used.
+ * 
  * @example
  * ```typescript
  * const config: AdvancedBaseClientConfiguration = {
  *   connectionTimeout: 5000, // 5 seconds
+ *   openTelemetryConfig: {
+ *      collectorEndPoint: 'https://127.0.0.1',
+ *      spanFlushInterval: 500,
+ *   },
  * };
  * ```
  */
@@ -690,6 +689,17 @@ export interface AdvancedBaseClientConfiguration {
      * If not explicitly set, a default value of 250 milliseconds will be used.
      */
     connectionTimeout?: number;
+    /**
+     * Configartion for OpenTelemetry if exits.
+     */
+    openTelemetryConfig?: {
+        collectorEndPoint: string;
+        /**
+         * The duration in milliseconds the data will exported to the collector.
+         * If interval is not specified, 500 will be used.
+         */
+        spanFlushInterval?: number;
+    }
 }
 
 /**
@@ -7689,6 +7699,7 @@ export class BaseClient {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
+        request.opentelemetryConfig = options.openTelemetryConfig;
     }
 
     /**
