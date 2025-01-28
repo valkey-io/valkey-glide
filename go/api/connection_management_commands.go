@@ -13,6 +13,4 @@ type ConnectionManagementCommands interface {
 	PingWithMessage(message string) (string, error)
 
 	Echo(message string) (Result[string], error)
-
-	EchoWithOptions(echoOptions *options.EchoOptions) (string, error)
 }
