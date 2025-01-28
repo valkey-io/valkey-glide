@@ -7809,6 +7809,9 @@ func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
 
 func (suite *GlideTestSuite) TestZInter() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
+		if suite.serverVersion < "6.2.0" {
+			suite.T().Skip("This feature was added in version 6.2.0")
+		}
 		key1 := "{key}-" + uuid.New().String()
 		key2 := "{key}-" + uuid.New().String()
 		key3 := "{key}-" + uuid.New().String()
