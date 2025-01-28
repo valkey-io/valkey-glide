@@ -35,7 +35,6 @@ func (suite *GlideTestSuite) TestDBSizeRandomRoute() {
 	route := config.Route(config.RandomRoute)
 	options := options.RouteOption{Route: route}
 	result, err := client.DBSizeWithOptions(options)
-
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), result)
 	assert.NotEmpty(suite.T(), result)
