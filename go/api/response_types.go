@@ -88,7 +88,7 @@ const (
 // Enum-like structure which stores either a single-node response or multi-node response.
 // Multi-node response stored in a map, where keys are hostnames or "<ip>:<port>" strings.
 //
-// Example:
+// For example:
 //
 //	// Command failed:
 //	value, err := clusterClient.CustomCommand(args)
@@ -96,32 +96,25 @@ const (
 //	err != nil: true
 //
 //	// Command returns response from multiple nodes:
-//	value, _ := clusterClient.Info()
-//	for node, nodeResponse := range value.MultiValue() {
-//	    response := nodeResponse
+//	value, _ := clusterClient.info()
+//	node, nodeResponse := range value.Value().(map[string]interface{}) {
+//	    response := nodeResponse.(string)
 //	    // `node` stores cluster node IP/hostname, `response` stores the command output from that node
 //	}
 //
 //	// Command returns a response from single node:
-//	value, _ := clusterClient.InfoWithOptions(api.ClusterInfoOptions{InfoOptions: nil, Route: api.RandomRoute.ToPtr()})
-//	response := value.SingleValue()
+//	value, _ := clusterClient.infoWithRoute(Random{})
+//	response := value.Value().(string)
 //	// `response` stores the command output from a cluster node
 type ClusterValue[T any] struct {
 	valueType ValueType
-	value     Result[any]
+	value     Result[T]
 }
 
-// Get the single value stored (value returned by a single cluster node).
-func (value ClusterValue[T]) SingleValue() T {
-	return value.value.Value().(T)
+func (value ClusterValue[T]) Value() T {
+	return value.value.Value()
 }
 
-// Get the multi value stored (value returned by multiple cluster nodes).
-func (value ClusterValue[T]) MultiValue() map[string]T {
-	return value.value.Value().(map[string]T)
-}
-
-// Get the value type
 func (value ClusterValue[T]) ValueType() ValueType {
 	return value.valueType
 }
@@ -138,33 +131,33 @@ func (value ClusterValue[T]) IsEmpty() bool {
 	return value.value.IsNil()
 }
 
-func createClusterValue[T any](data any) ClusterValue[T] {
+func CreateClusterValue[T any](data T) ClusterValue[T] {
 	switch any(data).(type) {
 	case map[string]interface{}:
-		return createClusterMultiValue(data.(map[string]T))
+		return CreateClusterMultiValue(data)
 	default:
-		return createClusterSingleValue(data.(T))
+		return CreateClusterSingleValue(data)
 	}
 }
 
-func createClusterSingleValue[T any](data T) ClusterValue[T] {
+func CreateClusterSingleValue[T any](data T) ClusterValue[T] {
 	return ClusterValue[T]{
 		valueType: SingleValue,
-		value:     Result[any]{val: data, isNil: false},
+		value:     Result[T]{val: data, isNil: false},
 	}
 }
 
-func createClusterMultiValue[T any](data map[string]T) ClusterValue[T] {
+func CreateClusterMultiValue[T any](data T) ClusterValue[T] {
 	return ClusterValue[T]{
 		valueType: MultiValue,
-		value:     Result[any]{val: data, isNil: false},
+		value:     Result[T]{val: data, isNil: false},
 	}
 }
 
-func createEmptyClusterValue[T any]() ClusterValue[T] {
-	var empty T
-	return ClusterValue[T]{
-		value: Result[any]{val: empty, isNil: true},
+func CreateEmptyClusterValue() ClusterValue[interface{}] {
+	var empty interface{}
+	return ClusterValue[interface{}]{
+		value: Result[interface{}]{val: empty, isNil: true},
 	}
 }
 
