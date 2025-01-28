@@ -70,36 +70,54 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 	return CreateClusterValue(data), nil
 }
 
-// Echoes the provided message back.
+// Echo the provided message back.
+// The command will be routed a random node.
 //
 // Parameters:
 //
-//	echoOptions - The EchoOptions type.
+//	message - The provided message.
 //
 // Return value:
 //
-//	Returns "PONG" or the copy of message.
+//	A map where each address is the key and its corresponding node response is the information for the default sections.
 //
 // For example:
 //
-//	route := config.SimpleNodeRoute(config.RandomRoute)
-//	options := options.NewEchoOptionsBuilder().SetRoute(route).SetMessage("Hello")
-//	result, err := client.EchoWithOptions(options)
-//	fmt.Println(result) // Output: "Hello"
+//	response, err := clusterClient.Echo(opts)
+//	if err != nil {
+//		// handle error
+//	}
+//	for node, data := range response {
+//		fmt.Printf("%s node returned %s\n", node, data)
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *glideClusterClient) EchoWithOptions(opts *options.EchoOptions) (ClusterValue[interface{}], error) {
-	args, err := opts.ToArgs()
-	if err != nil {
-		return CreateEmptyClusterValue(), err
+func (client *GlideClusterClient) EchoWithOptions(options ClusterEchoOptions) (ClusterValue[string], error) {
+	if options.Route == nil {
+		response, err := client.executeCommand(C.Echo, options.toArgs())
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
 	}
-	res, err := client.executeCommandWithRoute(C.Echo, args, opts.Route)
+	response, err := client.executeCommandWithRoute(C.Echo, options.toArgs(), *options.Route)
 	if err != nil {
-		return CreateEmptyClusterValue(), err
+		return createEmptyClusterValue[string](), err
 	}
-	data, err := handleInterfaceResponse(res)
+	if (*options.Route).IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
 	if err != nil {
-		return CreateEmptyClusterValue(), err
+		return createEmptyClusterValue[string](), err
 	}
-	return CreateClusterValue(data), nil
+	return createClusterSingleValue[string](data), nil
 }
