@@ -18,7 +18,12 @@ import (
 // - [config.ByAddressRoute]
 type Route interface {
 	ToRoutesProtobuf() (*protobuf.Routes, error)
+	IsMultiNode() bool
 }
+
+type notMultiNode struct{}
+
+func (*notMultiNode) IsMultiNode() bool { return false }
 
 type SimpleNodeRoute int
 
@@ -45,6 +50,15 @@ func (simpleNodeRoute SimpleNodeRoute) ToRoutesProtobuf() (*protobuf.Routes, err
 		},
 	}
 	return request, nil
+}
+
+func (route SimpleNodeRoute) IsMultiNode() bool {
+	return route != RandomRoute
+}
+
+func (snr SimpleNodeRoute) ToPtr() *Route {
+	a := Route(snr)
+	return &a
 }
 
 func mapSimpleNodeRoute(simpleNodeRoute SimpleNodeRoute) (protobuf.SimpleRoutes, error) {
@@ -86,6 +100,7 @@ func mapSlotType(slotType SlotType) (protobuf.SlotTypes, error) {
 type SlotIdRoute struct {
 	slotType SlotType
 	slotID   int32
+	notMultiNode
 }
 
 // - slotType: Defines type of the node being addressed.
@@ -117,6 +132,7 @@ func (slotIdRoute *SlotIdRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
 type SlotKeyRoute struct {
 	slotType SlotType
 	slotKey  string
+	notMultiNode
 }
 
 // - slotType: Defines type of the node being addressed.
@@ -146,6 +162,7 @@ func (slotKeyRoute *SlotKeyRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
 type ByAddressRoute struct {
 	host string
 	port int32
+	notMultiNode
 }
 
 // Create a route using hostname/address and port.

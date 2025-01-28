@@ -386,6 +386,43 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 	assert.Equal(suite.T(), "item3", sortResult[5].Value())
 }
 
+func (suite *GlideTestSuite) TestInfoStandalone() {
+	DEFAULT_INFO_SECTIONS := []string{
+		"Server",
+		"Clients",
+		"Memory",
+		"Persistence",
+		"Stats",
+		"Replication",
+		"CPU",
+		"Modules",
+		"Errorstats",
+		"Cluster",
+		"Keyspace",
+	}
+
+	client := suite.defaultClient()
+	t := suite.T()
+
+	// info without options
+	info, err := client.Info()
+	assert.NoError(t, err)
+	for _, section := range DEFAULT_INFO_SECTIONS {
+		assert.Contains(t, info, "# "+section, "Section "+section+" is missing")
+	}
+
+	// info with option or with multiple options
+	sections := []api.Section{api.Cpu}
+	if suite.serverVersion >= "7.0.0" {
+		sections = append(sections, api.Memory)
+	}
+	info, err = client.InfoWithOptions(api.InfoOptions{Sections: sections})
+	assert.NoError(t, err)
+	for _, section := range sections {
+		assert.Contains(t, strings.ToLower(info), strings.ToLower("# "+string(section)), "Section "+section+" is missing")
+	}
+}
+
 func (suite *GlideTestSuite) TestDBSize() {
 	client := suite.defaultClient()
 	result, err := client.DBSize()
