@@ -689,6 +689,16 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry configs_%p",
+        async (protocol) => {
+            const client = GlideClusterClient.createClient({
+                ...getClientConfigurationOption(cluster.getAddresses(), protocol), advancedConfiguration:{openTelemetryConfig: {collectorEndPoint: "https://eifrah-aws.github.io/glide-for-redis"}}},
+                // htttttps://eifrah-aws.github.io/glide-for-redis
+            )
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lolwut test_%p`,
         async (protocol) => {
             client = await GlideClusterClient.createClient(

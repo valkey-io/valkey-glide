@@ -1070,6 +1070,16 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "opentelemetry configs_%p",
+            async (protocol) => {
+                const client = GlideClient.createClient({
+                                ...getClientConfigurationOption(cluster.getAddresses(), protocol), advancedConfiguration:{openTelemetryConfig: {collectorEndPoint: "https://eifrah-aws.github.io/glide-for-redis", spanFlushInterval: 400}}},
+                                // htttttps://eifrah-aws.github.io/glide-for-redis
+                            )
+            },
+        );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function kill RW func %p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
