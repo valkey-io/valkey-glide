@@ -30,9 +30,9 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 
 func (suite *GlideTestSuite) TestDBSizeRandomRoute() {
 	client := suite.defaultClusterClient()
-	route := api.RandomRoute
-
-	result, err := client.DBSizeWithOptions(route)
+	route := config.Route(config.RandomRoute)
+	options := options.RouteOption{Route: route}
+	result, err := client.DBSizeWithOptions(options)
 
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), result)
