@@ -11,6 +11,7 @@ use rand::Rng;
 #[cfg(feature = "cluster-async")]
 use std::ops::Add;
 use std::time::Duration;
+use telemetrylib::GlideOpenTelemetryConfig;
 
 #[cfg(feature = "tls-rustls")]
 use crate::tls::TlsConnParams;
@@ -49,7 +50,7 @@ struct BuilderParams {
     response_timeout: Option<Duration>,
     protocol: ProtocolVersion,
     pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
-    // open_telemetry_configs: Option<GlideOpenTelemetry>,
+    open_telemetry_config: Option<GlideOpenTelemetryConfig>,
 }
 
 #[derive(Clone)]
@@ -400,6 +401,21 @@ impl ClusterClientBuilder {
     /// - `read_strategy`: defines the replica routing strategy.
     pub fn read_from(mut self, read_strategy: ReadFromReplicaStrategy) -> ClusterClientBuilder {
         self.builder_params.read_from_replicas = read_strategy;
+        self
+    }
+
+    /// Set OpenTelemetry configuration for this client
+    ///
+    /// # Parameters
+    /// - `open_telemetry_config`: Use the `open_telemetry_config` property to specify the endpoint of the collector to export the measurments.
+    ///  - **Collector EndPoint**: Set `collectorEndPoint` to specify the endpoint of the collector to export the measurments.
+    ///  - **Span Flush Interval**: Set `spanFlushInterval` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 5000 will be used.
+    ///
+    pub fn open_telemetry_config(
+        mut self,
+        open_telemetry_config: GlideOpenTelemetryConfig,
+    ) -> ClusterClientBuilder {
+        self.builder_params.open_telemetry_config = Some(open_telemetry_config);
         self
     }
 

@@ -4,8 +4,10 @@ use opentelemetry::trace::TraceContextExt;
 use opentelemetry::{global, trace::Tracer};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace::TracerProvider;
+use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+use url::Url;
 
 const SPAN_WRITE_LOCK_ERR: &str = "Failed to get span write lock";
 const SPAN_READ_LOCK_ERR: &str = "Failed to get span read lock";
@@ -29,6 +31,33 @@ pub enum GlideOpenTelemetryTraceExporter {
     /// No collector. Instead, write the traces collected to a file. The contained value "PathBuf"
     /// points to the folder where the collected data should be placed.
     File(PathBuf),
+}
+
+impl std::str::FromStr for GlideOpenTelemetryTraceExporter {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_endpoint(s)
+    }
+}
+
+fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Error> {
+    // Parse the URL using the `url` crate to validate it
+    let url = Url::parse(endpoint)
+        .map_err(|_| Error::new(ErrorKind::InvalidInput, format!("Parse error. {endpoint}")))?;
+
+    match url.scheme() {
+        "http" | "https" => Ok(GlideOpenTelemetryTraceExporter::Http(format!(
+            "{}:{}",
+            url.host_str().unwrap_or("127.0.0.1"),
+            url.port().unwrap_or(80)
+        ))), // HTTP endpoint
+        "grpc" => Ok(GlideOpenTelemetryTraceExporter::Grpc(format!(
+            "{}:{}",
+            url.host_str().unwrap_or("127.0.0.1"),
+            url.port().unwrap_or(80)
+        ))), // gRPC endpoint
+        _ => Err(Error::new(ErrorKind::InvalidInput, endpoint)),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -188,6 +217,7 @@ impl GlideSpan {
 ///    .build();
 /// GlideOpenTelemetry::initialise(config);
 /// ```
+#[derive(Clone, Debug)]
 pub struct GlideOpenTelemetryConfig {
     /// Default delay interval between two consecutive exports.
     span_flush_interval: std::time::Duration,
@@ -211,7 +241,6 @@ impl Default for GlideOpenTelemetryConfigBuilder {
     }
 }
 
-#[allow(dead_code)]
 impl GlideOpenTelemetryConfigBuilder {
     pub fn with_flush_interval(mut self, duration: std::time::Duration) -> Self {
         self.span_flush_interval = duration;
@@ -231,6 +260,7 @@ impl GlideOpenTelemetryConfigBuilder {
     }
 }
 
+#[derive(Clone)]
 pub struct GlideOpenTelemetry {}
 
 /// Our interface to OpenTelemetry
@@ -239,12 +269,13 @@ impl GlideOpenTelemetry {
     ///
     /// This method should be called once for the given **process**
     pub fn initialise(config: GlideOpenTelemetryConfig) {
+        let batch_config = opentelemetry_sdk::trace::BatchConfigBuilder::default()
+            .with_scheduled_delay(config.span_flush_interval)
+            .build();
+
         let trace_exporter = match config.trace_exporter {
             GlideOpenTelemetryTraceExporter::File(p) => {
                 let exporter = crate::SpanExporterFile::new(p);
-                let batch_config = opentelemetry_sdk::trace::BatchConfigBuilder::default()
-                    .with_scheduled_delay(config.span_flush_interval)
-                    .build();
                 opentelemetry_sdk::trace::BatchSpanProcessor::builder(
                     exporter,
                     opentelemetry_sdk::runtime::Tokio,
@@ -265,6 +296,10 @@ impl GlideOpenTelemetry {
             .with_span_processor(trace_exporter)
             .build();
         global::set_tracer_provider(provider);
+    }
+
+    pub fn get_span_interval(config: GlideOpenTelemetryConfig) -> u64 {
+        config.span_flush_interval.as_millis() as u64
     }
 
     /// Create new span
