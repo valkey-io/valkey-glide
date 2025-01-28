@@ -1020,7 +1020,6 @@ func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[st
 		next:     arrayConverter[string]{},
 		canBeNil: false,
 	}.convert(data)
-
 	if err != nil {
 		return nil, err
 	}
