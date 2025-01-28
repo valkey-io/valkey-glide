@@ -135,7 +135,7 @@ func (client *GlideClusterClient) Ping() (string, error) {
 }
 
 // Pings the server.
-// The command will be routed to all primary nodes
+// The command will be routed to all primary nodes, unless `Route` is provided in `pingOptions`.
 //
 // Parameters:
 //
@@ -148,17 +148,16 @@ func (client *GlideClusterClient) Ping() (string, error) {
 // For example:
 //
 //	route := config.Route(config.RandomRoute)
-//  opts := options.ClusterPingOptions{
-//		PingOptions: &options.PingOptions{
-//			Message: "Hello",
-//		},
-//		Route: &route,
-//	}
+//	opts  := options.ClusterPingOptions{
+//			 PingOptions: &options.PingOptions{
+//			   Message: "Hello",
+//			 },
+//			 Route: &route,
+//		 }
 //	result, err := clusterClient.PingWithOptions(opts)
 //	fmt.Println(result) // Output: Hello
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-
 func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (string, error) {
 	if pingOptions.Route == nil {
 		response, err := client.executeCommand(C.Ping, pingOptions.ToArgs())

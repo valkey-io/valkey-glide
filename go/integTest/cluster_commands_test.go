@@ -60,18 +60,10 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_InvalidRoute() {
 func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_AllNodes() {
 	client := suite.defaultClusterClient()
 	route := config.SimpleNodeRoute(config.AllNodes)
-	result, _ := client.CustomCommandWithRoute([]string{"PING"}, route)
+	result, err := client.CustomCommandWithRoute([]string{"PING"}, route)
 	value := result.Value()
-
-	if result.IsMultiValue() {
-		responses := value.(map[string]interface{})
-		assert.Greater(suite.T(), len(responses), 0)
-		for _, response := range responses {
-			assert.Equal(suite.T(), "PONG", response.(string))
-		}
-	} else {
-		assert.Equal(suite.T(), "PONG", value.(string))
-	}
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "PONG", value.(string))
 }
 
 func (suite *GlideTestSuite) TestPingWithOptions_NoRoute() {
