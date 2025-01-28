@@ -1,49 +1,18 @@
-#!/usr/bin/env node
-
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { GLIBC, familySync } from "detect-libc";
-import { arch, platform } from "process";
+import glideRs from './glide-rs';
 
 let globalObject = global as unknown;
 
-/* eslint-disable @typescript-eslint/no-require-imports */
-function loadNativeBinding() {
-    let nativeStr = process.env.native_binding;
+=======
+import glideRs from './glide-rs';
 
-    if (nativeStr == undefined) {
-        const prefix = familySync() == GLIBC ? "" : "-musl";
-        nativeStr = `${platform}${prefix}-${arch}`;
+let globalObject = global as unknown;
 
-        if (
-            !["x64", "arm64"].includes(arch) ||
-            !["linux", "darwin"].includes(platform)
-        ) {
-            throw new Error(
-                `Unsupported OS: ${platform}, architecture: ${arch}`,
-            );
-        }
-    }
-
-    let scope = process.env.scope || "@scope";
-
-    if (scope == "@scope") {
-        scope = "@valkey/";
-    }
-
-    const nativeBinding = require(`${scope}valkey-glide-${nativeStr}`);
-
-    if (!nativeBinding) {
-        throw new Error(`Failed to load native binding`);
-    }
-
-    return nativeBinding;
-}
-
+>>>>>>> 3ed65fe3 (additional refactoring)
 function initialize() {
-    const nativeBinding = loadNativeBinding();
     const {
         AggregationType,
         BaseScanOptions,
@@ -191,7 +160,7 @@ function initialize() {
         ReturnTypeAttribute,
         ReturnTypeJson,
         UniversalReturnTypeJson,
-    } = nativeBinding;
+    } = glideRs;
 
     module.exports = {
         AggregationType,
@@ -342,7 +311,7 @@ function initialize() {
         UniversalReturnTypeJson,
     };
 
-    globalObject = Object.assign(global, nativeBinding);
+    globalObject = Object.assign(global, glideRs);
 }
 
 initialize();
