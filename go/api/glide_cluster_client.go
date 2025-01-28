@@ -95,7 +95,7 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 func (client *GlideClusterClient) DBSizeWithOptions(opts *options.DBSizeOptions) (int64, error) {
 	result, err := client.executeCommandWithRoute(C.DBSize, []string{}, opts.Route)
 	if err != nil {
-		return handleIntOrNilResponse, err
+		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
