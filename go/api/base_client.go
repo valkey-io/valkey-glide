@@ -6838,5 +6838,5 @@ func (client *baseClient) Time() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return handleRawStringArrayResponse(result)
+	return handleStringArrayResponse(result)
 }

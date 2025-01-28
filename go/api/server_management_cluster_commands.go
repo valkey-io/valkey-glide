@@ -10,5 +10,5 @@ import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 //
 // [valkey.io]: https://valkey.io/commands/#server
 type ServerManagementClusterCommands interface {
-	TimeWithOptions(timeOptions options.ClusterTimeOptions) (ClusterValue[[]string], error)
+	TimeWithOptions(routeOption options.RouteOption) (ClusterValue[[]string], error)
 }

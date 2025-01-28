@@ -32,7 +32,7 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 
 func (suite *GlideTestSuite) TestTimeWithoutRoute() {
 	client := suite.defaultClusterClient()
-	options := options.ClusterTimeOptions{Route: nil}
+	options := options.RouteOption{Route: nil}
 	result, err := client.TimeWithOptions(options)
 
 	assert.NoError(suite.T(), err)
@@ -45,7 +45,7 @@ func (suite *GlideTestSuite) TestTimeWithoutRoute() {
 func (suite *GlideTestSuite) TestTimeWithAllNodesRoute() {
 	client := suite.defaultClusterClient()
 	route := config.Route(config.AllNodes)
-	options := options.ClusterTimeOptions{Route: &route}
+	options := options.RouteOption{Route: route}
 	result, err := client.TimeWithOptions(options)
 
 	assert.NoError(suite.T(), err)
@@ -61,7 +61,7 @@ func (suite *GlideTestSuite) TestTimeWithAllNodesRoute() {
 func (suite *GlideTestSuite) TestTimeWithRandomRoute() {
 	client := suite.defaultClusterClient()
 	route := config.Route(config.RandomRoute)
-	options := options.ClusterTimeOptions{Route: &route}
+	options := options.RouteOption{Route: route}
 	result, err := client.TimeWithOptions(options)
 
 	assert.NoError(suite.T(), err)
@@ -74,7 +74,7 @@ func (suite *GlideTestSuite) TestTimeWithRandomRoute() {
 func (suite *GlideTestSuite) TestTimeWithInvalidRoute() {
 	client := suite.defaultClusterClient()
 	invalidRoute := config.Route(config.NewByAddressRoute("invalidHost", 9999))
-	options := options.ClusterTimeOptions{Route: &invalidRoute}
+	options := options.RouteOption{Route: invalidRoute}
 	result, err := client.TimeWithOptions(options)
 
 	assert.NotNil(suite.T(), err)
