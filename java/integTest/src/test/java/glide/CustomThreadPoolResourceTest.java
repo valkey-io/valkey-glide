@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import glide.api.GlideClient;
 import glide.connectors.resources.NIOPoolResource;
+import io.netty.channel.nio.NioEventLoopGroup;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
