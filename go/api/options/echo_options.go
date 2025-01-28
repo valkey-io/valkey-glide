@@ -6,30 +6,26 @@ import (
 	"github.com/valkey-io/valkey-glide/go/glide/api/config"
 )
 
+// Optional arguments for `Echo` for standalone client
 type EchoOptions struct {
-	message string
-	Route   config.Route
+	Message string
 }
 
-func NewEchoOptionsBuilder() *EchoOptions {
-	return &EchoOptions{}
+// Optional arguments for `Echo` for cluster client
+type ClusterEchoOptions struct {
+	*EchoOptions
+	// Specifies the routing configuration for the command.
+	// The client will route the command to the nodes defined by *Route*.
+	Route *config.Route
 }
 
-func (echoOptions *EchoOptions) SetMessage(msg string) *EchoOptions {
-	echoOptions.message = msg
-	return echoOptions
-}
-
-func (echoOptions *EchoOptions) SetRoute(route config.Route) *EchoOptions {
-	echoOptions.Route = route
-	return echoOptions
-}
-
-func (opts *EchoOptions) ToArgs() ([]string, error) {
-	args := []string{}
-
-	if opts.message != "" {
-		args = append(args, opts.message)
+func (opts *EchoOptions) ToArgs() []string {
+	if opts == nil {
+		return []string{}
 	}
-	return args, nil
+	args := []string{}
+	if opts.Message != "" {
+		args = append(args, opts.Message)
+	}
+	return args
 }

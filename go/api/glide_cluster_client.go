@@ -17,7 +17,6 @@ var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
 type GlideClusterClientCommands interface {
 	BaseClient
 	GenericClusterCommands
-	ServerManagementClusterCommands
 }
 
 // GlideClusterClient implements cluster mode operations by extending baseClient functionality.
@@ -97,33 +96,19 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *GlideClusterClient) EchoWithOptions(opts *options.EchoOptions) (ClusterValue[string], error) {
-	args, err := opts.ToArgs()
-	if options.Route == nil {
-		response, err := client.executeCommand(C.Echo, args)
+func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (string, error) {
+	if echoOptions.Route == nil {
+		response, err := client.executeCommand(C.Echo, echoOptions.ToArgs())
 		if err != nil {
-			return CreateEmptyClusterValue[string](), err
+			return defaultStringResponse, err
 		}
-		data, err := handleStringToStringMapResponse(response)
-		if err != nil {
-			return CreateEmptyClusterValue[string](), err
-		}
-		return CreateClusterMultiValue[string](data), nil
+		return handleStringResponse(response)
 	}
-	response, err := client.executeCommandWithRoute(C.Echo, args, *options.Route)
+
+	response, err := client.executeCommandWithRoute(C.Echo, echoOptions.ToArgs(), *echoOptions.Route)
 	if err != nil {
-		return CreateEmptyClusterValue[string](), err
+		return defaultStringResponse, err
 	}
-	if (*options.Route).IsMultiNode() {
-		data, err := handleStringToStringMapResponse(response)
-		if err != nil {
-			return CreateEmptyClusterValue[string](), err
-		}
-		return CreateClusterMultiValue[string](data), nil
-	}
-	data, err := handleStringResponse(response)
-	if err != nil {
-		return CreateEmptyClusterValue[string](), err
-	}
-	return createClusterSingleValue[string](data), nil
+
+	return handleStringResponse(response)
 }

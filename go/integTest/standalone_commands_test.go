@@ -392,15 +392,3 @@ func (suite *GlideTestSuite) TestDBSize() {
 	assert.Nil(suite.T(), err)
 	assert.Greater(suite.T(), result, int64(0))
 }
-
-func (suite *GlideTestSuite) TestEchoWithOptions_WithRoute() {
-	client := suite.defaultClient()
-	options := options.NewEchoOptionsBuilder().
-		SetRoute(config.SimpleNodeRoute(config.RandomRoute))
-
-	result, err := client.EchoWithOptions(options)
-
-	assert.NotNil(suite.T(), err)
-	assert.Equal(suite.T(), "", result)
-	assert.IsType(suite.T(), &errors.RequestError{}, err)
-}
