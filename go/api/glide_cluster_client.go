@@ -166,6 +166,7 @@ func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (C
 }
 
 // Returns the server time.
+// The command will be routed to a random node, unless Route in opts is provided.
 //
 // See [valkey.io] for details.
 //
@@ -181,17 +182,17 @@ func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (C
 //
 // Example:
 //
-//	route := config.Route(config.AllNodes)
+//	route := config.Route(config.RandomRoute)
 //	opts  := options.ClusterTimeOptions{
 //		  Route: &route,
 //	}
-//	fmt.Println(clusterResponse.Value()) // Output: [1737994354 547816]
+//	fmt.Println(clusterResponse.SingleValue()) // Output: [1737994354 547816]
 //
 // [valkey.io]: https://valkey.io/commands/time/
 func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (ClusterValue[[]string], error) {
 	result, err := client.executeCommandWithRoute(C.Time, []string{}, opts.Route)
 	if err != nil {
-		return CreateEmptyStringArrayClusterValue(), err
+		return createEmptyClusterValue[[]string](), err
 	}
 	return handleTimeClusterResponse(result)
 }

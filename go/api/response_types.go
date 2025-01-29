@@ -169,13 +169,6 @@ func createEmptyClusterValue[T any]() ClusterValue[T] {
 	}
 }
 
-func CreateEmptyStringArrayClusterValue() ClusterValue[[]string] {
-	var empty []string
-	return ClusterValue[[]string]{
-		value: Result[[]string]{val: empty, isNil: true},
-	}
-}
-
 // XPendingSummary represents a summary of pending messages in a stream group.
 // It includes the total number of pending messages, the ID of the first and last pending messages,
 // and a list of consumer pending messages.

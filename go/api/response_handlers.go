@@ -1036,19 +1036,20 @@ func handleTimeClusterResponse(response *C.struct_CommandResponse) (ClusterValue
 	if err := checkResponseType(response, C.Map, true); err == nil {
 		mapData, err := handleRawStringArrayMapResponse(response)
 		if err != nil {
-			return CreateEmptyStringArrayClusterValue(), err
+			return createEmptyClusterValue[[]string](), err
 		}
-		var times []string
-		for _, nodeTimes := range mapData {
-			times = append(times, nodeTimes...)
+		multiNodeTimes := make(map[string][]string)
+		for nodeName, nodeTimes := range mapData {
+			multiNodeTimes[nodeName] = nodeTimes
 		}
-		return CreateClusterMultiValue(times), nil
+
+		return createClusterMultiValue(multiNodeTimes), nil
 	}
 
 	// Handle single node response
 	data, err := handleStringArrayResponse(response)
 	if err != nil {
-		return CreateEmptyStringArrayClusterValue(), err
+		return createEmptyClusterValue[[]string](), err
 	}
-	return CreateClusterSingleValue(data), nil
+	return createClusterSingleValue(data), nil
 }
