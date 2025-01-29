@@ -196,11 +196,6 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 //
 //	`"OK"` response on success.
 //
-// For example:
-//
-//	result, err := client.Set("key", "value")
-//	result: "OK"
-//
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) Set(key string, value string) (string, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
@@ -231,17 +226,6 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 //	api.CreateNilStringResult().
 //	If SetOptions.returnOldValue is set, return the old value as a String.
 //
-// For example:
-//
-//	 key: initialValue
-//	 result, err := client.SetWithOptions("key", "value", api.NewSetOptionsBuilder()
-//				.SetExpiry(api.NewExpiryBuilder()
-//				.SetType(api.Seconds)
-//				.SetCount(uint64(5)
-//			))
-//	 result.Value(): "OK"
-//	 result.IsNil(): false
-//
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (Result[string], error) {
 	optionArgs, err := options.toArgs()
@@ -270,15 +254,6 @@ func (client *baseClient) SetWithOptions(key string, value string, options *SetO
 //
 //	If key exists, returns the value of key as a String. Otherwise, return [api.CreateNilStringResult()].
 //
-// For example:
-//  1. key: value
-//     result, err := client.Get("key")
-//     result.Value(): "value"
-//     result.IsNil(): false
-//  2. result, err := client.Get("nonExistentKey")
-//     result.Value(): ""
-//     result.IsNil(): true
-//
 // [valkey.io]: https://valkey.io/commands/get/
 func (client *baseClient) Get(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.Get, []string{key})
@@ -302,15 +277,6 @@ func (client *baseClient) Get(key string) (Result[string], error) {
 //
 //	If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
 //
-// For example:
-//  1. key: value
-//     result, err := client.GetEx("key")
-//     result.Value(): "value"
-//     result.IsNil(): false
-//  2. result, err := client.GetEx("nonExistentKey")
-//     result.Value(): ""
-//     result.IsNil(): true
-//
 // [valkey.io]: https://valkey.io/commands/getex/
 func (client *baseClient) GetEx(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.GetEx, []string{key})
@@ -333,17 +299,6 @@ func (client *baseClient) GetEx(key string) (Result[string], error) {
 // Return value:
 //
 //	If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
-//
-// For example:
-//
-//	 key: initialValue
-//	 result, err := client.GetExWithOptions("key", api.NewGetExOptionsBuilder()
-//				.SetExpiry(api.NewExpiryBuilder()
-//				.SetType(api.Seconds)
-//				.SetCount(uint64(5)
-//			))
-//	 result.Value(): "initialValue"
-//	 result.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/getex/
 func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (Result[string], error) {
@@ -379,11 +334,6 @@ func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (R
 //
 //	`"OK"` on success.
 //
-// For example:
-//
-//	result, err := client.MSet(map[string]string{"key1": "value1", "key2": "value2"})
-//	result: "OK"
-//
 // [valkey.io]: https://valkey.io/commands/mset/
 func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
@@ -413,13 +363,6 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 // Return value:
 //
 //	A bool containing true, if all keys were set. false, if no key was set.
-//
-// For example:
-//  1. result, err := client.MSetNX(map[string]string{"key1": "value1", "key2": "value2"})
-//     result: true
-//  2. key3: initialValue
-//     result, err := client.MSetNX(map[string]string{"key3": "value3", "key4": "value4"})
-//     result: false
 //
 // [valkey.io]: https://valkey.io/commands/msetnx/
 func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
@@ -451,16 +394,6 @@ func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
 //	An array of values corresponding to the provided keys.
 //	If a key is not found, its corresponding value in the list will be a [api.CreateNilStringResult()]
 //
-// For example:
-//
-//	key1: value1, key2: value2
-//	result, err := client.MGet([]string{"key1", "key2", "key3"})
-//	result : {
-//	           api.CreateStringResult("value1),
-//	           api.CreateStringResult("value2"),
-//	           api.CreateNilStringResult()
-//	         }
-//
 // [valkey.io]: https://valkey.io/commands/mget/
 func (client *baseClient) MGet(keys []string) ([]Result[string], error) {
 	result, err := client.executeCommand(C.MGet, keys)
@@ -482,12 +415,6 @@ func (client *baseClient) MGet(keys []string) ([]Result[string], error) {
 // Return value:
 //
 //	The value of `key` after the increment.
-//
-// For example:
-//
-//	key: 1
-//	result, err := client.Incr("key");
-//	result: 2
 //
 // [valkey.io]: https://valkey.io/commands/incr/
 func (client *baseClient) Incr(key string) (int64, error) {
@@ -511,12 +438,6 @@ func (client *baseClient) Incr(key string) (int64, error) {
 // Return value:
 //
 //	The value of `key` after the increment.
-//
-// For example:
-//
-//	key: 1
-//	result, err := client.IncrBy("key", 2)
-//	result: 3
 //
 // [valkey.io]: https://valkey.io/commands/incrby/
 func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
@@ -543,12 +464,6 @@ func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
 //
 //	The value of key after the increment.
 //
-// For example:
-//
-//	key: 1
-//	result, err := client.IncrBy("key", 0.5)
-//	result: 1.5
-//
 // [valkey.io]: https://valkey.io/commands/incrbyfloat/
 func (client *baseClient) IncrByFloat(key string, amount float64) (float64, error) {
 	result, err := client.executeCommand(
@@ -573,12 +488,6 @@ func (client *baseClient) IncrByFloat(key string, amount float64) (float64, erro
 // Return value:
 //
 //	The value of `key` after the decrement.
-//
-// For example:
-//
-//	key: 1
-//	result, err := client.Decr("key")
-//	result: 0
 //
 // [valkey.io]: https://valkey.io/commands/decr/
 func (client *baseClient) Decr(key string) (int64, error) {
@@ -605,10 +514,6 @@ func (client *baseClient) Decr(key string) (int64, error) {
 //
 // For example:
 //
-//	key: 1
-//	result, err := client.DecrBy("key", 2)
-//	result: -1
-//
 // [valkey.io]: https://valkey.io/commands/decrby/
 func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 	result, err := client.executeCommand(C.DecrBy, []string{key, utils.IntToString(amount)})
@@ -631,12 +536,6 @@ func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 //
 //	The length of the string value stored at `key`.
 //	If key does not exist, it is treated as an empty string, and the command returns `0`.
-//
-// For example:
-//
-//	key: value
-//	result, err := client.Strlen("key")
-//	result: 5
 //
 // [valkey.io]: https://valkey.io/commands/strlen/
 func (client *baseClient) Strlen(key string) (int64, error) {
@@ -665,15 +564,6 @@ func (client *baseClient) Strlen(key string) (int64, error) {
 //
 //	The length of the string stored at `key` after it was modified.
 //
-// For example:
-//  1. result, err := client.SetRange("key", 6, "GLIDE")
-//     result: 11 (New key created with length of 11 bytes)
-//     value, err  := client.Get("key")
-//     value.Value(): "\x00\x00\x00\x00\x00\x00GLIDE"
-//  2. "key": "愛" (value char takes 3 bytes)
-//     result, err := client.SetRange("key", 1, "a")
-//     result: 3
-//
 // [valkey.io]: https://valkey.io/commands/setrange/
 func (client *baseClient) SetRange(key string, offset int, value string) (int64, error) {
 	result, err := client.executeCommand(C.SetRange, []string{key, strconv.Itoa(offset), value})
@@ -701,16 +591,6 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 //
 //	A substring extracted from the value stored at key. Returns empty string if the offset is out of bounds.
 //
-// For example:
-//  1. mykey: "This is a string"
-//     result, err := client.GetRange("mykey", 0, 3)
-//     result: "This"
-//     result, err := client.GetRange("mykey", -3, -1)
-//     result: "ing" (extracted last 3 characters of a string)
-//  2. "key": "愛" (value char takes 3 bytes)
-//     result, err = client.GetRange("key", 0, 1)
-//     result: "�" (returns an invalid UTF-8 string)
-//
 // [valkey.io]: https://valkey.io/commands/getrange/
 func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
 	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
@@ -734,11 +614,6 @@ func (client *baseClient) GetRange(key string, start int, end int) (string, erro
 // Return value:
 //
 //	The length of the string after appending the value.
-//
-// For example:
-//
-//	result, err := client.Append("key", "value")
-//	result: 5
 //
 // [valkey.io]: https://valkey.io/commands/append/
 func (client *baseClient) Append(key string, value string) (int64, error) {
@@ -775,12 +650,6 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 //	The longest common subsequence between the 2 strings.
 //	An empty string is returned if the keys do not exist or have no common subsequences.
 //
-// For example:
-//
-//	testKey1: foo, testKey2: fao
-//	result, err := client.LCS("testKey1", "testKey2")
-//	result: "fo"
-//
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	result, err := client.executeCommand(C.LCS, []string{key1, key2})
@@ -801,10 +670,6 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 //
 //	If key exists, returns the value of the key as a String and deletes the key.
 //	If key does not exist, returns a [api.NilResult[string]] (api.CreateNilStringResult()).
-//
-// For example:
-//
-//	result, err := client.GetDel("key")
 //
 // [valkey.io]: https://valkey.io/commands/getdel/
 func (client *baseClient) GetDel(key string) (Result[string], error) {
