@@ -5642,17 +5642,17 @@ func (suite *GlideTestSuite) TestXPending() {
 
 			resp, err := client.CustomCommand(command)
 			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), "OK", resp.Value().(string))
+			assert.Equal(suite.T(), "OK", resp.SingleValue().(string))
 
 			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
 			resp, err = client.CustomCommand(command)
 			assert.NoError(suite.T(), err)
-			assert.True(suite.T(), resp.Value().(bool))
+			assert.True(suite.T(), resp.SingleValue().(bool))
 
 			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer2}
 			resp, err = client.CustomCommand(command)
 			assert.NoError(suite.T(), err)
-			assert.True(suite.T(), resp.Value().(bool))
+			assert.True(suite.T(), resp.SingleValue().(bool))
 
 			streamid_1, err := client.XAdd(key, [][]string{{"field1", "value1"}})
 			assert.NoError(suite.T(), err)
@@ -5902,7 +5902,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			command := []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
 			resp, err := client.CustomCommand(command)
 			assert.NoError(suite.T(), err)
-			assert.True(suite.T(), resp.Value().(bool))
+			assert.True(suite.T(), resp.SingleValue().(bool))
 
 			_, err = client.XAdd(key, [][]string{{"field1", "value1"}})
 			assert.NoError(suite.T(), err)
