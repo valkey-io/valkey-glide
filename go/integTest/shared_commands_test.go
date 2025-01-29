@@ -603,23 +603,6 @@ func (suite *GlideTestSuite) TestGetDel_EmptyKey() {
 	})
 }
 
-func (suite *GlideTestSuite) TestPing_NoArgument() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
-		result, err := client.Ping()
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "PONG", result)
-	})
-}
-
-func (suite *GlideTestSuite) TestPing_WithArgument() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
-		// Passing "Hello" as the message
-		result, err := client.PingWithMessage("Hello")
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "Hello", result)
-	})
-}
-
 func (suite *GlideTestSuite) TestHSet_WithExistingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
@@ -6220,17 +6203,6 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		resultGet_test4, err := client.Get(key)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGet_test4.Value())
-	})
-}
-
-func (suite *GlideTestSuite) TestEcho() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
-		// Test 1: Check if Echo command return the message
-		value := "Hello world"
-		t := suite.T()
-		resultEcho, err := client.Echo(value)
-		assert.Nil(t, err)
-		assert.Equal(t, value, resultEcho.Value())
 	})
 }
 

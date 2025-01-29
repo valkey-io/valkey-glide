@@ -31,7 +31,6 @@ type BaseClient interface {
 	SetCommands
 	StreamCommands
 	SortedSetCommands
-	ConnectionManagementCommands
 	HyperLogLogCommands
 	GenericBaseCommands
 	BitmapCommands
@@ -3104,52 +3103,6 @@ func (client *baseClient) BLMove(
 	return handleStringOrNilResponse(result)
 }
 
-// Pings the server.
-//
-// Return value:
-//
-//	Returns "PONG".
-//
-// For example:
-//
-//	result, err := client.Ping()
-//
-// [valkey.io]: https://valkey.io/commands/ping/
-func (client *baseClient) Ping() (string, error) {
-	result, err := client.executeCommand(C.Ping, []string{})
-	if err != nil {
-		return defaultStringResponse, err
-	}
-
-	return handleStringResponse(result)
-}
-
-// Pings the server with a custom message.
-//
-// Parameters:
-//
-//	message - A message to include in the `PING` command.
-//
-// Return value:
-//
-//	Returns the copy of message.
-//
-// For example:
-//
-//	result, err := client.PingWithMessage("Hello")
-//
-// [valkey.io]: https://valkey.io/commands/ping/
-func (client *baseClient) PingWithMessage(message string) (string, error) {
-	args := []string{message}
-
-	result, err := client.executeCommand(C.Ping, args)
-	if err != nil {
-		return defaultStringResponse, err
-	}
-
-	return handleStringResponse(result)
-}
-
 // Del removes the specified keys from the database. A key is ignored if it does not exist.
 //
 // Note:
@@ -5589,34 +5542,6 @@ func (client *baseClient) Dump(key string) (Result[string], error) {
 // [valkey.io]: https://valkey.io/commands/object-encoding/
 func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.ObjectEncoding, []string{key})
-	if err != nil {
-		return CreateNilStringResult(), err
-	}
-	return handleStringOrNilResponse(result)
-}
-
-// Echo the provided message back.
-// The command will be routed a random node.
-//
-// Parameters:
-//
-//	message - The provided message.
-//
-// Return value:
-//
-//	The provided message
-//
-// For example:
-//
-//	 result, err := client.Echo("Hello World")
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: Hello World
-//
-// [valkey.io]: https://valkey.io/commands/echo/
-func (client *baseClient) Echo(message string) (Result[string], error) {
-	result, err := client.executeCommand(C.Echo, []string{message})
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
