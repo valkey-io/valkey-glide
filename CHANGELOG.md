@@ -19,6 +19,7 @@
 * Go: Add `BZPopMin` ([#2849](https://github.com/valkey-io/valkey-glide/pull/2849))
 * Java: Shadow `protobuf` dependency ([#2931](https://github.com/valkey-io/valkey-glide/pull/2931))
 * Java: Add `RESP2` support ([#2383](https://github.com/valkey-io/valkey-glide/pull/2383))
+* Java: Fix `lpopCount` null handling ([#3025](https://github.com/valkey-io/valkey-glide/pull/3025))
 * Node, Python: Add `IFEQ` option ([#2909](https://github.com/valkey-io/valkey-glide/pull/2909), [#2962](https://github.com/valkey-io/valkey-glide/pull/2962))
 
 #### Breaking Changes
