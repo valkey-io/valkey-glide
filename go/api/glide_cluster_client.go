@@ -18,7 +18,6 @@ type GlideClusterClientCommands interface {
 	BaseClient
 	GenericClusterCommands
 	ServerManagementClusterCommands
-	ConnectionManagementClusterCommands
 }
 
 // GlideClusterClient implements cluster mode operations by extending baseClient functionality.
