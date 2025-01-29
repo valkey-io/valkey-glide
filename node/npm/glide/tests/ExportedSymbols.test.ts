@@ -2,7 +2,7 @@ import { it } from "@jest/globals";
 import * as f from "fs/promises";
 import { describe } from "node:test";
 import * as ts from "typescript";
-import * as glideApi from "../"; //ESM convention, 
+import * as glideApi from "../"; //ESM convention,
 
 describe("Exported Symbols test", () => {
     it("check excluded symbols are not exported", async () => {
@@ -28,30 +28,47 @@ describe("Exported Symbols test", () => {
 
         internallyExported.sort();
 
-        const skippedListForExports: string[] = ['AdvancedBaseClientConfiguration',
-            'ClusterScanOptions', 'GlideMultiJson'
+        const skippedListForExports: string[] = [
+            "AdvancedBaseClientConfiguration",
+            "ClusterScanOptions",
+            "GlideMultiJson",
         ];
         const missingSymbols = internallyExported.filter(
-            (e: string) => (!exportedSymbolsList.includes(e) && !skippedListForExports.includes(e)),
+            (e: string) =>
+                !exportedSymbolsList.includes(e) &&
+                !skippedListForExports.includes(e),
         );
 
-        const glideRsKeyWords: string[] = ['ClusterScanCursor', 'Script', 'createLeakedArray',
-            'createLeakedAttribute', 'createLeakedBigint', 'createLeakedDouble', 'createLeakedMap',
-            'createLeakedString', 'default'];
+        const glideRsKeyWords: string[] = [
+            "ClusterScanCursor",
+            "Script",
+            "createLeakedArray",
+            "createLeakedAttribute",
+            "createLeakedBigint",
+            "createLeakedDouble",
+            "createLeakedMap",
+            "createLeakedString",
+            "default",
+        ];
         const doesNotExistExports = exportedSymbolsList.filter(
-            (e: string) => (!internallyExported.includes(e) && !glideRsKeyWords.includes(e)),
+            (e: string) =>
+                !internallyExported.includes(e) && !glideRsKeyWords.includes(e),
         );
 
         if (missingSymbols.length > 0) {
-            console.log('The following symbols are exported from npm/glide package but missing ' +
-                'from the internal node package export. These symbols might be from glide-rs package');
+            console.log(
+                "The following symbols are exported from npm/glide package but missing " +
+                    "from the internal node package export. These symbols might be from glide-rs package",
+            );
             console.log(missingSymbols);
         }
 
         expect(missingSymbols.length).toBe(0);
 
         if (doesNotExistExports.length > 0) {
-            console.log("Symbols that might be missed from the npm/glide package export:")
+            console.log(
+                "Symbols that might be missed from the npm/glide package export:",
+            );
             console.log(doesNotExistExports);
         }
 

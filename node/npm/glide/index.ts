@@ -73,7 +73,7 @@ function loadNativeBinding() {
     let scope = process.env.scope || "@scope";
 
     if (scope == "@scope") {
-        scope = "@valkey/"
+        scope = "@valkey/";
     }
 
     const nativeBinding = require(`${scope}valkey-glide-${nativeStr}`);
