@@ -14,7 +14,6 @@ function loadNativeBinding() {
     let scope = process.env.scope || "@scope";
     let nativeBinding = [];
     let nativeStr = process.env.native_binding;
-    console.log(nativeStr);
     if (scope == "@scope") {
         scope = "@valkey/"
     }
