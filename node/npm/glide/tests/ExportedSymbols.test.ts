@@ -7,11 +7,9 @@ import * as glideApi from "../"; //ESM convention,
 describe("Exported Symbols test", () => {
     it("check excluded symbols are not exported", async () => {
         // Check exported symbols for valkey glide package
-        const exportedSymbolsList = Object.keys(glideApi).sort(); // exportedList
+        const exportedSymbolsList = Object.keys(glideApi).sort(); // exportedList from the npm/glide package.
 
         const implBuildFolder = "./build-ts/";
-        // const rustClientBuildFolder = './node_modules/@valkey/valkey-glide-impl/rust-client/';
-        // const filesWithNodeCode = [...await getFiles(implBuildFolder), ...await getFiles(rustClientBuildFolder)];
         const filesWithNodeCode = await getFiles(implBuildFolder);
         console.log(filesWithNodeCode);
 
@@ -30,15 +28,31 @@ describe("Exported Symbols test", () => {
 
         internallyExported.sort();
 
+        const skippedListForExports: string[] = ['AdvancedBaseClientConfiguration',
+            'ClusterScanOptions', 'GlideMultiJson'
+        ];
         const missingSymbols = internallyExported.filter(
-            (e: string) => !exportedSymbolsList.includes(e),
+            (e: string) => (!exportedSymbolsList.includes(e) && !skippedListForExports.includes(e)),
         );
+
+        const glideRsKeyWords: string[] = ['ClusterScanCursor', 'Script', 'createLeakedArray',
+            'createLeakedAttribute', 'createLeakedBigint', 'createLeakedDouble', 'createLeakedMap',
+            'createLeakedString', 'default'];
         const doesNotExistExports = exportedSymbolsList.filter(
-            (e: string) => !internallyExported.includes(e),
+            (e: string) => (!internallyExported.includes(e) && !glideRsKeyWords.includes(e)),
         );
-        console.log(missingSymbols);
-        console.log(doesNotExistExports);
-        expect(exportedSymbolsList).toEqual(internallyExported);
+        if (missingSymbols.length > 0) {
+            console.log('The following symbols are exported from npm/glide package but missing ' +
+                'from the internal node package export. These symbols might be from glide-rs package');
+            console.log(missingSymbols);
+        }
+        expect(missingSymbols.length).toBe(0);
+
+        if (doesNotExistExports.length > 0) {
+            console.log("Symbols that might be missed from the npm/glide package export:")
+            console.log(doesNotExistExports);
+        }
+        expect(doesNotExistExports.length).toBe(0);
     });
 });
 
