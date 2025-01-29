@@ -210,8 +210,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
 
         let open_telemetry_endpoint =
             chars_to_string_option(&value.opentelemetry_config.collector_end_point);
-        let open_telemetry_span_interval =
-            Some(value.opentelemetry_config.span_flush_interval as u64);
+        let open_telemetry_span_interval = value.opentelemetry_config.span_flush_interval;
 
         ConnectionRequest {
             read_from,
