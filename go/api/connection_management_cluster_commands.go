@@ -10,5 +10,5 @@ import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 //
 // [valkey.io]: https://valkey.io/commands/#connection
 type ConnectionManagementClusterCommands interface {
-	EchoWithOptions(echoOptions options.ClusterEchoOptions) (string, error)
+	EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error)
 }
