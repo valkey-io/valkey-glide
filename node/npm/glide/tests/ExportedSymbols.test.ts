@@ -41,17 +41,20 @@ describe("Exported Symbols test", () => {
         const doesNotExistExports = exportedSymbolsList.filter(
             (e: string) => (!internallyExported.includes(e) && !glideRsKeyWords.includes(e)),
         );
+
         if (missingSymbols.length > 0) {
             console.log('The following symbols are exported from npm/glide package but missing ' +
                 'from the internal node package export. These symbols might be from glide-rs package');
             console.log(missingSymbols);
         }
+
         expect(missingSymbols.length).toBe(0);
 
         if (doesNotExistExports.length > 0) {
             console.log("Symbols that might be missed from the npm/glide package export:")
             console.log(doesNotExistExports);
         }
+
         expect(doesNotExistExports.length).toBe(0);
     });
 });

@@ -12,6 +12,7 @@ let globalObject = global as unknown;
 /* eslint-disable @typescript-eslint/no-require-imports */
 function loadNativeBinding() {
     let nativeStr = process.env.native_binding;
+
     if (nativeStr == undefined) {
         switch (platform) {
             case "linux":
@@ -70,9 +71,11 @@ function loadNativeBinding() {
     }
 
     let scope = process.env.scope || "@scope";
+
     if (scope == "@scope") {
         scope = "@valkey/"
     }
+
     const nativeBinding = require(`${scope}valkey-glide-${nativeStr}`);
 
     if (!nativeBinding) {
