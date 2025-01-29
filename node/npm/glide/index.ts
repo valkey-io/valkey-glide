@@ -11,12 +11,7 @@ let globalObject = global as unknown;
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 function loadNativeBinding() {
-    let scope = process.env.scope || "@scope";
-    let nativeBinding = [];
     let nativeStr = process.env.native_binding;
-    if (scope == "@scope") {
-        scope = "@valkey/"
-    }
     if (nativeStr == undefined) {
         switch (platform) {
             case "linux":
@@ -74,7 +69,11 @@ function loadNativeBinding() {
         }
     }
 
-    nativeBinding = require(`${scope}valkey-glide-${nativeStr}`);
+    let scope = process.env.scope || "@scope";
+    if (scope == "@scope") {
+        scope = "@valkey/"
+    }
+    const nativeBinding = require(`${scope}valkey-glide-${nativeStr}`);
 
     if (!nativeBinding) {
         throw new Error(`Failed to load native binding`);
