@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/stretchr/testify/assert"
@@ -107,46 +108,47 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 		}
 	}
 }
-func (suite *GlideTestSuite) TestEchoWithOptionsNoRoute() {
+
+func (suite *GlideTestSuite) TestEchoCluster() {
 	client := suite.defaultClusterClient()
-	options := options.ClusterEchoOptions{
+	t := suite.T()
+	// echo with option or with multiple options without route
+	opts := options.ClusterEchoOptions{
 		EchoOptions: &options.EchoOptions{
 			Message: "hello",
 		},
 		Route: nil,
 	}
+	response, err := client.EchoWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsMultiValue())
 
-	result, err := client.EchoWithOptions(options)
-	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), "hello", result)
-}
-
-func (suite *GlideTestSuite) TestEchoWithOptionsWithRoute() {
-	client := suite.defaultClusterClient()
-	route := config.Route(config.AllNodes)
-	options := options.ClusterEchoOptions{
+	// same sections with random route
+	route := config.Route(*config.RandomRoute.ToPtr())
+	opts = options.ClusterEchoOptions{
 		EchoOptions: &options.EchoOptions{
 			Message: "hello",
 		},
 		Route: &route,
 	}
+	response, err = client.EchoWithOptions(opts)
+	fmt.Println("response: ", response)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
 
-	result, err := client.EchoWithOptions(options)
-	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), "hello", result)
-}
-
-func (suite *GlideTestSuite) TestEchoWithOptionsInvalidRoute() {
-	client := suite.defaultClusterClient()
-	invalidRoute := config.Route(config.NewByAddressRoute("invalidHost", 9999))
-	options := options.ClusterEchoOptions{
+	// default sections, multi node route
+	routeMultiNode := config.Route(*config.AllPrimaries.ToPtr())
+	opts = options.ClusterEchoOptions{
 		EchoOptions: &options.EchoOptions{
 			Message: "hello",
 		},
-		Route: &invalidRoute,
+		Route: &routeMultiNode,
 	}
-
-	result, err := client.EchoWithOptions(options)
-	assert.NotNil(suite.T(), err)
-	assert.Empty(suite.T(), result)
+	response, err = client.EchoWithOptions(opts)
+	fmt.Println("response: ", response)
+	assert.NoError(t, err)
+	assert.True(t, response.IsMultiValue())
+	for _, messages := range response.MultiValue() {
+		assert.Contains(t, strings.ToLower(messages), strings.ToLower("hello"))
+	}
 }

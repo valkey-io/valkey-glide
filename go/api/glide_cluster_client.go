@@ -188,19 +188,32 @@ func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (C
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (string, error) {
+func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
 	if echoOptions.Route == nil {
-		response, err := client.executeCommand(C.Echo, echoOptions.ToArgs())
+		response, err := client.executeCommand(C.Info, echoOptions.ToArgs())
 		if err != nil {
-			return defaultStringResponse, err
+			return createEmptyClusterValue[string](), err
 		}
-		return handleStringResponse(response)
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
 	}
-
 	response, err := client.executeCommandWithRoute(C.Echo, echoOptions.ToArgs(), *echoOptions.Route)
 	if err != nil {
-		return defaultStringResponse, err
+		return createEmptyClusterValue[string](), err
 	}
-
-	return handleStringResponse(response)
+	if (*echoOptions.Route).IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
 }
