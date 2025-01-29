@@ -206,6 +206,7 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 }
 
 // Pings the server.
+// The command will be routed to all primary nodes.
 //
 // Return value:
 //
