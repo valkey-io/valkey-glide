@@ -114,10 +114,9 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_Info() {
 	result, err := client.CustomCommandWithRoute([]string{"INFO"}, route)
 	assert.Nil(suite.T(), err)
 	assert.True(suite.T(), result.IsMultiValue())
-
 	multiValue := result.MultiValue()
-	for nodeName, value := range multiValue {
-		assert.True(suite.T(), strings.Contains(value.(string), "# Stats"), "Node %s info should contain '# Stats'", nodeName)
+	for _, value := range multiValue {
+		assert.True(suite.T(), strings.Contains(value.(string), "# Stats"))
 	}
 }
 
@@ -143,12 +142,8 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_AllNodes() {
 	route := config.SimpleNodeRoute(config.AllNodes)
 	result, err := client.CustomCommandWithRoute([]string{"PING"}, route)
 	assert.Nil(suite.T(), err)
-	assert.True(suite.T(), result.IsMultiValue())
-
-	multiValue := result.MultiValue()
-	for nodeName, value := range multiValue {
-		assert.Equal(suite.T(), "PONG", value.(string), "Node %s should return 'PONG'", nodeName)
-	}
+	assert.True(suite.T(), result.IsSingleValue())
+	assert.Equal(suite.T(), "PONG", result.SingleValue())
 }
 
 func (suite *GlideTestSuite) TestPingWithOptions_NoRoute() {
