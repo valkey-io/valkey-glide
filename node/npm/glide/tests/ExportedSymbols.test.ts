@@ -2,7 +2,7 @@ import { it } from "@jest/globals";
 import * as f from "fs/promises";
 import { describe } from "node:test";
 import * as ts from "typescript";
-import * as glideApi from "../";
+import * as glideApi from "../"; //ESM convention, 
 
 describe("Exported Symbols test", () => {
     it("check excluded symbols are not exported", async () => {
