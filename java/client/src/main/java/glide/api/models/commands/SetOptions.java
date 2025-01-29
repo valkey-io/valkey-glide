@@ -65,20 +65,28 @@ public final class SetOptions {
 
     // Builder class for SetOptions
     public static class SetOptionsBuilder {
-        private ConditionalSet conditionalSet;
-        private String comparisonValue;
-
         /**
-         * Set the condition for the value to be set
+         * Sets the condition for the value to be set.<br>
+         * In order to set {@link ConditionalSet#ONLY_IF_EQUAL} use {@link #conditionalSetIfEqualTo}.
          *
-         * @param conditionalSet the condition to set (ONLY_IF_EXISTS, ONLY_IF_DOES_NOT_EXIST)
-         * @return this builder instance
+         * @param conditionalSet The condition to set, either {@link ConditionalSet#ONLY_IF_EXISTS} or
+         *     {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}.
+         * @return This builder instance
          * @throws IllegalArgumentException if the conditionalSet is ONLY_IF_EQUAL
+         * @throws IllegalStateException if a conflicting condition has already been set
          */
-        public SetOptionsBuilder conditionalSet(ConditionalSet conditionalSet) {
+        public SetOptionsBuilder conditionalSet(@NonNull ConditionalSet conditionalSet) {
             if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
                 throw new IllegalArgumentException(
                         "For ONLY_IF_EQUAL, use the conditionalSetIfEqualTo(String value) method.");
+            }
+
+            if (this.conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
+                throw new IllegalStateException(
+                        "Cannot set conditionalSet to "
+                                + conditionalSet
+                                + " when ONLY_IF_EQUAL is already set. Use either conditionalSet or"
+                                + " conditionalSetIfEqualTo, not both.");
             }
             this.conditionalSet = conditionalSet;
             this.comparisonValue = null; // Clear comparisonValue when not using ONLY_IF_EQUAL
@@ -86,12 +94,21 @@ public final class SetOptions {
         }
 
         /**
-         * Set the condition to ONLY_IF_EQUAL and specify the comparison value
+         * Set the key if the comparison value matches the existing value.
          *
+         * @since Valkey 8.1 and above.
          * @param value the value to compare
          * @return this builder instance
+         * @throws IllegalStateException if a conflicting condition has already been set
          */
         public SetOptionsBuilder conditionalSetIfEqualTo(@NonNull String value) {
+            if (this.conditionalSet != null && this.conditionalSet != ConditionalSet.ONLY_IF_EQUAL) {
+                throw new IllegalStateException(
+                        "Cannot set conditionalSetIfEqualTo when "
+                                + this.conditionalSet
+                                + " is already set. Use either conditionalSet or conditionalSetIfEqualTo, not"
+                                + " both.");
+            }
             this.conditionalSet = ConditionalSet.ONLY_IF_EQUAL;
             this.comparisonValue = value;
             return this;
