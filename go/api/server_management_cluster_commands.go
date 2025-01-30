@@ -14,5 +14,7 @@ type ServerManagementClusterCommands interface {
 
 	InfoWithOptions(options ClusterInfoOptions) (ClusterValue[string], error)
 
+	TimeWithOptions(routeOption options.RouteOption) (ClusterValue[[]string], error)
+
 	DBSizeWithOptions(routeOption options.RouteOption) (int64, error)
 }
