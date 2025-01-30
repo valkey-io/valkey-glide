@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -28,6 +29,9 @@ public final class SetOptions {
      * existence. If value isn't set because of the condition, command will return <code>null</code>.
      */
     private final ConditionalSet conditionalSet;
+
+    /** Value to compare when {@link ConditionalSet#ONLY_IF_EQUAL} is set. */
+    private final String comparisonValue;
 
     /**
      * Set command to return the old string stored at <code>key</code>, or <code>null</code> if <code>
@@ -49,9 +53,66 @@ public final class SetOptions {
          * Only set the key if it does not already exist. Equivalent to <code>NX</code> in the Valkey
          * API.
          */
-        ONLY_IF_DOES_NOT_EXIST("NX");
+        ONLY_IF_DOES_NOT_EXIST("NX"),
+        /**
+         * Only set the key if the current value of key equals the {@link SetOptions#comparisonValue}.
+         * Equivalent to <code>IFEQ comparison-value</code> in the Valkey API.
+         */
+        ONLY_IF_EQUAL("IFEQ");
 
         private final String valkeyApi;
+    }
+
+    // Builder class for SetOptions
+    public static class SetOptionsBuilder {
+        /**
+         * Sets the condition for the value to be set.<br>
+         * In order to set {@link ConditionalSet#ONLY_IF_EQUAL} use {@link #conditionalSetIfEqualTo}.
+         *
+         * @param conditionalSet The condition to set, either {@link ConditionalSet#ONLY_IF_EXISTS} or
+         *     {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}.
+         * @return This builder instance
+         * @throws IllegalArgumentException if the conditionalSet is ONLY_IF_EQUAL
+         * @throws IllegalStateException if a conflicting condition has already been set
+         */
+        public SetOptionsBuilder conditionalSet(@NonNull ConditionalSet conditionalSet) {
+            if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
+                throw new IllegalArgumentException(
+                        "For ONLY_IF_EQUAL, use the conditionalSetIfEqualTo(String value) method.");
+            }
+
+            if (this.conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
+                throw new IllegalStateException(
+                        "Cannot set conditionalSet to "
+                                + conditionalSet
+                                + " when ONLY_IF_EQUAL is already set. Use either conditionalSet or"
+                                + " conditionalSetIfEqualTo, not both.");
+            }
+            this.conditionalSet = conditionalSet;
+            this.comparisonValue = null; // Clear comparisonValue when not using ONLY_IF_EQUAL
+            return this;
+        }
+
+        /**
+         * Set the key if the comparison value matches the existing value.
+         *
+         * @since Valkey 8.1 and above.
+         * @param value the value to compare
+         * @return this builder instance
+         * @throws IllegalStateException if a conflicting condition has already been set
+         */
+        public SetOptionsBuilder conditionalSetIfEqualTo(@NonNull String value) {
+            if (this.conditionalSet != null && this.conditionalSet != ConditionalSet.ONLY_IF_EQUAL) {
+                throw new IllegalStateException(
+                        "Cannot set conditionalSetIfEqualTo when "
+                                + this.conditionalSet
+                                + " is already set. Use either conditionalSet or conditionalSetIfEqualTo, not"
+                                + " both.");
+            }
+            this.conditionalSet = ConditionalSet.ONLY_IF_EQUAL;
+            this.comparisonValue = value;
+            return this;
+        }
     }
 
     /** Configuration of value lifetime. */
@@ -151,6 +212,9 @@ public final class SetOptions {
         List<String> optionArgs = new ArrayList<>();
         if (conditionalSet != null) {
             optionArgs.add(conditionalSet.valkeyApi);
+            if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
+                optionArgs.add(comparisonValue);
+            }
         }
 
         if (returnOldValue) {
