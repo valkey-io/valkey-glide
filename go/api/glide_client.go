@@ -54,11 +54,6 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 //
 //	The returned value for the custom command.
 //
-// For example:
-//
-//	result, err := client.CustomCommand([]string{"ping"})
-//	result.(string): "PONG"
-//
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
@@ -81,11 +76,6 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 // Return value:
 //
 //	`"OK"` if all configurations have been successfully set. Otherwise, raises an error.
-//
-// For example:
-//
-//	result, err := client.ConfigSet(map[string]string{"timeout": "1000", "maxmemory": "1GB"})
-//	result: "OK"
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *GlideClient) ConfigSet(parameters map[string]string) (string, error) {
@@ -110,12 +100,6 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 //
 //	A map of api.Result[string] corresponding to the configuration parameters.
 //
-// For example:
-//
-//	result, err := client.ConfigGet([]string{"timeout" , "maxmemory"})
-//	// result["timeout"] = "1000"
-//	// result["maxmemory"] = "1GB"
-//
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 	res, err := client.executeCommand(C.ConfigGet, args)
@@ -135,11 +119,6 @@ func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 //
 //	A simple `"OK"` response.
 //
-// Example:
-//
-//	result, err := client.Select(2)
-//	result: "OK"
-//
 // [valkey.io]: https://valkey.io/commands/select/
 func (client *GlideClient) Select(index int64) (string, error) {
 	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
@@ -155,14 +134,6 @@ func (client *GlideClient) Select(index int64) (string, error) {
 // Return value:
 //
 //	The number of keys in the currently selected database.
-//
-// Example:
-//
-//	result, err := client.DBSize()
-//	if err != nil {
-//		// handle error
-//	}
-//	fmt.Println(result) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
 func (client *GlideClient) DBSize() (int64, error) {
