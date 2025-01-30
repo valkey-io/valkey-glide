@@ -31,7 +31,6 @@ type BaseClient interface {
 	SetCommands
 	StreamCommands
 	SortedSetCommands
-	ConnectionManagementCommands
 	HyperLogLogCommands
 	GenericBaseCommands
 	BitmapCommands
@@ -3104,52 +3103,6 @@ func (client *baseClient) BLMove(
 	return handleStringOrNilResponse(result)
 }
 
-// Pings the server.
-//
-// Return value:
-//
-//	Returns "PONG".
-//
-// For example:
-//
-//	result, err := client.Ping()
-//
-// [valkey.io]: https://valkey.io/commands/ping/
-func (client *baseClient) Ping() (string, error) {
-	result, err := client.executeCommand(C.Ping, []string{})
-	if err != nil {
-		return defaultStringResponse, err
-	}
-
-	return handleStringResponse(result)
-}
-
-// Pings the server with a custom message.
-//
-// Parameters:
-//
-//	message - A message to include in the `PING` command.
-//
-// Return value:
-//
-//	Returns the copy of message.
-//
-// For example:
-//
-//	result, err := client.PingWithMessage("Hello")
-//
-// [valkey.io]: https://valkey.io/commands/ping/
-func (client *baseClient) PingWithMessage(message string) (string, error) {
-	args := []string{message}
-
-	result, err := client.executeCommand(C.Ping, args)
-	if err != nil {
-		return defaultStringResponse, err
-	}
-
-	return handleStringResponse(result)
-}
-
 // Del removes the specified keys from the database. A key is ignored if it does not exist.
 //
 // Note:
@@ -5736,34 +5689,6 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
-// Echo the provided message back.
-// The command will be routed a random node.
-//
-// Parameters:
-//
-//	message - The provided message.
-//
-// Return value:
-//
-//	The provided message
-//
-// For example:
-//
-//	 result, err := client.Echo("Hello World")
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: Hello World
-//
-// [valkey.io]: https://valkey.io/commands/echo/
-func (client *baseClient) Echo(message string) (Result[string], error) {
-	result, err := client.executeCommand(C.Echo, []string{message})
-	if err != nil {
-		return CreateNilStringResult(), err
-	}
-	return handleStringOrNilResponse(result)
-}
-
 // Destroys the consumer group `group` for the stream stored at `key`.
 //
 // See [valkey.io] for details.
@@ -6959,4 +6884,130 @@ func (client *baseClient) XRevRangeWithOptions(
 		return nil, err
 	}
 	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+}
+
+// Reads or modifies the array of bits representing the string that is held at key
+// based on the specified sub commands.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key          -  The key of the string.
+//	subCommands  -  The subCommands to be performed on the binary value of the string at
+//	                key, which could be any of the following:
+//	                  - [BitFieldGet].
+//	                  - [BitFieldSet].
+//	                  - [BitFieldIncrby].
+//	                  - [BitFieldOverflow].
+//		            Use `options.NewBitFieldGet()` to specify a  BitField GET command.
+//		            Use `options.NewBitFieldSet()` to specify a BitField SET command.
+//		            Use `options.NewBitFieldIncrby()` to specify a BitField INCRYBY command.
+//		            Use `options.BitFieldOverflow()` to specify a BitField OVERFLOW command.
+//
+// Return value:
+//
+//	Result from the executed subcommands.
+//	  - BitFieldGet returns the value in the binary representation of the string.
+//	  - BitFieldSet returns the previous value before setting the new value in the binary representation.
+//	  - BitFieldIncrBy returns the updated value after increasing or decreasing the bits.
+//	  - BitFieldOverflow controls the behavior of subsequent operations and returns
+//	    a result based on the specified overflow type (WRAP, SAT, FAIL).
+//
+// Example:
+//
+//	commands := []options.BitFieldSubCommands{
+//		options.BitFieldGet(options.SignedInt, 8, 16),
+//		options.BitFieldOverflow(options.SAT),
+//		options.NewBitFieldSet(options.UnsignedInt, 4, 0, 7),
+//	    options.BitFieldIncrBy(options.SignedInt, 5, 100, 1),
+//	}
+//	result, err := client.BitField("mykey", commands)
+//	result: [{0 false} {7 false} {15 false}]
+//
+// [valkey.io]: https://valkey.io/commands/bitfield/
+func (client *baseClient) BitField(key string, subCommands []options.BitFieldSubCommands) ([]Result[int64], error) {
+	args := make([]string, 0, 10)
+	args = append(args, key)
+
+	for _, cmd := range subCommands {
+		cmdArgs, err := cmd.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, cmdArgs...)
+	}
+
+	result, err := client.executeCommand(C.BitField, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleIntOrNilArrayResponse(result)
+}
+
+// Reads the array of bits representing the string that is held at key
+// based on the specified  sub commands.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key          -  The key of the string.
+//	subCommands  -  The read-only subCommands to be performed on the binary value
+//	                of the string at key, which could be:
+//	                  - [BitFieldGet].
+//		            Use `options.NewBitFieldGet()` to specify a BitField GET command.
+//
+// Return value:
+//
+//	Result from the executed GET subcommands.
+//	  - BitFieldGet returns the value in the binary representation of the string.
+//
+// Example:
+//
+//	 commands := []options.BitFieldROCommands{
+//		options.BitFieldGet(options.SignedInt, 8, 16),
+//	  }
+//	 result, err := client.BitFieldRO("mykey", commands)
+//	 result: [{42 false}]
+//
+// [valkey.io]: https://valkey.io/commands/bitfield_ro/
+func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCommands) ([]Result[int64], error) {
+	args := make([]string, 0, 10)
+	args = append(args, key)
+
+	for _, cmd := range commands {
+		cmdArgs, err := cmd.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, cmdArgs...)
+	}
+
+	result, err := client.executeCommand(C.BitFieldReadOnly, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleIntOrNilArrayResponse(result)
+}
+
+// Returns the server time.
+//
+// Return value:
+// The current server time as a String array with two elements:
+// A UNIX TIME and the amount of microseconds already elapsed in the current second.
+// The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
+//
+// For example:
+//
+//	result, err := client.Time()
+//	result: [{1737051660} {994688}]
+//
+// [valkey.io]: https://valkey.io/commands/time/
+func (client *baseClient) Time() ([]string, error) {
+	result, err := client.executeCommand(C.Time, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
 }

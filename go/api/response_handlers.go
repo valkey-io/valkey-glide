@@ -323,6 +323,32 @@ func handleIntArrayResponse(response *C.struct_CommandResponse) ([]int64, error)
 	return slice, nil
 }
 
+func handleIntOrNilArrayResponse(response *C.struct_CommandResponse) ([]Result[int64], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice := make([]Result[int64], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		if v.response_type == C.Null {
+			slice = append(slice, CreateNilInt64Result())
+			continue
+		}
+
+		err := checkResponseType(&v, C.Int, false)
+		if err != nil {
+			return nil, err
+		}
+
+		slice = append(slice, CreateInt64Result(int64(v.int_value)))
+	}
+
+	return slice, nil
+}
+
 func handleFloatResponse(response *C.struct_CommandResponse) (float64, error) {
 	defer C.free_command_response(response)
 
@@ -1020,4 +1046,54 @@ func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendin
 	}
 
 	return pendingDetails, nil
+}
+
+func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[string][]string, error) {
+	defer C.free_command_response(response)
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := mapConverter[[]string]{
+		next:     arrayConverter[string]{},
+		canBeNil: false,
+	}.convert(data)
+	if err != nil {
+		return nil, err
+	}
+	mapResult, ok := result.(map[string][]string)
+	if !ok {
+		return nil, &errors.RequestError{Msg: "Unexpected conversion result type"}
+	}
+
+	return mapResult, nil
+}
+
+func handleTimeClusterResponse(response *C.struct_CommandResponse) (ClusterValue[[]string], error) {
+	// Handle multi-node response
+	if err := checkResponseType(response, C.Map, true); err == nil {
+		mapData, err := handleRawStringArrayMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[[]string](), err
+		}
+		multiNodeTimes := make(map[string][]string)
+		for nodeName, nodeTimes := range mapData {
+			multiNodeTimes[nodeName] = nodeTimes
+		}
+
+		return createClusterMultiValue(multiNodeTimes), nil
+	}
+
+	// Handle single node response
+	data, err := handleStringArrayResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[[]string](), err
+	}
+	return createClusterSingleValue(data), nil
 }
