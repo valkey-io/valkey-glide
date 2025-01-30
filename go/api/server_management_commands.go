@@ -19,4 +19,6 @@ type ServerManagementCommands interface {
 	InfoWithOptions(options InfoOptions) (string, error)
 
 	DBSize() (int64, error)
+
+	Time() ([]string, error)
 }

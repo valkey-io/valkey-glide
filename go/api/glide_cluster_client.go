@@ -266,3 +266,35 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 
 	return handleStringResponse(response)
 }
+
+// Returns the server time.
+// The command will be routed to a random node, unless Route in opts is provided.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	options - The TimeOptions type.
+//
+// Return value:
+//
+// The current server time as a String array with two elements: A UNIX TIME and the amount
+// of microseconds already elapsed in the current second.
+// The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
+//
+// Example:
+//
+//	route := config.Route(config.RandomRoute)
+//	opts  := options.ClusterTimeOptions{
+//		  Route: &route,
+//	}
+//	fmt.Println(clusterResponse.SingleValue()) // Output: [1737994354 547816]
+//
+// [valkey.io]: https://valkey.io/commands/time/
+func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (ClusterValue[[]string], error) {
+	result, err := client.executeCommandWithRoute(C.Time, []string{}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[[]string](), err
+	}
+	return handleTimeClusterResponse(result)
+}

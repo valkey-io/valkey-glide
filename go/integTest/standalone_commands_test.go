@@ -4,7 +4,9 @@ package integTest
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
@@ -481,5 +483,36 @@ func (suite *GlideTestSuite) TestPingWithOptions_ClosedClient() {
 	result, err := client.PingWithOptions(options)
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
+func (suite *GlideTestSuite) TestTime_Success() {
+	client := suite.defaultClient()
+	results, err := client.Time()
+
+	assert.Nil(suite.T(), err)
+	assert.Len(suite.T(), results, 2)
+
+	now := time.Now().Unix() - 1
+
+	timestamp, err := strconv.ParseInt(results[0], 10, 64)
+	assert.Nil(suite.T(), err)
+	assert.Greater(suite.T(), timestamp, now)
+
+	microseconds, err := strconv.ParseInt(results[1], 10, 64)
+	assert.Nil(suite.T(), err)
+	assert.Less(suite.T(), microseconds, int64(1000000))
+}
+
+func (suite *GlideTestSuite) TestTime_Error() {
+	client := suite.defaultClient()
+
+	// Disconnect the client or simulate an error condition
+	client.Close()
+
+	results, err := client.Time()
+
+	assert.NotNil(suite.T(), err)
+	assert.Nil(suite.T(), results)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
