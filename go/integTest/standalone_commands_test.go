@@ -432,6 +432,60 @@ func (suite *GlideTestSuite) TestDBSize() {
 	assert.Greater(suite.T(), result, int64(0))
 }
 
+func (suite *GlideTestSuite) TestPing_NoArgument() {
+	client := suite.defaultClient()
+
+	result, err := client.Ping()
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "PONG", result)
+}
+
+func (suite *GlideTestSuite) TestEcho() {
+	client := suite.defaultClient()
+	// Test 1: Check if Echo command return the message
+	value := "Hello world"
+	t := suite.T()
+	resultEcho, err := client.Echo(value)
+	assert.Nil(t, err)
+	assert.Equal(t, value, resultEcho.Value())
+}
+
+func (suite *GlideTestSuite) TestPing_ClosedClient() {
+	client := suite.defaultClient()
+	client.Close()
+
+	result, err := client.Ping()
+
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
+func (suite *GlideTestSuite) TestPingWithOptions_WithMessage() {
+	client := suite.defaultClient()
+	options := options.PingOptions{
+		Message: "hello",
+	}
+
+	result, err := client.PingWithOptions(options)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "hello", result)
+}
+
+func (suite *GlideTestSuite) TestPingWithOptions_ClosedClient() {
+	client := suite.defaultClient()
+	client.Close()
+
+	options := options.PingOptions{
+		Message: "hello",
+	}
+
+	result, err := client.PingWithOptions(options)
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
 func (suite *GlideTestSuite) TestTime_Success() {
 	client := suite.defaultClient()
 	results, err := client.Time()
