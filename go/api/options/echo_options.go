@@ -2,10 +2,6 @@
 
 package options
 
-import (
-	"github.com/valkey-io/valkey-glide/go/glide/api/config"
-)
-
 // Optional arguments for `Echo` for standalone client
 type EchoOptions struct {
 	Message string
@@ -16,7 +12,7 @@ type ClusterEchoOptions struct {
 	*EchoOptions
 	// Specifies the routing configuration for the command.
 	// The client will route the command to the nodes defined by *Route*.
-	RouteOption *config.Route
+	*RouteOption
 }
 
 func (opts *EchoOptions) ToArgs() []string {

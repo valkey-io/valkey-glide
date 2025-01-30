@@ -322,11 +322,23 @@ func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (Clu
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
-	response, err := client.executeCommandWithRoute(C.Echo, echoOptions.ToArgs(), *echoOptions.RouteOption)
+	if echoOptions.RouteOption.Route == nil {
+		response, err := client.executeCommand(C.Echo, echoOptions.ToArgs())
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		data, err := handleStringResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterSingleValue[string](data), nil
+	}
+	response, err := client.executeCommandWithRoute(C.Echo, echoOptions.ToArgs(),
+		echoOptions.RouteOption.Route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
-	if (*echoOptions.RouteOption).IsMultiNode() {
+	if (echoOptions.RouteOption.Route).IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
 			return createEmptyClusterValue[string](), err

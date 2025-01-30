@@ -3,7 +3,6 @@
 package integTest
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/stretchr/testify/assert"
@@ -249,19 +248,20 @@ func (suite *GlideTestSuite) TestTimeWithInvalidRoute() {
 func (suite *GlideTestSuite) TestEchoCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
+
 	// echo with option or with multiple options without route
 	opts := options.ClusterEchoOptions{
 		EchoOptions: &options.EchoOptions{
 			Message: "hello",
 		},
-		RouteOption: nil,
+		RouteOption: &options.RouteOption{Route: nil},
 	}
 	response, err := client.EchoWithOptions(opts)
 	assert.NoError(t, err)
-	assert.True(t, response.IsMultiValue())
+	assert.True(t, response.IsSingleValue())
 
 	// same sections with random route
-	route := config.Route(*config.RandomRoute.ToPtr())
+	route := options.RouteOption{Route: *config.RandomRoute.ToPtr()}
 	opts = options.ClusterEchoOptions{
 		EchoOptions: &options.EchoOptions{
 			Message: "hello",
@@ -269,20 +269,18 @@ func (suite *GlideTestSuite) TestEchoCluster() {
 		RouteOption: &route,
 	}
 	response, err = client.EchoWithOptions(opts)
-	fmt.Println("response: ", response)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
 
 	// default sections, multi node route
-	routeMultiNode := config.Route(*config.AllPrimaries.ToPtr())
+	route = options.RouteOption{Route: *config.AllPrimaries.ToPtr()}
 	opts = options.ClusterEchoOptions{
 		EchoOptions: &options.EchoOptions{
 			Message: "hello",
 		},
-		RouteOption: &routeMultiNode,
+		RouteOption: &route,
 	}
 	response, err = client.EchoWithOptions(opts)
-	fmt.Println("response: ", response)
 	assert.NoError(t, err)
 	assert.True(t, response.IsMultiValue())
 	for _, messages := range response.MultiValue() {
