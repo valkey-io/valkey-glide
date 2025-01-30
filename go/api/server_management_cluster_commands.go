@@ -2,7 +2,9 @@
 
 package api
 
-// ServerManagementCommands supports commands for the "Server Management" group for a cluster client.
+import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+
+// ServerManagementClusterCommands supports commands for the "Server Management Commands" group for cluster client.
 //
 // See [valkey.io] for details.
 //
@@ -11,4 +13,6 @@ type ServerManagementClusterCommands interface {
 	Info() (map[string]string, error)
 
 	InfoWithOptions(options ClusterInfoOptions) (ClusterValue[string], error)
+
+	TimeWithOptions(routeOption options.RouteOption) (ClusterValue[[]string], error)
 }
