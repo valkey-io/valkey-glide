@@ -27,6 +27,7 @@
 
 * Node: Fix `zrangeWithScores` (disallow `RangeByLex` as it is not supported) ([#2926](https://github.com/valkey-io/valkey-glide/pull/2926))
 * Core: improve fix in #2381 ([#2929](https://github.com/valkey-io/valkey-glide/pull/2929))
+* Java: Fix `lpopCount` null handling ([#3025](https://github.com/valkey-io/valkey-glide/pull/3025))
 
 #### Operational Enhancements
 
