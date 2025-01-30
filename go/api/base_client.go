@@ -7184,9 +7184,6 @@ func (client *baseClient) ZInterWithScores(options *options.ZInterOptions) (map[
 	if err != nil {
 		return nil, err
 	}
-	// fmt.Println("--------------------------------")
-	// fmt.Println(args)
-	// fmt.Println("--------------------------------")
 	result, err := client.executeCommand(C.ZInter, args)
 	if err != nil {
 		return nil, err

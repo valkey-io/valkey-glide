@@ -12,6 +12,7 @@ func NewZInterOptionsBuilder(keysOrWeightedKeys KeysOrWeightedKeys) *ZInterOptio
 	return &ZInterOptions{keysOrWeightedKeys: keysOrWeightedKeys}
 }
 
+// SetAggregate sets the aggregate method for the ZInter command.
 func (options *ZInterOptions) SetAggregate(aggregate Aggregate) *ZInterOptions {
 	options.aggregate = aggregate
 	return options

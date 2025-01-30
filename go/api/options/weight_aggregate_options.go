@@ -18,7 +18,9 @@ func (a Aggregate) ToArgs() []string {
 	return []string{AggregateKeyWord, string(a)}
 }
 
-// interface representing the keys or weighted keys
+// This is a basic interface. Please use one of the following implementations:
+// - KeyArray
+// - WeightedKeys
 type KeysOrWeightedKeys interface {
 	ToArgs() []string
 }

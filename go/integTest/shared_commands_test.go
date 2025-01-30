@@ -7808,10 +7808,8 @@ func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
 }
 
 func (suite *GlideTestSuite) TestZInter() {
+	suite.SkipIfServerVersionLowerThanBy("6.2.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		if suite.serverVersion < "6.2.0" {
-			suite.T().Skip("This feature was added in version 6.2.0")
-		}
 		key1 := "{key}-" + uuid.New().String()
 		key2 := "{key}-" + uuid.New().String()
 		key3 := "{key}-" + uuid.New().String()
@@ -7826,44 +7824,44 @@ func (suite *GlideTestSuite) TestZInter() {
 
 		// Add members to sorted sets
 		res, err := client.ZAdd(key1, memberScoreMap1)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res)
 
 		res, err = client.ZAdd(key2, memberScoreMap2)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res)
 
 		// intersection results are aggregated by the max score of elements
 		zinterResult, err := client.ZInter(options.KeyArray{Keys: []string{key1, key2}})
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), []string{"two"}, zinterResult)
 
 		// intersection with scores
 		zinterWithScoresResult, err := client.ZInterWithScores(
 			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateSum),
 		)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithScoresResult)
 
 		// intersect results with max aggregate
 		zinterWithMaxAggregateResult, err := client.ZInterWithScores(
 			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateMax),
 		)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": 3.5}, zinterWithMaxAggregateResult)
 
 		// intersect results with min aggregate
 		zinterWithMinAggregateResult, err := client.ZInterWithScores(
 			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateMin),
 		)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": 2.0}, zinterWithMinAggregateResult)
 
 		// intersect results with sum aggregate
 		zinterWithSumAggregateResult, err := client.ZInterWithScores(
 			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateSum),
 		)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithSumAggregateResult)
 
 		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
@@ -7877,14 +7875,14 @@ func (suite *GlideTestSuite) TestZInter() {
 				},
 			).SetAggregate(options.AggregateSum),
 		)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": 11.0}, zinterWithWeightedKeysResult)
 
 		// non-existent key - empty intersection
 		zinterWithNonExistentKeyResult, err := client.ZInterWithScores(
 			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key3}}).SetAggregate(options.AggregateSum),
 		)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), zinterWithNonExistentKeyResult)
 
 		// empty key list - request error
