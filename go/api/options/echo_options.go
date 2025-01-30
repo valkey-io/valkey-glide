@@ -16,7 +16,7 @@ type ClusterEchoOptions struct {
 	*EchoOptions
 	// Specifies the routing configuration for the command.
 	// The client will route the command to the nodes defined by *Route*.
-	Route *config.Route
+	RouteOption *config.Route
 }
 
 func (opts *EchoOptions) ToArgs() []string {

@@ -268,7 +268,7 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 }
 
 // Echo the provided message back.
-// The command will be routed a random node.
+// The command will be routed a random node, unless `Route` in `echoOptions` is provided.
 //
 // Parameters:
 //
@@ -290,22 +290,11 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
-	if echoOptions.Route == nil {
-		response, err := client.executeCommand(C.Info, echoOptions.ToArgs())
-		if err != nil {
-			return createEmptyClusterValue[string](), err
-		}
-		data, err := handleStringToStringMapResponse(response)
-		if err != nil {
-			return createEmptyClusterValue[string](), err
-		}
-		return createClusterMultiValue[string](data), nil
-	}
-	response, err := client.executeCommandWithRoute(C.Echo, echoOptions.ToArgs(), *echoOptions.Route)
+	response, err := client.executeCommandWithRoute(C.Echo, echoOptions.ToArgs(), *echoOptions.RouteOption)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
-	if (*echoOptions.Route).IsMultiNode() {
+	if (*echoOptions.RouteOption).IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
 			return createEmptyClusterValue[string](), err

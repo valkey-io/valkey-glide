@@ -196,7 +196,7 @@ func (suite *GlideTestSuite) TestEchoCluster() {
 		EchoOptions: &options.EchoOptions{
 			Message: "hello",
 		},
-		Route: nil,
+		RouteOption: nil,
 	}
 	response, err := client.EchoWithOptions(opts)
 	assert.NoError(t, err)
@@ -208,7 +208,7 @@ func (suite *GlideTestSuite) TestEchoCluster() {
 		EchoOptions: &options.EchoOptions{
 			Message: "hello",
 		},
-		Route: &route,
+		RouteOption: &route,
 	}
 	response, err = client.EchoWithOptions(opts)
 	fmt.Println("response: ", response)
@@ -221,7 +221,7 @@ func (suite *GlideTestSuite) TestEchoCluster() {
 		EchoOptions: &options.EchoOptions{
 			Message: "hello",
 		},
-		Route: &routeMultiNode,
+		RouteOption: &routeMultiNode,
 	}
 	response, err = client.EchoWithOptions(opts)
 	fmt.Println("response: ", response)
