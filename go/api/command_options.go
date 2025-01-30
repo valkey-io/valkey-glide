@@ -281,6 +281,28 @@ func (listDirection ListDirection) toString() (string, error) {
 	}
 }
 
+// Mandatory option for [ZMPop] and for [BZMPop].
+// Defines which elements to pop from the sorted set.
+type ScoreFilter string
+
+const (
+	// Pop elements with the highest scores.
+	MAX ScoreFilter = "MAX"
+	// Pop elements with the lowest scores.
+	MIN ScoreFilter = "MIN"
+)
+
+func (scoreFilter ScoreFilter) toString() (string, error) {
+	switch scoreFilter {
+	case MAX:
+		return string(MAX), nil
+	case MIN:
+		return string(MIN), nil
+	default:
+		return "", &errors.RequestError{Msg: "Invalid score filter"}
+	}
+}
+
 // Optional arguments to Restore(key string, ttl int64, value string, option *RestoreOptions)
 //
 // Note IDLETIME and FREQ modifiers cannot be set at the same time.

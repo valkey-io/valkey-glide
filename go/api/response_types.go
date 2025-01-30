@@ -23,6 +23,17 @@ type KeyWithMemberAndScore struct {
 	Score  float64
 }
 
+// Response of the [ZMPop] and [BZMPop] command.
+type KeyWithArrayOfMembersAndScores struct {
+	Key              string
+	MembersAndScores []MemberAndScore
+}
+
+type MemberAndScore struct {
+	Member string
+	Score  float64
+}
+
 // Response type of [XAutoClaim] command.
 type XAutoClaimResponse struct {
 	NextEntry       string
@@ -75,6 +86,16 @@ func CreateKeyWithMemberAndScoreResult(kmsVal KeyWithMemberAndScore) Result[KeyW
 
 func CreateNilKeyWithMemberAndScoreResult() Result[KeyWithMemberAndScore] {
 	return Result[KeyWithMemberAndScore]{val: KeyWithMemberAndScore{"", "", 0.0}, isNil: true}
+}
+
+func CreateKeyWithArrayOfMembersAndScoresResult(
+	kmsVals KeyWithArrayOfMembersAndScores,
+) Result[KeyWithArrayOfMembersAndScores] {
+	return Result[KeyWithArrayOfMembersAndScores]{val: kmsVals, isNil: false}
+}
+
+func CreateNilKeyWithArrayOfMembersAndScoresResult() Result[KeyWithArrayOfMembersAndScores] {
+	return Result[KeyWithArrayOfMembersAndScores]{val: KeyWithArrayOfMembersAndScores{"", nil}, isNil: true}
 }
 
 // Enum to distinguish value types stored in `ClusterValue`
