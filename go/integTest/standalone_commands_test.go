@@ -4,10 +4,13 @@ package integTest
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 
 	"github.com/stretchr/testify/assert"
@@ -150,7 +153,7 @@ func (suite *GlideTestSuite) TestCustomCommand_invalidCommand() {
 
 	assert.Nil(suite.T(), result)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.RequestError{}, err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestCustomCommand_invalidArgs() {
@@ -159,7 +162,7 @@ func (suite *GlideTestSuite) TestCustomCommand_invalidArgs() {
 
 	assert.Nil(suite.T(), result)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.RequestError{}, err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestCustomCommand_closedClient() {
@@ -170,7 +173,7 @@ func (suite *GlideTestSuite) TestCustomCommand_closedClient() {
 
 	assert.Nil(suite.T(), result)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.ClosingError{}, err)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
 
 func (suite *GlideTestSuite) TestConfigSetAndGet_multipleArgs() {
@@ -195,12 +198,12 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_noArgs() {
 
 	_, err := client.ConfigSet(configMap)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.RequestError{}, err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 	result2, err := client.ConfigGet([]string{})
 	assert.Nil(suite.T(), result2)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.RequestError{}, err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
@@ -210,7 +213,7 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
 
 	_, err := client.ConfigSet(configMap)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.RequestError{}, err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 	result2, err := client.ConfigGet([]string{"time"})
 	assert.Equal(suite.T(), map[string]string{}, result2)
@@ -383,4 +386,133 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 	assert.Equal(suite.T(), "item2", sortResult[1].Value())
 	assert.Equal(suite.T(), "item1", sortResult[3].Value())
 	assert.Equal(suite.T(), "item3", sortResult[5].Value())
+}
+
+func (suite *GlideTestSuite) TestInfoStandalone() {
+	DEFAULT_INFO_SECTIONS := []string{
+		"Server",
+		"Clients",
+		"Memory",
+		"Persistence",
+		"Stats",
+		"Replication",
+		"CPU",
+		"Modules",
+		"Errorstats",
+		"Cluster",
+		"Keyspace",
+	}
+
+	client := suite.defaultClient()
+	t := suite.T()
+
+	// info without options
+	info, err := client.Info()
+	assert.NoError(t, err)
+	for _, section := range DEFAULT_INFO_SECTIONS {
+		assert.Contains(t, info, "# "+section, "Section "+section+" is missing")
+	}
+
+	// info with option or with multiple options
+	sections := []api.Section{api.Cpu}
+	if suite.serverVersion >= "7.0.0" {
+		sections = append(sections, api.Memory)
+	}
+	info, err = client.InfoWithOptions(api.InfoOptions{Sections: sections})
+	assert.NoError(t, err)
+	for _, section := range sections {
+		assert.Contains(t, strings.ToLower(info), strings.ToLower("# "+string(section)), "Section "+section+" is missing")
+	}
+}
+
+func (suite *GlideTestSuite) TestDBSize() {
+	client := suite.defaultClient()
+	result, err := client.DBSize()
+	assert.Nil(suite.T(), err)
+	assert.Greater(suite.T(), result, int64(0))
+}
+
+func (suite *GlideTestSuite) TestPing_NoArgument() {
+	client := suite.defaultClient()
+
+	result, err := client.Ping()
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "PONG", result)
+}
+
+func (suite *GlideTestSuite) TestEcho() {
+	client := suite.defaultClient()
+	// Test 1: Check if Echo command return the message
+	value := "Hello world"
+	t := suite.T()
+	resultEcho, err := client.Echo(value)
+	assert.Nil(t, err)
+	assert.Equal(t, value, resultEcho.Value())
+}
+
+func (suite *GlideTestSuite) TestPing_ClosedClient() {
+	client := suite.defaultClient()
+	client.Close()
+
+	result, err := client.Ping()
+
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
+func (suite *GlideTestSuite) TestPingWithOptions_WithMessage() {
+	client := suite.defaultClient()
+	options := options.PingOptions{
+		Message: "hello",
+	}
+
+	result, err := client.PingWithOptions(options)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "hello", result)
+}
+
+func (suite *GlideTestSuite) TestPingWithOptions_ClosedClient() {
+	client := suite.defaultClient()
+	client.Close()
+
+	options := options.PingOptions{
+		Message: "hello",
+	}
+
+	result, err := client.PingWithOptions(options)
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
+func (suite *GlideTestSuite) TestTime_Success() {
+	client := suite.defaultClient()
+	results, err := client.Time()
+
+	assert.Nil(suite.T(), err)
+	assert.Len(suite.T(), results, 2)
+
+	now := time.Now().Unix() - 1
+
+	timestamp, err := strconv.ParseInt(results[0], 10, 64)
+	assert.Nil(suite.T(), err)
+	assert.Greater(suite.T(), timestamp, now)
+
+	microseconds, err := strconv.ParseInt(results[1], 10, 64)
+	assert.Nil(suite.T(), err)
+	assert.Less(suite.T(), microseconds, int64(1000000))
+}
+
+func (suite *GlideTestSuite) TestTime_Error() {
+	client := suite.defaultClient()
+
+	// Disconnect the client or simulate an error condition
+	client.Close()
+
+	results, err := client.Time()
+
+	assert.NotNil(suite.T(), err)
+	assert.Nil(suite.T(), results)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }

@@ -326,3 +326,117 @@ func (xgsio *XGroupSetIdOptions) ToArgs() ([]string, error) {
 
 	return args, nil
 }
+
+// Optional arguments for `XClaim` in [StreamCommands]
+type StreamClaimOptions struct {
+	idleTime     int64
+	idleUnixTime int64
+	retryCount   int64
+	isForce      bool
+}
+
+func NewStreamClaimOptions() *StreamClaimOptions {
+	return &StreamClaimOptions{}
+}
+
+// Set the idle time in milliseconds.
+func (sco *StreamClaimOptions) SetIdleTime(idleTime int64) *StreamClaimOptions {
+	sco.idleTime = idleTime
+	return sco
+}
+
+// Set the idle time in unix-milliseconds.
+func (sco *StreamClaimOptions) SetIdleUnixTime(idleUnixTime int64) *StreamClaimOptions {
+	sco.idleUnixTime = idleUnixTime
+	return sco
+}
+
+// Set the retry count.
+func (sco *StreamClaimOptions) SetRetryCount(retryCount int64) *StreamClaimOptions {
+	sco.retryCount = retryCount
+	return sco
+}
+
+// Set the force flag.
+func (sco *StreamClaimOptions) SetForce() *StreamClaimOptions {
+	sco.isForce = true
+	return sco
+}
+
+// Valkey API keywords for stream claim options
+const (
+	// ValKey API string to designate IDLE time in milliseconds
+	IDLE_VALKEY_API string = "IDLE"
+	// ValKey API string to designate TIME time in unix-milliseconds
+	TIME_VALKEY_API string = "TIME"
+	// ValKey API string to designate RETRYCOUNT
+	RETRY_COUNT_VALKEY_API string = "RETRYCOUNT"
+	// ValKey API string to designate FORCE
+	FORCE_VALKEY_API string = "FORCE"
+	// ValKey API string to designate JUSTID
+	JUST_ID_VALKEY_API string = "JUSTID"
+)
+
+func (sco *StreamClaimOptions) ToArgs() ([]string, error) {
+	optionArgs := []string{}
+
+	if sco.idleTime > 0 {
+		optionArgs = append(optionArgs, IDLE_VALKEY_API, utils.IntToString(sco.idleTime))
+	}
+
+	if sco.idleUnixTime > 0 {
+		optionArgs = append(optionArgs, TIME_VALKEY_API, utils.IntToString(sco.idleUnixTime))
+	}
+
+	if sco.retryCount > 0 {
+		optionArgs = append(optionArgs, RETRY_COUNT_VALKEY_API, utils.IntToString(sco.retryCount))
+	}
+
+	if sco.isForce {
+		optionArgs = append(optionArgs, FORCE_VALKEY_API)
+	}
+
+	return optionArgs, nil
+}
+
+type StreamBoundary string
+
+// Create a new stream boundary.
+func NewStreamBoundary(streamId string, isInclusive bool) StreamBoundary {
+	if !isInclusive {
+		return StreamBoundary("(" + streamId)
+	}
+	return StreamBoundary(streamId)
+}
+
+// Create a new stream boundary defined by an infinity.
+func NewInfiniteStreamBoundary(bound InfBoundary) StreamBoundary {
+	return StreamBoundary(string(bound))
+}
+
+// Optional arguments for `XRange` and `XRevRange` in [StreamCommands]
+type StreamRangeOptions struct {
+	count      int64
+	countIsSet bool
+}
+
+func NewStreamRangeOptions() *StreamRangeOptions {
+	return &StreamRangeOptions{}
+}
+
+// Set the count.
+func (sro *StreamRangeOptions) SetCount(count int64) *StreamRangeOptions {
+	sro.count = count
+	sro.countIsSet = true
+	return sro
+}
+
+func (sro *StreamRangeOptions) ToArgs() ([]string, error) {
+	var args []string
+
+	if sro.countIsSet {
+		args = append(args, "COUNT", utils.IntToString(sro.count))
+	}
+
+	return args, nil
+}

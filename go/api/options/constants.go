@@ -11,3 +11,12 @@ const (
 	NoScores     string = "NOSCORES"   // Valkey API keyword for the no scores option for zscan command.
 	WithValues   string = "WITHVALUES" // Valkey API keyword to query hash values along their names in `HRANDFIELD`.
 )
+
+type InfBoundary string
+
+const (
+	// The highest bound in the sorted set
+	PositiveInfinity InfBoundary = "+"
+	// The lowest bound in the sorted set
+	NegativeInfinity InfBoundary = "-"
+)
