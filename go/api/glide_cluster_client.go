@@ -323,3 +323,46 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 	}
 	return handleIntResponse(result)
 }
+
+// Echo the provided message back.
+// The command will be routed a random node, unless `Route` in `echoOptions` is provided.
+//
+// Parameters:
+//
+//	message - The provided message.
+//
+// Return value:
+//
+//	A map where each address is the key and its corresponding node response is the information for the default sections.
+//
+// Example:
+//
+//	response, err := clusterClient.EchoWithOptions(opts)
+//	if err != nil {
+//		// handle error
+//	}
+//	for node, data := range response {
+//		fmt.Printf("%s node returned %s\n", node, data)
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/echo/
+func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(C.Echo, echoOptions.ToArgs(),
+		echoOptions.RouteOption.Route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if echoOptions.RouteOption.Route != nil &&
+		(echoOptions.RouteOption.Route).IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
