@@ -2,7 +2,7 @@
 
 package options
 
-// This struct represents the optional arguments for the ZSCAN command.
+// This struct represents the optional arguments for the ZINTER command.
 type ZInterOptions struct {
 	keysOrWeightedKeys KeysOrWeightedKeys
 	aggregate          Aggregate
