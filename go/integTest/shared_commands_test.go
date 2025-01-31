@@ -7752,14 +7752,14 @@ func (suite *GlideTestSuite) TestZDiff() {
 		assert.Equal(t, map[string]float64{}, zDiffResultWithScores)
 
 		// Key exists, but it is not a set
-		setResult, err := client.Set(nonExistentKey, "bar")
+		setResult, _ := client.Set(nonExistentKey, "bar")
 		assert.Equal(t, setResult, "OK")
 
-		zDiffResult, err = client.ZDiff([]string{nonExistentKey, key2})
+		_, err = client.ZDiff([]string{nonExistentKey, key2})
 		assert.NotNil(t, err)
 		assert.IsType(t, &errors.RequestError{}, err)
 
-		zDiffResultWithScores, err = client.ZDiffWithScores([]string{nonExistentKey, key2})
+		_, err = client.ZDiffWithScores([]string{nonExistentKey, key2})
 		assert.NotNil(t, err)
 		assert.IsType(t, &errors.RequestError{}, err)
 	})
