@@ -7015,7 +7015,7 @@ func (client *baseClient) Time() ([]string, error) {
 // Returns the difference between the first sorted set and all the successive sorted sets.<br>
 // To get the elements with their scores, see `ZDiffWithScores`
 // When in cluster mode, all `keys` must map to the same hash slot.
-// Valkey 6.2 and above.
+// Available for Valkey 6.2 and above.
 //
 // See [valkey.io] for details.
 //
@@ -7031,9 +7031,11 @@ func (client *baseClient) Time() ([]string, error) {
 //
 // Example:
 //
-//	zAddResult1, err := client.ZAdd(key1, membersScores1)
-//	zAddResult2, err := client.ZAdd(key2, membersScores2)
-//	zDiffResult, err := client.ZDiff([]string{key1, key2})
+//	membersScores1 := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}
+//	membersScores2 := map[string]float64{"two": 2.0}
+//	zAddResult1, err := client.ZAdd("key1", membersScores1)
+//	zAddResult2, err := client.ZAdd("key2", membersScores2)
+//	zDiffResult, err := client.ZDiff([]string{"key1", "key2"})
 //	fmt.Println(zDiffResult) // Output: {"one", "three"}
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
