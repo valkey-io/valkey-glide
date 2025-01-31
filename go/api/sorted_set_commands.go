@@ -70,4 +70,8 @@ type SortedSetCommands interface {
 	ZRemRangeByRank(key string, start int64, stop int64) (int64, error)
 
 	ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error)
+
+	ZDiff(keys []string) ([]string, error)
+
+	ZDiffWithScores(keys []string) (map[string]float64, error)
 }

@@ -9,6 +9,7 @@ const (
 	WithScore    string = "WITHSCORE"  // Valkey API keyword for the with score option for zrank and zrevrank commands.
 	NoScores     string = "NOSCORES"   // Valkey API keyword for the no scores option for zscan command.
 	WithValues   string = "WITHVALUES" // Valkey API keyword to query hash values along their names in `HRANDFIELD`.
+	WithScores   string = "WITHSCORES" // Valkey API keyword for the with scores option for zdiff command.
 )
 
 type InfBoundary string
