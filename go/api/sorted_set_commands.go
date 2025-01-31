@@ -71,5 +71,11 @@ type SortedSetCommands interface {
 
 	ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error)
 
+	ZRandMember(key string) (Result[string], error)
+
+	ZRandMemberWithCount(key string, count int64) ([]string, error)
+
+	ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error)
+
 	ZMScore(key string, members []string) ([]Result[float64], error)
 }
