@@ -324,31 +324,6 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 	return handleIntResponse(result)
 }
 
-// Returns the number of keys in the database.
-//
-// Return value:
-//
-//	The number of keys in the database.
-//
-// Example:
-//
-//	route := api.SimpleNodeRoute(api.RandomRoute)
-//	options := options.NewDBOptionsBuilder().SetRoute(route)
-//	result, err := client.DBSizeWithOption(route)
-//	if err != nil {
-//	  // handle error
-//	}
-//	fmt.Println(result) // Output: 1
-//
-// [valkey.io]: https://valkey.io/commands/dbsize/
-func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (int64, error) {
-	result, err := client.executeCommandWithRoute(C.DBSize, []string{}, opts.Route)
-	if err != nil {
-		return defaultIntResponse, err
-	}
-	return handleIntResponse(result)
-}
-
 // Echo the provided message back.
 // The command will be routed a random node, unless `Route` in `echoOptions` is provided.
 //

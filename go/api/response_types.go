@@ -35,17 +35,6 @@ type MemberAndScore struct {
 	Score  float64
 }
 
-// Response of the [ZMPop] and [BZMPop] command.
-type KeyWithArrayOfMembersAndScores struct {
-	Key              string
-	MembersAndScores []MemberAndScore
-}
-
-type MemberAndScore struct {
-	Member string
-	Score  float64
-}
-
 // Response type of [XAutoClaim] command.
 type XAutoClaimResponse struct {
 	NextEntry       string
