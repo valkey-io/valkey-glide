@@ -4471,6 +4471,147 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 	return handleKeyWithMemberAndScoreResponse(result)
 }
 
+// Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
+// given keys being checked in the order they are provided.
+// BZMPop is the blocking variant of [baseClient.ZMPop].
+//
+// Note:
+//   - When in cluster mode, all keys must map to the same hash slot.
+//   - BZMPop is a client blocking command, see [Blocking Commands] for more details and best practices.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys          - An array of keys to lists.
+//	scoreFilter   - The element pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest
+//					scores accordingly.
+//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
+//					indefinitely.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	- The key name of the set from which the element was popped.
+//	- An array of member scores of the popped elements.
+//	Returns `nil` if no member could be popped and the timeout expired.
+//
+// For example:
+//
+//	result, err := client.ZAdd("my_list", map[string]float64{"five": 5.0, "six": 6.0})
+//	result, err := client.BZMPop([]string{"my_list"}, api.MAX, float64(0.1))
+//	result["my_list"] = []MemberAndScore{{Member: "six", Score: 6.0}}
+//
+// [valkey.io]: https://valkey.io/commands/bzmpop/
+// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+func (client *baseClient) BZMPop(
+	keys []string,
+	scoreFilter ScoreFilter,
+	timeoutSecs float64,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.toString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-3 {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
+			Msg: "Length overflow for the provided keys",
+		}
+	}
+
+	// args slice will have 3 more arguments with the keys provided.
+	args := make([]string, 0, len(keys)+3)
+	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, scoreFilterStr)
+	result, err := client.executeCommand(C.BZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
+}
+
+// Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
+// given keys being checked in the order they are provided.
+// BZMPop is the blocking variant of [baseClient.ZMPop].
+//
+// Note:
+//   - When in cluster mode, all keys must map to the same hash slot.
+//   - BZMPop is a client blocking command, see [Blocking Commands] for more details and best practices.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys          - An array of keys to lists.
+//	scoreFilter   - The element pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest
+//					scores accordingly.
+//	count         - The maximum number of popped elements.
+//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	- The key name of the set from which the element was popped.
+//	- An array of member scores of the popped elements.
+//	Returns `nil` if no member could be popped and the timeout expired.
+//
+// For example:
+//
+//	result, err := client.ZAdd("my_list", map[string]float64{"five": 5.0, "six": 6.0})
+//	result, err := client.BZMPopWithOptions([]string{"my_list"}, api.MAX, 0.1, options.NewZMPopOptions().SetCount(2))
+//	result["my_list"] = []MemberAndScore{{Member: "six", Score: 6.0}, {Member: "five", Score 5.0}}
+//
+// [valkey.io]: https://valkey.io/commands/bzmpop/
+// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+func (client *baseClient) BZMPopWithOptions(
+	keys []string,
+	scoreFilter ScoreFilter,
+	timeoutSecs float64,
+	opts *options.ZMPopOptions,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.toString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-5 {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
+			Msg: "Length overflow for the provided keys",
+		}
+	}
+
+	// args slice will have 5 more arguments with the keys provided.
+	args := make([]string, 0, len(keys)+5)
+	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, scoreFilterStr)
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		}
+		args = append(args, optionArgs...)
+	}
+	result, err := client.executeCommand(C.BZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
+}
+
 // Returns the specified range of elements in the sorted set stored at `key`.
 // `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
 //
@@ -5736,6 +5877,118 @@ func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeB
 	return handleIntResponse(result)
 }
 
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//
+// Return value:
+//
+//	A string representing a random member from the sorted set.
+//	If the sorted set does not exist or is empty, the response will be `nil`.
+//
+// Example:
+//
+//	member, err := client.ZRandMember("key1")
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMember(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//	An array of members from the sorted set.
+//	If the sorted set does not exist or is empty, the response will be an empty array.
+//
+// Example:
+//
+//	members, err := client.ZRandMemberWithCount("key1", -5)
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMemberWithCount(key string, count int64) ([]string, error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//	An array of `MemberAndScore` objects, which store member names and their respective scores.
+//	If the sorted set does not exist or is empty, the response will be an empty array.
+//
+// Example:
+//
+//	membersAndScores, err := client.ZRandMemberWithCountWithScores("key1", 5)
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key, utils.IntToString(count), options.WithScores})
+	if err != nil {
+		return nil, err
+	}
+	return handleMemberAndScoreArrayResponse(result)
+}
+
+// Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Parameters:
+//
+//	key     - The key of the sorted set.
+//	members - A list of members in the sorted set.
+//
+// Return value:
+//
+//	An array of scores corresponding to `members`.
+//	If a member does not exist in the sorted set, the corresponding value in the list will be `nil`.
+//
+// Example:
+//
+//	result, err := client.ZMScore(key, []string{"member1", "non_existent_member", "member2"})
+//	result: [{1.0 false} {0 true} {2.0 false}]
+//
+// [valkey.io]: https://valkey.io/commands/zmscore/
+func (client *baseClient) ZMScore(key string, members []string) ([]Result[float64], error) {
+	response, err := client.executeCommand(C.ZMScore, append([]string{key}, members...))
+	if err != nil {
+		return nil, err
+	}
+	return handleFloatOrNilArrayResponse(response)
+}
+
 // Returns the logarithmic access frequency counter of a Valkey object stored at key.
 //
 // Parameters:
@@ -6848,4 +7101,25 @@ func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCo
 		return nil, err
 	}
 	return handleIntOrNilArrayResponse(result)
+}
+
+// Returns the server time.
+//
+// Return value:
+// The current server time as a String array with two elements:
+// A UNIX TIME and the amount of microseconds already elapsed in the current second.
+// The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
+//
+// For example:
+//
+//	result, err := client.Time()
+//	result: [{1737051660} {994688}]
+//
+// [valkey.io]: https://valkey.io/commands/time/
+func (client *baseClient) Time() ([]string, error) {
+	result, err := client.executeCommand(C.Time, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
 }

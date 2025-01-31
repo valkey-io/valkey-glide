@@ -36,6 +36,15 @@ type SortedSetCommands interface {
 
 	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
 
+	BZMPop(keys []string, scoreFilter ScoreFilter, timeoutSecs float64) (Result[KeyWithArrayOfMembersAndScores], error)
+
+	BZMPopWithOptions(
+		keys []string,
+		scoreFilter ScoreFilter,
+		timeoutSecs float64,
+		options *options.ZMPopOptions,
+	) (Result[KeyWithArrayOfMembersAndScores], error)
+
 	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
 	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[string]float64, error)
@@ -61,4 +70,12 @@ type SortedSetCommands interface {
 	ZRemRangeByRank(key string, start int64, stop int64) (int64, error)
 
 	ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error)
+
+	ZRandMember(key string) (Result[string], error)
+
+	ZRandMemberWithCount(key string, count int64) ([]string, error)
+
+	ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error)
+
+	ZMScore(key string, members []string) ([]Result[float64], error)
 }
