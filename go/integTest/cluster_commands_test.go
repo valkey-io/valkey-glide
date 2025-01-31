@@ -255,3 +255,46 @@ func (suite *GlideTestSuite) TestDBSizeRandomRoute() {
 	assert.NotEmpty(suite.T(), result)
 	assert.Greater(suite.T(), result, int64(0))
 }
+
+func (suite *GlideTestSuite) TestEchoCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// echo with option or with multiple options without route
+	opts := options.ClusterEchoOptions{
+		EchoOptions: &options.EchoOptions{
+			Message: "hello",
+		},
+		RouteOption: &options.RouteOption{Route: nil},
+	}
+	response, err := client.EchoWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// same sections with random route
+	route := options.RouteOption{Route: *config.RandomRoute.ToPtr()}
+	opts = options.ClusterEchoOptions{
+		EchoOptions: &options.EchoOptions{
+			Message: "hello",
+		},
+		RouteOption: &route,
+	}
+	response, err = client.EchoWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// default sections, multi node route
+	route = options.RouteOption{Route: *config.AllPrimaries.ToPtr()}
+	opts = options.ClusterEchoOptions{
+		EchoOptions: &options.EchoOptions{
+			Message: "hello",
+		},
+		RouteOption: &route,
+	}
+	response, err = client.EchoWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsMultiValue())
+	for _, messages := range response.MultiValue() {
+		assert.Contains(t, strings.ToLower(messages), strings.ToLower("hello"))
+	}
+}
