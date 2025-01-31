@@ -633,6 +633,27 @@ func handleKeyWithArrayOfMembersAndScoresResponse(
 	return CreateKeyWithArrayOfMembersAndScoresResult(KeyWithArrayOfMembersAndScores{key, memberAndScoreArray}), nil
 }
 
+func handleMemberAndScoreArrayResponse(response *C.struct_CommandResponse) ([]MemberAndScore, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []MemberAndScore
+	for _, arr := range slice.([]interface{}) {
+		pair := arr.([]interface{})
+		result = append(result, MemberAndScore{pair[0].(string), pair[1].(float64)})
+	}
+	return result, nil
+}
+
 func handleScanResponse(response *C.struct_CommandResponse) (string, []string, error) {
 	defer C.free_command_response(response)
 
