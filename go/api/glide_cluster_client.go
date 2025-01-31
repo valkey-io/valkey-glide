@@ -360,7 +360,7 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
 //
-// For example:
+// Example:
 //
 //	response, err := clusterClient.EchoWithOptions(opts)
 //	if err != nil {
