@@ -78,4 +78,8 @@ type SortedSetCommands interface {
 	ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error)
 
 	ZMScore(key string, members []string) ([]Result[float64], error)
+
+	ZInter(keys options.KeyArray) ([]string, error)
+
+	ZInterWithScores(options *options.ZInterOptions) (map[string]float64, error)
 }
