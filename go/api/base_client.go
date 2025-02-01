@@ -7123,3 +7123,71 @@ func (client *baseClient) Time() ([]string, error) {
 	}
 	return handleStringArrayResponse(result)
 }
+
+// Returns the intersection of members from sorted sets specified by the given `keys`.
+// To get the elements with their scores, see [ZInterWithScores].
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - The keys of the sorted sets, see - [options.KeyArray].
+//
+// Return value:
+//
+//	The resulting sorted set from the intersection.
+//
+// Example:
+//
+//	res, err := client.ZInter(options.NewKeyArray("key1", "key2", "key3"))
+//	fmt.Println(res) // []string{"member1", "member2", "member3"}
+//
+// [valkey.io]: https://valkey.io/commands/zinter/
+func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
+	args := keys.ToArgs()
+	result, err := client.executeCommand(C.ZInter, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the intersection of members and their scores from sorted sets specified by the given
+// `keysOrWeightedKeys`.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	options - The options for the ZInter command, see - [options.ZInterOptions].
+//
+// Return value:
+//
+//	A map of members to their scores.
+//
+// Example:
+//
+//	res, err := client.ZInterWithScores(options.NewZInterOptionsBuilder(options.NewKeyArray("key1", "key2", "key3")))
+//	fmt.Println(res) // map[member1:1.0 member2:2.0 member3:3.0]
+//
+// [valkey.io]: https://valkey.io/commands/zinter/
+func (client *baseClient) ZInterWithScores(zInterOptions *options.ZInterOptions) (map[string]float64, error) {
+	args, err := zInterOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, options.WithScores)
+	result, err := client.executeCommand(C.ZInter, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringDoubleMapResponse(result)
+}

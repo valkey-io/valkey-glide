@@ -7806,3 +7806,102 @@ func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
 		assert.Equal(suite.T(), []int64{value1, value2}, []int64{getRO[0].Value(), getRO[1].Value()})
 	})
 }
+
+func (suite *GlideTestSuite) TestZInter() {
+	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-" + uuid.New().String()
+		key2 := "{key}-" + uuid.New().String()
+		key3 := "{key}-" + uuid.New().String()
+		memberScoreMap1 := map[string]float64{
+			"one": 1.0,
+			"two": 2.0,
+		}
+		memberScoreMap2 := map[string]float64{
+			"two":   3.5,
+			"three": 3.0,
+		}
+
+		// Add members to sorted sets
+		res, err := client.ZAdd(key1, memberScoreMap1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		res, err = client.ZAdd(key2, memberScoreMap2)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		// intersection results are aggregated by the max score of elements
+		zinterResult, err := client.ZInter(options.KeyArray{Keys: []string{key1, key2}})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{"two"}, zinterResult)
+
+		// intersection with scores
+		zinterWithScoresResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithScoresResult)
+
+		// intersect results with max aggregate
+		zinterWithMaxAggregateResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateMax),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"two": 3.5}, zinterWithMaxAggregateResult)
+
+		// intersect results with min aggregate
+		zinterWithMinAggregateResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateMin),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"two": 2.0}, zinterWithMinAggregateResult)
+
+		// intersect results with sum aggregate
+		zinterWithSumAggregateResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithSumAggregateResult)
+
+		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
+		zinterWithWeightedKeysResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(
+				options.WeightedKeys{
+					KeyWeightPairs: []options.KeyWeightPair{
+						{Key: key1, Weight: 2.0},
+						{Key: key2, Weight: 2.0},
+					},
+				},
+			).SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"two": 11.0}, zinterWithWeightedKeysResult)
+
+		// non-existent key - empty intersection
+		zinterWithNonExistentKeyResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key3}}).SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), zinterWithNonExistentKeyResult)
+
+		// empty key list - request error
+		_, err = client.ZInterWithScores(options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{}}))
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// key exists but not a set
+		_, err = client.Set(key3, "value")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.ZInter(options.KeyArray{Keys: []string{key1, key3}})
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		_, err = client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key3}}).SetAggregate(options.AggregateSum),
+		)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
