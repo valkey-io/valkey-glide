@@ -7179,11 +7179,12 @@ func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
 //	fmt.Println(res) // map[member1:1.0 member2:2.0 member3:3.0]
 //
 // [valkey.io]: https://valkey.io/commands/zinter/
-func (client *baseClient) ZInterWithScores(options *options.ZInterOptions) (map[string]float64, error) {
-	args, err := options.ToArgs()
+func (client *baseClient) ZInterWithScores(zInterOptions *options.ZInterOptions) (map[string]float64, error) {
+	args, err := zInterOptions.ToArgs()
 	if err != nil {
 		return nil, err
 	}
+	args = append(args, options.WithScores)
 	result, err := client.executeCommand(C.ZInter, args)
 	if err != nil {
 		return nil, err

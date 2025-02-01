@@ -29,7 +29,5 @@ func (options *ZInterOptions) ToArgs() ([]string, error) {
 		args = append(args, options.aggregate.ToArgs()...)
 	}
 
-	args = append(args, WithScores)
-
 	return args, nil
 }
