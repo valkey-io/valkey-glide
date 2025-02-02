@@ -976,7 +976,7 @@ public class GlideClientTest {
         // Set `key` to `newValue` with the correct condition
         SetOptions setOptions =
                 SetOptions.builder()
-                        .conditionalSetIfEqualTo(value) // Key must currently have `value`
+                        .conditionalSetOnlyIfEqualTo(value) // Key must currently have `value`
                         .expiry(Expiry.UnixSeconds(60L))
                         .build();
         String[] correctConditionArguments =
@@ -1022,7 +1022,7 @@ public class GlideClientTest {
         // Attempt to set `key` to `newValue` with the wrong condition
         SetOptions wrongConditionOptions =
                 SetOptions.builder()
-                        .conditionalSetIfEqualTo(newValue) // Incorrect: current value of key is `value`
+                        .conditionalSetOnlyIfEqualTo(newValue) // Incorrect: current value of key is `value`
                         .expiry(Expiry.UnixSeconds(60L))
                         .build();
 

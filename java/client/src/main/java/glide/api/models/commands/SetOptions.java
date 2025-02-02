@@ -63,52 +63,55 @@ public final class SetOptions {
         private final String valkeyApi;
     }
 
-    // Builder class for SetOptions
+    /**
+     * Builder class for {@link SetOptions}.
+     * <p>
+     * Provides methods to set conditions under which a value should be set.
+     * <p>
+     * Note: Calling any of these methods will override the existing values of
+     * {@code conditionalSet} and {@code comparisonValue}, if they are already set.
+     */
     public static class SetOptionsBuilder {
         /**
-         * Sets the condition for the value to be set.<br>
-         * In order to set {@link ConditionalSet#ONLY_IF_EQUAL} use {@link #conditionalSetIfEqualTo}.
+         * Sets the condition to {@link ConditionalSet#ONLY_IF_EXISTS} for setting the value.
+         * <p>
+         * This method overrides any previously set {@code conditionalSet} and
+         * {@code comparisonValue}.
          *
-         * @param conditionalSet The condition to set, either {@link ConditionalSet#ONLY_IF_EXISTS} or
-         *     {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}.
          * @return This builder instance
-         * @throws IllegalArgumentException if the conditionalSet is ONLY_IF_EQUAL
-         * @throws IllegalStateException if a conflicting condition has already been set
          */
-        public SetOptionsBuilder conditionalSet(@NonNull ConditionalSet conditionalSet) {
-            if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
-                throw new IllegalArgumentException(
-                        "For ONLY_IF_EQUAL, use the conditionalSetIfEqualTo(String value) method.");
-            }
-
-            if (this.conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
-                throw new IllegalStateException(
-                        "Cannot set conditionalSet to "
-                                + conditionalSet
-                                + " when ONLY_IF_EQUAL is already set. Use either conditionalSet or"
-                                + " conditionalSetIfEqualTo, not both.");
-            }
-            this.conditionalSet = conditionalSet;
-            this.comparisonValue = null; // Clear comparisonValue when not using ONLY_IF_EQUAL
+        public SetOptionsBuilder conditionalSetOnlyIfExists() {
+            this.conditionalSet = ConditionalSet.ONLY_IF_EXISTS;
+            this.comparisonValue = null;
             return this;
         }
 
         /**
-         * Set the key if the comparison value matches the existing value.
+         * Sets the condition to {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST} for setting the value.
+         * <p>
+         * This method overrides any previously set {@code conditionalSet} and
+         * {@code comparisonValue}.
+         *
+         * @return This builder instance
+         */
+        public SetOptionsBuilder conditionalSetOnlyIfNotExist() {
+            this.conditionalSet = ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
+            this.comparisonValue = null;
+            return this;
+        }
+
+        /**
+         * Sets the condition to {@link ConditionalSet#ONLY_IF_EQUAL} for setting the value.
+         * The key will be set if the provided comparison value matches the existing value.
+         * <p>
+         * This method overrides any previously set {@code conditionalSet} and
+         * {@code comparisonValue}.
          *
          * @since Valkey 8.1 and above.
          * @param value the value to compare
          * @return this builder instance
-         * @throws IllegalStateException if a conflicting condition has already been set
          */
-        public SetOptionsBuilder conditionalSetIfEqualTo(@NonNull String value) {
-            if (this.conditionalSet != null && this.conditionalSet != ConditionalSet.ONLY_IF_EQUAL) {
-                throw new IllegalStateException(
-                        "Cannot set conditionalSetIfEqualTo when "
-                                + this.conditionalSet
-                                + " is already set. Use either conditionalSet or conditionalSetIfEqualTo, not"
-                                + " both.");
-            }
+        public SetOptionsBuilder conditionalSetOnlyIfEqualTo(@NonNull String value) {
             this.conditionalSet = ConditionalSet.ONLY_IF_EQUAL;
             this.comparisonValue = value;
             return this;
