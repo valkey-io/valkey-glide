@@ -65,18 +65,18 @@ public final class SetOptions {
 
     /**
      * Builder class for {@link SetOptions}.
-     * <p>
-     * Provides methods to set conditions under which a value should be set.
-     * <p>
-     * Note: Calling any of these methods will override the existing values of
-     * {@code conditionalSet} and {@code comparisonValue}, if they are already set.
+     *
+     * <p>Provides methods to set conditions under which a value should be set.
+     *
+     * <p>Note: Calling any of these methods will override the existing values of {@code
+     * conditionalSet} and {@code comparisonValue}, if they are already set.
      */
     public static class SetOptionsBuilder {
         /**
          * Sets the condition to {@link ConditionalSet#ONLY_IF_EXISTS} for setting the value.
-         * <p>
-         * This method overrides any previously set {@code conditionalSet} and
-         * {@code comparisonValue}.
+         *
+         * <p>This method overrides any previously set {@code conditionalSet} and {@code
+         * comparisonValue}.
          *
          * @return This builder instance
          */
@@ -88,9 +88,9 @@ public final class SetOptions {
 
         /**
          * Sets the condition to {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST} for setting the value.
-         * <p>
-         * This method overrides any previously set {@code conditionalSet} and
-         * {@code comparisonValue}.
+         *
+         * <p>This method overrides any previously set {@code conditionalSet} and {@code
+         * comparisonValue}.
          *
          * @return This builder instance
          */
@@ -101,11 +101,11 @@ public final class SetOptions {
         }
 
         /**
-         * Sets the condition to {@link ConditionalSet#ONLY_IF_EQUAL} for setting the value.
-         * The key will be set if the provided comparison value matches the existing value.
-         * <p>
-         * This method overrides any previously set {@code conditionalSet} and
-         * {@code comparisonValue}.
+         * Sets the condition to {@link ConditionalSet#ONLY_IF_EQUAL} for setting the value. The key
+         * will be set if the provided comparison value matches the existing value.
+         *
+         * <p>This method overrides any previously set {@code conditionalSet} and {@code
+         * comparisonValue}.
          *
          * @since Valkey 8.1 and above.
          * @param value the value to compare
