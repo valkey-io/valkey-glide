@@ -7265,3 +7265,43 @@ func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, er
 	}
 	return handleStringDoubleMapResponse(result)
 }
+
+// Calculates the difference between the first sorted set and all the successive sorted sets at
+// `keys` and stores the difference as a sorted set to `destination`,
+// overwriting it if it already exists. Non-existent keys are treated as empty sets.
+//
+// Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+//
+// Available for Valkey 6.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	destination - The key for the resulting sorted set.
+//	keys        - The keys of the sorted sets to compare.
+//
+// Return value:
+//
+//	The number of members in the resulting sorted set stored at `destination`.
+//
+// Example:
+//
+//	membersScores1 := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}
+//	membersScores2 := map[string]float64{"two": 2.0}
+//	zAddResult1, err := client.ZAdd("key1", membersScores1)
+//	zAddResult2, err := client.ZAdd("key2", membersScores2)
+//	zDiffStoreResult, err := client.ZDiffStore("key4", []string{"key1", "key2"})
+//	fmt.Println(zDiffStoreResult) // Output: 2
+//
+// [valkey.io]: https://valkey.io/commands/zdiffstore/
+func (client *baseClient) ZDiffStore(destination string, keys []string) (int64, error) {
+	result, err := client.executeCommand(
+		C.ZDiffStore,
+		append([]string{destination, strconv.Itoa(len(keys))}, keys...),
+	)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
