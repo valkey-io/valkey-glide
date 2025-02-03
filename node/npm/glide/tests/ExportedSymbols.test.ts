@@ -1,17 +1,20 @@
+/**
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 import { it } from "@jest/globals";
 import * as f from "fs/promises";
 import { describe } from "node:test";
 import * as ts from "typescript";
 import * as glideApi from "../"; //ESM convention,
 
-describe("Exported Symbols test", () => {
+describe("Validation of Exported Symbols", () => {
     it("check excluded symbols are not exported", async () => {
         // Check exported symbols for valkey glide package
         const exportedSymbolsList = Object.keys(glideApi).sort(); // exportedList from the npm/glide package.
 
         const implBuildFolder = "./build-ts/";
         const filesWithNodeCode = await getFiles(implBuildFolder);
-        console.log(filesWithNodeCode);
 
         const internallyExported: string[] = [];
 
@@ -58,7 +61,7 @@ describe("Exported Symbols test", () => {
         if (missingSymbols.length > 0) {
             console.log(
                 "The following symbols are exported from npm/glide package but missing " +
-                    "from the internal node package export. These symbols might be from glide-rs package",
+                "from the internal node package export. These symbols might be from glide-rs package",
             );
             console.log(missingSymbols);
         }
