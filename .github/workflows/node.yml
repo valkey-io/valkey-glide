@@ -103,6 +103,32 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - name: Run npm install in ./npm/glide package
+              run: |
+                  export pkg_name=valkey-glide
+                  echo "The workflow is: ${{env.EVENT_NAME}}"
+                  if ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+                  export arch="${{ matrix.host.ARCH }}"
+                  export named_os="${{ matrix.host.NAMED_OS }}"
+                  export package_version=${R_VERSION}
+                  export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
+                  envsubst < package.json.temp > "package.json"
+                  cat package.json
+                  # Fix index.ts based on the scope variable
+                  # sed -i "s/\@scope/${scope}/g" index.ts
+                  sed -i "s|@scope/|${scope}|g" index.ts
+                  npm install
+              env:
+                  NPM_SCOPE: ${{ vars.NPM_SCOPE }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
+              working-directory: ./node/npm/glide
+
             - name: test
               run: npm test
               working-directory: ./node
