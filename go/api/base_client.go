@@ -5877,6 +5877,118 @@ func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeB
 	return handleIntResponse(result)
 }
 
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//
+// Return value:
+//
+//	A string representing a random member from the sorted set.
+//	If the sorted set does not exist or is empty, the response will be `nil`.
+//
+// Example:
+//
+//	member, err := client.ZRandMember("key1")
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMember(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//	An array of members from the sorted set.
+//	If the sorted set does not exist or is empty, the response will be an empty array.
+//
+// Example:
+//
+//	members, err := client.ZRandMemberWithCount("key1", -5)
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMemberWithCount(key string, count int64) ([]string, error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//	An array of `MemberAndScore` objects, which store member names and their respective scores.
+//	If the sorted set does not exist or is empty, the response will be an empty array.
+//
+// Example:
+//
+//	membersAndScores, err := client.ZRandMemberWithCountWithScores("key1", 5)
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key, utils.IntToString(count), options.WithScores})
+	if err != nil {
+		return nil, err
+	}
+	return handleMemberAndScoreArrayResponse(result)
+}
+
+// Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Parameters:
+//
+//	key     - The key of the sorted set.
+//	members - A list of members in the sorted set.
+//
+// Return value:
+//
+//	An array of scores corresponding to `members`.
+//	If a member does not exist in the sorted set, the corresponding value in the list will be `nil`.
+//
+// Example:
+//
+//	result, err := client.ZMScore(key, []string{"member1", "non_existent_member", "member2"})
+//	result: [{1.0 false} {0 true} {2.0 false}]
+//
+// [valkey.io]: https://valkey.io/commands/zmscore/
+func (client *baseClient) ZMScore(key string, members []string) ([]Result[float64], error) {
+	response, err := client.executeCommand(C.ZMScore, append([]string{key}, members...))
+	if err != nil {
+		return nil, err
+	}
+	return handleFloatOrNilArrayResponse(response)
+}
+
 // Returns the logarithmic access frequency counter of a Valkey object stored at key.
 //
 // Parameters:
@@ -7010,6 +7122,74 @@ func (client *baseClient) Time() ([]string, error) {
 		return nil, err
 	}
 	return handleStringArrayResponse(result)
+}
+
+// Returns the intersection of members from sorted sets specified by the given `keys`.
+// To get the elements with their scores, see [ZInterWithScores].
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - The keys of the sorted sets, see - [options.KeyArray].
+//
+// Return value:
+//
+//	The resulting sorted set from the intersection.
+//
+// Example:
+//
+//	res, err := client.ZInter(options.NewKeyArray("key1", "key2", "key3"))
+//	fmt.Println(res) // []string{"member1", "member2", "member3"}
+//
+// [valkey.io]: https://valkey.io/commands/zinter/
+func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
+	args := keys.ToArgs()
+	result, err := client.executeCommand(C.ZInter, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the intersection of members and their scores from sorted sets specified by the given
+// `keysOrWeightedKeys`.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	options - The options for the ZInter command, see - [options.ZInterOptions].
+//
+// Return value:
+//
+//	A map of members to their scores.
+//
+// Example:
+//
+//	res, err := client.ZInterWithScores(options.NewZInterOptionsBuilder(options.NewKeyArray("key1", "key2", "key3")))
+//	fmt.Println(res) // map[member1:1.0 member2:2.0 member3:3.0]
+//
+// [valkey.io]: https://valkey.io/commands/zinter/
+func (client *baseClient) ZInterWithScores(zInterOptions *options.ZInterOptions) (map[string]float64, error) {
+	args, err := zInterOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, options.WithScores)
+	result, err := client.executeCommand(C.ZInter, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringDoubleMapResponse(result)
 }
 
 // Returns the difference between the first sorted set and all the successive sorted sets.
