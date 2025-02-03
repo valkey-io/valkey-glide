@@ -35,7 +35,7 @@ type MemberAndScore struct {
 	Score  float64
 }
 
-// Response type of [XRangeResponse] command.
+// Response type of [XRange] and [XRevRange] commands.
 type XRangeResponse struct {
 	StreamId string
 	Entries  [][]string
