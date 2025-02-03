@@ -7455,7 +7455,10 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			map[string][][]string{streamId1.Value(): {{"field1", "value1"}}, streamId2.Value(): {{"field2", "value2"}}},
+			[]api.XRangeResponse{
+				{StreamId: streamId1.Value(), Entries: [][]string{{"field1", "value1"}}},
+				{StreamId: streamId2.Value(), Entries: [][]string{{"field2", "value2"}}},
+			},
 			xrangeResult,
 		)
 
@@ -7468,7 +7471,10 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			map[string][][]string{streamId2.Value(): {{"field2", "value2"}}, streamId1.Value(): {{"field1", "value1"}}},
+			[]api.XRangeResponse{
+				{StreamId: streamId2.Value(), Entries: [][]string{{"field2", "value2"}}},
+				{StreamId: streamId1.Value(), Entries: [][]string{{"field1", "value1"}}},
+			},
 			xrevrangeResult,
 		)
 
@@ -7507,7 +7513,9 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			map[string][][]string{streamId3.Value(): {{"field3", "value3"}}},
+			[]api.XRangeResponse{
+				{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
+			},
 			xrangeResult,
 		)
 
@@ -7521,7 +7529,9 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			map[string][][]string{streamId3.Value(): {{"field3", "value3"}}},
+			[]api.XRangeResponse{
+				{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
+			},
 			xrevrangeResult,
 		)
 
