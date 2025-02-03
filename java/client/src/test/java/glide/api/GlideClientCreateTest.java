@@ -18,7 +18,7 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.handlers.MessageHandler;
-import glide.connectors.resources.ThreadPoolResource;
+import glide.api.models.configuration.ThreadPoolResource;
 import glide.connectors.resources.ThreadPoolResourceAllocator;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;

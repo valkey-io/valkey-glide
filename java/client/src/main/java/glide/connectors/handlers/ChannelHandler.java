@@ -3,7 +3,7 @@ package glide.connectors.handlers;
 
 import command_request.CommandRequestOuterClass.CommandRequest;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
-import glide.connectors.resources.ThreadPoolResource;
+import glide.api.models.configuration.ThreadPoolResource;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;

@@ -2,6 +2,7 @@
 package glide.connectors.resources;
 
 import glide.api.logging.Logger;
+import glide.api.models.configuration.ThreadPoolResource;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.kqueue.KQueue;
 import java.util.function.Supplier;

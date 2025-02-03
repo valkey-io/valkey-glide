@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import glide.api.models.configuration.ThreadPoolResource;
 import io.netty.channel.EventLoop;
 import io.netty.channel.EventLoopGroup;
 import java.util.function.Supplier;

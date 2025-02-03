@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connectors.resources;
 
+import glide.api.models.configuration.ThreadPoolResource;
+
 import java.util.function.Supplier;
 
 /** A class responsible to allocating and deallocating the default Thread Pool Resource. */

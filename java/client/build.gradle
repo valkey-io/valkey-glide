@@ -246,6 +246,8 @@ jar {
 shadowJar {
     dependsOn('copyNativeLib')
     archiveClassifier = osdetector.classifier
+    excludes.remove("module-info.class")
+    enableRelocation = true // auto relocation
 }
 
 sourcesJar {

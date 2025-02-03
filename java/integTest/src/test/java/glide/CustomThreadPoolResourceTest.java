@@ -5,27 +5,41 @@ import static glide.TestUtilities.commonClientConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import glide.api.GlideClient;
-import glide.connectors.resources.EpollResource;
-import glide.connectors.resources.KQueuePoolResource;
-import glide.connectors.resources.Platform;
-import glide.connectors.resources.ThreadPoolResource;
+import glide.api.models.configuration.ThreadPoolResource;
+import io.netty.channel.epoll.EpollDomainSocketChannel;
 import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.kqueue.KQueueDomainSocketChannel;
 import io.netty.channel.kqueue.KQueueEventLoopGroup;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 
 public class CustomThreadPoolResourceTest {
+
+
+    class KQueueResource extends ThreadPoolResource {
+        public KQueueResource() {
+            super(new KQueueEventLoopGroup(numOfThreads), KQueueDomainSocketChannel.class);
+        }
+    }
+
+    class EPollResource extends ThreadPoolResource {
+        public EPollResource() {
+            super(new EpollEventLoopGroup(numOfThreads), EpollDomainSocketChannel.class);
+        }
+    }
+
+    private static final int numOfThreads = 8;
+
     @Test
     @SneakyThrows
     public void standalone_client_with_custom_threadPoolResource() {
         ThreadPoolResource customThreadPoolResource;
-        int numOfThreads = 8;
 
-        if (Platform.getCapabilities().isKQueueAvailable()) {
-            customThreadPoolResource = new KQueuePoolResource(new KQueueEventLoopGroup(numOfThreads));
-        } else if (Platform.getCapabilities().isEPollAvailable()) {
-            customThreadPoolResource = new EpollResource(new EpollEventLoopGroup(numOfThreads));
+        if (System.getProperty("os.name").startsWith("Mac")) {
+            customThreadPoolResource = new KQueueResource();
+        } else if (System.getProperty("os.name").startsWith("Linux")) {
+            customThreadPoolResource = new EPollResource();
         } else {
             throw new RuntimeException("Current platform supports no known thread pool resources");
         }

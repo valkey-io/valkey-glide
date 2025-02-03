@@ -272,7 +272,7 @@ import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.handlers.MessageHandler;
 import glide.connectors.resources.Platform;
-import glide.connectors.resources.ThreadPoolResource;
+import glide.api.models.configuration.ThreadPoolResource;
 import glide.connectors.resources.ThreadPoolResourceAllocator;
 import glide.ffi.resolvers.GlideValueResolver;
 import glide.ffi.resolvers.StatisticsResolver;
