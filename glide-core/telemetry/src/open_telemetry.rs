@@ -13,6 +13,9 @@ const SPAN_WRITE_LOCK_ERR: &str = "Failed to get span write lock";
 const SPAN_READ_LOCK_ERR: &str = "Failed to get span read lock";
 const TRACE_SCOPE: &str = "valkey_glide";
 
+/// Default interval in milliseconds for flushing open telemetry data to the collector.
+pub const DEFAULT_FLUSH_SPAN_INTERVAL_MS: u64 = 5000;
+
 pub enum GlideSpanStatus {
     Ok,
     Error(String),
@@ -46,11 +49,16 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
         .map_err(|_| Error::new(ErrorKind::InvalidInput, format!("Parse error. {endpoint}")))?;
 
     match url.scheme() {
-        "http" | "https" => Ok(GlideOpenTelemetryTraceExporter::Http(format!(
+        "http" => Ok(GlideOpenTelemetryTraceExporter::Http(format!(
             "{}:{}",
             url.host_str().unwrap_or("127.0.0.1"),
             url.port().unwrap_or(80)
         ))), // HTTP endpoint
+        "https" => Ok(GlideOpenTelemetryTraceExporter::Http(format!(
+            "{}:{}",
+            url.host_str().unwrap_or("127.0.0.1"),
+            url.port().unwrap_or(443)
+        ))), // HTTPS endpoint
         "grpc" => Ok(GlideOpenTelemetryTraceExporter::Grpc(format!(
             "{}:{}",
             url.host_str().unwrap_or("127.0.0.1"),
@@ -235,7 +243,7 @@ pub struct GlideOpenTelemetryConfigBuilder {
 impl Default for GlideOpenTelemetryConfigBuilder {
     fn default() -> Self {
         GlideOpenTelemetryConfigBuilder {
-            span_flush_interval: std::time::Duration::from_millis(5_000),
+            span_flush_interval: std::time::Duration::from_millis(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
             trace_exporter: GlideOpenTelemetryTraceExporter::File(std::env::temp_dir()),
         }
     }

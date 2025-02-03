@@ -408,9 +408,6 @@ impl ClusterClientBuilder {
     ///
     /// # Parameters
     /// - `open_telemetry_config`: Use the `open_telemetry_config` property to specify the endpoint of the collector to export the measurments.
-    ///  - **Collector EndPoint**: Set `collectorEndPoint` to specify the endpoint of the collector to export the measurments.
-    ///  - **Span Flush Interval**: Set `spanFlushInterval` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 5000 will be used.
-    ///
     pub fn open_telemetry_config(
         mut self,
         open_telemetry_config: GlideOpenTelemetryConfig,

@@ -806,12 +806,14 @@ impl Client {
             inflight_requests_limit.try_into().unwrap(),
         ));
 
-        if let Some(endpoint_str) = &request.open_telemetry_endpoint {
+        if let Some(endpoint_str) = &request.otel_endpoint {
             let trace_exporter = GlideOpenTelemetryTraceExporter::from_str(endpoint_str.as_str())
                 .map_err(ConnectionError::IoError)?;
             let config = GlideOpenTelemetryConfigBuilder::default()
                 .with_flush_interval(std::time::Duration::from_millis(
-                    request.open_telemetry_span_interval.unwrap_or(5000),
+                    request
+                        .otel_span_flush_interval_ms
+                        .unwrap_or(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
                 ))
                 .with_trace_exporter(trace_exporter)
                 .build();
