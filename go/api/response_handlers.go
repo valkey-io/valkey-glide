@@ -834,14 +834,6 @@ func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (
 	return claimedEntries, nil
 }
 
-func handleMapOfArrayOfStringArrayOrNilResponse(response *C.struct_CommandResponse) (map[string][][]string, error) {
-	if response.response_type == uint32(C.Null) {
-		return nil, nil
-	}
-
-	return handleMapOfArrayOfStringArrayResponse(response)
-}
-
 func handleXRangeResponse(response *C.struct_CommandResponse) ([]XRangeResponse, error) {
 	defer C.free_command_response(response)
 
