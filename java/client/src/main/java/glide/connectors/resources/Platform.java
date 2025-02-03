@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connectors.resources;
 
-import glide.api.logging.Logger;
 import glide.api.models.configuration.ThreadPoolResource;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.kqueue.KQueue;
@@ -98,6 +97,6 @@ public class Platform {
                         System.getProperty("os.arch"));
 
         throw new RuntimeException(
-                errorMessage + (Logger.getLoggerLevel() == Logger.Level.DEBUG ? debugInfo : ""));
+                errorMessage + debugInfo);
     }
 }

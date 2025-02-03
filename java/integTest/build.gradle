@@ -16,9 +16,9 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
 
     // needed for tests with custom thread pool - using another version of netty to confirm that it has no conflict
-    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.100.Final', classifier: 'linux-x86_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-x86_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-aarch_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.115.Final', classifier: 'linux-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.115.Final', classifier: 'osx-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.115.Final', classifier: 'osx-aarch_64'
 
     // junit
     testImplementation 'org.mockito:mockito-junit-jupiter:3.12.4'

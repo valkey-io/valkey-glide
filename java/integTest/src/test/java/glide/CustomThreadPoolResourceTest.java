@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import glide.api.GlideClient;
 import glide.api.models.configuration.ThreadPoolResource;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.EpollDomainSocketChannel;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.kqueue.KQueueDomainSocketChannel;
@@ -16,16 +17,15 @@ import org.junit.jupiter.api.Test;
 
 public class CustomThreadPoolResourceTest {
 
-
     class KQueueResource extends ThreadPoolResource {
         public KQueueResource() {
-            super(new KQueueEventLoopGroup(numOfThreads), KQueueDomainSocketChannel.class);
+            super((EventLoopGroup) new KQueueEventLoopGroup(numOfThreads), KQueueDomainSocketChannel.class);
         }
     }
 
     class EPollResource extends ThreadPoolResource {
         public EPollResource() {
-            super(new EpollEventLoopGroup(numOfThreads), EpollDomainSocketChannel.class);
+            super((EventLoopGroup) new EpollEventLoopGroup(numOfThreads), EpollDomainSocketChannel.class);
         }
     }
 
@@ -45,8 +45,7 @@ public class CustomThreadPoolResourceTest {
         }
 
         var regularClient =
-                GlideClient.createClient(
-                                commonClientConfig().threadPoolResource(customThreadPoolResource).build())
+                GlideClient.createClient(commonClientConfig().threadPoolResource(customThreadPoolResource).build())
                         .get(10, TimeUnit.SECONDS);
 
         String payload = (String) regularClient.customCommand(new String[] {"PING"}).get();

@@ -15,7 +15,11 @@ module glide.api {
     exports glide.api.models.exceptions;
     exports glide.api.commands.servermodules;
 
-    requires io.netty.codec; // remove?
+//    exports io.netty.transport;
+//    exports io.netty.common;
+
+
+    //requires io.netty.codec; // remove?
     requires io.netty.common;
     requires io.netty.transport;
     requires io.netty.transport.classes.epoll;
@@ -25,5 +29,4 @@ module glide.api {
     requires org.apache.commons.lang3;
     requires java.logging;
     requires io.netty.buffer;
-    requires com.google.protobuf;
 }
