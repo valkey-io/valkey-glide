@@ -7271,15 +7271,16 @@ func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, er
 // overwriting it if it already exists. Non-existent keys are treated as empty sets.
 //
 // Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+//
 // Available for Valkey 6.2 and above.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//  destination - The key for the resulting sorted set.
-//  keys        - The keys of the sorted sets to compare.
-
+//	destination - The key for the resulting sorted set.
+//	keys        - The keys of the sorted sets to compare.
+//
 // Return value:
 //
 //	The number of members in the resulting sorted set stored at `destination`.
