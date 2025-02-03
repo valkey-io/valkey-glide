@@ -7012,9 +7012,11 @@ func (client *baseClient) Time() ([]string, error) {
 	return handleStringArrayResponse(result)
 }
 
-// Returns the difference between the first sorted set and all the successive sorted sets.<br>
+// Returns the difference between the first sorted set and all the successive sorted sets.
 // To get the elements with their scores, see `ZDiffWithScores`
+//
 // When in cluster mode, all `keys` must map to the same hash slot.
+//
 // Available for Valkey 6.2 and above.
 //
 // See [valkey.io] for details.
