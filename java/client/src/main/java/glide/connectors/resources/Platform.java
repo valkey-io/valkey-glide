@@ -39,7 +39,12 @@ public class Platform {
     private static boolean isKQueueAvailable() {
         try {
             Class.forName("io.netty.channel.kqueue.KQueue");
-            return KQueue.isAvailable();
+            var res = KQueue.isAvailable();
+            if (!res) {
+                System.err.println(KQueue.unavailabilityCause().getMessage());
+                KQueue.unavailabilityCause().printStackTrace(System.err);
+            }
+            return res;
         } catch (ClassNotFoundException e) {
             return false;
         }
@@ -49,7 +54,12 @@ public class Platform {
     private static boolean isEPollAvailable() {
         try {
             Class.forName("io.netty.channel.epoll.Epoll");
-            return Epoll.isAvailable();
+            var res = Epoll.isAvailable();
+            if (!res) {
+                System.err.println(Epoll.unavailabilityCause().getMessage());
+                Epoll.unavailabilityCause().printStackTrace(System.err);
+            }
+            return res;
         } catch (ClassNotFoundException e) {
             return false;
         }
