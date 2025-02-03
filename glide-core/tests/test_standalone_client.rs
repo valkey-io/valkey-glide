@@ -290,7 +290,7 @@ mod standalone_client_tests {
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_az_affinity_replicas_and_primary() {
         test_read_from_replica(ReadFromReplicaTestConfig {
-            read_from: ReadFrom::AZAffinity,
+            read_from: ReadFrom::AZAffinityReplicasAndPrimary,
             expected_primary_reads: 0,
             expected_replica_reads: vec![1, 1, 1],
             ..Default::default()

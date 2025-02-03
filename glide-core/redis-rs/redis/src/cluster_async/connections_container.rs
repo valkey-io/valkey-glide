@@ -254,7 +254,7 @@ where
         slot_map_value: &SlotMapValue,
         client_az: String,
     ) -> Option<ConnectionAndAddress<Connection>> {
-        self.az_aware_round_robin_common(slot_map_value, client_az, false)
+        self.get_connection_by_az_affinity_strategy(slot_map_value, client_az, false)
     }
 
     /// Returns the node's connection in the same availability zone as `client_az`,
@@ -264,10 +264,10 @@ where
         slot_map_value: &SlotMapValue,
         client_az: String,
     ) -> Option<ConnectionAndAddress<Connection>> {
-        self.az_aware_round_robin_common(slot_map_value, client_az, true)
+        self.get_connection_by_az_affinity_strategy(slot_map_value, client_az, true)
     }
 
-    fn az_aware_round_robin_common(
+    fn get_connection_by_az_affinity_strategy(
         &self,
         slot_map_value: &SlotMapValue,
         client_az: String,
@@ -289,11 +289,12 @@ where
             let index = (initial_index + retries) % addrs.replicas().len();
             let replica = &addrs.replicas()[index];
 
+            // Check if this replica’s availability zone matches the user’s availability zone.
             if let Some((address, connection_details)) =
                 self.connection_details_for_address(replica.as_str())
             {
                 if self.az_for_address(&address) == Some(client_az.clone()) {
-                    // Found a replica in the same AZ
+                    // Attempt to update `latest_used_replica` with the index of this replica.
                     let _ = slot_map_value.last_used_replica.compare_exchange_weak(
                         initial_index,
                         index,
@@ -316,7 +317,7 @@ where
             }
         }
 
-        // Step 3: Fall back to any available replica using round-robin
+        // Step 3: Fall back to any available replica using round-robin or primary if needed
         self.round_robin_read_from_replica(slot_map_value)
     }
 
@@ -552,6 +553,7 @@ mod tests {
 
     fn create_container_with_az_strategy(
         use_management_connections: bool,
+        strategy: Option<ReadFromReplicaStrategy>,
     ) -> ConnectionsContainer<usize> {
         let slot_map = SlotMap::new(
             vec![
@@ -604,15 +606,12 @@ mod tests {
             "replica3-3".into(),
             create_cluster_node(33, use_management_connections, Some("use-1a".to_string())),
         );
-        connection_map.insert(
-            "replica3-3".into(),
-            create_cluster_node(33, use_management_connections, Some("use-1a".to_string())),
-        );
 
         ConnectionsContainer {
             slot_map,
             connection_map,
-            read_from_replica_strategy: ReadFromReplicaStrategy::AZAffinity("use-1a".to_string()),
+            read_from_replica_strategy: strategy
+                .unwrap_or(ReadFromReplicaStrategy::AZAffinity("use-1a".to_string())),
             topology_hash: 0,
         }
     }
@@ -843,7 +842,7 @@ mod tests {
 
     #[test]
     fn get_connection_for_az_affinity_route() {
-        let container = create_container_with_az_strategy(false);
+        let container = create_container_with_az_strategy(false, None);
 
         // slot number is not exits
         assert!(container
@@ -906,7 +905,7 @@ mod tests {
 
     #[test]
     fn get_connection_for_az_affinity_route_round_robin() {
-        let container = create_container_with_az_strategy(false);
+        let container = create_container_with_az_strategy(false, None);
 
         let mut addresses = vec![
             container
@@ -930,76 +929,46 @@ mod tests {
         assert_eq!(addresses, vec![31, 31, 33, 33]);
     }
 
-    // Helper function to create a container with AZAffinityReplicasAndPrimary strategy
-    fn create_container_with_az_affinity_replicas_and_primary_strategy(
-        use_management_connections: bool,
-    ) -> ConnectionsContainer<usize> {
-        let slot_map = SlotMap::new(
-            vec![
-                Slot::new(1, 1000, "primary1".to_owned(), Vec::new()),
-                Slot::new(
-                    1002,
-                    2000,
-                    "primary2".to_owned(),
-                    vec!["replica2-1".to_owned()],
-                ),
-                Slot::new(
-                    2001,
-                    3000,
-                    "primary3".to_owned(),
-                    vec![
-                        "replica3-1".to_owned(),
-                        "replica3-2".to_owned(),
-                        "replica3-3".to_owned(),
-                    ],
-                ),
-            ],
-            ReadFromReplicaStrategy::AlwaysFromPrimary,
-        );
-        let connection_map = DashMap::new();
-        connection_map.insert(
-            "primary1".into(),
-            create_cluster_node(1, use_management_connections, Some("use-1b".to_string())),
-        );
-        connection_map.insert(
-            "primary2".into(),
-            create_cluster_node(2, use_management_connections, Some("use-1c".to_string())),
-        );
-        connection_map.insert(
-            "primary3".into(),
-            create_cluster_node(3, use_management_connections, Some("use-1b".to_string())),
-        );
-        connection_map.insert(
-            "replica2-1".into(),
-            create_cluster_node(21, use_management_connections, Some("use-1c".to_string())),
-        );
-        connection_map.insert(
-            "replica3-1".into(),
-            create_cluster_node(31, use_management_connections, Some("use-1a".to_string())),
-        );
-        connection_map.insert(
-            "replica3-2".into(),
-            create_cluster_node(32, use_management_connections, Some("use-1b".to_string())),
-        );
-        connection_map.insert(
-            "replica3-3".into(),
-            create_cluster_node(33, use_management_connections, Some("use-1a".to_string())),
-        );
-
-        ConnectionsContainer {
-            slot_map,
-            connection_map,
-            read_from_replica_strategy: ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(
-                "use-1a".to_string(),
-            ),
-            topology_hash: 0,
-        }
-    }
-
     #[test]
     fn get_connection_for_az_affinity_replicas_and_primary_route() {
         // Create a container with AZAffinityReplicasAndPrimary strategy
-        let container = create_container_with_az_affinity_replicas_and_primary_strategy(false);
+        let container: ConnectionsContainer<usize> = create_container_with_az_strategy(
+            false,
+            Some(ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(
+                "use-1a".to_string(),
+            )),
+        );
+        // Modify the AZ of primary1
+        container
+            .connection_map
+            .get_mut("primary1")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1b".to_string());
+
+        // Modify the AZ of primary2
+        container
+            .connection_map
+            .get_mut("primary2")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1c".to_string());
+
+        // Modify the AZ of primary3
+        container
+            .connection_map
+            .get_mut("primary3")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1b".to_string());
+
+        // Modify the AZ of replica2-1
+        container
+            .connection_map
+            .get_mut("replica2-1")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1c".to_string());
 
         // Slot number does not exist (slot 1001 wasn't assigned to any primary)
         assert!(container
