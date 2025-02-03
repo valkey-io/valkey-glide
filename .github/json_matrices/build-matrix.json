@@ -17,7 +17,7 @@
         "TARGET": "aarch64-unknown-linux-gnu",
         "PACKAGE_MANAGERS": ["pypi", "npm", "maven"],
         "run": "always",
-        "languages": ["python"]
+        "languages": ["python", "node"]
     },
     {
         "OS": "ubuntu",
