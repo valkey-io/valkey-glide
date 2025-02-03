@@ -29,6 +29,7 @@ type KeyWithArrayOfMembersAndScores struct {
 	MembersAndScores []MemberAndScore
 }
 
+// MemberAndScore is used by ZRANDMEMBER, which return an object consisting of the sorted set member, and its score.
 type MemberAndScore struct {
 	Member string
 	Score  float64

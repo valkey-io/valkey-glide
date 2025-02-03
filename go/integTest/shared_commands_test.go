@@ -6446,6 +6446,118 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 	})
 }
 
+func (suite *GlideTestSuite) TestZMScore() {
+	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		zAddResult, err := client.ZAdd(key, map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zAddResult)
+
+		res, err := client.ZMScore(key, []string{"one", "three", "two"})
+		expected := []api.Result[float64]{
+			api.CreateFloat64Result(1),
+			api.CreateFloat64Result(3),
+			api.CreateFloat64Result(2),
+		}
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+
+		// not existing members
+		res, err = client.ZMScore(key, []string{"nonExistingMember", "two", "nonExistingMember"})
+		expected = []api.Result[float64]{
+			api.CreateNilFloat64Result(),
+			api.CreateFloat64Result(2),
+			api.CreateNilFloat64Result(),
+		}
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+
+		// not existing key
+		res, err = client.ZMScore(uuid.NewString(), []string{"one", "three", "two"})
+		expected = []api.Result[float64]{
+			api.CreateNilFloat64Result(),
+			api.CreateNilFloat64Result(),
+			api.CreateNilFloat64Result(),
+		}
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+
+		// invalid arg - member list must not be empty
+		_, err = client.ZMScore(key, []string{})
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// key exists, but it is not a sorted set
+		key2 := uuid.NewString()
+		suite.verifyOK(client.Set(key2, "ZMScore"))
+		_, err = client.ZMScore(key2, []string{"one"})
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZRandMember() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key1 := uuid.NewString()
+		key2 := uuid.NewString()
+		members := []string{"one", "two"}
+
+		zadd, err := client.ZAdd(key1, map[string]float64{"one": 1.0, "two": 2.0})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), zadd)
+
+		randomMember, err := client.ZRandMember(key1)
+		assert.NoError(t, err)
+		assert.Contains(t, members, randomMember.Value())
+
+		// unique values are expected as count is positive
+		randomMembers, err := client.ZRandMemberWithCount(key1, 4)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, members, randomMembers)
+
+		membersAndScores, err := client.ZRandMemberWithCountWithScores(key1, 4)
+		expectedMembersAndScores := []api.MemberAndScore{{Member: "one", Score: 1}, {Member: "two", Score: 2}}
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expectedMembersAndScores, membersAndScores)
+
+		// Duplicate values are expected as count is negative
+		randomMembers, err = client.ZRandMemberWithCount(key1, -4)
+		assert.NoError(t, err)
+		assert.Len(t, randomMembers, 4)
+		for _, member := range randomMembers {
+			assert.Contains(t, members, member)
+		}
+
+		membersAndScores, err = client.ZRandMemberWithCountWithScores(key1, -4)
+		assert.NoError(t, err)
+		assert.Len(t, membersAndScores, 4)
+		for _, memberAndScore := range membersAndScores {
+			assert.Contains(t, expectedMembersAndScores, memberAndScore)
+		}
+
+		// non existing key should return null or empty array
+		randomMember, err = client.ZRandMember(key2)
+		assert.NoError(t, err)
+		assert.True(t, randomMember.IsNil())
+		randomMembers, err = client.ZRandMemberWithCount(key2, -4)
+		assert.NoError(t, err)
+		assert.Len(t, randomMembers, 0)
+		membersAndScores, err = client.ZRandMemberWithCountWithScores(key2, -4)
+		assert.NoError(t, err)
+		assert.Len(t, membersAndScores, 0)
+
+		// Key exists, but is not a set
+		suite.verifyOK(client.Set(key2, "ZRandMember"))
+		_, err = client.ZRandMember(key2)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+		_, err = client.ZRandMemberWithCount(key2, 2)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+		_, err = client.ZRandMemberWithCountWithScores(key2, 2)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestObjectIdleTime() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		defaultClient := suite.defaultClient()
@@ -7692,6 +7804,175 @@ func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
 			[]int64{getRO[0].Value(), getRO[1].Value()},
 		)
 		assert.Equal(suite.T(), []int64{value1, value2}, []int64{getRO[0].Value(), getRO[1].Value()})
+	})
+}
+
+func (suite *GlideTestSuite) TestZInter() {
+	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-" + uuid.New().String()
+		key2 := "{key}-" + uuid.New().String()
+		key3 := "{key}-" + uuid.New().String()
+		memberScoreMap1 := map[string]float64{
+			"one": 1.0,
+			"two": 2.0,
+		}
+		memberScoreMap2 := map[string]float64{
+			"two":   3.5,
+			"three": 3.0,
+		}
+
+		// Add members to sorted sets
+		res, err := client.ZAdd(key1, memberScoreMap1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		res, err = client.ZAdd(key2, memberScoreMap2)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		// intersection results are aggregated by the max score of elements
+		zinterResult, err := client.ZInter(options.KeyArray{Keys: []string{key1, key2}})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{"two"}, zinterResult)
+
+		// intersection with scores
+		zinterWithScoresResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithScoresResult)
+
+		// intersect results with max aggregate
+		zinterWithMaxAggregateResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateMax),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"two": 3.5}, zinterWithMaxAggregateResult)
+
+		// intersect results with min aggregate
+		zinterWithMinAggregateResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateMin),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"two": 2.0}, zinterWithMinAggregateResult)
+
+		// intersect results with sum aggregate
+		zinterWithSumAggregateResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key2}}).SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithSumAggregateResult)
+
+		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
+		zinterWithWeightedKeysResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(
+				options.WeightedKeys{
+					KeyWeightPairs: []options.KeyWeightPair{
+						{Key: key1, Weight: 2.0},
+						{Key: key2, Weight: 2.0},
+					},
+				},
+			).SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"two": 11.0}, zinterWithWeightedKeysResult)
+
+		// non-existent key - empty intersection
+		zinterWithNonExistentKeyResult, err := client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key3}}).SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), zinterWithNonExistentKeyResult)
+
+		// empty key list - request error
+		_, err = client.ZInterWithScores(options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{}}))
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// key exists but not a set
+		_, err = client.Set(key3, "value")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.ZInter(options.KeyArray{Keys: []string{key1, key3}})
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		_, err = client.ZInterWithScores(
+			options.NewZInterOptionsBuilder(options.KeyArray{Keys: []string{key1, key3}}).SetAggregate(options.AggregateSum),
+		)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZDiff() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		suite.SkipIfServerVersionLowerThanBy("6.2.0")
+		t := suite.T()
+		key1 := "{testKey}:1-" + uuid.NewString()
+		key2 := "{testKey}:2-" + uuid.NewString()
+		key3 := "{testKey}:3-" + uuid.NewString()
+		nonExistentKey := "{testKey}:4-" + uuid.NewString()
+
+		membersScores1 := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+
+		membersScores2 := map[string]float64{
+			"two": 2.0,
+		}
+
+		membersScores3 := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+			"four":  4.0,
+		}
+
+		zAddResult1, err := client.ZAdd(key1, membersScores1)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), zAddResult1)
+		zAddResult2, err := client.ZAdd(key2, membersScores2)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), zAddResult2)
+		zAddResult3, err := client.ZAdd(key3, membersScores3)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(4), zAddResult3)
+
+		zDiffResult, err := client.ZDiff([]string{key1, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"one", "three"}, zDiffResult)
+		zDiffResult, err = client.ZDiff([]string{key1, key3})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{}, zDiffResult)
+		zDiffResult, err = client.ZDiff([]string{nonExistentKey, key3})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{}, zDiffResult)
+
+		zDiffResultWithScores, err := client.ZDiffWithScores([]string{key1, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]float64{"one": 1.0, "three": 3.0}, zDiffResultWithScores)
+		zDiffResultWithScores, err = client.ZDiffWithScores([]string{key1, key3})
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]float64{}, zDiffResultWithScores)
+		zDiffResultWithScores, err = client.ZDiffWithScores([]string{nonExistentKey, key3})
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]float64{}, zDiffResultWithScores)
+
+		// Key exists, but it is not a set
+		setResult, _ := client.Set(nonExistentKey, "bar")
+		assert.Equal(t, setResult, "OK")
+
+		_, err = client.ZDiff([]string{nonExistentKey, key2})
+		assert.NotNil(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+
+		_, err = client.ZDiffWithScores([]string{nonExistentKey, key2})
+		assert.NotNil(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
 	})
 }
 

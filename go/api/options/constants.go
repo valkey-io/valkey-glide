@@ -3,12 +3,15 @@
 package options
 
 const (
-	CountKeyword string = "COUNT"      // Valkey API keyword used to extract specific number of matching indices from a list.
-	MatchKeyword string = "MATCH"      // Valkey API keyword used to indicate the match filter.
-	NoValue      string = "NOVALUE"    // Valkey API keyword for the no value option for hcsan command.
-	WithScore    string = "WITHSCORE"  // Valkey API keyword for the with score option for zrank and zrevrank commands.
-	NoScores     string = "NOSCORES"   // Valkey API keyword for the no scores option for zscan command.
-	WithValues   string = "WITHVALUES" // Valkey API keyword to query hash values along their names in `HRANDFIELD`.
+	CountKeyword     string = "COUNT"      // Valkey API keyword used to extract specific number of matching indices from a list.
+	MatchKeyword     string = "MATCH"      // Valkey API keyword used to indicate the match filter.
+	NoValue          string = "NOVALUE"    // Valkey API keyword for the no value option for hcsan command.
+	WithScore        string = "WITHSCORE"  // Valkey API keyword for the with score option for zrank and zrevrank commands.
+	WithScores       string = "WITHSCORES" // Valkey API keyword for ZRandMember and ZDiff command to return scores along with members.
+	NoScores         string = "NOSCORES"   // Valkey API keyword for the no scores option for zscan command.
+	WithValues       string = "WITHVALUES" // Valkey API keyword to query hash values along their names in `HRANDFIELD`.
+	AggregateKeyWord string = "AGGREGATE"  // Valkey API keyword for the aggregate option for multiple commands.
+	WeightsKeyword   string = "WEIGHTS"    // Valkey API keyword for the weights option for multiple commands.
 )
 
 type InfBoundary string
