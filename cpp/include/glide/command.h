@@ -28,7 +28,7 @@ class Command {
    * @param value The value to associate with the key.
    * @return True if the operation is successful, false otherwise.
    */
-  bool set(Client& client, const std::string& key, const std::string& value);
+  bool set(Client &client, const std::string &key, const std::string &value);
 
   /**
    * Retrieves the value associated with the given key from the client's
@@ -36,10 +36,10 @@ class Command {
    *
    * @param client The client object.
    * @param key The key whose associated value is to be returned.
-   * @return The value associated with the specified key, or an empty string if
-   * the key is not found or an error occurs.
+   * @return The value associated with the specified key, or an empty string
+   * if the key is not found or an error occurs.
    */
-  std::string get(Client& client, const std::string& key);
+  std::string get(Client &client, const std::string &key);
 
   /**
    * Gets a value associated with the given string `key` and deletes the key.
@@ -47,12 +47,16 @@ class Command {
    *
    * @param client The client object.
    * @param key The key whose associated value is to be returned.
-   * @return The value associated with the specified key, or an empty string if
-   * the key is not found or an error occurs.
+   * @return The value associated with the specified key, or an empty string
+   * if the key is not found or an error occurs.
    */
-  std::string getdel(Client& client, const std::string& key);
+  std::string getdel(Client &client, const std::string &key);
 
-  
+  bool hset(Client &client, const std::string &key,
+            const std::map<std::string, std::string> &field_values);
+
+  std::string hget(Client &client, const std::string &key,
+                   const std::string &field);
 };
 
 }  // namespace glide

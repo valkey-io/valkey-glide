@@ -7,7 +7,7 @@ namespace glide {
 /**
  * Constructs a Client with a const configuration.
  */
-Client::Client(const glide::Config& config) : config_(config) {}
+Client::Client(const glide::Config &config) : config_(config) {}
 
 /**
  * Connects the client using the serialized configuration.
@@ -26,15 +26,24 @@ bool Client::connect() {
 /**
  * Sets a key-value pair in the client's configuration.
  */
-bool Client::set(const std::string& key, const std::string& value) {
+bool Client::set(const std::string &key, const std::string &value) {
   return command_.set(*this, key, value);
+}
+
+bool Client::hset(const std::string &key,
+                  const std::map<std::string, std::string> &field_values) {
+  return command_.hset(*this, key, field_values);
+}
+
+std::string Client::hget(const std::string &key, const std::string &field) {
+  return command_.hget(*this, key, field);
 }
 
 /**
  * Retrieves the value associated with the given key from the client's
  * configuration.
  */
-std::string Client::get(const std::string& key) {
+std::string Client::get(const std::string &key) {
   return command_.get(*this, key);
 }
 
@@ -42,7 +51,7 @@ std::string Client::get(const std::string& key) {
  * Retrieves the value associated with the given key from the client's
  * configuration.
  */
-std::string Client::getdel(const std::string& key) {
+std::string Client::getdel(const std::string &key) {
   return command_.getdel(*this, key);
 }
 
@@ -50,14 +59,14 @@ std::string Client::getdel(const std::string& key) {
  * Executes a command with the given request type and arguments.
  */
 void Client::exec_command(glide::RequestType type,
-                          std::vector<std::string>& args,
-                          CommandResponseData& channel) {
+                          std::vector<std::string> &args,
+                          CommandResponseData &channel) {
   // Prepare arguments.
   std::vector<uintptr_t> cmd_args;
   cmd_args.reserve(args.size());
   std::vector<unsigned long> cmd_args_len;
   cmd_args_len.reserve(args.size());
-  for (auto& arg : args) {
+  for (auto &arg : args) {
     cmd_args.push_back(reinterpret_cast<uintptr_t>(arg.data()));
     cmd_args_len.push_back(static_cast<unsigned long>(arg.size()));
   };
@@ -65,7 +74,7 @@ void Client::exec_command(glide::RequestType type,
   // Execute command.
   uintptr_t channel_ptr = reinterpret_cast<uintptr_t>(&channel);
   glide::command(connection_->conn_ptr, channel_ptr, type, cmd_args.size(),
-          cmd_args.data(), cmd_args_len.data());
+                 cmd_args.data(), cmd_args_len.data());
 }
 
 /**
@@ -75,7 +84,7 @@ Client::~Client() {
   if (connection_ && connection_->conn_ptr) {
     glide::close_client(connection_->conn_ptr);
     glide::free_connection_response(
-        const_cast<ConnectionResponse*>(connection_));
+        const_cast<ConnectionResponse *>(connection_));
   }
 }
 

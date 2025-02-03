@@ -64,5 +64,10 @@
     "rust-analyzer.cargo.features": "all",
     "dotnet.defaultSolution": "csharp/csharp.sln",
     "java.compile.nullAnalysis.mode": "automatic",
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "files.associations": {
+        "**/frontmatter.json": "jsonc",
+        "**/.frontmatter/config/*.json": "jsonc",
+        "iosfwd": "cpp"
+    }
 }

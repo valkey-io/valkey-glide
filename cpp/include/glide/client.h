@@ -2,6 +2,7 @@
 #define CLIENT_HPP
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -26,7 +27,7 @@ class Client {
    *
    * @param config A const reference to a glide::Config object.
    */
-  explicit Client(const glide::Config& config);
+  explicit Client(const glide::Config &config);
 
   /**
    * Connects the client using the serialized configuration.
@@ -42,27 +43,49 @@ class Client {
    * @param value The value to associate with the key.
    * @return True if the operation is successful, false otherwise.
    */
-  bool set(const std::string& key, const std::string& value);
+  bool set(const std::string &key, const std::string &value);
 
   /**
    * Retrieves the value associated with the given key from the client's
    * configuration.
    *
    * @param key The key whose associated value is to be returned.
-   * @return The value associated with the specified key, or an empty string if
-   * the key is not found or an error occurs.
+   * @return The value associated with the specified key, or an empty string
+   * if the key is not found or an error occurs.
    */
-  std::string get(const std::string& key);
+  std::string get(const std::string &key);
 
-     /**
+  /**
    * Gets a value associated with the given string `key` and deletes the key.
    * configuration.
    *
    * @param key The key whose associated value is to be returned.
-   * @return The value associated with the specified key, or an empty string if
-   * the key is not found or an error occurs.
+   * @return The value associated with the specified key, or an empty string
+   * if the key is not found or an error occurs.
    */
-  std::string getdel(const std::string& key);
+  std::string getdel(const std::string &key);
+
+  /**
+   * Sets multiple field-value pairs in a hash stored at the given key.
+   *
+   * @param key The key where the hash is stored.
+   * @param field_values A map containing the field-value pairs to set in the
+   * hash.
+   * @return True if the operation is successful, false otherwise.
+   */
+  bool hset(const std::string &key,
+            const std::map<std::string, std::string> &field_values);
+
+  /**
+   * Retrieves the value associated with a field in a hash stored at the given
+   * key.
+   *
+   * @param key The key where the hash is stored.
+   * @param field The field within the hash whose value should be retrieved.
+   * @return The value associated with the specified field, or an empty string
+   * if the key or field is not found or an error occurs.
+   */
+  std::string hget(const std::string &key, const std::string &field);
 
   /**
    * Executes a command with the given request type and arguments.
@@ -72,8 +95,8 @@ class Client {
    * @param channel A reference to a CommandResponseData object to store the
    * result of the command execution.
    */
-  void exec_command(glide::RequestType type, std::vector<std::string>& args,
-                    CommandResponseData& channel);
+  void exec_command(glide::RequestType type, std::vector<std::string> &args,
+                    CommandResponseData &channel);
 
   /**
    * Destructor for the Client class.
@@ -83,7 +106,7 @@ class Client {
 
  private:
   glide::Config config_;
-  const ConnectionResponse* connection_;
+  const ConnectionResponse *connection_;
   Command command_;
 };
 
