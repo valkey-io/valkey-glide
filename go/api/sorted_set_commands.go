@@ -87,5 +87,5 @@ type SortedSetCommands interface {
 
 	ZInterWithScores(options *options.ZInterOptions) (map[string]float64, error)
 
-  ZDiffStore(destination string, keys []string) (int64, error)
+	ZDiffStore(destination string, keys []string) (int64, error)
 }
