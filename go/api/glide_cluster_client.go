@@ -13,8 +13,8 @@ package api
 import "C"
 
 import (
-	"github.com/valkey-io/valkey-glide/go/glide/api/config"
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
+	"github.com/jamesx-improving/valkey-glide/go/api/config"
+	"github.com/jamesx-improving/valkey-glide/go/api/options"
 )
 
 // GlideClusterClient interface compliance check.

@@ -5,9 +5,9 @@ package api
 import (
 	"strconv"
 
+	"github.com/jamesx-improving/valkey-glide/go/api/config"
+	"github.com/jamesx-improving/valkey-glide/go/api/errors"
 	"github.com/jamesx-improving/valkey-glide/go/utils"
-	"github.com/valkey-io/valkey-glide/go/glide/api/config"
-	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 )
 
 // SetOptions represents optional arguments for the [api.StringCommands.SetWithOptions] command.
