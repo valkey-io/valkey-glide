@@ -4,9 +4,9 @@ env:
   TESTING_VERSION: "v0.0.9"
 
 on:
-  push:
-    branches:
-      - "go/jamesx-cd"
+  # push:
+  #   branches:
+  #     - "go/jamesx-cd"
   workflow_dispatch:
     inputs:
       version:
