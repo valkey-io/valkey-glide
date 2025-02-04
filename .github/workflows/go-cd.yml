@@ -1,7 +1,7 @@
 name: Go - Continuous Deployment
 
 env:
-  TESTING_VERSION: "v0.0.8"
+  TESTING_VERSION: "v0.0.9"
 
 on:
   push:
