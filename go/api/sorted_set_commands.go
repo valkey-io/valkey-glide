@@ -83,9 +83,17 @@ type SortedSetCommands interface {
 
 	ZMScore(key string, members []string) ([]Result[float64], error)
 
+	ZDiffStore(destination string, keys []string) (int64, error)
+
 	ZInter(keys options.KeyArray) ([]string, error)
 
-	ZInterWithScores(options *options.ZInterOptions) (map[string]float64, error)
+	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZInterOptions) (map[string]float64, error)
 
-	ZDiffStore(destination string, keys []string) (int64, error)
+	ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
+
+	ZInterStoreWithOptions(
+		destination string,
+		keysOrWeightedKeys options.KeysOrWeightedKeys,
+		options *options.ZInterOptions,
+	) (int64, error)
 }

@@ -7289,7 +7289,12 @@ func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
 //
 // Parameters:
 //
+//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
+//	                     - Use `options.NewKeyArray()` for keys only.
+//	                     - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
 //	options - The options for the ZInter command, see - [options.ZInterOptions].
+//	           Optional `aggregate` option specifies the aggregation strategy to apply when combining the scores of
+//	           elements.
 //
 // Return value:
 //
@@ -7301,11 +7306,16 @@ func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
 //	fmt.Println(res) // map[member1:1.0 member2:2.0 member3:3.0]
 //
 // [valkey.io]: https://valkey.io/commands/zinter/
-func (client *baseClient) ZInterWithScores(zInterOptions *options.ZInterOptions) (map[string]float64, error) {
-	args, err := zInterOptions.ToArgs()
+func (client *baseClient) ZInterWithScores(
+	keysOrWeightedKeys options.KeysOrWeightedKeys,
+	zInterOptions *options.ZInterOptions,
+) (map[string]float64, error) {
+	args := keysOrWeightedKeys.ToArgs()
+	optionsArgs, err := zInterOptions.ToArgs()
 	if err != nil {
 		return nil, err
 	}
+	args = append(args, optionsArgs...)
 	args = append(args, options.WithScores)
 	result, err := client.executeCommand(C.ZInter, args)
 	if err != nil {
@@ -7422,6 +7432,87 @@ func (client *baseClient) ZDiffStore(destination string, keys []string) (int64, 
 		C.ZDiffStore,
 		append([]string{destination, strconv.Itoa(len(keys))}, keys...),
 	)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
+// and stores the result in `destination`. If `destination` already exists, it is overwritten.
+// Otherwise, a new sorted set will be created.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	destination - The destination key for the result.
+//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
+//	                   - Use `options.NewKeyArray()` for keys only.
+//	                   - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
+//
+// Return value:
+//
+//	The number of elements in the resulting sorted set stored at <code>destination</code>.
+//
+// Example:
+//
+//	res, err := client.ZInterStore("destination", options.NewKeyArray("key1", "key2", "key3"))
+//	fmt.Println(res) // 3
+//
+// [valkey.io]: https://valkey.io/commands/zinterstore/
+func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error) {
+	return client.ZInterStoreWithOptions(destination, keysOrWeightedKeys, nil)
+}
+
+// Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
+// and stores the result in `destination`. If `destination` already exists, it is overwritten.
+// Otherwise, a new sorted set will be created.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	destination - The destination key for the result.
+//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
+//	                     - Use `options.NewKeyArray()` for keys only.
+//	                     - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
+//	options   - The options for the ZInterStore command, see - [options.ZInterOptions].
+//	           Optional `aggregate` option specifies the aggregation strategy to apply when combining the scores of
+//	           elements.
+//
+// Return value:
+//
+//	The number of elements in the resulting sorted set stored at <code>destination</code>.
+//
+// Example:
+//
+//	res, err := client.ZInterStore("destination", options.NewZInterOptionsBuilder(options.NewKeyArray("key1", "key2", "key3")))
+//	fmt.Println(res) // 3
+//
+// [valkey.io]: https://valkey.io/commands/zinterstore/
+func (client *baseClient) ZInterStoreWithOptions(
+	destination string,
+	keysOrWeightedKeys options.KeysOrWeightedKeys,
+	zInterOptions *options.ZInterOptions,
+) (int64, error) {
+	args := append([]string{destination}, keysOrWeightedKeys.ToArgs()...)
+	if zInterOptions != nil {
+		optionsArgs, err := zInterOptions.ToArgs()
+		if err != nil {
+			return defaultIntResponse, err
+		}
+		args = append(args, optionsArgs...)
+	}
+	result, err := client.executeCommand(C.ZInterStore, args)
 	if err != nil {
 		return defaultIntResponse, err
 	}
