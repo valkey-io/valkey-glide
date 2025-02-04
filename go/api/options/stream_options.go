@@ -3,7 +3,7 @@
 package options
 
 import (
-	"github.com/jamesx-improving/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/utils"
 )
 
 type triStateBool int

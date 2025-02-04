@@ -5,10 +5,10 @@ package integTest
 import (
 	"strings"
 
-	"github.com/jamesx-improving/valkey-glide/go/api"
-	"github.com/jamesx-improving/valkey-glide/go/api/config"
-	"github.com/jamesx-improving/valkey-glide/go/api/options"
 	"github.com/stretchr/testify/assert"
+	"github.com/valkey-io/valkey-glide/go/api"
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 func (suite *GlideTestSuite) TestClusterCustomCommandInfo() {

@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github.com/jamesx-improving/valkey-glide/go/api/errors"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
 )
 
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {

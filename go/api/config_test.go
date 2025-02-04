@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jamesx-improving/valkey-glide/go/protobuf"
 	"github.com/stretchr/testify/assert"
+	"github.com/valkey-io/valkey-glide/go/protobuf"
 )
 
 func TestDefaultStandaloneConfig(t *testing.T) {

@@ -1,4 +1,4 @@
-module github.com/jamesx-improving/valkey-glide/go
+module github.com/valkey-io/valkey-glide/go
 
 go 1.20
 

@@ -4,9 +4,6 @@ env:
   TESTING_VERSION: "v0.0.9"
 
 on:
-  # push:
-  #   branches:
-  #     - "go/jamesx-cd"
   workflow_dispatch:
     inputs:
       version:
@@ -73,8 +70,7 @@ jobs:
 
   create-binaries:
     needs: [load-platform-matrix, validate-release-version]
-    # TODO: change repository_owner to 'valkey-io' before merge to upstream
-    if: success() && github.repository_owner == 'jamesx-improving'
+    if: success() && github.repository_owner == 'valkey-io'
     strategy:
       fail-fast: false
       matrix:
@@ -119,6 +115,7 @@ jobs:
             go/protobuf/
 
   commit-auto-gen-files-with-tag:
+    if: ${{ github.event.inputs.pkg_go_dev_publish }}
     needs: [validate-release-version, create-binaries]
     runs-on: ubuntu-latest
     permissions:
@@ -149,8 +146,7 @@ jobs:
           git commit -m "Automated commit from GitHub Actions"
           git tag go/${{ needs.validate-release-version.outputs.RELEASE_VERSION}}
           git push origin go/${{ needs.validate-release-version.outputs.RELEASE_VERSION}}
-          # TODO: change to valkey-io
-          GOPROXY=proxy.golang.org go list -m github.com/jamesx-improving/valkey-glide/go@${{ needs.validate-release-version.outputs.RELEASE_VERSION}}
+          GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go@${{ needs.validate-release-version.outputs.RELEASE_VERSION}}
 
   extra-post-commit-test:
     needs: [load-platform-matrix, validate-release-version, commit-auto-gen-files-with-tag]
