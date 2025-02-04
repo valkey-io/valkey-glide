@@ -7382,18 +7382,17 @@ func (client *baseClient) ZInterStoreWithOptions(
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 	zInterOptions *options.ZInterOptions,
 ) (int64, error) {
-	args := []string{destination}
-	args = append(args, keysOrWeightedKeys.ToArgs()...)
+	args := append([]string{destination}, keysOrWeightedKeys.ToArgs()...)
 	if zInterOptions != nil {
 		optionsArgs, err := zInterOptions.ToArgs()
 		if err != nil {
-			return 0, err
+			return defaultIntResponse, err
 		}
 		args = append(args, optionsArgs...)
 	}
 	result, err := client.executeCommand(C.ZInterStore, args)
 	if err != nil {
-		return 0, err
+		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
