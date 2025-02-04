@@ -5,8 +5,8 @@ package integTest
 import (
 	"strings"
 
+	"github.com/jamesx-improving/valkey-glide/go/api"
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/glide/api"
 )
 
 func (suite *GlideTestSuite) TestModuleVerifyVssLoaded() {

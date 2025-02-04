@@ -21,11 +21,11 @@ import (
 	"strconv"
 	"unsafe"
 
+	"github.com/jamesx-improving/valkey-glide/go/api/config"
+	"github.com/jamesx-improving/valkey-glide/go/api/errors"
 	"github.com/jamesx-improving/valkey-glide/go/api/options"
 	"github.com/jamesx-improving/valkey-glide/go/protobuf"
 	"github.com/jamesx-improving/valkey-glide/go/utils"
-	"github.com/valkey-io/valkey-glide/go/glide/api/config"
-	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 	"google.golang.org/protobuf/proto"
 )
 

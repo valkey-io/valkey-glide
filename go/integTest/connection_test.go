@@ -4,8 +4,8 @@ package integTest
 
 import (
 	"github.com/jamesx-improving/valkey-glide/go/api"
+	"github.com/jamesx-improving/valkey-glide/go/api/errors"
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 )
 
 func (suite *GlideTestSuite) TestStandaloneConnect() {

@@ -12,9 +12,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jamesx-improving/valkey-glide/go/api"
+	"github.com/jamesx-improving/valkey-glide/go/api/errors"
 	"github.com/jamesx-improving/valkey-glide/go/api/options"
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
 )
 
 const (
