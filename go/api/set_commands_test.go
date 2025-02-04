@@ -25,6 +25,7 @@ func ExampleGlideClient_SRem() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	key := "my_set"
 
+	client.SAdd(key, []string{"member1", "member2"})
 	result, err := client.SRem(key, []string{"member1", "member2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)

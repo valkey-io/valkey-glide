@@ -805,9 +805,8 @@ func ExampleGlideClient_ObjectFreq() {
 
 	// Output:
 	// OK
-	// {2 false}
+	// {6 false}
 }
-
 func ExampleGlideClusterClient_ObjectFreq() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 

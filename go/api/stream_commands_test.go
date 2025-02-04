@@ -837,6 +837,7 @@ func ExampleGlideClient_XGroupSetIdWithOptions() {
 
 	opts := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(1)
 	client.XGroupSetIdWithOptions(key, group, "0-0", opts)          // reset the last acknowledged message to 0-0
+	client.XGroupSetIdWithOptions(key, group, "0-0", opts)          // reset the last acknowledged message to 0-0
 	client.XReadGroup(group, consumer, map[string]string{key: ">"}) // read the group again
 
 	summary, err := client.XPending(key, group) // get the pending messages, which should include the entry we previously acked

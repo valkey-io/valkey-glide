@@ -169,9 +169,10 @@ func ExampleGlideClient_HLen() {
 func ExampleGlideClient_HVals() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
+	// For this example, we only use 1 field for consistent output
 	fields := map[string]string{
 		"field1": "someValue",
-		"field2": "someOtherValue",
+		// other fields here
 	}
 
 	result, err := client.HSet("my_hash", fields)
@@ -183,8 +184,8 @@ func ExampleGlideClient_HVals() {
 	fmt.Println(result1)
 
 	// Output:
-	// 2
-	// [someValue someOtherValue]
+	// 1
+	// [someValue]
 }
 
 func ExampleGlideClient_HExists() {
@@ -213,7 +214,6 @@ func ExampleGlideClient_HKeys() {
 
 	fields := map[string]string{
 		"field1": "someValue",
-		"field2": "someOtherValue",
 	}
 
 	result, err := client.HSet("my_hash", fields)
@@ -225,8 +225,8 @@ func ExampleGlideClient_HKeys() {
 	fmt.Println(result1)
 
 	// Output:
-	// 2
-	// [field1 field2]
+	// 1
+	// [field1]
 }
 
 func ExampleGlideClient_HStrLen() {
@@ -295,9 +295,10 @@ func ExampleGlideClient_HIncrByFloat() {
 func ExampleGlideClient_HScan() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
+	// For this example we only use 1 field to ensure a consistent output
 	fields := map[string]string{
 		"field1": "someValue",
-		"field2": "someOtherValue",
+		// other fields here
 	}
 
 	result, err := client.HSet("my_hash", fields)
@@ -310,14 +311,15 @@ func ExampleGlideClient_HScan() {
 	fmt.Println(resCollection)
 
 	// Output:
-	// 2
+	// 1
 	// 0
-	// [field1 someValue field2 someOtherValue]
+	// [field1 someValue]
 }
 
 func ExampleGlideClient_HRandField() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
+	// For this example we only use 1 field to ensure consistent output
 	fields := map[string]string{
 		"field1": "someValue",
 		// other fields here...
@@ -332,7 +334,7 @@ func ExampleGlideClient_HRandField() {
 	fmt.Println(result1)
 
 	// Output:
-	// 2
+	// 1
 	// {field1 false}
 }
 
@@ -341,12 +343,12 @@ func ExampleGlideClient_HRandFieldWithCount() {
 
 	fields := map[string]string{
 		"field1": "someValue",
-		"field2": "someOtherValue",
 		// other fields here...
 	}
 
 	result, err := client.HSet("my_hash", fields)
-	result1, err := client.HRandFieldWithCount("my_hash", 2)
+	// For this example, we do 1 to ensure consistent output
+	result1, err := client.HRandFieldWithCount("my_hash", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -354,8 +356,8 @@ func ExampleGlideClient_HRandFieldWithCount() {
 	fmt.Println(result1)
 
 	// Output:
-	// 2
-	// [field1 field2]
+	// 1
+	// [field1]
 }
 
 func ExampleGlideClient_HRandFieldWithCountWithValues() {
@@ -363,12 +365,12 @@ func ExampleGlideClient_HRandFieldWithCountWithValues() {
 
 	fields := map[string]string{
 		"field1": "someValue",
-		"field2": "someOtherValue",
 		// other fields here...
 	}
 
 	result, err := client.HSet("my_hash", fields)
-	result1, err := client.HRandFieldWithCountWithValues("my_hash", 2)
+	// For this example, we do 1 to ensure consistent output
+	result1, err := client.HRandFieldWithCountWithValues("my_hash", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -376,8 +378,8 @@ func ExampleGlideClient_HRandFieldWithCountWithValues() {
 	fmt.Println(result1)
 
 	// Output:
-	// 2
-	// [[field1 someValue] [field2 someOtherValue]]
+	// 1
+	// [[field1 someValue]]
 }
 
 func ExampleGlideClient_HScanWithOptions() {
