@@ -7905,3 +7905,149 @@ func (suite *GlideTestSuite) TestZInter() {
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestZDiff() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		suite.SkipIfServerVersionLowerThanBy("6.2.0")
+		t := suite.T()
+		key1 := "{testKey}:1-" + uuid.NewString()
+		key2 := "{testKey}:2-" + uuid.NewString()
+		key3 := "{testKey}:3-" + uuid.NewString()
+		nonExistentKey := "{testKey}:4-" + uuid.NewString()
+
+		membersScores1 := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+
+		membersScores2 := map[string]float64{
+			"two": 2.0,
+		}
+
+		membersScores3 := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+			"four":  4.0,
+		}
+
+		zAddResult1, err := client.ZAdd(key1, membersScores1)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), zAddResult1)
+		zAddResult2, err := client.ZAdd(key2, membersScores2)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), zAddResult2)
+		zAddResult3, err := client.ZAdd(key3, membersScores3)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(4), zAddResult3)
+
+		zDiffResult, err := client.ZDiff([]string{key1, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"one", "three"}, zDiffResult)
+		zDiffResult, err = client.ZDiff([]string{key1, key3})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{}, zDiffResult)
+		zDiffResult, err = client.ZDiff([]string{nonExistentKey, key3})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{}, zDiffResult)
+
+		zDiffResultWithScores, err := client.ZDiffWithScores([]string{key1, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]float64{"one": 1.0, "three": 3.0}, zDiffResultWithScores)
+		zDiffResultWithScores, err = client.ZDiffWithScores([]string{key1, key3})
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]float64{}, zDiffResultWithScores)
+		zDiffResultWithScores, err = client.ZDiffWithScores([]string{nonExistentKey, key3})
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]float64{}, zDiffResultWithScores)
+
+		// Key exists, but it is not a set
+		setResult, _ := client.Set(nonExistentKey, "bar")
+		assert.Equal(t, setResult, "OK")
+
+		_, err = client.ZDiff([]string{nonExistentKey, key2})
+		assert.NotNil(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+
+		_, err = client.ZDiffWithScores([]string{nonExistentKey, key2})
+		assert.NotNil(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZDiffStore() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		suite.SkipIfServerVersionLowerThanBy("6.2.0")
+		t := suite.T()
+		key1 := "{testKey}:1-" + uuid.NewString()
+		key2 := "{testKey}:2-" + uuid.NewString()
+		key3 := "{testKey}:3-" + uuid.NewString()
+		key4 := "{testKey}:4-" + uuid.NewString()
+		key5 := "{testKey}:5-" + uuid.NewString()
+
+		membersScores1 := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+
+		membersScores2 := map[string]float64{
+			"two": 2.0,
+		}
+
+		membersScores3 := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+			"four":  4.0,
+		}
+
+		zAddResult1, err := client.ZAdd(key1, membersScores1)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), zAddResult1)
+		zAddResult2, err := client.ZAdd(key2, membersScores2)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), zAddResult2)
+		zAddResult3, err := client.ZAdd(key3, membersScores3)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(4), zAddResult3)
+
+		zDiffStoreResult, err := client.ZDiffStore(key4, []string{key1, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, zDiffStoreResult, int64(2))
+		zRangeWithScoreResult, err := client.ZRangeWithScores(key4, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]float64{"one": 1.0, "three": 3.0}, zRangeWithScoreResult)
+
+		zDiffStoreResult, err = client.ZDiffStore(key4, []string{key3, key2, key1})
+		assert.NoError(t, err)
+		assert.Equal(t, zDiffStoreResult, int64(1))
+		zRangeWithScoreResult, err = client.ZRangeWithScores(key4, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]float64{"four": 4.0}, zRangeWithScoreResult)
+
+		zDiffStoreResult, err = client.ZDiffStore(key4, []string{key1, key3})
+		assert.NoError(t, err)
+		assert.Equal(t, zDiffStoreResult, int64(0))
+		zRangeWithScoreResult, err = client.ZRangeWithScores(key4, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]float64{}, zRangeWithScoreResult)
+
+		// Non-Existing key
+		zDiffStoreResult, err = client.ZDiffStore(key4, []string{key5, key1})
+		assert.NoError(t, err)
+		assert.Equal(t, zDiffStoreResult, int64(0))
+		zRangeWithScoreResult, err = client.ZRangeWithScores(key4, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]float64{}, zRangeWithScoreResult)
+
+		// Key exists, but it is not a set
+		setResult, err := client.Set(key5, "bar")
+		assert.NoError(t, err)
+		assert.Equal(t, setResult, "OK")
+		_, err = client.ZDiffStore(key4, []string{key5, key1})
+		assert.NotNil(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}

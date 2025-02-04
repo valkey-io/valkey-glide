@@ -7191,3 +7191,117 @@ func (client *baseClient) ZInterWithScores(zInterOptions *options.ZInterOptions)
 	}
 	return handleStringDoubleMapResponse(result)
 }
+
+// Returns the difference between the first sorted set and all the successive sorted sets.
+// To get the elements with their scores, see `ZDiffWithScores`
+//
+// When in cluster mode, all `keys` must map to the same hash slot.
+//
+// Available for Valkey 6.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys -  The keys of the sorted sets.
+//
+// Return value:
+//
+//	An array of elements representing the difference between the sorted sets.
+//	If the first `key` does not exist, it is treated as an empty sorted set, and the
+//	command returns an empty array.
+//
+// Example:
+//
+//	membersScores1 := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}
+//	membersScores2 := map[string]float64{"two": 2.0}
+//	zAddResult1, err := client.ZAdd("key1", membersScores1)
+//	zAddResult2, err := client.ZAdd("key2", membersScores2)
+//	zDiffResult, err := client.ZDiff([]string{"key1", "key2"})
+//	fmt.Println(zDiffResult) // Output: {"one", "three"}
+//
+// [valkey.io]: https://valkey.io/commands/zdiff/
+func (client *baseClient) ZDiff(keys []string) ([]string, error) {
+	args := append([]string{}, strconv.Itoa(len(keys)))
+	result, err := client.executeCommand(C.ZDiff, append(args, keys...))
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the difference between the first sorted set and all the successive sorted sets.
+// When in cluster mode, all `keys` must map to the same hash slot.
+// Available for Valkey 6.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys -  The keys of the sorted sets.
+//
+// Return value:
+//
+//	A `Map` of elements and their scores representing the difference between the sorted sets.
+//	If the first `key` does not exist, it is treated as an empty sorted set, and the
+//	command returns an empty `Map`.
+//
+// Example:
+//
+//	membersScores1 := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}
+//	membersScores2 := map[string]float64{"two": 2.0}
+//	zAddResult1, err := client.ZAdd("key1", membersScores1)
+//	zAddResult2, err := client.ZAdd("key2", membersScores2)
+//	zDiffResultWithScores, err := client.ZDiffWithScores([]string{"key1", "key2"})
+//	fmt.Println(zDiffResultWithScores) // Output: {"one": 1.0, "three": 3.0}
+//
+// [valkey.io]: https://valkey.io/commands/zdiff/
+func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, error) {
+	args := append([]string{}, strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	result, err := client.executeCommand(C.ZDiff, append(args, options.WithScores))
+	if err != nil {
+		return nil, err
+	}
+	return handleStringDoubleMapResponse(result)
+}
+
+// Calculates the difference between the first sorted set and all the successive sorted sets at
+// `keys` and stores the difference as a sorted set to `destination`,
+// overwriting it if it already exists. Non-existent keys are treated as empty sets.
+//
+// Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+//
+// Available for Valkey 6.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	destination - The key for the resulting sorted set.
+//	keys        - The keys of the sorted sets to compare.
+//
+// Return value:
+//
+//	The number of members in the resulting sorted set stored at `destination`.
+//
+// Example:
+//
+//	membersScores1 := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}
+//	membersScores2 := map[string]float64{"two": 2.0}
+//	zAddResult1, err := client.ZAdd("key1", membersScores1)
+//	zAddResult2, err := client.ZAdd("key2", membersScores2)
+//	zDiffStoreResult, err := client.ZDiffStore("key4", []string{"key1", "key2"})
+//	fmt.Println(zDiffStoreResult) // Output: 2
+//
+// [valkey.io]: https://valkey.io/commands/zdiffstore/
+func (client *baseClient) ZDiffStore(destination string, keys []string) (int64, error) {
+	result, err := client.executeCommand(
+		C.ZDiffStore,
+		append([]string{destination, strconv.Itoa(len(keys))}, keys...),
+	)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}

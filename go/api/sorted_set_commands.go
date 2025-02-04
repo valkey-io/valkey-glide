@@ -71,6 +71,10 @@ type SortedSetCommands interface {
 
 	ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error)
 
+	ZDiff(keys []string) ([]string, error)
+
+	ZDiffWithScores(keys []string) (map[string]float64, error)
+
 	ZRandMember(key string) (Result[string], error)
 
 	ZRandMemberWithCount(key string, count int64) ([]string, error)
@@ -82,4 +86,6 @@ type SortedSetCommands interface {
 	ZInter(keys options.KeyArray) ([]string, error)
 
 	ZInterWithScores(options *options.ZInterOptions) (map[string]float64, error)
+
+	ZDiffStore(destination string, keys []string) (int64, error)
 }
