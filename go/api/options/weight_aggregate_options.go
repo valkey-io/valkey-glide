@@ -2,7 +2,7 @@
 
 package options
 
-import "github.com/jamesx-improving/valkey-glide/go/utils"
+import "github.com/valkey-io/valkey-glide/go/utils"
 
 // Aggregate represents the method of aggregating scores from multiple sets
 type Aggregate string

@@ -2,7 +2,7 @@
 
 package api
 
-import "github.com/jamesx-improving/valkey-glide/go/api/options"
+import "github.com/valkey-io/valkey-glide/go/api/options"
 
 // Supports commands and transactions for the "Set" group of commands for standalone and cluster clients.
 //

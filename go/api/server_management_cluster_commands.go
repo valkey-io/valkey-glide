@@ -2,7 +2,7 @@
 
 package api
 
-import "github.com/jamesx-improving/valkey-glide/go/api/options"
+import "github.com/valkey-io/valkey-glide/go/api/options"
 
 // ServerManagementCommands supports commands for the "Server Management" group for a cluster client.
 //
