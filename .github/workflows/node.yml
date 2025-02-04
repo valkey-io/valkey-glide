@@ -184,17 +184,19 @@ jobs:
             image: ${{ matrix.host.IMAGE }}
             options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
+            - name: Check if TARGET is x86_64-unknown-linux-musl
+              continue-on-error: true
+              run: |
+                  if [[ "${{ matrix.host.TARGET }}" != "x86_64-unknown-linux-musl" ]]; then
+                      echo "Skipping job: TARGET is not x86_64-unknown-linux-musl"
+                      exit 1
+                  fi
+
             - name: Install git
               run: |
-                  if [[ ${{ contains(matrix.host.TARGET, 'musl') }} == true ]]; then
-                     apk update
-                     apk add --no-cache git tar
-                  elif [[ ${{ contains(matrix.host.IMAGE, 'amazonlinux') }} == true ]]; then
-                     yum update
-                     yum install -y git tar
-                  fi
-                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
-            # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
+                  apk update
+                  apk add --no-cache git tar
+
             - uses: actions/checkout@v4
 
             - name: Setup musl on Linux
@@ -226,12 +228,16 @@ jobs:
               run: npm test
               working-directory: ./node
 
+            - name: Sanitize IMAGE variable
+              # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
+              run: echo "SANITIZED_IMAGE=${{ matrix.host.IMAGE }}" | sed -r 's/:/-/g' >> $GITHUB_ENV
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-report-node-${{ matrix.node }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.IMAGE }}-${{ matrix.host.ARCH }}
+                  name: test-report-node-${{ matrix.node }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.SANITIZED_IMAGE }}-${{ matrix.host.ARCH }}
                   path: |
                       node/test-report*.html
                       utils/clusters/**
