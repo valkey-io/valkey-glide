@@ -3,7 +3,6 @@
 package integTest
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/stretchr/testify/assert"
@@ -304,11 +303,9 @@ func (suite *GlideTestSuite) TestClientIdCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 
-	// echo with option or with multiple options without route
+	// ClientId with option or with multiple options without route
 	opts := options.RouteOption{Route: nil}
 	response, err := client.ClientIdWithOptions(opts)
-	fmt.Println("response: ", response)
-	fmt.Println("err: ", err)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
 
@@ -316,8 +313,6 @@ func (suite *GlideTestSuite) TestClientIdCluster() {
 	route := config.Route(config.RandomRoute)
 	opts = options.RouteOption{Route: route}
 	response, err = client.ClientIdWithOptions(opts)
-	fmt.Println("response: ", response)
-	fmt.Println("err: ", err)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
 
@@ -325,8 +320,6 @@ func (suite *GlideTestSuite) TestClientIdCluster() {
 	route = config.Route(config.AllPrimaries)
 	opts = options.RouteOption{Route: route}
 	response, err = client.ClientIdWithOptions(opts)
-	fmt.Println("response: ", response)
-	fmt.Println("err: ", err)
 	assert.NoError(t, err)
 	assert.True(t, response.IsMultiValue())
 }
