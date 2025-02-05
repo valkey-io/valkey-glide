@@ -372,7 +372,8 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 //
 // Parameters:
 //
-//	message - The provided message.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
 //
 // Return value:
 //
