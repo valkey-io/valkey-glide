@@ -1619,7 +1619,7 @@ the following restrictions:
 
 ----
 
-Package: async-trait:0.1.83
+Package: async-trait:0.1.86
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2306,7 +2306,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bitflags:2.6.0
+Package: bitflags:2.8.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2535,7 +2535,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bumpalo:3.16.0
+Package: bumpalo:3.17.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2816,7 +2816,7 @@ For more information, please refer to <http://unlicense.org/>
 
 ----
 
-Package: bytes:1.8.0
+Package: bytes:1.10.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -3299,7 +3299,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: chrono:0.4.38
+Package: chrono:0.4.39
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -4265,7 +4265,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: crossbeam-channel:0.5.13
+Package: crossbeam-channel:0.5.14
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -4494,7 +4494,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: crossbeam-utils:0.8.20
+Package: crossbeam-utils:0.8.21
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12136,7 +12136,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: js-sys:0.3.72
+Package: js-sys:0.3.77
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12594,7 +12594,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libc:0.2.165
+Package: libc:0.2.169
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13077,7 +13077,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: log:0.4.22
+Package: log:0.4.25
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13566,7 +13566,7 @@ For more information, please refer to <http://unlicense.org/>
 
 ----
 
-Package: miniz_oxide:0.8.0
+Package: miniz_oxide:0.8.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13815,7 +13815,7 @@ the following restrictions:
 
 ----
 
-Package: mio:1.0.2
+Package: mio:1.0.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -15035,7 +15035,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: object:0.36.5
+Package: object:0.36.7
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -15493,7 +15493,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: openssl-probe:0.1.5
+Package: openssl-probe:0.1.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -16434,7 +16434,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pin-project:1.1.7
+Package: pin-project:1.1.9
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -16663,7 +16663,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pin-project-internal:1.1.7
+Package: pin-project-internal:1.1.9
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -16892,7 +16892,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pin-project-lite:0.2.15
+Package: pin-project-lite:0.2.16
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17808,7 +17808,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: proc-macro2:1.0.92
+Package: proc-macro2:1.0.93
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -18087,7 +18087,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: quote:1.0.37
+Package: quote:1.0.38
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19034,7 +19034,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: redox_syscall:0.5.7
+Package: redox_syscall:0.5.8
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20042,7 +20042,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pki-types:1.10.0
+Package: rustls-pki-types:1.11.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20289,7 +20289,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: rustversion:1.0.18
+Package: rustversion:1.0.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20518,7 +20518,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ryu:1.0.18
+Package: ryu:1.0.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21235,7 +21235,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: security-framework-sys:2.12.1
+Package: security-framework-sys:2.14.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21464,7 +21464,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde:1.0.215
+Package: serde:1.0.217
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21693,7 +21693,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde_derive:1.0.215
+Package: serde_derive:1.0.217
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22232,7 +22232,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: socket2:0.5.7
+Package: socket2:0.5.8
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22796,7 +22796,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.89
+Package: syn:2.0.98
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23712,7 +23712,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time:0.3.36
+Package: time:0.3.37
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24170,7 +24170,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time-macros:0.2.18
+Package: time-macros:0.2.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24399,7 +24399,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tinyvec:1.8.0
+Package: tinyvec:1.8.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24897,7 +24897,7 @@ the following restrictions:
 
 ----
 
-Package: tokio:1.41.1
+Package: tokio:1.43.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24922,7 +24922,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tokio-macros:2.4.0
+Package: tokio-macros:2.5.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25201,7 +25201,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tokio-util:0.7.12
+Package: tokio-util:0.7.13
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25226,7 +25226,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tracing:0.1.40
+Package: tracing:0.1.41
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25276,7 +25276,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tracing-attributes:0.1.27
+Package: tracing-attributes:0.1.28
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25351,7 +25351,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tracing-subscriber:0.3.18
+Package: tracing-subscriber:0.3.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25376,7 +25376,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: unicode-bidi:0.3.17
+Package: unicode-bidi:0.3.18
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25605,7 +25605,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: unicode-ident:1.0.14
+Package: unicode-ident:1.0.16
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26344,7 +26344,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: valuable:0.1.0
+Package: valuable:0.1.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26818,7 +26818,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen:0.2.95
+Package: wasm-bindgen:0.2.100
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27047,7 +27047,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-backend:0.2.95
+Package: wasm-bindgen-backend:0.2.100
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27276,7 +27276,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro:0.2.95
+Package: wasm-bindgen-macro:0.2.100
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27505,7 +27505,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro-support:0.2.95
+Package: wasm-bindgen-macro-support:0.2.100
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27734,7 +27734,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-shared:0.2.95
+Package: wasm-bindgen-shared:0.2.100
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34192,7 +34192,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: com.google.protobuf:protobuf-java:4.27.1
+Package: com.google.protobuf:protobuf-java:4.28.1
 
 The following copyrights and licenses were found in the source code of this package:
 
