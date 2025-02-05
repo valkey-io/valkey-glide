@@ -41,11 +41,13 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             RELEASE_VERSION: ${{ steps.release-tag.outputs.RELEASE_VERSION }}
+        env:
+            INPUT_VERSION: ${{ github.event.inputs.version }}
         steps:
             - name: Validate Version Agaisnt RegEx
               run: |
-                  echo "input version is: ${{ github.event.inputs.version }}"
-                  if ! echo "${{ github.event.inputs.version }}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
+                  echo "input version is: ${{ env.INPUT_VERSION }}"
+                  if ! echo "${{ env.INPUT_VERSION }}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
                       echo "Version is not valid, must be v*.*.* or v*.*.*-rc*"
                       exit 1
                   fi
@@ -56,14 +58,14 @@ jobs:
             - name: Validate version agaisnt tags
               run: |
                   git fetch --tags
-                  if git tag | grep -q "^go/${{ github.event.inputs.version }}$"; then
-                      echo "Version ${{ github.event.inputs.version }} already exists."
+                  if git tag | grep -q "^go/${{ env.INPUT_VERSION }}$"; then
+                      echo "Version ${{ env.INPUT_VERSION }} already exists."
                       exit 1
                   fi
             - name: Output release tag
               id: release-tag
               run: |
-                  echo "RELEASE_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+                  echo "RELEASE_VERSION=${{ env.INPUT_VERSION }}" >> $GITHUB_OUTPUT
 
     create-binaries:
         needs: [load-platform-matrix]
