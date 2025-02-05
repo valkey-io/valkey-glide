@@ -1,5 +1,5 @@
 {
-    "name": "${scope}${pkg_name}",
+    "name": "valkey-glide",
     "types": "build-ts/index.d.ts",
     "version": "${package_version}",
     "description": "General Language Independent Driver for the Enterprise (GLIDE) for Valkey",
