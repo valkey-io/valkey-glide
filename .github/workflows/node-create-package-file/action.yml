@@ -61,14 +61,7 @@ runs:
               export node_os="${{ inputs.named_os }}"
               export node_arch="${{ inputs.arch }}"
               # set the version
-              echo "The workflow is: ${{env.EVENT_NAME}}"
-              if ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
-                R_VERSION="${{ env.INPUT_VERSION }}"
-              else
-                R_VERSION=${GITHUB_REF:11}
-              fi
-              echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-              export package_version=${R_VERSION}
+              export package_version="${{ inputs.release_version }}"
               # set the package name
               export pkg_name="${name}-${node_os}${MUSL_FLAG}-${node_arch}"
               # set the scope
@@ -99,7 +92,14 @@ runs:
               name="valkey-glide"
               export node_os="${{ inputs.named_os }}"
               export node_arch="${{ inputs.arch }}"
-              export package_version="${{ inputs.release_version }}"
+              echo "The workflow is: ${{env.EVENT_NAME}}"
+              if ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                R_VERSION="${{ env.INPUT_VERSION }}"
+              else
+                R_VERSION=${GITHUB_REF:11}
+              fi
+              echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+              export package_version=${R_VERSION}
               export scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}/"; fi`
               export MUSL_FLAG=`if [[ "${{ inputs.target }}" =~ .*"musl".*  ]]; then echo "-musl"; fi`
               export pkg_name="${name}-${node_os}${MUSL_FLAG}-${node_arch}"
