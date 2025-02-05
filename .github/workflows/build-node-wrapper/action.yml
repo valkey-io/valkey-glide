@@ -81,7 +81,7 @@ runs:
               rm -rf node_modules && rm -rf package-lock.json && npm install
         - name: npm install for /npm/glide package
           shell: bash
-          working-directory: ./npm/glide
+          working-directory: ./node/npm/glide
           run: |
               rm -rf node_modules && rm -rf package-lock.json && npm install
         - name: Build
