@@ -16,7 +16,10 @@ function loadNativeBinding() {
     if (nativeStr == undefined) {
         const prefix = familySync() == GLIBC ? "" : "-musl";
         nativeStr = `${platform}${prefix}-${arch}`;
-        if (!["x64", "arm64"].includes(arch) || (!["linux", "darwin"].includes(platform))) {
+        if (
+            !["x64", "arm64"].includes(arch) ||
+            !["linux", "darwin"].includes(platform)
+        ) {
             throw new Error(
                 `Unsupported OS: ${platform}, architecture: ${arch}`,
             );
