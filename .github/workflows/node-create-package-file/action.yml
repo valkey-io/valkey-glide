@@ -106,5 +106,5 @@ runs:
               export dev_dependency_name="${scope}${pkg_name}"
               mv package.json package.json.tmpl
               envsubst < package.json.tmpl > "package.json"
-              jq --arg dev_dependency_name "$dev_dependency_name" --arg path "../.." '.devDependencies += {($dev_dependency_name): $path} package.json > package.tmpl.json && mv package.tmpl.json package.json
+              jq --arg dev_dependency_name "$dev_dependency_name" --arg path "../.." '.devDependencies += {($dev_dependency_name): $path}' package.json > package.tmpl.json && mv package.tmpl.json package.json
               cat package.json
