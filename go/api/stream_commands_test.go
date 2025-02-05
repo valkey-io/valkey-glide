@@ -752,6 +752,36 @@ func ExampleGlideClusterClient_XPendingWithOptions() {
 	// Output: true
 }
 
+func ExampleGlideClusterClient_XPendingWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	key := "12345"
+	streamId := "12345-1"
+	group := "g12345"
+	consumer := "c12345"
+
+	client.XGroupCreateWithOptions(key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateConsumer(key, group, consumer)
+	client.XAddWithOptions(
+		key,
+		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+		options.NewXAddOptions().SetId(streamId),
+	)
+	client.XReadGroup(group, consumer, map[string]string{key: ">"})
+
+	details, err := client.XPendingWithOptions(
+		key,
+		group,
+		options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer),
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	jsonDetails, _ := json.Marshal(details)
+	fmt.Println(string(jsonDetails))
+
+	// Output: [{"Id":"12345-1","ConsumerName":"c12345","IdleTime":1,"DeliveryCount":1}]
+}
+
 func ExampleGlideClient_XGroupSetId() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	key := "12345"
@@ -837,6 +867,43 @@ func ExampleGlideClient_XGroupSetIdWithOptions() {
 
 	opts := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(1)
 	client.XGroupSetIdWithOptions(key, group, "0-0", opts)          // reset the last acknowledged message to 0-0
+	client.XGroupSetIdWithOptions(key, group, "0-0", opts)          // reset the last acknowledged message to 0-0
+	client.XReadGroup(group, consumer, map[string]string{key: ">"}) // read the group again
+
+	summary, err := client.XPending(key, group) // get the pending messages, which should include the entry we previously acked
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	jsonSummary, _ := json.Marshal(summary)
+	fmt.Println(string(jsonSummary))
+
+	// Output: {"NumOfMessages":2,"StartId":{},"EndId":{},"ConsumerMessages":[{"ConsumerName":"c12345","MessageCount":2}]}
+}
+
+func ExampleGlideClusterClient_XGroupSetIdWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	key := "12345"
+	streamId1 := "12345-1"
+	streamId2 := "12345-2"
+	group := "g12345"
+	consumer := "c12345"
+
+	client.XGroupCreateWithOptions(key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateConsumer(key, group, consumer)
+	client.XAddWithOptions(
+		key,
+		[][]string{{"field1", "value1"}, {"field2", "value2"}},
+		options.NewXAddOptions().SetId(streamId1),
+	)
+	client.XAddWithOptions(
+		key,
+		[][]string{{"field3", "value3"}, {"field4", "value4"}},
+		options.NewXAddOptions().SetId(streamId2),
+	)
+	client.XReadGroup(group, consumer, map[string]string{key: ">"})
+	client.XAck(key, group, []string{streamId1, streamId2}) // ack the message and remove it from the pending list
+
+	opts := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(1)
 	client.XGroupSetIdWithOptions(key, group, "0-0", opts)          // reset the last acknowledged message to 0-0
 	client.XReadGroup(group, consumer, map[string]string{key: ">"}) // read the group again
 
@@ -1476,6 +1543,25 @@ func ExampleGlideClusterClient_XRange() {
 	}
 	fmt.Println(len(response))
 
+	// Output: 2
+}
+
+func ExampleGlideClusterClient_XRange() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	key := "12345"
+
+	client.XAdd(key, [][]string{{"field1", "value1"}})
+	client.XAdd(key, [][]string{{"field2", "value2"}})
+
+	response, err := client.XRange(key,
+		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+		options.NewInfiniteStreamBoundary(options.PositiveInfinity))
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(response))
+
+	// TODO: This output is incorrect. It should be an slice since the values should be ordered.
 	// Output: 2
 }
 

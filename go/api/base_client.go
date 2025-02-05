@@ -1696,8 +1696,6 @@ func (client *baseClient) SRandMember(key string) (Result[string], error) {
 //	A Result[string] containing the value of the popped member.
 //	Returns a NilResult if key does not exist.
 //
-
-//
 // [valkey.io]: https://valkey.io/commands/spop/
 func (client *baseClient) SPop(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.SPop, []string{key})
@@ -5248,8 +5246,9 @@ func (client *baseClient) SetBit(key string, offset int64, value int64) (int64, 
 //	offset - The index of the bit to return.
 //
 // Return value:
-// The bit at offset of the string. Returns zero if the key is empty or if the positive
-// offset exceeds the length of the string.
+//
+//	The bit at offset of the string. Returns zero if the key is empty or if the positive
+//	offset exceeds the length of the string.
 //
 // [valkey.io]: https://valkey.io/commands/getbit/
 func (client *baseClient) GetBit(key string, offset int64) (int64, error) {
@@ -5290,8 +5289,9 @@ func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (int64, er
 //	key - The key for the string to count the set bits of.
 //
 // Return value:
-// The number of set bits in the string. Returns zero if the key is missing as it is
-// treated as an empty string.
+//
+//	The number of set bits in the string. Returns zero if the key is missing as it is
+//	treated as an empty string.
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
 func (client *baseClient) BitCount(key string) (int64, error) {
@@ -5314,8 +5314,9 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 //	options - The offset options - see [options.BitOffsetOptions].
 //
 // Return value:
-// The number of set bits in the string interval specified by start, end, and options.
-// Returns zero if the key is missing as it is treated as an empty string.
+//
+//	The number of set bits in the string interval specified by start, end, and options.
+//	Returns zero if the key is missing as it is treated as an empty string.
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
 func (client *baseClient) BitCountWithOptions(key string, opts *options.BitCountOptions) (int64, error) {
