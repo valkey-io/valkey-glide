@@ -85,3 +85,23 @@ runs:
               envsubst < package.json.tmpl > "package.json"
               cat package.json
               echo $(ls *json*)
+        - name: Create package.json file in npm/glide package
+          shell: bash
+          working-directory: ./node/npm/glide
+          run: |
+              export pkg_name=valkey-glide
+              echo "The workflow is: ${{env.EVENT_NAME}}"
+              if ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                R_VERSION="${{ env.INPUT_VERSION }}"
+              else
+                R_VERSION=${GITHUB_REF:11}
+              fi
+              echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+              export arch="${{ matrix.host.ARCH }}"
+              export named_os="${{ matrix.host.NAMED_OS }}"
+              export package_version=${R_VERSION}
+              export scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}/"; fi`
+              mv package.json package.json.tmpl
+
+              envsubst < package.json.tmpl > "package.json"
+              cat package.json

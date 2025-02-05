@@ -79,7 +79,7 @@ runs:
               rm -rf node_modules && rm -rf package-lock.json && npm install
               cd rust-client
               rm -rf node_modules && rm -rf package-lock.json && npm install
-
+        # - name: 
         - name: Build
           shell: bash
           working-directory: ./node
