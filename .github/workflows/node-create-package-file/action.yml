@@ -106,5 +106,5 @@ runs:
               mv package.json package.json.tmpl
               envsubst < package.json.tmpl > "package.json"
 
-              jq '.devDependencies += {"${scope}${pkg_name}": "../"}' package.json > package.json
+              jq '.devDependencies += {"${scope}${pkg_name}": "../"}' package.json > package.tmpl.json && mv package.tmpl.json package.json
               cat package.json
