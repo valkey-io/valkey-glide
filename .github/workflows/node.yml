@@ -185,11 +185,10 @@ jobs:
             options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
             - name: Check if TARGET is x86_64-unknown-linux-musl
-              continue-on-error: true
               run: |
                   if [[ "${{ matrix.host.TARGET }}" != "x86_64-unknown-linux-musl" ]]; then
                       echo "Skipping job: TARGET is not x86_64-unknown-linux-musl"
-                      exit 1
+                      exit 0
                   fi
 
             - name: Install git
