@@ -1096,6 +1096,21 @@ func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendin
 	return pendingDetails, nil
 }
 
+func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[string]interface{}, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	result, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	return result.(map[string]interface{}), nil
+}
+
 func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[string][]string, error) {
 	defer C.free_command_response(response)
 	typeErr := checkResponseType(response, C.Map, false)
