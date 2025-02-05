@@ -14,10 +14,9 @@ function loadNativeBinding() {
     let nativeStr = process.env.native_binding;
 
     if (nativeStr == undefined) {
-
         const prefix = familySync() == GLIBC ? "" : "-musl";
         nativeStr = `${platform}${prefix}-${arch}`;
-        if ((["x64", "arm64"].indexOf(arch) < 0) || (["linux", "darwin"].indexOf(platform) < 0)) {
+        if (!["x64", "arm64"].includes(arch) || (!["linux", "darwin"].includes(platform))) {
             throw new Error(
                 `Unsupported OS: ${platform}, architecture: ${arch}`,
             );

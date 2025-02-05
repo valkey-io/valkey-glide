@@ -105,5 +105,5 @@ runs:
               export pkg_name="${name}-${node_os}${MUSL_FLAG}-${node_arch}"
               mv package.json package.json.tmpl
               envsubst < package.json.tmpl > "package.json"
-              jq --arg scope "$scope" --arg pkg_name "$pkg_name" '.devDependencies |= . + {$scope$pkg_name: "../.."}' package.json > package.tmpl.json && mv package.tmpl.json package.json
+              jq --arg scope "$scope" --arg pkg_name "$pkg_name" '.devDependencies |= . + {($scope)$pkg_name: "../.."}' package.json > package.tmpl.json && mv package.tmpl.json package.json
               cat package.json
