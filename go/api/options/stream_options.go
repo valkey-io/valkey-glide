@@ -399,6 +399,33 @@ func (sco *StreamClaimOptions) ToArgs() ([]string, error) {
 	return optionArgs, nil
 }
 
+// Optional arguments for `XInfoStream` in [StreamCommands]
+type XInfoStreamOptions struct {
+	count int64
+}
+
+// Create new empty `XInfoStreamOptions`
+func NewXInfoStreamOptionsOptions() *XInfoStreamOptions {
+	return &XInfoStreamOptions{-1}
+}
+
+// Request verbose information limiting the returned PEL entries.
+// If `0` is specified, returns verbose information with no limit.
+func (xiso *XInfoStreamOptions) SetCount(count int64) *XInfoStreamOptions {
+	xiso.count = count
+	return xiso
+}
+
+func (xiso *XInfoStreamOptions) ToArgs() ([]string, error) {
+	var args []string
+
+	if xiso.count > -1 {
+		args = append(args, "COUNT", utils.IntToString(xiso.count))
+	}
+
+	return args, nil
+}
+
 type StreamBoundary string
 
 // Create a new stream boundary.
@@ -435,7 +462,7 @@ func (sro *StreamRangeOptions) ToArgs() ([]string, error) {
 	var args []string
 
 	if sro.countIsSet {
-		args = append(args, "COUNT", utils.IntToString(sro.count))
+		args = append(args, CountKeyword, utils.IntToString(sro.count))
 	}
 
 	return args, nil
