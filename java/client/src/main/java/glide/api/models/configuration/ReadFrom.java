@@ -16,8 +16,9 @@ public enum ReadFrom {
      */
     AZ_AFFINITY,
     /**
-     * Spread the read requests among nodes within the client's Availability Zone (AZ) in a round robin manner,
-     * prioritizing local replicas, then the local primary, and falling back to any replica or the primary if needed.
+     * Spread the read requests among nodes within the client's Availability Zone (AZ) in a round
+     * robin manner, prioritizing local replicas, then the local primary, and falling back to any
+     * replica or the primary if needed.
      */
     AZ_AFFINITY_REPLICAS_AND_PRIMARY,
 }

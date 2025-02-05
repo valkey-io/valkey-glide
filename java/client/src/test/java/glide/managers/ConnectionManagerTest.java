@@ -284,7 +284,7 @@ public class ConnectionManagerTest {
     public void test_convert_config_with_azaffinity_replicas_and_primary_to_protobuf() {
         testConvertConfigWithAzAffinity(ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY);
     }
-    
+
     private void testConvertConfigWithAzAffinity(ReadFrom readFrom) throws Exception {
         // setup
         String az = "us-east-1a";
@@ -330,7 +330,8 @@ public class ConnectionManagerTest {
     @SneakyThrows
     @Test
     public void test_az_affinity_replicas_and_primary_without_client_az_throws_ConfigurationError() {
-        testAzAffinityWithoutClientAzThrowsConfigurationError(ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY);
+        testAzAffinityWithoutClientAzThrowsConfigurationError(
+                ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY);
     }
 
     private void testAzAffinityWithoutClientAzThrowsConfigurationError(ReadFrom readFrom) {
