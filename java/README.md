@@ -9,11 +9,15 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 The release of Valkey GLIDE was tested on the following platforms:
 
 Linux:
-- Ubuntu 22.04.1 (x86_64)
-- Amazon Linux 2023 (AL2023) (x86_64)
+
+-   Ubuntu 22.04.1 (x86_64 and aarch64)
+-   Amazon Linux 2023 (AL2023) (x86_64)
+
+**Note: Currently Alpine Linux / MUSL is NOT supported due to an incompatibility with a native Java component.**
 
 macOS:
-- macOS 12.7 (Apple silicon/aarch_64 and Intel/x86_64)
+
+-   macOS 14.7 (Apple silicon/aarch_64)
 
 ## Layout of Java code
 The Java client contains the following parts:
@@ -55,7 +59,6 @@ Additionally, consider installing the Gradle plugin, [OS Detector](https://githu
 There are 4 types of classifiers for Valkey GLIDE which are
 ```
 osx-aarch_64
-osx-x86_64
 linux-aarch_64
 linux-x86_64
 ```
@@ -67,11 +70,6 @@ Gradle:
 // osx-aarch_64
 dependencies {
     implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'osx-aarch_64'
-}
-
-// osx-x86_64
-dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'osx-x86_64'
 }
 
 // linux-aarch_64
@@ -94,7 +92,7 @@ dependencies {
 ```
 
 Maven:
-- **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the pom.xml file.
+- **IMPORTANT** must include a `classifier`. Please use this dependency block, or both the dependency and the extension blocks if you're using `os-maven-plugin`, and add it to the pom.xml file.
 ```xml
 
 <!--osx-aarch_64-->
@@ -102,14 +100,6 @@ Maven:
    <groupId>io.valkey</groupId>
    <artifactId>valkey-glide</artifactId>
    <classifier>osx-aarch_64</classifier>
-   <version>[1.0.0,2.0.0)</version>
-</dependency>
-
-<!--osx-x86_64-->
-<dependency>
-   <groupId>io.valkey</groupId>
-   <artifactId>valkey-glide</artifactId>
-   <classifier>osx-x86_64</classifier>
    <version>[1.0.0,2.0.0)</version>
 </dependency>
 
@@ -128,6 +118,24 @@ Maven:
    <classifier>linux-x86_64</classifier>
    <version>[1.0.0,2.0.0)</version>
 </dependency>
+
+<!--with os-maven-plugin-->
+<build>
+    <extensions>
+        <extension>
+            <groupId>kr.motd.maven</groupId>
+            <artifactId>os-maven-plugin</artifactId>
+        </extension>
+    </extensions>
+</build>
+<dependencies>
+    <dependency>
+        <groupId>io.valkey</groupId>
+        <artifactId>valkey-glide</artifactId>
+        <classifier>${os.detected.classifier}</classifier>
+        <version>[1.0.0,2.0.0)</version>
+    </dependency>
+</dependencies>
 ```
 
 SBT:
@@ -135,9 +143,6 @@ SBT:
 ```scala
 // osx-aarch_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "osx-aarch_64"
-
-// osx-x86_64
-libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "osx-x86_64"
 
 // linux-aarch_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux-aarch_64"

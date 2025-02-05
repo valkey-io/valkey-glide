@@ -1,6 +1,4 @@
-/*
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #[cfg(feature = "socket-layer")]
 include!(concat!(env!("OUT_DIR"), "/protobuf/mod.rs"));
@@ -17,3 +15,4 @@ pub mod scripts_container;
 pub use client::ConnectionRequest;
 pub mod cluster_scan_container;
 pub mod request_type;
+pub use telemetrylib::Telemetry;

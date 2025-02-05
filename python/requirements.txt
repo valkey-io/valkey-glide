@@ -1,7 +1,5 @@
-async-timeout==4.0.2;python_version<"3.11"
-maturin==0.13.0
-protobuf==3.20.*
-pytest==7.1.2
-pytest-asyncio==0.19.0
-typing_extensions==4.8.0;python_version<"3.11"
-pytest-html
+# Note: The main location for tracking dependencies is pyproject.toml. This file is used only for the ORT process. When adding a dependency, make sure to add it both to this file and to pyproject.toml. 
+# Once issue https://github.com/aboutcode-org/python-inspector/issues/197 is resolved, this file can be removed.
+async-timeout>=4.0.2
+typing-extensions>=4.8.0
+protobuf>=3.20

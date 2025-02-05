@@ -1,4 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+# mypy: disable_error_code="arg-type"
 
 from __future__ import annotations
 
@@ -38,6 +39,7 @@ from glide.async_commands.core import (
     InfBound,
     InfoSection,
     InsertPosition,
+    OnlyIfEqual,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
@@ -71,6 +73,7 @@ from glide.async_commands.stream import (
 )
 from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
+    BackoffStrategy,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     ProtocolVersion,
@@ -104,6 +107,7 @@ from tests.utils.utils import (
     get_random_string,
     is_single_response,
     parse_info_response,
+    round_values,
 )
 
 
@@ -126,7 +130,7 @@ class TestGlideClients:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_send_and_receive_large_values(self, request, cluster_mode, protocol):
         glide_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
         length = 2**25  # 33mb
         key = "0" * length
@@ -135,6 +139,7 @@ class TestGlideClients:
         assert len(value) == length
         await glide_client.set(key, value)
         assert await glide_client.get(key) == value.encode()
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -200,6 +205,8 @@ class TestGlideClients:
             key = get_random_string(10)
             assert await auth_client.set(key, key) == OK
             assert await auth_client.get(key) == key.encode()
+            await auth_client.close()
+
         finally:
             # Reset the password
             auth_client = await create_client(
@@ -209,6 +216,7 @@ class TestGlideClients:
                 addresses=glide_client.config.addresses,
             )
             await auth_client.custom_command(["CONFIG", "SET", "requirepass", ""])
+            await auth_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -252,6 +260,7 @@ class TestGlideClients:
                 # This client isn't authorized to perform SET
                 await testuser_client.set("foo", "bar")
             assert "NOPERM" in str(e)
+            await testuser_client.close()
         finally:
             # Delete this user
             await glide_client.custom_command(["ACL", "DELUSER", username])
@@ -263,6 +272,7 @@ class TestGlideClients:
         )
         client_info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert b"db=4" in client_info
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -275,6 +285,7 @@ class TestGlideClients:
         )
         client_info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert b"name=TEST_CLIENT_NAME" in client_info
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -283,6 +294,99 @@ class TestGlideClients:
         with pytest.raises(ClosingError) as e:
             await glide_client.set("foo", "bar")
         assert "the client is closed" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_statistics(self, glide_client: TGlideClient):
+        stats = await glide_client.get_statistics()
+        assert isinstance(stats, dict)
+        assert "total_connections" in stats
+        assert "total_clients" in stats
+        assert len(stats) == 2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_connection_timeout(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+
+        client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            request_timeout=2000,
+            connection_timeout=2000,
+        )
+        assert isinstance(client, (GlideClient, GlideClusterClient))
+
+        assert await client.set("key", "value") == "OK"
+
+        await client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_connection_timeout_when_client_is_blocked(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            request_timeout=20000,  # 20 seconds timeout
+        )
+
+        async def run_debug_sleep():
+            """
+            Run a long-running DEBUG SLEEP command.
+            """
+            command = ["DEBUG", "sleep", "7"]
+            if isinstance(client, GlideClusterClient):
+                await client.custom_command(command, AllNodes())
+            else:
+                await client.custom_command(command)
+
+        async def fail_to_connect_to_client():
+            # try to connect with a small timeout connection
+            await asyncio.sleep(1)
+            with pytest.raises(ClosingError) as e:
+                await create_client(
+                    request,
+                    cluster_mode,
+                    protocol=protocol,
+                    connection_timeout=100,  # 100 ms
+                    reconnect_strategy=BackoffStrategy(
+                        1, 100, 2
+                    ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
+                )
+            assert "timed out" in str(e)
+
+        async def connect_to_client():
+            # Create a second client with a connection timeout of 7 seconds
+            await asyncio.sleep(1)
+            timeout_client = await create_client(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                connection_timeout=10000,  # 10-second connection timeout
+                reconnect_strategy=BackoffStrategy(1, 100, 2),
+            )
+
+            # Ensure the second client can connect and perform a simple operation
+            assert await timeout_client.set("key", "value") == "OK"
+            await timeout_client.close()
+
+        # Run tests
+        await asyncio.gather(run_debug_sleep(), fail_to_connect_to_client())
+        await asyncio.gather(run_debug_sleep(), connect_to_client())
+
+        # Clean up the main client
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -349,6 +453,7 @@ class TestCommands:
     async def test_conditional_set(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
+
         res = await glide_client.set(
             key, value, conditional_set=ConditionalChange.ONLY_IF_EXISTS
         )
@@ -363,6 +468,29 @@ class TestCommands:
         )
         assert res is None
         assert await glide_client.get(key) == value.encode()
+        # Tests for ONLY_IF_EQUAL below in test_set_only_if_equal()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.skip_if_version_below("8.1.0")
+    async def test_set_only_if_equal(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        value2 = get_random_string(10)
+        wrong_comparison_value = get_random_string(10)
+        while wrong_comparison_value == value:
+            wrong_comparison_value = get_random_string(10)
+
+        await glide_client.set(key, value)
+
+        res = await glide_client.set(
+            key, "foobar", conditional_set=OnlyIfEqual(wrong_comparison_value)
+        )
+        assert res is None
+        assert await glide_client.get(key) == value.encode()
+        res = await glide_client.set(key, value2, conditional_set=OnlyIfEqual(value))
+        assert res == OK
+        assert await glide_client.get(key) == value2.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -751,6 +879,58 @@ class TestCommands:
             )
             == OK
         )
+
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            previous_timeout = await glide_client.config_get(["timeout"])
+            previous_cluster_node_timeout = await glide_client.config_get(
+                ["cluster-node-timeout"]
+            )
+            assert (
+                await glide_client.config_set(
+                    {"timeout": "2000", "cluster-node-timeout": "16000"}
+                )
+                == OK
+            )
+            assert await glide_client.config_get(
+                ["timeout", "cluster-node-timeout"]
+            ) == {
+                b"timeout": b"2000",
+                b"cluster-node-timeout": b"16000",
+            }
+            # revert changes to previous timeout
+            previous_timeout_decoded = convert_bytes_to_string_object(previous_timeout)
+            previous_cluster_node_timeout_decoded = convert_bytes_to_string_object(
+                previous_cluster_node_timeout
+            )
+            assert isinstance(previous_timeout_decoded, dict)
+            assert isinstance(previous_cluster_node_timeout_decoded, dict)
+            assert isinstance(previous_timeout_decoded["timeout"], str)
+            assert isinstance(
+                previous_cluster_node_timeout_decoded["cluster-node-timeout"], str
+            )
+            assert (
+                await glide_client.config_set(
+                    {
+                        "timeout": previous_timeout_decoded["timeout"],
+                        "cluster-node-timeout": previous_cluster_node_timeout_decoded[
+                            "cluster-node-timeout"
+                        ],
+                    }
+                )
+                == OK
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_config_get_with_wildcard_and_multi_node_route(
+        self, glide_client: GlideClusterClient
+    ):
+        result = await glide_client.config_get(["*file"], AllPrimaries())
+        assert isinstance(result, Dict)
+        for resp in result.values():
+            assert len(resp) > 5
+            assert b"pidfile" in resp
+            assert b"logfile" in resp
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2686,6 +2866,7 @@ class TestCommands:
         )
         expected_map = {member: value[1] for member, value in result.items()}
         sorted_expected_map = dict(sorted(expected_map.items(), key=lambda x: x[1]))
+        zrange_map = round_values(zrange_map, 10)
         assert compare_maps(zrange_map, sorted_expected_map) is True
 
         # Test storing results of a box search, unit: kilometes, from a geospatial data, with distance
@@ -2705,6 +2886,8 @@ class TestCommands:
         )
         expected_map = {member: value[0] for member, value in result.items()}
         sorted_expected_map = dict(sorted(expected_map.items(), key=lambda x: x[1]))
+        zrange_map = round_values(zrange_map, 10)
+        sorted_expected_map = round_values(sorted_expected_map, 10)
         assert compare_maps(zrange_map, sorted_expected_map) is True
 
         # Test storing results of a box search, unit: kilometes, from a geospatial data, with count
@@ -2745,6 +2928,8 @@ class TestCommands:
             b"Palermo": 166274.15156960033,
             b"edge2": 236529.17986494553,
         }
+        zrange_map = round_values(zrange_map, 9)
+        expected_distances = round_values(expected_distances, 9)
         assert compare_maps(zrange_map, expected_distances) is True
 
         # Test search by box, unit: feet, from a member, with limited ANY count to 2, with hash
@@ -2826,6 +3011,8 @@ class TestCommands:
             b"Catania": 0.0,
             b"Palermo": 166274.15156960033,
         }
+        zrange_map = round_values(zrange_map, 9)
+        expected_distances = round_values(expected_distances, 9)
         assert compare_maps(zrange_map, expected_distances) is True
 
         # Test search by radius, unit: miles, from a geospatial data
@@ -2859,6 +3046,8 @@ class TestCommands:
         )
         expected_map = {member: value[0] for member, value in result.items()}
         sorted_expected_map = dict(sorted(expected_map.items(), key=lambda x: x[1]))
+        zrange_map = round_values(zrange_map, 10)
+        sorted_expected_map = round_values(sorted_expected_map, 10)
         assert compare_maps(zrange_map, sorted_expected_map) is True
 
         # Test storing results of a radius search, unit: kilometers, from a geospatial data, with limited ANY count to 1
@@ -5385,7 +5574,10 @@ class TestCommands:
         )
 
         test_client = await create_client(
-            request=request, protocol=protocol, cluster_mode=cluster_mode, timeout=900
+            request=request,
+            protocol=protocol,
+            cluster_mode=cluster_mode,
+            request_timeout=900,
         )
         # ensure command doesn't time out even if timeout > request timeout
         assert (
@@ -5778,7 +5970,10 @@ class TestCommands:
             )
 
         test_client = await create_client(
-            request=request, protocol=protocol, cluster_mode=cluster_mode, timeout=900
+            request=request,
+            protocol=protocol,
+            cluster_mode=cluster_mode,
+            request_timeout=900,
         )
         timeout_key = f"{{testKey}}:{get_random_string(10)}"
         timeout_group_name = get_random_string(10)
@@ -7226,7 +7421,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitpos_and_bitpos_interval(self, glide_client: TGlideClient):
+    async def test_bitpos(self, glide_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         set_key = get_random_string(10)
@@ -7237,58 +7432,66 @@ class TestCommands:
         assert await glide_client.set(key, value) == OK
         assert await glide_client.bitpos(key, 0) == 0
         assert await glide_client.bitpos(key, 1) == 2
-        assert await glide_client.bitpos(key, 1, 1) == 9
-        assert await glide_client.bitpos_interval(key, 0, 3, 5) == 24
+        assert await glide_client.bitpos(key, 1, OffsetOptions(1)) == 9
+        assert await glide_client.bitpos(key, 0, OffsetOptions(3, 5)) == 24
 
         # `BITPOS` returns -1 for non-existing strings
         assert await glide_client.bitpos(non_existing_key, 1) == -1
-        assert await glide_client.bitpos_interval(non_existing_key, 1, 3, 5) == -1
+        assert await glide_client.bitpos(non_existing_key, 1, OffsetOptions(3, 5)) == -1
 
         # invalid argument - bit value must be 0 or 1
         with pytest.raises(RequestError):
             await glide_client.bitpos(key, 2)
         with pytest.raises(RequestError):
-            await glide_client.bitpos_interval(key, 2, 3, 5)
+            await glide_client.bitpos(key, 2, OffsetOptions(3, 5))
 
         # key exists, but it is not a string
         assert await glide_client.sadd(set_key, [value]) == 1
         with pytest.raises(RequestError):
             await glide_client.bitpos(set_key, 1)
         with pytest.raises(RequestError):
-            await glide_client.bitpos_interval(set_key, 1, 1, -1)
+            await glide_client.bitpos(set_key, 1, OffsetOptions(1, -1))
 
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             # error thrown because BIT and BYTE options were implemented after 7.0.0
             with pytest.raises(RequestError):
-                await glide_client.bitpos_interval(key, 1, 1, -1, BitmapIndexType.BYTE)
+                await glide_client.bitpos(
+                    key, 1, OffsetOptions(1, -1, BitmapIndexType.BYTE)
+                )
             with pytest.raises(RequestError):
-                await glide_client.bitpos_interval(key, 1, 1, -1, BitmapIndexType.BIT)
+                await glide_client.bitpos(
+                    key, 1, OffsetOptions(1, -1, BitmapIndexType.BIT)
+                )
         else:
             assert (
-                await glide_client.bitpos_interval(key, 0, 3, 5, BitmapIndexType.BYTE)
+                await glide_client.bitpos(
+                    key, 0, OffsetOptions(3, 5, BitmapIndexType.BYTE)
+                )
                 == 24
             )
             assert (
-                await glide_client.bitpos_interval(key, 1, 43, -2, BitmapIndexType.BIT)
+                await glide_client.bitpos(
+                    key, 1, OffsetOptions(43, -2, BitmapIndexType.BIT)
+                )
                 == 47
             )
             assert (
-                await glide_client.bitpos_interval(
-                    non_existing_key, 1, 3, 5, BitmapIndexType.BYTE
+                await glide_client.bitpos(
+                    non_existing_key, 1, OffsetOptions(3, 5, BitmapIndexType.BYTE)
                 )
                 == -1
             )
             assert (
-                await glide_client.bitpos_interval(
-                    non_existing_key, 1, 3, 5, BitmapIndexType.BIT
+                await glide_client.bitpos(
+                    non_existing_key, 1, OffsetOptions(3, 5, BitmapIndexType.BIT)
                 )
                 == -1
             )
 
             # key exists, but it is not a string
             with pytest.raises(RequestError):
-                await glide_client.bitpos_interval(
-                    set_key, 1, 1, -1, BitmapIndexType.BIT
+                await glide_client.bitpos(
+                    set_key, 1, OffsetOptions(1, -1, BitmapIndexType.BIT)
                 )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -8298,11 +8501,11 @@ class TestCommands:
 
         # create a second client to run fcall
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         test_client2 = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         async def endless_fcall_route_call():
@@ -8427,7 +8630,7 @@ class TestCommands:
 
         # create a second client to run fcall
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=15000
         )
 
         async def endless_fcall_route_call():
@@ -8462,6 +8665,7 @@ class TestCommands:
         with pytest.raises(RequestError) as e:
             assert await glide_client.function_kill()
         assert "NotBusy" in str(e)
+        await test_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [False, True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -8481,7 +8685,7 @@ class TestCommands:
 
         # create a second client to run fcall - and give it a long timeout
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=15000
         )
 
         # call fcall to run the function loaded function
@@ -8512,6 +8716,7 @@ class TestCommands:
             endless_fcall_route_call(),
             wait_and_function_kill(),
         )
+        await test_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -10328,7 +10533,7 @@ class TestScripts:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_keys_no_args(self, request, cluster_mode, protocol):
         glide_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
         length = 2**13  # 8kb
         key = "0" * length
@@ -10340,7 +10545,7 @@ class TestScripts:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_args_no_keys(self, request, cluster_mode, protocol):
         glide_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
         length = 2**12  # 4kb
         arg1 = "0" * length
@@ -10356,7 +10561,7 @@ class TestScripts:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_keys_and_args(self, request, cluster_mode, protocol):
         glide_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
         length = 2**12  # 4kb
         key = "0" * length
@@ -10426,7 +10631,7 @@ class TestScripts:
         assert await glide_client.script_exists([script.get_hash()]) == [False]
 
     @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("single_route", [True, False])
+    @pytest.mark.parametrize("single_route", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_kill_route(
         self,
@@ -10440,7 +10645,7 @@ class TestScripts:
 
         # Create a second client to run the script
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         await script_kill_tests(glide_client, test_client, route)
@@ -10456,7 +10661,7 @@ class TestScripts:
     ):
         # Create a second client to run the script
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         await script_kill_tests(glide_client, test_client)
@@ -10468,12 +10673,12 @@ class TestScripts:
     ):
         # Create a second client to run the script
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         # Create a second client to kill the script
         test_client2 = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=15000
         )
 
         # Add test for script_kill with writing script

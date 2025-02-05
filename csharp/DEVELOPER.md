@@ -85,19 +85,13 @@ Before starting this step, make sure you've installed all software requirments.
     cd valkey-glide
     ```
 
-2. Initialize git submodule
-
-```bash
-git submodule update --init --recursive
-```
-
-3. Build the C# wrapper
+2. Build the C# wrapper
 
 ```bash
 dotnet build
 ```
 
-4. Run tests
+3. Run tests
 
 Run test suite from `csharp` directory:
 
@@ -105,7 +99,7 @@ Run test suite from `csharp` directory:
 dotnet test
 ```
 
-5. Run benchmark
+4. Run benchmark
 
     1. Ensure that you have installed `redis-server` and `redis-cli` on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
 
@@ -125,7 +119,7 @@ dotnet test
 
     Run benchmarking script with `-h` flag to get list and help about all command line parameters.
 
-6. Lint the code
+5. Lint the code
 
 Before making a contribution ensure that all new user API and non-obvious places in code is well documented and run a code linter.
 
@@ -149,3 +143,7 @@ After pulling new changes, ensure that you update the submodules by running the 
 ```bash
 git submodule update
 ```
+
+6. Test framework and style
+
+Test package used in code xUnit v3. Testing code styles defined in .editorcofing (see dotnet_diagnostic.xUnit.. rules). Rules enforced by https://github.com/xunit/xunit.analyzers referenced by the main xunit.v3 NuGet package out of the box. If you choose to reference xunit.v3.core instead, you can reference xunit.analyzers explicitly. For additional info, please, refer to https://xunit.net and https://github.com/xunit/xunit

@@ -15,7 +15,6 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BitwiseOperation,
     ClusterTransaction,
-    convertRecordToGlideRecord,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -24,6 +23,7 @@ import {
     GeoUnit,
     GlideClusterClient,
     GlideReturnType,
+    GlideString,
     InfoOptions,
     ListDirection,
     ProtocolVersion,
@@ -33,8 +33,10 @@ import {
     Script,
     SlotKeyTypes,
     SortOrder,
+    convertGlideRecordToRecord,
+    convertRecordToGlideRecord,
 } from "..";
-import { ValkeyCluster } from "../../utils/TestUtils.js";
+import { ValkeyCluster } from "../../utils/TestUtils";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
@@ -49,12 +51,10 @@ import {
     getServerVersion,
     intoArray,
     intoString,
-    parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
     validateTransactionResponse,
     waitForNotBusy,
-    waitForScriptNotBusy,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -62,45 +62,80 @@ const TIMEOUT = 50000;
 describe("GlideClusterClient", () => {
     let testsFailed = 0;
     let cluster: ValkeyCluster;
+    let azCluster: ValkeyCluster;
     let client: GlideClusterClient;
+    let azClient: GlideClusterClient;
     beforeAll(async () => {
-        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
-        // Connect to cluster or create a new one based on the parsed addresses
-        cluster = clusterAddresses
-            ? await ValkeyCluster.initFromExistingCluster(
-                  true,
-                  parseEndpoints(clusterAddresses),
-                  getServerVersion,
-              )
-            : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
-    }, 20000);
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
+
+        if (clusterAddresses) {
+            // Initialize current cluster from existing addresses
+            cluster = await ValkeyCluster.initFromExistingCluster(
+                true,
+                parseEndpoints(clusterAddresses),
+                getServerVersion,
+            );
+
+            // Initialize cluster from existing addresses for AzAffinity test
+            azCluster = await ValkeyCluster.initFromExistingCluster(
+                true,
+                parseEndpoints(clusterAddresses),
+                getServerVersion,
+            );
+        } else {
+            cluster = await ValkeyCluster.createCluster(
+                true,
+                3,
+                1,
+                getServerVersion,
+            );
+
+            azCluster = await ValkeyCluster.createCluster(
+                true,
+                3,
+                4,
+                getServerVersion,
+            );
+        }
+    }, 120000);
 
     afterEach(async () => {
         await flushAndCloseClient(true, cluster.getAddresses(), client);
+        await flushAndCloseClient(true, azCluster.getAddresses(), azClient);
     });
 
     afterAll(async () => {
         if (testsFailed === 0) {
-            await cluster.close();
+            if (cluster) await cluster.close();
+            if (azCluster) await azCluster.close();
         } else {
-            await cluster.close(true);
+            if (cluster) await cluster.close(true);
+            if (azCluster) await azCluster.close(true);
         }
     });
 
     runBaseTests({
         init: async (protocol, configOverrides) => {
-            const config = getClientConfigurationOption(
+            const configCurrent = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
                 configOverrides,
             );
+            client = await GlideClusterClient.createClient(configCurrent);
+
+            const configNew = getClientConfigurationOption(
+                azCluster.getAddresses(),
+                protocol,
+                configOverrides,
+            );
+            azClient = await GlideClusterClient.createClient(configNew);
 
             testsFailed += 1;
-            client = await GlideClusterClient.createClient(config);
             return {
                 client,
+                azClient,
                 cluster,
+                azCluster,
             };
         },
         close: (testSucceeded: boolean) => {
@@ -241,13 +276,13 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = "key";
+            const key = uuidv4();
             const value = "value";
             const valueEncoded = Buffer.from(value);
             expect(await client.set(key, value)).toEqual("OK");
             // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
             await expect(client.customCommand(["DUMP", key])).rejects.toThrow(
-                "invalid utf-8 sequence of 1 bytes from index",
+                /invalid utf-8 sequence|incomplete utf-8 byte sequence/,
             );
 
             const dumpResult = await client.customCommand(["DUMP", key], {
@@ -289,37 +324,101 @@ describe("GlideClusterClient", () => {
                 "OK",
                 convertRecordToGlideRecord({ timeout: "1000" }),
             ]);
+
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                const transaction = new ClusterTransaction()
+                    .configSet({
+                        timeout: "2000",
+                        "cluster-node-timeout": "16000",
+                    })
+                    .configGet(["timeout", "cluster-node-timeout"]);
+                const result = await client.exec(transaction);
+                const convertedResult = [
+                    result[0],
+                    convertGlideRecordToRecord(result[1]),
+                ];
+                expect(convertedResult).toEqual([
+                    "OK",
+                    {
+                        timeout: "2000",
+                        "cluster-node-timeout": "16000",
+                    },
+                ]);
+            }
         },
         TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `can send transactions_%p`,
+        `config get with wildcard and multi node route %p`,
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const transaction = new ClusterTransaction();
-
-            const expectedRes = await transactionTest(
-                transaction,
-                cluster.getVersion(),
-            );
-
-            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                transaction.publish("message", "key", true);
-                expectedRes.push(['publish("message", "key", true)', 0]);
-
-                transaction.pubsubShardChannels();
-                expectedRes.push(["pubsubShardChannels()", []]);
-                transaction.pubsubShardNumSub([]);
-                expectedRes.push(["pubsubShardNumSub()", []]);
-            }
-
-            const result = await client.exec(transaction);
-            validateTransactionResponse(result, expectedRes);
+            const result = await client.configGet(["*file"], {
+                route: "allPrimaries",
+            });
+            Object.values(
+                result as Record<string, Record<string, GlideString>>,
+            ).forEach((resp) => {
+                const keys = Object.keys(resp);
+                expect(keys.length).toBeGreaterThan(5);
+                expect(keys).toContain("pidfile");
+                expect(keys).toContain("logfile");
+            });
         },
         TIMEOUT,
+    );
+
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Protocol is RESP2 = %s",
+        (protocol) => {
+            describe.each([Decoder.String, Decoder.Bytes])(
+                "Decoder String = %s",
+                (decoder) => {
+                    it(
+                        "can send transactions",
+                        async () => {
+                            client = await GlideClusterClient.createClient(
+                                getClientConfigurationOption(
+                                    cluster.getAddresses(),
+                                    protocol,
+                                ),
+                            );
+
+                            const transaction = new ClusterTransaction();
+
+                            const expectedRes = await transactionTest(
+                                transaction,
+                                cluster,
+                                decoder,
+                            );
+
+                            if (
+                                !cluster.checkIfServerVersionLessThan("7.0.0")
+                            ) {
+                                transaction.publish("message", "key", true);
+                                expectedRes.push([
+                                    'publish("message", "key", true)',
+                                    0,
+                                ]);
+
+                                transaction.pubsubShardChannels();
+                                expectedRes.push(["pubsubShardChannels()", []]);
+                                transaction.pubsubShardNumSub([]);
+                                expectedRes.push(["pubsubShardNumSub()", []]);
+                            }
+
+                            const result = await client.exec(transaction, {
+                                decoder: Decoder.String,
+                            });
+                            validateTransactionResponse(result, expectedRes);
+                        },
+                        TIMEOUT,
+                    );
+                },
+            );
+        },
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -371,20 +470,6 @@ describe("GlideClusterClient", () => {
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const lmpopArr = [];
-
-            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                lmpopArr.push(
-                    client.lmpop(["abc", "def"], ListDirection.LEFT, {
-                        count: 1,
-                    }),
-                );
-                lmpopArr.push(
-                    client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
-                        count: 1,
-                    }),
-                );
-            }
 
             const promises: Promise<unknown>[] = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
@@ -406,7 +491,6 @@ describe("GlideClusterClient", () => {
                 client.sdiffstore("abc", ["zxy", "lkn"]),
                 client.sortStore("abc", "zyx"),
                 client.sortStore("abc", "zyx", { isAlpha: true }),
-                ...lmpopArr,
                 client.bzpopmax(["abc", "def"], 0.5),
                 client.bzpopmin(["abc", "def"], 0.5),
                 client.xread({ abc: "0-0", zxy: "0-0", lkn: "0-0" }),
@@ -449,6 +533,12 @@ describe("GlideClusterClient", () => {
                     client.lcs("abc", "xyz"),
                     client.lcsLen("abc", "xyz"),
                     client.lcsIdx("abc", "xyz"),
+                    client.lmpop(["abc", "def"], ListDirection.LEFT, {
+                        count: 1,
+                    }),
+                    client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
+                        count: 1,
+                    }),
                 );
             }
 
@@ -1930,67 +2020,434 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "script kill killable test_%p",
+        "should handle connection timeout when client is blocked by long-running command (protocol: %p)",
         async (protocol) => {
+            // Create a client configuration with a generous request timeout
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
-                { requestTimeout: 10000 },
+                { requestTimeout: 20000 }, // Long timeout to allow debugging operations (sleep for 7 seconds)
             );
-            const client1 = await GlideClusterClient.createClient(config);
-            const client2 = await GlideClusterClient.createClient(config);
+
+            // Initialize the primary client
+            const client = await GlideClusterClient.createClient(config);
 
             try {
-                // Verify that script kill raises an error when no script is running
-                await expect(client1.scriptKill()).rejects.toThrow(
-                    "No scripts in execution right now",
+                // Run a long-running DEBUG SLEEP command using the first client (client)
+                const debugCommandPromise = client.customCommand(
+                    ["DEBUG", "sleep", "7"],
+                    { route: "allNodes" }, // Sleep for 7 seconds
                 );
 
-                // Create a long-running script
-                const longScript = new Script(
-                    createLongRunningLuaScript(5, false),
-                );
+                // Function that tries to create a client with a short connection timeout (100ms)
+                const failToCreateClient = async () => {
+                    await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
+                    await expect(
+                        GlideClusterClient.createClient({
+                            advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout
+                            ...config, // Include the rest of the config
+                        }),
+                    ).rejects.toThrowError(/timed out/i); // Ensure it throws a timeout error
+                };
 
-                try {
-                    // call the script without await
-                    const promise = client2
-                        .invokeScript(longScript)
-                        .catch((e) =>
-                            expect((e as Error).message).toContain(
-                                "Script killed",
-                            ),
-                        );
+                // Function that verifies that a larger connection timeout allows connection
+                const connectWithLargeTimeout = async () => {
+                    await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
+                    const longerTimeoutClient =
+                        await GlideClusterClient.createClient({
+                            advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout
+                            ...config, // Include the rest of the config
+                        });
+                    expect(await client.set("x", "y")).toEqual("OK");
+                    longerTimeoutClient.close(); // Close the client after successful connection
+                };
 
-                    let killed = false;
-                    let timeout = 4000;
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                // Run both the long-running DEBUG SLEEP command and the client creation attempt in parallel
+                await Promise.all([
+                    debugCommandPromise, // Run the long-running command
+                    failToCreateClient(), // Attempt to create the client with a short timeout
+                ]);
 
-                    while (timeout >= 0) {
-                        try {
-                            expect(await client1.scriptKill()).toEqual("OK");
-                            killed = true;
-                            break;
-                        } catch {
-                            // do nothing
-                        }
-
-                        await new Promise((resolve) =>
-                            setTimeout(resolve, 500),
-                        );
-                        timeout -= 500;
-                    }
-
-                    expect(killed).toBeTruthy();
-                    await promise;
-                } finally {
-                    await waitForScriptNotBusy(client1);
-                }
+                // Run all tasks: fail short timeout, succeed with large timeout, and run the debug command
+                await Promise.all([
+                    debugCommandPromise, // Run the long-running command
+                    connectWithLargeTimeout(), // Attempt to create the client with a short timeout
+                ]);
             } finally {
-                expect(await client1.scriptFlush()).toEqual("OK");
-                client1.close();
-                client2.close();
+                // Clean up the test client and ensure everything is flushed and closed
+                client.close();
             }
         },
         TIMEOUT,
     );
+
+    it.each([
+        [ProtocolVersion.RESP2, 5],
+        [ProtocolVersion.RESP2, 100],
+        [ProtocolVersion.RESP2, 1500],
+        [ProtocolVersion.RESP3, 5],
+        [ProtocolVersion.RESP3, 100],
+        [ProtocolVersion.RESP3, 1500],
+    ])(
+        "test inflight requests limit of %p with protocol %p",
+        async (protocol, inflightRequestsLimit) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { inflightRequestsLimit },
+            );
+            const client = await GlideClusterClient.createClient(config);
+
+            try {
+                const key1 = `{nonexistinglist}:1-${uuidv4()}`;
+                const tasks: Promise<[GlideString, GlideString] | null>[] = [];
+
+                // Start inflightRequestsLimit blocking tasks
+                for (let i = 0; i < inflightRequestsLimit; i++) {
+                    tasks.push(client.blpop([key1], 0));
+                }
+
+                // This task should immediately fail due to reaching the limit
+                await expect(client.blpop([key1], 0)).rejects.toThrow(
+                    RequestError,
+                );
+
+                // Verify that all previous tasks are still pending
+                const timeoutPromise = new Promise((resolve) =>
+                    setTimeout(resolve, 100),
+                );
+                const allTasksStatus = await Promise.race([
+                    Promise.any(
+                        tasks.map((task) => task.then(() => "resolved")),
+                    ),
+                    timeoutPromise.then(() => "pending"),
+                ]);
+                expect(allTasksStatus).toBe("pending");
+            } finally {
+                await client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should return valid statistics using protocol %p",
+        async (protocol) => {
+            let glideClientForTesting;
+
+            try {
+                // Create a GlideClusterClient instance for testing
+                glideClientForTesting = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                        {
+                            requestTimeout: 2000,
+                        },
+                    ),
+                );
+
+                // Fetch statistics using get_statistics method
+                const stats = glideClientForTesting.getStatistics();
+
+                // Assertions to check if stats object has correct structure
+                expect(typeof stats).toBe("object");
+                expect(stats).toHaveProperty("total_connections");
+                expect(stats).toHaveProperty("total_clients");
+                expect(Object.keys(stats)).toHaveLength(2);
+            } finally {
+                // Ensure the client is properly closed
+                glideClientForTesting?.close();
+            }
+        },
+    );
+
+    describe("AZAffinity Read Strategy Tests", () => {
+        async function getNumberOfReplicas(
+            azClient: GlideClusterClient,
+        ): Promise<number> {
+            const replicationInfo = (await azClient.info({
+                sections: [InfoOptions.Replication],
+            })) as Record<string, string>;
+            let totalReplicas = 0;
+            Object.values(replicationInfo).forEach((nodeInfo) => {
+                const lines = nodeInfo.split(/\r?\n/);
+                const connectedReplicasLine = lines.find(
+                    (line) =>
+                        line.startsWith("connected_slaves:") ||
+                        line.startsWith("connected_replicas:"),
+                );
+
+                if (connectedReplicasLine) {
+                    const parts = connectedReplicasLine.split(":");
+                    const numReplicas = parseInt(parts[1], 10);
+
+                    if (!isNaN(numReplicas)) {
+                        // Sum up replicas from each primary node
+                        totalReplicas += numReplicas;
+                    }
+                }
+            });
+
+            if (totalReplicas > 0) {
+                return totalReplicas;
+            }
+
+            throw new Error(
+                "Could not find replica information in any node's response",
+            );
+        }
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "should route GET commands to all replicas with the same AZ using protocol %p",
+            async (protocol) => {
+                // Skip test if version is below 8.0.0
+                if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+
+                const az = "us-east-1a";
+                const GET_CALLS_PER_REPLICA = 3;
+
+                let client_for_config_set;
+                let client_for_testing_az;
+
+                try {
+                    // Stage 1: Configure nodes
+                    client_for_config_set =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                { requestTimeout: 3000 },
+                            ),
+                        );
+
+                    await client_for_config_set.configResetStat();
+                    await client_for_config_set.configSet(
+                        { "availability-zone": az },
+                        { route: "allNodes" },
+                    );
+
+                    // Retrieve the number of replicas dynamically
+                    const n_replicas = await getNumberOfReplicas(
+                        client_for_config_set,
+                    );
+
+                    if (n_replicas === 0) {
+                        throw new Error(
+                            "No replicas found in the cluster. Test requires at least one replica.",
+                        );
+                    }
+
+                    const GET_CALLS = GET_CALLS_PER_REPLICA * n_replicas;
+                    const get_cmdstat = `calls=${GET_CALLS_PER_REPLICA}`;
+
+                    // Stage 2: Create AZ affinity client and verify configuration
+                    client_for_testing_az =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                {
+                                    requestTimeout: 3000,
+                                    readFrom: "AZAffinity",
+                                    clientAz: az,
+                                },
+                            ),
+                        );
+
+                    const azs = (await client_for_testing_az.configGet(
+                        ["availability-zone"],
+                        { route: "allNodes" },
+                    )) as Record<string, Record<string, string>>;
+
+                    Object.values(azs).forEach((nodeResponse) =>
+                        expect(nodeResponse["availability-zone"]).toEqual(
+                            "us-east-1a",
+                        ),
+                    );
+
+                    // Stage 3: Set test data and perform GET operations
+                    await client_for_testing_az.set("foo", "testvalue");
+
+                    for (let i = 0; i < GET_CALLS; i++) {
+                        await client_for_testing_az.get("foo");
+                    }
+
+                    // Stage 4: Verify GET commands were routed correctly
+                    const info_result = (await client_for_testing_az.info(
+                        { sections: [InfoOptions.All], route: "allNodes" }, // Get both replication and commandstats info
+                    )) as Record<string, string>;
+
+                    const matching_entries_count = Object.values(
+                        info_result,
+                    ).filter((infoStr) => {
+                        // Check if this is a replica node AND it has the expected number of GET calls
+                        const isReplicaNode =
+                            infoStr.includes("role:slave") ||
+                            infoStr.includes("role:replica");
+
+                        return isReplicaNode && infoStr.includes(get_cmdstat);
+                    }).length;
+
+                    expect(matching_entries_count).toBe(n_replicas); // Should expect 12 as the cluster was created with 3 primary and 4 replicas, totalling 12 replica nodes
+                } finally {
+                    // Cleanup
+                    await client_for_config_set?.configSet(
+                        { "availability-zone": "" },
+                        { route: "allNodes" },
+                    );
+                    client_for_config_set?.close();
+                    client_for_testing_az?.close();
+                }
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "should route commands to single replica with AZ using protocol %p",
+            async (protocol) => {
+                // Skip test if version is below 8.0.0
+                if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+
+                const az = "us-east-1a";
+                const GET_CALLS = 3;
+                const get_cmdstat = `calls=${GET_CALLS}`;
+                let client_for_config_set;
+                let client_for_testing_az;
+
+                try {
+                    // Stage 1: Configure nodes
+                    client_for_config_set =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                { requestTimeout: 3000 },
+                            ),
+                        );
+
+                    await client_for_config_set.configSet(
+                        { "availability-zone": "" },
+                        { route: "allNodes" },
+                    );
+
+                    await client_for_config_set.configResetStat();
+
+                    await client_for_config_set.configSet(
+                        { "availability-zone": az },
+                        { route: { type: "replicaSlotId", id: 12182 } },
+                    );
+
+                    // Stage 2: Create AZ affinity client and verify configuration
+                    client_for_testing_az =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                {
+                                    requestTimeout: 3000,
+                                    readFrom: "AZAffinity",
+                                    clientAz: az,
+                                },
+                            ),
+                        );
+                    await client_for_testing_az.set("foo", "testvalue");
+
+                    for (let i = 0; i < GET_CALLS; i++) {
+                        await client_for_testing_az.get("foo");
+                    }
+
+                    // Stage 4: Verify GET commands were routed correctly
+                    const info_result = (await client_for_testing_az.info({
+                        sections: [InfoOptions.All],
+                        route: "allNodes",
+                    })) as Record<string, string>;
+
+                    // Process the info_result to check that only one replica has the GET calls
+                    const matching_entries_count = Object.values(
+                        info_result,
+                    ).filter((infoStr) => {
+                        return (
+                            infoStr.includes(get_cmdstat) &&
+                            infoStr.includes(`availability_zone:${az}`)
+                        );
+                    }).length;
+
+                    expect(matching_entries_count).toBe(1);
+
+                    // Check that only one node has the availability zone set to az
+                    const changed_az_count = Object.values(info_result).filter(
+                        (infoStr) => {
+                            return infoStr.includes(`availability_zone:${az}`);
+                        },
+                    ).length;
+
+                    expect(changed_az_count).toBe(1);
+                } finally {
+                    await client_for_config_set?.configSet(
+                        { "availability-zone": "" },
+                        { route: "allNodes" },
+                    );
+                    client_for_config_set?.close();
+                    client_for_testing_az?.close();
+                }
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "should route commands to a replica when AZ does not exist using protocol %p",
+            async (protocol) => {
+                // Skip test if version is below 8.0.0
+                if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+
+                const GET_CALLS = 4;
+                const replica_calls = 1;
+                const get_cmdstat = `cmdstat_get:calls=${replica_calls}`;
+                let client_for_testing_az;
+
+                try {
+                    // Create a client configured for AZAffinity with a non-existing AZ
+                    client_for_testing_az =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                {
+                                    readFrom: "AZAffinity",
+                                    clientAz: "non-existing-az",
+                                    requestTimeout: 3000,
+                                },
+                            ),
+                        );
+
+                    // Reset command stats on all nodes
+                    await client_for_testing_az.configResetStat({
+                        route: "allNodes",
+                    });
+
+                    // Issue GET commands
+                    for (let i = 0; i < GET_CALLS; i++) {
+                        await client_for_testing_az.get("foo");
+                    }
+
+                    // Fetch command stats from all nodes
+                    const info_result = (await client_for_testing_az.info({
+                        sections: [InfoOptions.Commandstats],
+                        route: "allNodes",
+                    })) as Record<string, string>;
+
+                    // Inline matching logic
+                    const matchingEntriesCount = Object.values(
+                        info_result,
+                    ).filter((nodeResponses) => {
+                        return nodeResponses.includes(get_cmdstat);
+                    }).length;
+
+                    // Validate that only one replica handled the GET calls
+                    expect(matchingEntriesCount).toBe(4);
+                } finally {
+                    // Cleanup: Close the client after test execution
+                    client_for_testing_az?.close();
+                }
+            },
+        );
+    });
 });

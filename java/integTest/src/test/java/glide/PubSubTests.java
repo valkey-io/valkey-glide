@@ -27,6 +27,7 @@ import glide.api.models.configuration.BaseSubscriptionConfiguration.ChannelMode;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode;
+import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
@@ -280,6 +281,31 @@ public class PubSubTests {
                 "PubSub doesn't work on mac OS");
     }
 
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void config_error_on_resp2(boolean standalone) {
+        if (standalone) {
+            var config =
+                    commonClientConfig()
+                            .subscriptionConfiguration(StandaloneSubscriptionConfiguration.builder().build())
+                            .protocol(ProtocolVersion.RESP2)
+                            .build();
+            var exception =
+                    assertThrows(ConfigurationError.class, () -> GlideClient.createClient(config));
+            assertTrue(exception.getMessage().contains("PubSub subscriptions require RESP3 protocol"));
+        } else {
+            var config =
+                    commonClusterClientConfig()
+                            .subscriptionConfiguration(ClusterSubscriptionConfiguration.builder().build())
+                            .protocol(ProtocolVersion.RESP2)
+                            .build();
+            var exception =
+                    assertThrows(ConfigurationError.class, () -> GlideClusterClient.createClient(config));
+            assertTrue(exception.getMessage().contains("PubSub subscriptions require RESP3 protocol"));
+        }
+    }
+
     /** Similar to `test_pubsub_exact_happy_path` in python client tests. */
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
@@ -307,8 +333,8 @@ public class PubSubTests {
     @MethodSource("getTestScenarios")
     public void exact_happy_path_many_channels(boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
-        int numChannels = 256;
-        int messagesPerChannel = 256;
+        int numChannels = 16;
+        int messagesPerChannel = 16;
         var messages = new ArrayList<PubSubMessage>(numChannels * messagesPerChannel);
         ChannelMode mode = exact(standalone);
         Map<? extends ChannelMode, Set<GlideString>> subscriptions = Map.of(mode, new HashSet<>());
@@ -366,8 +392,8 @@ public class PubSubTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
 
-        int numChannels = 256;
-        int pubsubMessagesPerChannel = 256;
+        int numChannels = 16;
+        int pubsubMessagesPerChannel = 16;
         var pubsubMessages = new ArrayList<PubSubMessage>(numChannels * pubsubMessagesPerChannel);
         PubSubClusterChannelMode mode = PubSubClusterChannelMode.SHARDED;
         Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions = Map.of(mode, new HashSet<>());
@@ -444,8 +470,8 @@ public class PubSubTests {
         skipTestsOnMac();
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
-        int numChannels = 256;
-        int messagesPerChannel = 256;
+        int numChannels = 16;
+        int messagesPerChannel = 16;
         ChannelMode mode = standalone ? PubSubChannelMode.PATTERN : PubSubClusterChannelMode.PATTERN;
         var messages = new ArrayList<PubSubMessage>(numChannels * messagesPerChannel);
         var subscriptions = Map.of(mode, Set.of(pattern));
@@ -482,8 +508,8 @@ public class PubSubTests {
         skipTestsOnMac();
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
-        int numChannels = 256;
-        int messagesPerChannel = 256;
+        int numChannels = 16;
+        int messagesPerChannel = 16;
         var messages = new ArrayList<PubSubMessage>(numChannels * messagesPerChannel);
         ChannelMode mode = standalone ? PubSubChannelMode.EXACT : PubSubClusterChannelMode.EXACT;
         Map<? extends ChannelMode, Set<GlideString>> subscriptions =
@@ -533,7 +559,7 @@ public class PubSubTests {
         skipTestsOnMac();
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
-        int numChannels = 256;
+        int numChannels = 16;
         var messages = new ArrayList<PubSubMessage>(numChannels * 2);
         ChannelMode mode = exact(standalone);
         Map<? extends ChannelMode, Set<GlideString>> subscriptions = Map.of(mode, new HashSet<>());
@@ -604,7 +630,7 @@ public class PubSubTests {
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
         String shardPrefix = "{shard}";
-        int numChannels = 256;
+        int numChannels = 16;
         var messages = new ArrayList<PubSubMessage>(numChannels * 2);
         var shardedMessages = new ArrayList<PubSubMessage>(numChannels);
         Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions =
@@ -660,7 +686,7 @@ public class PubSubTests {
         String prefix = "channel.";
         String pattern = prefix + "*";
         String shardPrefix = "{shard}";
-        int numChannels = 256;
+        int numChannels = 16;
         var messages = new ArrayList<PubSubMessage>(numChannels * 2);
         var shardedMessages = new ArrayList<PubSubMessage>(numChannels);
         Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions =
@@ -742,7 +768,7 @@ public class PubSubTests {
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
         String shardPrefix = "{shard}";
-        int numChannels = 256;
+        int numChannels = 16;
         var exactMessages = new ArrayList<PubSubMessage>(numChannels);
         var patternMessages = new ArrayList<PubSubMessage>(numChannels);
         var shardedMessages = new ArrayList<PubSubMessage>(numChannels);

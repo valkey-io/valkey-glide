@@ -1,6 +1,5 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 use glide_core::client;
 use glide_core::client::Client as GlideClient;
 use glide_core::request_type::RequestType;
@@ -52,7 +51,7 @@ fn create_client_internal(
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (),
 ) -> RedisResult<Client> {
-    let host_cstring = unsafe { CStr::from_ptr(host as *mut c_char) };
+    let host_cstring = unsafe { CStr::from_ptr(host) };
     let host_string = host_cstring.to_str()?.to_string();
     let request = create_connection_request(host_string, port, use_tls);
     let runtime = Builder::new_multi_thread()

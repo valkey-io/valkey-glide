@@ -1,6 +1,5 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 use crate::errors::{handle_errors, handle_panics, throw_java_exception, ExceptionType, FFIError};
 use jni::{
     objects::{JByteArray, JClass, JLongArray, JString},
@@ -8,6 +7,7 @@ use jni::{
     JNIEnv,
 };
 use redis::Value;
+use std::ptr::from_mut;
 
 #[no_mangle]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedNil<'local>(
@@ -15,7 +15,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedNil<'local>(
     _class: JClass<'local>,
 ) -> jlong {
     let resp_value = Value::Nil;
-    Box::leak(Box::new(resp_value)) as *mut Value as jlong
+    from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
 #[no_mangle]
@@ -26,7 +26,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedSimpleString<'local>(
 ) -> jlong {
     let value: String = env.get_string(&value).unwrap().into();
     let resp_value = Value::SimpleString(value);
-    Box::leak(Box::new(resp_value)) as *mut Value as jlong
+    from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
 #[no_mangle]
@@ -35,7 +35,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedOkay<'local>(
     _class: JClass<'local>,
 ) -> jlong {
     let resp_value = Value::Okay;
-    Box::leak(Box::new(resp_value)) as *mut Value as jlong
+    from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
 #[no_mangle]
@@ -45,7 +45,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedInt<'local>(
     value: jlong,
 ) -> jlong {
     let resp_value = Value::Int(value);
-    Box::leak(Box::new(resp_value)) as *mut Value as jlong
+    from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
 #[no_mangle]
@@ -57,7 +57,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedBulkString<'local>(
     let value = env.convert_byte_array(&value).unwrap();
     let value = value.into_iter().collect::<Vec<u8>>();
     let resp_value = Value::BulkString(value);
-    Box::leak(Box::new(resp_value)) as *mut Value as jlong
+    from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
 #[no_mangle]
@@ -68,7 +68,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedLongArray<'local>(
 ) -> jlong {
     let array = java_long_array_to_value(&mut env, &value);
     let resp_value = Value::Array(array);
-    Box::leak(Box::new(resp_value)) as *mut Value as jlong
+    from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
 #[no_mangle]
@@ -82,7 +82,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedMap<'local>(
     let values_vec = java_long_array_to_value(&mut env, &values);
     let map: Vec<(Value, Value)> = keys_vec.into_iter().zip(values_vec).collect();
     let resp_value = Value::Map(map);
-    Box::leak(Box::new(resp_value)) as *mut Value as jlong
+    from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
 #[no_mangle]
@@ -92,7 +92,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedDouble<'local>(
     value: jdouble,
 ) -> jlong {
     let resp_value = Value::Double(value.into());
-    Box::leak(Box::new(resp_value)) as *mut Value as jlong
+    from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
 #[no_mangle]
@@ -102,7 +102,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedBoolean<'local>(
     value: jboolean,
 ) -> jlong {
     let resp_value = Value::Boolean(value != 0);
-    Box::leak(Box::new(resp_value)) as *mut Value as jlong
+    from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
 #[no_mangle]
@@ -117,7 +117,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedVerbatimString<'local>
         format: VerbatimFormat::Text,
         text: value,
     };
-    Box::leak(Box::new(resp_value)) as *mut Value as jlong
+    from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
 #[no_mangle]
@@ -128,7 +128,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedLongSet<'local>(
 ) -> jlong {
     let set = java_long_array_to_value(&mut env, &value);
     let resp_value = Value::Set(set);
-    Box::leak(Box::new(resp_value)) as *mut Value as jlong
+    from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
 fn java_long_array_to_value<'local>(

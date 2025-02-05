@@ -124,15 +124,29 @@ export function createGetRange(
     ]);
 }
 
-export interface SetOptions {
-    /**
-     *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-     * Equivalent to `NX` in the Valkey API. `onlyIfExists` - Only set the key if
-     * it already exist. Equivalent to `EX` in the Valkey API. if `conditional` is
-     * not set the value will be set regardless of prior value existence. If value
-     * isn't set because of the condition, return null.
-     */
-    conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+export type SetOptions = (
+    | {
+          /**
+           * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
+           * `NX` in the Valkey API.
+           *
+           * `onlyIfExists` - Only set the key if it already exists.
+           * `EX` in the Valkey API.
+           */
+          conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+      }
+    | {
+          /**
+           * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
+           * `IFEQ` in the Valkey API.
+           */
+          conditionalSet: "onlyIfEqual";
+          /**
+           * The value to compare the existing value with.
+           */
+          comparisonValue: GlideString;
+      }
+) & {
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
      * is returned and SET aborted if the value stored at key is not a string.
@@ -151,7 +165,7 @@ export interface SetOptions {
               type: TimeUnit;
               count: number;
           };
-}
+};
 
 /**
  * @internal
@@ -168,6 +182,8 @@ export function createSet(
             args.push("XX");
         } else if (options.conditionalSet === "onlyIfDoesNotExist") {
             args.push("NX");
+        } else if (options.conditionalSet === "onlyIfEqual") {
+            args.push("IFEQ", options.comparisonValue);
         }
 
         if (options.returnOldValue) {
@@ -2475,18 +2491,25 @@ export function createFunctionRestore(
 }
 
 /**
- * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount} command. The offsets are
- * zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
+ * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount | bitcount} and {@link BaseClient.bitpos | bitpos} commands.
+ * The offsets are zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
  * The offsets can also be negative numbers indicating offsets starting at the end of the string, with `-1` being
  * the last index of the string, `-2` being the penultimate, and so on.
  *
- * See https://valkey.io/commands/bitcount/ for more details.
+ * If you are using Valkey 7.0.0 or above, the optional `indexType` can also be provided to specify whether the
+ * `start` and `end` offsets specify `BIT` or `BYTE` offsets. If `indexType` is not provided, `BYTE` offsets
+ * are assumed. If `BIT` is specified, `start=0` and `end=2` means to look at the first three bits. If `BYTE` is
+ * specified, `start=0` and `end=2` means to look at the first three bytes.
+ *
+ * @see {@link https://valkey.io/commands/bitcount/ | bitcount} and {@link https://valkey.io/commands/bitpos/ | bitpos} for more details.
  */
 export interface BitOffsetOptions {
     /** The starting offset index. */
     start: number;
-    /** The ending offset index. Optional since Valkey version 8.0 and above.
-     * If not provided, it will default to the end of the string
+    /**
+     * The ending offset index. Optional since Valkey version 8.0 and above for the BITCOUNT command.
+     * If not provided, it will default to the end of the string.
+     * Could be defined only if `start` is defined.
      */
     end?: number;
     /**
@@ -2500,16 +2523,33 @@ export interface BitOffsetOptions {
 /**
  * @internal
  */
+function convertBitOptionsToArgs(options?: BitOffsetOptions): GlideString[] {
+    const args: GlideString[] = [];
+    if (!options) return args;
+
+    args.push(options.start.toString());
+
+    if (options.end !== undefined) {
+        args.push(options.end.toString());
+
+        if (options.indexType) args.push(options.indexType);
+    }
+
+    return args;
+}
+
+/**
+ * @internal
+ */
 export function createBitCount(
     key: GlideString,
     options?: BitOffsetOptions,
 ): command_request.Command {
-    const args = [key];
+    let args: GlideString[] = [key];
 
     if (options) {
-        args.push(options.start.toString());
-        if (options.end !== undefined) args.push(options.end.toString());
-        if (options.indexType) args.push(options.indexType);
+        const optionResults: GlideString[] = convertBitOptionsToArgs(options);
+        args = args.concat(optionResults);
     }
 
     return createCommand(RequestType.BitCount, args);
@@ -2525,6 +2565,7 @@ export function createBitCount(
 export enum BitmapIndexType {
     /** Specifies that provided indexes are byte indexes. */
     BYTE = "BYTE",
+
     /** Specifies that provided indexes are bit indexes. */
     BIT = "BIT",
 }
@@ -2535,23 +2576,13 @@ export enum BitmapIndexType {
 export function createBitPos(
     key: GlideString,
     bit: number,
-    start?: number,
-    end?: number,
-    indexType?: BitmapIndexType,
+    options?: BitOffsetOptions,
 ): command_request.Command {
-    const args: GlideString[] = [key, bit.toString()];
-
-    if (start !== undefined) {
-        args.push(start.toString());
-    }
-
-    if (end !== undefined) {
-        args.push(end.toString());
-    }
-
-    if (indexType) {
-        args.push(indexType);
-    }
+    const args: GlideString[] = [
+        key,
+        bit.toString(),
+        ...convertBitOptionsToArgs(options),
+    ];
 
     return createCommand(RequestType.BitPos, args);
 }
@@ -3840,6 +3871,19 @@ export interface BaseScanOptions {
  */
 export interface ScanOptions extends BaseScanOptions {
     type?: ObjectType;
+}
+
+/**
+ * Options for the SCAN command.
+ * `match`: The match filter is applied to the result of the command and will only include keys that match the pattern specified.
+ * `count`: `COUNT` is a just a hint for the command for how many elements to fetch from the server, the default is 10.
+ * `type`: The type of the object to scan.
+ * Types are the data types of Valkey: `string`, `list`, `set`, `zset`, `hash`, `stream`.
+ * `allowNonCoveredSlots`: If true, the scan will keep scanning even if slots are not covered by the cluster.
+ * By default, the scan will stop if slots are not covered by the cluster.
+ */
+export interface ClusterScanOptions extends ScanOptions {
+    allowNonCoveredSlots?: boolean;
 }
 
 /**

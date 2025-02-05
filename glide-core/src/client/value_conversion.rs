@@ -1,6 +1,5 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 use redis::{
     cluster_routing::Routable, from_owned_redis_value, Cmd, ErrorKind, RedisResult, Value,
 };
@@ -11,6 +10,11 @@ pub(crate) enum ExpectedReturnType<'a> {
         key_type: &'a Option<ExpectedReturnType<'a>>,
         value_type: &'a Option<ExpectedReturnType<'a>>,
     },
+    // Second parameter is a function which returns true if value needs to be converted
+    SingleOrMultiNode(
+        &'a Option<ExpectedReturnType<'a>>,
+        Option<&'a (dyn Fn(Value) -> bool + Sync)>,
+    ),
     MapOfStringToDouble,
     Double,
     Boolean,
@@ -22,6 +26,10 @@ pub(crate) enum ExpectedReturnType<'a> {
     ArrayOfStrings,
     ArrayOfBools,
     ArrayOfDoubleOrNull,
+    FTAggregateReturnType,
+    FTSearchReturnType,
+    FTProfileReturnType(&'a Option<ExpectedReturnType<'a>>),
+    FTInfoReturnType,
     Lolwut,
     ArrayOfStringAndArrays,
     ArrayOfArraysOfDoubleOrNull,
@@ -275,12 +283,6 @@ pub(crate) fn convert_to_expected_type(
         },
         ExpectedReturnType::Lolwut => {
             match value {
-                // cluster (multi-node) response - go recursive
-                Value::Map(map) => convert_map_entries(
-                    map,
-                    Some(ExpectedReturnType::BulkString),
-                    Some(ExpectedReturnType::Lolwut),
-                ),
                 // RESP 2 response
                 Value::BulkString(bytes) => {
                     let text = std::str::from_utf8(&bytes).unwrap();
@@ -555,19 +557,7 @@ pub(crate) fn convert_to_expected_type(
         // Second part is converted as `Map[str, Map[str, int]]`
         ExpectedReturnType::FunctionStatsReturnType => match value {
             // TODO reuse https://github.com/Bit-Quill/glide-for-redis/pull/331 and https://github.com/valkey-io/valkey-glide/pull/1489
-            Value::Map(map) => {
-                if map[0].0 == Value::BulkString(b"running_script".into()) {
-                    // already a RESP3 response - do nothing
-                    Ok(Value::Map(map))
-                } else {
-                    // cluster (multi-node) response - go recursive
-                    convert_map_entries(
-                        map,
-                        Some(ExpectedReturnType::BulkString),
-                        Some(ExpectedReturnType::FunctionStatsReturnType),
-                    )
-                }
-            }
+            Value::Map(map) => Ok(Value::Map(map)),
             Value::Array(mut array) if array.len() == 4 => {
                 let mut result: Vec<(Value, Value)> = Vec::with_capacity(2);
                 let running_script_info = array.remove(1);
@@ -891,6 +881,268 @@ pub(crate) fn convert_to_expected_type(
                 format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
+        },
+        ExpectedReturnType::FTAggregateReturnType => match value {
+            /*
+            Example of the response
+                1) "3"
+                2) 1) "condition"
+                   2) "refurbished"
+                   3) "bicylces"
+                   4) 1) "bicycle:9"
+                3) 1) "condition"
+                   2) "used"
+                   3) "bicylces"
+                   4) 1) "bicycle:1"
+                      2) "bicycle:2"
+                      3) "bicycle:3"
+                      4) "bicycle:4"
+                4) 1) "condition"
+                   2) "new"
+                   3) "bicylces"
+                   4) 1) "bicycle:5"
+                      2) "bicycle:6"
+
+            Converting response to (array of maps)
+                1) 1# "condition" => "refurbished"
+                   2# "bicylces" =>
+                      1) "bicycle:9"
+                2) 1# "condition" => "used"
+                   2# "bicylces" =>
+                      1) "bicycle:1"
+                      2) "bicycle:2"
+                      3) "bicycle:3"
+                      4) "bicycle:4"
+                3) 1# "condition" => "new"
+                   2# "bicylces" =>
+                      1) "bicycle:5"
+                      2) "bicycle:6"
+
+            Very first element in the response is meaningless and should be ignored.
+            */
+            Value::Array(array) => {
+                let mut res = Vec::with_capacity(array.len() - 1);
+                for aggregation in array.into_iter().skip(1) {
+                    let Value::Array(fields) = aggregation else {
+                        return Err((
+                            ErrorKind::TypeError,
+                            "Response couldn't be converted for FT.AGGREGATE",
+                            format!("(`fields` was {:?})", get_value_type(&aggregation)),
+                        )
+                            .into());
+                    };
+                    res.push(convert_array_to_map_by_type(
+                        fields,
+                        None,
+                        None,
+                    )?);
+                }
+                Ok(Value::Array(res))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted for FT.AGGREGATE",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into()),
+        },
+        ExpectedReturnType::FTSearchReturnType => match value {
+            /*
+            Example of the response
+                1) (integer) 2
+                2) "json:2"
+                3) 1) "__VEC_score"
+                   2) "11.1100006104"
+                   3) "$"
+                   4) "{\"vec\":[1.1,1.2,1.3,1.4,1.5,1.6]}"
+                4) "json:0"
+                5) 1) "__VEC_score"
+                   2) "91"
+                   3) "$"
+                   4) "{\"vec\":[1,2,3,4,5,6]}"
+
+            Converting response to
+                1) (integer) 2
+                2) 1# "json:2" =>
+                      1# "__VEC_score" => "11.1100006104"
+                      2# "$" => "{\"vec\":[1.1,1.2,1.3,1.4,1.5,1.6]}"
+                   2# "json:0" =>
+                      1# "__VEC_score" => "91"
+                      2# "$" => "{\"vec\":[1,2,3,4,5,6]}"
+
+            Response may contain only 1 element, no conversion in that case.
+            */
+            Value::Array(ref array) if array.len() == 1 => Ok(value),
+            Value::Array(mut array) => {
+                Ok(Value::Array(vec![
+                    array.remove(0),
+                    convert_to_expected_type(Value::Array(array), Some(ExpectedReturnType::Map {
+                        key_type: &Some(ExpectedReturnType::BulkString),
+                        value_type: &Some(ExpectedReturnType::Map {
+                            key_type: &Some(ExpectedReturnType::BulkString),
+                            value_type: &Some(ExpectedReturnType::BulkString),
+                        }),
+                    }))?
+                ]))
+            },
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted for FT.SEARCH",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into())
+        },
+        ExpectedReturnType::FTInfoReturnType => match value {
+            /*
+            Example of the response
+                 1) index_name
+                 2) "957fa3ca-2280-467d-873f-8763a36fbd5a"
+                 3) creation_timestamp
+                 4) (integer) 1728348101740745
+                 5) key_type
+                 6) HASH
+                 7) key_prefixes
+                 8) 1) "blog:post:"
+                 9) fields
+                10) 1) 1) identifier
+                       2) category
+                       3) field_name
+                       4) category
+                       5) type
+                       6) TAG
+                       7) option
+                       8)
+                    2) 1) identifier
+                       2) vec
+                       3) field_name
+                       4) VEC
+                       5) type
+                       6) VECTOR
+                       7) option
+                       8)
+                       9) vector_params
+                      10)  1) algorithm
+                           2) HNSW
+                           3) data_type
+                           4) FLOAT32
+                           5) dimension
+                           6) (integer) 2
+                ...
+
+            Converting response to
+                1# "index_name" => "957fa3ca-2280-467d-873f-8763a36fbd5a"
+                2# "creation_timestamp" => 1728348101740745
+                3# "key_type" => "HASH"
+                4# "key_prefixes" =>
+                   1) "blog:post:"
+                5# "fields" =>
+                   1) 1# "identifier" => "category"
+                      2# "field_name" => "category"
+                      3# "type" => "TAG"
+                      4# "option" => ""
+                   2) 1# "identifier" => "vec"
+                      2# "field_name" => "VEC"
+                      3# "type" => "TAVECTORG"
+                      4# "option" => ""
+                      5# "vector_params" =>
+                         1# "algorithm" => "HNSW"
+                         2# "data_type" => "FLOAT32"
+                         3# "dimension" => 2
+                ...
+
+            Map keys (odd array elements) are simple strings, not bulk strings.
+            */
+            Value::Array(_) => {
+                let Value::Map(mut map) = convert_to_expected_type(value, Some(ExpectedReturnType::Map {
+                    key_type: &None,
+                    value_type: &None,
+                }))? else { unreachable!() };
+                let Some(fields_pair) = map.iter_mut().find(|(key, _)| {
+                    *key == Value::SimpleString("fields".into())
+                }) else { return Ok(Value::Map(map)) };
+                let (fields_key, fields_value) = std::mem::replace(fields_pair, (Value::Nil, Value::Nil));
+                let Value::Array(fields) = fields_value else {
+                    return Err((
+                        ErrorKind::TypeError,
+                        "Response couldn't be converted for FT.INFO",
+                        format!("(`fields` was {:?})", get_value_type(&fields_value)),
+                    ).into());
+                };
+                let fields = fields.into_iter().map(|field| {
+                    let Value::Map(mut field_params) = convert_to_expected_type(field, Some(ExpectedReturnType::Map {
+                        key_type: &None,
+                        value_type: &None,
+                    }))? else { unreachable!() };
+                    let Some(vector_params_pair) = field_params.iter_mut().find(|(key, _)| {
+                        *key == Value::SimpleString("vector_params".into())
+                    }) else { return Ok(Value::Map(field_params)) };
+                    let (vector_params_key, vector_params_value) = std::mem::replace(vector_params_pair, (Value::Nil, Value::Nil));
+                    let _ = std::mem::replace(vector_params_pair, (vector_params_key, convert_to_expected_type(vector_params_value, Some(ExpectedReturnType::Map {
+                        key_type: &None,
+                        value_type: &None,
+                    }))?));
+                    Ok(Value::Map(field_params))
+                }).collect::<RedisResult<Vec<Value>>>()?;
+                let _ = std::mem::replace(fields_pair, (fields_key, Value::Array(fields)));
+                Ok(Value::Map(map))
+            },
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted for FT.INFO",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into())
+        },
+        ExpectedReturnType::FTProfileReturnType(type_of_query) => match value {
+            /*
+            Example of the response
+                1) <query response>
+                2) 1) 1) "parse.time"
+                      2) 119
+                   2) 1) "all.count"
+                      2) 4
+                   3) 1) "sync.time"
+                      2) 0
+                   ...
+
+            Converting response to
+                1) <converted query response>
+                2) 1# "parse.time" => 119
+                   2# "all.count" => 4
+                   3# "sync.time" => 0
+                   ...
+
+            Converting first array element as it is needed for the inner query and second element to a map.
+            */
+            Value::Array(mut array) if array.len() == 2 => {
+                let res = vec![
+                    convert_to_expected_type(array.remove(0), *type_of_query)?,
+                    convert_to_expected_type(array.remove(0), Some(ExpectedReturnType::Map {
+                    key_type: &Some(ExpectedReturnType::SimpleString),
+                    value_type: &Some(ExpectedReturnType::Double),
+                }))?];
+
+                Ok(Value::Array(res))
+            },
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted for FT.PROFILE",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into())
+        }
+        ExpectedReturnType::SingleOrMultiNode(value_type, value_checker) =>  match value {
+            Value::Map(ref map) => match value_checker {
+                    Some(func) => {
+                        if !map.is_empty() && func(map[0].clone().1) {
+                            convert_to_expected_type(value, Some(ExpectedReturnType::Map { key_type: &None, value_type }))
+                        } else {
+                            Ok(value)
+                        }
+                    }
+                    None => convert_to_expected_type(value, Some(ExpectedReturnType::Map { key_type: &None, value_type })),
+                }
+            _ => convert_to_expected_type(value, *value_type),
         }
     }
 }
@@ -1135,15 +1387,28 @@ fn convert_flat_array_to_array_of_pairs(
     Ok(Value::Array(result))
 }
 
+fn is_array(val: Value) -> bool {
+    matches!(val, Value::Array(_))
+}
+
 pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
     let command = cmd.command()?;
 
     // TODO use enum to avoid mistakes
     match command.as_slice() {
-        b"HGETALL" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" => Some(ExpectedReturnType::Map {
-            key_type: &None,
-            value_type: &None,
-        }),
+        b"HGETALL" | b"FT.CONFIG GET" | b"FT._ALIASLIST" | b"HELLO" => {
+            Some(ExpectedReturnType::Map {
+                key_type: &None,
+                value_type: &None,
+            })
+        }
+        b"CONFIG GET" => Some(ExpectedReturnType::SingleOrMultiNode(
+            &Some(ExpectedReturnType::Map {
+                key_type: &None,
+                value_type: &None,
+            }),
+            Some(&is_array),
+        )),
         b"XCLAIM" => {
             if cmd.position(b"JUSTID").is_some() {
                 Some(ExpectedReturnType::ArrayOfStrings)
@@ -1227,11 +1492,17 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
                 None
             }
         }
-        b"LOLWUT" => Some(ExpectedReturnType::Lolwut),
+        b"LOLWUT" => Some(ExpectedReturnType::SingleOrMultiNode(
+            &Some(ExpectedReturnType::Lolwut),
+            None,
+        )),
         b"FUNCTION LIST" => Some(ExpectedReturnType::ArrayOfMaps(&Some(
             ExpectedReturnType::ArrayOfMaps(&Some(ExpectedReturnType::StringOrSet)),
         ))),
-        b"FUNCTION STATS" => Some(ExpectedReturnType::FunctionStatsReturnType),
+        b"FUNCTION STATS" => Some(ExpectedReturnType::SingleOrMultiNode(
+            &Some(ExpectedReturnType::FunctionStatsReturnType),
+            Some(&is_array),
+        )),
         b"GEOSEARCH" => {
             if cmd.position(b"WITHDIST").is_some()
                 || cmd.position(b"WITHHASH").is_some()
@@ -1256,6 +1527,17 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             key_type: &None,
             value_type: &None,
         }),
+        b"FT.AGGREGATE" => Some(ExpectedReturnType::FTAggregateReturnType),
+        b"FT.SEARCH" => Some(ExpectedReturnType::FTSearchReturnType),
+        // TODO replace with tuple
+        b"FT.PROFILE" => Some(ExpectedReturnType::FTProfileReturnType(
+            if cmd.arg_idx(2).is_some_and(|a| a == b"SEARCH") {
+                &Some(ExpectedReturnType::FTSearchReturnType)
+            } else {
+                &Some(ExpectedReturnType::FTAggregateReturnType)
+            },
+        )),
+        b"FT.INFO" => Some(ExpectedReturnType::FTInfoReturnType),
         _ => None,
     }
 }
@@ -1688,17 +1970,14 @@ mod tests {
 
     #[test]
     fn convert_lolwut() {
-        assert!(matches!(
-            expected_type_for_cmd(redis::cmd("LOLWUT").arg("version").arg("42")),
-            Some(ExpectedReturnType::Lolwut)
-        ));
-
         let unconverted_string : String = "\x1b[0;97;107m \x1b[0m--\x1b[0;37;47m \x1b[0m--\x1b[0;90;100m \x1b[0m--\x1b[0;30;40m \x1b[0m".into();
         let expected: String = "\u{2591}--\u{2592}--\u{2593}-- ".into();
+        let mut cmd = redis::cmd("LOLWUT");
+        let conversion_type = expected_type_for_cmd(cmd.arg("version").arg("42"));
 
         let converted_1 = convert_to_expected_type(
             Value::BulkString(unconverted_string.clone().into_bytes()),
-            Some(ExpectedReturnType::Lolwut),
+            conversion_type,
         );
         assert_eq!(
             Value::BulkString(expected.clone().into_bytes()),
@@ -1710,7 +1989,7 @@ mod tests {
                 format: redis::VerbatimFormat::Text,
                 text: unconverted_string.clone(),
             },
-            Some(ExpectedReturnType::Lolwut),
+            conversion_type,
         );
         assert_eq!(
             Value::BulkString(expected.clone().into_bytes()),
@@ -1728,16 +2007,16 @@ mod tests {
                     Value::BulkString(unconverted_string.clone().into_bytes()),
                 ),
             ]),
-            Some(ExpectedReturnType::Lolwut),
+            conversion_type,
         );
         assert_eq!(
             Value::Map(vec![
                 (
-                    Value::BulkString("node 1".into()),
+                    Value::SimpleString("node 1".into()),
                     Value::BulkString(expected.clone().into_bytes())
                 ),
                 (
-                    Value::BulkString("node 2".into()),
+                    Value::SimpleString("node 2".into()),
                     Value::BulkString(expected.clone().into_bytes())
                 ),
             ]),
@@ -1746,7 +2025,7 @@ mod tests {
 
         let converted_4 = convert_to_expected_type(
             Value::SimpleString(unconverted_string.clone()),
-            Some(ExpectedReturnType::Lolwut),
+            conversion_type,
         );
         assert!(converted_4.is_err());
     }
@@ -2256,11 +2535,6 @@ mod tests {
 
     #[test]
     fn convert_function_stats() {
-        assert!(matches!(
-            expected_type_for_cmd(redis::cmd("FUNCTION").arg("STATS")),
-            Some(ExpectedReturnType::FunctionStatsReturnType)
-        ));
-
         let resp2_response_non_empty_first_part_data = vec![
             Value::BulkString(b"running_script".into()),
             Value::Array(vec![
@@ -2387,7 +2661,8 @@ mod tests {
             ),
         ]);
 
-        let conversion_type = Some(ExpectedReturnType::FunctionStatsReturnType);
+        let cmd = redis::cmd("FUNCTION STATS");
+        let conversion_type = expected_type_for_cmd(&cmd);
         // resp2 -> resp3 conversion with non-empty `running_script` block
         assert_eq!(
             convert_to_expected_type(

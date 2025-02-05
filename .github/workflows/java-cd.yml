@@ -86,9 +86,6 @@ jobs:
                     echo "No cleaning needed"
                   fi
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
             - name: Set up JDK
               uses: actions/setup-java@v4
               with:
@@ -105,7 +102,7 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "26.1"
+                  version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Create secret key ring file
@@ -228,10 +225,12 @@ jobs:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         runs-on: ${{ matrix.host.RUNNER }}
         steps:
+            - name: Setup self-hosted runner access
+              if: ${{matrix.host.TARGET == 'aarch64-unknown-linux-gnu' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/action-runner-ilia/_work/valkey-glide
+
             - name: Checkout
               uses: actions/checkout@v4
-              with:
-                  submodules: recursive
 
             - name: Set up JDK
               uses: actions/setup-java@v4
@@ -250,7 +249,7 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "26.1"
+                  version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Start standalone Valkey server

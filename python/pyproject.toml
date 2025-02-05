@@ -1,14 +1,17 @@
 [build-system]
-requires = ["maturin>=0.13,<0.14"]
+requires = ["maturin==0.14.17"]
 build-backend = "maturin"
 
 [project]
 name = "valkey-glide"
-requires-python = ">=3.8"
+description = "An open source Valkey client library that supports Valkey and Redis open source 6.2, 7.0, 7.2 and 8.0."
+requires-python = ">=3.9"
 dependencies = [
+    # Note: If you add a dependency here, make sure to also add it to requirements.txt
+    # Once issue https://github.com/aboutcode-org/python-inspector/issues/197 is resolved, the requirements.txt file can be removed.
     "async-timeout>=4.0.2; python_version < '3.11'",
     "typing-extensions>=4.8.0; python_version < '3.11'",
-    "protobuf>=3.20"
+    "protobuf>=3.20",
 ]
 classifiers = [
     "Topic :: Database",
@@ -30,7 +33,7 @@ max-line-length = 127
 extend-ignore = ['E203']
 
 [tool.black]
-target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
 
 [tool.mypy]
-exclude = [ 'submodules', 'utils/release-candidate-testing' ]
+exclude = ['submodules', 'utils/release-candidate-testing']

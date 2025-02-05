@@ -1,6 +1,4 @@
-/*
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #[allow(unused_imports)]
 use logger_core::log_warn;
@@ -22,10 +20,13 @@ pub struct ConnectionRequest {
     pub addresses: Vec<NodeAddress>,
     pub cluster_mode_enabled: bool,
     pub request_timeout: Option<u32>,
+    pub connection_timeout: Option<u32>,
     pub connection_retry_strategy: Option<ConnectionRetryStrategy>,
     pub periodic_checks: Option<PeriodicCheck>,
     pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
     pub inflight_requests_limit: Option<u32>,
+    pub otel_endpoint: Option<String>,
+    pub otel_span_flush_interval_ms: Option<u64>,
 }
 
 pub struct AuthenticationInfo {
@@ -53,11 +54,12 @@ impl ::std::fmt::Display for NodeAddress {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Default)]
+#[derive(PartialEq, Eq, Clone, Default)]
 pub enum ReadFrom {
     #[default]
     Primary,
     PreferReplica,
+    AZAffinity(String),
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Default)]
@@ -99,7 +101,20 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             protobuf::ReadFrom::Primary => ReadFrom::Primary,
             protobuf::ReadFrom::PreferReplica => ReadFrom::PreferReplica,
             protobuf::ReadFrom::LowestLatency => todo!(),
-            protobuf::ReadFrom::AZAffinity => todo!(),
+            protobuf::ReadFrom::AZAffinity => {
+                if let Some(client_az) = chars_to_string_option(&value.client_az) {
+                    ReadFrom::AZAffinity(client_az)
+                } else {
+                    log_warn(
+                        "types",
+                        format!(
+                            "Failed to convert availability zone string: '{:?}'. Falling back to `ReadFrom::PreferReplica`",
+                            value.client_az
+                        ),
+                    );
+                    ReadFrom::PreferReplica
+                }
+            }
         });
 
         let client_name = chars_to_string_option(&value.client_name);
@@ -135,6 +150,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             .collect();
         let cluster_mode_enabled = value.cluster_mode_enabled;
         let request_timeout = none_if_zero(value.request_timeout);
+        let connection_timeout = none_if_zero(value.connection_timeout);
         let connection_retry_strategy =
             value
                 .connection_retry_strategy
@@ -192,6 +208,9 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
 
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
 
+        let otel_endpoint = chars_to_string_option(&value.opentelemetry_config.collector_end_point);
+        let otel_span_flush_interval_ms = value.opentelemetry_config.span_flush_interval;
+
         ConnectionRequest {
             read_from,
             client_name,
@@ -202,10 +221,13 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             addresses,
             cluster_mode_enabled,
             request_timeout,
+            connection_timeout,
             connection_retry_strategy,
             periodic_checks,
             pubsub_subscriptions,
             inflight_requests_limit,
+            otel_endpoint,
+            otel_span_flush_interval_ms,
         }
     }
 }

@@ -3,9 +3,12 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
+import json
 import logging
 import os
 import random
+import re
+import signal
 import socket
 import string
 import subprocess
@@ -23,14 +26,35 @@ LOG_LEVELS = {
     "debug": logging.DEBUG,
 }
 
-GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/../.."
+GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/.."
 CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
-    f"{GLIDE_HOME_DIR}/utils/clusters"
+    f"{GLIDE_HOME_DIR}/clusters"
 )
-TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/utils/tls_crts")
+TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
 CA_CRT = f"{TLS_FOLDER}/ca.crt"
-REDIS_CRT = f"{TLS_FOLDER}/redis.crt"
-REDIS_KEY = f"{TLS_FOLDER}/redis.key"
+SERVER_CRT = f"{TLS_FOLDER}/server.crt"
+SERVER_KEY = f"{TLS_FOLDER}/server.key"
+
+
+def get_command(commands: List[str]) -> str:
+    for command in commands:
+        try:
+            result = subprocess.run(
+                ["which", command],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if result.returncode == 0:
+                return command
+        except Exception as e:
+            logging.error(f"Error checking {command}: {e}")
+    raise Exception(f"Neither ${'nor'.join(command)} found in the system.")
+
+
+# Determine which server to use by checking `valkey-server` and `redis-server`
+SERVER_COMMAND = get_command(["valkey-server", "redis-server"])
+CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
 
 
 def init_logger(logfile: str):
@@ -64,7 +88,7 @@ def should_generate_new_tls_certs() -> bool:
     try:
         Path(TLS_FOLDER).mkdir(exist_ok=False)
     except FileExistsError:
-        files_list = [CA_CRT, REDIS_KEY, REDIS_CRT]
+        files_list = [CA_CRT, SERVER_KEY, SERVER_CRT]
         for file in files_list:
             if check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file):
                 return False
@@ -72,8 +96,8 @@ def should_generate_new_tls_certs() -> bool:
 
 
 def generate_tls_certs():
-    # Based on shell script in redis's server tests
-    # https://github.com/redis/redis/blob/8c291b97b95f2e011977b522acf77ead23e26f55/utils/gen-test-certs.sh
+    # Based on shell script in valkey's server tests
+    # https://github.com/valkey-io/valkey/blob/0d2ba9b94d28d4022ea475a2b83157830982c941/utils/gen-test-certs.sh
     logging.debug("## Generating TLS certificates")
     tic = time.perf_counter()
     ca_key = f"{TLS_FOLDER}/ca.key"
@@ -106,8 +130,8 @@ def generate_tls_certs():
     # Build CA key
     make_key(ca_key, 4096)
 
-    # Build redis key
-    make_key(REDIS_KEY, 2048)
+    # Build server key
+    make_key(SERVER_KEY, 2048)
 
     # Build CA Cert
     p = subprocess.Popen(
@@ -123,7 +147,7 @@ def generate_tls_certs():
             "-days",
             "3650",
             "-subj",
-            "/O=Redis Test/CN=Certificate Authority",
+            "/O=Valkey GLIDE Test/CN=Certificate Authority",
             "-out",
             CA_CRT,
         ],
@@ -137,7 +161,7 @@ def generate_tls_certs():
             f"Failed to make create CA cert. Executed: {str(p.args)}:\n{err}"
         )
 
-    # Read Redis key
+    # Read server key
     p1 = subprocess.Popen(
         [
             "openssl",
@@ -145,19 +169,19 @@ def generate_tls_certs():
             "-new",
             "-sha256",
             "-subj",
-            "/O=Redis Test/CN=Generic-cert",
+            "/O=Valkey GLIDE Test/CN=Generic-cert",
             "-key",
-            REDIS_KEY,
+            SERVER_KEY,
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
-    _redis_key_output, err = p.communicate(timeout=10)
+    _key_output, err = p.communicate(timeout=10)
     if p.returncode != 0:
-        raise Exception(f"Failed to read Redis key. Executed: {str(p.args)}:\n{err}")
+        raise Exception(f"Failed to read server key. Executed: {str(p.args)}:\n{err}")
 
-    # Build redis cert
+    # Build server cert
     p = subprocess.Popen(
         [
             "openssl",
@@ -176,7 +200,7 @@ def generate_tls_certs():
             "-extfile",
             ext_file,
             "-out",
-            REDIS_CRT,
+            SERVER_CRT,
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -185,22 +209,24 @@ def generate_tls_certs():
     )
     output, err = p.communicate(timeout=10)
     if p.returncode != 0:
-        raise Exception(f"Failed to create redis cert. Executed: {str(p.args)}:\n{err}")
+        raise Exception(
+            f"Failed to create server cert. Executed: {str(p.args)}:\n{err}"
+        )
     toc = time.perf_counter()
     logging.debug(f"generate_tls_certs() Elapsed time: {toc - tic:0.4f}")
-    logging.debug(f"TLS files= {REDIS_CRT}, {REDIS_KEY}, {CA_CRT}")
+    logging.debug(f"TLS files= {SERVER_CRT}, {SERVER_KEY}, {CA_CRT}")
 
 
-def get_redis_cli_option_args(
+def get_cli_option_args(
     cluster_folder: str, use_tls: bool, auth: Optional[str] = None
 ) -> List[str]:
     args = (
         [
             "--tls",
             "--cert",
-            REDIS_CRT,
+            SERVER_CRT,
             "--key",
-            REDIS_KEY,
+            SERVER_KEY,
             "--cacert",
             CA_CRT,
         ]
@@ -218,13 +244,43 @@ def get_random_string(length):
     return result_str
 
 
-class RedisServer:
+class Server:
     def __init__(self, host: str, port: int) -> None:
         self.host = host
         self.port = port
+        self.pid = -1
+        self.is_primary = True
 
     def __str__(self) -> str:
         return f"{self.host}:{self.port}"
+
+    def process_id(self) -> int:
+        return self.pid
+
+    def set_process_id(self, pid: int):
+        self.pid = pid
+
+    def to_dictionary(self) -> dict:
+        return {
+            "host": self.host,
+            "port": self.port,
+            "pid": self.pid,
+            "is_primary": self.is_primary,
+        }
+
+    def set_primary(self, is_primary: bool):
+        self.is_primary = is_primary
+
+
+def print_servers_json(servers: List[Server]):
+    """
+    Print the list of servers to the stdout as JSON array
+    """
+    arr = []
+    for server in servers:
+        arr.append(server.to_dictionary())
+
+    print("SERVERS_JSON={}".format(json.dumps(arr)))
 
 
 def next_free_port(
@@ -269,7 +325,7 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     return cluster_folder
 
 
-def start_redis_server(
+def start_server(
     host: str,
     port: Optional[int],
     cluster_folder: str,
@@ -277,7 +333,7 @@ def start_redis_server(
     tls_args: List[str],
     cluster_mode: bool,
     load_module: Optional[List[str]] = None,
-) -> Tuple[RedisServer, str]:
+) -> Tuple[Server, str]:
     port = port if port else next_free_port()
     logging.debug(f"Creating server {host}:{port}")
 
@@ -299,12 +355,29 @@ def start_redis_server(
                     return server
             except Exception as e:
                 logging.error(f"Error checking {server}: {e}")
-        raise Exception("Neither valkey-server nor redis-server found in the system.")
+        raise Exception(
+            "Neither valkey-server nor redis-server found in the system.")
+
+    def get_server_version(server_name):
+        result = subprocess.run(
+            [server_name, "--version"], capture_output=True, text=True
+        )
+        version_output = result.stdout
+        version_match = re.search(
+            r"server v=(\d+\.\d+\.\d+)", version_output, re.IGNORECASE
+        )
+        if version_match:
+            return tuple(map(int, version_match.group(1).split(".")))
+        raise Exception("Unable to determine server version.")
 
     server_name = get_server_command()
+    server_version = get_server_version(server_name)
+    logfile = f"{node_folder}/redis.log"
+
     # Define command arguments
+    logfile = f"{node_folder}/server.log"
     cmd_args = [
-        server_name,
+        SERVER_COMMAND,
         f"{'--tls-port' if tls else '--port'}",
         str(port),
         "--cluster-enabled",
@@ -314,8 +387,12 @@ def start_redis_server(
         "--daemonize",
         "yes",
         "--logfile",
-        f"{node_folder}/redis.log",
+        logfile,
+        "--protected-mode",
+        "no",
     ]
+    if server_version >= (7, 0, 0):
+        cmd_args.extend(["--enable-debug-command", "yes"])
     if load_module:
         if len(load_module) == 0:
             raise ValueError(
@@ -336,7 +413,16 @@ def start_redis_server(
             f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
         )
 
-    server = RedisServer(host, port)
+    server = Server(host, port)
+
+    # Read the process ID from the log file
+    # Note that `p.pid` is not good here since we daemonize the process
+    process_id = wait_for_regex_in_log(
+        logfile, r"version=(.*?)pid=([\d]+), just started", 2
+    )
+    if process_id:
+        server.set_process_id(int(process_id))
+
     return server, node_folder
 
 
@@ -349,10 +435,11 @@ def create_servers(
     tls: bool,
     cluster_mode: bool,
     load_module: Optional[List[str]] = None,
-) -> List[RedisServer]:
+    json_output: bool = False,
+) -> List[Server]:
     tic = time.perf_counter()
     logging.debug("## Creating servers")
-    ready_servers: List[RedisServer] = []
+    ready_servers: List[Server] = []
     nodes_count = shard_count * (1 + replica_count)
     tls_args = []
     if tls is True:
@@ -362,9 +449,9 @@ def create_servers(
             "--tls-cluster",
             "yes",
             "--tls-cert-file",
-            REDIS_CRT,
+            SERVER_CRT,
             "--tls-key-file",
-            REDIS_KEY,
+            SERVER_KEY,
             "--tls-ca-cert-file",
             CA_CRT,
             "--tls-auth-clients",  # Make it so client doesn't have to send cert
@@ -382,7 +469,7 @@ def create_servers(
     for i in range(nodes_count):
         port = ports[i] if ports else None
         servers_to_check.add(
-            start_redis_server(
+            start_server(
                 host, port, cluster_folder, tls, tls_args, cluster_mode, load_module
             )
         )
@@ -390,16 +477,16 @@ def create_servers(
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
-        if is_address_already_in_use(server, f"{node_folder}/redis.log"):
+        if is_address_already_in_use(server, f"{node_folder}/server.log"):
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error
                 raise Exception(
-                    f"Couldn't start redis on {server.host}:{server.port}, address already in use"
+                    f"Couldn't start server on {server.host}:{server.port}, address already in use"
                 )
             # The port was already taken, try to find a new free one
             servers_to_check.add(
-                start_redis_server(
+                start_server(
                     server.host,
                     None,
                     cluster_folder,
@@ -413,7 +500,7 @@ def create_servers(
         if not wait_for_server(server, cluster_folder, tls):
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
-                f"See {node_folder}/redis.log for more information"
+                f"See {node_folder}/server.log for more information"
             )
         ready_servers.append(server)
     logging.debug("All servers are up!")
@@ -423,7 +510,7 @@ def create_servers(
 
 
 def create_cluster(
-    servers: List[RedisServer],
+    servers: List[Server],
     shard_count: int,
     replica_count: int,
     cluster_folder: str,
@@ -434,8 +521,8 @@ def create_cluster(
     logging.debug("## Starting cluster creation...")
     p = subprocess.Popen(
         [
-            "redis-cli",
-            *get_redis_cli_option_args(cluster_folder, use_tls),
+            CLI_COMMAND,
+            *get_cli_option_args(cluster_folder, use_tls),
             "--cluster",
             "create",
             *servers_tuple,
@@ -451,19 +538,21 @@ def create_cluster(
     if err or "[OK] All 16384 slots covered." not in output:
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
-    wait_for_a_message_in_redis_logs(cluster_folder, "Cluster state changed: ok")
+    wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
     wait_for_all_topology_views(servers, cluster_folder, use_tls)
+    print_servers_json(servers)
+
     logging.debug("The cluster was successfully created!")
     toc = time.perf_counter()
     logging.debug(f"create_cluster {cluster_folder} Elapsed time: {toc - tic:0.4f}")
 
 
 def create_standalone_replication(
-    servers: List[RedisServer],
+    servers: List[Server],
     cluster_folder: str,
     use_tls: bool,
 ):
-    # Sets up replication among Redis servers, making them replicas of the primary server.
+    # Sets up replication among servers, making them replicas of the primary server.
     tic = time.perf_counter()
     primary_server = servers[0]
 
@@ -473,8 +562,8 @@ def create_standalone_replication(
         if i == 0:
             continue  # Skip the primary server
         replica_of_command = [
-            "redis-cli",
-            *get_redis_cli_option_args(cluster_folder, use_tls),
+            CLI_COMMAND,
+            *get_cli_option_args(cluster_folder, use_tls),
             "-h",
             str(server.host),
             "-p",
@@ -495,7 +584,7 @@ def create_standalone_replication(
                 f"Failed to set up replication for server {server}: {err if err else output}"
             )
     servers_ports = [str(server.port) for server in servers]
-    wait_for_a_message_in_redis_logs(
+    wait_for_a_message_in_logs(
         cluster_folder,
         "sync: Finished with success",
         servers_ports[1:],
@@ -508,7 +597,7 @@ def create_standalone_replication(
     logging.debug(f"create_replication Elapsed time: {toc - tic:0.4f}")
 
 
-def wait_for_a_message_in_redis_logs(
+def wait_for_a_message_in_logs(
     cluster_folder: str,
     message: str,
     server_ports: Optional[List[str]] = None,
@@ -516,19 +605,71 @@ def wait_for_a_message_in_redis_logs(
     for dir in Path(cluster_folder).rglob("*"):
         if not dir.is_dir():
             continue
-        log_file = f"{dir}/redis.log"
+        log_file = f"{dir}/server.log"
 
         if server_ports and os.path.basename(os.path.normpath(dir)) not in server_ports:
             continue
         if not wait_for_message(log_file, message, 10):
             raise Exception(
                 f"During the timeout duration, the server logs associated with port {dir} did not contain the message:{message}."
-                f"See {dir}/redis.log for more information"
+                f"See {dir}/server.log for more information"
             )
 
 
+def parse_cluster_nodes(command_output: Optional[str]) -> Optional[dict]:
+    """
+    Parameters
+    ----------
+    command_output: str :
+        The output returned from valkey for the command 'CLUSTER NODES'
+
+    Returns
+    -------
+        A dictionary for the current node's details
+    """
+    if command_output is None:
+        return None
+
+    lines = command_output.splitlines(keepends=False)
+    for line in lines:
+        tokens = line.split(" ")
+        if len(tokens) < 3:
+            continue
+
+        node_id = tokens[0].strip()
+        network = tokens[1].strip()
+        flags = tokens[2].strip()
+
+        if "myself" in flags:
+            # This is us
+            return {
+                "node_id": node_id,
+                "network": network,
+                "is_primary": "master" in flags,
+            }
+    return None
+
+
+def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
+    try:
+        p = subprocess.Popen(
+            cmd_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        output, err = p.communicate(timeout=5)
+        if err:
+            raise Exception(
+                f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
+            )
+        return output
+    except subprocess.TimeoutExpired:
+        return None
+
+
 def wait_for_all_topology_views(
-    servers: List[RedisServer], cluster_folder: str, use_tls: bool
+    servers: List[Server], cluster_folder: str, use_tls: bool
 ):
     """
     Wait for each of the nodes to have a topology view that contains all nodes.
@@ -536,42 +677,42 @@ def wait_for_all_topology_views(
     """
     for server in servers:
         cmd_args = [
-            "redis-cli",
+            CLI_COMMAND,
             "-h",
             server.host,
             "-p",
             str(server.port),
-            *get_redis_cli_option_args(cluster_folder, use_tls),
+            *get_cli_option_args(cluster_folder, use_tls),
             "cluster",
             "slots",
         ]
         logging.debug(f"Executing: {cmd_args}")
         retries = 60
-        output = ""
         while retries >= 0:
-            try:
-                p = subprocess.Popen(
-                    cmd_args,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-                output, err = p.communicate(timeout=5)
-                if err:
-                    raise Exception(
-                        f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
-                    )
-
-                if output.count(f"{server.host}") == len(servers):
-                    logging.debug(f"Server {server} is ready!")
-                    break
-                else:
-                    retries -= 1
-                    time.sleep(0.5)
-                    continue
-            except subprocess.TimeoutExpired:
-                time.sleep(0.5)
+            output = redis_cli_run_command(cmd_args)
+            if output is not None and output.count(f"{server.host}") == len(servers):
+                # Server is ready, get the node's role
+                cmd_args = [
+                    "redis-cli",
+                    "-h",
+                    server.host,
+                    "-p",
+                    str(server.port),
+                    *get_cli_option_args(cluster_folder, use_tls),
+                    "cluster",
+                    "nodes",
+                ]
+                cluster_slots_output = redis_cli_run_command(cmd_args)
+                node_info = parse_cluster_nodes(cluster_slots_output)
+                if node_info:
+                    server.set_primary(node_info["is_primary"])
+                logging.debug(f"Server {server} is ready!")
+                break
+            else:
                 retries -= 1
+                time.sleep(0.5)
+                continue
+
         if retries < 0:
             raise Exception(
                 f"Timeout exceeded trying to wait for server {server} to know all hosts.\n"
@@ -580,7 +721,7 @@ def wait_for_all_topology_views(
 
 
 def wait_for_server(
-    server: RedisServer,
+    server: Server,
     cluster_folder: str,
     use_tls: bool,
     timeout: int = 10,
@@ -590,12 +731,12 @@ def wait_for_server(
     while time.time() < timeout_start + timeout:
         p = subprocess.Popen(
             [
-                "redis-cli",
+                CLI_COMMAND,
                 "-h",
                 server.host,
                 "-p",
                 str(server.port),
-                *get_redis_cli_option_args(cluster_folder, use_tls),
+                *get_cli_option_args(cluster_folder, use_tls),
                 "PING",
             ],
             stdout=subprocess.PIPE,
@@ -627,8 +768,8 @@ def wait_for_message(
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
         with open(log_file, "r") as f:
-            redis_log = f.read()
-            if message in redis_log:
+            server_log = f.read()
+            if message in server_log:
                 return True
             else:
                 time.sleep(0.1)
@@ -637,8 +778,35 @@ def wait_for_message(
     return False
 
 
+def wait_for_regex_in_log(
+    logfile: str,
+    pattern: str,
+    group: int,
+    timeout: int = 5,
+) -> Optional[str]:
+    """Read the log file and search for a regular expression 'pattern'. If match is found
+    return the regex group identified by 'group'"""
+
+    logging.debug(f"searching regex pattern: '{pattern}' in file: '{logfile}'")
+    timeout_start = time.time()
+
+    while time.time() < timeout_start + timeout:
+        with open(logfile, "r") as f:
+            content = f.read()
+            lines = content.splitlines(keepends=False)
+            for line in lines:
+                result = re.search(pattern, line)
+                if result:
+                    return result.group(group)
+
+            else:
+                time.sleep(0.1)
+                continue
+    return None
+
+
 def is_address_already_in_use(
-    server: RedisServer,
+    server: Server,
     log_file: str,
     timeout: int = 5,
 ):
@@ -646,11 +814,11 @@ def is_address_already_in_use(
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
         with open(log_file, "r") as f:
-            redis_log = f.read()
-            if "Address already in use" in redis_log:
+            server_log = f.read()
+            if "Address already in use" in server_log:
                 logging.debug(f"Address is already bind for server {server}")
                 return True
-            elif "Ready" in redis_log:
+            elif "Ready" in server_log:
                 logging.debug(f"Address is free for server {server}!")
                 return False
             else:
@@ -674,15 +842,15 @@ def dir_path(path: str):
         raise NotADirectoryError(path)
 
 
-def stop_server(server: RedisServer, cluster_folder: str, use_tls: bool, auth: str):
+def stop_server(server: Server, cluster_folder: str, use_tls: bool, auth: str):
     logging.debug(f"Stopping server {server}")
     cmd_args = [
-        "redis-cli",
+        CLI_COMMAND,
         "-h",
         server.host,
         "-p",
         str(server.port),
-        *get_redis_cli_option_args(cluster_folder, use_tls, auth),
+        *get_cli_option_args(cluster_folder, use_tls, auth),
         "shutdown",
         "nosave",
     ]
@@ -720,7 +888,7 @@ def stop_server(server: RedisServer, cluster_folder: str, use_tls: bool, auth: s
 
 
 def wait_for_server_shutdown(
-    server: RedisServer,
+    server: Server,
     cluster_folder: str,
     use_tls: bool,
     auth: str,
@@ -732,12 +900,12 @@ def wait_for_server_shutdown(
     while time.time() < timeout_start + timeout:
         p = subprocess.Popen(
             [
-                "redis-cli",
+                CLI_COMMAND,
                 "-h",
                 server.host,
                 "-p",
                 str(server.port),
-                *get_redis_cli_option_args(cluster_folder, use_tls, auth),
+                *get_cli_option_args(cluster_folder, use_tls, auth),
                 "PING",
             ],
             stdout=subprocess.PIPE,
@@ -789,6 +957,7 @@ def stop_clusters(
     auth: str,
     logfile: Optional[str],
     keep_folder: bool,
+    pids: Optional[str],
 ):
     if cluster_folder:
         cluster_folders = [cluster_folder]
@@ -800,8 +969,20 @@ def stop_clusters(
             and prefix is not None
             and dirname.startswith(prefix)
         ]
+
+    # request for graceful shutdown
     for folder in cluster_folders:
         stop_cluster(host, folder, use_tls, auth, logfile, keep_folder)
+
+    if pids:
+        pid_arr = pids.split(",")
+        for pid in pid_arr:
+            try:
+                # Kill the process
+                os.kill(int(pid), signal.SIGKILL)
+            except ProcessLookupError as e:
+                logging.debug(f"Could not kill server with PID: {pid}. {e}")
+                pass
 
 
 def stop_cluster(
@@ -815,11 +996,17 @@ def stop_cluster(
     logfile = f"{cluster_folder}/cluster_manager.log" if not logfile else logfile
     init_logger(logfile)
     logging.debug(f"## Stopping cluster in path {cluster_folder}")
+    all_stopped = True
     for it in os.scandir(cluster_folder):
         if it.is_dir() and it.name.isdigit():
             port = it.name
-            stop_server(RedisServer(host, int(port)), cluster_folder, use_tls, auth)
-    logging.debug("All hosts were stopped")
+            try:
+                stop_server(Server(host, int(port)), cluster_folder, use_tls, auth)
+            except Exception:
+                all_stopped = False
+    if all_stopped:
+        logging.debug("All hosts were stopped gracefully")
+
     if not keep_folder:
         remove_folder(cluster_folder)
 
@@ -875,6 +1062,7 @@ def main():
         help="Create a Redis Cluster with cluster mode enabled. If not specified, a Standalone Redis cluster will be created.",
         required=False,
     )
+
     parser_start.add_argument(
         "--folder-path",
         type=dir_path,
@@ -882,6 +1070,7 @@ def main():
         required=False,
         default=CLUSTERS_FOLDER,
     )
+
     parser_start.add_argument(
         "-p",
         "--ports",
@@ -916,14 +1105,14 @@ def main():
         type=str,
         help="Prefix to be used for the cluster folder name "
         "(default without TLS: %(default)s, default with TLS: tls-%(default)s)",
-        default="redis-cluster",
+        default="cluster",
         required=False,
     )
 
     parser_start.add_argument(
         "--load-module",
         action="append",
-        help="The paths of the redis modules to load.",
+        help="The paths of the server modules to load.",
         required=False,
     )
 
@@ -950,12 +1139,20 @@ def main():
         help="Stop the cluster in the specified folder path. Expects a relative or a full path",
         required=False,
     )
+
     parser_stop.add_argument(
         "--keep-folder",
         action="store_true",
         default=False,
         help="Keep the cluster folder (default: %(default)s)",
         required=False,
+    )
+
+    parser_stop.add_argument(
+        "--pids",
+        type=str,
+        help="Optionally, provide comma separated list of process IDs to terminate",
+        default="",
     )
 
     args = parser.parse_args()
@@ -1050,6 +1247,7 @@ def main():
             args.auth,
             args.logfile,
             args.keep_folder,
+            args.pids,
         )
         toc = time.perf_counter()
         logging.info(f"Cluster stopped in {toc - tic:0.4f} seconds")

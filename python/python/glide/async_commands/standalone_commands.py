@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional, Set, Union, cast
+from typing import Dict, List, Mapping, Optional, Union, cast
 
-from glide.async_commands.command_args import Limit, ObjectType, OrderBy
+from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import (
     CoreCommands,
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
-    _build_sort_args,
 )
 from glide.async_commands.transaction import Transaction
 from glide.constants import (
-    OK,
     TOK,
     TEncodable,
     TFunctionListResponse,
@@ -23,7 +21,7 @@ from glide.constants import (
 )
 from glide.protobuf.command_request_pb2 import RequestType
 
-from ..glide import ClusterScanCursor, Script
+from ..glide import Script
 
 
 class StandaloneCommands(CoreCommands):
@@ -155,6 +153,7 @@ class StandaloneCommands(CoreCommands):
     async def config_get(self, parameters: List[TEncodable]) -> Dict[bytes, bytes]:
         """
         Get the values of configuration parameters.
+        Starting from server version 7, command supports multiple parameters.
         See https://valkey.io/commands/config-get/ for details.
 
         Args:
@@ -177,6 +176,7 @@ class StandaloneCommands(CoreCommands):
     async def config_set(self, parameters_map: Mapping[TEncodable, TEncodable]) -> TOK:
         """
         Set configuration parameters to the specified values.
+        Starting from server version 7, command supports multiple parameters.
         See https://valkey.io/commands/config-set/ for details.
 
         Args:
@@ -929,7 +929,7 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
-            >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
+            >>> await client.invoke_script(lua_script, keys=["foo"], args=["bar"] );
                 [b"foo", b"bar"]
         """
         return await self._execute_script(script.get_hash(), keys, args)

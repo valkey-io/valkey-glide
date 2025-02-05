@@ -12,14 +12,15 @@ import {
     GlideString,
     ObjectType,
     ProtocolVersion,
+    GlideClusterClientConfiguration,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
-    parseCommandLineArgs,
     parseEndpoints,
+    waitForClusterReady as isClusterReadyWithExpectedNodeCount,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -30,7 +31,7 @@ describe("Scan GlideClusterClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
-        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
@@ -377,6 +378,166 @@ describe("Scan GlideClusterClient", () => {
         },
         TIMEOUT,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClusterClient scan with allowNonCoveredSlots %p`,
+        async (protocol) => {
+            const testCluster = await ValkeyCluster.createCluster(
+                true,
+                3,
+                0,
+                getServerVersion,
+            );
+            const config: GlideClusterClientConfiguration = {
+                addresses: testCluster
+                    .getAddresses()
+                    .map(([host, port]) => ({ host, port })),
+                protocol,
+            };
+            const testClient = await GlideClusterClient.createClient(config);
+
+            try {
+                for (let i = 0; i < 10000; i++) {
+                    const result = await testClient.set(`${uuidv4()}`, "value");
+                    expect(result).toBe("OK");
+                }
+
+                // Perform an initial scan to ensure all works as expected
+                let cursor = new ClusterScanCursor();
+                let result = await testClient.scan(cursor);
+                cursor = result[0];
+                expect(cursor.isFinished()).toBe(false);
+
+                // Set 'cluster-require-full-coverage' to 'no' to allow operations with missing slots
+                await testClient.configSet({
+                    "cluster-require-full-coverage": "no",
+                });
+
+                // Forget one server to simulate a node failure
+                const addresses = testCluster.getAddresses();
+                const addressToForget = addresses[0];
+                const allOtherAddresses = addresses.slice(1);
+                const idToForget = await testClient.customCommand(
+                    ["CLUSTER", "MYID"],
+                    {
+                        route: {
+                            type: "routeByAddress",
+                            host: addressToForget[0],
+                            port: addressToForget[1],
+                        },
+                    },
+                );
+
+                for (const address of allOtherAddresses) {
+                    await testClient.customCommand(
+                        ["CLUSTER", "FORGET", idToForget as string],
+                        {
+                            route: {
+                                type: "routeByAddress",
+                                host: address[0],
+                                port: address[1],
+                            },
+                        },
+                    );
+                }
+
+                // Wait for the cluster to stabilize after forgetting a node
+                const ready = await isClusterReadyWithExpectedNodeCount(
+                    testClient,
+                    allOtherAddresses.length,
+                );
+                expect(ready).toBe(true);
+
+                // Attempt to scan without 'allowNonCoveredSlots', expecting an error
+                // Since it might take time for the inner core to forget the missing node,
+                // we retry the scan until the expected error is thrown.
+
+                const maxRetries = 10;
+                let retries = 0;
+                let errorReceived = false;
+
+                while (retries < maxRetries && !errorReceived) {
+                    retries++;
+                    cursor = new ClusterScanCursor();
+
+                    try {
+                        while (!cursor.isFinished()) {
+                            result = await testClient.scan(cursor);
+                            cursor = result[0];
+                        }
+
+                        // If scan completes without error, wait and retry
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 1000),
+                        );
+                    } catch (error) {
+                        if (
+                            error instanceof Error &&
+                            error.message.includes(
+                                "Could not find an address covering a slot, SCAN operation cannot continue",
+                            )
+                        ) {
+                            // Expected error occurred
+                            errorReceived = true;
+                        } else {
+                            // Unexpected error, rethrow
+                            throw error;
+                        }
+                    }
+                }
+
+                expect(errorReceived).toBe(true);
+
+                // Perform scan with 'allowNonCoveredSlots: true'
+                cursor = new ClusterScanCursor();
+
+                while (!cursor.isFinished()) {
+                    result = await testClient.scan(cursor, {
+                        allowNonCoveredSlots: true,
+                    });
+                    cursor = result[0];
+                }
+
+                expect(cursor.isFinished()).toBe(true);
+
+                // Get keys using 'KEYS *' from the remaining nodes
+                const keys: GlideString[] = [];
+
+                for (const address of allOtherAddresses) {
+                    const result = await testClient.customCommand(
+                        ["KEYS", "*"],
+                        {
+                            route: {
+                                type: "routeByAddress",
+                                host: address[0],
+                                port: address[1],
+                            },
+                        },
+                    );
+                    keys.push(...(result as GlideString[]));
+                }
+
+                // Scan again with 'allowNonCoveredSlots: true' and collect results
+                cursor = new ClusterScanCursor();
+                const results: GlideString[] = [];
+
+                while (!cursor.isFinished()) {
+                    result = await testClient.scan(cursor, {
+                        allowNonCoveredSlots: true,
+                    });
+                    results.push(...result[1]);
+                    cursor = result[0];
+                }
+
+                // Compare the sets of keys obtained from 'KEYS *' and 'SCAN'
+                expect(new Set(results)).toEqual(new Set(keys));
+            } finally {
+                testClient.close();
+                await testCluster.close();
+            }
+        },
+        TIMEOUT,
+    );
 });
 
 //standalone tests
@@ -385,8 +546,7 @@ describe("Scan GlideClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClient;
     beforeAll(async () => {
-        const standaloneAddresses =
-            parseCommandLineArgs()["standalone-endpoints"];
+        const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
         cluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   false,

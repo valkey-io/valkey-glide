@@ -8,12 +8,15 @@ import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import connection_request.ConnectionRequestOuterClass.PubSubChannelsOrPatterns;
 import connection_request.ConnectionRequestOuterClass.PubSubSubscriptions;
 import connection_request.ConnectionRequestOuterClass.TlsMode;
+import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.ConfigurationError;
 import glide.connectors.handlers.ChannelHandler;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
@@ -122,6 +125,18 @@ public class ConnectionManager {
             connectionRequestBuilder.setInflightRequestsLimit(configuration.getInflightRequestsLimit());
         }
 
+        if (configuration.getReadFrom() == ReadFrom.AZ_AFFINITY) {
+            if (configuration.getClientAZ() == null) {
+                throw new ConfigurationError(
+                        "`clientAZ` must be set when read_from is set to `AZ_AFFINITY`");
+            }
+            connectionRequestBuilder.setClientAz(configuration.getClientAZ());
+        }
+
+        if (configuration.getProtocol() != null) {
+            connectionRequestBuilder.setProtocolValue(configuration.getProtocol().ordinal());
+        }
+
         return connectionRequestBuilder;
     }
 
@@ -149,7 +164,10 @@ public class ConnectionManager {
         }
 
         if (configuration.getSubscriptionConfiguration() != null) {
-            // TODO throw ConfigurationError if RESP2
+            if (configuration.getProtocol() == ProtocolVersion.RESP2) {
+                throw new ConfigurationError(
+                        "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.");
+            }
             var subscriptionsBuilder = PubSubSubscriptions.newBuilder();
             for (var entry : configuration.getSubscriptionConfiguration().getSubscriptions().entrySet()) {
                 var channelsBuilder = PubSubChannelsOrPatterns.newBuilder();
@@ -160,6 +178,30 @@ public class ConnectionManager {
                         entry.getKey().ordinal(), channelsBuilder.build());
             }
             connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
+        }
+
+        if (configuration.getAdvancedConfiguration() != null) {
+            connectionRequestBuilder =
+                    setupConnectionRequestBuilderAdvancedBaseConfiguration(
+                            connectionRequestBuilder, configuration.getAdvancedConfiguration());
+        }
+
+        return connectionRequestBuilder;
+    }
+
+    /**
+     * Configures the {@link ConnectionRequest.Builder} with settings from the provided {@link
+     * AdvancedBaseClientConfiguration}.
+     *
+     * @param connectionRequestBuilder The builder for the {@link ConnectionRequest}.
+     * @param configuration The advanced configuration settings.
+     * @return The updated {@link ConnectionRequest.Builder}.
+     */
+    private ConnectionRequest.Builder setupConnectionRequestBuilderAdvancedBaseConfiguration(
+            ConnectionRequest.Builder connectionRequestBuilder,
+            AdvancedBaseClientConfiguration configuration) {
+        if (configuration.getConnectionTimeout() != null) {
+            connectionRequestBuilder.setConnectionTimeout(configuration.getConnectionTimeout());
         }
 
         return connectionRequestBuilder;
@@ -177,7 +219,10 @@ public class ConnectionManager {
         connectionRequestBuilder.setClusterModeEnabled(true);
 
         if (configuration.getSubscriptionConfiguration() != null) {
-            // TODO throw ConfigurationError if RESP2
+            if (configuration.getProtocol() == ProtocolVersion.RESP2) {
+                throw new ConfigurationError(
+                        "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.");
+            }
             var subscriptionsBuilder = PubSubSubscriptions.newBuilder();
             for (var entry : configuration.getSubscriptionConfiguration().getSubscriptions().entrySet()) {
                 var channelsBuilder = PubSubChannelsOrPatterns.newBuilder();
@@ -190,6 +235,12 @@ public class ConnectionManager {
             connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
         }
 
+        if (configuration.getAdvancedConfiguration() != null) {
+            connectionRequestBuilder =
+                    setupConnectionRequestBuilderAdvancedBaseConfiguration(
+                            connectionRequestBuilder, configuration.getAdvancedConfiguration());
+        }
+
         return connectionRequestBuilder;
     }
 
@@ -200,11 +251,14 @@ public class ConnectionManager {
      * @return Protobuf defined ReadFrom enum
      */
     private ConnectionRequestOuterClass.ReadFrom mapReadFromEnum(ReadFrom readFrom) {
-        if (readFrom == ReadFrom.PREFER_REPLICA) {
-            return ConnectionRequestOuterClass.ReadFrom.PreferReplica;
+        switch (readFrom) {
+            case PREFER_REPLICA:
+                return ConnectionRequestOuterClass.ReadFrom.PreferReplica;
+            case AZ_AFFINITY:
+                return ConnectionRequestOuterClass.ReadFrom.AZAffinity;
+            default:
+                return ConnectionRequestOuterClass.ReadFrom.Primary;
         }
-
-        return ConnectionRequestOuterClass.ReadFrom.Primary;
     }
 
     /** Check a response received from Glide. */

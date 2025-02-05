@@ -1,6 +1,5 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 mod types;
 
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
@@ -9,10 +8,17 @@ use futures::FutureExt;
 use logger_core::{log_info, log_warn};
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
-use redis::cluster_routing::{Routable, RoutingInfo, SingleNodeRoutingInfo};
-use redis::{Cmd, ErrorKind, ObjectType, PushInfo, RedisError, RedisResult, ScanStateRC, Value};
+use redis::cluster_routing::{
+    MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
+};
+use redis::cluster_slotmap::ReadFromReplicaStrategy;
+use redis::{
+    ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PushInfo, RedisError, RedisResult,
+    ScanStateRC, Value,
+};
 pub use standalone_client::StandaloneClient;
 use std::io;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -22,30 +28,35 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
+use redis::InfoDict;
+use telemetrylib::*;
 use tokio::sync::mpsc;
+use versions::Versioning;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 pub const DEFAULT_RETRIES: u32 = 3;
+/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
-pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
-pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
+/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
+pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
-// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
-//
-// Expected maximum request rate: 50,000 requests/second
-// Expected response time: 1 millisecond
-//
-// According to Little's Law, the maximum number of inflight requests required to fully utilize the maximum request rate is:
-//   (50,000 requests/second) × (1 millisecond / 1000 milliseconds) = 50 requests
-//
-// The value of 1000 provides a buffer for bursts while still allowing full utilization of the maximum request rate.
+
+/// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
+///
+/// Expected maximum request rate: 50,000 requests/second
+/// Expected response time: 1 millisecond
+///
+/// According to Little's Law, the maximum number of inflight requests required to fully utilize the maximum request rate is:
+///   (50,000 requests/second) × (1 millisecond / 1000 milliseconds) = 50 requests
+///
+/// The value of 1000 provides a buffer for bursts while still allowing full utilization of the maximum request rate.
 pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 
-// The connection check interval is currently not exposed to the user via ConnectionRequest,
-// as improper configuration could negatively impact performance or pub/sub resiliency.
-// A 3-second interval provides a reasonable balance between connection validation
-// and performance overhead.
+/// The connection check interval is currently not exposed to the user via ConnectionRequest,
+/// as improper configuration could negatively impact performance or pub/sub resiliency.
+/// A 3-second interval provides a reasonable balance between connection validation
+/// and performance overhead.
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
 
 pub(super) fn get_port(address: &NodeAddress) -> u16 {
@@ -258,9 +269,9 @@ impl Client {
                         if let Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)) =
                             routing
                         {
-                            let cmdname = cmd.command().unwrap_or_default();
-                            let cmdname = String::from_utf8_lossy(&cmdname);
-                            if redis::cluster_routing::is_readonly_cmd(cmdname.as_bytes()) {
+                            let cmd_name = cmd.command().unwrap_or_default();
+                            let cmd_name = String::from_utf8_lossy(&cmd_name);
+                            if redis::cluster_routing::is_readonly_cmd(cmd_name.as_bytes()) {
                                 // A read-only command, go ahead and send it to a random node
                                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
                             } else {
@@ -269,7 +280,7 @@ impl Client {
                                 log_warn(
                                     "send_command",
                                     format!(
-                                        "User provided 'Random' routing which is not suitable for the writeable command '{cmdname}'. Changing it to 'RandomPrimary'"
+                                        "User provided 'Random' routing which is not suitable for the writeable command '{cmd_name}'. Changing it to 'RandomPrimary'"
                                     ),
                                 );
                                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)
@@ -303,33 +314,16 @@ impl Client {
     pub async fn cluster_scan<'a>(
         &'a mut self,
         scan_state_cursor: &'a ScanStateRC,
-        match_pattern: &'a Option<Vec<u8>>,
-        count: Option<usize>,
-        object_type: Option<ObjectType>,
+        cluster_scan_args: ClusterScanArgs,
     ) -> RedisResult<Value> {
         match self.internal_client {
             ClientWrapper::Standalone(_) => {
                 unreachable!("Cluster scan is not supported in standalone mode")
             }
             ClientWrapper::Cluster { ref mut client } => {
-                let (cursor, keys) = match match_pattern {
-                    Some(pattern) => {
-                        client
-                            .cluster_scan_with_pattern(
-                                scan_state_cursor.clone(),
-                                pattern,
-                                count,
-                                object_type,
-                            )
-                            .await?
-                    }
-                    None => {
-                        client
-                            .cluster_scan(scan_state_cursor.clone(), count, object_type)
-                            .await?
-                    }
-                };
-
+                let (cursor, keys) = client
+                    .cluster_scan(scan_state_cursor.clone(), cluster_scan_args)
+                    .await?;
                 let cluster_cursor_id = if cursor.is_finished() {
                     Value::BulkString(FINISHED_SCAN_CURSOR.into())
                 } else {
@@ -473,6 +467,69 @@ impl Client {
         self.inflight_requests_allowed
             .fetch_add(1, Ordering::SeqCst)
     }
+
+    /// Update the password used to authenticate with the servers.
+    /// If None is passed, the password will be removed.
+    /// If `immediate_auth` is true, the password will be used to authenticate with the servers immediately using the `AUTH` command.
+    /// The default behavior is to update the password without authenticating immediately.
+    /// If the password is empty or None, and `immediate_auth` is true, the password will be updated and an error will be returned.
+    pub async fn update_connection_password(
+        &mut self,
+        password: Option<String>,
+        immediate_auth: bool,
+    ) -> RedisResult<Value> {
+        let timeout = self.request_timeout;
+        // The password update operation is wrapped in a timeout to prevent it from blocking indefinitely.
+        // If the operation times out, an error is returned.
+        // Since the password update operation is not a command that go through the regular command pipeline,
+        // it is not have the regular timeout handling, as such we need to handle it separately.
+        match tokio::time::timeout(timeout, async {
+            match self.internal_client {
+                ClientWrapper::Standalone(ref mut client) => {
+                    client.update_connection_password(password.clone()).await
+                }
+                ClientWrapper::Cluster { ref mut client } => {
+                    client.update_connection_password(password.clone()).await
+                }
+            }
+        })
+        .await
+        {
+            Ok(result) => {
+                if immediate_auth {
+                    self.send_immediate_auth(password).await
+                } else {
+                    result
+                }
+            }
+            Err(_elapsed) => Err(RedisError::from((
+                ErrorKind::IoError,
+                "Password update operation timed out, please check the connection",
+            ))),
+        }
+    }
+
+    async fn send_immediate_auth(&mut self, password: Option<String>) -> RedisResult<Value> {
+        match &password {
+            Some(pw) if pw.is_empty() => Err(RedisError::from((
+                ErrorKind::UserOperationError,
+                "Empty password provided for authentication",
+            ))),
+            None => Err(RedisError::from((
+                ErrorKind::UserOperationError,
+                "No password provided for authentication",
+            ))),
+            Some(password) => {
+                let routing = RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    Some(ResponsePolicy::AllSucceeded),
+                ));
+                let mut cmd = redis::cmd("AUTH");
+                cmd.arg(password);
+                self.send_command(&cmd, Some(routing)).await
+            }
+        }
+    }
 }
 
 fn load_cmd(code: &[u8]) -> Cmd {
@@ -511,20 +568,22 @@ async fn create_cluster_client(
         .into_iter()
         .map(|address| get_connection_info(&address, tls_mode, redis_connection_info.clone()))
         .collect();
-    let read_from = request.read_from.unwrap_or_default();
-    let read_from_replicas = !matches!(read_from, ReadFrom::Primary); // TODO - implement different read from replica strategies.
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
         Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
         Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
         None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
+    let connection_timeout = to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
-        .connection_timeout(INTERNAL_CONNECTION_TIMEOUT)
+        .connection_timeout(connection_timeout)
         .retries(DEFAULT_RETRIES);
-    if read_from_replicas {
-        builder = builder.read_from_replicas();
-    }
+    let read_from_strategy = request.read_from.unwrap_or_default();
+    builder = builder.read_from(match read_from_strategy {
+        ReadFrom::AZAffinity(az) => ReadFromReplicaStrategy::AZAffinity(az),
+        ReadFrom::PreferReplica => ReadFromReplicaStrategy::RoundRobin,
+        ReadFrom::Primary => ReadFromReplicaStrategy::AlwaysFromPrimary,
+    });
     if let Some(interval_duration) = periodic_topology_checks {
         builder = builder.periodic_topology_checks(interval_duration);
     }
@@ -540,7 +599,7 @@ async fn create_cluster_client(
         };
         builder = builder.tls(tls);
     }
-    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions {
+    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions.clone() {
         builder = builder.pubsub_subscriptions(pubsub_subscriptions);
     }
 
@@ -548,7 +607,55 @@ async fn create_cluster_client(
     builder = builder.periodic_connections_checks(CONNECTION_CHECKS_INTERVAL);
 
     let client = builder.build()?;
-    client.get_async_connection(push_sender).await
+    let mut con = client.get_async_connection(push_sender).await?;
+
+    // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
+    // preventing scenarios where the client becomes inoperable or, worse, unaware that sharded pubsub messages are not being received.
+    // The issue arises because `client.get_async_connection()` might succeed even if the engine does not support sharded pubsub.
+    // For example, initial connections may exclude the target node for sharded subscriptions, allowing the creation to succeed,
+    // but subsequent resubscription tasks will fail when `setup_connection()` cannot establish a connection to the node.
+    //
+    // One approach to handle this would be to check the engine version inside `setup_connection()` and skip applying sharded subscriptions.
+    // However, this approach would leave the application unaware that the subscriptions were not applied, requiring the user to analyze logs to identify the issue.
+    // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
+
+    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions {
+        if pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded) {
+            let info_res = con
+                .route_command(
+                    redis::cmd("INFO").arg("SERVER"),
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+                )
+                .await?;
+            let info_dict: InfoDict = FromRedisValue::from_redis_value(&info_res)?;
+            match info_dict.get::<String>("redis_version") {
+                Some(version) => match (Versioning::new(version), Versioning::new("7.0")) {
+                    (Some(server_ver), Some(min_ver)) => {
+                        if server_ver < min_ver {
+                            return Err(RedisError::from((
+                                ErrorKind::InvalidClientConfig,
+                                "Sharded subscriptions provided, but the engine version is < 7.0",
+                            )));
+                        }
+                    }
+                    _ => {
+                        return Err(RedisError::from((
+                            ErrorKind::ResponseError,
+                            "Failed to parse engine version",
+                        )))
+                    }
+                },
+                _ => {
+                    return Err(RedisError::from((
+                        ErrorKind::ResponseError,
+                        "Could not determine engine version from INFO result",
+                    )))
+                }
+            }
+        }
+    }
+
+    Ok(con)
 }
 
 #[derive(thiserror::Error)]
@@ -556,6 +663,7 @@ pub enum ConnectionError {
     Standalone(standalone_client::StandaloneClientConnectionError),
     Cluster(redis::RedisError),
     Timeout,
+    IoError(std::io::Error),
 }
 
 impl std::fmt::Debug for ConnectionError {
@@ -563,6 +671,7 @@ impl std::fmt::Debug for ConnectionError {
         match self {
             Self::Standalone(arg0) => f.debug_tuple("Standalone").field(arg0).finish(),
             Self::Cluster(arg0) => f.debug_tuple("Cluster").field(arg0).finish(),
+            Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
         }
     }
@@ -573,6 +682,7 @@ impl std::fmt::Display for ConnectionError {
         match self {
             ConnectionError::Standalone(err) => write!(f, "{err:?}"),
             ConnectionError::Cluster(err) => write!(f, "{err}"),
+            ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
         }
     }
@@ -615,15 +725,19 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         "\nStandalone mode"
     };
     let request_timeout = format_optional_value("Request timeout", request.request_timeout);
+    let connection_timeout =
+        format_optional_value("Connection timeout", request.connection_timeout);
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
         .read_from
+        .clone()
         .map(|rfr| {
             format!(
                 "\nRead from Replica mode: {}",
                 match rfr {
                     ReadFrom::Primary => "Only primary",
                     ReadFrom::PreferReplica => "Prefer replica",
+                    ReadFrom::AZAffinity(_) => "Prefer replica in user's availability zone",
                 }
             )
         })
@@ -669,7 +783,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     );
 
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
     )
 }
 
@@ -691,6 +805,22 @@ impl Client {
         let inflight_requests_allowed = Arc::new(AtomicIsize::new(
             inflight_requests_limit.try_into().unwrap(),
         ));
+
+        if let Some(endpoint_str) = &request.otel_endpoint {
+            let trace_exporter = GlideOpenTelemetryTraceExporter::from_str(endpoint_str.as_str())
+                .map_err(ConnectionError::IoError)?;
+            let config = GlideOpenTelemetryConfigBuilder::default()
+                .with_flush_interval(std::time::Duration::from_millis(
+                    request
+                        .otel_span_flush_interval_ms
+                        .unwrap_or(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
+                ))
+                .with_trace_exporter(trace_exporter)
+                .build();
+
+            GlideOpenTelemetry::initialise(config);
+        };
+
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             let internal_client = if request.cluster_mode_enabled {
                 let client = create_cluster_client(request, push_sender)
@@ -712,8 +842,7 @@ impl Client {
             })
         })
         .await
-        .map_err(|_| ConnectionError::Timeout)
-        .and_then(|res| res)
+        .map_err(|_| ConnectionError::Timeout)?
     }
 }
 

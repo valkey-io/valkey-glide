@@ -1,0 +1,18 @@
+[package]
+name = "telemetrylib"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Valkey GLIDE Maintainers"]
+
+[dependencies]
+lazy_static = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0"
+futures-util = "0"
+tokio = { version = "1", features = ["macros", "time"] }
+url = "2"
+
+opentelemetry = "0"
+opentelemetry_sdk = { version = "0", features = ["rt-tokio"] }
