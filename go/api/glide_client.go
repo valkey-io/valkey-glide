@@ -7,8 +7,8 @@ package api
 import "C"
 
 import (
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
-	"github.com/valkey-io/valkey-glide/go/glide/utils"
+	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/utils"
 )
 
 // GlideClient interface compliance check.
