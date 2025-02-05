@@ -394,6 +394,9 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 // [valkey.io]: https://valkey.io/commands/client-id/
 func (client *GlideClusterClient) ClientIdWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
 	response, err := client.executeCommandWithRoute(C.ClientId, []string{}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
 	if opts.Route != nil &&
 		(opts.Route).IsMultiNode() {
 		data, err := handleStringIntMapResponse(response)
