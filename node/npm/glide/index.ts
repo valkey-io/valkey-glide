@@ -4,7 +4,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { GLIBC, MUSL, familySync } from "detect-libc";
+import { GLIBC, familySync } from "detect-libc";
 import { arch, platform } from "process";
 
 let globalObject = global as unknown;
@@ -14,59 +14,13 @@ function loadNativeBinding() {
     let nativeStr = process.env.native_binding;
 
     if (nativeStr == undefined) {
-        switch (platform) {
-            case "linux":
-                switch (arch) {
-                    case "x64":
-                        switch (familySync()) {
-                            case MUSL:
-                                nativeStr = "linux-musl-x64";
-                                break;
-                            case GLIBC:
-                            default:
-                                nativeStr = "linux-x64";
-                                break;
-                        }
 
-                        break;
-                    case "arm64":
-                        switch (familySync()) {
-                            case MUSL:
-                                nativeStr = "linux-musl-arm64";
-                                break;
-                            case GLIBC:
-                            default:
-                                nativeStr = "linux-arm64";
-                                break;
-                        }
-
-                        break;
-                    default:
-                        throw new Error(
-                            `Unsupported OS: ${platform}, architecture: ${arch}`,
-                        );
-                }
-
-                break;
-            case "darwin":
-                switch (arch) {
-                    case "x64":
-                        nativeStr = "darwin-x64";
-                        break;
-                    case "arm64":
-                        nativeStr = "darwin-arm64";
-                        break;
-                    default:
-                        throw new Error(
-                            `Unsupported OS: ${platform}, architecture: ${arch}`,
-                        );
-                }
-
-                break;
-            default:
-                throw new Error(
-                    `Unsupported OS: ${platform}, architecture: ${arch}`,
-                );
+        const prefix = familySync() == GLIBC ? "" : "-musl";
+        nativeStr = `${platform}${prefix}${arch}`;
+        if ((["x64", "arm64"].indexOf(arch) < 0) || (["linux", "darwin"].indexOf(platform) < 0)) {
+            throw new Error(
+                `Unsupported OS: ${platform}, architecture: ${arch}`,
+            );
         }
     }
 
