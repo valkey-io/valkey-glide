@@ -8,6 +8,36 @@ import { describe } from "node:test";
 import * as ts from "typescript";
 import * as glideApi from "../"; //ESM convention,
 
+const skippedListForExports: string[] = [
+    "AdvancedBaseClientConfiguration",
+    "ClusterScanOptions",
+    "GlideMultiJson",
+];
+
+const glideRsKeyWords: string[] = [
+    "ClusterScanCursor",
+    "Script",
+    "createLeakedArray",
+    "createLeakedAttribute",
+    "createLeakedBigint",
+    "createLeakedDouble",
+    "createLeakedMap",
+    "createLeakedString",
+    "default",
+];
+
+
+const skipFolders = [
+    "commonjs-test",
+    "glide-logs",
+    "hybrid-node-tests",
+    "node_modules",
+    "npm",
+    ".cargo",
+    "target",
+    "tests",
+];
+
 describe("Validation of Exported Symbols", () => {
     it("check excluded symbols are not exported", async () => {
         // Check exported symbols for valkey glide package
@@ -31,28 +61,14 @@ describe("Validation of Exported Symbols", () => {
 
         internallyExported.sort();
 
-        const skippedListForExports: string[] = [
-            "AdvancedBaseClientConfiguration",
-            "ClusterScanOptions",
-            "GlideMultiJson",
-        ];
+
         const missingSymbols = internallyExported.filter(
             (e: string) =>
                 !exportedSymbolsList.includes(e) &&
                 !skippedListForExports.includes(e),
         );
 
-        const glideRsKeyWords: string[] = [
-            "ClusterScanCursor",
-            "Script",
-            "createLeakedArray",
-            "createLeakedAttribute",
-            "createLeakedBigint",
-            "createLeakedDouble",
-            "createLeakedMap",
-            "createLeakedString",
-            "default",
-        ];
+
         const doesNotExistExports = exportedSymbolsList.filter(
             (e: string) =>
                 !internallyExported.includes(e) && !glideRsKeyWords.includes(e),
@@ -61,7 +77,7 @@ describe("Validation of Exported Symbols", () => {
         if (missingSymbols.length > 0) {
             console.log(
                 "The following symbols are exported from npm/glide package but missing " +
-                    "from the internal node package export. These symbols might be from glide-rs package",
+                "from the internal node package export. These symbols might be from glide-rs package",
             );
             console.log(missingSymbols);
         }
@@ -82,16 +98,6 @@ describe("Validation of Exported Symbols", () => {
 async function getFiles(folderName: string): Promise<string[]> {
     const files = await f.readdir(folderName, { withFileTypes: true });
 
-    const skipFolders = [
-        "commonjs-test",
-        "glide-logs",
-        "hybrid-node-tests",
-        "node_modules",
-        "npm",
-        ".cargo",
-        "target",
-        "tests",
-    ];
 
     const filesWithNodeCode = [];
 
