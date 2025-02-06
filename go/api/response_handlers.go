@@ -9,6 +9,7 @@ import "C"
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"unsafe"
 
@@ -833,12 +834,94 @@ func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (
 	return claimedEntries, nil
 }
 
-func handleMapOfArrayOfStringArrayOrNilResponse(response *C.struct_CommandResponse) (map[string][][]string, error) {
+func handleXRangeResponse(response *C.struct_CommandResponse) ([]XRangeResponse, error) {
+	defer C.free_command_response(response)
+
 	if response.response_type == uint32(C.Null) {
 		return nil, nil
 	}
 
-	return handleMapOfArrayOfStringArrayResponse(response)
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	mapData, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := mapConverter[[][]string]{
+		arrayConverter[[]string]{
+			arrayConverter[string]{
+				nil,
+				false,
+			},
+			false,
+		},
+		false,
+	}.convert(mapData)
+	if err != nil {
+		return nil, err
+	}
+	claimedEntries, ok := converted.(map[string][][]string)
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+	}
+
+	xRangeResponseArray := make([]XRangeResponse, 0, len(claimedEntries))
+
+	for k, v := range claimedEntries {
+		xRangeResponseArray = append(xRangeResponseArray, XRangeResponse{k, v})
+	}
+
+	sort.Slice(xRangeResponseArray, func(i, j int) bool {
+		return xRangeResponseArray[i].StreamId < xRangeResponseArray[j].StreamId
+	})
+	return xRangeResponseArray, nil
+}
+
+func handleXRevRangeResponse(response *C.struct_CommandResponse) ([]XRangeResponse, error) {
+	defer C.free_command_response(response)
+
+	if response.response_type == uint32(C.Null) {
+		return nil, nil
+	}
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	mapData, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := mapConverter[[][]string]{
+		arrayConverter[[]string]{
+			arrayConverter[string]{
+				nil,
+				false,
+			},
+			false,
+		},
+		false,
+	}.convert(mapData)
+	if err != nil {
+		return nil, err
+	}
+	claimedEntries, ok := converted.(map[string][][]string)
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+	}
+
+	xRangeResponseArray := make([]XRangeResponse, 0, len(claimedEntries))
+
+	for k, v := range claimedEntries {
+		xRangeResponseArray = append(xRangeResponseArray, XRangeResponse{k, v})
+	}
+
+	sort.Slice(xRangeResponseArray, func(i, j int) bool {
+		return xRangeResponseArray[i].StreamId > xRangeResponseArray[j].StreamId
+	})
+	return xRangeResponseArray, nil
 }
 
 func handleXAutoClaimResponse(response *C.struct_CommandResponse) (XAutoClaimResponse, error) {
