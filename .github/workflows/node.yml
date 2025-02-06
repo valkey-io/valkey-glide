@@ -187,16 +187,12 @@ jobs:
             - name: Install git
               if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
               run: |
-                  if [[ ${{ contains(matrix.host.TARGET, 'musl') }} == true ]]; then
-                     apk update
-                     apk add --no-cache git tar
-                  elif [[ ${{ contains(matrix.host.IMAGE, 'amazonlinux') }} == true ]]; then
-                     yum update
-                     yum install -y git tar
-                  fi
-                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
-            # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
-            - uses: actions/checkout@v4
+                  apk update
+                  apk add --no-cache git tar
+
+            - name: Checkout code
+              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
+              uses: actions/checkout@v4
 
             - name: Setup musl on Linux
               if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
