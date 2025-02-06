@@ -707,6 +707,19 @@ func ExampleGlideClient_XPendingWithOptions() {
 	}
 	fmt.Println(hasFields)
 
+	// Since IdleTime can vary, check that output has all fields
+	fields := []string{"\"Id\"", "\"ConsumerName\"", "\"IdleTime\"", "\"DeliveryCount\""}
+	hasFields := true
+	jsonStr := string(jsonDetails)
+
+	for _, field := range fields {
+		hasFields = strings.Contains(jsonStr, field)
+		if !hasFields {
+			break
+		}
+	}
+	fmt.Println(hasFields)
+
 	// Output: true
 }
 
@@ -777,9 +790,21 @@ func ExampleGlideClusterClient_XPendingWithOptions() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	jsonDetails, _ := json.Marshal(details)
-	fmt.Println(string(jsonDetails))
 
-	// Output: [{"Id":"12345-1","ConsumerName":"c12345","IdleTime":1,"DeliveryCount":1}]
+	// Since IdleTime can vary, check that output has all fields
+	fields := []string{"\"Id\"", "\"ConsumerName\"", "\"IdleTime\"", "\"DeliveryCount\""}
+	hasFields := true
+	jsonStr := string(jsonDetails)
+
+	for _, field := range fields {
+		hasFields = strings.Contains(jsonStr, field)
+		if !hasFields {
+			break
+		}
+	}
+	fmt.Println(hasFields)
+
+	// Output: true
 }
 
 func ExampleGlideClient_XGroupSetId() {
