@@ -26,7 +26,6 @@ const glideRsKeyWords: string[] = [
     "default",
 ];
 
-
 const skipFolders = [
     "commonjs-test",
     "glide-logs",
@@ -61,13 +60,11 @@ describe("Validation of Exported Symbols", () => {
 
         internallyExported.sort();
 
-
         const missingSymbols = internallyExported.filter(
             (e: string) =>
                 !exportedSymbolsList.includes(e) &&
                 !skippedListForExports.includes(e),
         );
-
 
         const doesNotExistExports = exportedSymbolsList.filter(
             (e: string) =>
@@ -77,7 +74,7 @@ describe("Validation of Exported Symbols", () => {
         if (missingSymbols.length > 0) {
             console.log(
                 "The following symbols are exported from npm/glide package but missing " +
-                "from the internal node package export. These symbols might be from glide-rs package",
+                    "from the internal node package export. These symbols might be from glide-rs package",
             );
             console.log(missingSymbols);
         }
@@ -97,7 +94,6 @@ describe("Validation of Exported Symbols", () => {
 
 async function getFiles(folderName: string): Promise<string[]> {
     const files = await f.readdir(folderName, { withFileTypes: true });
-
 
     const filesWithNodeCode = [];
 
