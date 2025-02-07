@@ -5251,6 +5251,10 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 		assert.NoError(t, err)
 		assert.Equal(t, int64(0), res)
 		assert.Equal(t, 0, len(res1))
+		// Pull from non-existent source
+		res, err = client.ZRangeStore(dest, "{key}nonExistent", query)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), res)
 	})
 }
 
