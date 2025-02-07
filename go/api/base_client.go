@@ -5556,6 +5556,7 @@ func (client *baseClient) CopyWithOptions(
 //
 //	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
 //	fmt.Println(res) // map[key:[["field1", "entry1"]]
+//
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(
 	key string,
