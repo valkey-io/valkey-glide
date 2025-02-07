@@ -2,7 +2,13 @@
 
 package api
 
-// #cgo LDFLAGS: -L../target/release -lglide_rs
+// #cgo LDFLAGS: -lglide_rs
+// #cgo !windows LDFLAGS: -lm
+// #cgo darwin LDFLAGS: -framework Security
+// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
+// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
+// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
+// #cgo LDFLAGS: -L../target/release
 // #include "../lib.h"
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
@@ -15,11 +21,11 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github.com/valkey-io/valkey-glide/go/glide/api/config"
-	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
-	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
-	"github.com/valkey-io/valkey-glide/go/glide/utils"
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
+	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/protobuf"
+	"github.com/valkey-io/valkey-glide/go/utils"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -6849,7 +6855,7 @@ func (client *baseClient) CopyWithOptions(
 //
 // Return value:
 //
-//	A `map` of key to stream entry data, where entry data is an array of
+//	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
 // Example:
@@ -6860,7 +6866,7 @@ func (client *baseClient) CopyWithOptions(
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //	)
-//	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
+//	fmt.Println(res) // [{streamId [["field1", "entry1"], ["field2", "entry2"]]}]
 //
 //	// Retrieve exactly one stream entry by id
 //	res, err := client.XRange(
@@ -6868,14 +6874,14 @@ func (client *baseClient) CopyWithOptions(
 //		options.NewStreamBoundary(streamId, true),
 //		options.NewStreamBoundary(streamId, true),
 //	)
-//	fmt.Println(res) // map[key:[["field1", "entry1"]]
+//	fmt.Println(res) // [{streamId [["field1", "entry1"]]}]
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) (map[string][][]string, error) {
+) ([]XRangeResponse, error) {
 	return client.XRangeWithOptions(key, start, end, nil)
 }
 
@@ -6896,7 +6902,7 @@ func (client *baseClient) XRange(
 //
 // Return value:
 //
-//	A `map` of key to stream entry data, where entry data is an array of
+//	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
 // Example:
@@ -6908,7 +6914,7 @@ func (client *baseClient) XRange(
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //		options.NewStreamRangeOptions().SetCount(10),
 //	)
-//	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
+//	fmt.Println(res) // [{streamId [["field1", "entry1"], ["field2", "entry2"]]}]
 //
 //	// Retrieve exactly one stream entry by id
 //	res, err := client.XRangeWithOptions(
@@ -6917,7 +6923,7 @@ func (client *baseClient) XRange(
 //		options.NewStreamBoundary(streamId, true),
 //		options.NewStreamRangeOptions().SetCount(1),
 //	)
-//	fmt.Println(res) // map[key:[["field1", "entry1"]]
+//	fmt.Println(res) // [{streamId [["field1", "entry1"]]}]
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRangeWithOptions(
@@ -6925,7 +6931,7 @@ func (client *baseClient) XRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts *options.StreamRangeOptions,
-) (map[string][][]string, error) {
+) ([]XRangeResponse, error) {
 	args := []string{key, string(start), string(end)}
 	if opts != nil {
 		optionArgs, err := opts.ToArgs()
@@ -6938,7 +6944,7 @@ func (client *baseClient) XRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+	return handleXRangeResponse(result)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -6958,7 +6964,7 @@ func (client *baseClient) XRangeWithOptions(
 //
 // Return value:
 //
-//	A `map` of key to stream entry data, where entry data is an array of
+//	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // Example:
@@ -6969,14 +6975,14 @@ func (client *baseClient) XRangeWithOptions(
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //	)
-//	fmt.Println(res) // map[key:[["field2", "entry2"], ["field1", "entry1"]]]
+//	fmt.Println(res) // [{streamID ["field2", "entry2"], ["field1", "entry1"]]}]
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (client *baseClient) XRevRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) (map[string][][]string, error) {
+) ([]XRangeResponse, error) {
 	return client.XRevRangeWithOptions(key, start, end, nil)
 }
 
@@ -6998,7 +7004,7 @@ func (client *baseClient) XRevRange(
 //
 // Return value:
 //
-//	A `map` of key to stream entry data, where entry data is an array of
+//	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -7011,7 +7017,7 @@ func (client *baseClient) XRevRange(
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //		options.NewStreamRangeOptions().SetCount(10),
 //	)
-//	fmt.Println(res) // map[key:[["field2", "entry2"], ["field1", "entry1"]]]
+//	fmt.Println(res) // [{streamID [["field2", "entry2"], ["field1", "entry1"]]}]
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (client *baseClient) XRevRangeWithOptions(
@@ -7019,7 +7025,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts *options.StreamRangeOptions,
-) (map[string][][]string, error) {
+) ([]XRangeResponse, error) {
 	args := []string{key, string(start), string(end)}
 	if opts != nil {
 		optionArgs, err := opts.ToArgs()
@@ -7032,7 +7038,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+	return handleXRevRangeResponse(result)
 }
 
 // Returns information about the stream stored at `key`.
