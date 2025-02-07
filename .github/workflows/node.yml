@@ -190,7 +190,9 @@ jobs:
                   apk update
                   apk add --no-cache git tar
 
-            - uses: actions/checkout@v4
+            - name: Checkout code
+              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
+              uses: actions/checkout@v4
 
             - name: Setup musl on Linux
               if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
