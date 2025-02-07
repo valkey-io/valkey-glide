@@ -226,20 +226,21 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 // Return value:
 //
 //	If the value is successfully set, return api.Result[string] containing "OK".
-//	If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist conditions, return
-//	api.CreateNilStringResult().
+//	If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist
+//	or ConditionalSet.OnlyIfEquals conditions, return api.CreateNilStringResult().
 //	If SetOptions.returnOldValue is set, return the old value as a String.
 //
 // For example:
 //
-//	 key: initialValue
-//	 result, err := client.SetWithOptions("key", "value", api.NewSetOptionsBuilder()
-//				.SetExpiry(api.NewExpiryBuilder()
-//				.SetType(api.Seconds)
-//				.SetCount(uint64(5)
-//			))
-//	 result.Value(): "OK"
-//	 result.IsNil(): false
+//		 key: initialValue
+//		 result, err := client.SetWithOptions("key", "value", api.NewSetOptionsBuilder()
+//					.SetExpiry(api.NewExpiryBuilder()
+//	             .SetOnlyIfExists()
+//					.SetType(api.Seconds)
+//					.SetCount(uint64(5)
+//				))
+//		 result.Value(): "OK"
+//		 result.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (Result[string], error) {
