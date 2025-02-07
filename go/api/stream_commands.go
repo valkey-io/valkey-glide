@@ -2,7 +2,7 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+import "github.com/valkey-io/valkey-glide/go/api/options"
 
 // Supports commands and transactions for the "Stream" group of commands for standalone and cluster clients.
 //
@@ -113,21 +113,21 @@ type StreamCommands interface {
 
 	XInfoStreamFullWithOptions(key string, options *options.XInfoStreamOptions) (map[string]any, error)
 
-	XRange(key string, start options.StreamBoundary, end options.StreamBoundary) (map[string][][]string, error)
+	XRange(key string, start options.StreamBoundary, end options.StreamBoundary) ([]XRangeResponse, error)
 
 	XRangeWithOptions(
 		key string,
 		start options.StreamBoundary,
 		end options.StreamBoundary,
 		options *options.StreamRangeOptions,
-	) (map[string][][]string, error)
+	) ([]XRangeResponse, error)
 
-	XRevRange(key string, start options.StreamBoundary, end options.StreamBoundary) (map[string][][]string, error)
+	XRevRange(key string, start options.StreamBoundary, end options.StreamBoundary) ([]XRangeResponse, error)
 
 	XRevRangeWithOptions(
 		key string,
 		start options.StreamBoundary,
 		end options.StreamBoundary,
 		options *options.StreamRangeOptions,
-	) (map[string][][]string, error)
+	) ([]XRangeResponse, error)
 }
