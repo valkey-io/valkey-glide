@@ -1217,7 +1217,6 @@ func handleTimeClusterResponse(response *C.struct_CommandResponse) (ClusterValue
 		for nodeName, nodeTimes := range mapData {
 			multiNodeTimes[nodeName] = nodeTimes
 		}
-
 		return createClusterMultiValue(multiNodeTimes), nil
 	}
 

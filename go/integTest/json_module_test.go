@@ -12,7 +12,7 @@ import (
 func (suite *GlideTestSuite) TestModuleVerifyJsonLoaded() {
 	client := suite.defaultClusterClient()
 	result, err := client.InfoWithOptions(
-		api.ClusterInfoOptions{InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}}, Route: nil},
+		api.ClusterInfoOptions{InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}}, RouteOption: nil},
 	)
 
 	assert.Nil(suite.T(), err)

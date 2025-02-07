@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
 	"github.com/valkey-io/valkey-glide/go/glide/api/config"
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 )
 
 type GlideTestSuite struct {
@@ -173,7 +174,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 		info, _ := client.InfoWithOptions(
 			api.ClusterInfoOptions{
 				InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}},
-				Route:       config.RandomRoute.ToPtr(),
+				RouteOption: &options.RouteOption{Route: config.RandomRoute},
 			},
 		)
 		return extractServerVersion(suite, info.SingleValue())

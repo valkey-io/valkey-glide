@@ -138,8 +138,12 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (ClusterValue[string], error) {
-	if options.Route == nil {
-		response, err := client.executeCommand(C.Info, options.toArgs())
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if options.RouteOption == nil || options.RouteOption.Route == nil {
+		response, err := client.executeCommand(C.Info, optionArgs)
 		if err != nil {
 			return createEmptyClusterValue[string](), err
 		}
@@ -149,11 +153,11 @@ func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (C
 		}
 		return createClusterMultiValue[string](data), nil
 	}
-	response, err := client.executeCommandWithRoute(C.Info, options.toArgs(), *options.Route)
+	response, err := client.executeCommandWithRoute(C.Info, optionArgs, options.Route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
-	if (*options.Route).IsMultiNode() {
+	if options.Route.IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
 			return createEmptyClusterValue[string](), err
@@ -231,7 +235,7 @@ func (client *GlideClusterClient) Ping() (string, error) {
 //
 // Parameters:
 //
-//	pingOptions - The PingOptions type.
+//	pingOptions - The [ClusterPingOptions] type.
 //
 // Return value:
 //
@@ -239,27 +243,26 @@ func (client *GlideClusterClient) Ping() (string, error) {
 //
 // For example:
 //
-//	route := config.Route(config.RandomRoute)
-//	opts  := options.ClusterPingOptions{
-//			 PingOptions: &options.PingOptions{
-//			   Message: "Hello",
-//			 },
-//			 Route: &route,
-//		 }
+//	route := options.RouteOption{config.RandomRoute}
+//	opts  := options.ClusterPingOptions{ &options.PingOptions{ "Hello" }, &route }
 //	result, err := clusterClient.PingWithOptions(opts)
 //	fmt.Println(result) // Output: Hello
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (string, error) {
-	if pingOptions.Route == nil {
-		response, err := client.executeCommand(C.Ping, pingOptions.ToArgs())
+	args, err := pingOptions.ToArgs()
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	if pingOptions.RouteOption == nil || pingOptions.RouteOption.Route == nil {
+		response, err := client.executeCommand(C.Ping, args)
 		if err != nil {
 			return defaultStringResponse, err
 		}
 		return handleStringResponse(response)
 	}
 
-	response, err := client.executeCommandWithRoute(C.Ping, pingOptions.ToArgs(), *pingOptions.Route)
+	response, err := client.executeCommandWithRoute(C.Ping, args, pingOptions.Route)
 	if err != nil {
 		return defaultStringResponse, err
 	}
@@ -274,7 +277,7 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 //
 // Parameters:
 //
-//	options - The TimeOptions type.
+//	options - The [RouteOption] type.
 //
 // Return value:
 //
@@ -284,11 +287,9 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 //
 // Example:
 //
-//	route := config.Route(config.RandomRoute)
-//	opts  := options.ClusterTimeOptions{
-//		  Route: &route,
-//	}
-//	fmt.Println(clusterResponse.SingleValue()) // Output: [1737994354 547816]
+//		opts := options.RouteOption{config.RandomRoute}
+//	 response := client.TimeWithOptions(opts)
+//		fmt.Println(response.SingleValue()) // Output: [1737994354 547816]
 //
 // [valkey.io]: https://valkey.io/commands/time/
 func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (ClusterValue[[]string], error) {
@@ -301,15 +302,18 @@ func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (Clu
 
 // Returns the number of keys in the database.
 //
+// Parameters:
+//
+//	options - The [RouteOption] type.
+//
 // Return value:
 //
 //	The number of keys in the database.
 //
 // Example:
 //
-//	route := api.SimpleNodeRoute(api.RandomRoute)
-//	options := options.NewDBOptionsBuilder().SetRoute(route)
-//	result, err := client.DBSizeWithOption(route)
+//	options := options.RouteOption{config.RandomRoute}
+//	result, err := client.DBSizeWithOption(options)
 //	if err != nil {
 //	  // handle error
 //	}
@@ -329,7 +333,7 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 // Parameters:
 //
-//	message - The provided message.
+//	echoOptions - The [ClusterEchoOptions] type.
 //
 // Return value:
 //
@@ -337,22 +341,30 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 // Example:
 //
-//	response, err := clusterClient.EchoWithOptions(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	for node, data := range response {
-//		fmt.Printf("%s node returned %s\n", node, data)
-//	}
+//	 options := options.ClusterEchoOptions{&options.EchoOptions{"Hi"}, &options.RouteOption{config.AllNodes}}
+//		response, err := clusterClient.EchoWithOptions(options)
+//		if err != nil {
+//			// handle error
+//		}
+//		for node, data := range response {
+//			fmt.Printf("%s node returned %s\n", node, data)
+//		}
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
-	response, err := client.executeCommandWithRoute(C.Echo, echoOptions.ToArgs(),
-		echoOptions.RouteOption.Route)
+	args, err := echoOptions.ToArgs()
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
-	if echoOptions.RouteOption.Route != nil &&
+	var route config.Route
+	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil {
+		route = echoOptions.RouteOption.Route
+	}
+	response, err := client.executeCommandWithRoute(C.Echo, args, route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil &&
 		(echoOptions.RouteOption.Route).IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {

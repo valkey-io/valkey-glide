@@ -5,8 +5,8 @@ package api
 import (
 	"strconv"
 
-	"github.com/valkey-io/valkey-glide/go/glide/api/config"
 	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
 
@@ -215,7 +215,7 @@ func (lposOptions *LPosOptions) SetMaxLen(maxLen int64) *LPosOptions {
 	return lposOptions
 }
 
-func (opts *LPosOptions) toArgs() []string {
+func (opts *LPosOptions) toArgs() ([]string, error) {
 	args := []string{}
 	if opts.IsRankSet {
 		args = append(args, RankKeyword, utils.IntToString(opts.Rank))
@@ -225,7 +225,7 @@ func (opts *LPosOptions) toArgs() []string {
 		args = append(args, MaxLenKeyword, utils.IntToString(opts.MaxLen))
 	}
 
-	return args
+	return args, nil
 }
 
 const (
@@ -430,21 +430,18 @@ type InfoOptions struct {
 // Optional arguments for `Info` for cluster client
 type ClusterInfoOptions struct {
 	*InfoOptions
-	// Specifies the routing configuration for the command.
-	// The client will route the command to the nodes defined by `Route`.
-	// The command will be routed to all primary nodes, unless `Route` is provided.
-	Route *config.Route
+	*options.RouteOption
 }
 
-func (opts *InfoOptions) toArgs() []string {
+func (opts *InfoOptions) toArgs() ([]string, error) {
 	if opts == nil {
-		return []string{}
+		return []string{}, nil
 	}
 	args := make([]string, 0, len(opts.Sections))
 	for _, section := range opts.Sections {
 		args = append(args, string(section))
 	}
-	return args
+	return args, nil
 }
 
 // Optional arguments to Copy(source string, destination string, option *CopyOptions)

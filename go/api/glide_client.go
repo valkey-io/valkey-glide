@@ -197,7 +197,11 @@ func (client *GlideClient) Info() (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) InfoWithOptions(options InfoOptions) (string, error) {
-	result, err := client.executeCommand(C.Info, options.toArgs())
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	result, err := client.executeCommand(C.Info, optionArgs)
 	if err != nil {
 		return defaultStringResponse, err
 	}
@@ -290,7 +294,11 @@ func (client *GlideClient) Ping() (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
-	result, err := client.executeCommand(C.Ping, pingOptions.ToArgs())
+	optionArgs, err := pingOptions.ToArgs()
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	result, err := client.executeCommand(C.Ping, optionArgs)
 	if err != nil {
 		return defaultStringResponse, err
 	}

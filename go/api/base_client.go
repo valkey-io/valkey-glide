@@ -1244,7 +1244,7 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 func (client *baseClient) HScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.HScan, []string{key, cursor})
 	if err != nil {
-		return "", nil, err
+		return defaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1286,12 +1286,12 @@ func (client *baseClient) HScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return "", nil, err
+		return defaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.HScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return "", nil, err
+		return defaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1545,7 +1545,11 @@ func (client *baseClient) LPos(key string, element string) (Result[int64], error
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (client *baseClient) LPosWithOptions(key string, element string, options *LPosOptions) (Result[int64], error) {
-	result, err := client.executeCommand(C.LPos, append([]string{key, element}, options.toArgs()...))
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	result, err := client.executeCommand(C.LPos, append([]string{key, element}, optionArgs...))
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
@@ -1619,9 +1623,13 @@ func (client *baseClient) LPosCountWithOptions(
 	count int64,
 	options *LPosOptions,
 ) ([]int64, error) {
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return nil, err
+	}
 	result, err := client.executeCommand(
 		C.LPos,
-		append([]string{key, element, CountKeyword, utils.IntToString(count)}, options.toArgs()...),
+		append([]string{key, element, CountKeyword, utils.IntToString(count)}, optionArgs...),
 	)
 	if err != nil {
 		return nil, err
@@ -2221,7 +2229,7 @@ func (client *baseClient) SUnion(keys []string) (map[string]struct{}, error) {
 func (client *baseClient) SScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.SScan, []string{key, cursor})
 	if err != nil {
-		return "", nil, err
+		return defaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -2274,12 +2282,12 @@ func (client *baseClient) SScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return "", nil, err
+		return defaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.SScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return "", nil, err
+		return defaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -4649,7 +4657,11 @@ func (client *baseClient) BZMPopWithOptions(
 func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
-	args = append(args, rangeQuery.ToArgs()...)
+	queryArgs, err := rangeQuery.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, queryArgs...)
 	result, err := client.executeCommand(C.ZRange, args)
 	if err != nil {
 		return nil, err
@@ -4695,7 +4707,11 @@ func (client *baseClient) ZRangeWithScores(
 ) (map[string]float64, error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
-	args = append(args, rangeQuery.ToArgs()...)
+	queryArgs, err := rangeQuery.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, queryArgs...)
 	args = append(args, "WITHSCORES")
 	result, err := client.executeCommand(C.ZRange, args)
 	if err != nil {
@@ -5349,7 +5365,7 @@ func (client *baseClient) ZScore(key string, member string) (Result[float64], er
 func (client *baseClient) ZScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.ZScan, []string{key, cursor})
 	if err != nil {
-		return "", nil, err
+		return defaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -5392,12 +5408,12 @@ func (client *baseClient) ZScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return "", nil, err
+		return defaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.ZScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return "", nil, err
+		return defaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -5806,8 +5822,12 @@ func (client *baseClient) XGroupSetIdWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/zremrangebylex/
 func (client *baseClient) ZRemRangeByLex(key string, rangeQuery options.RangeByLex) (int64, error) {
+	queryArgs, err := rangeQuery.ToArgsRemRange()
+	if err != nil {
+		return defaultIntResponse, err
+	}
 	result, err := client.executeCommand(
-		C.ZRemRangeByLex, append([]string{key}, rangeQuery.ToArgsRemRange()...))
+		C.ZRemRangeByLex, append([]string{key}, queryArgs...))
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -5839,7 +5859,7 @@ func (client *baseClient) ZRemRangeByLex(key string, rangeQuery options.RangeByL
 func (client *baseClient) ZRemRangeByRank(key string, start int64, stop int64) (int64, error) {
 	result, err := client.executeCommand(C.ZRemRangeByRank, []string{key, utils.IntToString(start), utils.IntToString(stop)})
 	if err != nil {
-		return 0, err
+		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -5870,9 +5890,13 @@ func (client *baseClient) ZRemRangeByRank(key string, start int64, stop int64) (
 //
 // [valkey.io]: https://valkey.io/commands/zremrangebyscore/
 func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error) {
-	result, err := client.executeCommand(C.ZRemRangeByScore, append([]string{key}, rangeQuery.ToArgsRemRange()...))
+	queryArgs, err := rangeQuery.ToArgsRemRange()
 	if err != nil {
-		return 0, err
+		return defaultIntResponse, err
+	}
+	result, err := client.executeCommand(C.ZRemRangeByScore, append([]string{key}, queryArgs...))
+	if err != nil {
+		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -6130,7 +6154,10 @@ func (client *baseClient) Sort(key string) ([]Result[string], error) {
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
-	optionArgs := options.ToArgs()
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return nil, err
+	}
 	result, err := client.executeCommand(C.Sort, append([]string{key}, optionArgs...))
 	if err != nil {
 		return nil, err
@@ -6196,7 +6223,10 @@ func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortReadOnlyWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
-	optionArgs := options.ToArgs()
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return nil, err
+	}
 	result, err := client.executeCommand(C.SortReadOnly, append([]string{key}, optionArgs...))
 	if err != nil {
 		return nil, err
@@ -6279,7 +6309,10 @@ func (client *baseClient) SortStoreWithOptions(
 	destination string,
 	options *options.SortOptions,
 ) (int64, error) {
-	optionArgs := options.ToArgs()
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
 	result, err := client.executeCommand(C.Sort, append([]string{key, "STORE", destination}, optionArgs...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -7148,7 +7181,10 @@ func (client *baseClient) Time() ([]string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/zinter/
 func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
-	args := keys.ToArgs()
+	args, err := keys.ToArgs()
+	if err != nil {
+		return nil, err
+	}
 	result, err := client.executeCommand(C.ZInter, args)
 	if err != nil {
 		return nil, err
