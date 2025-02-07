@@ -7463,7 +7463,7 @@ func (client *baseClient) ZDiffStore(destination string, keys []string) (int64, 
 //
 // Return value:
 //
-//	The number of elements in the resulting sorted set stored at <code>destination</code>.
+//	The number of elements in the resulting sorted set stored at `destination`.
 //
 // Example:
 //
@@ -7497,7 +7497,7 @@ func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys opt
 //
 // Return value:
 //
-//	The number of elements in the resulting sorted set stored at <code>destination</code>.
+//	The number of elements in the resulting sorted set stored at `destination`.
 //
 // Example:
 //
@@ -7547,7 +7547,7 @@ func (client *baseClient) ZInterCard(keys []string) (int64, error) {
 	return client.ZInterCardWithOptions(keys, nil)
 }
 
-// Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+// Returns the cardinality of the intersection of the sorted sets specified by `keys`.
 // If the intersection cardinality reaches `options.limit` partway through the computation, the
 // algorithm will exit early and yield `options.limit` as the cardinality.
 //
