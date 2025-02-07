@@ -127,7 +127,7 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //
 //	opts := api.ClusterInfoOptions{
 //		InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}},
-//		Route: api.RandomRoute.ToPtr(),
+//		RouteOption: &options.RouteOption{Route: config.RandomRoute},
 //	}
 //	response, err := clusterClient.InfoWithOptions(opts)
 //	if err != nil {
@@ -191,7 +191,7 @@ func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (C
 //
 //	route := config.SimpleNodeRoute(config.RandomRoute)
 //	result, err := client.CustomCommandWithRoute([]string{"ping"}, route)
-//	result.SingleValue().(string): "PONG"
+//	result.SingleValue().(string): "ping"
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClusterClient) CustomCommandWithRoute(
@@ -287,9 +287,9 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 //
 // Example:
 //
-//		opts := options.RouteOption{config.RandomRoute}
-//	 response := client.TimeWithOptions(opts)
-//		fmt.Println(response.SingleValue()) // Output: [1737994354 547816]
+//	opts := options.RouteOption{config.RandomRoute}
+//	response := client.TimeWithOptions(opts)
+//	fmt.Println(response.SingleValue()) // Output: [1737994354 547816]
 //
 // [valkey.io]: https://valkey.io/commands/time/
 func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (ClusterValue[[]string], error) {
@@ -341,14 +341,14 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 // Example:
 //
-//	 options := options.ClusterEchoOptions{&options.EchoOptions{"Hi"}, &options.RouteOption{config.AllNodes}}
-//		response, err := clusterClient.EchoWithOptions(options)
-//		if err != nil {
-//			// handle error
-//		}
-//		for node, data := range response {
-//			fmt.Printf("%s node returned %s\n", node, data)
-//		}
+//	options := options.ClusterEchoOptions{&options.EchoOptions{"Hi"}, &options.RouteOption{config.AllNodes}}
+//	response, err := clusterClient.EchoWithOptions(options)
+//	if err != nil {
+//		// handle error
+//	}
+//	for node, data := range response {
+//		fmt.Printf("%s node returned %s\n", node, data)
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
