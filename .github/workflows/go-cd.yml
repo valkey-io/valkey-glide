@@ -44,7 +44,7 @@ jobs:
         env:
             INPUT_VERSION: ${{ github.event.inputs.version }}
         steps:
-            - name: Validate Version Agaisnt RegEx
+            - name: Validate Version Against RegEx
               run: |
                   echo "input version is: ${{ env.INPUT_VERSION }}"
                   if ! echo "${{ env.INPUT_VERSION }}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
