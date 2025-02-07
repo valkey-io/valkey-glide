@@ -96,7 +96,7 @@ unit-test:
 example-test:
 	mkdir -p reports
 	set -o pipefail; \
-	../utils/cluster_manager.py start -p 6379 6380
+	../utils/cluster_manager.py start -p 6379 -r 0
 	../utils/cluster_manager.py start --cluster-mode -p 7000 7001 7002 7003 7004 7005
 	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.so|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v -race ./... -skip Test $(if $(test-filter), -run $(test-filter)) \
