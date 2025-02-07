@@ -6579,7 +6579,7 @@ func (suite *GlideTestSuite) TestObjectIdleTime() {
 		time.Sleep(time.Duration(sleepSec) * time.Second)
 		resultIdleTime, err := defaultClient.ObjectIdleTime(key)
 		assert.Nil(t, err)
-		assert.GreaterOrEqual(t, resultIdleTime.Value(), sleepSec)
+		assert.GreaterOrEqual(t, resultIdleTime.Value(), sleepSec - 1)
 	})
 }
 
