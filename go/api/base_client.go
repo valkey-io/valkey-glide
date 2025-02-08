@@ -7524,3 +7524,100 @@ func (client *baseClient) ZInterStoreWithOptions(
 	}
 	return handleIntResponse(result)
 }
+
+// / Blocks the connection until it pops and returns a member-score pair
+// with the highest score from the first non-empty sorted set.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//   - keys: An array of keys to check for elements.
+//   - timeoutSecs: The maximum number of seconds to block (0 blocks indefinitely).
+//
+// Return value:
+//
+//   - A `KeyWithMemberAndScore` struct containing the key from which the member was popped,
+//     the popped member, and its score. If no element could be popped and the timeout expired,
+//     returns `nil`.
+//
+// Example:
+//
+//	zaddResult, err := client.ZAdd("mySortedSet", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0})
+//	res, err := client.BZPopMax([]string{"mySortedSet"}, 1.0)
+//	fmt.Println(res.Value()) // Output: {Key: "mySortedSet", Member: "c", Score: 3.0}
+//
+// [valkey.io]: https://valkey.io/commands/bzpopmax/
+func (client *baseClient) BZPopMax(
+	keys []string,
+	timeoutSecs float64,
+) (Result[KeyWithMemberAndScore], error) {
+	if len(keys) == 0 {
+		return CreateNilKeyWithMemberAndScoreResult(), fmt.Errorf("keys cannot be empty")
+	}
+
+	args := append(keys, utils.FloatToString(timeoutSecs))
+
+	result, err := client.executeCommand(C.BZPopMax, args)
+	if err != nil {
+		return CreateNilKeyWithMemberAndScoreResult(), err
+	}
+
+	return handleKeyWithMemberAndScoreResponse(result)
+}
+
+// / Pops one or more member-score pairs from the first non-empty sorted set,
+// with the given keys being checked in the order provided.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//   - keys: An array of keys to check for elements.
+//   - scoreFilter: Pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest scores.
+//   - count: The maximum number of elements to pop.
+//
+// Return value:
+//
+//   - A `KeyWithArrayOfMembersAndScores` struct containing:
+//   - The key from which the elements were popped.
+//   - An array of member-score pairs of the popped elements.
+//     Returns `nil` if no member could be popped.
+//
+// Example:
+//
+//	res, err := client.ZMPop([]string{"mySortedSet"}, api.MAX, 2)
+//	fmt.Println(res.Value()) // Output: {Key: "mySortedSet", MembersAndScores: [{Member: "c", Score: 3.0}, {Member: "b", Score:
+//
+// 2.0}]}
+//
+// [valkey.io]: https://valkey.io/commands/zmpop/
+func (client *baseClient) ZMPop(
+	keys []string,
+	scoreFilter ScoreFilter,
+	count int,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	if len(keys) == 0 {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), fmt.Errorf("keys cannot be empty")
+	}
+
+	scoreFilterStr, err := scoreFilter.toString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	args := make([]string, 0, len(keys)+3)
+	args = append(args, strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, scoreFilterStr)
+	if count > 0 {
+		args = append(args, "COUNT", strconv.Itoa(count))
+	}
+
+	result, err := client.executeCommand(C.ZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
+}
