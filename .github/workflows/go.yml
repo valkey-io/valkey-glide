@@ -68,11 +68,13 @@ jobs:
                   sudo apt-get update
                   sudo apt-get install -y make cmake gcc procps tree git openssl unzip
                   
-                  echo export PATH="$PATH:$HOME/.cargo/bin:$HOME/.local/bin" >> $HOME/.bashrc
+                  : 'echo export PATH="$PATH:$HOME/.cargo/bin:$HOME/.local/bin" >> $HOME/.bashrc'
+                  uname -a
+                  hostnamectl
                   
-                  PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-                  curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
-                  unzip -o protoc-29.1-linux-x86_64.zip -d $HOME/.local
+                  PB_REL="https://github.com/protocolbuffers/protobuf/releases/download/v29.1/protoc-29.1-linux-aarch_64.zip"
+                  curl -LO $PB_REL
+                  unzip -o protoc-29.1-linux-aarch_64.zip -d $HOME/.local
                   protoc --version
                   
                   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
