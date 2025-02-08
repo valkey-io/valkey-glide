@@ -58,7 +58,6 @@ env:
 jobs:
     test-modules:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
-        environment: AWS_ACTIONS
         name: Modules Tests
         runs-on: [self-hosted, linux, ARM64]
         timeout-minutes: 15
@@ -69,12 +68,11 @@ jobs:
                   sudo apt-get update
                   sudo apt-get install -y make cmake gcc procps tree git openssl unzip
                   
-                  rm -rf $HOME/.local/include/google/protobuf $HOME/.local/bin/protoc
                   echo export PATH="$PATH:$HOME/.cargo/bin:$HOME/.local/bin" >> $HOME/.bashrc
                   
                   PB_REL="https://github.com/protocolbuffers/protobuf/releases"
                   curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
-                  unzip protoc-29.1-linux-x86_64.zip -d $HOME/.local
+                  unzip -o protoc-29.1-linux-x86_64.zip -d $HOME/.local
                   protoc --version
                   
                   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
