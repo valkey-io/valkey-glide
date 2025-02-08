@@ -1,7 +1,9 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/glide/utils"
+	"github.com/valkey-io/valkey-glide/go/utils"
 )
 
 // Subcommands for bitfield operations.

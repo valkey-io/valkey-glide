@@ -3,7 +3,7 @@
 package api
 
 import (
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 // Supports commands and transactions for the "String" group of commands for standalone and cluster clients.
