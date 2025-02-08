@@ -4715,6 +4715,10 @@ func (client *baseClient) ZRangeWithScores(
 // sorted set at `destination`. If `destination` doesn't exist, a new sorted
 // set is created; if it exists, it's overwritten.
 //
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
 // See [valkey.io] for more details.
 //
 // Parameters:
