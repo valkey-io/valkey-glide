@@ -22,11 +22,19 @@ func (options *ZInterOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
 	if options.keysOrWeightedKeys != nil {
-		args = append(args, options.keysOrWeightedKeys.ToArgs()...)
+		keysArgs, err := options.keysOrWeightedKeys.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, keysArgs...)
 	}
 
 	if options.aggregate != "" {
-		args = append(args, options.aggregate.ToArgs()...)
+		aggArgs, err := options.aggregate.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, aggArgs...)
 	}
 
 	return args, nil

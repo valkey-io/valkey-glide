@@ -12,7 +12,7 @@ import "github.com/valkey-io/valkey-glide/go/api/options"
 type ServerManagementClusterCommands interface {
 	Info() (map[string]string, error)
 
-	InfoWithOptions(options ClusterInfoOptions) (ClusterValue[string], error)
+	InfoWithOptions(options options.ClusterInfoOptions) (ClusterValue[string], error)
 
 	TimeWithOptions(routeOption options.RouteOption) (ClusterValue[[]string], error)
 

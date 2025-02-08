@@ -11,7 +11,7 @@ import (
 //   - For range queries by lexicographical order, use `RangeByLex`.
 //   - For range queries by score, use `RangeByScore`.
 type ZRangeQuery interface {
-	ToArgs() []string
+	ToArgs() ([]string, error)
 }
 
 type ZRemRangeQuery interface {
@@ -85,8 +85,8 @@ type Limit struct {
 	count int64
 }
 
-func (limit *Limit) toArgs() []string {
-	return []string{"LIMIT", utils.IntToString(limit.offset), utils.IntToString(limit.count)}
+func (limit *Limit) toArgs() ([]string, error) {
+	return []string{"LIMIT", utils.IntToString(limit.offset), utils.IntToString(limit.count)}, nil
 }
 
 // Queries a range of elements from a sorted set by theirs index.
@@ -105,13 +105,13 @@ func (rbi *RangeByIndex) SetReverse() *RangeByIndex {
 	return rbi
 }
 
-func (rbi *RangeByIndex) ToArgs() []string {
+func (rbi *RangeByIndex) ToArgs() ([]string, error) {
 	args := make([]string, 0, 3)
 	args = append(args, utils.IntToString(rbi.start), utils.IntToString(rbi.end))
 	if rbi.reverse {
 		args = append(args, "REV")
 	}
-	return args
+	return args, nil
 }
 
 // Queries a range of elements from a sorted set by theirs score.
@@ -136,20 +136,24 @@ func (rbs *RangeByScore) SetLimit(offset, count int64) *RangeByScore {
 	return rbs
 }
 
-func (rbs *RangeByScore) ToArgs() []string {
+func (rbs *RangeByScore) ToArgs() ([]string, error) {
 	args := make([]string, 0, 7)
 	args = append(args, string(rbs.start), string(rbs.end), "BYSCORE")
 	if rbs.reverse {
 		args = append(args, "REV")
 	}
 	if rbs.Limit != nil {
-		args = append(args, rbs.Limit.toArgs()...)
+		limitArgs, err := rbs.Limit.toArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, limitArgs...)
 	}
-	return args
+	return args, nil
 }
 
-func (rbs *RangeByScore) ToArgsRemRange() []string {
-	return []string{string(rbs.start), string(rbs.end)}
+func (rbs *RangeByScore) ToArgsRemRange() ([]string, error) {
+	return []string{string(rbs.start), string(rbs.end)}, nil
 }
 
 // Queries a range of elements from a sorted set by theirs lexicographical order.
@@ -174,20 +178,24 @@ func (rbl *RangeByLex) SetLimit(offset, count int64) *RangeByLex {
 	return rbl
 }
 
-func (rbl *RangeByLex) ToArgs() []string {
+func (rbl *RangeByLex) ToArgs() ([]string, error) {
 	args := make([]string, 0, 7)
 	args = append(args, string(rbl.start), string(rbl.end), "BYLEX")
 	if rbl.reverse {
 		args = append(args, "REV")
 	}
 	if rbl.Limit != nil {
-		args = append(args, rbl.Limit.toArgs()...)
+		limitArgs, err := rbl.Limit.toArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, limitArgs...)
 	}
-	return args
+	return args, nil
 }
 
-func (rbl *RangeByLex) ToArgsRemRange() []string {
-	return []string{string(rbl.start), string(rbl.end)}
+func (rbl *RangeByLex) ToArgsRemRange() ([]string, error) {
+	return []string{string(rbl.start), string(rbl.end)}, nil
 }
 
 // Query for `ZRangeWithScores` in [SortedSetCommands]
@@ -197,7 +205,7 @@ type ZRangeQueryWithScores interface {
 	// A dummy interface to distinguish queries for `ZRange` and `ZRangeWithScores`
 	// `ZRangeWithScores` does not support BYLEX
 	dummy()
-	ToArgs() []string
+	ToArgs() ([]string, error)
 }
 
 func (q *RangeByIndex) dummy() {}
