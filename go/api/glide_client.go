@@ -171,7 +171,7 @@ func (client *GlideClient) Select(index int64) (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) Info() (string, error) {
-	return client.InfoWithOptions(InfoOptions{[]Section{}})
+	return client.InfoWithOptions(options.InfoOptions{Sections: []options.Section{}})
 }
 
 // Gets information and statistics about the server.
@@ -188,7 +188,7 @@ func (client *GlideClient) Info() (string, error) {
 //
 // Example:
 //
-//	opts := api.InfoOptions{Sections: []api.Section{api.Server}}
+//	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
 //	response, err := standaloneClient.InfoWithOptions(opts)
 //	if err != nil {
 //		// handle error
@@ -196,8 +196,8 @@ func (client *GlideClient) Info() (string, error) {
 //	fmt.Println(response)
 //
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *GlideClient) InfoWithOptions(options InfoOptions) (string, error) {
-	optionArgs, err := options.toArgs()
+func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string, error) {
+	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return defaultStringResponse, err
 	}

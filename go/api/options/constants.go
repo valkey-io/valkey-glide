@@ -12,6 +12,10 @@ const (
 	WithValues       string = "WITHVALUES" // Valkey API keyword to query hash values along their names in `HRANDFIELD`.
 	AggregateKeyWord string = "AGGREGATE"  // Valkey API keyword for the aggregate option for multiple commands.
 	WeightsKeyword   string = "WEIGHTS"    // Valkey API keyword for the weights option for multiple commands.
+	RankKeyword      string = "RANK"       // Valkey API keyword use to determine the rank of the match to return.
+	MaxLenKeyword    string = "MAXLEN"     // Valkey API keyword used to determine the maximum number of list items to compare.
+	ReplaceKeyword   string = "REPLACE"    // Subcommand string to replace existing key.
+	ABSTTLKeyword    string = "ABSTTL"     // Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
 )
 
 type InfBoundary string

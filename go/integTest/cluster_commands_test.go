@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/glide/api"
 	"github.com/valkey-io/valkey-glide/go/glide/api/config"
 	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 )
@@ -59,12 +58,12 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	}
 
 	// info with option or with multiple options without route
-	sections := []api.Section{api.Cpu}
+	sections := []options.Section{options.Cpu}
 	if suite.serverVersion >= "7.0.0" {
-		sections = append(sections, api.Memory)
+		sections = append(sections, options.Memory)
 	}
-	opts := api.ClusterInfoOptions{
-		InfoOptions: &api.InfoOptions{Sections: sections},
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
 		RouteOption: nil,
 	}
 	response, err := client.InfoWithOptions(opts)
@@ -77,8 +76,8 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	}
 
 	// same sections with random route
-	opts = api.ClusterInfoOptions{
-		InfoOptions: &api.InfoOptions{Sections: sections},
+	opts = options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
 		RouteOption: &options.RouteOption{Route: config.RandomRoute},
 	}
 	response, err = client.InfoWithOptions(opts)
@@ -94,7 +93,7 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	}
 
 	// default sections, multi node route
-	opts = api.ClusterInfoOptions{
+	opts = options.ClusterInfoOptions{
 		InfoOptions: nil,
 		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
 	}

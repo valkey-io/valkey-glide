@@ -151,7 +151,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 		client, err := api.NewGlideClient(clientConfig)
 		if err == nil && client != nil {
 			defer client.Close()
-			info, _ := client.InfoWithOptions(api.InfoOptions{Sections: []api.Section{api.Server}})
+			info, _ := client.InfoWithOptions(options.InfoOptions{Sections: []options.Section{options.Server}})
 			return extractServerVersion(suite, info)
 		}
 	}
@@ -172,8 +172,8 @@ func getServerVersion(suite *GlideTestSuite) string {
 		defer client.Close()
 
 		info, _ := client.InfoWithOptions(
-			api.ClusterInfoOptions{
-				InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}},
+			options.ClusterInfoOptions{
+				InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
 				RouteOption: &options.RouteOption{Route: config.RandomRoute},
 			},
 		)

@@ -414,11 +414,11 @@ func (suite *GlideTestSuite) TestInfoStandalone() {
 	}
 
 	// info with option or with multiple options
-	sections := []api.Section{api.Cpu}
+	sections := []options.Section{options.Cpu}
 	if suite.serverVersion >= "7.0.0" {
-		sections = append(sections, api.Memory)
+		sections = append(sections, options.Memory)
 	}
-	info, err = client.InfoWithOptions(api.InfoOptions{Sections: sections})
+	info, err = client.InfoWithOptions(options.InfoOptions{Sections: sections})
 	assert.NoError(t, err)
 	for _, section := range sections {
 		assert.Contains(t, strings.ToLower(info), strings.ToLower("# "+string(section)), "Section "+section+" is missing")

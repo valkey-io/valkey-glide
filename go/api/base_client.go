@@ -233,17 +233,17 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 // For example:
 //
 //	 key: initialValue
-//	 result, err := client.SetWithOptions("key", "value", api.NewSetOptionsBuilder()
-//				.SetExpiry(api.NewExpiryBuilder()
-//				.SetType(api.Seconds)
+//	 result, err := client.SetWithOptions("key", "value", options.NewSetOptionsBuilder()
+//				.SetExpiry(options.NewExpiryBuilder()
+//				.SetType(options.Seconds)
 //				.SetCount(uint64(5)
 //			))
 //	 result.Value(): "OK"
 //	 result.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/set/
-func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (Result[string], error) {
-	optionArgs, err := options.toArgs()
+func (client *baseClient) SetWithOptions(key string, value string, options *options.SetOptions) (Result[string], error) {
+	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -327,7 +327,7 @@ func (client *baseClient) GetEx(key string) (Result[string], error) {
 // Parameters:
 //
 //	key - The key to be retrieved from the database.
-//	options - The [api.GetExOptions].
+//	options - The [options.GetExOptions].
 //
 // Return value:
 //
@@ -336,17 +336,17 @@ func (client *baseClient) GetEx(key string) (Result[string], error) {
 // For example:
 //
 //	 key: initialValue
-//	 result, err := client.GetExWithOptions("key", api.NewGetExOptionsBuilder()
-//				.SetExpiry(api.NewExpiryBuilder()
-//				.SetType(api.Seconds)
+//	 result, err := client.GetExWithOptions("key", options.NewGetExOptionsBuilder()
+//				.SetExpiry(options.NewExpiryBuilder()
+//				.SetType(options.Seconds)
 //				.SetCount(uint64(5)
 //			))
 //	 result.Value(): "initialValue"
 //	 result.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/getex/
-func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (Result[string], error) {
-	optionArgs, err := options.toArgs()
+func (client *baseClient) GetExWithOptions(key string, options *options.GetExOptions) (Result[string], error) {
+	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -1258,7 +1258,7 @@ func (client *baseClient) HScan(key string, cursor string) (string, []string, er
 //
 //	key - The key of the hash.
 //	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
-//	options - The [api.HashScanOptions].
+//	options - The [options.HashScanOptions].
 //
 // Return value:
 //
@@ -1537,15 +1537,15 @@ func (client *baseClient) LPos(key string, element string) (Result[int64], error
 //
 // For example:
 //  1. result, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e"})
-//     result, err := client.LPosWithOptions("my_list", "e", api.NewLPosOptionsBuilder().SetRank(2))
+//     result, err := client.LPosWithOptions("my_list", "e", options.NewLPosOptionsBuilder().SetRank(2))
 //     result.Value(): 5 (Returns the second occurrence of the element "e")
 //  2. result, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e"})
-//     result, err := client.LPosWithOptions("my_list", "e", api.NewLPosOptionsBuilder().SetRank(1).SetMaxLen(1000))
+//     result, err := client.LPosWithOptions("my_list", "e", options.NewLPosOptionsBuilder().SetRank(1).SetMaxLen(1000))
 //     result.Value(): 4
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
-func (client *baseClient) LPosWithOptions(key string, element string, options *LPosOptions) (Result[int64], error) {
-	optionArgs, err := options.toArgs()
+func (client *baseClient) LPosWithOptions(key string, element string, options *options.LPosOptions) (Result[int64], error) {
+	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
@@ -1579,7 +1579,7 @@ func (client *baseClient) LPosWithOptions(key string, element string, options *L
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (client *baseClient) LPosCount(key string, element string, count int64) ([]int64, error) {
-	result, err := client.executeCommand(C.LPos, []string{key, element, CountKeyword, utils.IntToString(count)})
+	result, err := client.executeCommand(C.LPos, []string{key, element, options.CountKeyword, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
 	}
@@ -1597,39 +1597,41 @@ func (client *baseClient) LPosCount(key string, element string, count int64) ([]
 //	key     - The name of the list.
 //	element - The value to search for within the list.
 //	count   - The number of matches wanted.
-//	options - The LPos options.
+//	opts    - The LPos options.
 //
 // Return value:
 //
 //	An array that holds the indices of the matching elements within the list.
 //
 // For example:
-//  1. _, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-//     result, err := client.LPosWithOptions("my_list", "e", int64(1), api.NewLPosOptionsBuilder().SetRank(2))
-//     result: []int64{ 5 }
-//  2. _, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-//     result, err := client.LPosWithOptions(
-//     "my_list",
-//     "e",
-//     int64(3),
-//     api.NewLPosOptionsBuilder().SetRank(2).SetMaxLen(1000),
-//     )
-//     result: []int64{ 5, 6 }
+//
+//	_, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+//	result, err := client.LPosWithOptions("my_list", "e", int64(1), options.NewLPosOptionsBuilder().SetRank(2))
+//	result: []int64{ 5 }
+//
+//	_, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+//	result, err := client.LPosWithOptions(
+//		"my_list",
+//		"e",
+//		int64(3),
+//		options.NewLPosOptionsBuilder().SetRank(2).SetMaxLen(1000),
+//	)
+//	result: []int64{ 5, 6 }
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (client *baseClient) LPosCountWithOptions(
 	key string,
 	element string,
 	count int64,
-	options *LPosOptions,
+	opts *options.LPosOptions,
 ) ([]int64, error) {
-	optionArgs, err := options.toArgs()
+	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return nil, err
 	}
 	result, err := client.executeCommand(
 		C.LPos,
-		append([]string{key, element, CountKeyword, utils.IntToString(count)}, optionArgs...),
+		append([]string{key, element, options.CountKeyword, utils.IntToString(count)}, optionArgs...),
 	)
 	if err != nil {
 		return nil, err
@@ -2563,7 +2565,7 @@ func (client *baseClient) RPopCount(key string, count int64) ([]string, error) {
 // Parameters:
 //
 //	key            - The key of the list.
-//	insertPosition - The relative position to insert into - either api.Before or api.After the pivot.
+//	insertPosition - The relative position to insert into - either options.Before or options.After the pivot.
 //	pivot          - An element of the list.
 //	element        - The new element to insert.
 //
@@ -2576,17 +2578,17 @@ func (client *baseClient) RPopCount(key string, count int64) ([]string, error) {
 // For example:
 //
 //	"my_list": {"Hello", "Wprld"}
-//	result, err := client.LInsert("my_list", api.Before, "World", "There")
+//	result, err := client.LInsert("my_list", options.Before, "World", "There")
 //	result: 3
 //
 // [valkey.io]: https://valkey.io/commands/linsert/
 func (client *baseClient) LInsert(
 	key string,
-	insertPosition InsertPosition,
+	insertPosition options.InsertPosition,
 	pivot string,
 	element string,
 ) (int64, error) {
-	insertPositionStr, err := insertPosition.toString()
+	insertPositionStr, err := insertPosition.ToString()
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -2747,7 +2749,7 @@ func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
 // Parameters:
 //
 //	keys          - An array of keys to lists.
-//	listDirection - The direction based on which elements are popped from - see [api.ListDirection].
+//	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //
 // Return value:
 //
@@ -2756,12 +2758,12 @@ func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
 // For example:
 //
 //	result, err := client.LPush("my_list", []string{"one", "two", "three"})
-//	result, err := client.LMPop([]string{"my_list"}, api.Left)
+//	result, err := client.LMPop([]string{"my_list"}, options.Left)
 //	result["my_list"] = []string{"three"}
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
-func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map[string][]string, error) {
-	listDirectionStr, err := listDirection.toString()
+func (client *baseClient) LMPop(keys []string, listDirection options.ListDirection) (map[string][]string, error) {
+	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
 	}
@@ -2795,7 +2797,7 @@ func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map
 // Parameters:
 //
 //	keys          - An array of keys to lists.
-//	listDirection - The direction based on which elements are popped from - see [api.ListDirection].
+//	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	count         - The maximum number of popped elements.
 //
 // Return value:
@@ -2805,16 +2807,16 @@ func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map
 // For example:
 //
 //	result, err := client.LPush("my_list", []string{"one", "two", "three"})
-//	result, err := client.LMPopCount([]string{"my_list"}, api.Left, int64(1))
+//	result, err := client.LMPopCount([]string{"my_list"}, options.Left, int64(1))
 //	result["my_list"] = []string{"three"}
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (client *baseClient) LMPopCount(
 	keys []string,
-	listDirection ListDirection,
+	listDirection options.ListDirection,
 	count int64,
 ) (map[string][]string, error) {
-	listDirectionStr, err := listDirection.toString()
+	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
 	}
@@ -2828,7 +2830,7 @@ func (client *baseClient) LMPopCount(
 	args := make([]string, 0, len(keys)+4)
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
-	args = append(args, listDirectionStr, CountKeyword, utils.IntToString(count))
+	args = append(args, listDirectionStr, options.CountKeyword, utils.IntToString(count))
 	result, err := client.executeCommand(C.LMPop, args)
 	if err != nil {
 		return nil, err
@@ -2853,7 +2855,7 @@ func (client *baseClient) LMPopCount(
 // Parameters:
 //
 //	keys          - An array of keys to lists.
-//	listDirection - The direction based on which elements are popped from - see [api.ListDirection].
+//	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
@@ -2864,17 +2866,17 @@ func (client *baseClient) LMPopCount(
 // For example:
 //
 //	result, err := client.LPush("my_list", []string{"one", "two", "three"})
-//	result, err := client.BLMPop([]string{"my_list"}, api.Left, float64(0.1))
+//	result, err := client.BLMPop([]string{"my_list"}, options.Left, float64(0.1))
 //	result["my_list"] = []string{"three"}
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (client *baseClient) BLMPop(
 	keys []string,
-	listDirection ListDirection,
+	listDirection options.ListDirection,
 	timeoutSecs float64,
 ) (map[string][]string, error) {
-	listDirectionStr, err := listDirection.toString()
+	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
 	}
@@ -2913,7 +2915,7 @@ func (client *baseClient) BLMPop(
 // Parameters:
 //
 //	keys          - An array of keys to lists.
-//	listDirection - The direction based on which elements are popped from - see [api.ListDirection].
+//	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	count         - The maximum number of popped elements.
 //	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block
 //
@@ -2927,18 +2929,18 @@ func (client *baseClient) BLMPop(
 // For example:
 //
 //	result, err: client.LPush("my_list", []string{"one", "two", "three"})
-//	result, err := client.BLMPopCount([]string{"my_list"}, api.Left, int64(1), float64(0.1))
+//	result, err := client.BLMPopCount([]string{"my_list"}, options.Left, int64(1), float64(0.1))
 //	result["my_list"] = []string{"three"}
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (client *baseClient) BLMPopCount(
 	keys []string,
-	listDirection ListDirection,
+	listDirection options.ListDirection,
 	count int64,
 	timeoutSecs float64,
 ) (map[string][]string, error) {
-	listDirectionStr, err := listDirection.toString()
+	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
 	}
@@ -2952,7 +2954,7 @@ func (client *baseClient) BLMPopCount(
 	args := make([]string, 0, len(keys)+5)
 	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
-	args = append(args, listDirectionStr, CountKeyword, utils.IntToString(count))
+	args = append(args, listDirectionStr, options.CountKeyword, utils.IntToString(count))
 	result, err := client.executeCommand(C.BLMPop, args)
 	if err != nil {
 		return nil, err
@@ -3013,7 +3015,7 @@ func (client *baseClient) LSet(key string, index int64, element string) (string,
 //
 //	result, err: client.LPush("my_list", []string{"two", "one"})
 //	result, err: client.LPush("my_list2", []string{"four", "three"})
-//	result, err: client.LMove("my_list1", "my_list2", api.Left, api.Left)
+//	result, err: client.LMove("my_list1", "my_list2", options.Left, options.Left)
 //	result.Value(): "one"
 //	updatedList1, err: client.LRange("my_list1", int64(0), int64(-1))
 //	updatedList2, err: client.LRange("my_list2", int64(0), int64(-1))
@@ -3024,14 +3026,14 @@ func (client *baseClient) LSet(key string, index int64, element string) (string,
 func (client *baseClient) LMove(
 	source string,
 	destination string,
-	whereFrom ListDirection,
-	whereTo ListDirection,
+	whereFrom options.ListDirection,
+	whereTo options.ListDirection,
 ) (Result[string], error) {
-	whereFromStr, err := whereFrom.toString()
+	whereFromStr, err := whereFrom.ToString()
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	whereToStr, err := whereTo.toString()
+	whereToStr, err := whereTo.ToString()
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -3075,7 +3077,7 @@ func (client *baseClient) LMove(
 //
 //	result, err: client.LPush("my_list", []string{"two", "one"})
 //	result, err: client.LPush("my_list2", []string{"four", "three"})
-//	result, err: client.BLMove("my_list1", "my_list2", api.Left, api.Left, float64(0.1))
+//	result, err: client.BLMove("my_list1", "my_list2", options.Left, options.Left, 0.1)
 //	result.Value(): "one"
 //	updatedList1, err: client.LRange("my_list1", int64(0), int64(-1))
 //	updatedList2, err: client.LRange("my_list2", int64(0), int64(-1))
@@ -3087,15 +3089,15 @@ func (client *baseClient) LMove(
 func (client *baseClient) BLMove(
 	source string,
 	destination string,
-	whereFrom ListDirection,
-	whereTo ListDirection,
+	whereFrom options.ListDirection,
+	whereTo options.ListDirection,
 	timeoutSecs float64,
 ) (Result[string], error) {
-	whereFromStr, err := whereFrom.toString()
+	whereFromStr, err := whereFrom.ToString()
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	whereToStr, err := whereTo.toString()
+	whereToStr, err := whereTo.ToString()
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -3218,8 +3220,8 @@ func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 //
 // Parameters:
 // key - The key to expire.
-// seconds - Time in seconds for the key to expire
-// option - The option  to set expiry - NX, XX, GT, LT
+// seconds - Time in seconds for the key to expire.
+// option - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
 //
@@ -3227,12 +3229,12 @@ func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 //	or operation skipped due to the provided arguments.
 //
 // Example:
-// result, err := client.Expire("key", 1, api.OnlyIfDoesNotExist)
+// result, err := client.Expire("key", 1, options.OnlyIfDoesNotExist)
 // result: true
 //
 // [valkey.io]: https://valkey.io/commands/expire/
-func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (bool, error) {
-	expireConditionStr, err := expireCondition.toString()
+func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCondition options.ExpireCondition) (bool, error) {
+	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
 		return defaultBoolResponse, err
 	}
@@ -3286,8 +3288,8 @@ func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (bo
 //
 // Parameters:
 // key - The key to expire.
-// unixTimestampInSeconds - Absolute Unix timestamp
-// option - The option  to set expiry - NX, XX, GT, LT
+// unixTimestampInSeconds - Absolute Unix timestamp.
+// option - The option to set expiry - see [options.ExpireCondition].
 //
 // Return value:
 //
@@ -3295,16 +3297,16 @@ func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (bo
 //	or operation skipped due to the provided arguments.
 //
 // Example:
-// result, err := client.ExpireAt("key", time.Now().Unix(), api.OnlyIfDoesNotExist)
+// result, err := client.ExpireAt("key", time.Now().Unix(), options.OnlyIfDoesNotExist)
 // result: true
 //
 // [valkey.io]: https://valkey.io/commands/expireat/
 func (client *baseClient) ExpireAtWithOptions(
 	key string,
 	unixTimestampInSeconds int64,
-	expireCondition ExpireCondition,
+	expireCondition options.ExpireCondition,
 ) (bool, error) {
-	expireConditionStr, err := expireCondition.toString()
+	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
 		return defaultBoolResponse, err
 	}
@@ -3353,7 +3355,7 @@ func (client *baseClient) PExpire(key string, milliseconds int64) (bool, error) 
 // Parameters:
 // key - The key to set timeout on it.
 // milliseconds - The timeout in milliseconds.
-// option - The option  to set expiry - NX, XX, GT, LT
+// option - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
 //
@@ -3361,16 +3363,16 @@ func (client *baseClient) PExpire(key string, milliseconds int64) (bool, error) 
 //	or operation skipped due to the provided arguments.
 //
 // Example:
-// result, err := client.PExpire("key", int64(5 * 1000), api.OnlyIfDoesNotExist)
+// result, err := client.PExpire("key", int64(5 * 1000), options.OnlyIfDoesNotExist)
 // result: true
 //
 //	[valkey.io]: https://valkey.io/commands/pexpire/
 func (client *baseClient) PExpireWithOptions(
 	key string,
 	milliseconds int64,
-	expireCondition ExpireCondition,
+	expireCondition options.ExpireCondition,
 ) (bool, error) {
-	expireConditionStr, err := expireCondition.toString()
+	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
 		return defaultBoolResponse, err
 	}
@@ -3421,7 +3423,7 @@ func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int6
 // Parameters:
 // key - The key to set timeout on it.
 // unixMilliseconds - The timeout in an absolute Unix timestamp.
-// option - The option  to set expiry - NX, XX, GT, LT
+// option - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
 //
@@ -3429,16 +3431,16 @@ func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int6
 //	or operation skipped due to the provided arguments.
 //
 // Example:
-// result, err := client.PExpire("key", time.Now().Unix()*1000, api.OnlyIfDoesNotExist)
+// result, err := client.PExpire("key", time.Now().Unix()*1000, options.OnlyIfDoesNotExist)
 // result: true
 //
 //	[valkey.io]: https://valkey.io/commands/pexpireat/
 func (client *baseClient) PExpireAtWithOptions(
 	key string,
 	unixTimestampInMilliSeconds int64,
-	expireCondition ExpireCondition,
+	expireCondition options.ExpireCondition,
 ) (bool, error) {
-	expireConditionStr, err := expireCondition.toString()
+	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
 		return defaultBoolResponse, err
 	}
@@ -4496,7 +4498,7 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 // Parameters:
 //
 //	keys          - An array of keys to lists.
-//	scoreFilter   - The element pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest
+//	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
 //	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
 //					indefinitely.
@@ -4511,17 +4513,17 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 // For example:
 //
 //	result, err := client.ZAdd("my_list", map[string]float64{"five": 5.0, "six": 6.0})
-//	result, err := client.BZMPop([]string{"my_list"}, api.MAX, float64(0.1))
+//	result, err := client.BZMPop([]string{"my_list"}, options.MAX, float64(0.1))
 //	result["my_list"] = []MemberAndScore{{Member: "six", Score: 6.0}}
 //
 // [valkey.io]: https://valkey.io/commands/bzmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (client *baseClient) BZMPop(
 	keys []string,
-	scoreFilter ScoreFilter,
+	scoreFilter options.ScoreFilter,
 	timeoutSecs float64,
 ) (Result[KeyWithArrayOfMembersAndScores], error) {
-	scoreFilterStr, err := scoreFilter.toString()
+	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
 		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
@@ -4562,7 +4564,7 @@ func (client *baseClient) BZMPop(
 // Parameters:
 //
 //	keys          - An array of keys to lists.
-//	scoreFilter   - The element pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest
+//	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
 //	count         - The maximum number of popped elements.
 //	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
@@ -4577,18 +4579,18 @@ func (client *baseClient) BZMPop(
 // For example:
 //
 //	result, err := client.ZAdd("my_list", map[string]float64{"five": 5.0, "six": 6.0})
-//	result, err := client.BZMPopWithOptions([]string{"my_list"}, api.MAX, 0.1, options.NewZMPopOptions().SetCount(2))
+//	result, err := client.BZMPopWithOptions([]string{"my_list"}, options.MAX, 0.1, options.NewZMPopOptions().SetCount(2))
 //	result["my_list"] = []MemberAndScore{{Member: "six", Score: 6.0}, {Member: "five", Score 5.0}}
 //
 // [valkey.io]: https://valkey.io/commands/bzmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (client *baseClient) BZMPopWithOptions(
 	keys []string,
-	scoreFilter ScoreFilter,
+	scoreFilter options.ScoreFilter,
 	timeoutSecs float64,
 	opts *options.ZMPopOptions,
 ) (Result[KeyWithArrayOfMembersAndScores], error) {
-	scoreFilterStr, err := scoreFilter.toString()
+	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
 		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
@@ -5599,7 +5601,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/restore/
 func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
-	return client.RestoreWithOptions(key, ttl, value, NewRestoreOptionsBuilder())
+	return client.RestoreWithOptions(key, ttl, value, options.NewRestoreOptionsBuilder())
 }
 
 // Create a key associated with a value that is obtained by
@@ -5610,7 +5612,7 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (Result[s
 //	key - The key to create.
 //	ttl - The expiry time (in milliseconds). If 0, the key will persist.
 //	value - The serialized value to deserialize and assign to key.
-//	restoreOptions - Set restore options with replace and absolute TTL modifiers, object idletime and frequency
+//	restoreOptions - Set restore options with replace and absolute TTL modifiers, object idletime and frequency.
 //
 // Return value:
 //
@@ -5618,7 +5620,7 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (Result[s
 //
 // Example:
 //
-//	restoreOptions := api.NewRestoreOptionsBuilder().SetReplace().SetABSTTL().SetEviction(api.FREQ, 10)
+//	restoreOptions := options.NewRestoreOptionsBuilder().SetReplace().SetABSTTL().SetEviction(options.FREQ, 10)
 //	resultRestoreOpt, err := client.RestoreWithOptions(key, ttl, value, restoreOptions)
 //
 //	if err != nil {
@@ -5628,9 +5630,9 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (Result[s
 //
 // [valkey.io]: https://valkey.io/commands/restore/
 func (client *baseClient) RestoreWithOptions(key string, ttl int64,
-	value string, options *RestoreOptions,
+	value string, options *options.RestoreOptions,
 ) (Result[string], error) {
-	optionArgs, err := options.toArgs()
+	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -5652,7 +5654,7 @@ func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 //
 // Return value:
 //
-//	The serialized value of the data stored at key
+//	The serialized value of the data stored at key.
 //	If key does not exist, null will be returned.
 //
 // Example:
@@ -5685,7 +5687,7 @@ func (client *baseClient) Dump(key string) (Result[string], error) {
 // Return value:
 //
 //	If key exists, returns the internal encoding of the object stored at
-//	key as a String. Otherwise, returns null.
+//	key as a String. Otherwise, returns `null`.
 //
 // Example:
 //
@@ -6147,7 +6149,7 @@ func (client *baseClient) Sort(key string) ([]Result[string], error) {
 //
 // Example:
 //
-// options := api.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
+// options := options.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
 // result, err := client.Sort("key", options)
 // result.Value(): [{Object_3 false} {c false} {Object_1 false} {a false} {Object_2 false} {b false}]
 // result.IsNil(): false
@@ -6216,7 +6218,7 @@ func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
 //
 // Example:
 //
-// options := api.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
+// options := options.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
 // result, err := client.SortReadOnly("key", options)
 // result.Value(): [{Object_3 false} {c false} {Object_1 false} {a false} {Object_2 false} {b false}]
 // result.IsNil(): false
@@ -6299,7 +6301,7 @@ func (client *baseClient) SortStore(key string, destination string) (int64, erro
 //
 // Example:
 //
-// options := api.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
+// options := options.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
 // result, err := client.SortStore("key","destkey",options)
 // result: 1
 //
@@ -6803,8 +6805,8 @@ func (client *baseClient) Copy(source string, destination string) (bool, error) 
 //
 // Example:
 //
-//	copyOptions := api.NewCopyOptionsBuilder().SetDBDestination(2).SetReplace()
-//	result, err := client.CopyWithOptions(source, destination",copyOptions)
+//	copyOptions := options.NewCopyOptionsBuilder().SetDBDestination(2).SetReplace()
+//	result, err := client.CopyWithOptions(source, destination", copyOptions)
 //	if err != nil {
 //	   // handle error
 //	}
@@ -6814,9 +6816,9 @@ func (client *baseClient) Copy(source string, destination string) (bool, error) 
 func (client *baseClient) CopyWithOptions(
 	source string,
 	destination string,
-	options *CopyOptions,
+	options *options.CopyOptions,
 ) (bool, error) {
-	optionArgs, err := options.toArgs()
+	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return defaultBoolResponse, err
 	}

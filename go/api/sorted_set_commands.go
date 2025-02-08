@@ -36,11 +36,11 @@ type SortedSetCommands interface {
 
 	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
 
-	BZMPop(keys []string, scoreFilter ScoreFilter, timeoutSecs float64) (Result[KeyWithArrayOfMembersAndScores], error)
+	BZMPop(keys []string, scoreFilter options.ScoreFilter, timeoutSecs float64) (Result[KeyWithArrayOfMembersAndScores], error)
 
 	BZMPopWithOptions(
 		keys []string,
-		scoreFilter ScoreFilter,
+		scoreFilter options.ScoreFilter,
 		timeoutSecs float64,
 		options *options.ZMPopOptions,
 	) (Result[KeyWithArrayOfMembersAndScores], error)

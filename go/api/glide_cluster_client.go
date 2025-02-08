@@ -125,8 +125,8 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //
 // Example:
 //
-//	opts := api.ClusterInfoOptions{
-//		InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}},
+//	opts := options.ClusterInfoOptions{
+//		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
 //		RouteOption: &options.RouteOption{Route: config.RandomRoute},
 //	}
 //	response, err := clusterClient.InfoWithOptions(opts)
@@ -137,8 +137,8 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //	fmt.Println(response.SingleValue())
 //
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (ClusterValue[string], error) {
-	optionArgs, err := options.toArgs()
+func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOptions) (ClusterValue[string], error) {
+	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}

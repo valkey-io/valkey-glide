@@ -1,12 +1,11 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package options
 
 import (
 	"strconv"
 
 	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
 
@@ -47,7 +46,7 @@ func (setOptions *SetOptions) SetExpiry(expiry *Expiry) *SetOptions {
 	return setOptions
 }
 
-func (opts *SetOptions) toArgs() ([]string, error) {
+func (opts *SetOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.ConditionalSet != "" {
@@ -92,7 +91,7 @@ func (getExOptions *GetExOptions) SetExpiry(expiry *Expiry) *GetExOptions {
 	return getExOptions
 }
 
-func (opts *GetExOptions) toArgs() ([]string, error) {
+func (opts *GetExOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 
@@ -135,7 +134,7 @@ const (
 	NewExpiryLessThanCurrent ExpireCondition = "LT"
 )
 
-func (expireCondition ExpireCondition) toString() (string, error) {
+func (expireCondition ExpireCondition) ToString() (string, error) {
 	switch expireCondition {
 	case HasExistingExpiry:
 		return string(HasExistingExpiry), nil
@@ -215,7 +214,7 @@ func (lposOptions *LPosOptions) SetMaxLen(maxLen int64) *LPosOptions {
 	return lposOptions
 }
 
-func (opts *LPosOptions) toArgs() ([]string, error) {
+func (opts *LPosOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	if opts.IsRankSet {
 		args = append(args, RankKeyword, utils.IntToString(opts.Rank))
@@ -227,13 +226,6 @@ func (opts *LPosOptions) toArgs() ([]string, error) {
 
 	return args, nil
 }
-
-const (
-	CountKeyword  string = "COUNT"  // Valkey API keyword used to extract specific number of matching indices from a list.
-	RankKeyword   string = "RANK"   // Valkey API keyword use to determine the rank of the match to return.
-	MaxLenKeyword string = "MAXLEN" // Valkey API keyword used to determine the maximum number of list items to compare.
-	MatchKeyword  string = "MATCH"  // Valkey API keyword used to indicate the match filter.
-)
 
 // A InsertPosition defines where to insert new elements into a list.
 //
@@ -249,7 +241,7 @@ const (
 	After InsertPosition = "AFTER"
 )
 
-func (insertPosition InsertPosition) toString() (string, error) {
+func (insertPosition InsertPosition) ToString() (string, error) {
 	switch insertPosition {
 	case Before:
 		return string(Before), nil
@@ -270,7 +262,7 @@ const (
 	Right ListDirection = "RIGHT"
 )
 
-func (listDirection ListDirection) toString() (string, error) {
+func (listDirection ListDirection) ToString() (string, error) {
 	switch listDirection {
 	case Left:
 		return string(Left), nil
@@ -292,7 +284,7 @@ const (
 	MIN ScoreFilter = "MIN"
 )
 
-func (scoreFilter ScoreFilter) toString() (string, error) {
+func (scoreFilter ScoreFilter) ToString() (string, error) {
 	switch scoreFilter {
 	case MAX:
 		return string(MAX), nil
@@ -321,23 +313,15 @@ func NewRestoreOptionsBuilder() *RestoreOptions {
 	return &RestoreOptions{}
 }
 
-const (
-	// Subcommand string to replace existing key.
-	Replace_keyword = "REPLACE"
-
-	// Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
-	ABSTTL_keyword string = "ABSTTL"
-)
-
 // Custom setter methods to replace existing key.
 func (restoreOption *RestoreOptions) SetReplace() *RestoreOptions {
-	restoreOption.replace = Replace_keyword
+	restoreOption.replace = ReplaceKeyword
 	return restoreOption
 }
 
 // Custom setter methods to represent absolute timestamp (in milliseconds) for TTL.
 func (restoreOption *RestoreOptions) SetABSTTL() *RestoreOptions {
-	restoreOption.absTTL = ABSTTL_keyword
+	restoreOption.absTTL = ABSTTLKeyword
 	return restoreOption
 }
 
@@ -365,7 +349,7 @@ func (restoreOption *RestoreOptions) SetEviction(evictionType EvictionType, coun
 	return restoreOption
 }
 
-func (opts *RestoreOptions) toArgs() ([]string, error) {
+func (opts *RestoreOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.replace != "" {
@@ -430,10 +414,10 @@ type InfoOptions struct {
 // Optional arguments for `Info` for cluster client
 type ClusterInfoOptions struct {
 	*InfoOptions
-	*options.RouteOption
+	*RouteOption
 }
 
-func (opts *InfoOptions) toArgs() ([]string, error) {
+func (opts *InfoOptions) ToArgs() ([]string, error) {
 	if opts == nil {
 		return []string{}, nil
 	}
@@ -470,7 +454,7 @@ func (copyOption *CopyOptions) SetDBDestination(destinationDB int64) *CopyOption
 	return copyOption
 }
 
-func (opts *CopyOptions) toArgs() ([]string, error) {
+func (opts *CopyOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.replace {

@@ -6,13 +6,16 @@ import (
 	"strings"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 )
 
 func (suite *GlideTestSuite) TestModuleVerifyJsonLoaded() {
 	client := suite.defaultClusterClient()
 	result, err := client.InfoWithOptions(
-		api.ClusterInfoOptions{InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}}, RouteOption: nil},
+		options.ClusterInfoOptions{
+			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+			RouteOption: nil,
+		},
 	)
 
 	assert.Nil(suite.T(), err)
