@@ -56,6 +56,27 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
+**Valkey Server and CLI**
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
+Some distributions has a package manager for Valkey. You can install it using the following command, base on your distribution:
+
+```bash
+# With yum (CentOS, Fedora, RHEL, AL2023)
+sudo yum install valkey
+
+# With apt (Debian, Ubuntu, Mint)
+sudo apt-get install valkey
+
+# With zypper (OpenSUSE)
+sudo zypper install valkey
+
+# Using package manager (Arch Linux)
+sudo pacman -S valkey
+
+# With brew (MacOS)
+brew install valkey
+```
+
 #### Building and installation steps
 
 Before starting this step, make sure you've installed all software requirments.
@@ -185,14 +206,6 @@ After applying changes in client code you need to restart the shell.
 It has command history and bash-like search (`Ctrl+R`).
 
 Shell hangs on exit (`Ctrl+D`) if you don't close the clients. Use `Ctrl+C` to kill it and/or close clients before exit.
-
-### Submodules
-
-After pulling new changes, ensure that you update the submodules by running the following command:
-
-```bash
-git submodule update
-```
 
 ### Linters
 
