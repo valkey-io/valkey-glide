@@ -2901,7 +2901,12 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		assert.Equal(suite.T(), int64(3), res4)
 
 		// Try to pop the top 2 elements from key1
-		res5, err := client.BZMPopWithOptions([]string{key1}, options.MAX, float64(0.1), options.NewZMPopOptions().SetCount(2))
+		res5, err := client.BZMPopWithOptions(
+			[]string{key1},
+			options.MAX,
+			float64(0.1),
+			options.NewZMPopOptionsBuilder().SetCount(2),
+		)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), key1, res5.Value().Key)
 		assert.ElementsMatch(
@@ -4214,13 +4219,13 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 		res, err := client.XAddWithOptions(
 			key,
 			[][]string{{"field1", "value1"}},
-			options.NewXAddOptions().SetDontMakeNewStream(),
+			options.NewXAddOptionsBuilder().SetDontMakeNewStream(),
 		)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), res.IsNil())
 
 		// adding data to with given ID
-		res, err = client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, options.NewXAddOptions().SetId("0-1"))
+		res, err = client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, options.NewXAddOptionsBuilder().SetId("0-1"))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", res.Value())
 
@@ -4230,7 +4235,7 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 		res, err = client.XAddWithOptions(
 			key,
 			[][]string{{"field3", "value3"}},
-			options.NewXAddOptions().SetTrimOptions(options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming()),
+			options.NewXAddOptionsBuilder().SetTrimOptions(options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming()),
 		)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), res.IsNil())
@@ -4277,14 +4282,14 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		xadd, err := client.XAddWithOptions(
 			key,
 			[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-			options.NewXAddOptions().SetId("0-1"),
+			options.NewXAddOptionsBuilder().SetId("0-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(
 			key,
 			[][]string{{"entry2_field1", "entry2_value1"}},
-			options.NewXAddOptions().SetId("0-2"),
+			options.NewXAddOptionsBuilder().SetId("0-2"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-2", xadd.Value())
@@ -4333,7 +4338,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		xadd, err = client.XAddWithOptions(
 			key,
 			[][]string{{"entry3_field1", "entry3_value1"}},
-			options.NewXAddOptions().SetId("0-3"),
+			options.NewXAddOptionsBuilder().SetId("0-3"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-3", xadd.Value())
@@ -4509,12 +4514,16 @@ func (suite *GlideTestSuite) TestXRead() {
 		res, err := client.XAddWithOptions(
 			key1,
 			[][]string{{"k1_field1", "k1_value1"}, {"k1_field1", "k1_value2"}},
-			options.NewXAddOptions().SetId("0-1"),
+			options.NewXAddOptionsBuilder().SetId("0-1"),
 		)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), res.IsNil())
 
-		res, err = client.XAddWithOptions(key2, [][]string{{"k2_field1", "k2_value1"}}, options.NewXAddOptions().SetId("2-0"))
+		res, err = client.XAddWithOptions(
+			key2,
+			[][]string{{"k2_field1", "k2_value1"}},
+			options.NewXAddOptionsBuilder().SetId("2-0"),
+		)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), res.IsNil())
 
@@ -4551,7 +4560,10 @@ func (suite *GlideTestSuite) TestXRead() {
 				WithAddress(&suite.clusterHosts[0]).
 				WithUseTLS(suite.tls))
 		}
-		read, err = testClient.XReadWithOptions(map[string]string{key1: "0-1"}, options.NewXReadOptions().SetBlock(1000))
+		read, err = testClient.XReadWithOptions(
+			map[string]string{key1: "0-1"},
+			options.NewXReadOptionsBuilder().SetBlock(1000),
+		)
 		assert.Nil(suite.T(), err)
 		assert.Nil(suite.T(), read)
 
@@ -4559,7 +4571,7 @@ func (suite *GlideTestSuite) TestXRead() {
 		// but we wrap the test with timeout to avoid test failing or stuck forever
 		finished := make(chan bool)
 		go func() {
-			testClient.XReadWithOptions(map[string]string{key1: "0-1"}, options.NewXReadOptions().SetBlock(0))
+			testClient.XReadWithOptions(map[string]string{key1: "0-1"}, options.NewXReadOptionsBuilder().SetBlock(0))
 			finished <- true
 		}()
 		select {
@@ -4581,21 +4593,21 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		xadd, err := client.XAddWithOptions(
 			key,
 			[][]string{{"f0", "v0"}},
-			options.NewXAddOptions().SetId("1-0"),
+			options.NewXAddOptionsBuilder().SetId("1-0"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "1-0", xadd.Value())
 		xadd, err = client.XAddWithOptions(
 			key,
 			[][]string{{"f1", "v1"}},
-			options.NewXAddOptions().SetId("1-1"),
+			options.NewXAddOptionsBuilder().SetId("1-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "1-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(
 			key,
 			[][]string{{"f2", "v2"}},
-			options.NewXAddOptions().SetId("1-2"),
+			options.NewXAddOptionsBuilder().SetId("1-2"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "1-2", xadd.Value())
@@ -4627,7 +4639,7 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		if suite.serverVersion < "7.0.0" {
 			suite.verifyOK(client.XGroupSetId(key, group, "1-1"))
 		} else {
-			opts := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(42)
+			opts := options.NewXGroupSetIdOptionsOptionsBuilder().SetEntriesRead(42)
 			suite.verifyOK(client.XGroupSetIdWithOptions(key, group, "1-1", opts))
 		}
 
@@ -5225,7 +5237,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		xAddResult, err := client.XAddWithOptions(
 			key1,
 			[][]string{{field1, "foo"}, {field2, "bar"}},
-			options.NewXAddOptions().SetDontMakeNewStream(),
+			options.NewXAddOptionsBuilder().SetDontMakeNewStream(),
 		)
 		assert.NoError(t, err)
 		assert.True(t, xAddResult.IsNil())
@@ -5233,7 +5245,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		xAddResult, err = client.XAddWithOptions(
 			key1,
 			[][]string{{field1, "foo1"}, {field2, "bar1"}},
-			options.NewXAddOptions().SetId("0-1"),
+			options.NewXAddOptionsBuilder().SetId("0-1"),
 		)
 		assert.NoError(t, err)
 		assert.Equal(t, xAddResult.Value(), "0-1")
@@ -5253,7 +5265,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		xAddResult, err = client.XAddWithOptions(
 			key1,
 			[][]string{{field1, "foo3"}, {field2, "bar2"}},
-			options.NewXAddOptions().SetTrimOptions(
+			options.NewXAddOptionsBuilder().SetTrimOptions(
 				options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming(),
 			),
 		)
@@ -5268,7 +5280,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		xAddResult, err = client.XAddWithOptions(
 			key1,
 			[][]string{{field1, "foo4"}, {field2, "bar4"}},
-			options.NewXAddOptions().SetTrimOptions(
+			options.NewXAddOptionsBuilder().SetTrimOptions(
 				options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
 			),
 		)
@@ -5441,7 +5453,7 @@ func (suite *GlideTestSuite) Test_XDel() {
 		xAddResult, err := client.XAddWithOptions(
 			key1,
 			[][]string{{"f1", "foo1"}, {"f2", "bar2"}},
-			options.NewXAddOptions().SetId(streamId1),
+			options.NewXAddOptionsBuilder().SetId(streamId1),
 		)
 		assert.NoError(t, err)
 		assert.Equal(t, xAddResult.Value(), streamId1)
@@ -5449,7 +5461,7 @@ func (suite *GlideTestSuite) Test_XDel() {
 		xAddResult, err = client.XAddWithOptions(
 			key1,
 			[][]string{{"f1", "foo1"}, {"f2", "bar2"}},
-			options.NewXAddOptions().SetId(streamId2),
+			options.NewXAddOptionsBuilder().SetId(streamId2),
 		)
 		assert.NoError(t, err)
 		assert.Equal(t, xAddResult.Value(), streamId2)
@@ -5713,7 +5725,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			detailResult, _ := client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+				options.NewXPendingOptionsBuilder("-", "+", 10).SetConsumer(consumer1),
 			)
 			assert.Equal(suite.T(), len(detailResult), 2)
 			assert.Equal(suite.T(), streamid_1.Value(), detailResult[0].Id)
@@ -5787,7 +5799,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			detailResult, _ := client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+				options.NewXPendingOptionsBuilder("-", "+", 10).SetConsumer(consumer1),
 			)
 			assert.Equal(suite.T(), len(detailResult), 2)
 			assert.Equal(suite.T(), streamid_1.Value(), detailResult[0].Id)
@@ -5835,7 +5847,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 					key,
 					groupName,
 					zeroStreamId,
-					options.NewXGroupCreateOptions().SetMakeStream(),
+					options.NewXGroupCreateOptionsBuilder().SetMakeStream(),
 				),
 			)
 
@@ -5854,7 +5866,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), int64(0), summaryResult.NumOfMessages)
 
-			detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptions("-", "+", 10))
+			detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptionsBuilder("-", "+", 10))
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), 0, len(detailResult))
 
@@ -5870,7 +5882,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			detailResult, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "+", 1).SetConsumer(consumer1),
+				options.NewXPendingOptionsBuilder("-", "+", 1).SetConsumer(consumer1),
 			)
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), len(detailResult) > 0)
@@ -5879,7 +5891,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			detailResult, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("+", "-", 10).SetConsumer(consumer1),
+				options.NewXPendingOptionsBuilder("+", "-", 10).SetConsumer(consumer1),
 			)
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), 0, len(detailResult))
@@ -5888,7 +5900,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			detailResult, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "+", 10).SetMinIdleTime(100000),
+				options.NewXPendingOptionsBuilder("-", "+", 10).SetMinIdleTime(100000),
 			)
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), 0, len(detailResult))
@@ -5897,7 +5909,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			detailResult, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "+", 10).SetConsumer(invalidConsumer),
+				options.NewXPendingOptionsBuilder("-", "+", 10).SetConsumer(invalidConsumer),
 			)
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), 0, len(detailResult))
@@ -5906,7 +5918,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			_, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("invalid-id", "+", 10),
+				options.NewXPendingOptionsBuilder("invalid-id", "+", 10),
 			)
 			assert.Error(suite.T(), err)
 			assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -5914,7 +5926,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			_, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "invalid-id", 10),
+				options.NewXPendingOptionsBuilder("-", "invalid-id", 10),
 			)
 			assert.Error(suite.T(), err)
 			assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -5923,7 +5935,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			detailResult, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "+", -1),
+				options.NewXPendingOptionsBuilder("-", "+", -1),
 			)
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), 0, len(detailResult))
@@ -5949,7 +5961,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			_, err = client.XPendingWithOptions(
 				missingKey,
 				groupName,
-				options.NewXPendingOptions("-", "+", 10),
+				options.NewXPendingOptionsBuilder("-", "+", 10),
 			)
 			assert.Error(suite.T(), err)
 			assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -5968,7 +5980,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			_, err = client.XPendingWithOptions(
 				nonStreamKey,
 				groupName,
-				options.NewXPendingOptions("-", "+", 10),
+				options.NewXPendingOptionsBuilder("-", "+", 10),
 			)
 			assert.Error(suite.T(), err)
 			assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -5986,7 +5998,12 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			invalidConsumer := "invalid-consumer-" + uuid.New().String()
 
 			suite.verifyOK(
-				client.XGroupCreateWithOptions(key, groupName, zeroStreamId, options.NewXGroupCreateOptions().SetMakeStream()),
+				client.XGroupCreateWithOptions(
+					key,
+					groupName,
+					zeroStreamId,
+					options.NewXGroupCreateOptionsBuilder().SetMakeStream(),
+				),
 			)
 
 			command := []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
@@ -6004,7 +6021,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), int64(0), summaryResult.NumOfMessages)
 
-			detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptions("-", "+", 10))
+			detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptionsBuilder("-", "+", 10))
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), 0, len(detailResult))
 
@@ -6020,7 +6037,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			detailResult, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "+", 1).SetConsumer(consumer1),
+				options.NewXPendingOptionsBuilder("-", "+", 1).SetConsumer(consumer1),
 			)
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), len(detailResult) > 0)
@@ -6029,7 +6046,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			detailResult, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("+", "-", 10).SetConsumer(consumer1),
+				options.NewXPendingOptionsBuilder("+", "-", 10).SetConsumer(consumer1),
 			)
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), 0, len(detailResult))
@@ -6038,7 +6055,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			detailResult, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "+", 10).SetMinIdleTime(100000),
+				options.NewXPendingOptionsBuilder("-", "+", 10).SetMinIdleTime(100000),
 			)
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), 0, len(detailResult))
@@ -6047,7 +6064,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			detailResult, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "+", 10).SetConsumer(invalidConsumer),
+				options.NewXPendingOptionsBuilder("-", "+", 10).SetConsumer(invalidConsumer),
 			)
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), 0, len(detailResult))
@@ -6056,7 +6073,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			_, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("invalid-id", "+", 10),
+				options.NewXPendingOptionsBuilder("invalid-id", "+", 10),
 			)
 			assert.Error(suite.T(), err)
 			assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -6064,7 +6081,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			_, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "invalid-id", 10),
+				options.NewXPendingOptionsBuilder("-", "invalid-id", 10),
 			)
 			assert.Error(suite.T(), err)
 			assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -6073,7 +6090,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			detailResult, err = client.XPendingWithOptions(
 				key,
 				groupName,
-				options.NewXPendingOptions("-", "+", -1),
+				options.NewXPendingOptionsBuilder("-", "+", -1),
 			)
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), 0, len(detailResult))
@@ -6099,7 +6116,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			_, err = client.XPendingWithOptions(
 				missingKey,
 				groupName,
-				options.NewXPendingOptions("-", "+", 10),
+				options.NewXPendingOptionsBuilder("-", "+", 10),
 			)
 			assert.Error(suite.T(), err)
 			assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -6118,7 +6135,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			_, err = client.XPendingWithOptions(
 				nonStreamKey,
 				groupName,
-				options.NewXPendingOptions("-", "+", 10),
+				options.NewXPendingOptionsBuilder("-", "+", 10),
 			)
 			assert.Error(suite.T(), err)
 			assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -6151,7 +6168,7 @@ func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		// Stream with option to create creates stream & Group
-		opts := options.NewXGroupCreateOptions().SetMakeStream()
+		opts := options.NewXGroupCreateOptionsBuilder().SetMakeStream()
 		suite.verifyOK(client.XGroupCreateWithOptions(key, group, id, opts))
 
 		// ...and again results in BUSYGROUP error, because group names must be unique
@@ -6170,7 +6187,7 @@ func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 		assert.False(suite.T(), destroyed)
 
 		// ENTRIESREAD option was added in valkey 7.0.0
-		opts = options.NewXGroupCreateOptions().SetEntriesRead(100)
+		opts = options.NewXGroupCreateOptionsBuilder().SetEntriesRead(100)
 		if suite.serverVersion >= "7.0.0" {
 			suite.verifyOK(client.XGroupCreateWithOptions(key, group, id, opts))
 		} else {
@@ -7086,7 +7103,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			key,
 			groupName,
 			zeroStreamId,
-			options.NewXGroupCreateOptions().SetMakeStream(),
+			options.NewXGroupCreateOptionsBuilder().SetMakeStream(),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "OK", resp)
@@ -7158,7 +7175,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		pendingResultExtended, err := client.XPendingWithOptions(
 			key,
 			groupName,
-			options.NewXPendingOptions("-", "+", 10),
+			options.NewXPendingOptionsBuilder("-", "+", 10),
 		)
 		assert.NoError(suite.T(), err)
 
@@ -7221,7 +7238,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			consumer1,
 			int64(0),
 			[]string{streamid_6.Value()},
-			options.NewStreamClaimOptions().SetForce().SetRetryCount(99),
+			options.NewStreamClaimOptionsBuilder().SetForce().SetRetryCount(99),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string][][]string{streamid_6.Value(): {{"field6", "value6"}}}, claimResult)
@@ -7229,7 +7246,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		forcePendingResult, err := client.XPendingWithOptions(
 			key,
 			groupName,
-			options.NewXPendingOptions(streamid_6.Value(), streamid_6.Value(), 1),
+			options.NewXPendingOptionsBuilder(streamid_6.Value(), streamid_6.Value(), 1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1, len(forcePendingResult))
@@ -7247,7 +7264,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		pendingResultExtended, err = client.XPendingWithOptions(
 			key,
 			groupName,
-			options.NewXPendingOptions(streamid_3.Value(), "+", 10),
+			options.NewXPendingOptionsBuilder(streamid_3.Value(), "+", 10),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1, len(pendingResultExtended))
@@ -7257,7 +7274,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		pendingResultExtended, err = client.XPendingWithOptions(
 			key,
 			groupName,
-			options.NewXPendingOptions("-", "("+streamid_5.Value(), 10),
+			options.NewXPendingOptionsBuilder("-", "("+streamid_5.Value(), 10),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1, len(pendingResultExtended))
@@ -7267,7 +7284,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		pendingResultExtended, err = client.XPendingWithOptions(
 			key,
 			groupName,
-			options.NewXPendingOptions("-", "+", 10).SetMinIdleTime(1).SetConsumer(consumer1),
+			options.NewXPendingOptionsBuilder("-", "+", 10).SetMinIdleTime(1).SetConsumer(consumer1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 2, len(pendingResultExtended))
@@ -7287,7 +7304,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			key,
 			groupName,
 			zeroStreamId,
-			options.NewXGroupCreateOptions().SetMakeStream(),
+			options.NewXGroupCreateOptionsBuilder().SetMakeStream(),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "OK", groupCreateResult)
@@ -7316,7 +7333,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		assert.Equal(suite.T(), []string{}, claimResult)
 
 		// non existent key causes a RequestError
-		claimOptions := options.NewStreamClaimOptions().SetIdleTime(1)
+		claimOptions := options.NewStreamClaimOptionsBuilder().SetIdleTime(1)
 		_, err = client.XClaim(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -7517,7 +7534,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			key,
 			options.NewStreamBoundary(streamId2.Value(), false),
 			positiveInfinity,
-			options.NewStreamRangeOptions().SetCount(1),
+			options.NewStreamRangeOptionsBuilder().SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -7533,7 +7550,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			key,
 			positiveInfinity,
 			options.NewStreamBoundary(streamId2.Value(), false),
-			options.NewStreamRangeOptions().SetCount(1),
+			options.NewStreamRangeOptionsBuilder().SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -7549,7 +7566,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			key,
 			negativeInfinity,
 			positiveInfinity,
-			options.NewStreamRangeOptions().SetCount(0),
+			options.NewStreamRangeOptionsBuilder().SetCount(0),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrangeResult)
@@ -7558,7 +7575,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			key,
 			positiveInfinity,
 			negativeInfinity,
-			options.NewStreamRangeOptions().SetCount(-1),
+			options.NewStreamRangeOptionsBuilder().SetCount(-1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrevrangeResult)

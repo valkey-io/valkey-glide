@@ -109,31 +109,6 @@ func (opts *GetExOptions) ToArgs() ([]string, error) {
 	return args, err
 }
 
-const returnOldValue = "GET"
-
-// A ConditionalSet defines whether a new value should be set or not.
-type ConditionalSet string
-
-const (
-	// OnlyIfExists only sets the key if it already exists. Equivalent to "XX" in the valkey API.
-	OnlyIfExists ConditionalSet = "XX"
-	// OnlyIfDoesNotExist only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
-	OnlyIfDoesNotExist ConditionalSet = "NX"
-)
-
-type ExpireCondition string
-
-const (
-	// HasExistingExpiry only sets the key if it already exists. Equivalent to "XX" in the valkey API.
-	HasExistingExpiry ExpireCondition = "XX"
-	// HasNoExpiry only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
-	HasNoExpiry ExpireCondition = "NX"
-	// NewExpiryGreaterThanCurrent only sets the key if its greater than current. Equivalent to "GT" in the valkey API.
-	NewExpiryGreaterThanCurrent ExpireCondition = "GT"
-	// NewExpiryLessThanCurrent only sets the key if its lesser than current. Equivalent to "LT" in the valkey API.
-	NewExpiryLessThanCurrent ExpireCondition = "LT"
-)
-
 func (expireCondition ExpireCondition) ToString() (string, error) {
 	switch expireCondition {
 	case HasExistingExpiry:
@@ -168,18 +143,6 @@ func (ex *Expiry) SetCount(count uint64) *Expiry {
 	ex.Count = count
 	return ex
 }
-
-// An ExpiryType is used to configure the type of expiration for a value.
-type ExpiryType string
-
-const (
-	KeepExisting     ExpiryType = "KEEPTTL" // keep the existing expiration of the value
-	Seconds          ExpiryType = "EX"      // expire the value after [api.Expiry.Count] seconds
-	Milliseconds     ExpiryType = "PX"      // expire the value after [api.Expiry.Count] milliseconds
-	UnixSeconds      ExpiryType = "EXAT"    // expire the value after the Unix time specified by [api.Expiry.Count], in seconds
-	UnixMilliseconds ExpiryType = "PXAT"    // expire the value after the Unix time specified by [api.Expiry.Count], in milliseconds
-	Persist          ExpiryType = "PERSIST" // Remove the expiry associated with the key
-)
 
 // LPosOptions represents optional arguments for the [api.ListCommands.LPosWithOptions] and
 // [api.ListCommands.LPosCountWithOptions] commands.
@@ -227,20 +190,6 @@ func (opts *LPosOptions) ToArgs() ([]string, error) {
 	return args, nil
 }
 
-// A InsertPosition defines where to insert new elements into a list.
-//
-// See [valkey.io]
-//
-// [valkey.io]: https://valkey.io/commands/linsert/
-type InsertPosition string
-
-const (
-	// Insert new element before the pivot.
-	Before InsertPosition = "BEFORE"
-	// Insert new element after the pivot.
-	After InsertPosition = "AFTER"
-)
-
 func (insertPosition InsertPosition) ToString() (string, error) {
 	switch insertPosition {
 	case Before:
@@ -252,16 +201,6 @@ func (insertPosition InsertPosition) ToString() (string, error) {
 	}
 }
 
-// Enumeration representing element popping or adding direction for the [api.ListCommands].
-type ListDirection string
-
-const (
-	// Represents the option that elements should be popped from or added to the left side of a list.
-	Left ListDirection = "LEFT"
-	// Represents the option that elements should be popped from or added to the right side of a list.
-	Right ListDirection = "RIGHT"
-)
-
 func (listDirection ListDirection) ToString() (string, error) {
 	switch listDirection {
 	case Left:
@@ -272,17 +211,6 @@ func (listDirection ListDirection) ToString() (string, error) {
 		return "", &errors.RequestError{Msg: "Invalid list direction"}
 	}
 }
-
-// Mandatory option for [ZMPop] and for [BZMPop].
-// Defines which elements to pop from the sorted set.
-type ScoreFilter string
-
-const (
-	// Pop elements with the highest scores.
-	MAX ScoreFilter = "MAX"
-	// Pop elements with the lowest scores.
-	MIN ScoreFilter = "MIN"
-)
 
 func (scoreFilter ScoreFilter) ToString() (string, error) {
 	switch scoreFilter {
@@ -333,15 +261,6 @@ type Eviction struct {
 	Count int64
 }
 
-type EvictionType string
-
-const (
-	// It represents the idletime of object
-	IDLETIME EvictionType = "IDLETIME"
-	// It represents the frequency of object
-	FREQ EvictionType = "FREQ"
-)
-
 // Custom setter methods set the idletime/frequency of object.
 func (restoreOption *RestoreOptions) SetEviction(evictionType EvictionType, count int64) *RestoreOptions {
 	restoreOption.eviction.Type = evictionType
@@ -363,45 +282,6 @@ func (opts *RestoreOptions) ToArgs() ([]string, error) {
 	}
 	return args, err
 }
-
-type Section string
-
-const (
-	// SERVER: General information about the server
-	Server Section = "server"
-	// CLIENTS: Client connections section
-	Clients Section = "clients"
-	// MEMORY: Memory consumption related information
-	Memory Section = "memory"
-	// PERSISTENCE: RDB and AOF related information
-	Persistence Section = "persistence"
-	// STATS: General statistics
-	Stats Section = "stats"
-	// REPLICATION: Master/replica replication information
-	Replication Section = "replication"
-	// CPU: CPU consumption statistics
-	Cpu Section = "cpu"
-	// COMMANDSTATS: Valkey command statistics
-	Commandstats Section = "commandstats"
-	// LATENCYSTATS: Valkey command latency percentile distribution statistics
-	Latencystats Section = "latencystats"
-	// SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
-	Sentinel Section = "sentinel"
-	// CLUSTER: Valkey Cluster section
-	Cluster Section = "cluster"
-	// MODULES: Modules section
-	Modules Section = "modules"
-	// KEYSPACE: Database related statistics
-	Keyspace Section = "keyspace"
-	// ERRORSTATS: Valkey error statistics
-	Errorstats Section = "errorstats"
-	// ALL: Return all sections (excluding module generated ones)
-	All Section = "all"
-	// DEFAULT: Return only the default set of sections
-	Default Section = "default"
-	// EVERYTHING: Includes all and modules
-	Everything Section = "everything"
-)
 
 // Optional arguments for `Info` for standalone client
 type InfoOptions struct {

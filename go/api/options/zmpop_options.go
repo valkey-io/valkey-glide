@@ -12,7 +12,7 @@ type ZMPopOptions struct {
 	countIsSet bool
 }
 
-func NewZMPopOptions() *ZMPopOptions {
+func NewZMPopOptionsBuilder() *ZMPopOptions {
 	return &ZMPopOptions{}
 }
 

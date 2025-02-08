@@ -1389,7 +1389,7 @@ func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCountWithValues(key string, count int64) ([][]string, error) {
-	result, err := client.executeCommand(C.HRandField, []string{key, utils.IntToString(count), options.WithValues})
+	result, err := client.executeCommand(C.HRandField, []string{key, utils.IntToString(count), options.WithValuesKeyword})
 	if err != nil {
 		return nil, err
 	}
@@ -2041,7 +2041,11 @@ func (client *baseClient) SInterCard(keys []string) (int64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/sintercard/
 func (client *baseClient) SInterCardLimit(keys []string, limit int64) (int64, error) {
-	args := utils.Concat([]string{utils.IntToString(int64(len(keys)))}, keys, []string{"LIMIT", utils.IntToString(limit)})
+	args := utils.Concat(
+		[]string{utils.IntToString(int64(len(keys)))},
+		keys,
+		[]string{options.LimitKeyword, utils.IntToString(limit)},
+	)
 
 	result, err := client.executeCommand(C.SInterCard, args)
 	if err != nil {
@@ -3807,7 +3811,7 @@ func (client *baseClient) Renamenx(key string, newKey string) (bool, error) {
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (client *baseClient) XAdd(key string, values [][]string) (Result[string], error) {
-	return client.XAddWithOptions(key, values, options.NewXAddOptions())
+	return client.XAddWithOptions(key, values, options.NewXAddOptionsBuilder())
 }
 
 // Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
@@ -3826,7 +3830,7 @@ func (client *baseClient) XAdd(key string, values [][]string) (Result[string], e
 //
 // For example:
 //
-//	options := options.NewXAddOptions().SetId("100-500").SetDontMakeNewStream()
+//	options := options.NewXAddOptionsBuilder().SetId("100-500").SetDontMakeNewStream()
 //	result, err := client.XAddWithOptions("myStream", [][]string{{"field1", "value1"}, {"field2", "value2"}}, options)
 //	result.IsNil(): false
 //	result.Value(): "100-500"
@@ -3888,7 +3892,7 @@ func (client *baseClient) XAddWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error) {
-	return client.XReadWithOptions(keysAndIds, options.NewXReadOptions())
+	return client.XReadWithOptions(keysAndIds, options.NewXReadOptionsBuilder())
 }
 
 // Reads entries from the given streams.
@@ -3902,7 +3906,7 @@ func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[st
 // Parameters:
 //
 //	keysAndIds - A map of keys and entry IDs to read from.
-//	options - Options detailing how to read the stream.
+//	opts - Options detailing how to read the stream.
 //
 // Return value:
 // A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
@@ -3910,7 +3914,7 @@ func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[st
 //
 // For example:
 //
-//	options := options.NewXReadOptions().SetBlock(100500)
+//	options := options.NewXReadOptionsBuilder().SetBlock(100500)
 //	result, err := client.XReadWithOptions({"stream1": "0-0", "stream2": "0-1"}, options)
 //	err == nil: true
 //	result: map[string]map[string][][]string{
@@ -3921,10 +3925,10 @@ func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[st
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
 	keysAndIds map[string]string,
-	options *options.XReadOptions,
+	opts *options.XReadOptions,
 ) (map[string]map[string][][]string, error) {
 	args := make([]string, 0, 5+2*len(keysAndIds))
-	optionArgs, _ := options.ToArgs()
+	optionArgs, _ := opts.ToArgs()
 	args = append(args, optionArgs...)
 
 	// Note: this loop iterates in an indeterminate order, but it is OK for that case
@@ -3934,7 +3938,7 @@ func (client *baseClient) XReadWithOptions(
 		keys = append(keys, key)
 		values = append(values, keysAndIds[key])
 	}
-	args = append(args, "STREAMS")
+	args = append(args, options.StreamsKeyword)
 	args = append(args, keys...)
 	args = append(args, values...)
 
@@ -3986,7 +3990,7 @@ func (client *baseClient) XReadGroup(
 	consumer string,
 	keysAndIds map[string]string,
 ) (map[string]map[string][][]string, error) {
-	return client.XReadGroupWithOptions(group, consumer, keysAndIds, options.NewXReadGroupOptions())
+	return client.XReadGroupWithOptions(group, consumer, keysAndIds, options.NewXReadGroupOptionsBuilder())
 }
 
 // Reads entries from the given streams owned by a consumer group.
@@ -4002,7 +4006,7 @@ func (client *baseClient) XReadGroup(
 //	group - The consumer group name.
 //	consumer - The group consumer.
 //	keysAndIds - A map of keys and entry IDs to read from.
-//	options - Options detailing how to read the stream.
+//	opts - Options detailing how to read the stream.
 //
 // Return value:
 // A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
@@ -4010,7 +4014,7 @@ func (client *baseClient) XReadGroup(
 //
 // For example:
 //
-//	options := options.NewXReadGroupOptions().SetNoAck()
+//	options := options.NewXReadGroupOptionsBuilder().SetNoAck()
 //	result, err := client.XReadGroupWithOptions({"stream1": "0-0", "stream2": "0-1", "stream3": "0-1"}, options)
 //	err == nil: true
 //	result: map[string]map[string][][]string{
@@ -4030,9 +4034,9 @@ func (client *baseClient) XReadGroupWithOptions(
 	group string,
 	consumer string,
 	keysAndIds map[string]string,
-	options *options.XReadGroupOptions,
+	opts *options.XReadGroupOptions,
 ) (map[string]map[string][][]string, error) {
-	args, err := createStreamCommandArgs([]string{"GROUP", group, consumer}, keysAndIds, options)
+	args, err := createStreamCommandArgs([]string{options.GroupKeyword, group, consumer}, keysAndIds, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -4049,9 +4053,9 @@ func (client *baseClient) XReadGroupWithOptions(
 func createStreamCommandArgs(
 	args []string,
 	keysAndIds map[string]string,
-	options interface{ ToArgs() ([]string, error) },
+	opts interface{ ToArgs() ([]string, error) },
 ) ([]string, error) {
-	optionArgs, err := options.ToArgs()
+	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return nil, err
 	}
@@ -4063,7 +4067,7 @@ func createStreamCommandArgs(
 		keys = append(keys, key)
 		values = append(values, keysAndIds[key])
 	}
-	args = append(args, "STREAMS")
+	args = append(args, options.StreamsKeyword)
 	args = append(args, keys...)
 	args = append(args, values...)
 	return args, nil
@@ -4578,9 +4582,10 @@ func (client *baseClient) BZMPop(
 //
 // For example:
 //
-//	result, err := client.ZAdd("my_list", map[string]float64{"five": 5.0, "six": 6.0})
-//	result, err := client.BZMPopWithOptions([]string{"my_list"}, options.MAX, 0.1, options.NewZMPopOptions().SetCount(2))
-//	result["my_list"] = []MemberAndScore{{Member: "six", Score: 6.0}, {Member: "five", Score 5.0}}
+//	_, err := client.ZAdd("my_list", map[string]float64{"five": 5.0, "six": 6.0})
+//	options := options.NewZMPopOptionsBuilder().SetCount(2)
+//	result, err := client.BZMPopWithOptions([]string{"my_list"}, options.MAX, 0.1, options)
+//	result["my_list"]: []MemberAndScore{{Member: "six", Score: 6.0}, {Member: "five", Score 5.0}}
 //
 // [valkey.io]: https://valkey.io/commands/bzmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -4714,7 +4719,7 @@ func (client *baseClient) ZRangeWithScores(
 		return nil, err
 	}
 	args = append(args, queryArgs...)
-	args = append(args, "WITHSCORES")
+	args = append(args, options.WithScoresKeyword)
 	result, err := client.executeCommand(C.ZRange, args)
 	if err != nil {
 		return nil, err
@@ -4859,7 +4864,7 @@ func (client *baseClient) ZRank(key string, member string) (Result[int64], error
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
-	result, err := client.executeCommand(C.ZRank, []string{key, member, options.WithScore})
+	result, err := client.executeCommand(C.ZRank, []string{key, member, options.WithScoreKeyword})
 	if err != nil {
 		return CreateNilInt64Result(), CreateNilFloat64Result(), err
 	}
@@ -4933,7 +4938,7 @@ func (client *baseClient) ZRevRank(key string, member string) (Result[int64], er
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
-	result, err := client.executeCommand(C.ZRevRank, []string{key, member, options.WithScore})
+	result, err := client.executeCommand(C.ZRevRank, []string{key, member, options.WithScoreKeyword})
 	if err != nil {
 		return CreateNilInt64Result(), CreateNilFloat64Result(), err
 	}
@@ -4958,7 +4963,7 @@ func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[i
 //	 xAddResult, err = client.XAddWithOptions(
 //		"key1",
 //		[][]string{{field1, "foo4"}, {field2, "bar4"}},
-//		options.NewXAddOptions().SetTrimOptions(
+//		options.NewXAddOptionsBuilder().SetTrimOptions(
 //			options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
 //		),
 //	 )
@@ -4998,7 +5003,7 @@ func (client *baseClient) XTrim(key string, options *options.XTrimOptions) (int6
 //	 xAddResult, err = client.XAddWithOptions(
 //		"key1",
 //		[][]string{{field1, "foo4"}, {field2, "bar4"}},
-//		options.NewXAddOptions().SetTrimOptions(
+//		options.NewXAddOptionsBuilder().SetTrimOptions(
 //			options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
 //		),
 //	 )
@@ -5210,7 +5215,7 @@ func (client *baseClient) XAutoClaimJustId(
 //	consumer - The group consumer.
 //	minIdleTime - The minimum idle time for the message to be claimed.
 //	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
-//	options - Options detailing how to read the stream.
+//	opts - Options detailing how to read the stream.
 //
 // Return value:
 //
@@ -5247,17 +5252,17 @@ func (client *baseClient) XAutoClaimJustIdWithOptions(
 	consumer string,
 	minIdleTime int64,
 	start string,
-	options *options.XAutoClaimOptions,
+	opts *options.XAutoClaimOptions,
 ) (XAutoClaimJustIdResponse, error) {
 	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
-	if options != nil {
-		optArgs, err := options.ToArgs()
+	if opts != nil {
+		optArgs, err := opts.ToArgs()
 		if err != nil {
 			return XAutoClaimJustIdResponse{}, err
 		}
 		args = append(args, optArgs...)
 	}
-	args = append(args, "JUSTID")
+	args = append(args, options.JustIdKeyword)
 	result, err := client.executeCommand(C.XAutoClaim, args)
 	if err != nil {
 		return XAutoClaimJustIdResponse{}, err
@@ -5284,7 +5289,7 @@ func (client *baseClient) XAutoClaimJustIdWithOptions(
 //	 xAddResult, err := client.XAddWithOptions(
 //		"key1",
 //	 	[][]string{{"f1", "foo1"}, {"f2", "bar2"}},
-//		options.NewXAddOptions().SetId(streamId1),
+//		options.NewXAddOptionsBuilder().SetId(streamId1),
 //	 )
 //	 xDelResult, err := client.XDel("key1", []string{streamId1, streamId3})
 //	 fmt.Println(xDelResult) // Output: 1
@@ -5481,7 +5486,7 @@ func (client *baseClient) XPending(key string, group string) (XPendingSummary, e
 //
 // Example
 //
-//	detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptions("-", "+", 10))
+//	detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptionsBuilder("-", "+", 10))
 //	if err != nil {
 //	  return err
 //	}
@@ -5534,7 +5539,7 @@ func (client *baseClient) XPendingWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupCreate(key string, group string, id string) (string, error) {
-	return client.XGroupCreateWithOptions(key, group, id, options.NewXGroupCreateOptions())
+	return client.XGroupCreateWithOptions(key, group, id, options.NewXGroupCreateOptionsBuilder())
 }
 
 // Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
@@ -5555,7 +5560,7 @@ func (client *baseClient) XGroupCreate(key string, group string, id string) (str
 //
 // Example:
 //
-//	opts := options.NewXGroupCreateOptions().SetMakeStream()
+//	opts := options.NewXGroupCreateOptionsBuilder().SetMakeStream()
 //	ok, err := client.XGroupCreateWithOptions("mystream", "mygroup", "0-0", opts)
 //	if ok != "OK" || err != nil {
 //		// handle error
@@ -5759,7 +5764,7 @@ func (client *baseClient) XGroupDestroy(key string, group string) (bool, error) 
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupSetId(key string, group string, id string) (string, error) {
-	return client.XGroupSetIdWithOptions(key, group, id, options.NewXGroupSetIdOptionsOptions())
+	return client.XGroupSetIdWithOptions(key, group, id, options.NewXGroupSetIdOptionsOptionsBuilder())
 }
 
 // Sets the last delivered ID for a consumer group.
@@ -5779,7 +5784,7 @@ func (client *baseClient) XGroupSetId(key string, group string, id string) (stri
 //
 // Example:
 //
-//	opts := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(42)
+//	opts := options.NewXGroupSetIdOptionsOptionsBuilder().SetEntriesRead(42)
 //	ok, err := client.XGroupSetIdWithOptions("mystream", "mygroup", "0-0", opts)
 //	if ok != "OK" || err != nil {
 //		// handle error
@@ -5978,7 +5983,7 @@ func (client *baseClient) ZRandMemberWithCount(key string, count int64) ([]strin
 //
 // [valkey.io]: https://valkey.io/commands/zrandmember/
 func (client *baseClient) ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error) {
-	result, err := client.executeCommand(C.ZRandMember, []string{key, utils.IntToString(count), options.WithScores})
+	result, err := client.executeCommand(C.ZRandMember, []string{key, utils.IntToString(count), options.WithScoresKeyword})
 	if err != nil {
 		return nil, err
 	}
@@ -6266,7 +6271,7 @@ func (client *baseClient) SortReadOnlyWithOptions(key string, options *options.S
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortStore(key string, destination string) (int64, error) {
-	result, err := client.executeCommand(C.Sort, []string{key, "STORE", destination})
+	result, err := client.executeCommand(C.Sort, []string{key, options.StoreKeyword, destination})
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -6294,7 +6299,7 @@ func (client *baseClient) SortStore(key string, destination string) (int64, erro
 // Parameters:
 // key - The key of the list, set, or sorted set to be sorted.
 // destination - The key where the sorted result will be stored.
-// sortOptions - The SortOptions type.
+// opts - The [options.SortOptions] type.
 //
 // Return value:
 // The number of elements in the sorted key stored at destination.
@@ -6309,13 +6314,13 @@ func (client *baseClient) SortStore(key string, destination string) (int64, erro
 func (client *baseClient) SortStoreWithOptions(
 	key string,
 	destination string,
-	options *options.SortOptions,
+	opts *options.SortOptions,
 ) (int64, error) {
-	optionArgs, err := options.ToArgs()
+	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return defaultIntResponse, err
 	}
-	result, err := client.executeCommand(C.Sort, append([]string{key, "STORE", destination}, optionArgs...))
+	result, err := client.executeCommand(C.Sort, append([]string{key, options.StoreKeyword, destination}, optionArgs...))
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -6629,7 +6634,7 @@ func (client *baseClient) XClaim(
 //		"consumer",
 //		1000,
 //		[]string{"streamId1", "streamId2"},
-//		options.NewStreamClaimOptions().SetIdleTime(1),
+//		options.NewStreamClaimOptionsBuilder().SetIdleTime(1),
 //	)
 //	fmt.Println(result) // Output: map[streamId1:[["entry1", "data1"], ["entry2", "data2"]] streamId2:[["entry3", "data3"]]]
 //
@@ -6723,7 +6728,7 @@ func (client *baseClient) XClaimJustId(
 //		"consumer",
 //		1000,
 //		[]string{"streamId1", "streamId2"},
-//		options.NewStreamClaimOptions().SetIdleTime(1),
+//		options.NewStreamClaimOptionsBuilder().SetIdleTime(1),
 //	)
 //	fmt.Println(result) // Output: ["streamId1", "streamId2"]
 //
@@ -6744,7 +6749,7 @@ func (client *baseClient) XClaimJustIdWithOptions(
 		}
 		args = append(args, optionArgs...)
 	}
-	args = append(args, options.JUST_ID_VALKEY_API)
+	args = append(args, options.JustIdKeyword)
 	result, err := client.executeCommand(C.XClaim, args)
 	if err != nil {
 		return nil, err
@@ -6904,7 +6909,7 @@ func (client *baseClient) XRange(
 //		"key",
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
-//		options.NewStreamRangeOptions().SetCount(10),
+//		options.NewStreamRangeOptionsBuilder().SetCount(10),
 //	)
 //	fmt.Println(res) // [{streamId [["field1", "entry1"], ["field2", "entry2"]]}]
 //
@@ -6913,7 +6918,7 @@ func (client *baseClient) XRange(
 //		"key",
 //		options.NewStreamBoundary(streamId, true),
 //		options.NewStreamBoundary(streamId, true),
-//		options.NewStreamRangeOptions().SetCount(1),
+//		options.NewStreamRangeOptionsBuilder().SetCount(1),
 //	)
 //	fmt.Println(res) // [{streamId [["field1", "entry1"]]}]
 //
@@ -7007,7 +7012,7 @@ func (client *baseClient) XRevRange(
 //		"key",
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-//		options.NewStreamRangeOptions().SetCount(10),
+//		options.NewStreamRangeOptionsBuilder().SetCount(10),
 //	)
 //	fmt.Println(res) // [{streamID [["field2", "entry2"], ["field1", "entry1"]]}]
 //
@@ -7222,7 +7227,7 @@ func (client *baseClient) ZInterWithScores(zInterOptions *options.ZInterOptions)
 	if err != nil {
 		return nil, err
 	}
-	args = append(args, options.WithScores)
+	args = append(args, options.WithScoresKeyword)
 	result, err := client.executeCommand(C.ZInter, args)
 	if err != nil {
 		return nil, err
@@ -7297,7 +7302,7 @@ func (client *baseClient) ZDiff(keys []string) ([]string, error) {
 func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, error) {
 	args := append([]string{}, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
-	result, err := client.executeCommand(C.ZDiff, append(args, options.WithScores))
+	result, err := client.executeCommand(C.ZDiff, append(args, options.WithScoresKeyword))
 	if err != nil {
 		return nil, err
 	}
