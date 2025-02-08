@@ -229,7 +229,18 @@ jobs:
         timeout-minutes: 15
         steps:
             - name: Setup self-hosted runner access
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+              run:
+                  sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+                  sudo apt-get update
+                  sudo apt-get install make cmake gcc rustup pstools tree git pkgconfig openssl openssl-devel unzip
+                  PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                  curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
+                  unzip protoc-29.1-linux-x86_64.zip -d $HOME/.local
+                  sudo cp $HOME/.local/bin/protoc /usr/bin/
+                  protoc --version
+                  rustup component add clippy rustfmt
+                  cargo --version
+                  rustc --version
 
             - uses: actions/checkout@v4
 
