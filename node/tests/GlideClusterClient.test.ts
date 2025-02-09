@@ -2169,7 +2169,7 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    describe("AZAffinity Read Strategy Tests", () => {
+    describe("AZAffinity Read Strategy Testss", () => {
         async function getNumberOfReplicas(
             azClient: GlideClusterClient,
         ): Promise<number> {
