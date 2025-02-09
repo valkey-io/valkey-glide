@@ -4,7 +4,10 @@
 
 import { expect } from "@jest/globals";
 import { exec } from "child_process";
+import { promisify } from "util";
+const execAsync = promisify(exec);
 import { v4 as uuidv4 } from "uuid";
+import { Socket } from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
@@ -183,6 +186,25 @@ export interface Client {
     get: (key: string) => Promise<GlideString | null>;
 }
 
+export async function checkWhichCommandAvailable(
+    valkeyCommand: string,
+    redisCommand: string,
+): Promise<string> {
+    try {
+        if (await checkCommandAvailability(valkeyCommand)) {
+            return valkeyCommand;
+        }
+    } catch {
+        // ignore
+    }
+
+    if (await checkCommandAvailability(redisCommand)) {
+        return redisCommand;
+    }
+
+    throw new Error("No available command found.");
+}
+
 export async function GetAndSetRandomValue(client: Client) {
     const key = uuidv4();
     // Adding random repetition, to prevent the inputs from always having the same alignment.
@@ -193,17 +215,21 @@ export async function GetAndSetRandomValue(client: Client) {
     expect(intoString(result)).toEqual(value);
 }
 
-export function flushallOnPort(port: number): Promise<void> {
-    return new Promise<void>((resolve, reject) =>
-        exec(`redis-cli -p ${port} FLUSHALL`, (error, _, stderr) => {
+export async function flushallOnPort(port: number): Promise<void> {
+    try {
+        const command = await checkWhichCommandAvailable(
+            "valkey-cli",
+            "redis-cli",
+        );
+        exec(`${command} -p ${port} flushall`, (error) => {
             if (error) {
-                console.error(stderr);
-                reject(error);
-            } else {
-                resolve();
+                console.error(`exec error: ${error}`);
+                return;
             }
-        }),
-    );
+        });
+    } catch (error) {
+        console.error(`Error flushing on port ${port}: ${error}`);
+    }
 }
 
 /**
@@ -2105,4 +2131,49 @@ export async function getServerVersion(
     }
 
     return version;
+}
+
+/**
+ * Check if a command is available on the system
+ */
+export function checkCommandAvailability(command: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        exec(`which ${command}`, (error) => {
+            resolve(!error);
+        });
+    });
+}
+
+/**
+ * Starts a Valkey/Redis-compatible server on the specified port
+ */
+export async function startServer(
+    port: number,
+): Promise<{ process: any; command: string }> {
+    // check which command is available
+    const serverCmd = await checkWhichCommandAvailable(
+        "valkey-server",
+        "redis-server",
+    );
+    // run server, and wait for it to start
+    const serverProcess = await execAsync(`${serverCmd} --port ${port}`)
+        .then(async (process) => {
+            // wait for the server to start
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            // check if the server is running by connecting to it using a socket
+            const client = new Socket();
+            await new Promise<void>((resolve) => {
+                client.connect(port, "localhost", () => {
+                    client.end();
+                    resolve();
+                });
+            });
+            return process;
+        })
+        .catch((err) => {
+            console.error("Failed to start the server:", err);
+            process.exit(1);
+        });
+
+    return { process: serverProcess, command: serverCmd };
 }
