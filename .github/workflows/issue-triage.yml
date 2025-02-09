@@ -1,74 +1,74 @@
 name: Issue Triage
 
 on:
-  issues:
-    types: [opened]
+    issues:
+        types: [opened]
 
 jobs:
-  triage:
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      # Needed to check contributor status
-      contents: read
-    # Add concurrency to prevent race conditions
-    concurrency:
-      group: issue-triage-${{ github.event.issue.number }}
-      cancel-in-progress: false
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Needed to check git history
+    triage:
+        runs-on: ubuntu-latest
+        permissions:
+            issues: write
+            # Needed to check contributor status
+            contents: read
+        # Add concurrency to prevent race conditions
+        concurrency:
+            group: issue-triage-${{ github.event.issue.number }}
+            cancel-in-progress: false
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0 # Needed to check git history
 
-      - name: Check if user is contributor
-        id: check-contributor
-        run: |
-          # Get the issue creator's username
-          CREATOR="${{ github.event.issue.user.login }}"
-          
-          # Skip bot accounts
-          if [[ "$CREATOR" == *"[bot]" ]]; then
-            echo "is_contributor=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # Check if user has any commits in the repository
-          if git log --author="$CREATOR" --oneline | grep -q .; then
-            echo "is_contributor=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # Check org membership if this is an organization repo
-          if [[ "${{ github.repository_owner }}" != *"/"* ]]; then
-            # Use GitHub API to check org membership
-            STATUS=$(curl -s -H "Authorization: token ${{ github.token }}" \
-                    -H "Accept: application/vnd.github.v3+json" \
-                    -o /dev/null -w "%{http_code}" \
-                    "https://api.github.com/orgs/${{ github.repository_owner }}/members/$CREATOR")
-            if [ "$STATUS" -eq 204 ]; then
-              echo "is_contributor=true" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-          fi
-          
-          echo "is_contributor=false" >> $GITHUB_OUTPUT
+            - name: Check if user is contributor
+              id: check-contributor
+              run: |
+                  # Get the issue creator's username
+                  CREATOR="${{ github.event.issue.user.login }}"
 
-      - name: Label non-contributor issues
-        if: steps.check-contributor.outputs.is_contributor == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            // Add a small delay to prevent race conditions with other workflows
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            try {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                labels: ['User issue', 'Untriaged user issue']
-              });
-            } catch (error) {
-              core.warning(`Failed to add labels: ${error.message}`);
-            }
+                  # Skip bot accounts
+                  if [[ "$CREATOR" == *"[bot]" ]]; then
+                    echo "is_contributor=true" >> $GITHUB_OUTPUT
+                    exit 0
+                  fi
+
+                  # Check if user has any commits in the repository
+                  if git log --author="$CREATOR" --oneline | grep -q .; then
+                    echo "is_contributor=true" >> $GITHUB_OUTPUT
+                    exit 0
+                  fi
+
+                  # Check org membership if this is an organization repo
+                  if [[ "${{ github.repository_owner }}" != *"/"* ]]; then
+                    # Use GitHub API to check org membership
+                    STATUS=$(curl -s -H "Authorization: token ${{ github.token }}" \
+                            -H "Accept: application/vnd.github.v3+json" \
+                            -o /dev/null -w "%{http_code}" \
+                            "https://api.github.com/orgs/${{ github.repository_owner }}/members/$CREATOR")
+                    if [ "$STATUS" -eq 204 ]; then
+                      echo "is_contributor=true" >> $GITHUB_OUTPUT
+                      exit 0
+                    fi
+                  fi
+
+                  echo "is_contributor=false" >> $GITHUB_OUTPUT
+
+            - name: Label non-contributor issues
+              if: steps.check-contributor.outputs.is_contributor == 'false'
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      // Add a small delay to prevent race conditions with other workflows
+                      await new Promise(resolve => setTimeout(resolve, 1000));
+
+                      try {
+                        await github.rest.issues.addLabels({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          issue_number: context.issue.number,
+                          labels: ['User issue', 'Untriaged user issue']
+                        });
+                      } catch (error) {
+                        core.warning(`Failed to add labels: ${error.message}`);
+                      }
