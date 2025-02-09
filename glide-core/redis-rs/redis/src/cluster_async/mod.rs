@@ -23,9 +23,8 @@
 //! ```
 
 mod connections_container;
-mod pipeline_routing;
-
 mod connections_logic;
+mod pipeline_routing;
 /// Exposed only for testing.
 pub mod testing {
     pub use super::connections_container::ConnectionDetails;
@@ -2133,7 +2132,6 @@ where
                     Self::handle_pipeline_request(&pipeline, core).await
                 }
             }
-
             CmdArg::ClusterScan {
                 cluster_scan_args, ..
             } => {
@@ -2162,18 +2160,11 @@ where
     ///
     /// This function distributes the commands in the pipeline across the cluster nodes based on routing information, collects the responses,
     /// and aggregates them if necessary according to the specified response policies.
-    ///
-    /// # Arguments
-    /// * `pipeline` - A reference to the pipeline to be executed.
-    /// * `core` - A reference to the core cluster connection state.
-    ///
-    /// # Returns
-    /// * `OperationResult` - Returns a result containing the aggregated responses from the sub-pipelines, or an error if the operation fails.
     async fn handle_pipeline_request(pipeline: &crate::Pipeline, core: Core<C>) -> OperationResult {
         // Distribute pipeline commands across cluster nodes based on routing information.
         // Returns:
         // - pipelines_by_node: Map of node addresses to their pipeline contexts
-        // - response_policies: List of response aggregation policies for multi-node operations
+        // - response_policies: List of response aggregation policies for multi-node commands
         let (pipelines_by_node, response_policies) =
             map_pipeline_to_nodes(pipeline, core.clone()).await?;
 
@@ -2184,14 +2175,17 @@ where
         // a vector of tuples where each tuple holds a response to the command and the address of the node that provided it.
         let mut pipeline_responses: PipelineResponses = vec![Vec::new(); pipeline.len()];
 
-        // Send the requests to each node and collect thw responses
+        // Send the requests to each node and collect the responses
+        // Returns a tuple containing:
+        // - A vector of results for each sub-pipeline execution.
+        // - A vector of (address, indices) pairs indicating where each response should be placed.
         let (responses, addresses_and_indices) =
             collect_and_send_pending_requests(pipelines_by_node, core.clone()).await;
 
         // Process the responses and update the pipeline_responses
         process_pipeline_responses(&mut pipeline_responses, responses, addresses_and_indices)?;
 
-        // Process response policies after all tasks are complete
+        // Process response policies after all tasks are complete and aggregate the relevant commands.
         Self::aggregate_pipeline_multi_node_commands(&mut pipeline_responses, response_policies)
             .await?;
 
@@ -2272,6 +2266,7 @@ where
         pipeline_responses: &mut PipelineResponses,
         response_policies: Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>,
     ) -> Result<(), (OperationTarget, RedisError)> {
+        // Go over the multi-node commands
         for (index, routing_info, response_policy) in response_policies {
             let response_receivers = pipeline_responses[index]
                 .iter()

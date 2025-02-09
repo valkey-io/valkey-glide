@@ -1270,12 +1270,12 @@ mod socket_listener {
             CommandComponents {
                 args: vec!["FLUSHALL".to_string().into()],
                 args_pointer: false,
-                request_type: RequestType::CustomCommand.into(),
+                request_type: RequestType::CustomCommand.into(), // AllPrimaries command
             },
             CommandComponents {
                 args: vec![],
                 args_pointer: false,
-                request_type: RequestType::DBSize.into(),
+                request_type: RequestType::DBSize.into(), // Aggregation of sum
             },
             CommandComponents {
                 args: vec![key.clone().into()],
@@ -1305,12 +1305,12 @@ mod socket_listener {
             CommandComponents {
                 args: vec!["appendonly".to_string().into(), "no".to_string().into()],
                 args_pointer: false,
-                request_type: RequestType::ConfigSet.into(),
+                request_type: RequestType::ConfigSet.into(), // AllNodes command
             },
             CommandComponents {
                 args: vec!["appendonly".to_string().into()],
                 args_pointer: false,
-                request_type: RequestType::ConfigGet.into(),
+                request_type: RequestType::ConfigGet.into(), // RandomNode command
             },
         ];
         let mut buffer = Vec::with_capacity(200);
