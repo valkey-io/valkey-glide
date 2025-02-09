@@ -2931,10 +2931,17 @@ impl Connect for MultiplexedConnection {
 
 #[cfg(test)]
 mod pipeline_routing_tests {
+    use futures::executor::block_on;
+
     use super::pipeline_routing::route_for_pipeline;
     use crate::{
-        cluster_routing::{Route, SlotAddr},
-        cmd,
+        aio::MultiplexedConnection,
+        cluster_async::{pipeline_routing::PipelineResponses, ClusterConnInner},
+        cluster_routing::{
+            AggregateOp, MultiSlotArgPattern, MultipleNodeRoutingInfo, ResponsePolicy, Route,
+            SlotAddr,
+        },
+        cmd, Value,
     };
 
     #[test]
@@ -2950,6 +2957,135 @@ mod pipeline_routing_tests {
         assert_eq!(
             route_for_pipeline(&pipeline),
             Ok(Some(Route::new(12182, SlotAddr::ReplicaOptional)))
+        );
+    }
+
+    #[test]
+    fn test_numerical_response_aggregation_logic() {
+        let mut pipeline_responses: PipelineResponses = vec![
+            vec![
+                (Value::Int(3), "node1".to_string()),
+                (Value::Int(7), "node2".to_string()),
+                (Value::Int(0), "node3".to_string()),
+            ],
+            vec![(
+                Value::BulkString(b"unchanged".to_vec()),
+                "node3".to_string(),
+            )],
+            vec![
+                (Value::Int(5), "node1".to_string()),
+                (Value::Int(11), "node2".to_string()),
+            ],
+        ];
+        let response_policies = vec![
+            (
+                0,
+                MultipleNodeRoutingInfo::AllNodes,
+                Some(ResponsePolicy::Aggregate(AggregateOp::Sum)),
+            ),
+            (
+                2,
+                MultipleNodeRoutingInfo::AllMasters,
+                Some(ResponsePolicy::Aggregate(AggregateOp::Min)),
+            ),
+        ];
+        block_on(
+            ClusterConnInner::<MultiplexedConnection>::aggregate_pipeline_multi_node_commands(
+                &mut pipeline_responses,
+                response_policies,
+            ),
+        )
+        .expect("Aggregation failed");
+
+        // Command 0 should be aggregated to 3 + 7 + 0 = 10.
+        // Command 1 should remain unchanged.
+        assert_eq!(
+            pipeline_responses[0],
+            vec![(Value::Int(10), "".to_string())],
+            "Expected command 0 aggregation to yield 10"
+        );
+        assert_eq!(
+            pipeline_responses[1],
+            vec![(
+                Value::BulkString(b"unchanged".to_vec()),
+                "node3".to_string()
+            )],
+            "Expected command 1 to remain unchanged"
+        );
+        assert_eq!(
+            pipeline_responses[2],
+            vec![(Value::Int(5), "".to_string())],
+            "Expected command 2 aggregation to yield 5 as the minimum value"
+        );
+    }
+
+    #[test]
+    fn test_combine_arrays_response_aggregation_logic() {
+        let mut pipeline_responses: PipelineResponses = vec![
+            vec![
+                (Value::Array(vec![Value::Int(1)]), "node1".to_string()),
+                (Value::Array(vec![Value::Int(2)]), "node2".to_string()),
+            ],
+            vec![
+                (
+                    Value::Array(vec![
+                        Value::BulkString("key1".into()),
+                        Value::BulkString("key3".into()),
+                    ]),
+                    "node2".to_string(),
+                ),
+                (
+                    Value::Array(vec![
+                        Value::BulkString("key2".into()),
+                        Value::BulkString("key4".into()),
+                    ]),
+                    "node1".to_string(),
+                ),
+            ],
+        ];
+        let response_policies = vec![
+            (
+                0,
+                MultipleNodeRoutingInfo::AllNodes,
+                Some(ResponsePolicy::CombineArrays),
+            ),
+            (
+                1,
+                MultipleNodeRoutingInfo::MultiSlot((
+                    vec![
+                        (Route::new(1, SlotAddr::Master), vec![0, 2]),
+                        (Route::new(2, SlotAddr::Master), vec![1, 3]),
+                    ],
+                    MultiSlotArgPattern::KeysOnly,
+                )),
+                Some(ResponsePolicy::CombineArrays),
+            ),
+        ];
+
+        block_on(
+            ClusterConnInner::<MultiplexedConnection>::aggregate_pipeline_multi_node_commands(
+                &mut pipeline_responses,
+                response_policies,
+            ),
+        )
+        .expect("CombineArrays aggregation should succeed");
+
+        let mut expected = Value::Array(vec![Value::Int(1), Value::Int(2)]);
+        assert_eq!(
+            pipeline_responses[0],
+            vec![(expected, "".to_string())],
+            "Expected combined array to include all elements"
+        );
+        expected = Value::Array(vec![
+            Value::BulkString("key1".into()),
+            Value::BulkString("key2".into()),
+            Value::BulkString("key3".into()),
+            Value::BulkString("key4".into()),
+        ]);
+        assert_eq!(
+            pipeline_responses[1],
+            vec![(expected, "".to_string())],
+            "Expected combined array to include all elements"
         );
     }
 
