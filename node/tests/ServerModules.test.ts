@@ -2313,7 +2313,7 @@ describe("Server Module Tests", () => {
                 ).toBeNull();
             });
 
-            it("can send GlideMultiJson transactions for ARR commands", async () => {
+            it("can send JsonBatch transactions for ARR commands", async () => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(
                         cluster.getAddresses(),
@@ -2331,7 +2331,7 @@ describe("Server Module Tests", () => {
                 client.close();
             });
 
-            it("can send GlideMultiJson transactions general commands", async () => {
+            it("can send JsonBatch transactions general commands", async () => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(
                         cluster.getAddresses(),
