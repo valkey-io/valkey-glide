@@ -36,9 +36,9 @@ import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
+    JsonBatchForArrCommands,
     parseEndpoints,
     transactionMultiJson,
-    transactionMultiJsonForArrCommands,
     validateTransactionResponse,
 } from "./TestUtilities";
 
@@ -2322,9 +2322,7 @@ describe("Server Module Tests", () => {
                 );
                 const clusterTransaction = new ClusterTransaction();
                 const expectedRes =
-                    await transactionMultiJsonForArrCommands(
-                        clusterTransaction,
-                    );
+                    await JsonBatchForArrCommands(clusterTransaction);
                 const result = await client.exec(clusterTransaction);
 
                 validateTransactionResponse(result, expectedRes);
