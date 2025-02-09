@@ -333,7 +333,9 @@ describe("GlideClusterClient", () => {
                         "cluster-node-timeout": "16000",
                     })
                     .configGet(["timeout", "cluster-node-timeout"]);
-                const result = await client.exec(transaction) as GlideRecord<unknown>[];
+                const result = (await client.exec(
+                    transaction,
+                )) as GlideRecord<unknown>[];
                 const convertedResult = [
                     result[0],
                     convertGlideRecordToRecord(result[1]),
