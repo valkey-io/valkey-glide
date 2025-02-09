@@ -2129,7 +2129,7 @@ where
                     .await
                 } else {
                     // The pipeline is not atomic and not already splitted, we need to split it into sub-pipelines and send them separately.
-                    Self::handle_pipeline_request(&pipeline, core).await
+                    Self::handle_pipeline_request(pipeline, core).await
                 }
             }
             CmdArg::ClusterScan {
@@ -2160,13 +2160,16 @@ where
     ///
     /// This function distributes the commands in the pipeline across the cluster nodes based on routing information, collects the responses,
     /// and aggregates them if necessary according to the specified response policies.
-    async fn handle_pipeline_request(pipeline: &crate::Pipeline, core: Core<C>) -> OperationResult {
+    async fn handle_pipeline_request(
+        pipeline: Arc<crate::Pipeline>,
+        core: Core<C>,
+    ) -> OperationResult {
         // Distribute pipeline commands across cluster nodes based on routing information.
         // Returns:
         // - pipelines_by_node: Map of node addresses to their pipeline contexts
         // - response_policies: List of response aggregation policies for multi-node commands
         let (pipelines_by_node, response_policies) =
-            map_pipeline_to_nodes(pipeline, core.clone()).await?;
+            map_pipeline_to_nodes(&pipeline, core.clone()).await?;
 
         // Initialize `PipelineResponses` to store responses for each pipeline command.
         // This will be used to store the responses from the different sub-pipelines to the pipeline commands.
