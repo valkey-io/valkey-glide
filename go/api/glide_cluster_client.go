@@ -374,7 +374,7 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 }
 
 // Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
-// The command will be routed to a random node.
+// The command is routed to a random node by default, which is safe for read-only commands.
 //
 // Parameters:
 //
