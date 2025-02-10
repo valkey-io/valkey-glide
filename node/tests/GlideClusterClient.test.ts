@@ -2169,7 +2169,7 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    describe("AZAffinity Read Strategy Testss", () => {
+    describe("AZAffinity Read Strategy Tests", () => {
         async function getNumberOfReplicas(
             azClient: GlideClusterClient,
         ): Promise<number> {
@@ -2205,6 +2205,41 @@ describe("GlideClusterClient", () => {
             );
         }
 
+        async function getNumberOfPrimaries(
+            azClient: GlideClusterClient,
+        ): Promise<number> {
+            // Get replication info from ALL nodes
+            const nodeInfo = (await azClient.info({
+                sections: [InfoOptions.Replication],
+            })) as Record<string, string>;
+
+            let totalPrimaries = 0;
+
+            Object.values(nodeInfo).forEach((nodeData) => {
+                const roleLine = nodeData
+                    .split("\n")
+                    .find((line) => line.startsWith("role:"));
+
+                if (roleLine) {
+                    const role = roleLine
+                        .split(":")[1]
+                        .trim()
+                        .toLowerCase()
+                        .replace(/^(master|primary)$/, "primary");
+
+                    if (role === "primary") {
+                        totalPrimaries += 1;
+                    }
+                }
+            });
+
+            if (totalPrimaries > 0) {
+                return totalPrimaries;
+            }
+
+            throw new Error("No primary nodes found in cluster response");
+        }
+
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "should route GET commands to all replicas with the same AZ using protocol %p",
             async (protocol) => {
@@ -2212,8 +2247,6 @@ describe("GlideClusterClient", () => {
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
 
                 const az = "us-east-1a";
-                const GET_CALLS_PER_REPLICA = 3;
-
                 let client_for_config_set;
                 let client_for_testing_az;
 
@@ -2224,7 +2257,6 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
-                                { requestTimeout: 3000 },
                             ),
                         );
 
@@ -2245,8 +2277,16 @@ describe("GlideClusterClient", () => {
                         );
                     }
 
-                    const GET_CALLS = GET_CALLS_PER_REPLICA * n_replicas;
-                    const get_cmdstat = `calls=${GET_CALLS_PER_REPLICA}`;
+                    // Retrieve the number of primaries dynamically
+                    const n_primaries = await getNumberOfPrimaries(
+                        client_for_config_set,
+                    );
+
+                    if (n_primaries === 0) {
+                        throw new Error(
+                            "No primaries found in the cluster. Test requires at least one primary.",
+                        );
+                    }
 
                     // Stage 2: Create AZ affinity client and verify configuration
                     client_for_testing_az =
@@ -2255,7 +2295,6 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
-                                    requestTimeout: 3000,
                                     readFrom: "AZAffinity",
                                     clientAz: az,
                                 },
@@ -2273,17 +2312,24 @@ describe("GlideClusterClient", () => {
                         ),
                     );
 
+                    const replicas_per_primary = n_replicas / n_primaries;
+                    const get_calls_per_replica = 25;
+                    const get_calls =
+                        get_calls_per_replica * replicas_per_primary;
+                    const get_cmdstat = `cmdstat_get:calls=${get_calls_per_replica}`;
+
                     // Stage 3: Set test data and perform GET operations
                     await client_for_testing_az.set("foo", "testvalue");
 
-                    for (let i = 0; i < GET_CALLS; i++) {
+                    for (let i = 0; i < get_calls; i++) {
                         await client_for_testing_az.get("foo");
                     }
 
                     // Stage 4: Verify GET commands were routed correctly
-                    const info_result = (await client_for_testing_az.info(
-                        { sections: [InfoOptions.All], route: "allNodes" }, // Get both replication and commandstats info
-                    )) as Record<string, string>;
+                    const info_result = (await client_for_testing_az.info({
+                        sections: [InfoOptions.All],
+                        route: "allNodes",
+                    })) as Record<string, string>;
 
                     const matching_entries_count = Object.values(
                         info_result,
@@ -2296,7 +2342,7 @@ describe("GlideClusterClient", () => {
                         return isReplicaNode && infoStr.includes(get_cmdstat);
                     }).length;
 
-                    expect(matching_entries_count).toBe(n_replicas); // Should expect 12 as the cluster was created with 3 primary and 4 replicas, totalling 12 replica nodes
+                    expect(matching_entries_count).toBe(replicas_per_primary);
                 } finally {
                     // Cleanup
                     await client_for_config_set?.configSet(
