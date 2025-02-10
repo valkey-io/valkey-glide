@@ -225,7 +225,7 @@ impl RedisServer {
         modules: &[Module],
         spawner: F,
     ) -> RedisServer {
-        // Check wether the server available is redis or valkey
+        // Check wether the server available is valkey or redis
         let server_command = ["valkey-server", "redis-server"]
             .iter()
             .find(|cmd| which::which(cmd).is_ok())
