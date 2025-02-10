@@ -49,6 +49,8 @@ type SortedSetCommands interface {
 
 	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[string]float64, error)
 
+	ZRangeStore(destination string, key string, rangeQuery options.ZRangeQuery) (int64, error)
+
 	ZRank(key string, member string) (Result[int64], error)
 
 	ZRankWithScore(key string, member string) (Result[int64], Result[float64], error)
