@@ -1457,7 +1457,6 @@ func ExampleGlideClient_XRange() {
 	}
 	fmt.Println(len(response))
 
-	// TODO: This output is incorrect. It should be an slice since the values should be ordered.
 	// Output: 2
 }
 
@@ -1476,7 +1475,6 @@ func ExampleGlideClusterClient_XRange() {
 	}
 	fmt.Println(len(response))
 
-	// TODO: This output is incorrect. It should be an slice since the values should be ordered.
 	// Output: 2
 }
 

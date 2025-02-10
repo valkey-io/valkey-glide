@@ -4,6 +4,7 @@ package api
 
 import (
 	"fmt"
+
 	"github.com/stretchr/testify/assert"
 )
 
