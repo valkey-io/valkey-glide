@@ -1185,6 +1185,49 @@ func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendin
 	return pendingDetails, nil
 }
 
+func handleXInfoConsumersResponse(response *C.struct_CommandResponse) ([]XInfoConsumerInfo, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	arrData, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := arrayConverter[map[string]interface{}]{
+		nil,
+		false,
+	}.convert(arrData)
+	if err != nil {
+		return nil, err
+	}
+	arr, ok := converted.([]map[string]interface{})
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+	}
+
+	result := make([]XInfoConsumerInfo, 0, len(arr))
+
+	for _, group := range arr {
+		info := XInfoConsumerInfo{
+			Name:    group["name"].(string),
+			Pending: group["pending"].(int64),
+			Idle:    group["idle"].(int64),
+		}
+		switch inactive := group["inactive"].(type) {
+		case int64:
+			info.Inactive = CreateInt64Result(inactive)
+		default:
+			info.Inactive = CreateNilInt64Result()
+		}
+		result = append(result, info)
+	}
+
+	return result, nil
+}
+
 func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[string]interface{}, error) {
 	defer C.free_command_response(response)
 
