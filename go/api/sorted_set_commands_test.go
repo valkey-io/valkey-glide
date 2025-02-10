@@ -462,7 +462,18 @@ func ExampleGlideClient_BZMPopWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	jsonSummary, _ := json.Marshal(result.Value())
-	fmt.Println(string(jsonSummary))
-	// Output: {"Key":"key1","MembersAndScores":[{"Member":"c","Score":3},{"Member":"d","Score":4}]}
+	kms := KeyWithArrayOfMembersAndScores{
+		Key: "key1",
+		MembersAndScores: []MemberAndScore{
+			{Member: "d", Score: 4},
+			{Member: "c", Score: 3},
+		},
+	}
+	fmt.Println(kms.Key == result.Value().Key)
+	isEqual := elementsMatch(kms.MembersAndScores, result.Value().MembersAndScores) // helper function for comparing arrays and slices
+	fmt.Println(isEqual)
+
+	// Output:
+	// true
+	// true
 }

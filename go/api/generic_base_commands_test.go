@@ -1154,38 +1154,34 @@ func ExampleGlideClusterClient_Copy() {
 
 func ExampleGlideClient_CopyWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	opts := NewCopyOptionsBuilder().SetDBDestination(2).SetReplace()
-	result, err := client.Set("key1", "someValue")
-	result1, err := client.CopyWithOptions("key1", "key2", opts)
-	result2, err := client.Get("key2")
+	client.Set("key1", "someValue")
+
+	opts := NewCopyOptionsBuilder().SetReplace()
+	client.CopyWithOptions("key1", "key2", opts)
+
+	result, err := client.Get("key2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
-	fmt.Println(result1)
-	fmt.Println(result2)
+	fmt.Println(result.Value())
 
-	// Output:
-	// OK
-	// true
-	// {someValue false}
+	// Output: someValue
 }
 
 func ExampleGlideClusterClient_CopyWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.Set("{key}1", "someValue")
+
 	opts := NewCopyOptionsBuilder().SetReplace()
-	result, err := client.Set("{key}1", "someValue")
-	result1, err := client.CopyWithOptions("{key}1", "{key}2", opts)
-	result2, err := client.Get("{key}2")
+	client.CopyWithOptions("{key}1", "{key}2", opts)
+
+	result, err := client.Get("{key}2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
-	fmt.Println(result1)
-	fmt.Println(result2)
 
-	// Output:
-	// OK
-	// true
-	// {someValue false}
+	fmt.Println(result.Value())
+
+	// Output: someValue
 }

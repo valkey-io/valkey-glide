@@ -4,6 +4,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/assert"
 )
 
 // getExampleGlideClient returns a GlideClient instance for testing purposes.
@@ -44,4 +45,14 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 	// }
 
 	return client.(*GlideClusterClient)
+}
+
+// dummyt is a dummy testing.T type to satisfy the interface of the client methods.
+// It is used for testify assertions in the examples of the GlideClient methods.
+type dummyt struct{}
+
+func (t dummyt) Errorf(string, ...interface{}) {}
+
+func elementsMatch(listA, listB interface{}) bool {
+	return assert.ElementsMatch(dummyt{}, listA, listB)
 }
