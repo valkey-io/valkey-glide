@@ -98,9 +98,11 @@ example-test:
 	set -o pipefail; \
 	../utils/cluster_manager.py start -p 6379 -r 0
 	../utils/cluster_manager.py start --cluster-mode -p 7001 7002 7003 7004 7005 7006
-	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.so|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
-	go test -v -race ./... -skip Test $(if $(test-filter), -run $(test-filter)) \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/glide/api | go-test-report -o reports/example-tests.html -t example-test > /dev/null)
+	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
+    go test -v -race ./... -skip Test $(if $(test-filter), -run $(test-filter)) \
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/api \
+    | go-test-report -o reports/example-tests.html -t example-test > /dev/null)
+
 	../utils/cluster_manager.py stop --prefix cluster
 
 # integration tests - run subtask with skipping modules tests
