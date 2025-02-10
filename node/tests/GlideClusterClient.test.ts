@@ -2362,8 +2362,8 @@ describe("GlideClusterClient", () => {
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
 
                 const az = "us-east-1a";
-                const GET_CALLS = 3;
-                const get_cmdstat = `calls=${GET_CALLS}`;
+                const get_calls = 3;
+                const get_cmdstat = `cmdstat_get:calls=${get_calls}`;
                 let client_for_config_set;
                 let client_for_testing_az;
 
@@ -2403,10 +2403,12 @@ describe("GlideClusterClient", () => {
                                 },
                             ),
                         );
-                    await client_for_testing_az.set("foo", "testvalue");
 
-                    for (let i = 0; i < GET_CALLS; i++) {
-                        await client_for_testing_az.get("foo");
+                    const key = "foo_{12182}"; // Key targets slot 12182
+                    await client_for_testing_az.set(key, "testvalue");
+
+                    for (let i = 0; i < get_calls; i++) {
+                        await client_for_testing_az.get(key);
                     }
 
                     // Stage 4: Verify GET commands were routed correctly
@@ -2419,6 +2421,7 @@ describe("GlideClusterClient", () => {
                     const matching_entries_count = Object.values(
                         info_result,
                     ).filter((infoStr) => {
+                        console.log("Info String:", infoStr);
                         return (
                             infoStr.includes(get_cmdstat) &&
                             infoStr.includes(`availability_zone:${az}`)
