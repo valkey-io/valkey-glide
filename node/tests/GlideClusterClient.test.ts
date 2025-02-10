@@ -22,6 +22,7 @@ import {
     FunctionStatsSingleResponse,
     GeoUnit,
     GlideClusterClient,
+    GlideRecord,
     GlideReturnType,
     GlideString,
     InfoOptions,
@@ -332,7 +333,9 @@ describe("GlideClusterClient", () => {
                         "cluster-node-timeout": "16000",
                     })
                     .configGet(["timeout", "cluster-node-timeout"]);
-                const result = await client.exec(transaction);
+                const result = (await client.exec(
+                    transaction,
+                )) as GlideRecord<unknown>[];
                 const convertedResult = [
                     result[0],
                     convertGlideRecordToRecord(result[1]),
@@ -1802,7 +1805,12 @@ describe("GlideClusterClient", () => {
                         decoder: Decoder.Bytes,
                         route: route,
                     });
-                    const data = result?.[0] as Buffer;
+
+                    if (!result) {
+                        throw new Error("Transaction failed: result is null");
+                    }
+
+                    const data = result[0] as Buffer;
 
                     // Verify functionRestore
                     transaction = new ClusterTransaction()
