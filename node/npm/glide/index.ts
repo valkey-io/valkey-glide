@@ -4,36 +4,70 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { GLIBC, familySync } from "detect-libc";
+import { GLIBC, MUSL, familySync } from "detect-libc";
 import { arch, platform } from "process";
 
 let globalObject = global as unknown;
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 function loadNativeBinding() {
-    let nativeStr = process.env.native_binding;
+    let nativeBinding = null;
 
-    if (nativeStr == undefined) {
-        const prefix = familySync() == GLIBC ? "" : "-musl";
-        nativeStr = `${platform}${prefix}-${arch}`;
+    switch (platform) {
+        case "linux":
+            switch (arch) {
+                case "x64":
+                    switch (familySync()) {
+                        case GLIBC:
+                            nativeBinding = require("@scope/valkey-glide-linux-x64");
+                            break;
+                        case MUSL:
+                            nativeBinding = require("@scope/valkey-glide-linux-musl-x64");
+                            break;
+                        default:
+                            nativeBinding = require("@scope/valkey-glide-linux-x64");
+                            break;
+                    }
 
-        if (
-            !["x64", "arm64"].includes(arch) ||
-            !["linux", "darwin"].includes(platform)
-        ) {
+                    break;
+                case "arm64":
+                    switch (familySync()) {
+                        case GLIBC:
+                            nativeBinding = require("@scope/valkey-glide-linux-arm64");
+                            break;
+                        case MUSL:
+                            nativeBinding = require("@scope/valkey-glide-linux-musl-arm64");
+                            break;
+                        default:
+                            nativeBinding = require("@scope/valkey-glide-linux-arm64");
+                            break;
+                    }
+
+                    break;
+                default:
+                    throw new Error(
+                        `Unsupported OS: ${platform}, architecture: ${arch}`,
+                    );
+            }
+
+            break;
+        case "darwin":
+            switch (arch) {
+                case "arm64":
+                    nativeBinding = require("@scope/valkey-glide-darwin-arm64");
+                    break;
+                default:
+                    throw new Error(
+                        `Unsupported OS: ${platform}, architecture: ${arch}`,
+                    );
+            }
+
+            break;
+        default:
             throw new Error(
                 `Unsupported OS: ${platform}, architecture: ${arch}`,
             );
-        }
     }
-
-    let scope = process.env.scope || "@scope";
-
-    if (scope == "@scope") {
-        scope = "@valkey/";
-    }
-
-    const nativeBinding = require(`${scope}valkey-glide-${nativeStr}`);
 
     if (!nativeBinding) {
         throw new Error(`Failed to load native binding`);
