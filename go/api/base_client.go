@@ -4711,6 +4711,67 @@ func (client *baseClient) ZRangeWithScores(
 	return handleStringDoubleMapResponse(result)
 }
 
+// Stores a specified range of elements from the sorted set at `key`, into a new
+// sorted set at `destination`. If `destination` doesn't exist, a new sorted
+// set is created; if it exists, it's overwritten.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destination - The key for the destination sorted set.
+//	key - The key of the source sorted set.
+//	rangeQuery - The range query object representing the type of range query to perform.
+//	 - For range queries by index (rank), use [RangeByIndex].
+//	 - For range queries by lexicographical order, use [RangeByLex].
+//	 - For range queries by score, use [RangeByScore].
+//
+// Return value:
+//
+//	The number of elements in the resulting sorted set.
+//
+// For example:
+//
+//	client.ZAdd("my_sorted_set", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0})
+//
+//	// Retrieve and store all members of a sorted set in ascending order
+//	res1, err := client.ZRangeStore("my_dest", "my_sorted_set", options.NewRangeByIndexQuery(0, -1))
+//
+//	// Retrieve members within a score range in descending order
+//	query := options.NewRangeByScoreQuery(
+//	    options.NewScoreBoundary(3, false),
+//		options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+//		SetReverse()
+//	res2, err := client.ZRange("my_dest", query)
+//	fmt.Println(res1)
+//	fmt.Println(res2)
+//
+//	// Output:
+//	// 3
+//	// [b a]
+//
+// [valkey.io]: https://valkey.io/commands/zrangestore/
+func (client *baseClient) ZRangeStore(
+	destination string,
+	key string,
+	rangeQuery options.ZRangeQuery,
+) (int64, error) {
+	args := make([]string, 0, 10)
+	args = append(args, destination)
+	args = append(args, key)
+	args = append(args, rangeQuery.ToArgs()...)
+	result, err := client.executeCommand(C.ZRangeStore, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+
+	return handleIntResponse(result)
+}
+
 // Removes the existing timeout on key, turning the key from volatile
 // (a key with an expire set) to persistent (a key that will never expire as no timeout is associated).
 //
