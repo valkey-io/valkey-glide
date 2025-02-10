@@ -79,6 +79,19 @@ class ConditionalChange(Enum):
     ONLY_IF_DOES_NOT_EXIST = "NX"
 
 
+@dataclass
+class OnlyIfEqual:
+    """
+    Change condition to the `SET` command,
+    For additional conditonal options see ConditionalChange
+    - comparison_value - value to compare to the current value of a key.
+    If comparison_value is equal to the key, it will overwrite the value of key to the new provided value
+    Equivalent to the IFEQ comparison-value in the Valkey API
+    """
+
+    comparison_value: TEncodable
+
+
 class ExpiryType(Enum):
     """SET option: The type of the expiry.
     - SEC - Set the specified expire time, in seconds. Equivalent to `EX` in the Valkey API.
@@ -390,6 +403,7 @@ class CoreCommands(Protocol):
         match: Optional[TEncodable] = ...,
         count: Optional[int] = ...,
         type: Optional[ObjectType] = ...,
+        allow_non_covered_slots: bool = ...,
     ) -> TResult: ...
 
     async def _update_connection_password(
@@ -434,7 +448,7 @@ class CoreCommands(Protocol):
         self,
         key: TEncodable,
         value: TEncodable,
-        conditional_set: Optional[ConditionalChange] = None,
+        conditional_set: Optional[Union[ConditionalChange, OnlyIfEqual]] = None,
         expiry: Optional[ExpirySet] = None,
         return_old_value: bool = False,
     ) -> Optional[bytes]:
@@ -446,7 +460,7 @@ class CoreCommands(Protocol):
             key (TEncodable): the key to store.
             value (TEncodable): the value to store with the given key.
             conditional_set (Optional[ConditionalChange], optional): set the key only if the given condition is met.
-                Equivalent to [`XX` | `NX`] in the Valkey API. Defaults to None.
+                Equivalent to [`XX` | `NX` | `IFEQ` comparison-value] in the Valkey API. Defaults to None.
             expiry (Optional[ExpirySet], optional): set expiriation to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Valkey API. Defaults to None.
             return_old_value (bool, optional): Return the old value stored at key, or None if key did not exist.
@@ -462,16 +476,38 @@ class CoreCommands(Protocol):
         Example:
             >>> await client.set(b"key", b"value")
                 'OK'
-            >>> await client.set("key", "new_value",conditional_set=ConditionalChange.ONLY_IF_EXISTS, expiry=Expiry(ExpiryType.SEC, 5))
+
+                # ONLY_IF_EXISTS -> Only set the key if it already exists
+                # expiry -> Set the amount of time until key expires
+            >>> await client.set("key", "new_value",conditional_set=ConditionalChange.ONLY_IF_EXISTS, expiry=ExpirySet(ExpiryType.SEC, 5))
                 'OK' # Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
+
+                # ONLY_IF_DOES_NOT_EXIST -> Only set key if it does not already exist
             >>> await client.set("key", "value", conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,return_old_value=True)
                 b'new_value' # Returns the old value of "key".
             >>> await client.get("key")
                 b'new_value' # Value wasn't modified back to being "value" because of "NX" flag.
+
+
+                # ONLY_IF_EQUAL -> Only set key if provided value is equal to current value of the key
+            >>> await client.set("key", "value")
+                'OK' # Reset "key" to "value"
+            >>> await client.set("key", "new_value", conditional_set=OnlyIfEqual("different_value")
+                'None' # Did not rewrite value of "key" because provided value was not equal to the previous value of "key"
+            >>> await client.get("key")
+                b'value' # Still the original value because nothing got rewritten in the last call
+            >>> await client.set("key", "new_value", conditional_set=OnlyIfEqual("value")
+                'OK'
+            >>> await client.get("key")
+                b'newest_value" # Set "key" to "new_value" because the provided value was equal to the previous value of "key"
         """
         args = [key, value]
-        if conditional_set:
+        if isinstance(conditional_set, ConditionalChange):
             args.append(conditional_set.value)
+
+        elif isinstance(conditional_set, OnlyIfEqual):
+            args.extend(["IFEQ", conditional_set.comparison_value])
+
         if return_old_value:
             args.append("GET")
         if expiry is not None:
@@ -5738,7 +5774,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.set("key1", "A")  # "A" has binary value 01000001
-            >>> await client.set("key1", "B")  # "B" has binary value 01000010
+            >>> await client.set("key2", "B")  # "B" has binary value 01000010
             >>> await client.bitop(BitwiseOperation.AND, "destination", ["key1", "key2"])
                 1  # The size of the resulting string stored in "destination" is 1
             >>> await client.get("destination")

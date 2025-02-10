@@ -49,7 +49,8 @@ public abstract class BaseClientConfiguration {
      * The duration in milliseconds that the client should wait for a request to complete. This
      * duration encompasses sending the request, awaiting for a response from the server, and any
      * required reconnections or retries. If the specified timeout is exceeded for a pending request,
-     * it will result in a timeout error. If not set, a default value will be used.
+     * it will result in a timeout error. If not explicitly set, a default value of 250 milliseconds
+     * will be used.
      */
     private final Integer requestTimeout;
 
@@ -64,6 +65,12 @@ public abstract class BaseClientConfiguration {
      * loop group. If set, users are responsible for shutting the resource down when no longer in use.
      */
     private final ThreadPoolResource threadPoolResource;
+
+    /**
+     * Serialization protocol to be used with the server. If not set, {@link ProtocolVersion#RESP3}
+     * will be used.
+     */
+    private final ProtocolVersion protocol;
 
     public abstract BaseSubscriptionConfiguration getSubscriptionConfiguration();
 

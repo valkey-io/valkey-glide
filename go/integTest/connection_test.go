@@ -4,12 +4,13 @@ package integTest
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/api"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
 )
 
 func (suite *GlideTestSuite) TestStandaloneConnect() {
 	config := api.NewGlideClientConfiguration().
-		WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]})
+		WithAddress(&suite.standaloneHosts[0])
 	client, err := api.NewGlideClient(config)
 
 	assert.Nil(suite.T(), err)
@@ -20,8 +21,8 @@ func (suite *GlideTestSuite) TestStandaloneConnect() {
 
 func (suite *GlideTestSuite) TestClusterConnect() {
 	config := api.NewGlideClusterClientConfiguration()
-	for _, port := range suite.clusterPorts {
-		config.WithAddress(&api.NodeAddress{Port: port})
+	for _, host := range suite.clusterHosts {
+		config.WithAddress(&host)
 	}
 
 	client, err := api.NewGlideClusterClient(config)
@@ -34,7 +35,7 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 
 func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 	config := api.NewGlideClusterClientConfiguration().
-		WithAddress(&api.NodeAddress{Port: suite.clusterPorts[0]})
+		WithAddress(&suite.clusterHosts[0])
 
 	client, err := api.NewGlideClusterClient(config)
 
@@ -51,5 +52,5 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 
 	assert.Nil(suite.T(), client)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.ConnectionError{}, err)
+	assert.IsType(suite.T(), &errors.ConnectionError{}, err)
 }

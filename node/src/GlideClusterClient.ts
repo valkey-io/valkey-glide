@@ -4,7 +4,9 @@
 
 import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
+import { Writer } from "protobufjs";
 import {
+    AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
     Decoder,
@@ -16,6 +18,7 @@ import {
     convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
+    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -23,7 +26,6 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
-    ScanOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -146,7 +148,7 @@ export namespace GlideClusterClientConfiguration {
 /**
  * Configuration options for creating a {@link GlideClusterClient | GlideClusterClient}.
  *
- * Extends `BaseClientConfiguration` with properties specific to `GlideClusterClient`, such as periodic topology checks
+ * Extends {@link BaseClientConfiguration | BaseClientConfiguration} with properties specific to `GlideClusterClient`, such as periodic topology checks
  * and Pub/Sub subscription settings.
  *
  * @remarks
@@ -190,7 +192,25 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
      * Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
      */
     pubsubSubscriptions?: GlideClusterClientConfiguration.PubSubSubscriptions;
+    /**
+     * Advanced configuration settings for the client.
+     */
+    advancedConfiguration?: AdvancedGlideClusterClientConfiguration;
 };
+
+/**
+ * Represents advanced configuration settings for creating a {@link GlideClusterClient | GlideClusterClient} used in {@link GlideClusterClientConfiguration | GlideClusterClientConfiguration}.
+ *
+ *
+ * @example
+ * ```typescript
+ * const config: AdvancedGlideClusterClientConfiguration = {
+ *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ * };
+ * ```
+ */
+export type AdvancedGlideClusterClientConfiguration =
+    AdvancedBaseClientConfiguration & {};
 
 /**
  * If the command's routing is to one node we will get T as a response type,
@@ -504,6 +524,14 @@ export class GlideClusterClient extends BaseClient {
         }
 
         this.configurePubsub(options, configuration);
+
+        if (options.advancedConfiguration) {
+            this.configureAdvancedConfigurationBase(
+                options.advancedConfiguration,
+                configuration,
+            );
+        }
+
         return configuration;
     }
     /**
@@ -579,7 +607,7 @@ export class GlideClusterClient extends BaseClient {
      */
     protected scanOptionsToProto(
         cursor: string,
-        options?: ScanOptions,
+        options?: ClusterScanOptions,
     ): command_request.ClusterScan {
         const command = command_request.ClusterScan.create();
         command.cursor = cursor;
@@ -596,6 +624,7 @@ export class GlideClusterClient extends BaseClient {
             command.objectType = options.type;
         }
 
+        command.allowNonCoveredSlots = options?.allowNonCoveredSlots ?? false;
         return command;
     }
 
@@ -604,13 +633,43 @@ export class GlideClusterClient extends BaseClient {
      */
     protected createClusterScanPromise(
         cursor: ClusterScanCursor,
-        options?: ScanOptions & DecoderOption,
+        options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
+        this.ensureClientIsOpen();
         // separate decoder option from scan options
-        const { decoder, ...scanOptions } = options || {};
+        const { decoder = this.defaultDecoder, ...scanOptions } = options || {};
         const cursorId = cursor.getCursor();
         const command = this.scanOptionsToProto(cursorId, scanOptions);
-        return this.createWritePromise(command, { decoder });
+
+        return new Promise((resolve, reject) => {
+            const callbackIdx = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIdx] = [
+                (resolveAns: [ClusterScanCursor, GlideString[]]) => {
+                    try {
+                        resolve([
+                            new ClusterScanCursor(resolveAns[0].toString()),
+                            resolveAns[1],
+                        ]);
+                    } catch (error) {
+                        reject(error);
+                    }
+                },
+                reject,
+                decoder,
+            ];
+            this.writeOrBufferRequest(
+                new command_request.CommandRequest({
+                    callbackIdx,
+                    clusterScan: command,
+                }),
+                (message: command_request.CommandRequest, writer: Writer) => {
+                    command_request.CommandRequest.encodeDelimited(
+                        message,
+                        writer,
+                    );
+                },
+            );
+        });
     }
 
     /**
@@ -633,7 +692,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param cursor - The cursor object that wraps the scan state.
      *   To start a new scan, create a new empty `ClusterScanCursor` using {@link ClusterScanCursor}.
-     * @param options - (Optional) The scan options, see {@link ScanOptions} and  {@link DecoderOption}.
+     * @param options - (Optional) The scan options, see {@link ClusterScanOptions} and  {@link DecoderOption}.
      * @returns A Promise resolving to an array containing the next cursor and an array of keys,
      *   formatted as [`ClusterScanCursor`, `string[]`].
      *
@@ -651,14 +710,14 @@ export class GlideClusterClient extends BaseClient {
      * console.log(allKeys); // ["key1", "key2", "key3"]
      *
      * // Iterate over keys matching a pattern
-     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "notMykey", value: "value3"}, {key: "somethingElse", value: "value4"}]);
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "notMyKey", value: "value3"}, {key: "somethingElse", value: "value4"}]);
      * let cursor = new ClusterScanCursor();
      * const matchedKeys: GlideString[] = [];
      * while (!cursor.isFinished()) {
      *   const [cursor, keys] = await client.scan(cursor, { match: "*key*", count: 10 });
      *   matchedKeys.push(...keys);
      * }
-     * console.log(matchedKeys); // ["key1", "key2", "notMykey"]
+     * console.log(matchedKeys); // ["key1", "key2", "notMyKey"]
      *
      * // Iterate over keys of a specific type
      * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
@@ -674,7 +733,7 @@ export class GlideClusterClient extends BaseClient {
      */
     public async scan(
         cursor: ClusterScanCursor,
-        options?: ScanOptions & DecoderOption,
+        options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         return this.createClusterScanPromise(cursor, options);
     }
@@ -915,6 +974,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Reads the configuration parameters of the running server.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
@@ -953,6 +1013,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Sets configuration parameters to the specified values.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * The command will be routed to all nodes, unless `route` is provided.
      *
@@ -1734,10 +1795,40 @@ export class GlideClusterClient extends BaseClient {
             keys: [],
             args: options?.args?.map(Buffer.from),
         });
-        return this.createWritePromise<ClusterGlideRecord<GlideReturnType>>(
-            scriptInvocation,
-            options,
-        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+        return this.createScriptInvocationWithRoutePromise<
+            ClusterGlideRecord<GlideReturnType>
+        >(scriptInvocation, options).then((res) =>
+            convertClusterGlideRecord(res, true, options?.route),
+        );
+    }
+
+    private async createScriptInvocationWithRoutePromise<T = GlideString>(
+        command: command_request.ScriptInvocation,
+        options?: { args?: GlideString[] } & DecoderOption & RouteOption,
+    ) {
+        this.ensureClientIsOpen();
+
+        return new Promise<T>((resolve, reject) => {
+            const callbackIdx = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIdx] = [
+                resolve,
+                reject,
+                options?.decoder,
+            ];
+            this.writeOrBufferRequest(
+                new command_request.CommandRequest({
+                    callbackIdx,
+                    scriptInvocation: command,
+                    route: this.toProtobufRoute(options?.route),
+                }),
+                (message: command_request.CommandRequest, writer: Writer) => {
+                    command_request.CommandRequest.encodeDelimited(
+                        message,
+                        writer,
+                    );
+                },
+            );
+        });
     }
 
     /**

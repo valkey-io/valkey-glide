@@ -54,7 +54,7 @@ function toBuffersArray(args: GlideString[]) {
 }
 
 /**
- * @internal
+ * @internal @test
  */
 export function parseInfoResponse(response: string): Record<string, string> {
     const lines = response.split("\n");
@@ -124,15 +124,29 @@ export function createGetRange(
     ]);
 }
 
-export interface SetOptions {
-    /**
-     *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-     * Equivalent to `NX` in the Valkey API. `onlyIfExists` - Only set the key if
-     * it already exist. Equivalent to `EX` in the Valkey API. if `conditional` is
-     * not set the value will be set regardless of prior value existence. If value
-     * isn't set because of the condition, return null.
-     */
-    conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+export type SetOptions = (
+    | {
+          /**
+           * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
+           * `NX` in the Valkey API.
+           *
+           * `onlyIfExists` - Only set the key if it already exists.
+           * `EX` in the Valkey API.
+           */
+          conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+      }
+    | {
+          /**
+           * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
+           * `IFEQ` in the Valkey API.
+           */
+          conditionalSet: "onlyIfEqual";
+          /**
+           * The value to compare the existing value with.
+           */
+          comparisonValue: GlideString;
+      }
+) & {
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
      * is returned and SET aborted if the value stored at key is not a string.
@@ -151,7 +165,7 @@ export interface SetOptions {
               type: TimeUnit;
               count: number;
           };
-}
+};
 
 /**
  * @internal
@@ -168,6 +182,8 @@ export function createSet(
             args.push("XX");
         } else if (options.conditionalSet === "onlyIfDoesNotExist") {
             args.push("NX");
+        } else if (options.conditionalSet === "onlyIfEqual") {
+            args.push("IFEQ", options.comparisonValue);
         }
 
         if (options.returnOldValue) {
@@ -418,6 +434,7 @@ export function createHGet(
 }
 
 /**
+ * @internal
  * This function converts an input from {@link HashDataType} or `Record` types to `HashDataType`.
  *
  * @param fieldsAndValues - field names and their values.
@@ -3855,6 +3872,19 @@ export interface BaseScanOptions {
  */
 export interface ScanOptions extends BaseScanOptions {
     type?: ObjectType;
+}
+
+/**
+ * Options for the SCAN command.
+ * `match`: The match filter is applied to the result of the command and will only include keys that match the pattern specified.
+ * `count`: `COUNT` is a just a hint for the command for how many elements to fetch from the server, the default is 10.
+ * `type`: The type of the object to scan.
+ * Types are the data types of Valkey: `string`, `list`, `set`, `zset`, `hash`, `stream`.
+ * `allowNonCoveredSlots`: If true, the scan will keep scanning even if slots are not covered by the cluster.
+ * By default, the scan will stop if slots are not covered by the cluster.
+ */
+export interface ClusterScanOptions extends ScanOptions {
+    allowNonCoveredSlots?: boolean;
 }
 
 /**

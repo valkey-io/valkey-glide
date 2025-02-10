@@ -153,6 +153,7 @@ class StandaloneCommands(CoreCommands):
     async def config_get(self, parameters: List[TEncodable]) -> Dict[bytes, bytes]:
         """
         Get the values of configuration parameters.
+        Starting from server version 7, command supports multiple parameters.
         See https://valkey.io/commands/config-get/ for details.
 
         Args:
@@ -175,6 +176,7 @@ class StandaloneCommands(CoreCommands):
     async def config_set(self, parameters_map: Mapping[TEncodable, TEncodable]) -> TOK:
         """
         Set configuration parameters to the specified values.
+        Starting from server version 7, command supports multiple parameters.
         See https://valkey.io/commands/config-set/ for details.
 
         Args:
@@ -927,7 +929,7 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
-            >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
+            >>> await client.invoke_script(lua_script, keys=["foo"], args=["bar"] );
                 [b"foo", b"bar"]
         """
         return await self._execute_script(script.get_hash(), keys, args)
