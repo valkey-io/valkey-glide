@@ -61,7 +61,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists)
+		opts := api.NewSetOptionsBuilder().SetOnlyIfExists()
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -75,7 +75,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists)
+		opts := api.NewSetOptionsBuilder().SetOnlyIfExists()
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 
 		assert.Nil(suite.T(), err)
@@ -86,7 +86,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist)
+		opts := api.NewSetOptionsBuilder().SetOnlyIfDoesNotExist()
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -100,7 +100,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist)
+		opts := api.NewSetOptionsBuilder().SetOnlyIfDoesNotExist()
 		suite.verifyOK(client.Set(key, initialValue))
 
 		result, err := client.SetWithOptions(key, anotherValue, opts)
@@ -171,6 +171,30 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "", result.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfEquals() {
+	suite.SkipIfServerVersionLowerThanBy("8.1.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		suite.verifyOK(client.Set(key, initialValue))
+
+		// successful set
+		opts := api.NewSetOptionsBuilder().SetOnlyIfEquals(initialValue)
+		result, err := client.SetWithOptions(key, anotherValue, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result.Value())
+
+		result, err = client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), anotherValue, result.Value())
+
+		// unsuccessful set
+		opts = api.NewSetOptionsBuilder().SetOnlyIfEquals(initialValue)
+		result, err = client.SetWithOptions(key, initialValue, opts)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), result.IsNil())
 	})
 }
 
@@ -5109,6 +5133,152 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		res, err = client.ZRangeWithScores(key, query)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(res))
+	})
+}
+
+func (suite *GlideTestSuite) TestZRangeStore() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key := "{key}" + uuid.New().String()
+		dest := "{key}" + uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"a": 1.0,
+			"b": 2.0,
+			"c": 3.0,
+		}
+		_, err := client.ZAdd(key, memberScoreMap)
+		assert.NoError(t, err)
+		// index [0:1]
+		res, err := client.ZRangeStore(dest, key, options.NewRangeByIndexQuery(0, 1))
+		assert.NoError(t, err)
+		res1, err := client.ZRange(dest, options.NewRangeByIndexQuery(0, 1))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), res)
+		assert.Equal(t, []string{"a", "b"}, res1)
+		// index [0:-1] (all)
+		res, err = client.ZRangeStore(dest, key, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res)
+		assert.Equal(t, []string{"a", "b", "c"}, res1)
+		// index [3:1] (none)
+		res, err = client.ZRangeStore(dest, key, options.NewRangeByIndexQuery(3, 1))
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, options.NewRangeByIndexQuery(3, 1))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), res)
+		assert.Equal(t, 0, len(res1))
+		// score [-inf:3]
+		var query options.ZRangeQuery
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, true))
+		res, err = client.ZRangeStore(dest, key, query)
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, query)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res)
+		assert.Equal(t, []string{"a", "b", "c"}, res1)
+		// score [-inf:3)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, false))
+		res, err = client.ZRangeStore(dest, key, query)
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, query)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), res)
+		assert.Equal(t, []string{"a", "b"}, res1)
+		// score (3:-inf] reverse
+		query = options.NewRangeByScoreQuery(
+			options.NewScoreBoundary(3, false),
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+			SetReverse()
+		res, err = client.ZRangeStore(dest, key, query)
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, query)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), res)
+		assert.Equal(t, []string{"b", "a"}, res1)
+		// score [-inf:+inf] limit 1 2
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity)).
+			SetLimit(1, 2)
+		res, err = client.ZRangeStore(dest, key, query)
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), res)
+		assert.Equal(t, []string{"b", "c"}, res1)
+		// score [-inf:3) reverse (none)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, true)).
+			SetReverse()
+		res, err = client.ZRangeStore(dest, key, query)
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), res)
+		assert.Equal(t, 0, len(res1))
+		// score [+inf:3) (none)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+			options.NewScoreBoundary(3, false))
+		res, err = client.ZRangeStore(dest, key, query)
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), res)
+		assert.Equal(t, 0, len(res1))
+		// lex [-:c)
+		query = options.NewRangeByLexQuery(
+			options.NewInfiniteLexBoundary(options.NegativeInfinity),
+			options.NewLexBoundary("c", false))
+		res, err = client.ZRangeStore(dest, key, query)
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), res)
+		assert.Equal(t, []string{"a", "b"}, res1)
+		// lex [+:-] reverse limit 1 2
+		query = options.NewRangeByLexQuery(
+			options.NewInfiniteLexBoundary(options.PositiveInfinity),
+			options.NewInfiniteLexBoundary(options.NegativeInfinity)).
+			SetReverse().SetLimit(1, 2)
+		res, err = client.ZRangeStore(dest, key, query)
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), res)
+		assert.Equal(t, []string{"a", "b"}, res1)
+		// lex (c:-] reverse
+		query = options.NewRangeByLexQuery(
+			options.NewLexBoundary("c", false),
+			options.NewInfiniteLexBoundary(options.NegativeInfinity)).
+			SetReverse()
+		res, err = client.ZRangeStore(dest, key, query)
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), res)
+		assert.Equal(t, []string{"a", "b"}, res1)
+		// lex [+:c] (none)
+		query = options.NewRangeByLexQuery(
+			options.NewInfiniteLexBoundary(options.PositiveInfinity),
+			options.NewLexBoundary("c", true))
+		res, err = client.ZRangeStore(dest, key, query)
+		assert.NoError(t, err)
+		res1, err = client.ZRange(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), res)
+		assert.Equal(t, 0, len(res1))
+		// Pull from non-existent source
+		res, err = client.ZRangeStore(dest, "{key}nonExistent", query)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), res)
 	})
 }
 
