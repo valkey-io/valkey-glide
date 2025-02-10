@@ -2119,7 +2119,7 @@ where
                 sub_pipeline,
             } => {
                 if pipeline.is_atomic() || sub_pipeline {
-                    // If the pipeline is atomic (i.e., a transaction) or if the pipeline is already splitted into sub-pipelines, we can send it as is, with no need to split it into sub-pipelines.
+                    // If the pipeline is atomic (i.e., a transaction) or if the pipeline is already splitted into sub-pipelines (i.e., the pipeline is already routed to a specific node), we can send it as is, with no need to split it into sub-pipelines.
                     Self::try_pipeline_request(
                         pipeline,
                         offset,
@@ -2129,7 +2129,7 @@ where
                     .await
                 } else {
                     // The pipeline is not atomic and not already splitted, we need to split it into sub-pipelines and send them separately.
-                    Self::handle_pipeline_request(pipeline, core).await
+                    Self::handle_non_atomic_pipeline_request(pipeline, core).await
                 }
             }
             CmdArg::ClusterScan {
@@ -2160,7 +2160,7 @@ where
     ///
     /// This function distributes the commands in the pipeline across the cluster nodes based on routing information, collects the responses,
     /// and aggregates them if necessary according to the specified response policies.
-    async fn handle_pipeline_request(
+    async fn handle_non_atomic_pipeline_request(
         pipeline: Arc<crate::Pipeline>,
         core: Core<C>,
     ) -> OperationResult {
@@ -2171,6 +2171,20 @@ where
         let (pipelines_by_node, response_policies) =
             map_pipeline_to_nodes(&pipeline, core.clone()).await?;
 
+        // If there's only one node to send the pipeline to, we can use `try_pipeline_request` directly.
+        if pipelines_by_node.len() == 1 {
+            let (address, pipeline_context) = pipelines_by_node.into_iter().next().unwrap(); // Safe to unwrap since we checked the length.
+            let conn =
+                Self::get_connection(InternalSingleNodeRouting::ByAddress(address), core, None);
+            let pipeline_len = pipeline_context.pipeline.len();
+            return Self::try_pipeline_request(
+                Arc::new(pipeline_context.pipeline),
+                0,
+                pipeline_len,
+                conn,
+            )
+            .await;
+        }
         // Initialize `PipelineResponses` to store responses for each pipeline command.
         // This will be used to store the responses from the different sub-pipelines to the pipeline commands.
         // A command can have one or more responses (e.g MultiNode commands).
@@ -2269,9 +2283,24 @@ where
         pipeline_responses: &mut PipelineResponses,
         response_policies: Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>,
     ) -> Result<(), (OperationTarget, RedisError)> {
+        // TODO: Try to have a single step of iterating through the PipelineResponses once.
+        // Responses without response policy would simply be inserted into a new results vector (removing their node address),
+        // and multi-node responses will be aggregated and then their address can be removed instead of storing "".to_string.
+
         // Go over the multi-node commands
         for (index, routing_info, response_policy) in response_policies {
-            let response_receivers = pipeline_responses[index]
+            let response_receivers = pipeline_responses
+                .get(index)
+                .ok_or_else(|| {
+                    (
+                        OperationTarget::FanOut,
+                        RedisError::from((
+                            ErrorKind::ResponseError,
+                            "No response found for command at index: ",
+                            index.to_string(),
+                        )),
+                    )
+                })?
                 .iter()
                 .map(|(value, address)| {
                     let (sender, receiver) = oneshot::channel();
@@ -2281,10 +2310,12 @@ where
                 .collect();
 
             let aggregated_response =
+                // TODO: Change aggregate_results function to accept vec of (result, address) instead of receivers
                 Self::aggregate_results(response_receivers, &routing_info, response_policy)
                     .await
                     .map_err(|err| (OperationTarget::FanOut, err))?;
 
+            // Safe to use [index] as the index is guaranteed to be valid
             pipeline_responses[index] = vec![(aggregated_response, "".to_string())];
         }
         Ok(())

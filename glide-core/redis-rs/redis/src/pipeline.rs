@@ -9,6 +9,7 @@ use crate::types::{
 /// Represents a redis command pipeline.
 #[derive(Clone)]
 pub struct Pipeline {
+    // TODO - make this Arc
     commands: Vec<Cmd>,
     transaction_mode: bool,
     ignored_commands: HashSet<usize>,

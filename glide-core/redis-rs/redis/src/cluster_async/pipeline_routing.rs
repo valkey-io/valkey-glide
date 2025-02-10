@@ -146,11 +146,19 @@ where
                         };
 
                         if connections.is_empty() {
+                            let error_message = if matches!(
+                                multi_node_routing,
+                                MultipleNodeRoutingInfo::AllNodes
+                            ) {
+                                "No available connections to any nodes"
+                            } else {
+                                "No available connections to primary nodes"
+                            };
                             return Err((
                                 OperationTarget::NotFound,
                                 RedisError::from((
-                                    ErrorKind::AllConnectionsUnavailable, // should use different kind? ConnectionNotFoundForRoute
-                                    "No available connections",
+                                    ErrorKind::AllConnectionsUnavailable,
+                                    error_message,
                                 )),
                             ));
                         }
@@ -244,7 +252,7 @@ pub async fn handle_pipeline_multi_slot_routing<C>(
 where
     C: Clone,
 {
-    // inner_index is used to keep track of the index of the sub-command inside cmd
+    // inner_index is used to keep track of the index of the sub-commands in the multi slot routing info vector.
     for (inner_index, (route, indices)) in slots.iter().enumerate() {
         let conn = {
             let lock = core.conn_lock.read().expect(MUTEX_READ_ERR);
@@ -266,7 +274,8 @@ where
                 OperationTarget::NotFound,
                 RedisError::from((
                     ErrorKind::ConnectionNotFoundForRoute,
-                    "No available connections",
+                    "No available connections for route: ",
+                    format!("Slot: {} Slot Address: {}", route.slot(), route.slot_addr()),
                 )),
             ));
         }
@@ -301,14 +310,6 @@ where
 {
     // Processes the sub-pipelines to generate pending requests for execution on specific nodes.
     // Each pending request encapsulates all the necessary details for executing commands on a node.
-    //
-    // Returns:
-    // - `receivers`: A vector of `oneshot::Receiver` instances, enabling asynchronous retrieval
-    //   of the results from the execution of each sub-pipeline.
-    // - `pending_requests`: A vector of `PendingRequest` objects, each representing a scheduled command
-    //   for execution on a node.
-    // - `addresses_and_indices`: A vector of tuples where each tuple contains a node address and a list
-    //   of command indices for each sub-pipeline, allowing the results to be mapped back to their original command within the original pipeline.
     let (receivers, pending_requests, addresses_and_indices) =
         collect_pipeline_requests(pipeline_map);
 
@@ -401,16 +402,29 @@ pub fn add_pipeline_result(
     inner_index: Option<usize>,
     value: Value,
     address: String,
-) {
-    match inner_index {
-        Some(inner_index) => {
-            // Ensure the vector at the given index is large enough to hold the value and address at the specified position
-            if pipeline_responses[index].len() <= inner_index {
-                pipeline_responses[index].resize(inner_index + 1, (Value::Nil, "".to_string()));
+) -> Result<(), (OperationTarget, RedisError)> {
+    if let Some(responses) = pipeline_responses.get_mut(index) {
+        match inner_index {
+            Some(inner_index) => {
+                // Ensure the vector at the given index is large enough to hold the value and address at the specified position
+                if responses.len() <= inner_index {
+                    // TODO - change to Value::ServerError
+                    // TODO - change the pipeline_responses to hold in [index] a vector already sized with the expected responses length
+                    responses.resize(inner_index + 1, (Value::Nil, "".to_string()));
+                }
+                responses[inner_index] = (value, address);
             }
-            pipeline_responses[index][inner_index] = (value, address);
+            None => responses.push((value, address)),
         }
-        None => pipeline_responses[index].push((value, address)),
+        Ok(())
+    } else {
+        Err((
+            OperationTarget::NotFound,
+            RedisError::from((
+                ErrorKind::ClientError,
+                "Index not found in pipeline responses",
+            )),
+        ))
     }
 }
 
@@ -449,16 +463,38 @@ pub fn process_pipeline_responses(
                         inner_index,
                         value,
                         address.clone(),
-                    );
+                    )?;
                 }
             }
             Ok(Err(err)) => {
                 return Err((OperationTarget::Node { address }, err));
             }
-            _ => {
+            Ok(Ok(Response::Single(_))) => {
                 return Err((
                     OperationTarget::Node { address },
-                    RedisError::from((ErrorKind::ResponseError, "Failed to receive response")),
+                    RedisError::from((
+                        ErrorKind::ClientError,
+                        "Received a single response for a pipeline with multiple commands.",
+                    )),
+                ));
+            }
+            Ok(Ok(Response::ClusterScanResult(_, _))) => {
+                return Err((
+                    OperationTarget::Node { address },
+                    RedisError::from((
+                        ErrorKind::ClientError,
+                        "Received a cluster scan result inside a pipeline.",
+                    )),
+                ));
+            }
+            Err(err) => {
+                return Err((
+                    OperationTarget::Node { address },
+                    RedisError::from((
+                        ErrorKind::FatalReceiveError,
+                        "RecvError occurred",
+                        err.to_string(),
+                    )),
                 ));
             }
         }
