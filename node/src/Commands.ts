@@ -54,7 +54,7 @@ function toBuffersArray(args: GlideString[]) {
 }
 
 /**
- * @internal @test
+ * @test
  */
 export function parseInfoResponse(response: string): Record<string, string> {
     const lines = response.split("\n");
@@ -434,7 +434,6 @@ export function createHGet(
 }
 
 /**
- * @internal
  * This function converts an input from {@link HashDataType} or `Record` types to `HashDataType`.
  *
  * @param fieldsAndValues - field names and their values.

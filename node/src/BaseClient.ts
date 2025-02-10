@@ -730,7 +730,6 @@ export interface PubSubMsg {
 export type WritePromiseOptions = RouteOption & DecoderOption;
 
 /**
- * @internal
  * Base client interface for GLIDE
  */
 export class BaseClient {
