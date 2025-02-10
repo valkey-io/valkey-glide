@@ -98,14 +98,17 @@ Before starting this step, make sure you've installed all software requirments.
     Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
 
 4. Run tests:
+
     1. Ensure that you have installed server and valkey-cli on your host. You can download Valkey at the following link: [Valkey Download page](https://valkey.io/download/).
     2. Execute the following command from the node folder:
+
         ```bash
         npm run build # make sure we have a debug build compiled first
         npm test-local # For testing on local. For skipping exported symbols validation test on local.
         npm test
 
         ```
+
 5. Integrating the built GLIDE package into your project:
    Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
