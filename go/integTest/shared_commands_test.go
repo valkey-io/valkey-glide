@@ -7188,7 +7188,6 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 			},
 		}
 		assert.Equal(suite.T(), expectedResult, xReadGroup)
-		assert.NoError(suite.T(), err)
 
 		// after reading, `lag` is reset, and `pending`, consumer count and last ID are set
 		xinfo, err = client.XInfoGroups(key)
