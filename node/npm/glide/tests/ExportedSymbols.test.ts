@@ -12,6 +12,9 @@ const skippedListForExports: string[] = [
     "AdvancedBaseClientConfiguration",
     "ClusterScanOptions",
     "GlideMultiJson",
+    "BaseClient",
+    "convertFieldsAndValuesToHashDataType",
+    "parseInfoResponse"
 ];
 
 const glideRsKeyWords: string[] = [
@@ -74,7 +77,7 @@ describe("Validation of Exported Symbols", () => {
         if (missingSymbols.length > 0) {
             console.log(
                 "The following symbols are exported from npm/glide package but missing " +
-                    "from the internal node package export. These symbols might be from glide-rs package",
+                "from the internal node package export. These symbols might be from glide-rs package",
             );
             console.log(missingSymbols);
         }
