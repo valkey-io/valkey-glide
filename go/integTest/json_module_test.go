@@ -5,8 +5,10 @@ package integTest
 import (
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/server-modules/glidejson"
 )
 
 func (suite *GlideTestSuite) TestModuleVerifyJsonLoaded() {
@@ -19,4 +21,15 @@ func (suite *GlideTestSuite) TestModuleVerifyJsonLoaded() {
 	for _, value := range result.MultiValue() {
 		assert.True(suite.T(), strings.Contains(value, "# json_core_metrics"))
 	}
+}
+
+func (suite *GlideTestSuite) TestModuleSetCommand() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	key := uuid.New().String()
+	jsonValue := "{\"a\": 1.0,\"b\": 2}"
+
+	jsonSetResult, err := glidejson.Set(client, key, "$", jsonValue)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", jsonSetResult)
 }
