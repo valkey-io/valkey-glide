@@ -3,7 +3,7 @@
 package api
 
 import (
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 // SortedSetCommands supports commands and transactions for the "Sorted Set Commands" group for standalone and cluster clients.
@@ -48,6 +48,8 @@ type SortedSetCommands interface {
 	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
 	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[string]float64, error)
+
+	ZRangeStore(destination string, key string, rangeQuery options.ZRangeQuery) (int64, error)
 
 	ZRank(key string, member string) (Result[int64], error)
 

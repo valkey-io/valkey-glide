@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/glide/api"
-	"github.com/valkey-io/valkey-glide/go/glide/api/server-modules/glidejson"
+	"github.com/valkey-io/valkey-glide/go/api"
+	"github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson"
 )
 
 func (suite *GlideTestSuite) TestModuleVerifyJsonLoaded() {

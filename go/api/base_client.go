@@ -2,7 +2,13 @@
 
 package api
 
-// #cgo LDFLAGS: -L../target/release -lglide_rs
+// #cgo LDFLAGS: -lglide_rs
+// #cgo !windows LDFLAGS: -lm
+// #cgo darwin LDFLAGS: -framework Security
+// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
+// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
+// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
+// #cgo LDFLAGS: -L../target/release
 // #include "../lib.h"
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
@@ -15,11 +21,11 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github.com/valkey-io/valkey-glide/go/glide/api/config"
-	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
-	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
-	"github.com/valkey-io/valkey-glide/go/glide/utils"
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
+	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/protobuf"
+	"github.com/valkey-io/valkey-glide/go/utils"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -226,20 +232,21 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 // Return value:
 //
 //	If the value is successfully set, return api.Result[string] containing "OK".
-//	If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist conditions, return
-//	api.CreateNilStringResult().
+//	If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist
+//	or ConditionalSet.OnlyIfEquals conditions, return api.CreateNilStringResult().
 //	If SetOptions.returnOldValue is set, return the old value as a String.
 //
 // For example:
 //
-//	 key: initialValue
-//	 result, err := client.SetWithOptions("key", "value", api.NewSetOptionsBuilder()
-//				.SetExpiry(api.NewExpiryBuilder()
-//				.SetType(api.Seconds)
-//				.SetCount(uint64(5)
-//			))
-//	 result.Value(): "OK"
-//	 result.IsNil(): false
+//		 key: initialValue
+//		 result, err := client.SetWithOptions("key", "value", api.NewSetOptionsBuilder()
+//					.SetExpiry(api.NewExpiryBuilder()
+//	             .SetOnlyIfExists()
+//					.SetType(api.Seconds)
+//					.SetCount(uint64(5)
+//				))
+//		 result.Value(): "OK"
+//		 result.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (Result[string], error) {
@@ -4705,6 +4712,67 @@ func (client *baseClient) ZRangeWithScores(
 	return handleStringDoubleMapResponse(result)
 }
 
+// Stores a specified range of elements from the sorted set at `key`, into a new
+// sorted set at `destination`. If `destination` doesn't exist, a new sorted
+// set is created; if it exists, it's overwritten.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destination - The key for the destination sorted set.
+//	key - The key of the source sorted set.
+//	rangeQuery - The range query object representing the type of range query to perform.
+//	 - For range queries by index (rank), use [RangeByIndex].
+//	 - For range queries by lexicographical order, use [RangeByLex].
+//	 - For range queries by score, use [RangeByScore].
+//
+// Return value:
+//
+//	The number of elements in the resulting sorted set.
+//
+// For example:
+//
+//	client.ZAdd("my_sorted_set", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0})
+//
+//	// Retrieve and store all members of a sorted set in ascending order
+//	res1, err := client.ZRangeStore("my_dest", "my_sorted_set", options.NewRangeByIndexQuery(0, -1))
+//
+//	// Retrieve members within a score range in descending order
+//	query := options.NewRangeByScoreQuery(
+//	    options.NewScoreBoundary(3, false),
+//		options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+//		SetReverse()
+//	res2, err := client.ZRange("my_dest", query)
+//	fmt.Println(res1)
+//	fmt.Println(res2)
+//
+//	// Output:
+//	// 3
+//	// [b a]
+//
+// [valkey.io]: https://valkey.io/commands/zrangestore/
+func (client *baseClient) ZRangeStore(
+	destination string,
+	key string,
+	rangeQuery options.ZRangeQuery,
+) (int64, error) {
+	args := make([]string, 0, 10)
+	args = append(args, destination)
+	args = append(args, key)
+	args = append(args, rangeQuery.ToArgs()...)
+	result, err := client.executeCommand(C.ZRangeStore, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+
+	return handleIntResponse(result)
+}
+
 // Removes the existing timeout on key, turning the key from volatile
 // (a key with an expire set) to persistent (a key that will never expire as no timeout is associated).
 //
@@ -6812,7 +6880,7 @@ func (client *baseClient) CopyWithOptions(
 //
 // Return value:
 //
-//	A `map` of key to stream entry data, where entry data is an array of
+//	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
 // Example:
@@ -6823,7 +6891,7 @@ func (client *baseClient) CopyWithOptions(
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //	)
-//	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
+//	fmt.Println(res) // [{streamId [["field1", "entry1"], ["field2", "entry2"]]}]
 //
 //	// Retrieve exactly one stream entry by id
 //	res, err := client.XRange(
@@ -6831,14 +6899,14 @@ func (client *baseClient) CopyWithOptions(
 //		options.NewStreamBoundary(streamId, true),
 //		options.NewStreamBoundary(streamId, true),
 //	)
-//	fmt.Println(res) // map[key:[["field1", "entry1"]]
+//	fmt.Println(res) // [{streamId [["field1", "entry1"]]}]
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) (map[string][][]string, error) {
+) ([]XRangeResponse, error) {
 	return client.XRangeWithOptions(key, start, end, nil)
 }
 
@@ -6859,7 +6927,7 @@ func (client *baseClient) XRange(
 //
 // Return value:
 //
-//	A `map` of key to stream entry data, where entry data is an array of
+//	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
 // Example:
@@ -6871,7 +6939,7 @@ func (client *baseClient) XRange(
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //		options.NewStreamRangeOptions().SetCount(10),
 //	)
-//	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
+//	fmt.Println(res) // [{streamId [["field1", "entry1"], ["field2", "entry2"]]}]
 //
 //	// Retrieve exactly one stream entry by id
 //	res, err := client.XRangeWithOptions(
@@ -6880,7 +6948,7 @@ func (client *baseClient) XRange(
 //		options.NewStreamBoundary(streamId, true),
 //		options.NewStreamRangeOptions().SetCount(1),
 //	)
-//	fmt.Println(res) // map[key:[["field1", "entry1"]]
+//	fmt.Println(res) // [{streamId [["field1", "entry1"]]}]
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRangeWithOptions(
@@ -6888,7 +6956,7 @@ func (client *baseClient) XRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts *options.StreamRangeOptions,
-) (map[string][][]string, error) {
+) ([]XRangeResponse, error) {
 	args := []string{key, string(start), string(end)}
 	if opts != nil {
 		optionArgs, err := opts.ToArgs()
@@ -6901,7 +6969,7 @@ func (client *baseClient) XRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+	return handleXRangeResponse(result)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -6921,7 +6989,7 @@ func (client *baseClient) XRangeWithOptions(
 //
 // Return value:
 //
-//	A `map` of key to stream entry data, where entry data is an array of
+//	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // Example:
@@ -6932,14 +7000,14 @@ func (client *baseClient) XRangeWithOptions(
 //		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //	)
-//	fmt.Println(res) // map[key:[["field2", "entry2"], ["field1", "entry1"]]]
+//	fmt.Println(res) // [{streamID ["field2", "entry2"], ["field1", "entry1"]]}]
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (client *baseClient) XRevRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) (map[string][][]string, error) {
+) ([]XRangeResponse, error) {
 	return client.XRevRangeWithOptions(key, start, end, nil)
 }
 
@@ -6961,7 +7029,7 @@ func (client *baseClient) XRevRange(
 //
 // Return value:
 //
-//	A `map` of key to stream entry data, where entry data is an array of
+//	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -6974,7 +7042,7 @@ func (client *baseClient) XRevRange(
 //		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
 //		options.NewStreamRangeOptions().SetCount(10),
 //	)
-//	fmt.Println(res) // map[key:[["field2", "entry2"], ["field1", "entry1"]]]
+//	fmt.Println(res) // [{streamID [["field2", "entry2"], ["field1", "entry1"]]}]
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (client *baseClient) XRevRangeWithOptions(
@@ -6982,7 +7050,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts *options.StreamRangeOptions,
-) (map[string][][]string, error) {
+) ([]XRangeResponse, error) {
 	args := []string{key, string(start), string(end)}
 	if opts != nil {
 		optionArgs, err := opts.ToArgs()
@@ -6995,7 +7063,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+	return handleXRevRangeResponse(result)
 }
 
 // Returns information about the stream stored at `key`.
