@@ -4661,7 +4661,7 @@ func (client *baseClient) XGroupDestroy(key string, group string) (bool, error) 
 //
 //	`"OK"`.
 //
-// [valkey.io]: https://valkey.io/commands/xgroup-create/
+// [valkey.io]: https://valkey.io/commands/xgroup-setid/
 func (client *baseClient) XGroupSetId(key string, group string, id string) (string, error) {
 	return client.XGroupSetIdWithOptions(key, group, id, options.NewXGroupSetIdOptionsOptions())
 }
