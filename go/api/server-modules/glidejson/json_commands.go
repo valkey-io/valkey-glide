@@ -35,7 +35,8 @@ func Set(
 	client api.BaseClient,
 	key string,
 	path string,
-	value string) (string, error) {
+	value string,
+) (string, error) {
 	result, err := executeCommand(client, []string{JsonSet, key, path, value})
 	return result.(string), err
 }
@@ -45,14 +46,13 @@ func SetWithOptions(
 	key string,
 	path string,
 	value string,
-	options *JsonSetOptions) (string, error) {
+	options *JsonSetOptions,
+) (string, error) {
 	result, err := executeCommand(client, []string{JsonSet, key, path, value})
 	return result.(string), err
 }
 
-func Get(
-	client api.BaseClient,
-	key string) (string, error) {
+func Get(client api.BaseClient, key string) (string, error) {
 	result, err := executeCommand(client, []string{JsonGet, key})
 	return result.(string), err
 }
