@@ -61,7 +61,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists)
+		opts := api.NewSetOptionsBuilder().SetOnlyIfExists()
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -75,7 +75,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists)
+		opts := api.NewSetOptionsBuilder().SetOnlyIfExists()
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 
 		assert.Nil(suite.T(), err)
@@ -86,7 +86,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist)
+		opts := api.NewSetOptionsBuilder().SetOnlyIfDoesNotExist()
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -100,7 +100,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist)
+		opts := api.NewSetOptionsBuilder().SetOnlyIfDoesNotExist()
 		suite.verifyOK(client.Set(key, initialValue))
 
 		result, err := client.SetWithOptions(key, anotherValue, opts)
@@ -171,6 +171,30 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "", result.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfEquals() {
+	suite.SkipIfServerVersionLowerThanBy("8.1.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		suite.verifyOK(client.Set(key, initialValue))
+
+		// successful set
+		opts := api.NewSetOptionsBuilder().SetOnlyIfEquals(initialValue)
+		result, err := client.SetWithOptions(key, anotherValue, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result.Value())
+
+		result, err = client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), anotherValue, result.Value())
+
+		// unsuccessful set
+		opts = api.NewSetOptionsBuilder().SetOnlyIfEquals(initialValue)
+		result, err = client.SetWithOptions(key, initialValue, opts)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), result.IsNil())
 	})
 }
 
