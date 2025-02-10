@@ -8108,7 +8108,7 @@ export function runBaseTests(config: {
         const setWithUnixSec = await client.set(key, value, {
             expiry: {
                 type: TimeUnit.UnixSeconds,
-                count: Math.floor(Date.now() / 1000) + 1,
+                count: Math.floor(Date.now() / 1000) + 2,
             },
         });
         expect(setWithUnixSec).toEqual("OK");
@@ -8122,7 +8122,7 @@ export function runBaseTests(config: {
         const getResWithExpiryKeep = await client.get(key);
         expect(getResWithExpiryKeep).toEqual(value);
         // wait for the key to expire base on the previous set
-        let sleep = new Promise((resolve) => setTimeout(resolve, 1000));
+        let sleep = new Promise((resolve) => setTimeout(resolve, 2000));
         await sleep;
         const getResExpire = await client.get(key);
         // key should have expired
