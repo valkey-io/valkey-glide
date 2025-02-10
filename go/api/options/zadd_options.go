@@ -18,7 +18,7 @@ type ZAddOptions struct {
 	member            string
 }
 
-func NewZAddOptionsBuilder() *ZAddOptions {
+func NewZAddOptions() *ZAddOptions {
 	return &ZAddOptions{}
 }
 

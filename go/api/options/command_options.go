@@ -27,7 +27,7 @@ type SetOptions struct {
 	Expiry *Expiry
 }
 
-func NewSetOptionsBuilder() *SetOptions {
+func NewSetOptions() *SetOptions {
 	return &SetOptions{}
 }
 
@@ -82,7 +82,7 @@ type GetExOptions struct {
 	Expiry *Expiry
 }
 
-func NewGetExOptionsBuilder() *GetExOptions {
+func NewGetExOptions() *GetExOptions {
 	return &GetExOptions{}
 }
 
@@ -130,7 +130,7 @@ type Expiry struct {
 	Count uint64
 }
 
-func NewExpiryBuilder() *Expiry {
+func NewExpiry() *Expiry {
 	return &Expiry{}
 }
 
@@ -161,7 +161,7 @@ type LPosOptions struct {
 	MaxLen int64
 }
 
-func NewLPosOptionsBuilder() *LPosOptions {
+func NewLPosOptions() *LPosOptions {
 	return &LPosOptions{}
 }
 
@@ -237,7 +237,7 @@ type RestoreOptions struct {
 	eviction Eviction
 }
 
-func NewRestoreOptionsBuilder() *RestoreOptions {
+func NewRestoreOptions() *RestoreOptions {
 	return &RestoreOptions{}
 }
 
@@ -318,7 +318,7 @@ type CopyOptions struct {
 	dbDestination int64
 }
 
-func NewCopyOptionsBuilder() *CopyOptions {
+func NewCopyOptions() *CopyOptions {
 	return &CopyOptions{replace: false}
 }
 
@@ -338,7 +338,7 @@ func (opts *CopyOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.replace {
-		args = append(args, string("REPLACE"))
+		args = append(args, string(ReplaceKeyword))
 	}
 	if opts.dbDestination >= 0 {
 		args = append(args, "DB", utils.IntToString(opts.dbDestination))

@@ -8,7 +8,7 @@ type ZScanOptions struct {
 	noScores bool
 }
 
-func NewZScanOptionsBuilder() *ZScanOptions {
+func NewZScanOptions() *ZScanOptions {
 	return &ZScanOptions{}
 }
 

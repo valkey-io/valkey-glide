@@ -8,7 +8,7 @@ type HashScanOptions struct {
 	noValue bool
 }
 
-func NewHashScanOptionsBuilder() *HashScanOptions {
+func NewHashScanOptions() *HashScanOptions {
 	return &HashScanOptions{}
 }
 

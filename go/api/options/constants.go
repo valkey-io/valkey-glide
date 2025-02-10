@@ -17,6 +17,7 @@ const (
 	ReplaceKeyword    string = "REPLACE"    // Subcommand string to replace existing key.
 	ABSTTLKeyword     string = "ABSTTL"     // Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
 	StoreKeyword      string = "STORE"
+	DbKeyword         string = "DB"
 	/// Valkey API keywords for stream commands
 	IdleKeyword         string = "IDLE"       // ValKey API string to designate IDLE time in milliseconds
 	TimeKeyword         string = "TIME"       // ValKey API string to designate TIME time in unix-milliseconds

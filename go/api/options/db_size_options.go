@@ -8,7 +8,7 @@ type DBSizeOptions struct {
 	Route config.Route
 }
 
-func NewTimeOptionsBuilder() *DBSizeOptions {
+func NewTimeOptions() *DBSizeOptions {
 	return &DBSizeOptions{}
 }
 

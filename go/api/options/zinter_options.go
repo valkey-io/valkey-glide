@@ -8,7 +8,7 @@ type ZInterOptions struct {
 	aggregate          Aggregate
 }
 
-func NewZInterOptionsBuilder(keysOrWeightedKeys KeysOrWeightedKeys) *ZInterOptions {
+func NewZInterOptions(keysOrWeightedKeys KeysOrWeightedKeys) *ZInterOptions {
 	return &ZInterOptions{keysOrWeightedKeys: keysOrWeightedKeys}
 }
 

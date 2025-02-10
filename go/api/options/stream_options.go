@@ -23,7 +23,7 @@ type XAddOptions struct {
 }
 
 // Create new empty `XAddOptions`
-func NewXAddOptionsBuilder() *XAddOptions {
+func NewXAddOptions() *XAddOptions {
 	return &XAddOptions{}
 }
 
@@ -136,7 +136,7 @@ type XReadOptions struct {
 }
 
 // Create new empty `XReadOptions`
-func NewXReadOptionsBuilder() *XReadOptions {
+func NewXReadOptions() *XReadOptions {
 	return &XReadOptions{-1, -1}
 }
 
@@ -171,7 +171,7 @@ type XReadGroupOptions struct {
 }
 
 // Create new empty `XReadOptions`
-func NewXReadGroupOptionsBuilder() *XReadGroupOptions {
+func NewXReadGroupOptions() *XReadGroupOptions {
 	return &XReadGroupOptions{-1, -1, false}
 }
 
@@ -219,7 +219,7 @@ type XPendingOptions struct {
 }
 
 // Create new empty `XPendingOptions`. The `start`, `end` and `count` arguments are required.
-func NewXPendingOptionsBuilder(start string, end string, count int64) *XPendingOptions {
+func NewXPendingOptions(start string, end string, count int64) *XPendingOptions {
 	options := &XPendingOptions{}
 	options.start = start
 	options.end = end
@@ -269,7 +269,7 @@ type XGroupCreateOptions struct {
 }
 
 // Create new empty `XGroupCreateOptions`
-func NewXGroupCreateOptionsBuilder() *XGroupCreateOptions {
+func NewXGroupCreateOptions() *XGroupCreateOptions {
 	return &XGroupCreateOptions{false, -1}
 }
 
@@ -305,7 +305,7 @@ type XGroupSetIdOptions struct {
 }
 
 // Create new empty `XGroupSetIdOptions`
-func NewXGroupSetIdOptionsOptionsBuilder() *XGroupSetIdOptions {
+func NewXGroupSetIdOptionsOptions() *XGroupSetIdOptions {
 	return &XGroupSetIdOptions{-1}
 }
 
@@ -335,7 +335,7 @@ type StreamClaimOptions struct {
 	isForce      bool
 }
 
-func NewStreamClaimOptionsBuilder() *StreamClaimOptions {
+func NewStreamClaimOptions() *StreamClaimOptions {
 	return &StreamClaimOptions{}
 }
 
@@ -406,7 +406,7 @@ type StreamRangeOptions struct {
 	countIsSet bool
 }
 
-func NewStreamRangeOptionsBuilder() *StreamRangeOptions {
+func NewStreamRangeOptions() *StreamRangeOptions {
 	return &StreamRangeOptions{}
 }
 

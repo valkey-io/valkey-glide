@@ -294,7 +294,7 @@ func (client *GlideClient) Ping() (string, error) {
 //
 // For example:
 //
-//	options := options.NewPingOptionsBuilder().SetMessage("hello")
+//	options := options.NewPingOptions().SetMessage("hello")
 //	result, err := client.PingWithOptions(options)
 //	result: "hello"
 //
