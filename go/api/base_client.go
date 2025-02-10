@@ -4681,7 +4681,7 @@ func (client *baseClient) XGroupSetId(key string, group string, id string) (stri
 //
 //	`"OK"`.
 //
-// [valkey.io]: https://valkey.io/commands/xgroup-create/
+// [valkey.io]: https://valkey.io/commands/xgroup-setid/
 func (client *baseClient) XGroupSetIdWithOptions(
 	key string,
 	group string,
