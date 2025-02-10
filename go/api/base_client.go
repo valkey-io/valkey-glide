@@ -5048,7 +5048,7 @@ func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
 //
 //	An Array of sorted elements.
 //
-// [valkey.io]: https://valkey.io/commands/sort/
+// [valkey.io]: https://valkey.io/commands/sort_ro/
 func (client *baseClient) SortReadOnlyWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
 	optionArgs := options.ToArgs()
 	result, err := client.executeCommand(C.SortReadOnly, append([]string{key}, optionArgs...))
