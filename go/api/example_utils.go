@@ -24,3 +24,20 @@ func getExampleGlideClient() *GlideClient {
 
 	return client.(*GlideClient)
 }
+
+func getExampleGlideClusterClient() *GlideClusterClient {
+	config := NewGlideClusterClientConfiguration().
+		WithAddress(new(NodeAddress)) // use default address
+
+	client, err := NewGlideClusterClient(config)
+	if err != nil {
+		fmt.Println("error connecting to database: ", err)
+	}
+
+	_, err = client.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
+	if err != nil {
+		fmt.Println("error flushing database: ", err)
+	}
+
+	return client.(*GlideClusterClient)
+}
