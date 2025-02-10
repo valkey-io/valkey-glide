@@ -126,26 +126,26 @@ export function createGetRange(
 
 export type SetOptions = (
     | {
-        /**
-         * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-         * `NX` in the Valkey API.
-         *
-         * `onlyIfExists` - Only set the key if it already exists.
-         * `EX` in the Valkey API.
-         */
-        conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
-    }
+          /**
+           * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
+           * `NX` in the Valkey API.
+           *
+           * `onlyIfExists` - Only set the key if it already exists.
+           * `EX` in the Valkey API.
+           */
+          conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+      }
     | {
-        /**
-         * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
-         * `IFEQ` in the Valkey API.
-         */
-        conditionalSet: "onlyIfEqual";
-        /**
-         * The value to compare the existing value with.
-         */
-        comparisonValue: GlideString;
-    }
+          /**
+           * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
+           * `IFEQ` in the Valkey API.
+           */
+          conditionalSet: "onlyIfEqual";
+          /**
+           * The value to compare the existing value with.
+           */
+          comparisonValue: GlideString;
+      }
 ) & {
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
@@ -161,10 +161,10 @@ export type SetOptions = (
      * `KEEPTTL` in the Valkey API.
      */
     | "keepExisting"
-    | {
-        type: TimeUnit;
-        count: number;
-    };
+        | {
+              type: TimeUnit;
+              count: number;
+          };
 };
 
 /**
@@ -1452,7 +1452,7 @@ export function createZAdd(
         if (options.conditionalChange) {
             if (
                 options.conditionalChange ===
-                ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
+                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
                 options.updateOptions
             ) {
                 throw new Error(
@@ -1715,15 +1715,15 @@ export type Boundary<T> =
      *  Represents a specific boundary.
      */
     | {
-        /**
-         * The comparison value.
-         */
-        value: T;
-        /**
-         * Whether the value is inclusive. Defaults to `true`.
-         */
-        isInclusive?: boolean;
-    };
+          /**
+           * The comparison value.
+           */
+          value: T;
+          /**
+           * Whether the value is inclusive. Defaults to `true`.
+           */
+          isInclusive?: boolean;
+      };
 
 /**
  * Represents a range by index (rank) in a sorted set.
@@ -2090,21 +2090,21 @@ export function createZRank(
 
 export type StreamTrimOptions = (
     | {
-        /**
-         * Trim the stream according to entry ID.
-         * Equivalent to `MINID` in the Valkey API.
-         */
-        method: "minid";
-        threshold: GlideString;
-    }
+          /**
+           * Trim the stream according to entry ID.
+           * Equivalent to `MINID` in the Valkey API.
+           */
+          method: "minid";
+          threshold: GlideString;
+      }
     | {
-        /**
-         * Trim the stream according to length.
-         * Equivalent to `MAXLEN` in the Valkey API.
-         */
-        method: "maxlen";
-        threshold: number;
-    }
+          /**
+           * Trim the stream according to length.
+           * Equivalent to `MAXLEN` in the Valkey API.
+           */
+          method: "maxlen";
+          threshold: number;
+      }
 ) & {
     /**
      * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the
