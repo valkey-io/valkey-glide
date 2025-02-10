@@ -2374,7 +2374,6 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
-                                { requestTimeout: 3000 },
                             ),
                         );
 
@@ -2397,7 +2396,6 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
-                                    requestTimeout: 3000,
                                     readFrom: "AZAffinity",
                                     clientAz: az,
                                 },
@@ -2421,7 +2419,6 @@ describe("GlideClusterClient", () => {
                     const matching_entries_count = Object.values(
                         info_result,
                     ).filter((infoStr) => {
-                        console.log("Info String:", infoStr);
                         return (
                             infoStr.includes(get_cmdstat) &&
                             infoStr.includes(`availability_zone:${az}`)
@@ -2455,7 +2452,7 @@ describe("GlideClusterClient", () => {
                 // Skip test if version is below 8.0.0
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
 
-                const GET_CALLS = 4;
+                const get_calls = 4;
                 const replica_calls = 1;
                 const get_cmdstat = `cmdstat_get:calls=${replica_calls}`;
                 let client_for_testing_az;
@@ -2470,7 +2467,6 @@ describe("GlideClusterClient", () => {
                                 {
                                     readFrom: "AZAffinity",
                                     clientAz: "non-existing-az",
-                                    requestTimeout: 3000,
                                 },
                             ),
                         );
@@ -2481,7 +2477,7 @@ describe("GlideClusterClient", () => {
                     });
 
                     // Issue GET commands
-                    for (let i = 0; i < GET_CALLS; i++) {
+                    for (let i = 0; i < get_calls; i++) {
                         await client_for_testing_az.get("foo");
                     }
 
@@ -2498,7 +2494,7 @@ describe("GlideClusterClient", () => {
                         return nodeResponses.includes(get_cmdstat);
                     }).length;
 
-                    // Validate that only one replica handled the GET calls
+                    // Validate that the get calls were distributed across replicas, each replica recieved 1 get call
                     expect(matchingEntriesCount).toBe(4);
                 } finally {
                     // Cleanup: Close the client after test execution
