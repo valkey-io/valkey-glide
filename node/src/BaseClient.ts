@@ -729,6 +729,9 @@ export interface PubSubMsg {
  */
 export type WritePromiseOptions = RouteOption & DecoderOption;
 
+/**
+ * Base client interface for GLIDE
+ */
 export class BaseClient {
     private socket: net.Socket;
     protected readonly promiseCallbackFunctions:
