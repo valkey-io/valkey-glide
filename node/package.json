@@ -12,7 +12,7 @@
     "homepage": "https://github.com/valkey-io/valkey-glide#readme",
     "dependencies": {
         "glide-rs": "file:rust-client",
-        "long": "^5.2.3",
+        "long": "^5.3.0",
         "npmignore": "^0.3.1",
         "protobufjs": "^7.4.0"
     },
