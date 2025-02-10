@@ -324,6 +324,34 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 	return handleIntResponse(result)
 }
 
+// Deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
+//	options - The RouteOption type.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// Example:
+//
+//	route := options.RouteOption{Route: config.AllPrimaries}
+//	res, err := client.FlushAllWithOptions(options.SYNC, route)
+//	fmt.Println(res) // OK
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *GlideClusterClient) FlushAllWithOptions(mode options.FlushMode, opts options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(C.FlushAll, []string{string(mode)}, opts.Route)
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Echo the provided message back.
 // The command will be routed a random node, unless `Route` in `echoOptions` is provided.
 //

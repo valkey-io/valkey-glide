@@ -516,3 +516,98 @@ func (suite *GlideTestSuite) TestTime_Error() {
 	assert.Nil(suite.T(), results)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
+
+func (suite *GlideTestSuite) TestFlushAll() {
+	client := suite.defaultClient()
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+
+	_, err := client.Set(key1, "value1")
+	assert.Nil(suite.T(), err)
+	_, err = client.Set(key2, "value2")
+	assert.Nil(suite.T(), err)
+
+	result, err := client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "value1", result.Value())
+
+	response, err := client.FlushAll()
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", response)
+
+	result, err = client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Empty(suite.T(), result.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushAll_Sync() {
+	client := suite.defaultClient()
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+
+	_, err := client.Set(key1, "value1")
+	assert.Nil(suite.T(), err)
+	_, err = client.Set(key2, "value2")
+	assert.Nil(suite.T(), err)
+
+	result, err := client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "value1", result.Value())
+
+	response, err := client.FlushAllWithOptions(options.SYNC)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", response)
+
+	result, err = client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Empty(suite.T(), result.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushAll_Async() {
+	client := suite.defaultClient()
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+
+	_, err := client.Set(key1, "value1")
+	assert.Nil(suite.T(), err)
+	_, err = client.Set(key2, "value2")
+	assert.Nil(suite.T(), err)
+
+	response, err := client.FlushAllWithOptions(options.ASYNC)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", response)
+
+	result, err := client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Empty(suite.T(), result.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushAll_ClosedClient() {
+	client := suite.defaultClient()
+	client.Close()
+
+	response, err := client.FlushAllWithOptions(options.SYNC)
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", response)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
+func (suite *GlideTestSuite) TestFlushAll_MultipleFlush() {
+	client := suite.defaultClient()
+	key1 := uuid.New().String()
+
+	response, err := client.FlushAllWithOptions(options.SYNC)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", response)
+
+	_, err = client.Set(key1, "value1")
+	assert.Nil(suite.T(), err)
+
+	response, err = client.FlushAllWithOptions(options.ASYNC)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", response)
+
+	result, err := client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Empty(suite.T(), result.Value())
+}

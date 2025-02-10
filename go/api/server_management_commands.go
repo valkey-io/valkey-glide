@@ -2,6 +2,8 @@
 
 package api
 
+import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+
 // ServerManagementCommands supports commands for the "Server Management" group for a standalone client.
 //
 // See [valkey.io] for details.
@@ -21,4 +23,8 @@ type ServerManagementCommands interface {
 	DBSize() (int64, error)
 
 	Time() ([]string, error)
+
+	FlushAll() (string, error)
+
+	FlushAllWithOptions(mode options.FlushMode) (string, error)
 }

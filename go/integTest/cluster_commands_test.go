@@ -5,6 +5,7 @@ package integTest
 import (
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
 	"github.com/valkey-io/valkey-glide/go/glide/api/config"
@@ -297,4 +298,71 @@ func (suite *GlideTestSuite) TestEchoCluster() {
 	for _, messages := range response.MultiValue() {
 		assert.Contains(t, strings.ToLower(messages), strings.ToLower("hello"))
 	}
+}
+
+func (suite *GlideTestSuite) TestFlushAllWithOptions_AllNodes() {
+	client := suite.defaultClusterClient()
+
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+	_, err := client.Set(key1, "value3")
+	assert.NoError(suite.T(), err)
+	_, err = client.Set(key2, "value4")
+	assert.NoError(suite.T(), err)
+
+	route := config.Route(config.AllNodes)
+	result, err := client.FlushAllWithOptions(options.ASYNC, options.RouteOption{Route: route})
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "ReadOnly: You can't write against a read only replica")
+	assert.Empty(suite.T(), result)
+}
+
+func (suite *GlideTestSuite) TestFlushAllWithOptions_AllPrimaries() {
+	client := suite.defaultClusterClient()
+
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+	_, err := client.Set(key1, "value3")
+	assert.NoError(suite.T(), err)
+	_, err = client.Set(key2, "value4")
+	assert.NoError(suite.T(), err)
+
+	route := config.Route(config.AllPrimaries)
+	result, err := client.FlushAllWithOptions(options.ASYNC, options.RouteOption{Route: route})
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+
+	val1, err := client.Get(key1)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val1.Value())
+
+	val2, err := client.Get(key2)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val2.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushAllWithOptions_InvalidRoute() {
+	client := suite.defaultClusterClient()
+
+	invalidRoute := config.Route(config.NewByAddressRoute("invalidHost", 9999))
+	result, err := client.FlushAllWithOptions(options.SYNC, options.RouteOption{Route: invalidRoute})
+	assert.Error(suite.T(), err)
+	assert.Empty(suite.T(), result)
+}
+
+func (suite *GlideTestSuite) TestFlushAllWithOptions_AsyncMode() {
+	client := suite.defaultClusterClient()
+
+	key := uuid.New().String()
+	_, err := client.Set(key, "value5")
+	assert.NoError(suite.T(), err)
+
+	route := config.Route(config.AllPrimaries)
+	result, err := client.FlushAllWithOptions(options.ASYNC, options.RouteOption{Route: route})
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+
+	val, err := client.Get(key)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val.Value())
 }

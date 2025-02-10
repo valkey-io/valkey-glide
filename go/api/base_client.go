@@ -7246,6 +7246,54 @@ func (client *baseClient) Time() ([]string, error) {
 	return handleStringArrayResponse(result)
 }
 
+// FlushAll deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// Example:
+//
+//	res, err := client.FlushAll()
+//	fmt.Println(res) // OK
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *baseClient) FlushAll() (string, error) {
+	result, err := client.executeCommand(C.FlushAll, []string{})
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// Example:
+//
+//	res, err := client.FlushAllWithOptions(options.SYNC)
+//	fmt.Println(res) // OK
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *baseClient) FlushAllWithOptions(mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(C.FlushAll, []string{string(mode)})
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Returns the intersection of members from sorted sets specified by the given `keys`.
 // To get the elements with their scores, see [ZInterWithScores].
 //
