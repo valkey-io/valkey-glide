@@ -15,4 +15,4 @@ tokio = { version = "1", features = ["macros", "time"] }
 url = "2"
 
 opentelemetry = "0"
-opentelemetry_sdk = { version = "0", features = ["rt-tokio"] }
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
