@@ -16,14 +16,14 @@ body:
           description: Describe the task in detail
           placeholder: Describe the task...
 
-    - type: checkboxes
+    - type: textarea
       attributes:
           label: Checklist
           description: Add items to be completed
-          options:
-              - label: Task item 1
-              - label: Task item 2
-              - label: Task item 3
+          value: |
+              1. 
+              2. 
+              ...
 
     - type: textarea
       attributes:
