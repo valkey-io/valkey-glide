@@ -80,6 +80,7 @@ func ExampleGlideClusterClient_Exists() {
 	// OK
 	// 2
 }
+
 func ExampleGlideClient_Expire() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	result, err := client.Set("key", "someValue")
@@ -160,6 +161,7 @@ func ExampleGlideClient_ExpireAt() {
 	// OK
 	// true
 }
+
 func ExampleGlideClusterClient_ExpireAt() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	result, err := client.Set("key", "someValue")
@@ -788,6 +790,7 @@ func ExampleGlideClusterClient_Dump() {
 	// OK
 	// false
 }
+
 func ExampleGlideClient_ObjectFreq() {
 	var client *GlideClient = getExampleGlideClient()                                // example helper function
 	_, err := client.ConfigSet(map[string]string{"maxmemory-policy": "allkeys-lfu"}) // example configuration
@@ -1148,6 +1151,7 @@ func ExampleGlideClusterClient_Copy() {
 	// true
 	// {someValue false}
 }
+
 func ExampleGlideClient_CopyWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	opts := NewCopyOptionsBuilder().SetDBDestination(2).SetReplace()
@@ -1166,6 +1170,7 @@ func ExampleGlideClient_CopyWithOptions() {
 	// true
 	// {someValue false}
 }
+
 func ExampleGlideClusterClient_CopyWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	opts := NewCopyOptionsBuilder().SetReplace()

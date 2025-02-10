@@ -319,6 +319,7 @@ func ExampleGlideClusterClient_XAutoClaimJustId() {
 
 	// Output: {0-0 [0-1 0-2] []}
 }
+
 func ExampleGlideClient_XAutoClaimJustIdWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	key := uuid.NewString()
