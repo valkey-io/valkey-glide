@@ -935,6 +935,7 @@ func ExampleGlideClusterClient_BZMPopWithOptions() {
 	}
 	jsonSummary, _ := json.Marshal(result.Value())
 	fmt.Println(string(jsonSummary))
+
 	// Output: {"Key":"key1","MembersAndScores":[{"Member":"d","Score":4}]}
 }
 
