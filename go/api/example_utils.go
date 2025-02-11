@@ -5,7 +5,8 @@ package api
 import (
 	"fmt"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 // getExampleGlideClient returns a GlideClient instance for testing purposes.
@@ -36,24 +37,18 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 	if err != nil {
 		fmt.Println("error connecting to database: ", err)
 	}
-	if client == nil {
-		fmt.Println("client is nil")
-	}
 
-	// _, err = client.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
-	// if err != nil {
-	// 	fmt.Println("error flushing database: ", err)
-	// }
+	_, err = client.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
+	if err != nil {
+		fmt.Println("error flushing database: ", err)
+	}
 
 	return client.(*GlideClusterClient)
 }
 
-// dummyt is a dummy testing.T type to satisfy the interface of the client methods.
-// It is used for testify assertions in the examples of the GlideClient methods.
-type dummyt struct{}
-
-func (t dummyt) Errorf(string, ...interface{}) {}
-
-func elementsMatch(listA, listB interface{}) bool {
-	return assert.ElementsMatch(dummyt{}, listA, listB)
+// CompareUnorderedSlices compares two unordered slices of structs and returns if both are equal.
+func CompareUnorderedSlices[T any](slice1, slice2 []T) bool {
+	return cmp.Equal(slice1, slice2, cmpopts.SortSlices(func(a, b T) bool {
+		return fmt.Sprintf("%v", a) < fmt.Sprintf("%v", b)
+	}))
 }

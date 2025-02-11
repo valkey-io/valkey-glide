@@ -470,7 +470,7 @@ func ExampleGlideClient_BZMPopWithOptions() {
 		},
 	}
 	fmt.Println(kms.Key == result.Value().Key)
-	isEqual := elementsMatch(
+	isEqual := CompareUnorderedSlices[MemberAndScore](
 		kms.MembersAndScores,
 		result.Value().MembersAndScores,
 	) // helper function for comparing arrays and slices
