@@ -4832,7 +4832,7 @@ func (suite *GlideTestSuite) TestZPopMin() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"one": float64(1)}, res2)
 
-		res3, err := client.ZPopMinWithCount(key1, 2)
+		res3, err := client.ZPopMinWithOptions(key1, api.NewZPopOptions().SetCount(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": float64(2), "three": float64(3)}, res3)
 
@@ -4863,7 +4863,7 @@ func (suite *GlideTestSuite) TestZPopMax() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"three": float64(3)}, res2)
 
-		res3, err := client.ZPopMaxWithCount(key1, 2)
+		res3, err := client.ZPopMaxWithOptions(key1, api.NewZPopOptions().SetCount(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": float64(2), "one": float64(1)}, res3)
 

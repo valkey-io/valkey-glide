@@ -4306,12 +4306,17 @@ func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 //
 // Example:
 //
-//	res, err := client.ZPopMinWithCount("mySortedSet", 2)
+//	opts := NewZPopOptions().SetCount(2)
+//	res, err := client.ZPopMinWithOptions("mySortedSet", opts)
 //	fmt.Println(res) // Output: map["member1": 5.0, "member2": 6.0]
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
-func (client *baseClient) ZPopMinWithCount(key string, count int64) (map[string]float64, error) {
-	result, err := client.executeCommand(C.ZPopMin, []string{key, utils.IntToString(count)})
+func (client *baseClient) ZPopMinWithOptions(key string, options ZPopOptions) (map[string]float64, error) {
+	optArgs, err := options.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	result, err := client.executeCommand(C.ZPopMin, append([]string{key}, optArgs...))
 	if err != nil {
 		return nil, err
 	}
@@ -4365,12 +4370,17 @@ func (client *baseClient) ZPopMax(key string) (map[string]float64, error) {
 //
 // Example:
 //
-//	res, err := client.ZPopMaxWithCount("mySortedSet", 2)
+//	opts := NewZPopOptions().SetCount(2)
+//	res, err := client.ZPopMaxWithOptions("mySortedSet", opts)
 //	fmt.Println(res) // Output: map["member1": 5.0, "member2": 6.0]
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
-func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[string]float64, error) {
-	result, err := client.executeCommand(C.ZPopMax, []string{key, utils.IntToString(count)})
+func (client *baseClient) ZPopMaxWithOptions(key string, options ZPopOptions) (map[string]float64, error) {
+	optArgs, err := options.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	result, err := client.executeCommand(C.ZPopMax, append([]string{key}, optArgs...))
 	if err != nil {
 		return nil, err
 	}
