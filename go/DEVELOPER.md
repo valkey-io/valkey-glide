@@ -238,6 +238,121 @@ go run . -help
 go run . -resultsFile gobenchmarks.json -dataSize "100 1000" -concurrentTasks "10 100" -clients all -host localhost -port 6379 -clientCount "1 5" -tls
 ```
 
+### Naming Conventions
+
+#### Function names
+
+For every command that you implement (granted it is not supposed to be private), please use PascalCase.
+
+Examples of good function names:
+
+- `BZPopMin`
+- `ZRem`
+- `PExpireWithOptions`
+- `SetWithOptions`
+- `Decr`
+
+Examples of bad function names:
+
+- `zRange`
+- `hincrbyfloat`
+- `Sdiffstore`
+
+#### Function names for examples
+
+In order for `pkgsite` to work properly, examples must be written in a very specific format. They follow this pattern: `Example[ClientType]_[FunctionName]()`. If we wanted to create an example for the `Get` command in `GlideClient`, we would name define our function as follows:
+
+```
+func ExampleGlideClient_Get() {
+    // Example code here
+}
+```
+
+In cases where we want to show more than one example, we can add extra endings to the function names:
+
+```
+func ExampleGlideClient_Get_KeyExists() {
+    // Example code here when the key exists
+}
+
+func ExampleGlideClient_Get_KeyNotExists() {
+    // Example code here when the key does not exist
+}
+```
+
+**Note: `ClientType` and `FunctionName` are CASE-SENSITIVE.**
+
+### Documentation
+
+#### Adding links
+
+When adding links, surround the piece of text using square brackets and then put the link reference at the bottom of the comment block.
+
+For example, this effectively links `valkey.io` with the proper reference:
+
+```
+// SInter gets the intersection of all the given sets.
+//
+// Note: When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - The keys of the sets to intersect.
+//
+// Return value:
+//
+//	A `map[string]struct{}` containing members which are present in all given sets.
+//	If one or more sets do not exist, an empty collection will be returned.
+//
+// [valkey.io]: https://valkey.io/commands/sinter/
+```
+
+#### Writing examples
+
+To write an example for the command, find it's respective group of commands and add the example to that `*_test.go` file. For example, `ZAdd` is a command that belongs to `sorted_set_commands` so we would add the example to `sorted_set_commands_test.go`. See [function names for examples](#function-names-for-examples) to start.
+
+According to which client you are working with, you can use `getExampleGlideClient()` or `getExampleGlideClusterClient()` for your examples.
+
+Your example should look something like this:
+
+```
+// string_commands_test.go:
+
+
+// Template
+func ExampleGlideClient_Get() {
+    var client *GlideClient = getExampleGlideClient() // example helper function
+    // General set up and code execution
+
+    fmt.Println(result)
+
+    // Output: [expected result]
+}
+
+// Full example
+func ExampleGlideClient_Get() {
+    var client *GlideClient = getExampleGlideClient() // example helper function
+
+    client.Set("my_key", "my_value")
+    result1, err := client.Get("my_key")
+    if err != nil {
+        fmt.Println("Glide example failed with an error: ", err)
+    }
+    fmt.Println(result.Value())
+
+    // Output: my_value
+}
+```
+
+To run all examples, ensure ports `6379`, `7000`, `7001`, `7002`, `7003`, `7004`, `7005`, `7006` are not being used, and then run the following:
+```
+make example-test
+```
+
+
+
 ### Recommended extensions for VS Code
 
 -   [Go](https://marketplace.visualstudio.com/items?itemName=golang.Go)
