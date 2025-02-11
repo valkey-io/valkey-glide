@@ -37,7 +37,6 @@ func (suite *GlideTestSuite) TestModuleGetSetCommand() {
 	jsonGetResult, err := glidejson.Get(client, key)
 	assert.NoError(t, err)
 	assert.Equal(t, jsonValue, jsonGetResult)
-	// String getResultWithMultiPaths = Json.get(client, key, new String[] {"$.a", "$.b"}).get();
 
 	jsonGetResultWithMultiPaths, err := glidejson.GetWithOptions(
 		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$.a", "$.b"}))
