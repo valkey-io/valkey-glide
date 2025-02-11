@@ -2,6 +2,8 @@ use opentelemetry::global::ObjectSafeSpan;
 use opentelemetry::trace::SpanKind;
 use opentelemetry::trace::TraceContextExt;
 use opentelemetry::{global, trace::Tracer};
+use opentelemetry_otlp::Protocol;
+use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace::TracerProvider;
 use std::io::{Error, ErrorKind};
@@ -291,11 +293,33 @@ impl GlideOpenTelemetry {
                 .with_batch_config(batch_config)
                 .build()
             }
-            GlideOpenTelemetryTraceExporter::Http(_url) => {
-                todo!("HTTP protocol is not implemented yet!")
+            GlideOpenTelemetryTraceExporter::Http(url) => {
+                let exporter = opentelemetry_otlp::SpanExporter::builder()
+                    .with_http()
+                    .with_endpoint(url)
+                    .with_protocol(Protocol::HttpBinary)
+                    .build()
+                    .unwrap();
+                opentelemetry_sdk::trace::BatchSpanProcessor::builder(
+                    exporter,
+                    opentelemetry_sdk::runtime::Tokio,
+                )
+                .with_batch_config(batch_config)
+                .build()
             }
-            GlideOpenTelemetryTraceExporter::Grpc(_url) => {
-                todo!("GRPC protocol is not implemented yet!")
+            GlideOpenTelemetryTraceExporter::Grpc(url) => {
+                let exporter = opentelemetry_otlp::SpanExporter::builder()
+                    .with_tonic()
+                    .with_endpoint(url)
+                    .with_protocol(Protocol::Grpc)
+                    .build()
+                    .unwrap();
+                opentelemetry_sdk::trace::BatchSpanProcessor::builder(
+                    exporter,
+                    opentelemetry_sdk::runtime::Tokio,
+                )
+                .with_batch_config(batch_config)
+                .build()
             }
         };
 
@@ -331,40 +355,44 @@ mod tests {
         s.parse::<u64>().unwrap()
     }
 
+    async fn create_test_spans() {
+        let span = GlideOpenTelemetry::new_span("Root_Span_1");
+        span.add_event("Event1");
+        span.set_status(GlideSpanStatus::Ok);
+
+        let child1 = span.add_span("Network_Span");
+
+        // Simulate some work
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        child1.end();
+
+        // Simulate that the parent span is still doing some work
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        span.end();
+
+        let span = GlideOpenTelemetry::new_span("Root_Span_2");
+        span.add_event("Event1");
+        span.add_event("Event2");
+        span.set_status(GlideSpanStatus::Ok);
+        drop(span); // writes the span
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    }
+
     #[test]
     fn test_span_json_exporter() {
+        let _ = std::fs::remove_file(SPANS_JSON);
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
         runtime.block_on(async {
-            let _ = std::fs::remove_file(SPANS_JSON);
             let config = GlideOpenTelemetryConfigBuilder::default()
                 .with_flush_interval(std::time::Duration::from_millis(100))
                 .with_trace_exporter(GlideOpenTelemetryTraceExporter::File(PathBuf::from("/tmp")))
                 .build();
             GlideOpenTelemetry::initialise(config);
-            let span = GlideOpenTelemetry::new_span("Root_Span_1");
-            span.add_event("Event1");
-            span.set_status(GlideSpanStatus::Ok);
-
-            let child1 = span.add_span("Network_Span");
-
-            // Simulate some work
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            child1.end();
-
-            // Simulate that the parent span is still doing some work
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            span.end();
-
-            let span = GlideOpenTelemetry::new_span("Root_Span_2");
-            span.add_event("Event1");
-            span.add_event("Event2");
-            span.set_status(GlideSpanStatus::Ok);
-            drop(span); // writes the span
-
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            create_test_spans().await;
 
             // Read the file content
             let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
@@ -397,6 +425,42 @@ mod tests {
 
             let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
             assert_eq!(span_json["name"], "Root_Span_2");
+        });
+    }
+
+    #[test]
+    fn test_span_http_exporter() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let config = GlideOpenTelemetryConfigBuilder::default()
+                .with_flush_interval(std::time::Duration::from_millis(100))
+                .with_trace_exporter(GlideOpenTelemetryTraceExporter::Http(
+                    "http://test.com".to_string(),
+                ))
+                .build();
+            GlideOpenTelemetry::initialise(config);
+            create_test_spans().await;
+        });
+    }
+
+    #[test]
+    fn test_span_grpc_exporter() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let config = GlideOpenTelemetryConfigBuilder::default()
+                .with_flush_interval(std::time::Duration::from_millis(100))
+                .with_trace_exporter(GlideOpenTelemetryTraceExporter::Grpc(
+                    "grpc://test.com".to_string(),
+                ))
+                .build();
+            GlideOpenTelemetry::initialise(config);
+            create_test_spans().await;
         });
     }
 }
