@@ -1,57 +1,57 @@
 /* eslint no-undef: off */
 /* eslint @typescript-eslint/no-require-imports: off */
-const { AsyncClient } = require("glide-rs");
-const RedisServer = require("redis-server");
+const { GlideClient } = require("@valkey/valkey-glide");
 const FreePort = require("find-free-port");
-const { execFile } = require("child_process");
+const { checkWhichCommandAvailable } = require("../../tests/TestUtilities");
 
 const PORT_NUMBER = 4001;
-let server;
-let port;
 
-function flushallOnPort(port) {
-    return new Promise((resolve, reject) => {
-        execFile("redis-cli", ["-p", port, "FLUSHALL"], (error, _, stderr) => {
-            if (error) {
-                console.error(stderr);
-                reject(error);
-            } else {
+async function main() {
+    console.log("Starting main");
+    const port = await FreePort(PORT_NUMBER).then(([free_port]) => free_port);
+    const server = await checkWhichCommandAvailable(
+        "valkey-server",
+        "redis-server",
+    );
+
+    const serverProcess = spawn(server, ["--port", port.toString()], {
+        stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    await new Promise((resolve) => {
+        serverProcess.stdout.on("data", (data) => {
+            console.log(`${data}`);
+
+            if (data.toString().includes("Ready to accept connections")) {
                 resolve();
             }
         });
+
+        serverProcess.stderr.on("data", (data) => {
+            console.error(`${data}`);
+        });
     });
+
+    const client = await GlideClient.createClient({
+        addresses: [{ host: "localhost", port }],
+    });
+    const setResult = await client.set("test", "test");
+    console.log(setResult);
+    let getResult = await client.get("test");
+    console.log(getResult);
+
+    if (getResult !== "test") {
+        throw new Error("Common Test failed");
+    } else {
+        console.log("Common Test passed");
+    }
+
+    await client.flushall();
+    client.close();
+    serverProcess.kill();
 }
 
-FreePort(PORT_NUMBER)
-    .then(([free_port]) => {
-        port = free_port;
-        server = new RedisServer(port);
-        server.open(async (err) => {
-            if (err) {
-                console.error("Error opening server:", err);
-                throw err;
-            }
-
-            const client = AsyncClient.CreateConnection(
-                `redis://localhost:${port}`,
-            );
-            await client.set("test", "test");
-            let result = await client.get("test");
-
-            if (result !== "test") {
-                throw new Error("Common Test failed");
-            } else {
-                console.log("Common Test passed");
-            }
-
-            await flushallOnPort(port).then(() => {
-                console.log("db flushed");
-            });
-            await server.close().then(() => {
-                console.log("server closed");
-            });
-        });
-    })
-    .catch((error) => {
-        console.error("Error occurred while finding a free port:", error);
-    });
+main().then(() => {
+    console.log("Done");
+    process.exit(0);
+});
