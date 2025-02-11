@@ -5,7 +5,7 @@ use crate::cluster_topology::TopologyHash;
 use dashmap::DashMap;
 use futures::FutureExt;
 use rand::seq::IteratorRandom;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -288,37 +288,6 @@ impl RefreshConnectionStates {
 
         // Clear the entire map; Drop handles the cleanup
         self.refresh_address_in_progress.clear();
-
-        // Clear other state tracking
-    }
-
-    // Collects the notifiers for the given addresses and returns them as a vector.
-    //
-    // This function retrieves the notifiers for the provided addresses from the `refresh_address_in_progress`
-    // map and returns them, so they can be awaited outside of the lock.
-    //
-    // # Arguments
-    // * `addresses` - A list of addresses for which notifiers are required.
-    //
-    // # Returns
-    // A vector of `futures::future::Notified` that can be awaited.
-    pub(crate) fn collect_refresh_notifiers(
-        &self,
-        addresses: &HashSet<String>,
-    ) -> Vec<Arc<Notify>> {
-        addresses
-            .iter()
-            .filter_map(|address| {
-                self.refresh_address_in_progress
-                    .get(address)
-                    .and_then(|refresh_state| match &refresh_state.status {
-                        RefreshTaskStatus::Reconnecting(notifier) => {
-                            Some(notifier.get_notifier().clone())
-                        }
-                        _ => None,
-                    })
-            })
-            .collect()
     }
 }
 
