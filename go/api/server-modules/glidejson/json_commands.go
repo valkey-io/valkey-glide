@@ -79,5 +79,4 @@ func GetWithOptions(client api.BaseClient, key string, options *options.JsonGetO
 	args = append(args, optionalArgs...)
 	result, err := executeCommand(client, args)
 	return result.(string), err
-
 }

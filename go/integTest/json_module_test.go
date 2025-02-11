@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson"
+	"github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
 )
 
 func (suite *GlideTestSuite) TestModuleVerifyJsonLoaded() {
@@ -23,7 +24,7 @@ func (suite *GlideTestSuite) TestModuleVerifyJsonLoaded() {
 	}
 }
 
-func (suite *GlideTestSuite) TestModuleSetCommand() {
+func (suite *GlideTestSuite) TestModuleGetSetCommand() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 	key := uuid.New().String()
@@ -36,4 +37,20 @@ func (suite *GlideTestSuite) TestModuleSetCommand() {
 	jsonGetResult, err := glidejson.Get(client, key)
 	assert.NoError(t, err)
 	assert.Equal(t, jsonValue, jsonGetResult)
+	// String getResultWithMultiPaths = Json.get(client, key, new String[] {"$.a", "$.b"}).get();
+
+	jsonGetResultWithMultiPaths, err := glidejson.GetWithOptions(
+		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$.a", "$.b"}))
+	assert.NoError(t, err)
+	assert.Equal(t, "{\"$.a\":[1.0],\"$.b\":[2]}", jsonGetResultWithMultiPaths)
+
+	jsonGetResult, err = glidejson.Get(
+		client, "non_existing_key")
+	assert.NoError(t, err)
+	assert.Nil(t, jsonGetResult)
+
+	jsonGetResult, err = glidejson.GetWithOptions(
+		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$.d"}))
+	assert.NoError(t, err)
+	assert.Equal(t, "[]", jsonGetResult)
 }
