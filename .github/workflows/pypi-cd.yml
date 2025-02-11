@@ -41,8 +41,16 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Get the matrix from the matrix.json file, without the object that has the IMAGE key
-                  export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"]))))' < .github/json_matrices/build-matrix.json | jq -c .)"
+                  # Filter entries with pypi in PACKAGE_MANAGERS and remove "ephemeral" from RUNNER
+                  export PLATFORM_MATRIX=$(jq 'map(
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"]))) 
+                      | .RUNNER = (
+                          if (.RUNNER | type == "array") 
+                          then (.RUNNER | map(select(. != "ephemeral"))) 
+                          else .RUNNER 
+                          end
+                      )
+                  )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     start-self-hosted-runner:
