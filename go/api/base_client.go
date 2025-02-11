@@ -5,6 +5,7 @@ package api
 // #cgo LDFLAGS: -lglide_rs
 // #cgo !windows LDFLAGS: -lm
 // #cgo darwin LDFLAGS: -framework Security
+// #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
 // #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
 // #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
 // #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
@@ -205,7 +206,7 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 func (client *baseClient) Set(key string, value string) (string, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -343,7 +344,7 @@ func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (R
 func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -598,7 +599,7 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
 	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -657,7 +658,7 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	result, err := client.executeCommand(C.LCS, []string{key1, key2})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -1929,7 +1930,7 @@ func (client *baseClient) LIndex(key string, index int64) (Result[string], error
 func (client *baseClient) LTrim(key string, start int64, end int64) (string, error) {
 	result, err := client.executeCommand(C.LTrim, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -2409,7 +2410,7 @@ func (client *baseClient) BLMPopCount(
 func (client *baseClient) LSet(key string, index int64, element string) (string, error) {
 	result, err := client.executeCommand(C.LSet, []string{key, utils.IntToString(index), element})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -3002,7 +3003,7 @@ func (client *baseClient) Unlink(keys []string) (int64, error) {
 func (client *baseClient) Type(key string) (string, error) {
 	result, err := client.executeCommand(C.Type, []string{key})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -3057,7 +3058,7 @@ func (client *baseClient) Touch(keys []string) (int64, error) {
 func (client *baseClient) Rename(key string, newKey string) (string, error) {
 	result, err := client.executeCommand(C.Rename, []string{key, newKey})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -4506,7 +4507,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 	args := append([]string{key, group, id}, optionArgs...)
 	result, err := client.executeCommand(C.XGroupCreate, args)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -4692,7 +4693,7 @@ func (client *baseClient) XGroupSetIdWithOptions(
 	args := append([]string{key, group, id}, optionArgs...)
 	result, err := client.executeCommand(C.XGroupSetId, args)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }

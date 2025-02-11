@@ -5,6 +5,7 @@ package api
 // #cgo LDFLAGS: -lglide_rs
 // #cgo !windows LDFLAGS: -lm
 // #cgo darwin LDFLAGS: -framework Security
+// #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
 // #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
 // #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
 // #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
@@ -90,7 +91,7 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 func (client *GlideClient) ConfigSet(parameters map[string]string) (string, error) {
 	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -132,7 +133,7 @@ func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 func (client *GlideClient) Select(index int64) (string, error) {
 	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -184,7 +185,7 @@ func (client *GlideClient) Info() (string, error) {
 func (client *GlideClient) InfoWithOptions(options InfoOptions) (string, error) {
 	result, err := client.executeCommand(C.Info, options.toArgs())
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -269,7 +270,7 @@ func (client *GlideClient) Ping() (string, error) {
 func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
 	result, err := client.executeCommand(C.Ping, pingOptions.ToArgs())
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }

@@ -1,5 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-package glidejson
+package options
 
 import (
 	"github.com/valkey-io/valkey-glide/go/api"
@@ -18,7 +18,7 @@ func (jsonSetOptions *JsonSetOptions) SetConditionalSet(conditionalSet api.Condi
 	return jsonSetOptions
 }
 
-func (opts *JsonSetOptions) toArgs() ([]string, error) {
+func (opts *JsonSetOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.ConditionalSet != "" {

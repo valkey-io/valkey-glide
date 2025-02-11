@@ -4,6 +4,7 @@ package glidejson
 import (
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/errors"
+	"github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
 )
 
 const (
@@ -38,6 +39,9 @@ func Set(
 	value string,
 ) (string, error) {
 	result, err := executeCommand(client, []string{JsonSet, key, path, value})
+	if err != nil {
+		return api.DefaultStringResponse, err
+	}
 	return result.(string), err
 }
 
@@ -46,13 +50,26 @@ func SetWithOptions(
 	key string,
 	path string,
 	value string,
-	options *JsonSetOptions,
+	options *options.JsonSetOptions,
 ) (string, error) {
-	result, err := executeCommand(client, []string{JsonSet, key, path, value})
+	args := []string{JsonSet, key, path, value}
+	optionsArgs, err := options.ToArgs()
+	if err != nil {
+		return api.DefaultStringResponse, err
+	}
+	args = append(args, optionsArgs...)
+	result, err := executeCommand(client, args)
 	return result.(string), err
 }
 
 func Get(client api.BaseClient, key string) (string, error) {
 	result, err := executeCommand(client, []string{JsonGet, key})
+	if err != nil {
+		return api.DefaultStringResponse, err
+	}
 	return result.(string), err
+}
+
+func Get(client api.BaseClient, key string, options.JsonGetOptions) (string, error) {
+
 }

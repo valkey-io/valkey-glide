@@ -7,7 +7,7 @@ var (
 	defaultFloatResponse  float64
 	defaultBoolResponse   bool
 	defaultIntResponse    int64
-	defaultStringResponse string
+	DefaultStringResponse string
 )
 
 type Result[T any] struct {
