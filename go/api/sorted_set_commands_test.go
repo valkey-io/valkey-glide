@@ -546,7 +546,6 @@ func ExampleGlideClient_ZUnionStore() {
 		"dest",
 		options.KeyArray{Keys: []string{"key1", "key2"}},
 	)
-
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -554,7 +553,6 @@ func ExampleGlideClient_ZUnionStore() {
 	fmt.Println(zUnionStoreResult)
 
 	// Output: 3
-
 }
 
 func ExampleGlideClusterClient_ZUnionStore() {
@@ -576,7 +574,6 @@ func ExampleGlideClusterClient_ZUnionStore() {
 		"{key}dest",
 		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
 	)
-
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -584,7 +581,6 @@ func ExampleGlideClusterClient_ZUnionStore() {
 	fmt.Println(zUnionStoreResult)
 
 	// Output: 3
-
 }
 
 func ExampleGlideClient_ZUnionStoreWithOptions() {
@@ -607,7 +603,6 @@ func ExampleGlideClient_ZUnionStoreWithOptions() {
 		options.KeyArray{Keys: []string{"key1", "key2"}},
 		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 	)
-
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -615,7 +610,6 @@ func ExampleGlideClient_ZUnionStoreWithOptions() {
 	fmt.Println(zUnionStoreWithOptionsResult)
 
 	// Output: 3
-
 }
 
 func ExampleGlideClusterClient_ZUnionStoreWithOptions() {
@@ -638,7 +632,6 @@ func ExampleGlideClusterClient_ZUnionStoreWithOptions() {
 		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
 		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 	)
-
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -646,5 +639,4 @@ func ExampleGlideClusterClient_ZUnionStoreWithOptions() {
 	fmt.Println(zUnionStoreWithOptionsResult)
 
 	// Output: 3
-
 }
