@@ -44,9 +44,7 @@ use connections_container::{RefreshTaskState, RefreshTaskStatus};
 use dashmap::DashMap;
 use std::{
     collections::{HashMap, HashSet},
-    fmt, io,
-    iter::once,
-    mem,
+    fmt, io, mem,
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
@@ -1374,7 +1372,7 @@ where
         }
     }
 
-    // Creates refresh tasks, await on the tasks' notifier and the update the connection_container.
+    // Creates refresh tasks and await on the tasks' notifier.
     // Awaiting on the notifier guaranties at least one reconnect attempt on each address.
     async fn refresh_and_update_connections(
         inner: Arc<InnerCore<C>>,
@@ -1383,7 +1381,7 @@ where
         check_existing_conn: bool,
     ) {
         trace!("refresh_and_update_connections: calling trigger_refresh_connection_tasks");
-        Self::trigger_refresh_connection_tasks(
+        let refresh_task_notifiers = Self::trigger_refresh_connection_tasks(
             inner.clone(),
             addresses.clone(),
             conn_type,
@@ -1392,19 +1390,12 @@ where
         .await;
 
         trace!("refresh_and_update_connections: Await on all tasks' refresh notifier");
-        // Await on all tasks' refresh notifier if exists
-        let refresh_task_notifiers = inner
-            .clone()
-            .conn_lock
-            .read()
-            .expect(MUTEX_READ_ERR)
-            .refresh_conn_state
-            .collect_refresh_notifiers(&addresses);
-        let futures: Vec<_> = refresh_task_notifiers
-            .iter()
-            .map(|notify| notify.notified())
-            .collect();
-        futures::future::join_all(futures).await;
+        futures::future::join_all(
+            refresh_task_notifiers
+                .iter()
+                .map(|notify| notify.notified()),
+        )
+        .await;
     }
 
     async fn trigger_refresh_connection_tasks(
@@ -1412,24 +1403,29 @@ where
         addresses: HashSet<String>,
         conn_type: RefreshConnectionType,
         check_existing_conn: bool,
-    ) {
+    ) -> Vec<Arc<Notify>> {
         debug!("Triggering refresh connections tasks to {:?} ", addresses);
 
+        let mut notifiers = Vec::<Arc<Notify>>::new();
+
         for address in addresses {
-            if inner
+            if let Some(existing_task) = inner
                 .conn_lock
                 .read()
                 .expect(MUTEX_READ_ERR)
                 .refresh_conn_state
                 .refresh_address_in_progress
-                .contains_key(&address)
+                .get(&address)
             {
-                info!("Skipping refresh for {}: already in progress", address);
-                continue;
+                if let RefreshTaskStatus::Reconnecting(ref notifier) = existing_task.status {
+                    // Clone and store the notifier
+                    notifiers.push(notifier.get_notifier());
+                }
+                debug!("Skipping refresh for {}: already in progress", address);
+                continue; // Skip creating a new refresh task
             }
 
             let inner_clone = inner.clone();
-            let address_clone = address.clone();
             let address_clone_for_task = address.clone();
 
             let mut node_option = inner
@@ -1469,7 +1465,7 @@ where
 
                 match node_result {
                     Ok(node) => {
-                        debug!(
+                        info!(
                             "Succeeded to refresh connection for node {}.",
                             address_clone_for_task
                         );
@@ -1477,10 +1473,7 @@ where
                             .conn_lock
                             .write()
                             .expect(MUTEX_READ_ERR)
-                            .replace_or_add_connection_for_address(
-                                address_clone_for_task.clone(),
-                                node,
-                            );
+                            .replace_or_add_connection_for_address(&address_clone_for_task, node);
                     }
                     Err(err) => {
                         warn!(
@@ -1502,8 +1495,19 @@ where
                     .refresh_address_in_progress
                     .remove(&address_clone_for_task);
 
-                info!("Refreshing connection task to {:?} is done", address_clone);
+                debug!(
+                    "Refreshing connection task to {:?} is done",
+                    address_clone_for_task
+                );
             });
+
+            // Create the RefreshTaskState before spawning the task
+            let refresh_task_state = RefreshTaskState::new(handle);
+
+            // Extract the notifier from the new RefreshTaskState
+            if let RefreshTaskStatus::Reconnecting(ref notifier) = refresh_task_state.status {
+                notifiers.push(notifier.get_notifier());
+            }
 
             // Keep the task handle into the RefreshState of this address
             inner
@@ -1512,9 +1516,10 @@ where
                 .expect(MUTEX_READ_ERR)
                 .refresh_conn_state
                 .refresh_address_in_progress
-                .insert(address.clone(), RefreshTaskState::new(handle));
+                .insert(address.clone(), refresh_task_state);
         }
         debug!("trigger_refresh_connection_tasks: Done");
+        notifiers
     }
 
     async fn aggregate_results(
@@ -2356,7 +2361,6 @@ where
                             "SpecificNode: Waiting on reconnect notifier for route `{route:?}`."
                         );
 
-                        // Drop the lock before awaiting
                         notifier.notified().await;
 
                         debug!(
@@ -2411,49 +2415,17 @@ where
         let (address, mut conn) = match conn_check {
             ConnectionCheck::Found((address, connection)) => (address, connection.await),
             ConnectionCheck::OnlyAddress(address) => {
-                // No connection for this address in the conn_map
-                Self::trigger_refresh_connection_tasks(
+                // Trigger refresh task and get the single notifier
+                let mut notifiers = Self::trigger_refresh_connection_tasks(
                     core.clone(),
-                    HashSet::from_iter(once(address.clone())),
+                    HashSet::from([address.clone()]),
                     RefreshConnectionType::AllConnections,
                     false,
                 )
                 .await;
 
-                let reconnect_notifier: Option<Arc<Notify>> = match core
-                    .conn_lock
-                    .read()
-                    .expect(MUTEX_READ_ERR)
-                    .refresh_conn_state
-                    .refresh_address_in_progress
-                    .get(&address)
-                {
-                    Some(refresh_task_state) => {
-                        match &refresh_task_state.status {
-                            // If the task status is `Reconnecting`, grab the notifier.
-                            RefreshTaskStatus::Reconnecting(refresh_notifier) => {
-                                Some(refresh_notifier.get_notifier())
-                            }
-                            RefreshTaskStatus::ReconnectingTooLong => {
-                                debug!(
-                                    "get_connection: Address {} is in ReconnectingTooLong state, skipping notifier wait.",
-                                    address
-                                );
-                                None
-                            }
-                        }
-                    }
-                    None => {
-                        debug!(
-                            "get_connection: No refresh task found in progress for address: {}",
-                            address
-                        );
-                        None
-                    }
-                };
-
-                let mut conn_option = None;
-                if let Some(refresh_notifier) = reconnect_notifier {
+                // Extract the single notifier (if any)
+                if let Some(refresh_notifier) = notifiers.pop() {
                     debug!(
                         "get_connection: Waiting on the refresh notifier for address: {}",
                         address
@@ -2464,20 +2436,24 @@ where
                         "get_connection: After waiting on the refresh notifier for address: {}",
                         address
                     );
-
-                    conn_option = core
-                        .conn_lock
-                        .read()
-                        .expect(MUTEX_READ_ERR)
-                        .connection_for_address(&address);
+                } else {
+                    debug!(
+                        "get_connection: No notifier to wait on for address: {}",
+                        address
+                    );
                 }
+
+                // Try fetching the connection after the notifier resolves
+                let conn_option = core
+                    .conn_lock
+                    .read()
+                    .expect(MUTEX_READ_ERR)
+                    .connection_for_address(&address);
 
                 if let Some((address, conn)) = conn_option {
                     debug!("get_connection: Connection found for address: {}", address);
-                    // If found, return the connection
                     (address, conn.await)
                 } else {
-                    // Otherwise, return an error indicating the connection wasn't found
                     return Err((
                         ErrorKind::ConnectionNotFoundForRoute,
                         "Requested connection not found",
@@ -2823,7 +2799,8 @@ where
                             addresses,
                             RefreshConnectionType::OnlyUserConnection,
                             true,
-                        ),
+                        )
+                        .map(|_| ()), // Convert Vec<Arc<Notify>> to () as it's not needed here
                     )));
                 }
                 PollFlushAction::ReconnectFromInitialConnections => {
