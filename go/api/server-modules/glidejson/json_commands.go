@@ -2,8 +2,8 @@
 package glidejson
 
 import (
-	"github.com/valkey-io/valkey-glide/go/glide/api"
-	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
+	"github.com/valkey-io/valkey-glide/go/api"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
 )
 
 const (
