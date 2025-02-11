@@ -2,7 +2,7 @@
 package glidejson
 
 import (
-	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/api"
 )
 
 type JsonSetOptions struct {
