@@ -16,3 +16,4 @@ url = "2"
 
 opentelemetry = "0.27"
 opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.27", features = ["http-proto", "reqwest-client"] }
