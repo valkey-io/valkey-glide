@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/valkey-io/valkey-glide/go/glide/api/config"
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 func ExampleGlideClusterClient_Info() {

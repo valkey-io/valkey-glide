@@ -3,7 +3,7 @@ package api
 import (
 	"fmt"
 
-	"github.com/valkey-io/valkey-glide/go/glide/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/config"
 )
 
 func ExampleGlideClusterClient_CustomCommand() {
