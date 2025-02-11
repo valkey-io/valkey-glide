@@ -6295,28 +6295,6 @@ func (client *baseClient) ZUnionWithScores(
 //
 //	The number of elements in the resulting sorted set stored at `destination`.
 //
-// For Example:
-//
-//	memberScoreMap1 := map[string]float64{
-//	  "one": 1.0,
-//	  "two": 2.0,
-//	}
-//	memberScoreMap2 := map[string]float64{
-//	  "two":   3.5,
-//	  "three": 3.0,
-//	}
-//
-//	client.ZAdd("key1", memberScoreMap1)
-//	client.ZAdd("key2", memberScoreMap2)
-//
-//	zUnionStoreResult, err := client.ZUnionStore(
-//	  "dest",
-//	  options.KeyArray{Keys: []string{"key1", "key2"}},
-//	)
-//	fmt.Println(zUnionStoreResult)
-//
-//	// Output: 3
-//
 // [valkey.io]: https://valkey.io/commands/zunionstore/
 func (client *baseClient) ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error) {
 	return client.ZUnionStoreWithOptions(destination, keysOrWeightedKeys, nil)
@@ -6340,36 +6318,13 @@ func (client *baseClient) ZUnionStore(destination string, keysOrWeightedKeys opt
 //	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
 //	                   - Use `options.NewKeyArray()` for keys only.
 //	                   - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
-//	options   - The options for the ZUnionStore command, see - [options.ZUnionOptions].
+//	zUnionOptions   - The options for the ZUnionStore command, see - [options.ZUnionOptions].
 //	           Optional `aggregate` option specifies the aggregation strategy to apply when combining the scores of
 //	           elements.
 //
 // Return Value:
 //
 //	The number of elements in the resulting sorted set stored at `destination`.
-//
-// For Example:
-//
-//	memberScoreMap1 := map[string]float64{
-//	  "one": 1.0,
-//	  "two": 2.0,
-//	}
-//	memberScoreMap2 := map[string]float64{
-//	  "two":   3.5,
-//	  "three": 3.0,
-//	}
-//
-//	client.ZAdd("key1", memberScoreMap1)
-//	client.ZAdd("key2", memberScoreMap2)
-//
-//	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(
-//	   "dest",
-//	   options.KeyArray{Keys: []string{"key1", "key2"}},
-//	   options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
-//	)
-//	fmt.Println(zUnionStoreWithOptionsResult)
-//
-//	// Output: 3
 //
 // [valkey.io]: https://valkey.io/commands/zunionstore/
 func (client *baseClient) ZUnionStoreWithOptions(
