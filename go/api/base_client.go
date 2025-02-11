@@ -6221,26 +6221,6 @@ func (client *baseClient) ZInterStoreWithOptions(
 //
 //	The resulting sorted set from the union.
 //
-// For example:
-//
-//	memberScoreMap1 := map[string]float64{
-//	    "one": 1.0,
-//	    "two": 2.0,
-//	}
-//	memberScoreMap2 := map[string]float64{
-//	    "two":   3.5,
-//	    "three": 3.0,
-//	}
-//
-//	client.ZAdd("key1", memberScoreMap1)
-//	client.ZAdd("key2", memberScoreMap2)
-//
-//	zUnionResult, err := client.ZUnion(options.KeyArray{Keys: []string{key1, key2}})
-//	fmt.Println(zUnionResult)
-//
-//	// Output:
-//	// [one three two]
-//
 // [valkey.io]: https://valkey.io/commands/zunion/
 func (client *baseClient) ZUnion(keys options.KeyArray) ([]string, error) {
 	args := keys.ToArgs()
@@ -6272,29 +6252,6 @@ func (client *baseClient) ZUnion(keys options.KeyArray) ([]string, error) {
 // Return Value:
 //
 //	The resulting sorted set from the union.
-//
-// For Example:
-//
-//	memberScoreMap1 := map[string]float64{
-//	  "one": 1.0,
-//	  "two": 2.0,
-//	}
-//	memberScoreMap2 := map[string]float64{
-//	  "two":   3.5,
-//	  "three": 3.0,
-//	}
-//
-//	client.ZAdd("key1", memberScoreMap1)
-//	client.ZAdd("key2", memberScoreMap2)
-//
-//	zUnionResult, err := client.ZUnionWithScores(
-//	  options.KeyArray{Keys: []string{"key1", "key2"}},
-//	  options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
-//	)
-//	fmt.Println(zUnionResult)
-//
-//	// Output:
-//	// map[one:1 three:3 two:5.5]
 //
 // [valkey.io]: https://valkey.io/commands/zunion/
 func (client *baseClient) ZUnionWithScores(
