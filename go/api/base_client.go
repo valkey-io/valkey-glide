@@ -6201,3 +6201,73 @@ func (client *baseClient) ZInterStoreWithOptions(
 	}
 	return handleIntResponse(result)
 }
+
+// Returns the union of members from sorted sets specified by the given `keys`.
+// To get the elements with their scores, see `ZUnionWithScores`.
+//
+// Available for Valkey 6.2 and above.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - The keys of the sorted sets.
+//
+// Return Value:
+//
+//	The resulting sorted set from the union.
+//
+// [valkey.io]: https://valkey.io/commands/zunion/
+func (client *baseClient) ZUnion(keys options.KeyArray) ([]string, error) {
+	args := keys.ToArgs()
+	result, err := client.executeCommand(C.ZUnion, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the union of members and their scores from sorted sets specified by the given
+// `keysOrWeightedKeys`.
+//
+// Available for Valkey 6.2 and above.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keysOrWeightedKeys - The keys of the sorted sets with possible formats:
+//	 - Use `KeyArray` for keys only.
+//	 - Use `WeightedKeys` for weighted keys with score multipliers.
+//	aggregate - Specifies the aggregation strategy to apply when combining the scores of elements.
+//
+// Return Value:
+//
+//	The resulting sorted set from the union.
+//
+// [valkey.io]: https://valkey.io/commands/zunion/
+func (client *baseClient) ZUnionWithScores(
+	keysOrWeightedKeys options.KeysOrWeightedKeys,
+	zUnionOptions *options.ZUnionOptions,
+) (map[string]float64, error) {
+	args := keysOrWeightedKeys.ToArgs()
+	optionsArgs, err := zUnionOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, optionsArgs...)
+	args = append(args, options.WithScores)
+	result, err := client.executeCommand(C.ZUnion, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringDoubleMapResponse(result)
+}

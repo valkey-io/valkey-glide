@@ -8403,3 +8403,107 @@ func (suite *GlideTestSuite) TestZDiffStore() {
 		assert.IsType(t, &errors.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
+	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-" + uuid.New().String()
+		key2 := "{key}-" + uuid.New().String()
+		key3 := "{key}-" + uuid.New().String()
+		memberScoreMap1 := map[string]float64{
+			"one": 1.0,
+			"two": 2.0,
+		}
+		memberScoreMap2 := map[string]float64{
+			"two":   3.5,
+			"three": 3.0,
+		}
+
+		// Add members to sorted sets
+		res, err := client.ZAdd(key1, memberScoreMap1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		res, err = client.ZAdd(key2, memberScoreMap2)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		zUnionResult, err := client.ZUnion(options.KeyArray{Keys: []string{key1, key2}})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{"one", "three", "two"}, zUnionResult)
+
+		// Union with scores
+		zUnionWithScoresResult, err := client.ZUnionWithScores(options.KeyArray{Keys: []string{key1, key2}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 5.5, "three": 3.0}, zUnionWithScoresResult)
+
+		// Union results with max aggregate
+		zUnionWithMaxAggregateResult, err := client.ZUnionWithScores(
+			options.KeyArray{Keys: []string{key1, key2}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMax),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 3.5, "three": 3.0}, zUnionWithMaxAggregateResult)
+
+		// Union results with min aggregate
+		zUnionWithMinAggregateResult, err := client.ZUnionWithScores(
+			options.KeyArray{Keys: []string{key1, key2}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMin),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}, zUnionWithMinAggregateResult)
+
+		// Union results with sum aggregate
+		zUnionWithSumAggregateResult, err := client.ZUnionWithScores(
+			options.KeyArray{Keys: []string{key1, key2}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 5.5, "three": 3.0}, zUnionWithSumAggregateResult)
+
+		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
+		zUnionWithWeightedKeysResult, err := client.ZUnionWithScores(
+			options.WeightedKeys{
+				KeyWeightPairs: []options.KeyWeightPair{
+					{Key: key1, Weight: 3.0},
+					{Key: key2, Weight: 2.0},
+				},
+			},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"one": 3.0, "two": 13.0, "three": 6.0}, zUnionWithWeightedKeysResult)
+
+		// non-existent key - empty union
+		zUnionWithNonExistentKeyResult, err := client.ZUnionWithScores(
+			options.KeyArray{Keys: []string{key1, key3}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 2.0}, zUnionWithNonExistentKeyResult)
+
+		// empty key list - empty union
+		zUnionWithEmptyKeyArray, err := client.ZUnionWithScores(options.KeyArray{Keys: []string{}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NotNil(suite.T(), err)
+		assert.Empty(suite.T(), zUnionWithEmptyKeyArray)
+
+		// key exists but not a set
+		_, err = client.Set(key3, "value")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.ZUnion(options.KeyArray{Keys: []string{key1, key3}})
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		_, err = client.ZUnionWithScores(
+			options.KeyArray{Keys: []string{key1, key3}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
