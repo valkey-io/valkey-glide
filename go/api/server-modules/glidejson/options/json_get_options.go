@@ -20,6 +20,11 @@ func NewJsonGetOptionsBuilder() *JsonGetOptions {
 	return &JsonGetOptions{}
 }
 
+func (jsonGetOptions *JsonGetOptions) SetPaths(paths []string) *JsonGetOptions {
+	jsonGetOptions.paths = paths
+	return jsonGetOptions
+}
+
 func (jsonGetOptions *JsonGetOptions) SetIndent(indent string) *JsonGetOptions {
 	jsonGetOptions.indent = indent
 	return jsonGetOptions
@@ -58,6 +63,10 @@ func (opts *JsonGetOptions) ToArgs() ([]string, error) {
 
 	if opts.noescape {
 		args = append(args, noescapeKeyword)
+	}
+
+	if opts.paths != nil && len(opts.paths) > 0 {
+		args = append(args, opts.paths...)
 	}
 	return args, err
 }
