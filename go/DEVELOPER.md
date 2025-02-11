@@ -242,9 +242,9 @@ go run . -resultsFile gobenchmarks.json -dataSize "100 1000" -concurrentTasks "1
 
 #### Function names
 
-For every command that you implement (granted it is not supposed to be private), please use PascalCase.
+For every command that you implement, please use PascalCase.
 
-Examples of good function names:
+Examples of good command function names:
 
 - `BZPopMin`
 - `ZRem`
@@ -252,7 +252,7 @@ Examples of good function names:
 - `SetWithOptions`
 - `Decr`
 
-Examples of bad function names:
+Examples of bad command function names:
 
 - `zRange`
 - `hincrbyfloat`
@@ -288,7 +288,7 @@ func ExampleGlideClient_Get_KeyNotExists() {
 
 When adding links, surround the piece of text using square brackets and then put the link reference at the bottom of the comment block.
 
-For example, this effectively links `valkey.io` with the proper reference:
+For example, this links `valkey.io` with the proper reference:
 
 ```
 // SInter gets the intersection of all the given sets.
@@ -311,7 +311,7 @@ For example, this effectively links `valkey.io` with the proper reference:
 
 #### Writing examples
 
-To write an example for the command, find it's respective group of commands and add the example to that `*_test.go` file. For example, `ZAdd` is a command that belongs to `sorted_set_commands` so we would add the example to `sorted_set_commands_test.go`. See [function names for examples](#function-names-for-examples) to start.
+To write an example for the command, find its respective group of commands and add the example to that `*_test.go` file. For example, `ZAdd` is a command that belongs to `sorted_set_commands` so we would add the example to `sorted_set_commands_test.go`. See [function names for examples](#function-names-for-examples) to start.
 
 According to which client you are working with, you can use `getExampleGlideClient()` or `getExampleGlideClusterClient()` for your examples.
 
@@ -324,6 +324,7 @@ Your example should look something like this:
 // Template
 func ExampleGlideClient_Get() {
     var client *GlideClient = getExampleGlideClient() // example helper function
+
     // General set up and code execution
 
     fmt.Println(result)
@@ -346,7 +347,7 @@ func ExampleGlideClient_Get() {
 }
 ```
 
-To run all examples, ensure ports `6379`, `7000`, `7001`, `7002`, `7003`, `7004`, `7005`, `7006` are not being used, and then run the following:
+To run all examples, ensure ports `6379`, `7001`, `7002`, `7003`, `7004`, `7005`, `7006` are not being used, and then run the following:
 ```
 make example-test
 ```
