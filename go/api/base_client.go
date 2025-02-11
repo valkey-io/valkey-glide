@@ -7641,6 +7641,10 @@ func (client *baseClient) ZUnion(keys options.KeyArray) ([]string, error) {
 //
 // Available for Valkey 6.2 and above.
 //
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
 // See [valkey.io] for details.
 //
 // Parameters:
