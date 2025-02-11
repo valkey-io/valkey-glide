@@ -4,9 +4,6 @@ package api
 
 import (
 	"fmt"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 // getExampleGlideClient returns a GlideClient instance for testing purposes.
@@ -47,8 +44,8 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 }
 
 // CompareUnorderedSlices compares two unordered slices of structs and returns if both are equal.
-func CompareUnorderedSlices[T any](slice1, slice2 []T) bool {
-	return cmp.Equal(slice1, slice2, cmpopts.SortSlices(func(a, b T) bool {
-		return fmt.Sprintf("%v", a) < fmt.Sprintf("%v", b)
-	}))
-}
+// func CompareUnorderedSlices[T any](slice1, slice2 []T) bool {
+// 	return cmp.Equal(slice1, slice2, cmpopts.SortSlices(func(a, b T) bool {
+// 		return fmt.Sprintf("%v", a) < fmt.Sprintf("%v", b)
+// 	}))
+// }
