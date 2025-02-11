@@ -1976,7 +1976,7 @@ export async function JsonBatchForArrCommands(
     return responseData;
 }
 
-export async function transactionMultiJson(
+export async function JsonBatch(
     baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
