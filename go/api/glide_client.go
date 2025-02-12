@@ -273,3 +273,26 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	}
 	return handleStringResponse(result)
 }
+
+// Rewrites the configuration file with the current configuration.
+//
+// Return value:
+//
+//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//
+// Example:
+//
+//	response, err = client.executeCommand()
+//	if err != nil {
+//	  // handle error
+//	}
+//	fmt.Println(response) // Output: OK
+//
+// [valkey.io]: https://valkey.io/commands/config-rewrite/
+func (client *GlideClient) ConfigRewrite() (string, error) {
+	response, err := client.executeCommand(C.ConfigRewrite, []string{})
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
