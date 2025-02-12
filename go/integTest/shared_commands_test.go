@@ -8892,3 +8892,73 @@ func (suite *GlideTestSuite) TestZInterCard() {
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestZLexCount() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		suite.SkipIfServerVersionLowerThanBy("6.2.0")
+		t := suite.T()
+		key1 := "{testKey}:1-" + uuid.New().String()
+		key2 := "{testKey}:3-" + uuid.New().String()
+
+		// add members to sorted sets
+		client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0})
+
+		// count members in range a exclusive to c inclusive
+		result, err := client.ZLexCount(
+			key1,
+			options.NewRangeByLexQuery(
+				options.NewLexBoundary("a", false),
+				options.NewLexBoundary("c", true),
+			),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), result)
+
+		// count members in range negative to positive infinity
+		result, err = client.ZLexCount(
+			key1,
+			options.NewRangeByLexQuery(
+				options.NewInfiniteLexBoundary("-"),
+				options.NewInfiniteLexBoundary("+"),
+			),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), result)
+
+		// count members in range negative infinity to c inclusive
+		result, err = client.ZLexCount(
+			key1,
+			options.NewRangeByLexQuery(
+				options.NewInfiniteLexBoundary("-"),
+				options.NewLexBoundary("c", true),
+			),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), result)
+
+		// non-existent key
+		result, err = client.ZLexCount(
+			key2,
+			options.NewRangeByLexQuery(
+				options.NewLexBoundary("a", false),
+				options.NewLexBoundary("c", true),
+			),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), result)
+
+		// key exists but not a set
+		_, err = client.Set(key2, "value")
+		assert.NoError(t, err)
+
+		_, err = client.ZLexCount(
+			key2,
+			options.NewRangeByLexQuery(
+				options.NewLexBoundary("a", false),
+				options.NewLexBoundary("c", true),
+			),
+		)
+		assert.NotNil(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}

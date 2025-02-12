@@ -114,4 +114,6 @@ type SortedSetCommands interface {
 	ZInterCard(keys []string) (int64, error)
 
 	ZInterCardWithOptions(keys []string, options *options.ZInterCardOptions) (int64, error)
+
+	ZLexCount(key string, rangeQuery *options.RangeByLex) (int64, error)
 }
