@@ -587,10 +587,10 @@ func ExampleGlideClusterClient_Rename() {
 	// OK
 }
 
-func ExampleGlideClient_Renamenx() {
+func ExampleGlideClient_RenameNX() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	result, err := client.Set("key1", "someValue")
-	result1, err := client.Renamenx("key1", "key2")
+	result1, err := client.RenameNX("key1", "key2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -602,10 +602,10 @@ func ExampleGlideClient_Renamenx() {
 	// true
 }
 
-func ExampleGlideClusterClient_Renamenx() {
+func ExampleGlideClusterClient_RenameNX() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	result, err := client.Set("{key}1", "someValue")
-	result1, err := client.Renamenx("{key}1", "{key}2")
+	result1, err := client.RenameNX("{key}1", "{key}2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
