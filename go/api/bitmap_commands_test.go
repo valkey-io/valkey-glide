@@ -51,7 +51,7 @@ func ExampleGlideClient_BitCount() {
 func ExampleGlideClient_BitCountWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	options := options.NewBitCountOptionsBuilder().
+	options := options.NewBitCountOptions().
 		SetStart(1).
 		SetEnd(1).
 		SetBitmapIndexType(options.BYTE)

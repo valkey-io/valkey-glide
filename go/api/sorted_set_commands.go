@@ -24,11 +24,11 @@ type SortedSetCommands interface {
 
 	ZPopMin(key string) (map[string]float64, error)
 
-	ZPopMinWithOptions(key string, options ZPopOptions) (map[string]float64, error)
+	ZPopMinWithOptions(key string, options options.ZPopOptions) (map[string]float64, error)
 
 	ZPopMax(key string) (map[string]float64, error)
 
-	ZPopMaxWithOptions(key string, options ZPopOptions) (map[string]float64, error)
+	ZPopMaxWithOptions(key string, options options.ZPopOptions) (map[string]float64, error)
 
 	ZRem(key string, members []string) (int64, error)
 
@@ -36,11 +36,11 @@ type SortedSetCommands interface {
 
 	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
 
-	BZMPop(keys []string, scoreFilter ScoreFilter, timeoutSecs float64) (Result[KeyWithArrayOfMembersAndScores], error)
+	BZMPop(keys []string, scoreFilter options.ScoreFilter, timeoutSecs float64) (Result[KeyWithArrayOfMembersAndScores], error)
 
 	BZMPopWithOptions(
 		keys []string,
-		scoreFilter ScoreFilter,
+		scoreFilter options.ScoreFilter,
 		timeoutSecs float64,
 		options *options.ZMPopOptions,
 	) (Result[KeyWithArrayOfMembersAndScores], error)

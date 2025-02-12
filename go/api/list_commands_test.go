@@ -4,6 +4,8 @@ package api
 
 import (
 	"fmt"
+
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 func ExampleGlideClient_LPush() {
@@ -74,7 +76,7 @@ func ExampleGlideClient_LPosWithOptions() {
 	result1, err := client.LPosWithOptions(
 		"my_list",
 		"e",
-		NewLPosOptionsBuilder().SetRank(2),
+		options.NewLPosOptions().SetRank(2),
 	) // (Returns the second occurrence of the element "e")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -105,9 +107,9 @@ func ExampleGlideClient_LPosCount() {
 func ExampleGlideClient_LPosCountWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	result, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LPosCountWithOptions("my_list", "e", 1, NewLPosOptionsBuilder().SetRank(2))
+	result1, err := client.LPosCountWithOptions("my_list", "e", 1, options.NewLPosOptions().SetRank(2))
 	result2, err := client.LPosCountWithOptions("my_list", "e", 3,
-		NewLPosOptionsBuilder().SetRank(2).SetMaxLen(1000))
+		options.NewLPosOptions().SetRank(2).SetMaxLen(1000))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -251,7 +253,7 @@ func ExampleGlideClient_LInsert() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	client.Del([]string{"my_list"})
 	result, err := client.RPush("my_list", []string{"hello", "world"})
-	result1, err := client.LInsert("my_list", Before, "world", "there")
+	result1, err := client.LInsert("my_list", options.Before, "world", "there")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -339,7 +341,7 @@ func ExampleGlideClient_LPushX() {
 func ExampleGlideClient_LMPop() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	result, err := client.LPush("my_list", []string{"one", "two", "three"})
-	result1, err := client.LMPop([]string{"my_list"}, Left)
+	result1, err := client.LMPop([]string{"my_list"}, options.Left)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -354,7 +356,7 @@ func ExampleGlideClient_LMPop() {
 func ExampleGlideClient_LMPopCount() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	result, err := client.LPush("my_list", []string{"one", "two", "three"})
-	result1, err := client.LMPopCount([]string{"my_list"}, Left, 2)
+	result1, err := client.LMPopCount([]string{"my_list"}, options.Left, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -369,7 +371,7 @@ func ExampleGlideClient_LMPopCount() {
 func ExampleGlideClient_BLMPop() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	result, err := client.LPush("my_list", []string{"one", "two", "three"})
-	result1, err := client.BLMPop([]string{"my_list"}, Left, 0.1)
+	result1, err := client.BLMPop([]string{"my_list"}, options.Left, 0.1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -384,7 +386,7 @@ func ExampleGlideClient_BLMPop() {
 func ExampleGlideClient_BLMPopCount() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	result, err := client.LPush("my_list", []string{"one", "two", "three"})
-	result1, err := client.BLMPopCount([]string{"my_list"}, Left, 2, 0.1)
+	result1, err := client.BLMPopCount([]string{"my_list"}, options.Left, 2, 0.1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -419,7 +421,7 @@ func ExampleGlideClient_LMove() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	result, err := client.LPush("my_list1", []string{"two", "one"})
 	result1, err := client.LPush("my_list2", []string{"four", "three"})
-	result2, err := client.LMove("my_list1", "my_list2", Left, Left)
+	result2, err := client.LMove("my_list1", "my_list2", options.Left, options.Left)
 	result3, err := client.LRange("my_list1", 0, -1)
 	result4, err := client.LRange("my_list2", 0, -1)
 	if err != nil {
@@ -443,7 +445,7 @@ func ExampleGlideClient_BLMove() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	result, err := client.LPush("my_list1", []string{"two", "one"})
 	result1, err := client.LPush("my_list2", []string{"four", "three"})
-	result2, err := client.BLMove("my_list1", "my_list2", Left, Left, 0.1)
+	result2, err := client.BLMove("my_list1", "my_list2", options.Left, options.Left, 0.1)
 	result3, err := client.LRange("my_list1", 0, -1)
 	result4, err := client.LRange("my_list2", 0, -1)
 	if err != nil {

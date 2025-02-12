@@ -48,7 +48,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		suite.verifyOK(client.Set(keyName, initialValue))
 
-		opts := api.NewSetOptionsBuilder().SetReturnOldValue(true)
+		opts := options.NewSetOptions().SetReturnOldValue(true)
 		result, err := client.SetWithOptions(keyName, anotherValue, opts)
 
 		assert.Nil(suite.T(), err)
@@ -61,7 +61,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists)
+		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfExists)
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -75,7 +75,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists)
+		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfExists)
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 
 		assert.Nil(suite.T(), err)
@@ -86,7 +86,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist)
+		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfDoesNotExist)
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -100,7 +100,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist)
+		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfDoesNotExist)
 		suite.verifyOK(client.Set(key, initialValue))
 
 		result, err := client.SetWithOptions(key, anotherValue, opts)
@@ -118,7 +118,8 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey()
 func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
+		opts := options.NewSetOptions().
+			SetExpiry(options.NewExpiry().SetType(options.Milliseconds).SetCount(uint64(2000)))
 		result, err := client.SetWithOptions(key, initialValue, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -127,7 +128,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 
-		opts = api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.KeepExisting))
+		opts = options.NewSetOptions().SetExpiry(options.NewExpiry().SetType(options.KeepExisting))
 		result, err = client.SetWithOptions(key, anotherValue, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -148,7 +149,8 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(100500)))
+		opts := options.NewSetOptions().
+			SetExpiry(options.NewExpiry().SetType(options.Milliseconds).SetCount(uint64(100500)))
 		result, err := client.SetWithOptions(key, initialValue, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -157,7 +159,8 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 
-		opts = api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
+		opts = options.NewSetOptions().
+			SetExpiry(options.NewExpiry().SetType(options.Milliseconds).SetCount(uint64(2000)))
 		result, err = client.SetWithOptions(key, anotherValue, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -195,7 +198,8 @@ func (suite *GlideTestSuite) TestGetExWithOptions_PersistKey() {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
-		opts := api.NewGetExOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
+		opts := options.NewGetExOptions().
+			SetExpiry(options.NewExpiry().SetType(options.Milliseconds).SetCount(uint64(2000)))
 		result, err := client.GetExWithOptions(key, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
@@ -206,7 +210,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_PersistKey() {
 
 		time.Sleep(1000 * time.Millisecond)
 
-		opts = api.NewGetExOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Persist))
+		opts = options.NewGetExOptions().SetExpiry(options.NewExpiry().SetType(options.Persist))
 		result, err = client.GetExWithOptions(key, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
@@ -218,7 +222,8 @@ func (suite *GlideTestSuite) TestGetExWithOptions_UpdateExpiry() {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
-		opts := api.NewGetExOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
+		opts := options.NewGetExOptions().
+			SetExpiry(options.NewExpiry().SetType(options.Milliseconds).SetCount(uint64(2000)))
 		result, err := client.GetExWithOptions(key, opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
@@ -238,7 +243,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_UpdateExpiry() {
 func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue_nonExistentKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := api.NewSetOptionsBuilder().SetReturnOldValue(true)
+		opts := options.NewSetOptions().SetReturnOldValue(true)
 
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 
@@ -1141,7 +1146,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.True(t, isSubset(resultKeys, keysList) && isSubset(keysList, resultKeys))
 		assert.True(t, isSubset(resultValues, valuesList) && isSubset(valuesList, resultValues))
 
-		opts := options.NewHashScanOptionsBuilder().SetMatch("a")
+		opts := options.NewHashScanOptions().SetMatch("a")
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
 		assert.Equal(t, initialCursor, resCursor)
 		assert.Equal(t, len(resCollection), 2)
@@ -1197,28 +1202,28 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.True(t, isSubset(numberValuesList, secondResultAllValues))
 
 		// Test match pattern
-		opts = options.NewHashScanOptionsBuilder().SetMatch("*")
+		opts = options.NewHashScanOptions().SetMatch("*")
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
 		resCursorInt, _ := strconv.Atoi(resCursor)
 		assert.True(t, resCursorInt >= 0)
 		assert.True(t, int(len(resCollection)) >= defaultCount)
 
 		// Test count
-		opts = options.NewHashScanOptionsBuilder().SetCount(int64(20))
+		opts = options.NewHashScanOptions().SetCount(int64(20))
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
 		resCursorInt, _ = strconv.Atoi(resCursor)
 		assert.True(t, resCursorInt >= 0)
 		assert.True(t, len(resCollection) >= 20)
 
 		// Test count with match returns a non-empty list
-		opts = options.NewHashScanOptionsBuilder().SetMatch("1*").SetCount(int64(20))
+		opts = options.NewHashScanOptions().SetMatch("1*").SetCount(int64(20))
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
 		resCursorInt, _ = strconv.Atoi(resCursor)
 		assert.True(t, resCursorInt >= 0)
 		assert.True(t, len(resCollection) >= 0)
 
 		if suite.serverVersion >= "8.0.0" {
-			opts = options.NewHashScanOptionsBuilder().SetNoValue(true)
+			opts = options.NewHashScanOptions().SetNoValue(true)
 			resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
 			resCursorInt, _ = strconv.Atoi(resCursor)
 			assert.True(t, resCursorInt >= 0)
@@ -1240,12 +1245,12 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.NotEmpty(t, err)
 
 		// Check if Non-hash key throws an error when HSCAN called with options.
-		opts = options.NewHashScanOptionsBuilder().SetMatch("test").SetCount(int64(1))
+		opts = options.NewHashScanOptions().SetMatch("test").SetCount(int64(1))
 		_, _, err = client.HScanWithOptions(key2, initialCursor, opts)
 		assert.NotEmpty(t, err)
 
 		// Check if a negative cursor value throws an error.
-		opts = options.NewHashScanOptionsBuilder().SetCount(int64(-1))
+		opts = options.NewHashScanOptions().SetCount(int64(-1))
 		_, _, err = client.HScanWithOptions(key1, initialCursor, opts)
 		assert.NotEmpty(t, err)
 	})
@@ -1383,7 +1388,7 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), res2.Value())
 
-		res3, err := client.LPosWithOptions(key, "b", api.NewLPosOptionsBuilder().SetRank(2))
+		res3, err := client.LPosWithOptions(key, "b", options.NewLPosOptions().SetRank(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(5), res3.Value())
 
@@ -1393,7 +1398,7 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res4)
 
 		// reverse traversal
-		res5, err := client.LPosWithOptions(key, "b", api.NewLPosOptionsBuilder().SetRank(-2))
+		res5, err := client.LPosWithOptions(key, "b", options.NewLPosOptions().SetRank(-2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res5.Value())
 
@@ -1401,7 +1406,7 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		res6, err := client.LPosWithOptions(
 			key,
 			"a",
-			api.NewLPosOptionsBuilder().SetRank(1).SetMaxLen(0),
+			options.NewLPosOptions().SetRank(1).SetMaxLen(0),
 		)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), res6.Value())
@@ -1410,19 +1415,19 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		res7, err := client.LPosWithOptions(
 			key,
 			"c",
-			api.NewLPosOptionsBuilder().SetRank(1).SetMaxLen(2),
+			options.NewLPosOptions().SetRank(1).SetMaxLen(2),
 		)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res7)
 
 		// invalid rank value
-		res8, err := client.LPosWithOptions(key, "a", api.NewLPosOptionsBuilder().SetRank(0))
+		res8, err := client.LPosWithOptions(key, "a", options.NewLPosOptions().SetRank(0))
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res8)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		// invalid maxlen value
-		res9, err := client.LPosWithOptions(key, "a", api.NewLPosOptionsBuilder().SetMaxLen(-1))
+		res9, err := client.LPosWithOptions(key, "a", options.NewLPosOptions().SetMaxLen(-1))
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res9)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -1487,16 +1492,16 @@ func (suite *GlideTestSuite) TestLPosCount_withOptions() {
 		assert.Equal(suite.T(), int64(6), res1)
 		assert.Nil(suite.T(), err)
 
-		res2, err := client.LPosCountWithOptions(key, "a", int64(0), api.NewLPosOptionsBuilder().SetRank(1))
+		res2, err := client.LPosCountWithOptions(key, "a", int64(0), options.NewLPosOptions().SetRank(1))
 		assert.Equal(suite.T(), []int64{0, 1, 4}, res2)
 		assert.Nil(suite.T(), err)
 
-		res3, err := client.LPosCountWithOptions(key, "a", int64(0), api.NewLPosOptionsBuilder().SetRank(2))
+		res3, err := client.LPosCountWithOptions(key, "a", int64(0), options.NewLPosOptions().SetRank(2))
 		assert.Equal(suite.T(), []int64{1, 4}, res3)
 		assert.Nil(suite.T(), err)
 
 		// reverse traversal
-		res4, err := client.LPosCountWithOptions(key, "a", int64(0), api.NewLPosOptionsBuilder().SetRank(-1))
+		res4, err := client.LPosCountWithOptions(key, "a", int64(0), options.NewLPosOptions().SetRank(-1))
 		assert.Equal(suite.T(), []int64{4, 1, 0}, res4)
 		assert.Nil(suite.T(), err)
 	})
@@ -2335,7 +2340,7 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.Equal(t, len(charMembers), len(resCollection))
 		assert.True(t, isSubset(resCollection, charMembers))
 
-		opts := options.NewBaseScanOptionsBuilder().SetMatch("a")
+		opts := options.NewBaseScanOptions().SetMatch("a")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.Equal(t, initialCursor, resCursor)
@@ -2363,21 +2368,21 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.True(t, isSubset(charMembers, resultCollection))
 
 		// test match pattern
-		opts = options.NewBaseScanOptionsBuilder().SetMatch("*")
+		opts = options.NewBaseScanOptions().SetMatch("*")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), defaultCount)
 
 		// test count
-		opts = options.NewBaseScanOptionsBuilder().SetCount(20)
+		opts = options.NewBaseScanOptions().SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), 20)
 
 		// test count with match, returns a non-empty array
-		opts = options.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
+		opts = options.NewBaseScanOptions().SetMatch("1*").SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor)
@@ -2598,11 +2603,11 @@ func (suite *GlideTestSuite) TestLInsert() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(4), res1)
 
-		res2, err := client.LInsert(key, api.Before, "value2", "value1.5")
+		res2, err := client.LInsert(key, options.Before, "value2", "value1.5")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(5), res2)
 
-		res3, err := client.LInsert(key, api.After, "value3", "value3.5")
+		res3, err := client.LInsert(key, options.After, "value3", "value3.5")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(6), res3)
 
@@ -2610,18 +2615,18 @@ func (suite *GlideTestSuite) TestLInsert() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), []string{"value1", "value1.5", "value2", "value3", "value3.5", "value4"}, res4)
 
-		res5, err := client.LInsert("non_existing_key", api.Before, "pivot", "elem")
+		res5, err := client.LInsert("non_existing_key", options.Before, "pivot", "elem")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), res5)
 
-		res6, err := client.LInsert(key, api.Before, "value5", "value6")
+		res6, err := client.LInsert(key, options.Before, "value5", "value6")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(-1), res6)
 
 		key2 := uuid.NewString()
 		suite.verifyOK(client.Set(key2, "value"))
 
-		res7, err := client.LInsert(key2, api.Before, "value5", "value6")
+		res7, err := client.LInsert(key2, options.Before, "value5", "value6")
 		assert.Equal(suite.T(), int64(0), res7)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -2771,11 +2776,11 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 		key2 := "{key}-2" + uuid.NewString()
 		key3 := "{key}-3" + uuid.NewString()
 
-		res1, err := client.LMPop([]string{key1}, api.Left)
+		res1, err := client.LMPop([]string{key1}, options.Left)
 		assert.Nil(suite.T(), err)
 		assert.Nil(suite.T(), res1)
 
-		res2, err := client.LMPopCount([]string{key1}, api.Left, int64(1))
+		res2, err := client.LMPopCount([]string{key1}, options.Left, int64(1))
 		assert.Nil(suite.T(), err)
 		assert.Nil(suite.T(), res2)
 
@@ -2786,7 +2791,7 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(5), res4)
 
-		res5, err := client.LMPop([]string{key1}, api.Left)
+		res5, err := client.LMPop([]string{key1}, options.Left)
 		assert.Nil(suite.T(), err)
 		assert.Equal(
 			suite.T(),
@@ -2794,7 +2799,7 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 			res5,
 		)
 
-		res6, err := client.LMPopCount([]string{key2, key1}, api.Right, int64(2))
+		res6, err := client.LMPopCount([]string{key2, key1}, options.Right, int64(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(
 			suite.T(),
@@ -2806,7 +2811,7 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 
 		suite.verifyOK(client.Set(key3, "value"))
 
-		res7, err := client.LMPop([]string{key3}, api.Left)
+		res7, err := client.LMPop([]string{key3}, options.Left)
 		assert.Nil(suite.T(), res7)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -2827,11 +2832,11 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 		key2 := "{key}-2" + uuid.NewString()
 		key3 := "{key}-3" + uuid.NewString()
 
-		res1, err := client.BLMPop([]string{key1}, api.Left, float64(0.1))
+		res1, err := client.BLMPop([]string{key1}, options.Left, float64(0.1))
 		assert.Nil(suite.T(), err)
 		assert.Nil(suite.T(), res1)
 
-		res2, err := client.BLMPopCount([]string{key1}, api.Left, int64(1), float64(0.1))
+		res2, err := client.BLMPopCount([]string{key1}, options.Left, int64(1), float64(0.1))
 		assert.Nil(suite.T(), err)
 		assert.Nil(suite.T(), res2)
 
@@ -2842,7 +2847,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(5), res4)
 
-		res5, err := client.BLMPop([]string{key1}, api.Left, float64(0.1))
+		res5, err := client.BLMPop([]string{key1}, options.Left, float64(0.1))
 		assert.Nil(suite.T(), err)
 		assert.Equal(
 			suite.T(),
@@ -2850,7 +2855,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 			res5,
 		)
 
-		res6, err := client.BLMPopCount([]string{key2, key1}, api.Right, int64(2), float64(0.1))
+		res6, err := client.BLMPopCount([]string{key2, key1}, options.Right, int64(2), float64(0.1))
 		assert.Nil(suite.T(), err)
 		assert.Equal(
 			suite.T(),
@@ -2862,7 +2867,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 
 		suite.verifyOK(client.Set(key3, "value"))
 
-		res7, err := client.BLMPop([]string{key3}, api.Left, float64(0.1))
+		res7, err := client.BLMPop([]string{key3}, options.Left, float64(0.1))
 		assert.Nil(suite.T(), res7)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -2878,7 +2883,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		key2 := "{key}-2" + uuid.NewString()
 		key3 := "{key}-3" + uuid.NewString()
 
-		res1, err := client.BZMPop([]string{key1}, api.MIN, float64(0.1))
+		res1, err := client.BZMPop([]string{key1}, options.MIN, float64(0.1))
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), res1.IsNil())
 
@@ -2896,7 +2901,12 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		assert.Equal(suite.T(), int64(3), res4)
 
 		// Try to pop the top 2 elements from key1
-		res5, err := client.BZMPopWithOptions([]string{key1}, api.MAX, float64(0.1), options.NewZMPopOptions().SetCount(2))
+		res5, err := client.BZMPopWithOptions(
+			[]string{key1},
+			options.MAX,
+			float64(0.1),
+			options.NewZMPopOptions().SetCount(2),
+		)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), key1, res5.Value().Key)
 		assert.ElementsMatch(
@@ -2909,7 +2919,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		)
 
 		// Try to pop the minimum value from key2
-		res6, err := client.BZMPop([]string{key2}, api.MIN, float64(0.1))
+		res6, err := client.BZMPop([]string{key2}, options.MIN, float64(0.1))
 		assert.Nil(suite.T(), err)
 		assert.Equal(
 			suite.T(),
@@ -2925,7 +2935,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		)
 
 		// Pop the minimum value from multiple keys
-		res7, err := client.BZMPop([]string{key1, key2}, api.MIN, float64(0.1))
+		res7, err := client.BZMPop([]string{key1, key2}, options.MIN, float64(0.1))
 		assert.Nil(suite.T(), err)
 		assert.Equal(
 			suite.T(),
@@ -2943,7 +2953,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		suite.verifyOK(client.Set(key3, "value"))
 
 		// Popping a non-existent value in key3
-		res8, err := client.BZMPop([]string{key3}, api.MIN, float64(0.1))
+		res8, err := client.BZMPop([]string{key3}, options.MIN, float64(0.1))
 		assert.True(suite.T(), res8.IsNil())
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -2991,7 +3001,7 @@ func (suite *GlideTestSuite) TestLMove() {
 		nonExistentKey := "{key}-3" + uuid.NewString()
 		nonListKey := "{key}-4" + uuid.NewString()
 
-		res1, err := client.LMove(key1, key2, api.Left, api.Right)
+		res1, err := client.LMove(key1, key2, options.Left, options.Right)
 		assert.Equal(suite.T(), api.CreateNilStringResult(), res1)
 		assert.Nil(suite.T(), err)
 
@@ -3000,7 +3010,7 @@ func (suite *GlideTestSuite) TestLMove() {
 		assert.Equal(suite.T(), int64(4), res2)
 
 		// only source exists, only source elements gets popped, creates a list at nonExistingKey
-		res3, err := client.LMove(key1, nonExistentKey, api.Right, api.Left)
+		res3, err := client.LMove(key1, nonExistentKey, options.Right, options.Left)
 		assert.Equal(suite.T(), "four", res3.Value())
 		assert.Nil(suite.T(), err)
 
@@ -3009,7 +3019,7 @@ func (suite *GlideTestSuite) TestLMove() {
 		assert.Equal(suite.T(), []string{"one", "two", "three"}, res4)
 
 		// source and destination are the same, performing list rotation, "one" gets popped and added back
-		res5, err := client.LMove(key1, key1, api.Left, api.Left)
+		res5, err := client.LMove(key1, key1, options.Left, options.Left)
 		assert.Equal(suite.T(), "one", res5.Value())
 		assert.Nil(suite.T(), err)
 
@@ -3021,7 +3031,7 @@ func (suite *GlideTestSuite) TestLMove() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), res7)
 
-		res8, err := client.LMove(key1, key2, api.Right, api.Left)
+		res8, err := client.LMove(key1, key2, options.Right, options.Left)
 		assert.Equal(suite.T(), "three", res8.Value())
 		assert.Nil(suite.T(), err)
 
@@ -3035,7 +3045,7 @@ func (suite *GlideTestSuite) TestLMove() {
 		// source exists but is not a list type key
 		suite.verifyOK(client.Set(nonListKey, "value"))
 
-		res11, err := client.LMove(nonListKey, key1, api.Left, api.Left)
+		res11, err := client.LMove(nonListKey, key1, options.Left, options.Left)
 		assert.Equal(suite.T(), api.CreateNilStringResult(), res11)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -3043,7 +3053,7 @@ func (suite *GlideTestSuite) TestLMove() {
 		// destination exists but is not a list type key
 		suite.verifyOK(client.Set(nonListKey, "value"))
 
-		res12, err := client.LMove(key1, nonListKey, api.Left, api.Left)
+		res12, err := client.LMove(key1, nonListKey, options.Left, options.Left)
 		assert.Equal(suite.T(), api.CreateNilStringResult(), res12)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -3113,7 +3123,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 
 		suite.verifyOK(client.Set(key, value))
 
-		result, err := client.ExpireWithOptions(key, 2, api.HasNoExpiry)
+		result, err := client.ExpireWithOptions(key, 2, options.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), result)
 
@@ -3123,7 +3133,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "", resultGet.Value())
 
-		result, err = client.ExpireWithOptions(key, 1, api.HasNoExpiry)
+		result, err = client.ExpireWithOptions(key, 1, options.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), result)
 	})
@@ -3137,11 +3147,11 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasExistingExpiry() {
 
 		suite.verifyOK(client.Set(key, value))
 
-		resexp, err := client.ExpireWithOptions(key, 20, api.HasNoExpiry)
+		resexp, err := client.ExpireWithOptions(key, 20, options.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resexp)
 
-		resultExpire, err := client.ExpireWithOptions(key, 1, api.HasExistingExpiry)
+		resultExpire, err := client.ExpireWithOptions(key, 1, options.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire)
 
@@ -3161,11 +3171,11 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryGreaterThanCurrent()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(key, value))
 
-		resultExpire, err := client.ExpireWithOptions(key, 2, api.HasNoExpiry)
+		resultExpire, err := client.ExpireWithOptions(key, 2, options.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire)
 
-		resultExpire, err = client.ExpireWithOptions(key, 5, api.NewExpiryGreaterThanCurrent)
+		resultExpire, err = client.ExpireWithOptions(key, 5, options.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire)
 		time.Sleep(6 * time.Second)
@@ -3183,16 +3193,16 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryLessThanCurrent() {
 
 		suite.verifyOK(client.Set(key, value))
 
-		resultExpire, err := client.ExpireWithOptions(key, 10, api.HasNoExpiry)
+		resultExpire, err := client.ExpireWithOptions(key, 10, options.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire)
 
-		resultExpire, err = client.ExpireWithOptions(key, 5, api.NewExpiryLessThanCurrent)
+		resultExpire, err = client.ExpireWithOptions(key, 5, options.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
 
 		assert.True(suite.T(), resultExpire)
 
-		resultExpire, err = client.ExpireWithOptions(key, 15, api.NewExpiryGreaterThanCurrent)
+		resultExpire, err = client.ExpireWithOptions(key, 15, options.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
 
 		assert.True(suite.T(), resultExpire)
@@ -3213,13 +3223,13 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
 
 		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
 
-		resultExpire, err := client.ExpireAtWithOptions(key, futureTimestamp, api.HasNoExpiry)
+		resultExpire, err := client.ExpireAtWithOptions(key, futureTimestamp, options.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire)
 		resultExpireAt, err := client.ExpireAt(key, futureTimestamp)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireAt)
-		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, futureTimestamp+10, api.HasNoExpiry)
+		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, futureTimestamp+10, options.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), resultExpireWithOptions)
 	})
@@ -3237,7 +3247,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireAt)
 
-		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, futureTimestamp+10, api.HasExistingExpiry)
+		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, futureTimestamp+10, options.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions)
 	})
@@ -3257,7 +3267,11 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent
 		assert.True(suite.T(), resultExpireAt)
 
 		newFutureTimestamp := time.Now().Add(20 * time.Second).Unix()
-		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, newFutureTimestamp, api.NewExpiryGreaterThanCurrent)
+		resultExpireWithOptions, err := client.ExpireAtWithOptions(
+			key,
+			newFutureTimestamp,
+			options.NewExpiryGreaterThanCurrent,
+		)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions)
 	})
@@ -3277,7 +3291,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryLessThanCurrent() 
 		assert.True(suite.T(), resultExpireAt)
 
 		newFutureTimestamp := time.Now().Add(5 * time.Second).Unix()
-		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, newFutureTimestamp, api.NewExpiryLessThanCurrent)
+		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, newFutureTimestamp, options.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
@@ -3322,7 +3336,7 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
 
 		newExpire := 1000
 
-		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.HasExistingExpiry)
+		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), options.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
@@ -3343,7 +3357,7 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasNoExpiry() {
 
 		newExpire := 500
 
-		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.HasNoExpiry)
+		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), options.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
@@ -3369,7 +3383,7 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent(
 
 		newExpire := 1000
 
-		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.NewExpiryGreaterThanCurrent)
+		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), options.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
@@ -3395,7 +3409,7 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryLessThanCurrent() {
 
 		newExpire := 200
 
-		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.NewExpiryLessThanCurrent)
+		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), options.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
@@ -3435,7 +3449,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasNoExpiry() {
 		suite.verifyOK(client.Set(key, value))
 
 		timestamp := time.Now().Unix() * 1000
-		result, err := client.PExpireAtWithOptions(key, timestamp, api.HasNoExpiry)
+		result, err := client.PExpireAtWithOptions(key, timestamp, options.HasNoExpiry)
 
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), result)
@@ -3460,7 +3474,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasExistingExpiry() {
 		assert.True(suite.T(), resultExpire)
 		newExpire := time.Now().Unix()*1000 + 1000
 
-		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, api.HasExistingExpiry)
+		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, options.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
@@ -3486,7 +3500,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurren
 
 		newExpire := time.Now().UnixMilli() + 2000
 
-		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, api.NewExpiryGreaterThanCurrent)
+		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, options.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
@@ -3512,7 +3526,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent()
 
 		newExpire := time.Now().Unix()*1000 + 500
 
-		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, api.NewExpiryLessThanCurrent)
+		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, options.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
 
 		assert.True(suite.T(), resultExpireWithOptions)
@@ -3985,7 +3999,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 		nonExistentKey := "{key}-3" + uuid.NewString()
 		nonListKey := "{key}-4" + uuid.NewString()
 
-		res1, err := client.BLMove(key1, key2, api.Left, api.Right, float64(0.1))
+		res1, err := client.BLMove(key1, key2, options.Left, options.Right, float64(0.1))
 		assert.Equal(suite.T(), api.CreateNilStringResult(), res1)
 		assert.Nil(suite.T(), err)
 
@@ -3994,7 +4008,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 		assert.Equal(suite.T(), int64(4), res2)
 
 		// only source exists, only source elements gets popped, creates a list at nonExistingKey
-		res3, err := client.BLMove(key1, nonExistentKey, api.Right, api.Left, float64(0.1))
+		res3, err := client.BLMove(key1, nonExistentKey, options.Right, options.Left, float64(0.1))
 		assert.Equal(suite.T(), "four", res3.Value())
 		assert.Nil(suite.T(), err)
 
@@ -4003,7 +4017,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 		assert.Equal(suite.T(), []string{"one", "two", "three"}, res4)
 
 		// source and destination are the same, performing list rotation, "one" gets popped and added back
-		res5, err := client.BLMove(key1, key1, api.Left, api.Left, float64(0.1))
+		res5, err := client.BLMove(key1, key1, options.Left, options.Left, float64(0.1))
 		assert.Equal(suite.T(), "one", res5.Value())
 		assert.Nil(suite.T(), err)
 
@@ -4015,7 +4029,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), res7)
 
-		res8, err := client.BLMove(key1, key2, api.Right, api.Left, float64(0.1))
+		res8, err := client.BLMove(key1, key2, options.Right, options.Left, float64(0.1))
 		assert.Equal(suite.T(), "three", res8.Value())
 		assert.Nil(suite.T(), err)
 
@@ -4030,7 +4044,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 		// source exists but is not a list type key
 		suite.verifyOK(client.Set(nonListKey, "value"))
 
-		res11, err := client.BLMove(nonListKey, key1, api.Left, api.Left, float64(0.1))
+		res11, err := client.BLMove(nonListKey, key1, options.Left, options.Left, float64(0.1))
 		assert.Equal(suite.T(), api.CreateNilStringResult(), res11)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -4038,7 +4052,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 		// destination exists but is not a list type key
 		suite.verifyOK(client.Set(nonListKey, "value"))
 
-		res12, err := client.BLMove(key1, nonListKey, api.Left, api.Left, float64(0.1))
+		res12, err := client.BLMove(key1, nonListKey, options.Left, options.Left, float64(0.1))
 		assert.Equal(suite.T(), api.CreateNilStringResult(), res12)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -4505,7 +4519,11 @@ func (suite *GlideTestSuite) TestXRead() {
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), res.IsNil())
 
-		res, err = client.XAddWithOptions(key2, [][]string{{"k2_field1", "k2_value1"}}, options.NewXAddOptions().SetId("2-0"))
+		res, err = client.XAddWithOptions(
+			key2,
+			[][]string{{"k2_field1", "k2_value1"}},
+			options.NewXAddOptions().SetId("2-0"),
+		)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), res.IsNil())
 
@@ -4542,7 +4560,10 @@ func (suite *GlideTestSuite) TestXRead() {
 				WithAddress(&suite.clusterHosts[0]).
 				WithUseTLS(suite.tls))
 		}
-		read, err = testClient.XReadWithOptions(map[string]string{key1: "0-1"}, options.NewXReadOptions().SetBlock(1000))
+		read, err = testClient.XReadWithOptions(
+			map[string]string{key1: "0-1"},
+			options.NewXReadOptions().SetBlock(1000),
+		)
 		assert.Nil(suite.T(), err)
 		assert.Nil(suite.T(), read)
 
@@ -4686,8 +4707,8 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		// with NX & XX
-		onlyIfExistsOpts := options.NewZAddOptionsBuilder().SetConditionalChange(options.OnlyIfExists)
-		onlyIfDoesNotExistOpts := options.NewZAddOptionsBuilder().SetConditionalChange(options.OnlyIfDoesNotExist)
+		onlyIfExistsOpts := options.NewZAddOptions().SetConditionalChange(options.OnlyIfExists)
+		onlyIfDoesNotExistOpts := options.NewZAddOptions().SetConditionalChange(options.OnlyIfDoesNotExist)
 
 		res, err = client.ZAddWithOptions(key3, membersScoreMap, onlyIfExistsOpts)
 		assert.Nil(suite.T(), err)
@@ -4718,10 +4739,10 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 
 		membersScoreMap2["one"] = 10.0
 
-		gtOpts := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreGreaterThanCurrent)
-		ltOpts := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreLessThanCurrent)
-		gtOptsChanged, _ := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreGreaterThanCurrent).SetChanged(true)
-		ltOptsChanged, _ := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreLessThanCurrent).SetChanged(true)
+		gtOpts := options.NewZAddOptions().SetUpdateOptions(options.ScoreGreaterThanCurrent)
+		ltOpts := options.NewZAddOptions().SetUpdateOptions(options.ScoreLessThanCurrent)
+		gtOptsChanged, _ := options.NewZAddOptions().SetUpdateOptions(options.ScoreGreaterThanCurrent).SetChanged(true)
+		ltOptsChanged, _ := options.NewZAddOptions().SetUpdateOptions(options.ScoreLessThanCurrent).SetChanged(true)
 
 		res, err = client.ZAddWithOptions(key4, membersScoreMap2, gtOptsChanged)
 		assert.Nil(suite.T(), err)
@@ -4832,7 +4853,7 @@ func (suite *GlideTestSuite) TestZPopMin() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"one": float64(1)}, res2)
 
-		res3, err := client.ZPopMinWithOptions(key1, api.NewZPopOptions().SetCount(2))
+		res3, err := client.ZPopMinWithOptions(key1, options.NewZPopOptions().SetCount(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": float64(2), "three": float64(3)}, res3)
 
@@ -4863,7 +4884,7 @@ func (suite *GlideTestSuite) TestZPopMax() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"three": float64(3)}, res2)
 
-		res3, err := client.ZPopMaxWithOptions(key1, api.NewZPopOptions().SetCount(2))
+		res3, err := client.ZPopMaxWithOptions(key1, options.NewZPopOptions().SetCount(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": float64(2), "one": float64(1)}, res3)
 
@@ -5356,14 +5377,14 @@ func (suite *GlideTestSuite) TestZCount() {
 		assert.Equal(t, int64(3), res1)
 
 		// In range negative to positive infinity.
-		zCountRange := options.NewZCountRangeBuilder(
+		zCountRange := options.NewZCountRange(
 			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
 			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
 		)
 		zCountResult, err := client.ZCount(key1, zCountRange)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(3), zCountResult)
-		zCountRange = options.NewZCountRangeBuilder(
+		zCountRange = options.NewZCountRange(
 			options.NewInclusiveScoreBoundary(math.Inf(-1)),
 			options.NewInclusiveScoreBoundary(math.Inf(+1)),
 		)
@@ -5372,7 +5393,7 @@ func (suite *GlideTestSuite) TestZCount() {
 		assert.Equal(t, int64(3), zCountResult)
 
 		// In range 1 (exclusive) to 3 (inclusive)
-		zCountRange = options.NewZCountRangeBuilder(
+		zCountRange = options.NewZCountRange(
 			options.NewScoreBoundary(1, false),
 			options.NewScoreBoundary(3, true),
 		)
@@ -5381,7 +5402,7 @@ func (suite *GlideTestSuite) TestZCount() {
 		assert.Equal(t, int64(2), zCountResult)
 
 		// In range negative infinity to 3 (inclusive)
-		zCountRange = options.NewZCountRangeBuilder(
+		zCountRange = options.NewZCountRange(
 			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
 			options.NewScoreBoundary(3, true),
 		)
@@ -5390,7 +5411,7 @@ func (suite *GlideTestSuite) TestZCount() {
 		assert.Equal(t, int64(3), zCountResult)
 
 		// Incorrect range start > end
-		zCountRange = options.NewZCountRangeBuilder(
+		zCountRange = options.NewZCountRange(
 			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
 			options.NewInclusiveScoreBoundary(3),
 		)
@@ -5399,7 +5420,7 @@ func (suite *GlideTestSuite) TestZCount() {
 		assert.Equal(t, int64(0), zCountResult)
 
 		// Non-existing key
-		zCountRange = options.NewZCountRangeBuilder(
+		zCountRange = options.NewZCountRange(
 			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
 			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
 		)
@@ -5410,7 +5431,7 @@ func (suite *GlideTestSuite) TestZCount() {
 		// Key exists, but it is not a set
 		setResult, _ := client.Set(key2, "value")
 		assert.Equal(t, setResult, "OK")
-		zCountRange = options.NewZCountRangeBuilder(
+		zCountRange = options.NewZCountRange(
 			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
 			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
 		)
@@ -5533,7 +5554,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		// Scores come back as integers converted to a string when the fraction is zero.
 		assert.True(suite.T(), isSubset(charMapValues, resultValueSet))
 
-		opts := options.NewZScanOptionsBuilder().SetMatch("a")
+		opts := options.NewZScanOptions().SetMatch("a")
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), initialCursor, resCursor)
@@ -5568,21 +5589,21 @@ func (suite *GlideTestSuite) TestZScan() {
 		assert.True(suite.T(), isSubset(numMembers, resKeys))
 
 		// Test match pattern
-		opts = options.NewZScanOptionsBuilder().SetMatch("*")
+		opts = options.NewZScanOptions().SetMatch("*")
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
 		assert.NotEqual(suite.T(), initialCursor, resCursor)
 		assert.GreaterOrEqual(suite.T(), len(resCollection), defaultCount)
 
 		// test count
-		opts = options.NewZScanOptionsBuilder().SetCount(20)
+		opts = options.NewZScanOptions().SetCount(20)
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
 		assert.NotEqual(suite.T(), initialCursor, resCursor)
 		assert.GreaterOrEqual(suite.T(), len(resCollection), 20)
 
 		// test count with match, returns a non-empty array
-		opts = options.NewZScanOptionsBuilder().SetMatch("1*").SetCount(20)
+		opts = options.NewZScanOptions().SetMatch("1*").SetCount(20)
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
 		assert.NotEqual(suite.T(), initialCursor, resCursor)
@@ -5590,7 +5611,7 @@ func (suite *GlideTestSuite) TestZScan() {
 
 		// Test NoScores option for Redis 8.0.0+
 		if suite.serverVersion >= "8.0.0" {
-			opts = options.NewZScanOptionsBuilder().SetNoScores(true)
+			opts = options.NewZScanOptions().SetNoScores(true)
 			resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 			assert.NoError(suite.T(), err)
 			cursor, err := strconv.ParseInt(resCursor, 10, 64)
@@ -5614,13 +5635,13 @@ func (suite *GlideTestSuite) TestZScan() {
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
-		opts = options.NewZScanOptionsBuilder().SetMatch("test").SetCount(1)
+		opts = options.NewZScanOptions().SetMatch("test").SetCount(1)
 		_, _, err = client.ZScanWithOptions(stringKey, initialCursor, opts)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		// Negative count
-		opts = options.NewZScanOptionsBuilder().SetCount(-1)
+		opts = options.NewZScanOptions().SetCount(-1)
 		_, _, err = client.ZScanWithOptions(key1, "-1", opts)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -5977,7 +5998,12 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			invalidConsumer := "invalid-consumer-" + uuid.New().String()
 
 			suite.verifyOK(
-				client.XGroupCreateWithOptions(key, groupName, zeroStreamId, options.NewXGroupCreateOptions().SetMakeStream()),
+				client.XGroupCreateWithOptions(
+					key,
+					groupName,
+					zeroStreamId,
+					options.NewXGroupCreateOptions().SetMakeStream(),
+				),
 			)
 
 			command := []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
@@ -6241,7 +6267,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		deletedCount, err := client.Del([]string{key})
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), deletedCount)
-		optsReplace := api.NewRestoreOptionsBuilder().SetReplace()
+		optsReplace := options.NewRestoreOptions().SetReplace()
 		result_test1, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), optsReplace)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result_test1.Value())
@@ -6253,7 +6279,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		delete_test2, err := client.Del([]string{key})
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test2)
-		opts_test2 := api.NewRestoreOptionsBuilder().SetABSTTL()
+		opts_test2 := options.NewRestoreOptions().SetABSTTL()
 		result_test2, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), opts_test2)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result_test2.Value())
@@ -6265,7 +6291,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		delete_test3, err := client.Del([]string{key})
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test3)
-		opts_test3 := api.NewRestoreOptionsBuilder().SetEviction(api.FREQ, 10)
+		opts_test3 := options.NewRestoreOptions().SetEviction(options.FREQ, 10)
 		result_test3, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), opts_test3)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result_test3.Value())
@@ -6277,7 +6303,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		delete_test4, err := client.Del([]string{key})
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test4)
-		opts_test4 := api.NewRestoreOptionsBuilder().SetEviction(api.IDLETIME, 10)
+		opts_test4 := options.NewRestoreOptions().SetEviction(options.IDLETIME, 10)
 		result_test4, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), opts_test4)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result_test4.Value())
@@ -7407,7 +7433,7 @@ func (suite *GlideTestSuite) TestCopyWithOptions() {
 		suite.verifyOK(client.Set(key2, "World"))
 
 		// Test 1: Check the copy command with options
-		optsCopy := api.NewCopyOptionsBuilder().SetReplace()
+		optsCopy := options.NewCopyOptions().SetReplace()
 		resultCopy, err := client.CopyWithOptions(key, key2, optsCopy)
 		assert.Nil(t, err)
 		assert.True(t, resultCopy)
@@ -7848,7 +7874,7 @@ func (suite *GlideTestSuite) TestZInter() {
 
 		// intersection with scores
 		zinterWithScoresResult, err := client.ZInterWithScores(options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateSum),
+			options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithScoresResult)
@@ -7856,7 +7882,7 @@ func (suite *GlideTestSuite) TestZInter() {
 		// intersect results with max aggregate
 		zinterWithMaxAggregateResult, err := client.ZInterWithScores(
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateMax),
+			options.NewZInterOptions().SetAggregate(options.AggregateMax),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": 3.5}, zinterWithMaxAggregateResult)
@@ -7864,7 +7890,7 @@ func (suite *GlideTestSuite) TestZInter() {
 		// intersect results with min aggregate
 		zinterWithMinAggregateResult, err := client.ZInterWithScores(
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateMin),
+			options.NewZInterOptions().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": 2.0}, zinterWithMinAggregateResult)
@@ -7872,7 +7898,7 @@ func (suite *GlideTestSuite) TestZInter() {
 		// intersect results with sum aggregate
 		zinterWithSumAggregateResult, err := client.ZInterWithScores(
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateSum),
+			options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithSumAggregateResult)
@@ -7885,7 +7911,7 @@ func (suite *GlideTestSuite) TestZInter() {
 					{Key: key2, Weight: 2.0},
 				},
 			},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateSum),
+			options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": 11.0}, zinterWithWeightedKeysResult)
@@ -7893,14 +7919,14 @@ func (suite *GlideTestSuite) TestZInter() {
 		// non-existent key - empty intersection
 		zinterWithNonExistentKeyResult, err := client.ZInterWithScores(
 			options.KeyArray{Keys: []string{key1, key3}},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateSum),
+			options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), zinterWithNonExistentKeyResult)
 
 		// empty key list - request error
 		_, err = client.ZInterWithScores(options.KeyArray{Keys: []string{}},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateSum),
+			options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -7915,7 +7941,7 @@ func (suite *GlideTestSuite) TestZInter() {
 
 		_, err = client.ZInterWithScores(
 			options.KeyArray{Keys: []string{key1, key3}},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateSum),
+			options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -7960,7 +7986,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 
 		// Store the intersection of key1 and key2 in key4 with max aggregate
 		res, err = client.ZInterStoreWithOptions(key3, options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateMax),
+			options.NewZInterOptions().SetAggregate(options.AggregateMax),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res)
@@ -7972,7 +7998,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 
 		// Store the intersection of key1 and key2 in key5 with min aggregate
 		res, err = client.ZInterStoreWithOptions(key3, options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateMin),
+			options.NewZInterOptions().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res)
@@ -7984,7 +8010,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 
 		// Store the intersection of key1 and key2 in key6 with sum aggregate
 		res, err = client.ZInterStoreWithOptions(key3, options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateSum),
+			options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res)
@@ -8017,7 +8043,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 				{Key: key2, Weight: -2.0},
 			},
 		},
-			options.NewZInterOptionsBuilder().SetAggregate(options.AggregateMin),
+			options.NewZInterOptions().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res)
