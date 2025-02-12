@@ -258,69 +258,56 @@ Examples of bad command function names:
 - `hincrbyfloat`
 - `Sdiffstore`
 
-#### Function names for examples
 
-`pkgsite` is a program which generates documentation for Go projects.  To install and run it, execute the following:
-
-```bash
-# In the valkey-glide directory
-cd go
-go install golang.org/x/pkgsite/cmd/pkgsite@latest
-pkgsite -open .
-```
-
-In order for `pkgsite` to work properly, examples for API must be written in a very specific format. They should be located in one of the `*_test.go` files in `./api/` and follow this pattern: `Example<ClientType>_<FunctionName>()`. If we wanted to create an example for the `Get` command in `GlideClient`, we would name define our function as follows:
-
-```go
-func ExampleGlideClient_Get() {
-    // Example code here
-}
-```
-
-In cases where we want to show more than one example, we can add extra endings to the function names:
-
-```go
-func ExampleGlideClient_Get_KeyExists() {
-    // Example code here when the key exists
-}
-
-func ExampleGlideClient_Get_KeyNotExists() {
-    // Example code here when the key does not exist
-}
-```
-
-**Note: `ClientType` and `FunctionName` are CASE-SENSITIVE.**
 
 ### Documentation
 
 #### Adding links
 
-When adding links, surround the piece of text using square brackets and then put the link reference at the bottom of the comment block.
+When adding links, surround the piece of text using square brackets and then put the link reference at the bottom of the comment block. 
 
-For example, this links `valkey.io` with the proper reference:
+When creating links to other types, surround `<Package>.<Type>` with square brackets.
+
+For example, this links `valkey.io` and the `XPendingOptions` type with the proper reference:
 
 ```go
-// SInter gets the intersection of all the given sets.
-//
-// Note: When in cluster mode, all keys must map to the same hash slot.
+// Returns stream message summary information for pending messages matching a given range of IDs.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	keys - The keys of the sets to intersect.
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	opts - The options for the command. See [options.XPendingOptions] for details.
 //
 // Return value:
 //
-//	A `map[string]struct{}` containing members which are present in all given sets.
-//	If one or more sets do not exist, an empty collection will be returned.
+//  A slice of XPendingDetail structs, where each detail struct includes the following fields:
 //
-// [valkey.io]: https://valkey.io/commands/sinter/
+//	 Id - The ID of the pending message.
+//	 ConsumerName - The name of the consumer that fetched the message and has still to acknowledge it.
+//	 IdleTime - The time in milliseconds since the last time the message was delivered to the consumer.
+//	 DeliveryCount - The number of times this message was delivered.
+//
+// [valkey.io]: https://valkey.io/commands/xpending/
 ```
+
+#### Examples
+
+In the Go client, we have runnable examples in the `api/*_test.go` files to supplement the documentation.
+
+To run all examples, ensure ports `6379`, `7001`, `7002`, `7003`, `7004`, `7005`, `7006` are not being used, and then run the following:
+
+```bash
+make example-test
+```
+
+Examples in Go are treated as tests by the framework. They must compile and execute without error and should return an `OK` response when run with the `make example-test` or `go test` commands.
 
 #### Writing examples
 
-To write an example for the command, find its respective group of commands and add the example to that `*_test.go` file. For example, `ZAdd` is a command that belongs to `sorted_set_commands` so we would add the example to `sorted_set_commands_test.go`. See [function names for examples](#function-names-for-examples) to start.
+To write an example for the command, find its respective group of commands and add the example to that `*_test.go` file. For example, `ZAdd` is a command that belongs to `sorted_set_commands` so we would add the example to `sorted_set_commands_test.go`.
 
 According to which client you are working with, you can use `getExampleGlideClient()` or `getExampleGlideClusterClient()` for your examples.
 
@@ -340,29 +327,96 @@ func ExampleGlideClient_Get() {
 
     // Output: [expected result]
 }
+```
 
-// Full example
-func ExampleGlideClient_Get() {
+There can only be a single `Output:` directive in an example and it should be the last item in the example `func`. For examples with a single print statement, you should put the expected result on the same line as the `Output:` directive. For examples with multiple print statements, include the expected output from each print statments on separate comment lines after the `Output:` directive. For example:
+
+```go
+// Single-line example
+func ExampleGlideClient_Set() {
     var client *GlideClient = getExampleGlideClient() // example helper function
 
-    client.Set("my_key", "my_value")
-    result1, err := client.Get("my_key")
-    if err != nil {
-        fmt.Println("Glide example failed with an error: ", err)
-    }
-    fmt.Println(result.Value())
+    result, err := client.Set("my_key", "my_value")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
 
-    // Output: my_value
+	// Output: OK
+}
+
+// Multi-line example
+func ExampleGlideClient_Sort() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	result, err := client.LPush("key1", []string{"1", "3", "2", "4"})
+	result1, err := client.Sort("key1")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+	fmt.Println(result1)
+
+	// Output:
+	// 4
+	// [{1 false} {2 false} {3 false} {4 false}]
 }
 ```
 
-To run all examples, ensure ports `6379`, `7001`, `7002`, `7003`, `7004`, `7005`, `7006` are not being used, and then run the following:
+For complex return types, it may be difficult to understand a response with multiple nested maps and arrays. Consider outputing the response as formatted JSON or use multiple print statements to break down and test key parts of the response. For example:
 
-```bash
-make example-test
+```go
+func ExampleGlideClient_XPending() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+    // Setup here...
+
+	summary, err := client.XPending(key, group)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	jsonSummary, _ := json.Marshal(summary)
+	fmt.Println(string(jsonSummary))
+
+	// Output: {"NumOfMessages":1,"StartId":{},"EndId":{},"ConsumerMessages":[{"ConsumerName":"c12345","MessageCount":1}]}
+}
 ```
 
+#### Function names for examples
 
+`pkgsite` is a program which generates documentation for Go projects.  To install and run it, execute the following:
+
+```bash
+# In the valkey-glide directory
+cd go
+go install golang.org/x/pkgsite/cmd/pkgsite@latest
+pkgsite -open .
+```
+
+In order for `pkgsite` to work properly, examples for API must be written in a very specific format. They should be located in one of the `*_test.go` files in `./api/` and follow this pattern: `Example<ClientType>_<FunctionName>()`. If we wanted to create an example for the `Get` command in `GlideClient`, we would name define our function as follows:
+
+```go
+func ExampleGlideClient_Get() {
+    // Example code here
+}
+```
+
+In cases where we want to show more than one example, we can add extra endings to the function names. **Endings must begin with a lowercase letter:**
+
+```go
+// Bad: extension begins with upper case
+func ExampleGlideClient_Get_KeyExists() { ... }
+
+// Bad: extension begins with number
+func ExampleGlideClient_Get_1() { ... }
+
+// Good: extension begins with lower case letter
+func ExampleGlideClient_Get_one() { ... }
+
+// Better: extension begins with lower case letter and is descriptive
+func ExampleGlideClient_Get_keyIsNil { ... }
+```
+
+**Note: `ClientType` and `FunctionName` are CASE-SENSITIVE.**
 
 ### Recommended extensions for VS Code
 
