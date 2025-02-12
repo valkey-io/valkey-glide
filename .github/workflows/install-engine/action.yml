@@ -41,7 +41,8 @@ runs:
           run: |
               echo "Cloning and checking out Valkey ${{ inputs.engine-version }}"
               cd ~/
-              if [[ ! -d valkey ]]; then
+              if [[ -d valkey ]]; then
+                echo "Removing existing valkey directory..."
                 rm -fR valkey
               fi
               git clone https://github.com/valkey-io/valkey.git
