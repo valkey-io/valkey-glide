@@ -65,7 +65,7 @@ func (opts *JsonGetOptions) ToArgs() ([]string, error) {
 		args = append(args, noescapeKeyword)
 	}
 
-	if opts.paths != nil && len(opts.paths) > 0 {
+	if len(opts.paths) > 0 {
 		args = append(args, opts.paths...)
 	}
 	return args, err
