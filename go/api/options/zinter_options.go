@@ -7,7 +7,7 @@ type ZInterOptions struct {
 	aggregate Aggregate
 }
 
-func NewZInterOptionsBuilder() ZInterOptions {
+func NewZInterOptions() ZInterOptions {
 	return ZInterOptions{}
 }
 
@@ -19,7 +19,7 @@ func (options ZInterOptions) SetAggregate(aggregate Aggregate) ZInterOptions {
 
 func (options ZInterOptions) ToArgs() ([]string, error) {
 	if options.aggregate != "" {
-		return options.aggregate.ToArgs(), nil
+		return options.aggregate.ToArgs()
 	}
 
 	return []string{}, nil
