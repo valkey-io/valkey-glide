@@ -102,4 +102,6 @@ type SortedSetCommands interface {
 	ZUnion(keys options.KeyArray) ([]string, error)
 
 	ZUnionWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZUnionOptions) (map[string]float64, error)
+
+	ZLexCount(key string, rangeQuery *options.RangeByLex) (int64, error)
 }

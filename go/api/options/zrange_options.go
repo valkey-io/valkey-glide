@@ -190,6 +190,10 @@ func (rbl *RangeByLex) ToArgsRemRange() []string {
 	return []string{string(rbl.start), string(rbl.end)}
 }
 
+func (rbl *RangeByLex) ToArgsLexCount() []string {
+	return []string{string(rbl.start), string(rbl.end)}
+}
+
 // Query for `ZRangeWithScores` in [SortedSetCommands]
 //   - For range queries by index (rank), use `RangeByIndex`.
 //   - For range queries by score, use `RangeByScore`.
