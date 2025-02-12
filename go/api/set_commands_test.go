@@ -272,7 +272,7 @@ func ExampleGlideClient_SScanWithOptions() {
 	key := "my_set"
 	client.SAdd(key, []string{"member1", "member2", "item3"})
 	cursor := "0"
-	options := options.NewBaseScanOptionsBuilder().SetMatch("mem*")
+	options := options.NewBaseScanOptions().SetMatch("mem*")
 	result, nextCursor, err := client.SScanWithOptions(key, cursor, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)

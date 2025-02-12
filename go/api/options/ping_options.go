@@ -2,10 +2,6 @@
 
 package options
 
-import (
-	"github.com/valkey-io/valkey-glide/go/api/config"
-)
-
 // Optional arguments for `Ping` for standalone client
 type PingOptions struct {
 	Message string
@@ -14,18 +10,16 @@ type PingOptions struct {
 // Optional arguments for `Ping` for cluster client
 type ClusterPingOptions struct {
 	*PingOptions
-	// Specifies the routing configuration for the command.
-	// The client will route the command to the nodes defined by *Route*.
-	Route *config.Route
+	*RouteOption
 }
 
-func (opts *PingOptions) ToArgs() []string {
+func (opts *PingOptions) ToArgs() ([]string, error) {
 	if opts == nil {
-		return []string{}
+		return []string{}, nil
 	}
 	args := []string{}
 	if opts.Message != "" {
 		args = append(args, opts.Message)
 	}
-	return args
+	return args, nil
 }
