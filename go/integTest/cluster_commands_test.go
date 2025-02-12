@@ -298,3 +298,21 @@ func (suite *GlideTestSuite) TestEchoCluster() {
 		assert.Contains(t, strings.ToLower(messages), strings.ToLower("hello"))
 	}
 }
+
+func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
+	client := suite.defaultClusterClient()
+
+	// ConfigResetStat with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	suite.verifyOK(client.ConfigRewriteWithOptions(opts))
+
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigRewriteWithOptions(opts))
+
+	// default sections, multi node route
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigRewriteWithOptions(opts))
+}
