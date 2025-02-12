@@ -961,6 +961,28 @@ func ExampleGlideClient_ZUnion() {
 	// [one three two]
 }
 
+func ExampleGlideClusterClient_ZUnion() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	memberScoreMap1 := map[string]float64{
+		"one": 1.0,
+		"two": 2.0,
+	}
+	memberScoreMap2 := map[string]float64{
+		"two":   3.5,
+		"three": 3.0,
+	}
+
+	client.ZAdd("{key}1", memberScoreMap1)
+	client.ZAdd("{key}2", memberScoreMap2)
+
+	zUnionResult, _ := client.ZUnion(options.KeyArray{Keys: []string{"{key}1", "{key}2"}})
+	fmt.Println(zUnionResult)
+
+	// Output:
+	// [one three two]
+}
+
 func ExampleGlideClient_ZUnionWithScores() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
@@ -978,6 +1000,31 @@ func ExampleGlideClient_ZUnionWithScores() {
 
 	zUnionResult, _ := client.ZUnionWithScores(
 		options.KeyArray{Keys: []string{"key1", "key2"}},
+		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+	)
+	fmt.Println(zUnionResult)
+
+	// Output:
+	// map[one:1 three:3 two:5.5]
+}
+
+func ExampleGlideClusterClient_ZUnionWithScores() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	memberScoreMap1 := map[string]float64{
+		"one": 1.0,
+		"two": 2.0,
+	}
+	memberScoreMap2 := map[string]float64{
+		"two":   3.5,
+		"three": 3.0,
+	}
+
+	client.ZAdd("{key}1", memberScoreMap1)
+	client.ZAdd("{key}2", memberScoreMap2)
+
+	zUnionResult, _ := client.ZUnionWithScores(
+		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
 		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 	)
 	fmt.Println(zUnionResult)
