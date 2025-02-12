@@ -33,10 +33,10 @@ import {
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
+    CreateJsonBatchCommands,
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
-    JsonBatch,
     JsonBatchForArrCommands,
     parseEndpoints,
     validateTransactionResponse,
@@ -2337,7 +2337,7 @@ describe("Server Module Tests", () => {
                     ),
                 );
                 const clusterTransaction = new ClusterTransaction();
-                const expectedRes = await JsonBatch(clusterTransaction);
+                const expectedRes = await CreateJsonBatchCommands(clusterTransaction);
                 const result = await client.exec(clusterTransaction);
 
                 validateTransactionResponse(result, expectedRes);
