@@ -24,9 +24,10 @@ jobs:
             fail-fast: false
         env:
             PYTHON_ATTRIBUTIONS: "python/THIRD_PARTY_LICENSES_PYTHON"
-            NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
+            NODE_ATTRIBUTIONS: "node/"
             RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
             JAVA_ATTRIBUTIONS: "java/THIRD_PARTY_LICENSES_JAVA"
+            GO_ATTRIBUTES: "go/THIRD_PARTY_LICENSES_GO"
             INPUT_TARGET_BRANCH: ${{ github.event.inputs.branch_name }}
             EVENT_NAME: ${{ github.event_name }}
             HEAD_REF: ${{ github.head_ref }}
@@ -171,6 +172,11 @@ jobs:
               uses: ./.github/workflows/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/java"
+
+            - name: Run ORT tools for Go
+              uses: ./.github/workflows/run-ort-tools
+              with:
+                  folder_path: "${{ github.workspace }}/go"
 
               ### Get licenses ###
             - name: Retrieve licenses list
