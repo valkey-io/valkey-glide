@@ -6284,11 +6284,6 @@ func (client *baseClient) ZUnionWithScores(
 //
 //	The cardinality of the intersection of the sorted sets.
 //
-// Example:
-//
-//	res, err := client.ZInterCard([]string{"key1", "key2", "key3"})
-//	fmt.Println(res) // 3
-//
 // [valkey.io]: https://valkey.io/commands/zintercard/
 func (client *baseClient) ZInterCard(keys []string) (int64, error) {
 	return client.ZInterCardWithOptions(keys, nil)
@@ -6309,11 +6304,7 @@ func (client *baseClient) ZInterCard(keys []string) (int64, error) {
 //
 //	The cardinality of the intersection of the sorted sets.
 //
-// Example:
-//
-//	res, err := client.ZInterCardWithOptions([]string{"key1", "key2", "key3"},
-//		options.NewZInterCardOptionsBuilder().SetLimit(5))
-//	fmt.Println(res) // 3
+// [valkey.io]: https://valkey.io/commands/zintercard/
 func (client *baseClient) ZInterCardWithOptions(keys []string, options *options.ZInterCardOptions) (int64, error) {
 	args := append([]string{strconv.Itoa(len(keys))}, keys...)
 	if options != nil {
