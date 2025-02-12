@@ -2337,7 +2337,8 @@ describe("Server Module Tests", () => {
                     ),
                 );
                 const clusterTransaction = new ClusterTransaction();
-                const expectedRes = await CreateJsonBatchCommands(clusterTransaction);
+                const expectedRes =
+                    await CreateJsonBatchCommands(clusterTransaction);
                 const result = await client.exec(clusterTransaction);
 
                 validateTransactionResponse(result, expectedRes);
