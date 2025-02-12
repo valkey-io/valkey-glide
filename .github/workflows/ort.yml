@@ -248,7 +248,7 @@ jobs:
                   git config --global user.email "valkey-glide@lists.valkey.io"
                   git config --global user.name "ort-bot"
                   git checkout -b ${ORT_DIFF_BRANCH_NAME}
-                  git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTES
+                  git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS
                   git commit -m "Updated attribution files" -s
                   git push --set-upstream origin ${ORT_DIFF_BRANCH_NAME} -f
 
