@@ -22,6 +22,7 @@ permissions:
 jobs:
     load-platform-matrix:
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
         steps:
