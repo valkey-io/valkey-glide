@@ -16,11 +16,11 @@ type ListCommands interface {
 
 	LPos(key string, element string) (Result[int64], error)
 
-	LPosWithOptions(key string, element string, options *LPosOptions) (Result[int64], error)
+	LPosWithOptions(key string, element string, options LPosOptions) (Result[int64], error)
 
 	LPosCount(key string, element string, count int64) ([]int64, error)
 
-	LPosCountWithOptions(key string, element string, count int64, options *LPosOptions) ([]int64, error)
+	LPosCountWithOptions(key string, element string, count int64, options LPosOptions) ([]int64, error)
 
 	RPush(key string, elements []string) (int64, error)
 

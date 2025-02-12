@@ -13,8 +13,8 @@ type BaseScanOptions struct {
 	count int64
 }
 
-func NewBaseScanOptionsBuilder() *BaseScanOptions {
-	return &BaseScanOptions{}
+func NewBaseScanOptionsBuilder() BaseScanOptions {
+	return BaseScanOptions{}
 }
 
 /*
@@ -24,7 +24,7 @@ only a subset of the sorted set then there could be a case where the result is e
 items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
 that it will only fetch and match `10` items from the list.
 */
-func (scanOptions *BaseScanOptions) SetMatch(m string) *BaseScanOptions {
+func (scanOptions BaseScanOptions) SetMatch(m string) BaseScanOptions {
 	scanOptions.match = m
 	return scanOptions
 }
@@ -34,12 +34,12 @@ func (scanOptions *BaseScanOptions) SetMatch(m string) *BaseScanOptions {
 sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
 represent the results as compact single-allocation packed encoding.
 */
-func (scanOptions *BaseScanOptions) SetCount(c int64) *BaseScanOptions {
+func (scanOptions BaseScanOptions) SetCount(c int64) BaseScanOptions {
 	scanOptions.count = c
 	return scanOptions
 }
 
-func (opts *BaseScanOptions) ToArgs() ([]string, error) {
+func (opts BaseScanOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.match != "" {

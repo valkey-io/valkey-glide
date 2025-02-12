@@ -4289,7 +4289,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 			},
 		}, xreadgroup)
 
-		opts := options.NewXAutoClaimOptionsWithCount(1)
+		opts := options.NewXAutoClaimOptions().SetCount(1)
 		xautoclaim, err := client.XAutoClaimWithOptions(key, group, consumer, 0, "0-0", opts)
 		assert.NoError(suite.T(), err)
 		var deletedEntries []string
@@ -7010,11 +7010,9 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEnd() {
 
 		client.Set(key, value)
 
-		start := int64(1)
-		end := int64(5)
-		opts := &options.BitCountOptions{}
-		opts.SetStart(start)
-		opts.SetEnd(end)
+		opts := options.NewBitCountOptionsBuilder().
+			SetStart(1).
+			SetEnd(5)
 
 		result, err := client.BitCountWithOptions(key, opts)
 		assert.NoError(suite.T(), err)
@@ -7030,12 +7028,10 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndByte() {
 
 		client.Set(key, value)
 
-		start := int64(1)
-		end := int64(5)
-		opts := &options.BitCountOptions{}
-		opts.SetStart(start)
-		opts.SetEnd(end)
-		opts.SetBitmapIndexType(options.BYTE)
+		opts := options.NewBitCountOptionsBuilder().
+			SetStart(1).
+			SetEnd(5).
+			SetBitmapIndexType(options.BYTE)
 
 		result, err := client.BitCountWithOptions(key, opts)
 		assert.NoError(suite.T(), err)
@@ -7051,12 +7047,10 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
 
 		client.Set(key, value)
 
-		start := int64(1)
-		end := int64(5)
-		opts := &options.BitCountOptions{}
-		opts.SetStart(start)
-		opts.SetEnd(end)
-		opts.SetBitmapIndexType(options.BIT)
+		opts := options.NewBitCountOptionsBuilder().
+			SetStart(1).
+			SetEnd(5).
+			SetBitmapIndexType(options.BIT)
 
 		result, err := client.BitCountWithOptions(key, opts)
 		assert.NoError(suite.T(), err)
@@ -7212,7 +7206,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			consumer1,
 			int64(0),
 			[]string{streamid_6.Value()},
-			options.NewStreamClaimOptions().SetForce().SetRetryCount(99),
+			options.NewXClaimOptions().SetForce().SetRetryCount(99),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), map[string][][]string{streamid_6.Value(): {{"field6", "value6"}}}, claimResult)
@@ -7307,7 +7301,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		assert.Equal(suite.T(), []string{}, claimResult)
 
 		// non existent key causes a RequestError
-		claimOptions := options.NewStreamClaimOptions().SetIdleTime(1)
+		claimOptions := options.NewXClaimOptions().SetIdleTime(1)
 		_, err = client.XClaim(stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -7508,7 +7502,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			key,
 			options.NewStreamBoundary(streamId2.Value(), false),
 			positiveInfinity,
-			options.NewStreamRangeOptions().SetCount(1),
+			options.NewXRangeOptions().SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -7524,7 +7518,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			key,
 			positiveInfinity,
 			options.NewStreamBoundary(streamId2.Value(), false),
-			options.NewStreamRangeOptions().SetCount(1),
+			options.NewXRangeOptions().SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -7540,7 +7534,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			key,
 			negativeInfinity,
 			positiveInfinity,
-			options.NewStreamRangeOptions().SetCount(0),
+			options.NewXRangeOptions().SetCount(0),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrangeResult)
@@ -7549,7 +7543,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			key,
 			positiveInfinity,
 			negativeInfinity,
-			options.NewStreamRangeOptions().SetCount(-1),
+			options.NewXRangeOptions().SetCount(-1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrevrangeResult)

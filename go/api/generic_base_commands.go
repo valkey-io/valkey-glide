@@ -52,7 +52,7 @@ type GenericBaseCommands interface {
 
 	Restore(key string, ttl int64, value string) (Result[string], error)
 
-	RestoreWithOptions(key string, ttl int64, value string, option *RestoreOptions) (Result[string], error)
+	RestoreWithOptions(key string, ttl int64, value string, option RestoreOptions) (Result[string], error)
 
 	ObjectEncoding(key string) (Result[string], error)
 
@@ -66,19 +66,19 @@ type GenericBaseCommands interface {
 
 	Sort(key string) ([]Result[string], error)
 
-	SortWithOptions(key string, sortOptions *options.SortOptions) ([]Result[string], error)
+	SortWithOptions(key string, sortOptions options.SortOptions) ([]Result[string], error)
 
 	SortStore(key string, destination string) (int64, error)
 
-	SortStoreWithOptions(key string, destination string, sortOptions *options.SortOptions) (int64, error)
+	SortStoreWithOptions(key string, destination string, sortOptions options.SortOptions) (int64, error)
 
 	SortReadOnly(key string) ([]Result[string], error)
 
-	SortReadOnlyWithOptions(key string, sortOptions *options.SortOptions) ([]Result[string], error)
+	SortReadOnlyWithOptions(key string, sortOptions options.SortOptions) ([]Result[string], error)
 
 	Wait(numberOfReplicas int64, timeout int64) (int64, error)
 
 	Copy(source string, destination string) (bool, error)
 
-	CopyWithOptions(source string, destination string, option *CopyOptions) (bool, error)
+	CopyWithOptions(source string, destination string, option CopyOptions) (bool, error)
 }

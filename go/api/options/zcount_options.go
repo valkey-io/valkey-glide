@@ -14,10 +14,10 @@ type ZCountRange struct {
 }
 
 // Create a new Zcount range.
-func NewZCountRangeBuilder(min scoreBoundary, max scoreBoundary) *ZCountRange {
-	return &ZCountRange{min, max}
+func NewZCountRangeBuilder(min scoreBoundary, max scoreBoundary) ZCountRange {
+	return ZCountRange{min, max}
 }
 
-func (zCountRange *ZCountRange) ToArgs() ([]string, error) {
+func (zCountRange ZCountRange) ToArgs() ([]string, error) {
 	return []string{string(zCountRange.min), string(zCountRange.max)}, nil
 }
