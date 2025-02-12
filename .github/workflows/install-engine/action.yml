@@ -38,9 +38,9 @@ runs:
         - name: Prepare Valkey sources
           if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
           shell: bash
-          working-directory: ~
           run: |
               echo "Cloning and checking out Valkey ${{ inputs.engine-version }}"
+              cd ~/
               if [[ ! -d valkey ]]; then
                 rm -fR valkey
               fi
