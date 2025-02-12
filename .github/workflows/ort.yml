@@ -27,7 +27,7 @@ jobs:
             NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
             RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
             JAVA_ATTRIBUTIONS: "java/THIRD_PARTY_LICENSES_JAVA"
-            GO_ATTRIBUTES: "go/THIRD_PARTY_LICENSES_GO"
+            GO_ATTRIBUTIONS: "go/THIRD_PARTY_LICENSES_GO"
             INPUT_TARGET_BRANCH: ${{ github.event.inputs.branch_name }}
             EVENT_NAME: ${{ github.event_name }}
             HEAD_REF: ${{ github.head_ref }}
@@ -231,8 +231,8 @@ jobs:
                   cp node/ort_results/NOTICE_DEFAULT $NODE_ATTRIBUTIONS
                   cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
                   cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
-                  cp go/ort_results/NOTICE_DEFAULT $GO_ATTRIBUTES
-                  GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTES`
+                  cp go/ort_results/NOTICE_DEFAULT $GO_ATTRIBUTIONS
+                  GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS`
                   if [ -n "$GIT_DIFF" ]; then
                     echo "FOUND_DIFF=true" >> $GITHUB_ENV
                   else
