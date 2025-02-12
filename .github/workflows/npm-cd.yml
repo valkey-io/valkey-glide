@@ -166,12 +166,12 @@ jobs:
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
-                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  if [[ "${RELEASE_VERSION}" == *"rc"* ]]
                   then
-                    echo "This is a release candidate: ${GITHUB_REF:11}"
+                    echo "This is a release candidate: ${RELEASE_VERSION}"
                     export npm_tag="next"
                   else
-                    echo "This is a stable release: ${GITHUB_REF:11}"
+                    echo "This is a stable release: ${RELEASE_VERSION}"
                     export npm_tag="latest"
                   fi
                   echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
