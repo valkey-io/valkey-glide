@@ -24,7 +24,7 @@ jobs:
             fail-fast: false
         env:
             PYTHON_ATTRIBUTIONS: "python/THIRD_PARTY_LICENSES_PYTHON"
-            NODE_ATTRIBUTIONS: "node/"
+            NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
             RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
             JAVA_ATTRIBUTIONS: "java/THIRD_PARTY_LICENSES_JAVA"
             GO_ATTRIBUTES: "go/THIRD_PARTY_LICENSES_GO"
