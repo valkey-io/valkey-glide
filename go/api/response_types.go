@@ -179,6 +179,8 @@ func createClusterValue[T any](data any) ClusterValue[T] {
 	switch any(data).(type) {
 	case map[string]interface{}:
 		return createClusterMultiValue(data.(map[string]T))
+	case nil:
+		return createEmptyClusterValue[T]()
 	default:
 		fmt.Println(data.(T))
 		return createClusterSingleValue(data.(T))
