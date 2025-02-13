@@ -3868,26 +3868,6 @@ func (client *baseClient) ZRangeWithScores(
 //
 //	The number of elements in the resulting sorted set.
 //
-// For example:
-//
-//	client.ZAdd("my_sorted_set", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0})
-//
-//	// Retrieve and store all members of a sorted set in ascending order
-//	res1, err := client.ZRangeStore("my_dest", "my_sorted_set", options.NewRangeByIndexQuery(0, -1))
-//
-//	// Retrieve members within a score range in descending order
-//	query := options.NewRangeByScoreQuery(
-//	    options.NewScoreBoundary(3, false),
-//		options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
-//		SetReverse()
-//	res2, err := client.ZRange("my_dest", query)
-//	fmt.Println(res1)
-//	fmt.Println(res2)
-//
-//	// Output:
-//	// 3
-//	// [b a]
-//
 // [valkey.io]: https://valkey.io/commands/zrangestore/
 func (client *baseClient) ZRangeStore(
 	destination string,
@@ -4786,10 +4766,6 @@ func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeB
 //	A string representing a random member from the sorted set.
 //	If the sorted set does not exist or is empty, the response will be `nil`.
 //
-// Example:
-//
-//	member, err := client.ZRandMember("key1")
-//
 // [valkey.io]: https://valkey.io/commands/zrandmember/
 func (client *baseClient) ZRandMember(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.ZRandMember, []string{key})
@@ -4813,10 +4789,6 @@ func (client *baseClient) ZRandMember(key string) (Result[string], error) {
 //
 //	An array of members from the sorted set.
 //	If the sorted set does not exist or is empty, the response will be an empty array.
-//
-// Example:
-//
-//	members, err := client.ZRandMemberWithCount("key1", -5)
 //
 // [valkey.io]: https://valkey.io/commands/zrandmember/
 func (client *baseClient) ZRandMemberWithCount(key string, count int64) ([]string, error) {
@@ -4842,10 +4814,6 @@ func (client *baseClient) ZRandMemberWithCount(key string, count int64) ([]strin
 //	An array of `MemberAndScore` objects, which store member names and their respective scores.
 //	If the sorted set does not exist or is empty, the response will be an empty array.
 //
-// Example:
-//
-//	membersAndScores, err := client.ZRandMemberWithCountWithScores("key1", 5)
-//
 // [valkey.io]: https://valkey.io/commands/zrandmember/
 func (client *baseClient) ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error) {
 	result, err := client.executeCommand(C.ZRandMember, []string{key, utils.IntToString(count), options.WithScores})
@@ -4870,11 +4838,6 @@ func (client *baseClient) ZRandMemberWithCountWithScores(key string, count int64
 //
 //	An array of scores corresponding to `members`.
 //	If a member does not exist in the sorted set, the corresponding value in the list will be `nil`.
-//
-// Example:
-//
-//	result, err := client.ZMScore(key, []string{"member1", "non_existent_member", "member2"})
-//	result: [{1.0 false} {0 true} {2.0 false}]
 //
 // [valkey.io]: https://valkey.io/commands/zmscore/
 func (client *baseClient) ZMScore(key string, members []string) ([]Result[float64], error) {
@@ -5693,27 +5656,6 @@ func (client *baseClient) XRevRangeWithOptions(
 //
 //	A stream information for the given `key`. See the example for a sample response.
 //
-// Example:
-//
-//	infoBreef, err := client.XInfoStream(key)
-//	infoBreef:
-//	// map[string]any {
-//	// 	"entries-added" : 1,
-//	// 	"first-entry" : []any{
-//	// 		"1719877599564-0", []any{"some_field", "some_value", ...},
-//	// 	},
-//	// 	"groups" : 1,
-//	// 	"last-entry" : []any{
-//	// 		"1719877599564-1", []any{"some_field", "some_value", ...},
-//	// 	},
-//	// 	"last-generated-id" : "1719877599564-1",
-//	// 	"length" : 1,
-//	// 	"max-deleted-entry-id" : "0-0",
-//	// 	"radix-tree-keys" : 1,
-//	// 	"radix-tree-nodes" : 2,
-//	// 	"recorded-first-entry-id" : "1719877599564-1",
-//	// }
-//
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
 func (client *baseClient) XInfoStream(key string) (map[string]interface{}, error) {
 	result, err := client.executeCommand(C.XInfoStream, []string{key})
@@ -5735,53 +5677,6 @@ func (client *baseClient) XInfoStream(key string) (map[string]interface{}, error
 // Return value:
 //
 //	A detailed stream information for the given `key`. See the example for a sample response.
-//
-// Example:
-//
-//	options := options.NewXInfoStreamOptionsOptions().SetCount(5)
-//	infoFull, err := client.XInfoStreamWithOptions(key, options)
-//	infoFull:
-//	// map[string]any {
-//	// 	"entries" : []any{
-//	// 		"1719877599564-0", []any{"some_field", "some_value", ...},
-//	// 		...
-//	//  },
-//	// 	"entries-added" : 2,
-//	// 	"groups" : []any{
-//	// 		map[string]any {
-//	// 			"consumers" : []any{
-//	// 				map[string]any {
-//	// 					"active-time" : 1737592821596,
-//	// 					"name" : "consumer1",
-//	// 					"pel-count" : 1,
-//	// 					"pending" : []any{
-//	// 						[]any{ "1719877599564-0", 1737592821596, 1 },
-//	// 						...
-//	// 					},
-//	// 					"seen-time" : 1737592821596,
-//	// 				},
-//	// 			},
-//	// 			"entries-read" : 1,
-//	// 			"lag" : 1,
-//	// 			"last-delivered-id" : "1719877599564-0",
-//	// 			"name" : "group1"
-//	// 			"pel-count" : 1,
-//	// 			"pending" : []any{
-//	// 				[]any{ "1719877599564-0", "consumer1", 1737592821596, 1 },
-//	// 				...
-//	// 			},
-//	// 		},
-//	// 	},
-//	// 	"last-generated-id" : "1719877599564-1",
-//	// 	"length" : 2,
-//	// 	"max-deleted-entry-id" : "0-0",
-//	// 	"radix-tree-keys" : 1,
-//	// 	"radix-tree-nodes" : 2,
-//	// 	"recorded-first-entry-id" : "1719877599564-1",
-//	// }
-//
-//	// get info for the first consumer of the first group
-//	consumer := infoFull["groups"].([]any)[0].(map[string]any)["consumers"].([]any)[0]
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
 func (client *baseClient) XInfoStreamFullWithOptions(
@@ -5831,17 +5726,6 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 //	  - BitFieldOverflow controls the behavior of subsequent operations and returns
 //	    a result based on the specified overflow type (WRAP, SAT, FAIL).
 //
-// Example:
-//
-//	commands := []options.BitFieldSubCommands{
-//		options.BitFieldGet(options.SignedInt, 8, 16),
-//		options.BitFieldOverflow(options.SAT),
-//		options.NewBitFieldSet(options.UnsignedInt, 4, 0, 7),
-//	    options.BitFieldIncrBy(options.SignedInt, 5, 100, 1),
-//	}
-//	result, err := client.BitField("mykey", commands)
-//	result: [{0 false} {7 false} {15 false}]
-//
 // [valkey.io]: https://valkey.io/commands/bitfield/
 func (client *baseClient) BitField(key string, subCommands []options.BitFieldSubCommands) ([]Result[int64], error) {
 	args := make([]string, 0, 10)
@@ -5880,14 +5764,6 @@ func (client *baseClient) BitField(key string, subCommands []options.BitFieldSub
 //	Result from the executed GET subcommands.
 //	  - BitFieldGet returns the value in the binary representation of the string.
 //
-// Example:
-//
-//	 commands := []options.BitFieldROCommands{
-//		options.BitFieldGet(options.SignedInt, 8, 16),
-//	  }
-//	 result, err := client.BitFieldRO("mykey", commands)
-//	 result: [{42 false}]
-//
 // [valkey.io]: https://valkey.io/commands/bitfield_ro/
 func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCommands) ([]Result[int64], error) {
 	args := make([]string, 0, 10)
@@ -5915,11 +5791,6 @@ func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCo
 // A UNIX TIME and the amount of microseconds already elapsed in the current second.
 // The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
 //
-// For example:
-//
-//	result, err := client.Time()
-//	result: [{1737051660} {994688}]
-//
 // [valkey.io]: https://valkey.io/commands/time/
 func (client *baseClient) Time() ([]string, error) {
 	result, err := client.executeCommand(C.Time, []string{})
@@ -5945,11 +5816,6 @@ func (client *baseClient) Time() ([]string, error) {
 // Return value:
 //
 //	The resulting sorted set from the intersection.
-//
-// Example:
-//
-//	res, err := client.ZInter(options.NewKeyArray("key1", "key2", "key3"))
-//	fmt.Println(res) // []string{"member1", "member2", "member3"}
 //
 // [valkey.io]: https://valkey.io/commands/zinter/
 func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
@@ -5982,11 +5848,6 @@ func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
 // Return value:
 //
 //	A map of members to their scores.
-//
-// Example:
-//
-//	res, err := client.ZInterWithScores(options.NewZInterOptionsBuilder(options.NewKeyArray("key1", "key2", "key3")))
-//	fmt.Println(res) // map[member1:1.0 member2:2.0 member3:3.0]
 //
 // [valkey.io]: https://valkey.io/commands/zinter/
 func (client *baseClient) ZInterWithScores(
@@ -6026,15 +5887,6 @@ func (client *baseClient) ZInterWithScores(
 //	If the first `key` does not exist, it is treated as an empty sorted set, and the
 //	command returns an empty array.
 //
-// Example:
-//
-//	membersScores1 := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}
-//	membersScores2 := map[string]float64{"two": 2.0}
-//	zAddResult1, err := client.ZAdd("key1", membersScores1)
-//	zAddResult2, err := client.ZAdd("key2", membersScores2)
-//	zDiffResult, err := client.ZDiff([]string{"key1", "key2"})
-//	fmt.Println(zDiffResult) // Output: {"one", "three"}
-//
 // [valkey.io]: https://valkey.io/commands/zdiff/
 func (client *baseClient) ZDiff(keys []string) ([]string, error) {
 	args := append([]string{}, strconv.Itoa(len(keys)))
@@ -6060,15 +5912,6 @@ func (client *baseClient) ZDiff(keys []string) ([]string, error) {
 //	A `Map` of elements and their scores representing the difference between the sorted sets.
 //	If the first `key` does not exist, it is treated as an empty sorted set, and the
 //	command returns an empty `Map`.
-//
-// Example:
-//
-//	membersScores1 := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}
-//	membersScores2 := map[string]float64{"two": 2.0}
-//	zAddResult1, err := client.ZAdd("key1", membersScores1)
-//	zAddResult2, err := client.ZAdd("key2", membersScores2)
-//	zDiffResultWithScores, err := client.ZDiffWithScores([]string{"key1", "key2"})
-//	fmt.Println(zDiffResultWithScores) // Output: {"one": 1.0, "three": 3.0}
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
 func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, error) {
@@ -6099,15 +5942,6 @@ func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, er
 // Return value:
 //
 //	The number of members in the resulting sorted set stored at `destination`.
-//
-// Example:
-//
-//	membersScores1 := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}
-//	membersScores2 := map[string]float64{"two": 2.0}
-//	zAddResult1, err := client.ZAdd("key1", membersScores1)
-//	zAddResult2, err := client.ZAdd("key2", membersScores2)
-//	zDiffStoreResult, err := client.ZDiffStore("key4", []string{"key1", "key2"})
-//	fmt.Println(zDiffStoreResult) // Output: 2
 //
 // [valkey.io]: https://valkey.io/commands/zdiffstore/
 func (client *baseClient) ZDiffStore(destination string, keys []string) (int64, error) {
@@ -6142,11 +5976,6 @@ func (client *baseClient) ZDiffStore(destination string, keys []string) (int64, 
 //
 //	The number of elements in the resulting sorted set stored at <code>destination</code>.
 //
-// Example:
-//
-//	res, err := client.ZInterStore("destination", options.NewKeyArray("key1", "key2", "key3"))
-//	fmt.Println(res) // 3
-//
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error) {
 	return client.ZInterStoreWithOptions(destination, keysOrWeightedKeys, nil)
@@ -6175,11 +6004,6 @@ func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys opt
 // Return value:
 //
 //	The number of elements in the resulting sorted set stored at <code>destination</code>.
-//
-// Example:
-//
-//	res, err := client.ZInterStore("destination", options.NewZInterOptionsBuilder(options.NewKeyArray("key1", "key2", "key3")))
-//	fmt.Println(res) // 3
 //
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (client *baseClient) ZInterStoreWithOptions(

@@ -64,3 +64,42 @@ func ExampleGlideClient_BitCountWithOptions() {
 
 	// Output: 0
 }
+
+func ExampleGlideClient_BitField() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	commands := []options.BitFieldSubCommands{
+		options.NewBitFieldGet(options.SignedInt, 8, 16),
+		options.NewBitFieldOverflow(options.SAT),
+		options.NewBitFieldSet(options.UnsignedInt, 4, 0, 7),
+		options.NewBitFieldIncrBy(options.SignedInt, 5, 100, 1),
+	}
+	result, err := client.BitField("mykey", commands)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// output: [{0 false} {0 false} {1 false}]
+}
+
+func ExampleGlideClient_BitFieldRO() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	key := "mykey"
+
+	bfcommands := []options.BitFieldSubCommands{
+		options.NewBitFieldSet(options.UnsignedInt, 8, 0, 24),
+	}
+	client.BitField(key, bfcommands)
+
+	commands := []options.BitFieldROCommands{
+		options.NewBitFieldGet(options.UnsignedInt, 8, 0),
+	}
+	result, err := client.BitFieldRO(key, commands)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// output: [{24 false}]
+}
