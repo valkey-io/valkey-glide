@@ -1533,8 +1533,7 @@ func ExampleGlideClient_XRevRange() {
 	}
 	fmt.Println(response)
 
-	// TODO: This output is incorrect. It should be an slice since the values should be ordered.
-	// Output: map[12345-1:[[field1 value1]] 12345-2:[[field2 value2]]]
+	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
 }
 
 func ExampleGlideClusterClient_XRevRange() {
@@ -1554,8 +1553,7 @@ func ExampleGlideClusterClient_XRevRange() {
 	}
 	fmt.Println(response)
 
-	// TODO: This output is incorrect. It should be an slice since the values should be ordered.
-	// Output: map[12345-1:[[field1 value1]] 12345-2:[[field2 value2]]]
+	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
 }
 
 func ExampleGlideClient_XRevRangeWithOptions() {
@@ -1576,8 +1574,7 @@ func ExampleGlideClient_XRevRangeWithOptions() {
 	}
 	fmt.Println(response)
 
-	// TODO: This output is incorrect. It should be an slice since the values should be ordered.
-	// Output: map[12345-1:[[field1 value1]] 12345-2:[[field2 value2]]]
+	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
 }
 
 func ExampleGlideClusterClient_XRevRangeWithOptions() {
@@ -1598,6 +1595,5 @@ func ExampleGlideClusterClient_XRevRangeWithOptions() {
 	}
 	fmt.Println(response)
 
-	// TODO: This output is incorrect. It should be an slice since the values should be ordered.
-	// Output: map[12345-1:[[field1 value1]] 12345-2:[[field2 value2]]]
+	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
 }
