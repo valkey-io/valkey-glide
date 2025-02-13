@@ -43,8 +43,8 @@ type SortOptions struct {
 	GetPatterns []string
 }
 
-func NewSortOptions() SortOptions {
-	return SortOptions{
+func NewSortOptions() *SortOptions {
+	return &SortOptions{
 		OrderBy: ASC,   // Default order is ascending
 		IsAlpha: false, // Default is numeric sorting
 	}
@@ -54,19 +54,19 @@ func NewSortOptions() SortOptions {
 // Offset is the starting position of the range, zero based.
 // Count is the maximum number of elements to include in the range.
 // A negative count returns all elements from the offset.
-func (opts SortOptions) SetSortLimit(offset, count int64) SortOptions {
+func (opts *SortOptions) SetSortLimit(offset, count int64) *SortOptions {
 	opts.SortLimit = &SortLimit{Offset: offset, Count: count}
 	return opts
 }
 
 // OrderBy sets the order to sort by (ASC or DESC)
-func (opts SortOptions) SetOrderBy(order OrderBy) SortOptions {
+func (opts *SortOptions) SetOrderBy(order OrderBy) *SortOptions {
 	opts.OrderBy = order
 	return opts
 }
 
 // IsAlpha determines whether to sort lexicographically (true) or numerically (false)
-func (opts SortOptions) SetIsAlpha(isAlpha bool) SortOptions {
+func (opts *SortOptions) SetIsAlpha(isAlpha bool) *SortOptions {
 	opts.IsAlpha = isAlpha
 	return opts
 }
@@ -77,7 +77,7 @@ func (opts SortOptions) SetIsAlpha(isAlpha bool) SortOptions {
 // contains IDs of objects, byPattern can be used to sort these IDs based on an
 // attribute of the objects, like their weights or timestamps.
 // Supported in cluster mode since Valkey version 8.0 and above.
-func (opts SortOptions) SetByPattern(byPattern string) SortOptions {
+func (opts *SortOptions) SetByPattern(byPattern string) *SortOptions {
 	opts.ByPattern = byPattern
 	return opts
 }
@@ -94,13 +94,13 @@ func (opts SortOptions) SetByPattern(byPattern string) SortOptions {
 // be used to include the actual element from key being sorted. If not provided, only
 // the sorted elements themselves are returned.
 // Supported in cluster mode since Valkey version 8.0 and above.
-func (opts SortOptions) AddGetPattern(getPattern string) SortOptions {
+func (opts *SortOptions) AddGetPattern(getPattern string) *SortOptions {
 	opts.GetPatterns = append(opts.GetPatterns, getPattern)
 	return opts
 }
 
 // ToArgs creates the arguments to be used in SORT and SORT_RO commands.
-func (opts SortOptions) ToArgs() ([]string, error) {
+func (opts *SortOptions) ToArgs() ([]string, error) {
 	var args []string
 
 	if opts.SortLimit != nil {

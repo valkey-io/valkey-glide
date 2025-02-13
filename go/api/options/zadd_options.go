@@ -18,35 +18,35 @@ type ZAddOptions struct {
 	member            string
 }
 
-func NewZAddOptions() ZAddOptions {
-	return ZAddOptions{}
+func NewZAddOptions() *ZAddOptions {
+	return &ZAddOptions{}
 }
 
 // `conditionalChange` defines conditions for updating or adding elements with `ZADD` command.
-func (options ZAddOptions) SetConditionalChange(c ConditionalSet) ZAddOptions {
+func (options *ZAddOptions) SetConditionalChange(c ConditionalSet) *ZAddOptions {
 	options.conditionalChange = c
 	return options
 }
 
 // `updateOptions` specifies conditions for updating scores with zadd command.
-func (options ZAddOptions) SetUpdateOptions(u UpdateOptions) ZAddOptions {
+func (options *ZAddOptions) SetUpdateOptions(u UpdateOptions) *ZAddOptions {
 	options.updateOptions = u
 	return options
 }
 
 // `Changed` changes the return value from the number of new elements added to the total number of elements changed.
-func (options ZAddOptions) SetChanged(ch bool) (ZAddOptions, error) {
+func (options *ZAddOptions) SetChanged(ch bool) (*ZAddOptions, error) {
 	if options.incr {
-		return ZAddOptions{}, errors.New("changed cannot be set when incr is true")
+		return nil, errors.New("changed cannot be set when incr is true")
 	}
 	options.changed = ch
 	return options, nil
 }
 
 // `INCR` sets the increment value to use when incr is true.
-func (options ZAddOptions) SetIncr(incr bool, increment float64, member string) (ZAddOptions, error) {
+func (options *ZAddOptions) SetIncr(incr bool, increment float64, member string) (*ZAddOptions, error) {
 	if options.changed {
-		return ZAddOptions{}, errors.New("incr cannot be set when changed is true")
+		return nil, errors.New("incr cannot be set when changed is true")
 	}
 	options.incr = incr
 	options.increment = increment
@@ -55,7 +55,7 @@ func (options ZAddOptions) SetIncr(incr bool, increment float64, member string) 
 }
 
 // `ToArgs` converts the options to a list of arguments.
-func (opts ZAddOptions) ToArgs() ([]string, error) {
+func (opts *ZAddOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 

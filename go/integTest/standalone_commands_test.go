@@ -291,7 +291,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 		SetOrderBy(options.ASC).
 		SetIsAlpha(false)
 
-	sortResult, err := client.SortReadOnlyWithOptions(key, options)
+	sortResult, err := client.SortReadOnlyWithOptions(key, *options)
 
 	assert.Nil(suite.T(), err)
 	resultList := []api.Result[string]{
@@ -320,7 +320,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 		SetIsAlpha(false).
 		AddGetPattern("object_*")
 
-	sortResult, err := client.SortReadOnlyWithOptions(key, options)
+	sortResult, err := client.SortReadOnlyWithOptions(key, *options)
 
 	assert.Nil(suite.T(), err)
 
@@ -356,7 +356,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 		AddGetPattern("object_*").
 		AddGetPattern("#")
 
-	sortResult, err := client.SortReadOnlyWithOptions(key, options)
+	sortResult, err := client.SortReadOnlyWithOptions(key, *options)
 
 	assert.Nil(suite.T(), err)
 

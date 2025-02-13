@@ -3109,7 +3109,7 @@ func (client *baseClient) Renamenx(key string, newKey string) (bool, error) {
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (client *baseClient) XAdd(key string, values [][]string) (Result[string], error) {
-	return client.XAddWithOptions(key, values, options.NewXAddOptions())
+	return client.XAddWithOptions(key, values, *options.NewXAddOptions())
 }
 
 // Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
@@ -3174,7 +3174,7 @@ func (client *baseClient) XAddWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error) {
-	return client.XReadWithOptions(keysAndIds, options.NewXReadOptions())
+	return client.XReadWithOptions(keysAndIds, *options.NewXReadOptions())
 }
 
 // Reads entries from the given streams.
@@ -3199,20 +3199,10 @@ func (client *baseClient) XReadWithOptions(
 	keysAndIds map[string]string,
 	opts options.XReadOptions,
 ) (map[string]map[string][][]string, error) {
-	args := make([]string, 0, 5+2*len(keysAndIds))
-	optionArgs, _ := opts.ToArgs()
-	args = append(args, optionArgs...)
-
-	// Note: this loop iterates in an indeterminate order, but it is OK for that case
-	keys := make([]string, 0, len(keysAndIds))
-	values := make([]string, 0, len(keysAndIds))
-	for key := range keysAndIds {
-		keys = append(keys, key)
-		values = append(values, keysAndIds[key])
+	args, err := createStreamCommandArgs(make([]string, 0, 5+2*len(keysAndIds)), keysAndIds, &opts)
+	if err != nil {
+		return nil, err
 	}
-	args = append(args, options.StreamsKeyword)
-	args = append(args, keys...)
-	args = append(args, values...)
 
 	result, err := client.executeCommand(C.XRead, args)
 	if err != nil {
@@ -3246,7 +3236,7 @@ func (client *baseClient) XReadGroup(
 	consumer string,
 	keysAndIds map[string]string,
 ) (map[string]map[string][][]string, error) {
-	return client.XReadGroupWithOptions(group, consumer, keysAndIds, options.NewXReadGroupOptions())
+	return client.XReadGroupWithOptions(group, consumer, keysAndIds, *options.NewXReadGroupOptions())
 }
 
 // Reads entries from the given streams owned by a consumer group.
@@ -3275,7 +3265,7 @@ func (client *baseClient) XReadGroupWithOptions(
 	keysAndIds map[string]string,
 	opts options.XReadGroupOptions,
 ) (map[string]map[string][][]string, error) {
-	args, err := createStreamCommandArgs([]string{options.GroupKeyword, group, consumer}, keysAndIds, opts)
+	args, err := createStreamCommandArgs([]string{options.GroupKeyword, group, consumer}, keysAndIds, &opts)
 	if err != nil {
 		return nil, err
 	}
@@ -3377,7 +3367,7 @@ func (client *baseClient) ZAddWithOptions(
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) zAddIncrBase(key string, opts options.ZAddOptions) (Result[float64], error) {
+func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (Result[float64], error) {
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return CreateNilFloat64Result(), err
@@ -3737,9 +3727,7 @@ func (client *baseClient) BZMPop(
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
 //	count         - The maximum number of popped elements.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
-//
-// indefinitely.
+//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 //	opts          - Pop options, see [options.ZMPopOptions].
 //
@@ -4097,7 +4085,7 @@ func (client *baseClient) XAutoClaim(
 	minIdleTime int64,
 	start string,
 ) (XAutoClaimResponse, error) {
-	return client.XAutoClaimWithOptions(key, group, consumer, minIdleTime, start, options.NewXAutoClaimOptions())
+	return client.XAutoClaimWithOptions(key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
@@ -4185,7 +4173,7 @@ func (client *baseClient) XAutoClaimJustId(
 	minIdleTime int64,
 	start string,
 ) (XAutoClaimJustIdResponse, error) {
-	return client.XAutoClaimJustIdWithOptions(key, group, consumer, minIdleTime, start, options.NewXAutoClaimOptions())
+	return client.XAutoClaimJustIdWithOptions(key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
@@ -4429,7 +4417,7 @@ func (client *baseClient) XPendingWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupCreate(key string, group string, id string) (string, error) {
-	return client.XGroupCreateWithOptions(key, group, id, options.NewXGroupCreateOptions())
+	return client.XGroupCreateWithOptions(key, group, id, *options.NewXGroupCreateOptions())
 }
 
 // Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
@@ -4616,7 +4604,7 @@ func (client *baseClient) XGroupDestroy(key string, group string) (bool, error) 
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-setid/
 func (client *baseClient) XGroupSetId(key string, group string, id string) (string, error) {
-	return client.XGroupSetIdWithOptions(key, group, id, options.NewXGroupSetIdOptionsOptions())
+	return client.XGroupSetIdWithOptions(key, group, id, *options.NewXGroupSetIdOptionsOptions())
 }
 
 // Sets the last delivered ID for a consumer group.
@@ -5325,7 +5313,7 @@ func (client *baseClient) XClaim(
 	minIdleTime int64,
 	ids []string,
 ) (map[string][][]string, error) {
-	return client.XClaimWithOptions(key, group, consumer, minIdleTime, ids, options.NewXClaimOptions())
+	return client.XClaimWithOptions(key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
 }
 
 // Changes the ownership of a pending message.
@@ -5394,7 +5382,7 @@ func (client *baseClient) XClaimJustId(
 	minIdleTime int64,
 	ids []string,
 ) ([]string, error) {
-	return client.XClaimJustIdWithOptions(key, group, consumer, minIdleTime, ids, options.NewXClaimOptions())
+	return client.XClaimJustIdWithOptions(key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
 }
 
 // Changes the ownership of a pending message. This function returns an `array` with
@@ -5528,7 +5516,7 @@ func (client *baseClient) XRange(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 ) ([]XRangeResponse, error) {
-	return client.XRangeWithOptions(key, start, end, options.NewXRangeOptions())
+	return client.XRangeWithOptions(key, start, end, *options.NewXRangeOptions())
 }
 
 // Returns stream entries matching a given range of IDs.
@@ -5597,7 +5585,7 @@ func (client *baseClient) XRevRange(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 ) ([]XRangeResponse, error) {
-	return client.XRevRangeWithOptions(key, start, end, options.NewXRangeOptions())
+	return client.XRevRangeWithOptions(key, start, end, *options.NewXRangeOptions())
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -5880,7 +5868,7 @@ func (client *baseClient) ZInterWithScores(
 //
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error) {
-	return client.ZInterStoreWithOptions(destination, keysOrWeightedKeys, options.NewZInterOptions())
+	return client.ZInterStoreWithOptions(destination, keysOrWeightedKeys, *options.NewZInterOptions())
 }
 
 // Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`

@@ -12,22 +12,22 @@ type ZMPopOptions struct {
 	countIsSet bool
 }
 
-func NewZMPopOptions() ZMPopOptions {
-	return ZMPopOptions{}
+func NewZMPopOptions() *ZMPopOptions {
+	return &ZMPopOptions{}
 }
 
 // Set the count.
-func (zmpo ZMPopOptions) SetCount(count int64) ZMPopOptions {
+func (zmpo *ZMPopOptions) SetCount(count int64) *ZMPopOptions {
 	zmpo.count = count
 	zmpo.countIsSet = true
 	return zmpo
 }
 
-func (zmpo ZMPopOptions) ToArgs() ([]string, error) {
+func (zmpo *ZMPopOptions) ToArgs() ([]string, error) {
 	var args []string
 
 	if zmpo.countIsSet {
-		args = append(args, "COUNT", utils.IntToString(zmpo.count))
+		args = append(args, CountKeyword, utils.IntToString(zmpo.count))
 	}
 
 	return args, nil
