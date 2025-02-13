@@ -76,7 +76,7 @@ func Get(client api.BaseClient, key string) (string, error) {
 }
 
 func GetWithOptions(client api.BaseClient, key string, options *options.JsonGetOptions) (string, error) {
-	args := []string{JsonSet, key}
+	args := []string{JsonGet, key}
 	optionalArgs, err := options.ToArgs()
 	if err != nil {
 		return api.DefaultStringResponse, err
