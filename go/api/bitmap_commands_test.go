@@ -53,6 +53,7 @@ func ExampleGlideClusterClient_GetBit() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
 	client.SetBit("my_key", 1, 1)
+	client.SetBit("my_key", 1, 1)
 	result, err := client.GetBit("my_key", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)

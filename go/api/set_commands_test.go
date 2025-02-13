@@ -52,7 +52,7 @@ func ExampleGlideClusterClient_SRem() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(key, []string{"member1", "member2", "member3", "member4", "member5"})
 	result, err := client.SRem(key, []string{"member1", "member2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
