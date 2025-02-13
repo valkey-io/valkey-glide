@@ -56,6 +56,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
+**Valkey Server and CLI**
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
+
 #### Building and installation steps
 
 Before starting this step, make sure you've installed all software requirments.
@@ -190,14 +193,6 @@ After applying changes in client code you need to restart the shell.
 It has command history and bash-like search (`Ctrl+R`).
 
 Shell hangs on exit (`Ctrl+D`) if you don't close the clients. Use `Ctrl+C` to kill it and/or close clients before exit.
-
-### Submodules
-
-After pulling new changes, ensure that you update the submodules by running the following command:
-
-```bash
-git submodule update
-```
 
 ### Linters
 
