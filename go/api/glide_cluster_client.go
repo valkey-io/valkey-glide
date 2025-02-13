@@ -372,3 +372,34 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 	}
 	return createClusterSingleValue[string](data), nil
 }
+
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM
+// The command will be routed a random node, unless `Route` in `routeOptions` is provided.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	OK to confirm that the statistics were successfully reset.
+//
+// Example:
+//
+//	route := config.Route(config.RandomRoute)
+//	opts = options.RouteOption{Route: route}
+//	response, err = client.ConfigResetStatWithOptions(opts)
+//	if err != nil {
+//	  // handle error
+//	}
+//	fmt.Println(response) // Output: OK
+//
+// [valkey.io]: https://valkey.io/commands/config-resetstat/
+func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteOption) (string, error) {
+	response, err := client.executeCommandWithRoute(C.ConfigResetStat, []string{}, opts.Route)
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
