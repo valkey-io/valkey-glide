@@ -302,3 +302,27 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	}
 	return handleStringResponse(result)
 }
+
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM
+//
+// Return value:
+//
+//	OK to confirm that the statistics were successfully reset.
+//
+// Example:
+//
+//	response, err = client.ConfigResetStat()
+//	if err != nil {
+//	  // handle error
+//	}
+//	fmt.Println(response) // Output: OK
+//
+// [valkey.io]: https://valkey.io/commands/config-resetstat/
+func (client *GlideClient) ConfigResetStat() (string, error) {
+	response, err := client.executeCommand(C.ConfigResetStat, []string{})
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(response)
+
+}
