@@ -2,6 +2,11 @@
 
 package api
 
+import (
+	"fmt"
+	"reflect"
+)
+
 // A value to return alongside with error in case if command failed
 var (
 	defaultFloatResponse  float64
@@ -169,6 +174,8 @@ func (value ClusterValue[T]) IsEmpty() bool {
 }
 
 func createClusterValue[T any](data any) ClusterValue[T] {
+	fmt.Println("createClusterValue=")
+	fmt.Println(reflect.TypeOf(data))
 	switch any(data).(type) {
 	case map[string]interface{}:
 		return createClusterMultiValue(data.(map[string]T))
