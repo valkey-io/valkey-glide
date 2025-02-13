@@ -3078,7 +3078,7 @@ func (client *baseClient) Rename(key string, newKey string) (string, error) {
 //	`true` if key was renamed to `newKey`, `false` if `newKey` already exists.
 //
 // [valkey.io]: https://valkey.io/commands/renamenx/
-func (client *baseClient) Renamenx(key string, newKey string) (bool, error) {
+func (client *baseClient) RenameNX(key string, newKey string) (bool, error) {
 	result, err := client.executeCommand(C.RenameNX, []string{key, newKey})
 	if err != nil {
 		return defaultBoolResponse, err

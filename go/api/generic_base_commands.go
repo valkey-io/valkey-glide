@@ -46,7 +46,7 @@ type GenericBaseCommands interface {
 
 	Rename(key string, newKey string) (string, error)
 
-	Renamenx(key string, newKey string) (bool, error)
+	RenameNX(key string, newKey string) (bool, error)
 
 	Persist(key string) (bool, error)
 
