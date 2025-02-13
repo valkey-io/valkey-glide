@@ -19,9 +19,9 @@ func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap
 	fmt.Println("type===")
 	fmt.Println(reflect.TypeOf(client))
 	switch client.(type) {
-	case api.GlideClient:
+	case *api.GlideClient:
 		return (client.(*api.GlideClient)).CustomCommand(args)
-	case api.GlideClusterClient:
+	case *api.GlideClusterClient:
 		result, err := (client.(*api.GlideClusterClient)).CustomCommand(args)
 		if returnMap {
 			return result.MultiValue(), err
