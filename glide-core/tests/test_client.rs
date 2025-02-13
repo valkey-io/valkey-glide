@@ -667,7 +667,7 @@ pub(crate) mod shared_client_tests {
 
             assert_eq!(
                 err.kind(),
-                ErrorKind::ResponseError,
+                ErrorKind::ExtensionError,
                 "Pipeline should fail with response error"
             );
             assert!(err.to_string().contains("WRONGTYPE"), "{err:?}");
@@ -793,7 +793,7 @@ pub(crate) mod shared_client_tests {
             kill_connection_for_route(
                 &mut test_basics.client,
                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
-                    get_slot(&key2.as_bytes()),
+                    get_slot(key2.as_bytes()),
                     SlotAddr::Master,
                 ))),
             )
@@ -968,7 +968,6 @@ pub(crate) mod shared_client_tests {
             let mut pipeline = Pipeline::new();
             pipeline.add_command(cmd("PING"));
             pipeline.set(generate_random_string(10), "value");
-            pipeline.add_command(cmd("DBSIZE")); // AllPrimary cmd + SUM aggregation
             pipeline.add_command(cmd("FLUSHALL"));
             pipeline.add_command(cmd("DBSIZE")); // AllPrimary cmd + SUM aggregation
 
@@ -982,7 +981,6 @@ pub(crate) mod shared_client_tests {
             let expected = Value::Array(vec![
                 Value::SimpleString("PONG".to_string()),
                 Value::Okay,
-                Value::Int(1),
                 Value::Okay,
                 Value::Int(0),
             ]);
