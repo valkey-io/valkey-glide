@@ -1,6 +1,6 @@
 # GO wrapper
 
-The GO wrapper is currently a **public preview.**
+The Valkey GLIDE Go Wrapper is currently in **public preview.** Please refer to [this page](https://pkg.go.dev/github.com/valkey-io/valkey-glide/go/api) for available commands.
 
 # Valkey GLIDE
 
@@ -12,6 +12,18 @@ Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valk
 
 # Getting Started - GO Wrapper
 
+## System Requirements
+
+The release of Valkey GLIDE was tested on the following platforms:
+
+Linux:
+
+- Ubuntu 24.04.1 (x86_64 and aarch64)
+
+macOS:
+
+- macOS 14.7 (Apple silicon/aarch_64)
+
 ## GO supported versions
 
 | Go Version |
@@ -21,9 +33,9 @@ Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valk
 
 ## Installation and Setup
 
-To install Valkey GLIDE in `go`, follow these steps:
+To install Valkey GLIDE in your Go project, follow these steps:
 
-1. Open your terminal.
+1. Open your terminal in your project directory.
 2. Execute the command below:
     ```bash
     $ go get github.com/valkey-io/valkey-glide/go
