@@ -36,11 +36,12 @@ macOS:
 To install Valkey GLIDE in your Go project, follow these steps:
 
 1. Open your terminal in your project directory.
-2. Execute the command below:
+2. Execute the commands below:
     ```bash
     $ go get github.com/valkey-io/valkey-glide/go
+    $ go mod tidy
     ```
-3. After installation, you can start up a Redis or Valkey server and run one of the examples in [Basic Examples](#basic-examples).
+3. After installation, you can start up a Valkey server and run one of the examples in [Basic Examples](#basic-examples).
 
 
 ## Basic Examples
@@ -72,7 +73,8 @@ func main() {
 
 	res, err := client.Ping()
 	if err != nil {
-		log.Fatal("Glide example failed with an error: ", err)
+        fmt.Println("There was an error: ", err)
+        return
 	}
 	fmt.Println(res) // PONG
 
@@ -106,7 +108,8 @@ func main() {
 
 	res, err := client.Ping()
 	if err != nil {
-		log.Fatal("Glide example failed with an error: ", err)
+        fmt.Println("There was an error: ", err)
+        return
 	}
 	fmt.Println(res) // PONG
 
