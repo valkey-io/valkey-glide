@@ -712,3 +712,117 @@ func ExampleGlideClient_ZUnionWithScores() {
 	// Output:
 	// map[one:1 three:3 two:5.5]
 }
+
+func ExampleGlideClient_ZUnionStore() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	memberScoreMap1 := map[string]float64{
+		"one": 1.0,
+		"two": 2.0,
+	}
+	memberScoreMap2 := map[string]float64{
+		"two":   3.5,
+		"three": 3.0,
+	}
+
+	client.ZAdd("key1", memberScoreMap1)
+	client.ZAdd("key2", memberScoreMap2)
+
+	zUnionStoreResult, err := client.ZUnionStore(
+		"dest",
+		options.KeyArray{Keys: []string{"key1", "key2"}},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(zUnionStoreResult)
+
+	// Output: 3
+}
+
+func ExampleGlideClusterClient_ZUnionStore() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	memberScoreMap1 := map[string]float64{
+		"one": 1.0,
+		"two": 2.0,
+	}
+	memberScoreMap2 := map[string]float64{
+		"two":   3.5,
+		"three": 3.0,
+	}
+
+	client.ZAdd("{key}1", memberScoreMap1)
+	client.ZAdd("{key}2", memberScoreMap2)
+
+	zUnionStoreResult, err := client.ZUnionStore(
+		"{key}dest",
+		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(zUnionStoreResult)
+
+	// Output: 3
+}
+
+func ExampleGlideClient_ZUnionStoreWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	memberScoreMap1 := map[string]float64{
+		"one": 1.0,
+		"two": 2.0,
+	}
+	memberScoreMap2 := map[string]float64{
+		"two":   3.5,
+		"three": 3.0,
+	}
+
+	client.ZAdd("key1", memberScoreMap1)
+	client.ZAdd("key2", memberScoreMap2)
+
+	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(
+		"dest",
+		options.KeyArray{Keys: []string{"key1", "key2"}},
+		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(zUnionStoreWithOptionsResult)
+
+	// Output: 3
+}
+
+func ExampleGlideClusterClient_ZUnionStoreWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	memberScoreMap1 := map[string]float64{
+		"one": 1.0,
+		"two": 2.0,
+	}
+	memberScoreMap2 := map[string]float64{
+		"two":   3.5,
+		"three": 3.0,
+	}
+
+	client.ZAdd("{key}1", memberScoreMap1)
+	client.ZAdd("{key}2", memberScoreMap2)
+
+	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(
+		"{key}dest",
+		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
+		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(zUnionStoreWithOptionsResult)
+
+	// Output: 3
+}
