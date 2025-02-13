@@ -1598,6 +1598,8 @@ func (client *baseClient) SInter(keys []string) (map[string]struct{}, error) {
 // Return value:
 //
 //	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/sinterstore/
 func (client *baseClient) SInterStore(destination string, keys []string) (int64, error) {
 	result, err := client.executeCommand(C.SInterStore, append([]string{destination}, keys...))
 	if err != nil {
@@ -1707,8 +1709,6 @@ func (client *baseClient) SRandMember(key string) (Result[string], error) {
 //
 //	A Result[string] containing the value of the popped member.
 //	Returns a NilResult if key does not exist.
-//
-
 //
 // [valkey.io]: https://valkey.io/commands/spop/
 func (client *baseClient) SPop(key string) (Result[string], error) {
@@ -2565,7 +2565,8 @@ func (client *baseClient) Del(keys []string) (int64, error) {
 //	the request into sub-requests per slot to ensure atomicity.
 //
 // Parameters:
-// keys - One or more keys to check if they exist.
+//
+//	keys - One or more keys to check if they exist.
 //
 // Return value:
 //
@@ -2588,8 +2589,9 @@ func (client *baseClient) Exists(keys []string) (int64, error) {
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // Parameters:
-// key - The key to expire.
-// seconds - Time in seconds for the key to expire
+//
+//	key - The key to expire.
+//	seconds - Time in seconds for the key to expire
 //
 // Return value:
 //
@@ -2985,7 +2987,7 @@ func (client *baseClient) PfCount(keys []string) (int64, error) {
 //
 //	Return the number of keys that were unlinked.
 //
-// [valkey.io]: Https://valkey.io/commands/unlink/
+// [valkey.io]: https://valkey.io/commands/unlink/
 func (client *baseClient) Unlink(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Unlink, keys)
 	if err != nil {
@@ -3169,8 +3171,9 @@ func (client *baseClient) XAddWithOptions(
 //	keysAndIds - A map of keys and entry IDs to read from.
 //
 // Return value:
-// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-// a key does not exist or does not contain requiested entries.
+//
+//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//	a key does not exist or does not contain requiested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error) {
@@ -3191,8 +3194,9 @@ func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[st
 //	opts - Options detailing how to read the stream.
 //
 // Return value:
-// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-// a key does not exist or does not contain requiested entries.
+//
+//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//	a key does not exist or does not contain requiested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
@@ -3237,8 +3241,9 @@ func (client *baseClient) XReadWithOptions(
 //	keysAndIds - A map of keys and entry IDs to read from.
 //
 // Return value:
-// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-// a key does not exist or does not contain requested entries.
+//
+//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//	a key does not exist or does not contain requested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (client *baseClient) XReadGroup(
@@ -3265,8 +3270,9 @@ func (client *baseClient) XReadGroup(
 //	opts - Options detailing how to read the stream.
 //
 // Return value:
-// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-// a key does not exist or does not contain requiested entries.
+//
+//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//	a key does not exist or does not contain requiested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (client *baseClient) XReadGroupWithOptions(
@@ -4399,6 +4405,7 @@ func (client *baseClient) XPending(key string, group string) (XPendingSummary, e
 //	opts - The options for the command. See [options.XPendingOptions] for details.
 //
 // Return value:
+//
 // A slice of XPendingDetail structs, where each detail struct includes the following fields:
 //
 //	Id - The ID of the pending message.
@@ -5134,7 +5141,9 @@ func (client *baseClient) XGroupCreateConsumer(
 //	group - The consumer group name.
 //	consumer - The consumer to delete.
 //
-// Returns the number of pending messages the `consumer` had before it was deleted.
+// Return value:
+//
+//	The number of pending messages the `consumer` had before it was deleted.
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-delconsumer/
 func (client *baseClient) XGroupDelConsumer(
@@ -5210,8 +5219,9 @@ func (client *baseClient) SetBit(key string, offset int64, value int64) (int64, 
 //	offset - The index of the bit to return.
 //
 // Return value:
-// The bit at offset of the string. Returns zero if the key is empty or if the positive
-// offset exceeds the length of the string.
+//
+//	The bit at offset of the string. Returns zero if the key is empty or if the positive
+//	offset exceeds the length of the string.
 //
 // [valkey.io]: https://valkey.io/commands/getbit/
 func (client *baseClient) GetBit(key string, offset int64) (int64, error) {
@@ -5252,8 +5262,9 @@ func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (int64, er
 //	key - The key for the string to count the set bits of.
 //
 // Return value:
-// The number of set bits in the string. Returns zero if the key is missing as it is
-// treated as an empty string.
+//
+//	The number of set bits in the string. Returns zero if the key is missing as it is
+//	treated as an empty string.
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
 func (client *baseClient) BitCount(key string) (int64, error) {
@@ -5276,8 +5287,9 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 //	options - The offset options - see [options.BitOffsetOptions].
 //
 // Return value:
-// The number of set bits in the string interval specified by start, end, and options.
-// Returns zero if the key is missing as it is treated as an empty string.
+//
+//	The number of set bits in the string interval specified by start, end, and options.
+//	Returns zero if the key is missing as it is treated as an empty string.
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
 func (client *baseClient) BitCountWithOptions(key string, opts *options.BitCountOptions) (int64, error) {
@@ -5732,9 +5744,10 @@ func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCo
 // Returns the server time.
 //
 // Return value:
-// The current server time as a String array with two elements:
-// A UNIX TIME and the amount of microseconds already elapsed in the current second.
-// The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
+//
+//	The current server time as a String array with two elements:
+//	A UNIX TIME and the amount of microseconds already elapsed in the current second.
+//	The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
 //
 // [valkey.io]: https://valkey.io/commands/time/
 func (client *baseClient) Time() ([]string, error) {
