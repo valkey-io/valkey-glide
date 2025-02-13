@@ -23,6 +23,10 @@ func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap
 		return (client.(*api.GlideClient)).CustomCommand(args)
 	case *api.GlideClusterClient:
 		result, err := (client.(*api.GlideClusterClient)).CustomCommand(args)
+		fmt.Println("result===")
+		fmt.Println(result.SingleValue())
+		fmt.Println(reflect.TypeOf(result.SingleValue()))
+
 		if returnMap {
 			return result.MultiValue(), err
 		} else {
