@@ -1,3 +1,17 @@
+#### Changes
+
+* Csharp: updating xUnit, adding xUnit analyser rules and guidelines ([#3035](https://github.com/valkey-io/valkey-glide/pull/3035))
+* Go: Add ZRangeStore ([3105](https://github.com/valkey-io/valkey-glide/pull/3105))
+* Go: Add `ZUNION` ([#3119](https://github.com/valkey-io/valkey-glide/pull/3119))
+* Go: Add `ZUNIONSTORE` ([#3136](https://github.com/valkey-io/valkey-glide/pull/3136))
+
+#### Breaking Changes
+
+#### Fixes
+
+
+#### Operational Enhancements
+
 ## 1.3.0 (2025-02-14)
 
 #### Changes
@@ -11,9 +25,7 @@
 * Java: Add `RESP2` support ([#2383](https://github.com/valkey-io/valkey-glide/pull/2383))
 * Node, Python: Add `IFEQ` option ([#2909](https://github.com/valkey-io/valkey-glide/pull/2909), [#2962](https://github.com/valkey-io/valkey-glide/pull/2962))
 * Java: Add `IFEQ` option ([#2978](https://github.com/valkey-io/valkey-glide/pull/2978))
-* Go: Add `ZUNION` ([#3119](https://github.com/valkey-io/valkey-glide/pull/3119))
-* Go: Add `ZUNIONSTORE` ([#3136](https://github.com/valkey-io/valkey-glide/pull/3136))
-
+* Core: Add AzAffinityReplicasAndPrimary Read Strategy([#2986](https://github.com/valkey-io/valkey-glide/pull/2986))
 
 #### Breaking Changes
 
