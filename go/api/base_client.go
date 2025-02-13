@@ -2720,7 +2720,7 @@ func (client *baseClient) ExpireAtWithOptions(
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
-//	[valkey.io]: https://valkey.io/commands/pexpire/
+// [valkey.io]: https://valkey.io/commands/pexpire/
 func (client *baseClient) PExpire(key string, milliseconds int64) (bool, error) {
 	result, err := client.executeCommand(C.PExpire, []string{key, utils.IntToString(milliseconds)})
 	if err != nil {
@@ -2735,16 +2735,17 @@ func (client *baseClient) PExpire(key string, milliseconds int64) (bool, error) 
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // Parameters:
-// key - The key to set timeout on it.
-// milliseconds - The timeout in milliseconds.
-// option - The option to set expiry, see [options.ExpireCondition].
+//
+//	key - The key to set timeout on it.
+//	milliseconds - The timeout in milliseconds.
+//	option - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
 //
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
-//	[valkey.io]: https://valkey.io/commands/pexpire/
+// [valkey.io]: https://valkey.io/commands/pexpire/
 func (client *baseClient) PExpireWithOptions(
 	key string,
 	milliseconds int64,
@@ -2779,7 +2780,7 @@ func (client *baseClient) PExpireWithOptions(
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
-//	[valkey.io]: https://valkey.io/commands/pexpireat/
+// [valkey.io]: https://valkey.io/commands/pexpireat/
 func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error) {
 	result, err := client.executeCommand(C.PExpireAt, []string{key, utils.IntToString(unixTimestampInMilliSeconds)})
 	if err != nil {
@@ -2796,16 +2797,17 @@ func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int6
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 //
 // Parameters:
-// key - The key to set timeout on it.
-// unixMilliseconds - The timeout in an absolute Unix timestamp.
-// option - The option to set expiry, see [options.ExpireCondition].
+//
+//	key - The key to set timeout on it.
+//	unixMilliseconds - The timeout in an absolute Unix timestamp.
+//	option - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
 //
 //	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
-//	[valkey.io]: https://valkey.io/commands/pexpireat/
+// [valkey.io]: https://valkey.io/commands/pexpireat/
 func (client *baseClient) PExpireAtWithOptions(
 	key string,
 	unixTimestampInMilliSeconds int64,
@@ -3008,7 +3010,7 @@ func (client *baseClient) Unlink(keys []string) (int64, error) {
 //
 //	If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
 //
-// [valkey.io]: Https://valkey.io/commands/type/
+// [valkey.io]: https://valkey.io/commands/type/
 func (client *baseClient) Type(key string) (string, error) {
 	result, err := client.executeCommand(C.Type, []string{key})
 	if err != nil {
@@ -5853,11 +5855,6 @@ func (client *baseClient) ZInterWithScores(
 //
 //	The number of elements in the resulting sorted set stored at <code>destination</code>.
 //
-// Example:
-//
-//	res, err := client.ZInterStore("destination", options.NewKeyArray("key1", "key2", "key3"))
-//	fmt.Println(res) // 3
-//
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error) {
 	return client.ZInterStoreWithOptions(destination, keysOrWeightedKeys, nil)
@@ -5887,11 +5884,6 @@ func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys opt
 //
 //	The number of elements in the resulting sorted set stored at <code>destination</code>.
 //
-// Example:
-//
-//	res, err := client.ZInterStore("destination", options.NewZInterOptions(options.NewKeyArray("key1", "key2", "key3")))
-//	fmt.Println(res) // 3
-//
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (client *baseClient) ZInterStoreWithOptions(
 	destination string,
@@ -5920,7 +5912,9 @@ func (client *baseClient) ZInterStoreWithOptions(
 // Returns the difference between the first sorted set and all the successive sorted sets.
 // To get the elements with their scores, see `ZDiffWithScores`
 //
-// When in cluster mode, all `keys` must map to the same hash slot.
+// Note:
+//
+//	When in cluster mode, all `keys` must map to the same hash slot.
 //
 // Available for Valkey 6.2 and above.
 //
@@ -5977,7 +5971,9 @@ func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, er
 // `keys` and stores the difference as a sorted set to `destination`,
 // overwriting it if it already exists. Non-existent keys are treated as empty sets.
 //
-// Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+// Note:
+//
+//	When in cluster mode, `destination` and all `keys` must map to the same hash slot.
 //
 // Available for Valkey 6.2 and above.
 //

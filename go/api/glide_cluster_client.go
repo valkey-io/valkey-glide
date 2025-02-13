@@ -186,7 +186,7 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 //
 // Return value:
 //
-// Returns "PONG".
+//	Returns "PONG".
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) Ping() (string, error) {
