@@ -1598,6 +1598,46 @@ func ExampleGlideClusterClient_XRevRangeWithOptions() {
 	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
 }
 
+func ExampleGlideClient_XInfoStream() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	key := "12345"
+	streamId1 := "12345-1"
+
+	client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, options.NewXAddOptions().SetId(streamId1))
+	response, err := client.XInfoStream(key)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	jsonResult, _ := json.MarshalIndent(response, "", "  ")
+
+	fmt.Println(string(jsonResult))
+	// Output:
+	// {
+	//   "entries-added": 1,
+	//   "first-entry": [
+	//     "12345-1",
+	//     [
+	//       "field1",
+	//       "value1"
+	//     ]
+	//   ],
+	//   "groups": 0,
+	//   "last-entry": [
+	//     "12345-1",
+	//     [
+	//       "field1",
+	//       "value1"
+	//     ]
+	//   ],
+	//   "last-generated-id": "12345-1",
+	//   "length": 1,
+	//   "max-deleted-entry-id": "0-0",
+	//   "radix-tree-keys": 1,
+	//   "radix-tree-nodes": 2,
+	//   "recorded-first-entry-id": "12345-1"
+	// }
+}
+
 func ExampleGlideClusterClient_XInfoStream() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	key := "12345"
@@ -1638,8 +1678,8 @@ func ExampleGlideClusterClient_XInfoStream() {
 	// }
 }
 
-func ExampleGlideClusterClient_XInfoStreamFullWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleGlideClient_XInfoStreamFullWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
 	key := "12345"
 
 	for i := 1; i <= 5; i++ {
@@ -1688,48 +1728,8 @@ func ExampleGlideClusterClient_XInfoStreamFullWithOptions() {
 	// }
 }
 
-func ExampleGlideClient_XInfoStream() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
-	key := "12345"
-	streamId1 := "12345-1"
-
-	client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, options.NewXAddOptions().SetId(streamId1))
-	response, err := client.XInfoStream(key)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	jsonResult, _ := json.MarshalIndent(response, "", "  ")
-
-	fmt.Println(string(jsonResult))
-	// Output:
-	// {
-	//   "entries-added": 1,
-	//   "first-entry": [
-	//     "12345-1",
-	//     [
-	//       "field1",
-	//       "value1"
-	//     ]
-	//   ],
-	//   "groups": 0,
-	//   "last-entry": [
-	//     "12345-1",
-	//     [
-	//       "field1",
-	//       "value1"
-	//     ]
-	//   ],
-	//   "last-generated-id": "12345-1",
-	//   "length": 1,
-	//   "max-deleted-entry-id": "0-0",
-	//   "radix-tree-keys": 1,
-	//   "radix-tree-nodes": 2,
-	//   "recorded-first-entry-id": "12345-1"
-	// }
-}
-
-func ExampleGlideClient_XInfoStreamFullWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleGlideClusterClient_XInfoStreamFullWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	key := "12345"
 
 	for i := 1; i <= 5; i++ {
