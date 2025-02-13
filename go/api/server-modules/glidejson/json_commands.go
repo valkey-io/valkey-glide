@@ -26,11 +26,10 @@ func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap
 		fmt.Println("result===")
 		fmt.Println(result.SingleValue())
 		fmt.Println(reflect.TypeOf(result.SingleValue()))
-
+		if result.IsEmpty() {
+			return "", err
+		}
 		if returnMap {
-			if result.IsEmpty() {
-				return "", err
-			}
 			return result.MultiValue(), err
 		} else {
 			return result.SingleValue(), err
