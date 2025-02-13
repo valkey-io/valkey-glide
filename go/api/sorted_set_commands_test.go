@@ -458,6 +458,29 @@ func ExampleGlideClient_ZRangeWithScores() {
 	// map[one:1 two:2]
 }
 
+func ExampleGlideClusterClient_ZRangeWithScores() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	result, err := client.ZAdd("key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
+	result1, err := client.ZRangeWithScores("key1", options.NewRangeByIndexQuery(0, -1))
+
+	query := options.NewRangeByScoreQuery(
+		options.NewScoreBoundary(3, false),
+		options.NewInfiniteScoreBoundary(options.NegativeInfinity)).SetReverse()
+	result2, err := client.ZRangeWithScores("key1", query)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+	fmt.Println(result1)
+	fmt.Println(result2)
+
+	// Output:
+	// 3
+	// map[one:1 three:3 two:2]
+	// map[one:1 two:2]
+}
+
 func ExampleGlideClient_ZRangeStore() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 

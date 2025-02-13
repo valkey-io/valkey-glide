@@ -290,16 +290,6 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
 //
-// Example:
-//
-//	response, err := clusterClient.EchoWithOptions(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	for node, data := range response {
-//		fmt.Printf("%s node returned %s\n", node, data)
-//	}
-//
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
 	response, err := client.executeCommandWithRoute(C.Echo, echoOptions.ToArgs(),

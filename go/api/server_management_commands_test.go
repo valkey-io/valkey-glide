@@ -86,3 +86,28 @@ func ExampleGlideClusterClient_Time() {
 
 	// Output: true
 }
+
+func ExampleGlideClient_Info() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	response, err := client.Info()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Printf("response is of type %T\n", response)
+
+	// Output: response is of type string
+}
+
+func ExampleGlideClient_InfoWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	opts := InfoOptions{Sections: []Section{Server}}
+	response, err := client.InfoWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Printf("response is of type %T\n", response)
+
+	// Output: response is of type string
+}

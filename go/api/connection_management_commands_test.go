@@ -4,6 +4,8 @@ package api
 
 import (
 	"fmt"
+
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 func ExampleGlideClient_Ping() {
@@ -17,30 +19,20 @@ func ExampleGlideClient_Ping() {
 	// Output: PONG
 }
 
-func ExampleGlideClusterClient_Ping() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Ping()
+func ExampleGlideClient_PingWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	options := options.PingOptions{Message: "hello"}
+	result, err := client.PingWithOptions(options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
 
-	// Output: PONG
+	// Output: hello
 }
 
 func ExampleGlideClient_Echo() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Echo("Hello World")
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(result)
-
-	// Output: {Hello World false}
-}
-
-func ExampleGlideClusterClient_Echo() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	result, err := client.Echo("Hello World")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
