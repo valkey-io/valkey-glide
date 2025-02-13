@@ -3,6 +3,7 @@ package glidejson
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/errors"
@@ -16,7 +17,7 @@ const (
 
 func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap bool) (interface{}, error) {
 	fmt.Println("type===")
-	fmt.Println(client)
+	fmt.Println(reflect.TypeOf(client))
 	switch client.(type) {
 	case api.GlideClient:
 		return (client.(*api.GlideClient)).CustomCommand(args)
