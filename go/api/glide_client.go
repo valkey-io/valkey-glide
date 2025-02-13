@@ -295,5 +295,4 @@ func (client *GlideClient) ConfigResetStat() (string, error) {
 		return defaultStringResponse, err
 	}
 	return handleStringResponse(response)
-
 }
