@@ -29,7 +29,7 @@ func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap
 
 		if returnMap {
 			if result.IsEmpty() {
-				return nil, err
+				return "", err
 			}
 			return result.MultiValue(), err
 		} else {
