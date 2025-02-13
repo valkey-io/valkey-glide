@@ -65,11 +65,6 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 //
 //	The returned value for the custom command.
 //
-// For example:
-//
-//	result, err := client.CustomCommand([]string{"ping"})
-//	result.Value().(string): "PONG"
-//
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[interface{}], error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
@@ -92,16 +87,6 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 // Return value:
 //
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
-//
-// Example:
-//
-//	response, err := clusterClient.Info(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	for node, data := range response {
-//		fmt.Printf("%s node returned %s\n", node, data)
-//	}
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClusterClient) Info() (map[string]string, error) {
@@ -128,19 +113,6 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //	When specifying a route other than a single node or when route is not given,
 //	it returns a map where each address is the key and its corresponding node response is the value.
 //	When a single node route is given, command returns a string containing the information for the sections requested.
-//
-// Example:
-//
-//	opts := api.ClusterInfoOptions{
-//		InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}},
-//		Route: api.RandomRoute.ToPtr(),
-//	}
-//	response, err := clusterClient.InfoWithOptions(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	// Command sent to a single random node via RANDOM route, expecting SingleValue result as a `string`.
-//	fmt.Println(response.SingleValue())
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (ClusterValue[string], error) {
@@ -189,12 +161,6 @@ func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (C
 //
 //	The returning value depends on the executed command and route.
 //
-// For example:
-//
-//	route := config.SimpleNodeRoute(config.RandomRoute)
-//	result, err := client.CustomCommandWithRoute([]string{"ping"}, route)
-//	result.SingleValue().(string): "PONG"
-//
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClusterClient) CustomCommandWithRoute(
 	args []string,
@@ -217,11 +183,6 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 // Return value:
 //
 // Returns "PONG".
-//
-// For example:
-//
-//	result, err := clusterClient.Ping()
-//	fmt.Println(result) // Output: PONG
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) Ping() (string, error) {
@@ -288,14 +249,6 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 // of microseconds already elapsed in the current second.
 // The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
 //
-// Example:
-//
-//	route := config.Route(config.RandomRoute)
-//	opts  := options.ClusterTimeOptions{
-//		  Route: &route,
-//	}
-//	fmt.Println(clusterResponse.SingleValue()) // Output: [1737994354 547816]
-//
 // [valkey.io]: https://valkey.io/commands/time/
 func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (ClusterValue[[]string], error) {
 	result, err := client.executeCommandWithRoute(C.Time, []string{}, opts.Route)
@@ -307,19 +260,15 @@ func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (Clu
 
 // Returns the number of keys in the database.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	options - The options for DBSize.
+//
 // Return value:
 //
 //	The number of keys in the database.
-//
-// Example:
-//
-//	route := api.SimpleNodeRoute(api.RandomRoute)
-//	options := options.NewDBOptionsBuilder().SetRoute(route)
-//	result, err := client.DBSizeWithOption(route)
-//	if err != nil {
-//	  // handle error
-//	}
-//	fmt.Println(result) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
 func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (int64, error) {
@@ -340,16 +289,6 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 // Return value:
 //
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
-//
-// Example:
-//
-//	response, err := clusterClient.EchoWithOptions(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	for node, data := range response {
-//		fmt.Printf("%s node returned %s\n", node, data)
-//	}
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {

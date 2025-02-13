@@ -4,6 +4,8 @@ package api
 
 import (
 	"fmt"
+
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 func ExampleGlideClient_Ping() {
@@ -15,6 +17,18 @@ func ExampleGlideClient_Ping() {
 	fmt.Println(result)
 
 	// Output: PONG
+}
+
+func ExampleGlideClient_PingWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	options := options.PingOptions{Message: "hello"}
+	result, err := client.PingWithOptions(options)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: hello
 }
 
 func ExampleGlideClient_Echo() {
