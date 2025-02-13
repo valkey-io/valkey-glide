@@ -180,6 +180,7 @@ func createClusterValue[T any](data any) ClusterValue[T] {
 	case map[string]interface{}:
 		return createClusterMultiValue(data.(map[string]T))
 	default:
+		fmt.Println(data.(T))
 		return createClusterSingleValue(data.(T))
 	}
 }
