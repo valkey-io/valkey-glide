@@ -1,6 +1,6 @@
 # GO wrapper
 
-The GO wrapper is currently not in a usable state and is under development.
+The GO wrapper is currently a **public preview.**
 
 # Valkey GLIDE
 
@@ -10,13 +10,97 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 
 Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valkey-glide/blob/main/README.md#supported-engine-versions) for details.
 
-## Current Status
-
 # Getting Started - GO Wrapper
 
-## GO supported version
+## GO supported versions
 
-## Basic Example
+| Go Version |
+|----------------|
+| 1.20           |
+| 1.22           |
+
+## Installation and Setup
+
+To install Valkey GLIDE in `go`, follow these steps:
+
+1. Open your terminal.
+2. Execute the command below:
+    ```bash
+    $ go get github.com/valkey-io/valkey-glide/go
+    ```
+3. After installation, you can start up a Redis or Valkey server and run one of the examples in [Basic Examples](#basic-examples).
+
+
+## Basic Examples
+
+
+### Standalone Example:
+
+```go   
+package main
+
+import (
+	"fmt"
+
+	"github.com/valkey-io/valkey-glide/go/api"
+)
+
+func main() {
+	host := "localhost"
+	port := 6379
+
+	config := api.NewGlideClientConfiguration().
+		WithAddress(&api.NodeAddress{Host: host, Port: port})
+
+	client, err := api.NewGlideClient(config)
+	if err != nil {
+        fmt.Println("There was an error: ", err)
+        return
+	}
+
+	res, err := client.Ping()
+	if err != nil {
+		log.Fatal("Glide example failed with an error: ", err)
+	}
+	fmt.Println(res) // PONG
+
+	client.Close()
+}
+```
+
+### Cluster Example:
+
+```go   
+package main
+
+import (
+	"fmt"
+
+	"github.com/valkey-io/valkey-glide/go/api"
+)
+
+func main() {
+	host := "localhost"
+	port := 7001
+
+	config := api.NewGlideClusterClientConfiguration().
+		WithAddress(&api.NodeAddress{Host: host, Port: port})
+
+	client, err := api.NewGlideClusterClient(config)
+	if err != nil {
+		fmt.Println("There was an error: ", err)
+		return
+	}
+
+	res, err := client.Ping()
+	if err != nil {
+		log.Fatal("Glide example failed with an error: ", err)
+	}
+	fmt.Println(res) // PONG
+
+	client.Close()
+}
+```
 
 ### Building & Testing
 
