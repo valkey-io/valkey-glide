@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ func (suite *GlideTestSuite) TestModuleVerifyJsonLoaded() {
 	)
 
 	assert.Nil(suite.T(), err)
+	fmt.Println(result)
 	for _, value := range result.MultiValue() {
 		assert.True(suite.T(), strings.Contains(value, "# json_core_metrics"))
 	}
