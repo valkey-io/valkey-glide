@@ -102,4 +102,12 @@ type SortedSetCommands interface {
 	ZUnion(keys options.KeyArray) ([]string, error)
 
 	ZUnionWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZUnionOptions) (map[string]float64, error)
+
+	ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
+
+	ZUnionStoreWithOptions(
+		destination string,
+		keysOrWeightedKeys options.KeysOrWeightedKeys,
+		zUnionOptions *options.ZUnionOptions,
+	) (int64, error)
 }

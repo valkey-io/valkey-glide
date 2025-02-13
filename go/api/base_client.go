@@ -6108,3 +6108,78 @@ func (client *baseClient) ZUnionWithScores(
 	}
 	return handleStringDoubleMapResponse(result)
 }
+
+// Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
+// stores the result in `destination`. If `destination` already exists, it
+// is overwritten. Otherwise, a new sorted set will be created.
+//
+// Available for Valkey 6.2 and above.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	destination - The key of the destination sorted set.
+//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
+//	                   - Use `options.NewKeyArray()` for keys only.
+//	                   - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
+//
+// Return Value:
+//
+//	The number of elements in the resulting sorted set stored at `destination`.
+//
+// [valkey.io]: https://valkey.io/commands/zunionstore/
+func (client *baseClient) ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error) {
+	return client.ZUnionStoreWithOptions(destination, keysOrWeightedKeys, nil)
+}
+
+// Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
+// stores the result in `destination`. If `destination` already exists, it
+// is overwritten. Otherwise, a new sorted set will be created.
+//
+// Available for Valkey 6.2 and above.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	destination - The key of the destination sorted set.
+//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
+//	                   - Use `options.NewKeyArray()` for keys only.
+//	                   - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
+//	zUnionOptions   - The options for the ZUnionStore command, see - [options.ZUnionOptions].
+//	           Optional `aggregate` option specifies the aggregation strategy to apply when combining the scores of
+//	           elements.
+//
+// Return Value:
+//
+//	The number of elements in the resulting sorted set stored at `destination`.
+//
+// [valkey.io]: https://valkey.io/commands/zunionstore/
+func (client *baseClient) ZUnionStoreWithOptions(
+	destination string,
+	keysOrWeightedKeys options.KeysOrWeightedKeys,
+	zUnionOptions *options.ZUnionOptions,
+) (int64, error) {
+	args := append([]string{destination}, keysOrWeightedKeys.ToArgs()...)
+	if zUnionOptions != nil {
+		optionsArgs, err := zUnionOptions.ToArgs()
+		if err != nil {
+			return defaultIntResponse, err
+		}
+		args = append(args, optionsArgs...)
+	}
+	result, err := client.executeCommand(C.ZUnionStore, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
