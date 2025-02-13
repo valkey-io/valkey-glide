@@ -1,23 +1,12 @@
+## 1.3.0 (2025-02-14)
+
 #### Changes
 
-* Csharp: updating xUnit, adding xUnit analyser rules and guidelines ([#3035](https://github.com/valkey-io/valkey-glide/pull/3035))
-* Go: Add `HScan` command ([#2917](https://github.com/valkey-io/valkey-glide/pull/2917))
 * Java, Node, Python: Add transaction commands for JSON module ([#2862](https://github.com/valkey-io/valkey-glide/pull/2862))
-* Go: Add HINCRBY command ([#2847](https://github.com/valkey-io/valkey-glide/pull/2847))
-* Go: Add HINCRBYFLOAT command ([#2846](https://github.com/valkey-io/valkey-glide/pull/2846))
-* Go: Add SUNIONSTORE command ([#2805](https://github.com/valkey-io/valkey-glide/pull/2805))
-* Go: Add SUNION ([#2787](https://github.com/valkey-io/valkey-glide/pull/2787))
 * Java: bump `netty` version ([#2795](https://github.com/valkey-io/valkey-glide/pull/2795))
 * Java: Bump protobuf (protoc) version ([#2796](https://github.com/valkey-io/valkey-glide/pull/2796), [#2800](https://github.com/valkey-io/valkey-glide/pull/2800))
-* Go: Add `SInterStore` ([#2779](https://github.com/valkey-io/valkey-glide/issues/2779))
-* Go: Add `ZIncrBy` command ([#2830](https://github.com/valkey-io/valkey-glide/pull/2830))
-* Go: Add `SScan` and `SMove` ([#2789](https://github.com/valkey-io/valkey-glide/issues/2789))
-* Go: Add `ZADD` ([#2813](https://github.com/valkey-io/valkey-glide/issues/2813))
-* Go: Add `ZPopMin` and `ZPopMax` ([#2850](https://github.com/valkey-io/valkey-glide/pull/2850))
 * Java: Add binary version of `ZRANK WITHSCORE` ([#2896](https://github.com/valkey-io/valkey-glide/pull/2896))
-* Go: Add `ZCARD` ([#2838](https://github.com/valkey-io/valkey-glide/pull/2838))
 * Java, Node, Python: Update documentation for CONFIG SET and CONFIG GET ([#2919](https://github.com/valkey-io/valkey-glide/pull/2919))
-* Go: Add `BZPopMin` ([#2849](https://github.com/valkey-io/valkey-glide/pull/2849))
 * Java: Shadow `protobuf` dependency ([#2931](https://github.com/valkey-io/valkey-glide/pull/2931))
 * Java: Add `RESP2` support ([#2383](https://github.com/valkey-io/valkey-glide/pull/2383))
 * Node, Python: Add `IFEQ` option ([#2909](https://github.com/valkey-io/valkey-glide/pull/2909), [#2962](https://github.com/valkey-io/valkey-glide/pull/2962))
@@ -37,6 +26,10 @@
 * Node: Fix NPM CD tag ([#3155](https://github.com/valkey-io/valkey-glide/pull/3155))
 
 #### Operational Enhancements
+
+#### Features
+
+* Go: Preview release of Go client. See documentation for details on specific supported commands in this release.
 
 ## 1.2.1 (2024-12-29)
 
