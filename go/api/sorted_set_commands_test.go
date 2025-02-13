@@ -245,6 +245,24 @@ func ExampleGlideClient_ZRangeWithScores() {
 	// map[one:1 two:2]
 }
 
+func ExampleGlideClient_ZRangeStore() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
+	query := options.NewRangeByScoreQuery(
+		options.NewScoreBoundary(3, false),
+		options.NewInfiniteScoreBoundary(options.NegativeInfinity)).SetReverse()
+	result, err := client.ZRangeStore("dest", "key1", query)
+	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output:
+	// 2
+}
+
 func ExampleGlideClient_ZRank() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
@@ -480,6 +498,174 @@ func ExampleGlideClient_BZMPopWithOptions() {
 	// true
 }
 
+func ExampleGlideClient_ZRandMember() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+	result, err := client.ZRandMember("key2")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// If the key does not exist, an empty string is returned
+	fmt.Println(result.Value() == "")
+
+	// Output: true
+}
+
+func ExampleGlideClient_ZRandMemberWithCount() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+	result, err := client.ZRandMemberWithCount("key1", 4)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// If the key does not exist, an empty string is returned
+	fmt.Println(result)
+
+	// Output: [d c b a]
+}
+
+func ExampleGlideClient_ZRandMemberWithCountWithScores() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+	result, err := client.ZRandMemberWithCountWithScores("key1", 4)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// If the key does not exist, an empty string is returned
+	fmt.Println(result)
+
+	// Output: [{d 4} {c 3} {b 2} {a 1}]
+}
+
+func ExampleGlideClient_ZMScore() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
+	result, err := client.ZMScore("key1", []string{"c", "b", "e"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// If the key does not exist, an empty string is returned
+	fmt.Println(result)
+
+	// Output: [{3 false} {2.5 false} {0 true}]
+}
+
+func ExampleGlideClient_ZInter() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
+	client.ZAdd("key2", map[string]float64{"b": 1.0, "c": 2.5, "d": 3.0, "e": 4.0})
+
+	result, err := client.ZInter(options.KeyArray{
+		Keys: []string{"key1", "key2"},
+	})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: [b c d]
+}
+
+func ExampleGlideClient_ZInterWithScores() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
+	client.ZAdd("key2", map[string]float64{"b": 1.0, "c": 2.5, "d": 3.0, "e": 4.0})
+	result, err := client.ZInterWithScores(
+		options.KeyArray{
+			Keys: []string{"key1", "key2"},
+		},
+		options.NewZInterOptionsBuilder().SetAggregate(options.AggregateSum),
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+	// Output: map[b:3.5 c:5.5 d:7]
+}
+
+func ExampleGlideClient_ZInterStore() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
+	client.ZAdd("key2", map[string]float64{"b": 1.0, "c": 2.5, "d": 3.0, "e": 4.0})
+	result, err := client.ZInterStore("dest", options.KeyArray{
+		Keys: []string{"key1", "key2"},
+	})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+	// Output: 3
+}
+
+func ExampleGlideClient_ZInterStoreWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
+	client.ZAdd("key2", map[string]float64{"b": 1.0, "c": 2.5, "d": 3.0, "e": 4.0})
+	result, err := client.ZInterStoreWithOptions(
+		"dest",
+		options.KeyArray{
+			Keys: []string{"key1", "key2"},
+		},
+		options.NewZInterOptionsBuilder().SetAggregate(options.AggregateSum),
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+	// Output: 3
+}
+
+func ExampleGlideClient_ZDiff() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
+	client.ZAdd("key2", map[string]float64{"b": 1.0, "c": 2.5, "d": 3.0, "e": 4.0})
+	result, err := client.ZDiff([]string{"key1", "key2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+	// Output: [a]
+}
+
+func ExampleGlideClient_ZDiffWithScores() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
+	client.ZAdd("key2", map[string]float64{"b": 1.0, "c": 2.5, "d": 3.0, "e": 4.0})
+	result, err := client.ZDiffWithScores([]string{"key1", "key2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+	// Output: map[a:1]
+}
+
+func ExampleGlideClient_ZDiffStore() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
+	client.ZAdd("key2", map[string]float64{"b": 1.0, "c": 2.5, "d": 3.0, "e": 4.0})
+	result, err := client.ZDiffStore("dest", []string{"key1", "key2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+	// Output: 1
+}
+
 func ExampleGlideClient_ZUnion() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
@@ -525,4 +711,118 @@ func ExampleGlideClient_ZUnionWithScores() {
 
 	// Output:
 	// map[one:1 three:3 two:5.5]
+}
+
+func ExampleGlideClient_ZUnionStore() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	memberScoreMap1 := map[string]float64{
+		"one": 1.0,
+		"two": 2.0,
+	}
+	memberScoreMap2 := map[string]float64{
+		"two":   3.5,
+		"three": 3.0,
+	}
+
+	client.ZAdd("key1", memberScoreMap1)
+	client.ZAdd("key2", memberScoreMap2)
+
+	zUnionStoreResult, err := client.ZUnionStore(
+		"dest",
+		options.KeyArray{Keys: []string{"key1", "key2"}},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(zUnionStoreResult)
+
+	// Output: 3
+}
+
+func ExampleGlideClusterClient_ZUnionStore() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	memberScoreMap1 := map[string]float64{
+		"one": 1.0,
+		"two": 2.0,
+	}
+	memberScoreMap2 := map[string]float64{
+		"two":   3.5,
+		"three": 3.0,
+	}
+
+	client.ZAdd("{key}1", memberScoreMap1)
+	client.ZAdd("{key}2", memberScoreMap2)
+
+	zUnionStoreResult, err := client.ZUnionStore(
+		"{key}dest",
+		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(zUnionStoreResult)
+
+	// Output: 3
+}
+
+func ExampleGlideClient_ZUnionStoreWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	memberScoreMap1 := map[string]float64{
+		"one": 1.0,
+		"two": 2.0,
+	}
+	memberScoreMap2 := map[string]float64{
+		"two":   3.5,
+		"three": 3.0,
+	}
+
+	client.ZAdd("key1", memberScoreMap1)
+	client.ZAdd("key2", memberScoreMap2)
+
+	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(
+		"dest",
+		options.KeyArray{Keys: []string{"key1", "key2"}},
+		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(zUnionStoreWithOptionsResult)
+
+	// Output: 3
+}
+
+func ExampleGlideClusterClient_ZUnionStoreWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	memberScoreMap1 := map[string]float64{
+		"one": 1.0,
+		"two": 2.0,
+	}
+	memberScoreMap2 := map[string]float64{
+		"two":   3.5,
+		"three": 3.0,
+	}
+
+	client.ZAdd("{key}1", memberScoreMap1)
+	client.ZAdd("{key}2", memberScoreMap2)
+
+	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(
+		"{key}dest",
+		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
+		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(zUnionStoreWithOptionsResult)
+
+	// Output: 3
 }
