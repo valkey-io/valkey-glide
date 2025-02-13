@@ -30,7 +30,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommand() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 	key := uuid.New().String()
-	jsonValue := "{\"a\": 1.0,\"b\": 2}"
+	jsonValue := "{\"a\":1.0,\"b\":2}"
 
 	jsonSetResult, err := glidejson.Set(client, key, "$", jsonValue)
 	assert.NoError(t, err)
