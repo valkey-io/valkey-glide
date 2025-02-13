@@ -24,11 +24,11 @@ type SortedSetCommands interface {
 
 	ZPopMin(key string) (map[string]float64, error)
 
-	ZPopMinWithCount(key string, count int64) (map[string]float64, error)
+	ZPopMinWithOptions(key string, options options.ZPopOptions) (map[string]float64, error)
 
 	ZPopMax(key string) (map[string]float64, error)
 
-	ZPopMaxWithCount(key string, count int64) (map[string]float64, error)
+	ZPopMaxWithOptions(key string, options options.ZPopOptions) (map[string]float64, error)
 
 	ZRem(key string, members []string) (int64, error)
 
