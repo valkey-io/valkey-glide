@@ -295,8 +295,8 @@ jobs:
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
 
-    drop-deployment:
-        if: ${{ failure() || inputs.maven_publish == false }}
+    drop-deployment-if-validation-fails:
+        if: ${{ failure() }}
         needs:
             [
                 publish-to-maven-central-deployment,
