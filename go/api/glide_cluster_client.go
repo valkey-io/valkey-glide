@@ -5,6 +5,7 @@ package api
 // #cgo LDFLAGS: -lglide_rs
 // #cgo !windows LDFLAGS: -lm
 // #cgo darwin LDFLAGS: -framework Security
+// #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
 // #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
 // #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
 // #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
@@ -13,6 +14,8 @@ package api
 import "C"
 
 import (
+	"fmt"
+
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -68,6 +71,8 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[interface{}], error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
+	fmt.Println("res====")
+	fmt.Println(res)
 	if err != nil {
 		return createEmptyClusterValue[interface{}](), err
 	}
@@ -188,7 +193,7 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 func (client *GlideClusterClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -221,14 +226,14 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 	if pingOptions.Route == nil {
 		response, err := client.executeCommand(C.Ping, pingOptions.ToArgs())
 		if err != nil {
-			return defaultStringResponse, err
+			return DefaultStringResponse, err
 		}
 		return handleStringResponse(response)
 	}
 
 	response, err := client.executeCommandWithRoute(C.Ping, pingOptions.ToArgs(), *pingOptions.Route)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(response)
