@@ -389,6 +389,9 @@ impl Client {
         Ok(Value::Array(values))
     }
 
+    /// Send a pipeline to the server.
+    /// Transaction is a batch of commands that are sent in a single request.
+    /// Unlike a pipelines, transactions are atomic, and in cluster mode, the key-based commands must route to the same slot.
     pub fn send_transaction<'a>(
         &'a mut self,
         pipeline: &'a redis::Pipeline,
@@ -420,6 +423,9 @@ impl Client {
         .boxed()
     }
 
+    /// Send a pipeline to the server.
+    /// Pipeline is a batch of commands that are sent in a single request.
+    /// Unlike a transaction, the commands are not executed atomically, and in cluster mode, the commands can be sent to different nodes.
     pub fn send_pipeline<'a>(
         &'a mut self,
         pipeline: &'a redis::Pipeline,

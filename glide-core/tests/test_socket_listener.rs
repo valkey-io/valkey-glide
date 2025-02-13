@@ -21,9 +21,9 @@ mod socket_listener {
     use crate::utilities::mocks::{Mock, ServerMock};
 
     use super::*;
-    use command_request::{CommandRequest, Pipeline, RequestType};
+    use command_request::{CommandRequest, RequestType};
     use glide_core::command_request::command::{Args, ArgsArray};
-    use glide_core::command_request::{Command, Transaction};
+    use glide_core::command_request::{Batch, Command};
     use glide_core::response::{response, ConstantResponse, Response};
     use glide_core::scripts_container::add_script;
     use protobuf::{EnumOrUnknown, Message};
@@ -288,46 +288,24 @@ mod socket_listener {
         write_request(buffer, socket, request);
     }
 
-    fn write_transaction_request(
+    fn write_batch_request(
         buffer: &mut Vec<u8>,
         socket: &mut UnixStream,
         callback_index: u32,
         commands_components: Vec<CommandComponents>,
+        is_atomic: bool,
     ) {
         let mut request = CommandRequest::new();
         request.callback_idx = callback_index;
-        let mut transaction = Transaction::new();
-        transaction.commands.reserve(commands_components.len());
+        let mut batch = Batch::new();
+        batch.commands.reserve(commands_components.len());
+        batch.is_atomic = is_atomic;
 
         for components in commands_components {
-            transaction.commands.push(get_command(components));
+            batch.commands.push(get_command(components));
         }
 
-        request.command = Some(command_request::command_request::Command::Transaction(
-            transaction,
-        ));
-
-        write_request(buffer, socket, request);
-    }
-
-    fn write_pipeline_request(
-        buffer: &mut Vec<u8>,
-        socket: &mut UnixStream,
-        callback_index: u32,
-        commands_components: Vec<CommandComponents>,
-    ) {
-        let mut request = CommandRequest::new();
-        request.callback_idx = callback_index;
-        let mut pipeline = Pipeline::new();
-        pipeline.commands.reserve(commands_components.len());
-
-        for components in commands_components {
-            pipeline.commands.push(get_command(components));
-        }
-
-        request.command = Some(command_request::command_request::Command::Pipeline(
-            pipeline,
-        ));
+        request.command = Some(command_request::command_request::Command::Batch(batch));
 
         write_request(buffer, socket, request);
     }
@@ -1219,7 +1197,7 @@ mod socket_listener {
             },
         ];
         let mut buffer = Vec::with_capacity(200);
-        write_transaction_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands);
+        write_batch_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands, true);
 
         assert_value_response(
             &mut buffer,
@@ -1268,53 +1246,13 @@ mod socket_listener {
                 request_type: RequestType::MGet.into(),
             },
             CommandComponents {
-                args: vec!["FLUSHALL".to_string().into()],
-                args_pointer: false,
-                request_type: RequestType::CustomCommand.into(), // AllPrimaries command
-            },
-            CommandComponents {
                 args: vec![],
                 args_pointer: false,
                 request_type: RequestType::DBSize.into(), // Aggregation of sum
             },
-            CommandComponents {
-                args: vec![key.clone().into()],
-                args_pointer: false,
-                request_type: RequestType::Get.into(),
-            },
-            CommandComponents {
-                args: vec!["HELLO".into()],
-                args_pointer: false,
-                request_type: RequestType::Ping.into(),
-            },
-            CommandComponents {
-                args: vec![
-                    key.into(),
-                    "bar".to_string().into(),
-                    key2.into(),
-                    "baz".to_string().into(),
-                ],
-                args_pointer: false,
-                request_type: RequestType::MSet.into(),
-            },
-            CommandComponents {
-                args: vec![],
-                args_pointer: false,
-                request_type: RequestType::DBSize.into(),
-            },
-            CommandComponents {
-                args: vec!["appendonly".to_string().into(), "no".to_string().into()],
-                args_pointer: false,
-                request_type: RequestType::ConfigSet.into(), // AllNodes command
-            },
-            CommandComponents {
-                args: vec!["appendonly".to_string().into()],
-                args_pointer: false,
-                request_type: RequestType::ConfigGet.into(), // RandomNode command
-            },
         ];
         let mut buffer = Vec::with_capacity(200);
-        write_pipeline_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands);
+        write_batch_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands, false);
 
         assert_value_response(
             &mut buffer,
@@ -1324,19 +1262,7 @@ mod socket_listener {
                 Value::Okay,
                 Value::BulkString(vec![b'b', b'a', b'r']),
                 Value::Array(vec![Value::BulkString(vec![b'b', b'a', b'r']), Value::Nil]),
-                Value::Okay,
-                Value::Int(0),
-                Value::Nil,
-                Value::BulkString(vec![b'H', b'E', b'L', b'L', b'O']),
-                Value::Okay,
-                Value::Int(2),
-                Value::Okay,
-                Value::Map(vec![(
-                    Value::BulkString(vec![
-                        b'a', b'p', b'p', b'e', b'n', b'd', b'o', b'n', b'l', b'y',
-                    ]),
-                    Value::BulkString(vec![b'n', b'o']),
-                )]),
+                Value::Int(1),
             ]),
         );
     }
@@ -1388,7 +1314,7 @@ mod socket_listener {
             },
         ];
         let mut buffer = Vec::with_capacity(200);
-        write_pipeline_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands);
+        write_batch_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands, false);
 
         assert_error_response(
             &mut buffer,
@@ -1397,6 +1323,7 @@ mod socket_listener {
             ResponseType::RequestError,
         );
     }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]

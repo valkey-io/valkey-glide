@@ -2171,20 +2171,7 @@ where
         let (pipelines_by_node, response_policies) =
             map_pipeline_to_nodes(&pipeline, core.clone()).await?;
 
-        // If there's only one node to send the pipeline to, we can use `try_pipeline_request` directly.
-        if pipelines_by_node.len() == 1 {
-            let (address, pipeline_context) = pipelines_by_node.into_iter().next().unwrap(); // Safe to unwrap since we checked the length.
-            let conn =
-                Self::get_connection(InternalSingleNodeRouting::ByAddress(address), core, None);
-            let pipeline_len = pipeline_context.pipeline.len();
-            return Self::try_pipeline_request(
-                Arc::new(pipeline_context.pipeline),
-                0,
-                pipeline_len,
-                conn,
-            )
-            .await;
-        }
+        //TODO: move teh creation of `pipeline_responses` to pipeline_routing.rs
         // Initialize `PipelineResponses` to store responses for each pipeline command.
         // This will be used to store the responses from the different sub-pipelines to the pipeline commands.
         // A command can have one or more responses (e.g MultiNode commands).
