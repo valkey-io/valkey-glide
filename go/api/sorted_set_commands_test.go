@@ -546,3 +546,23 @@ func ExampleGlideClient_ZLexCount() {
 	// Output:
 	// 2
 }
+
+func ExampleGlideClusterClient_ZLexCount() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+
+	result, err := client.ZLexCount("key1",
+		options.NewRangeByLexQuery(
+			options.NewLexBoundary("a", false),
+			options.NewLexBoundary("c", true),
+		),
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output:
+	// 2
+}
