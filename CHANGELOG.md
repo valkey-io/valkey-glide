@@ -35,6 +35,7 @@
 * Core: improve fix in #2381 ([#2929](https://github.com/valkey-io/valkey-glide/pull/2929))
 * Java: Fix `lpopCount` null handling ([#3025](https://github.com/valkey-io/valkey-glide/pull/3025))
 * Core: Fix `opentelemetry` related dependency issue (backport to 1.3) ([#3130](https://github.com/valkey-io/valkey-glide/pull/3130))
+* Node: Fix NPM CD tag ([#3163](https://github.com/valkey-io/valkey-glide/pull/3163))
 
 #### Operational Enhancements
 
