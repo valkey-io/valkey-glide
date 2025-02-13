@@ -69,7 +69,8 @@ class BackoffStrategy:
         Represents the strategy used to determine how and when to reconnect, in case of connection failures.
         The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N
         is the number of failed attempts.
-        Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is succesful.
+        Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is
+        successful.
         The client will attempt to reconnect indefinitely.
 
         Args:
@@ -184,16 +185,23 @@ class BaseClientConfiguration:
             credentials (ServerCredentials): Credentials for authentication process.
                     If none are set, the client will not authenticate itself with the server.
             read_from (ReadFrom): If not set, `PRIMARY` will be used.
-            request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to complete.
-                This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
-                If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not explicitly set, a default value of 250 milliseconds will be used.
-            client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
+            request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to
+                complete.
+                This duration encompasses sending the request, awaiting for a response from the server, and any required
+                reconnections or retries.
+                If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not
+                explicitly set, a default value of 250 milliseconds will be used.
+            client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command
+                during connection establishment.
             protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
-            inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
-                This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
+            inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
+                (sent but not yet completed).
+                This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
+                stuck in case of a queue backlog.
                 If not set, a default value will be used.
             client_az (Optional[str]): Availability Zone of the client.
-                If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
+                If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas
+                within the specified AZ if exits.
             advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
         """
         self.addresses = addresses
@@ -286,23 +294,30 @@ class GlideClientConfiguration(BaseClientConfiguration):
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
-                This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
+                This duration encompasses sending the request, awaiting for a response from the server, and any required
+                reconnections or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error.
                 If not explicitly set, a default value of 250 milliseconds will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
             connection failures.
             If not set, a default backoff strategy will be used.
         database_id (Optional[int]): index of the logical database to connect to.
-        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
+        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
+            connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
-        pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
+        pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
+                client.
                 Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
-        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
-            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
+        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
+            (sent but not yet completed).
+            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
+            stuck in case of a queue backlog.
             If not set, a default value will be used.
         client_az (Optional[str]): Availability Zone of the client.
-            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
-        advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client, see `AdvancedGlideClientConfiguration`.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
+            the specified AZ if exits.
+        advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client,
+            see `AdvancedGlideClientConfiguration`.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -443,22 +458,30 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
-            This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
-            If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not explicitly set, a default value of 250 milliseconds will be used.
-        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
+            This duration encompasses sending the request, awaiting for a response from the server, and any required
+            reconnections or retries.
+            If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not explicitly
+            set, a default value of 250 milliseconds will be used.
+        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
+            connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
             Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
             Defaults to PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS.
-        pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
+        pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used
+            for the client.
             Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
-        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
-            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
+        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
+            (sent but not yet completed).
+            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
+            stuck in case of a queue backlog.
             If not set, a default value will be used.
         client_az (Optional[str]): Availability Zone of the client.
-            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
-        advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client, see `AdvancedGlideClusterClientConfiguration`.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
+            the specified AZ if exits.
+        advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client,
+            see `AdvancedGlideClusterClientConfiguration`.
 
 
     Notes:

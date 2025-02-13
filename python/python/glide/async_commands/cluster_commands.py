@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional, Set, Union, cast
+from typing import Dict, List, Mapping, Optional, Union, cast
 
-from glide.async_commands.command_args import Limit, ObjectType, OrderBy
+from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import (
     CoreCommands,
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
-    _build_sort_args,
 )
 from glide.async_commands.transaction import ClusterTransaction
 from glide.constants import (
@@ -43,7 +42,8 @@ class ClusterCommands(CoreCommands):
         Args:
             command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
-            route (Optional[Route]): The command will be routed automatically based on the passed command's default request policy, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed automatically based on the passed command's default request
+                policy, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
@@ -93,8 +93,8 @@ class ClusterCommands(CoreCommands):
 
         Args:
             transaction (ClusterTransaction): A `ClusterTransaction` object containing a list of commands to be executed.
-            route (Optional[TSingleNodeRoute]): If `route` is not provided, the transaction will be routed to the slot owner of the
-                first key found in the transaction. If no key is found, the command will be sent to a random node.
+            route (Optional[TSingleNodeRoute]): If `route` is not provided, the transaction will be routed to the slot owner
+                of the first key found in the transaction. If no key is found, the command will be sent to a random node.
                 If `route` is provided, the client will route the command to the nodes defined by `route`.
 
         Returns:
@@ -115,8 +115,8 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/config-resetstat/ for details.
 
         Args:
-            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
-            case the client will route the command to the nodes defined by `route`. Defaults to None.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
+                which case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
             OK: Returns "OK" to confirm that the statistics were successfully reset.
@@ -134,8 +134,8 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/config-rewrite/ for details.
 
         Args:
-            route (Optional[TRoute]): The command will be routed automatically to all nodes, unless `route` is provided, in which
-            case the client will route the command to the nodes defined by `route`. Defaults to None.
+            route (Optional[TRoute]): The command will be routed automatically to all nodes, unless `route` is provided, in
+            which case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
             OK: OK is returned when the configuration was rewritten properly. Otherwise an error is raised.
@@ -216,7 +216,8 @@ class ClusterCommands(CoreCommands):
         Returns:
             TClusterResponse[Dict[bytes, bytes]]: A dictionary of values corresponding to the
             configuration parameters.
-            When specifying a route other than a single node, response will be : {Address (bytes) : response (Dict[bytes, bytes]) , ... }
+            When specifying a route other than a single node, response will be :
+                {Address (bytes) : response (Dict[bytes, bytes]) , ... }
             with type of Dict[bytes, Dict[bytes, bytes]].
 
         Examples:
@@ -301,7 +302,8 @@ class ClusterCommands(CoreCommands):
 
         Returns:
             int: The number of keys in the database.
-            In the case of routing the query to multiple nodes, returns the aggregated number of keys across the different nodes.
+            In the case of routing the query to multiple nodes, returns the aggregated number of keys across the
+            different nodes.
 
         Examples:
             >>> await client.dbsize()
@@ -540,7 +542,11 @@ class ClusterCommands(CoreCommands):
                 the queried node and the value contains the function's return value.
 
         Example:
-            >>> await client.fcall("Deep_Thought", ["Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"], RandomNode())
+            >>> await client.fcall(
+            ...     "Deep_Thought",
+            ...     ["Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"],
+            ...     RandomNode()
+            ... )
                 b'new_value' # Returns the function's return value.
 
         Since: Valkey version 7.0.0.
@@ -598,8 +604,8 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/function-stats/ for more details
 
         Args:
-            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
-                case the client will route the command to the nodes defined by `route`. Defaults to None.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
+                which case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
             TClusterResponse[TFunctionStatsSingleNodeResponse]: A `Mapping` with two keys:

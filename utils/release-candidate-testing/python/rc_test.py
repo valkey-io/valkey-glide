@@ -1,19 +1,19 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import asyncio
-from typing import List, Tuple
 import os
 import subprocess
 import sys
+from typing import List, Tuple
 
 SCRIPT_FILE = os.path.abspath(f"{__file__}/../../../cluster_manager.py")
 
 from glide import (
+    GlideClient,
+    GlideClientConfiguration,
     GlideClusterClient,
     GlideClusterClientConfiguration,
     NodeAddress,
-    GlideClient,
-    GlideClientConfiguration,
 )
 
 

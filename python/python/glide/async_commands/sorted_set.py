@@ -116,7 +116,8 @@ class RangeByScore:
     Args:
         start (Union[InfBound, ScoreBoundary]): The start score boundary.
         end (Union[InfBound, ScoreBoundary]): The end score boundary.
-        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class for more information.
+        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit`
+            class for more information.
     """
 
     def __init__(
@@ -141,7 +142,8 @@ class RangeByLex:
     Args:
         start (Union[InfBound, LexBoundary]): The start lexicographic boundary.
         end (Union[InfBound, LexBoundary]): The end lexicographic boundary.
-        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class for more information.
+        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class
+            for more information.
     """
 
     def __init__(

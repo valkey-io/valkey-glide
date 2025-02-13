@@ -6,7 +6,6 @@ from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 from glide.async_commands.bitmap import (
     BitFieldGet,
     BitFieldSubCommands,
-    BitmapIndexType,
     BitwiseOperation,
     OffsetOptions,
     _create_bitfield_args,
@@ -126,7 +125,8 @@ class BaseTransaction:
         self: TTransaction, key: TEncodable, start: int, end: int
     ) -> TTransaction:
         """
-        Returns the substring of the string value stored at `key`, determined by the offsets `start` and `end` (both are inclusive).
+        Returns the substring of the string value stored at `key`, determined by the offsets `start` and `end`
+        (both are inclusive).
         Negative offsets can be used in order to provide an offset starting from the end of the string.
         So `-1` means the last character, `-2` the penultimate and so forth.
 
@@ -159,7 +159,8 @@ class BaseTransaction:
 
             @example - Set "foo" to "bar" only if "foo" already exists, and set the key expiration to 5 seconds:
 
-                connection.set("foo", "bar", conditional_set=ConditionalChange.ONLY_IF_EXISTS, expiry=Expiry(ExpiryType.SEC, 5))
+                connection.set("foo", "bar", conditional_set=ConditionalChange.ONLY_IF_EXISTS,
+                    expiry=Expiry(ExpiryType.SEC, 5))
 
         Args:
             key (TEncodable): the key to store.
@@ -219,7 +220,8 @@ class BaseTransaction:
             new_key (TEncodable) : The new name of the key.
 
         Command response:
-            OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, the transaction fails with an error.
+            OK: If the `key` was successfully renamed, return "OK". If `key` does not exist,
+                the transaction fails with an error.
         """
         return self.append_command(RequestType.Rename, [key, new_key])
 
@@ -264,7 +266,8 @@ class BaseTransaction:
     def append(self: TTransaction, key: TEncodable, value: TEncodable) -> TTransaction:
         """
         Appends a value to a key.
-        If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to SET in this special case.
+        If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to
+        SET in this special case.
 
         See https://valkey.io/commands/append for more details.
 
@@ -383,7 +386,8 @@ class BaseTransaction:
         See https://valkey.io/commands/msetnx/ for more details.
 
         Args:
-            key_value_map (Mapping[TEncodable, TEncodable]): A key-value map consisting of keys and their respective values to set.
+            key_value_map (Mapping[TEncodable, TEncodable]): A key-value map consisting of keys and their respective
+                values to set.
 
         Commands response:
             bool: True if all keys were set. False if no key was set.
@@ -567,7 +571,8 @@ class BaseTransaction:
 
         Args:
             key (TEncodable): The key of the hash.
-            field_value_map (Mapping[TEncodable, TEncodable]): A field-value map consisting of fields and their corresponding values
+            field_value_map (Mapping[TEncodable, TEncodable]): A field-value map consisting of fields and their
+                corresponding values
             to be set in the hash stored at the specified key.
 
         Command response:
@@ -712,8 +717,8 @@ class BaseTransaction:
             key (TEncodable): The key of the hash.
 
         Command response:
-            Dict[bytes, bytes]: A dictionary of fields and their values stored in the hash. Every field name in the list is followed by
-            its value.
+            Dict[bytes, bytes]: A dictionary of fields and their values stored in the hash. Every field name in the
+                list is followed by its value.
             If `key` does not exist, it returns an empty dictionary.
         """
         return self.append_command(RequestType.HGetAll, [key])
@@ -929,15 +934,19 @@ class BaseTransaction:
 
         See https://valkey.io/commands/blpop for details.
 
-        BLPOP is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
+        BLPOP is a client blocking command, see
+        https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details
+        and best practices.
 
         Args:
             keys (List[TEncodable]): The keys of the lists to pop from.
-            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of 0 will block indefinitely.
 
         Command response:
             Optional[List[bytes]]: A two-element list containing the key from which the element was popped and the value of the
-                popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
+                popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired,
+                returns None.
         """
         return self.append_command(RequestType.BLPop, keys + [str(timeout)])
 
@@ -954,11 +963,14 @@ class BaseTransaction:
 
         Args:
             keys (List[TEncodable]): An array of keys of lists.
-            direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
-            count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
+            direction (ListDirection): The direction based on which elements are popped from
+                (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            count (Optional[int]): The maximum number of popped elements. If not provided,
+                defaults to popping a single element.
 
         Command response:
-            Optional[Mapping[bytes, List[bytes]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped.
+            Optional[Mapping[bytes, List[bytes]]]: A map of `key` name mapped to an array of popped elements,
+                or None if no elements could be popped.
 
         Since: Valkey version 7.0.0.
         """
@@ -984,12 +996,16 @@ class BaseTransaction:
 
         Args:
             keys (List[TEncodable]): An array of keys of lists.
-            direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
-            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
-            count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
+            direction (ListDirection): The direction based on which elements are popped from
+                (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of `0` will block indefinitely.
+            count (Optional[int]): The maximum number of popped elements. If not provided,
+                defaults to popping a single element.
 
         Command response:
-            Optional[Mapping[bytes, List[bytes]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped and the timeout expired.
+            Optional[Mapping[bytes, List[bytes]]]: A map of `key` name mapped to an array of popped elements,
+                or None if no elements could be popped and the timeout expired.
 
         Since: Valkey version 7.0.0.
         """
@@ -1149,15 +1165,19 @@ class BaseTransaction:
 
         See https://valkey.io/commands/brpop for details.
 
-        BRPOP is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
+        BRPOP is a client blocking command, see
+        https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details
+        and best practices.
 
         Args:
             keys (List[TEncodable]): The keys of the lists to pop from.
-            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of 0 will block indefinitely.
 
         Command response:
             Optional[List[bytes]]: A two-element list containing the key from which the element was popped and the value of the
-                popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
+                popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired,
+                returns None.
         """
         return self.append_command(RequestType.BRPop, keys + [str(timeout)])
 
@@ -1206,8 +1226,10 @@ class BaseTransaction:
         Args:
             source (TEncodable): The key to the source list.
             destination (TEncodable): The key to the destination list.
-            where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
-            where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            where_from (ListDirection): The direction to remove the element from
+                (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            where_to (ListDirection): The direction to add the element to
+                (`ListDirection.LEFT` or `ListDirection.RIGHT`).
 
         Command response:
             Optional[bytes]: The popped element, or `None` if `source` does not exist.
@@ -1237,9 +1259,12 @@ class BaseTransaction:
         Args:
             source (TEncodable): The key to the source list.
             destination (TEncodable): The key to the destination list.
-            where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
-            where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
-            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+            where_from (ListDirection): The direction to remove the element from
+                (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            where_to (ListDirection): The direction to add the element to
+                (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of `0` will block indefinitely.
 
         Command response:
             Optional[bytes]: The popped element, or `None` if `source` does not exist or if the operation timed-out.
@@ -1385,7 +1410,8 @@ class BaseTransaction:
             member (TEncodable): The set element to move.
 
         Command response:
-            bool: True on success, or False if the `source` set does not exist or the element is not a member of the source set.
+            bool: True on success, or False if the `source` set does not exist or the element
+                is not a member of the source set.
         """
         return self.append_command(RequestType.SMove, [source, destination, member])
 
@@ -1462,7 +1488,8 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Gets the cardinality of the intersection of all the given sets.
-        Optionally, a `limit` can be specified to stop the computation early if the intersection cardinality reaches the specified limit.
+        Optionally, a `limit` can be specified to stop the computation early if the intersection
+        cardinality reaches the specified limit.
 
         See https://valkey.io/commands/sintercard for more details.
 
@@ -1645,8 +1672,8 @@ class BaseTransaction:
             option (Optional[ExpireOptions]): The expire option.
 
         Commands response:
-            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
-                skipped due to the provided arguments).
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set
+                (e.g., the key doesn't exist or the operation is skipped due to the provided arguments).
         """
         args: List[TEncodable] = (
             [key, str(seconds)] if option is None else [key, str(seconds), option.value]
@@ -1674,8 +1701,8 @@ class BaseTransaction:
             option (Optional[ExpireOptions]): The expire option.
 
         Commands response:
-            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
-                skipped due to the provided arguments).
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set
+                (e.g., the key doesn't exist or the operation is skipped due to the provided arguments).
         """
         args = (
             [key, str(unix_seconds)]
@@ -1703,8 +1730,8 @@ class BaseTransaction:
             option (Optional[ExpireOptions]): The expire option.
 
         Commands response:
-            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
-                skipped due to the provided arguments).
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set
+                (e.g., the key doesn't exist or the operation is skipped due to the provided arguments).
         """
         args = (
             [key, str(milliseconds)]
@@ -1734,8 +1761,8 @@ class BaseTransaction:
             option (Optional[ExpireOptions]): The expire option.
 
         Commands response:
-            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
-                skipped due to the provided arguments).
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set
+                (e.g., the key doesn't exist or the operation is skipped due to the provided arguments).
         """
         args = (
             [key, str(unix_milliseconds)]
@@ -1756,7 +1783,8 @@ class BaseTransaction:
             key (TEncodable): The `key` to determine the expiration value of.
 
         Commands response:
-            int: The expiration Unix timestamp in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
+            int: The expiration Unix timestamp in seconds, -2 if `key` does not exist
+                or -1 if `key` exists but has no associated expire.
 
         Since: Valkey version 7.0.0.
         """
@@ -1773,7 +1801,8 @@ class BaseTransaction:
             key (TEncodable): The `key` to determine the expiration value of.
 
         Commands response:
-            int: The expiration Unix timestamp in milliseconds, -2 if `key` does not exist, or -1 if `key` exists but has no associated expiration.
+            int: The expiration Unix timestamp in milliseconds, -2 if `key` does not exist,
+                or -1 if `key` exists but has no associated expiration.
 
         Since: Valkey version 7.0.0.
         """
@@ -2150,10 +2179,12 @@ class BaseTransaction:
         Args:
             key (TEncodable): The key of the stream.
             values: List[Tuple[TEncodable, TEncodable]]: Field-value pairs to be added to the entry.
-            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Default to None. See `StreamAddOptions`.
+            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream.
+                Default to None. See `StreamAddOptions`.
 
         Commands response:
-            bytes: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.
+            bytes: The id of the added entry, or None if `options.make_stream` is set to False and no stream
+                with the matching `key` exists.
         """
         args = [key]
         if options:
@@ -2308,7 +2339,8 @@ class BaseTransaction:
             Optional[Mapping[bytes, Mapping[bytes, List[List[bytes]]]]]: A mapping of stream keys, to a mapping of stream IDs,
                 to a list of pairings with format `[[field, entry], [field, entry], ...]`.
                 None will be returned under the following conditions:
-                - All key-ID pairs in `keys_and_ids` have either a non-existing key or a non-existing ID, or there are no entries after the given ID.
+                - All key-ID pairs in `keys_and_ids` have either a non-existing key or a non-existing ID,
+                    or there are no entries after the given ID.
                 - The `BLOCK` option is specified and the timeout is hit.
         """
         args: List[TEncodable] = [] if options is None else options.to_args()
@@ -2745,12 +2777,14 @@ class BaseTransaction:
 
         Args:
             key (TEncodable): The key of the sorted set.
-            members_geospatialdata (Mapping[TEncodable, GeospatialData]): A mapping of member names to their corresponding positions. See `GeospatialData`.
+            members_geospatialdata (Mapping[TEncodable, GeospatialData]): A mapping of member names to their
+                corresponding positions. See `GeospatialData`.
             The command will report an error when the user attempts to index coordinates outside the specified ranges.
             existing_options (Optional[ConditionalChange]): Options for handling existing members.
                 - NX: Only add new elements.
                 - XX: Only update existing elements.
-            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the
+                number of new elements added.
 
         Commands response:
             int: The number of elements added to the sorted set.
@@ -2815,7 +2849,8 @@ class BaseTransaction:
             members (List[TEncodable]): The list of members whose GeoHash bytes strings are to be retrieved.
 
         Commands response:
-            List[Optional[bytes]]: A list of GeoHash bytes strings representing the positions of the specified members stored at `key`.
+            List[Optional[bytes]]: A list of GeoHash bytes strings representing the positions of the specified members
+                stored at `key`.
             If a member does not exist in the sorted set, a None value is returned for that member.
         """
         return self.append_command(RequestType.GeoHash, [key] + members)
@@ -2826,8 +2861,8 @@ class BaseTransaction:
         members: List[TEncodable],
     ) -> TTransaction:
         """
-        Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored at
-        `key`.
+        Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored
+        at `key`.
 
         See https://valkey.io/commands/geopos for more details.
 
@@ -2853,7 +2888,8 @@ class BaseTransaction:
         with_hash: bool = False,
     ) -> TTransaction:
         """
-        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area.
+        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or
+        rectangular area.
 
         See https://valkey.io/commands/geosearch/ for more details.
 
@@ -2876,10 +2912,13 @@ class BaseTransaction:
             with_hash (bool): Whether to include geohash of the returned items. Defaults to False.
 
         Command Response:
-            List[Union[bytes, List[Union[bytes, float, int, List[float]]]]]: By default, returns a list of members (locations) names.
-            If any of `with_coord`, `with_dist` or `with_hash` are True, returns an array of arrays, we're each sub array represents a single item in the following order:
+            List[Union[bytes, List[Union[bytes, float, int, List[float]]]]]: By default, returns a list of members (locations)
+                names.
+            If any of `with_coord`, `with_dist` or `with_hash` are True, returns an array of arrays, where each sub array
+            represents a single item in the following order:
                 (bytes): The member (location) name.
-                (float): The distance from the center as a floating point number, in the same unit specified in the radius, if `with_dist` is set to True.
+                (float): The distance from the center as a floating point number, in the same unit specified in the radius, if
+                    `with_dist` is set to True.
                 (int): The Geohash integer, if `with_hash` is set to True.
                 List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
 
@@ -2908,7 +2947,8 @@ class BaseTransaction:
         store_dist: bool = False,
     ) -> TTransaction:
         """
-        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area and stores the result in `destination`.
+        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular
+        area and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
 
         To get the result directly, see `geosearch`.
@@ -2927,8 +2967,8 @@ class BaseTransaction:
                 If not specified, stores all results.
             store_dist (bool): Determines what is stored as the sorted set score. Defaults to False.
                 - If set to False, the geohash of the location will be stored as the sorted set score.
-                - If set to True, the distance from the center of the shape (circle or box) will be stored as the sorted set score.
-                    The distance is represented as a floating-point number in the same unit specified for that shape.
+                - If set to True, the distance from the center of the shape (circle or box) will be stored as the sorted set
+                    score. The distance is represented as a floating-point number in the same unit specified for that shape.
 
         Commands response:
             int: The number of elements in the resulting sorted set stored at `destination`.s
@@ -2972,7 +3012,8 @@ class BaseTransaction:
             update_condition (Optional[UpdateOptions]): Options for updating scores.
                 - GT: Only update scores greater than the current values.
                 - LT: Only update scores less than the current values.
-            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the number
+                of new elements added.
 
         Commands response:
             int: The number of elements added to the sorted set.
@@ -3012,7 +3053,8 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Increments the score of member in the sorted set stored at `key` by `increment`.
-        If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
+        If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its
+        previous score was 0.0).
         If `key` does not exist, a new sorted set with the specified member as its sole member is created.
 
         See https://valkey.io/commands/zadd/ for more details.
@@ -3139,11 +3181,13 @@ class BaseTransaction:
         Args:
             key (TEncodable): The key of the sorted set.
             count (Optional[int]): Specifies the quantity of members to pop. If not specified, pops one member.
-            If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
+            If `count` is higher than the sorted set's cardinality, returns all members and their scores,
+            ordered from highest to lowest.
 
         Commands response:
-            Mapping[bytes, float]: A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
-            If `key` doesn't exist, it will be treated as an empy sorted set and the command returns an empty map.
+            Mapping[bytes, float]: A map of the removed members and their scores, ordered from the one with the highest score
+            to the one with the lowest.
+            If `key` doesn't exist, it will be treated as an emtpy sorted set and the command returns an empty map.
         """
         return self.append_command(
             RequestType.ZPopMax, [key, str(count)] if count else [key]
@@ -3159,7 +3203,9 @@ class BaseTransaction:
 
         `BZPOPMAX` is the blocking variant of `ZPOPMAX`.
 
-        `BZPOPMAX` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
+        `BZPOPMAX` is a client blocking command, see
+        https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+        for more details and best practices.
 
         See https://valkey.io/commands/bzpopmax for more details.
 
@@ -3169,8 +3215,8 @@ class BaseTransaction:
                 A value of 0 will block indefinitely.
 
         Command response:
-            Optional[List[Union[bytes, float]]]: An array containing the key where the member was popped out, the member itself,
-                and the member score. If no member could be popped and the `timeout` expired, returns None.
+            Optional[List[Union[bytes, float]]]: An array containing the key where the member was popped out, the
+                member itself, and the member score. If no member could be popped and the `timeout` expired, returns None.
         """
         return self.append_command(RequestType.BZPopMax, keys + [str(timeout)])
 
@@ -3190,7 +3236,8 @@ class BaseTransaction:
             If `count` is higher than the sorted set's cardinality, returns all members and their scores.
 
         Commands response:
-            Mapping[bytes, float]: A map of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
+            Mapping[bytes, float]: A map of the removed members and their scores, ordered from the one with the lowest score
+                to the one with the highest.
             If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
         """
         return self.append_command(
@@ -3207,7 +3254,9 @@ class BaseTransaction:
 
         `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
 
-        `BZPOPMIN` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
+        `BZPOPMIN` is a client blocking command, see
+        https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+        for more details and best practices.
 
         See https://valkey.io/commands/bzpopmin for more details.
 
@@ -3217,8 +3266,8 @@ class BaseTransaction:
                 A value of 0 will block indefinitely.
 
         Command response:
-            Optional[List[Union[bytes, float]]]: An array containing the key where the member was popped out, the member itself,
-                and the member score. If no member could be popped and the `timeout` expired, returns None.
+            Optional[List[Union[bytes, float]]]: An array containing the key where the member was popped out, the
+                member itself, and the member score. If no member could be popped and the `timeout` expired, returns None.
         """
         return self.append_command(RequestType.BZPopMin, keys + [str(timeout)])
 
@@ -3237,7 +3286,8 @@ class BaseTransaction:
 
         Args:
             key (TEncodable): The key of the sorted set.
-            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
+            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range
+            query to perform.
                 - For range queries by index (rank), use RangeByIndex.
                 - For range queries by lexicographical order, use RangeByLex.
                 - For range queries by score, use RangeByScore.
@@ -3265,7 +3315,8 @@ class BaseTransaction:
 
         Args:
             key (TEncodable): The key of the sorted set.
-            range_query (Union[RangeByIndex, RangeByScore]): The range query object representing the type of range query to perform.
+            range_query (Union[RangeByIndex, RangeByScore]): The range query object representing the type of range query
+            to perform.
                 - For range queries by index (rank), use RangeByIndex.
                 - For range queries by score, use RangeByScore.
             reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
@@ -3297,7 +3348,8 @@ class BaseTransaction:
         Args:
             destination (TEncodable): The key for the destination sorted set.
             source (TEncodable): The key of the source sorted set.
-            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
+            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of
+            range query to perform.
                 - For range queries by index (rank), use RangeByIndex.
                 - For range queries by lexicographical order, use RangeByLex.
                 - For range queries by score, use RangeByScore.
@@ -3338,7 +3390,8 @@ class BaseTransaction:
         member: TEncodable,
     ) -> TTransaction:
         """
-        Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
+        Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
+        lowest to highest.
 
         See https://valkey.io/commands/zrank for more details.
 
@@ -3529,7 +3582,8 @@ class BaseTransaction:
         max_lex: Union[InfBound, LexBoundary],
     ) -> TTransaction:
         """
-        Returns the number of members in the sorted set stored at `key` with lexographical values between `min_lex` and `max_lex`.
+        Returns the number of members in the sorted set stored at `key` with lexographical values between
+        `min_lex` and `max_lex`.
 
         See https://valkey.io/commands/zlexcount/ for more details.
 
@@ -3678,7 +3732,8 @@ class BaseTransaction:
         aggregation_type: Optional[AggregationType] = None,
     ) -> TTransaction:
         """
-        Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of intersecting elements with scores.
+        Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of
+        intersecting elements with scores.
 
         See https://valkey.io/commands/zinter/ for more details.
 
@@ -3906,7 +3961,9 @@ class BaseTransaction:
         See https://valkey.io/commands/bzmpop for more details.
 
         Note:
-            `BZMPOP` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
+            `BZMPOP` is a client blocking command, see
+            https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+            for more details and best practices.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -4215,8 +4272,8 @@ class BaseTransaction:
             key (TEncodable): The key of the object to get the logarithmic access frequency counter of.
 
         Command response:
-            Optional[int]: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
-                integer. Otherwise, returns None.
+            Optional[int]: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as
+                an integer. Otherwise, returns None.
         """
         return self.append_command(RequestType.ObjectFreq, [key])
 
@@ -4399,9 +4456,9 @@ class BaseTransaction:
             cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
             match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
-                strings or bytes strings that match the pattern specified. If the set is large enough for scan commands to return only a
-                subset of the set then there could be a case where the result is empty although there are items that
-                match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
+                strings or bytes strings that match the pattern specified. If the set is large enough for scan commands to
+                return only a subset of the set then there could be a case where the result is empty although there are items
+                that match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
                 only fetch and match `10` items from the list.
             count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the set.
                 `COUNT` could be ignored until the set is large enough for the `SCAN` commands to represent the results
@@ -4439,9 +4496,9 @@ class BaseTransaction:
             cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
             match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
-                strings or byte strings that match the pattern specified. If the sorted set is large enough for scan commands to return
-                only a subset of the sorted set then there could be a case where the result is empty although there are
-                items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
+                strings or byte strings that match the pattern specified. If the sorted set is large enough for scan commands
+                to return only a subset of the sorted set then there could be a case where the result is empty although there
+                are items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
                 that it will only fetch and match `10` items from the list.
             count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the
                 sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
@@ -4484,10 +4541,10 @@ class BaseTransaction:
             cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
             match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
-                strings or byte strings that match the pattern specified. If the hash is large enough for scan commands to return only a
-                subset of the hash then there could be a case where the result is empty although there are items that
-                match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
-                only fetch and match `10` items from the list.
+                strings or byte strings that match the pattern specified. If the hash is large enough for scan commands to
+                return only a subset of the hash then there could be a case where the result is empty although there are
+                items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates that
+                it will only fetch and match `10` items from the list.
             count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the hash.
                 `COUNT` could be ignored until the hash is large enough for the `SCAN` commands to represent the results
                 as compact single-allocation packed encoding.
@@ -4821,7 +4878,8 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-        The `sort` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
+        The `sort` command can be used to sort elements based on different criteria and apply transformations on sorted
+        elements.
         To store the result into a new key, see `sort_store`.
 
         See https://valkey.io/commands/sort for more details.
@@ -4832,7 +4890,8 @@ class BaseTransaction:
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
-            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key
+                themselves.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
                 `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
@@ -4841,8 +4900,10 @@ class BaseTransaction:
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
                 Supported in cluster mode since Valkey version 8.0.
-            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            get_pattern (Optional[TEncodable]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
+                more information.
+            get_pattern (Optional[TEncodable]): A pattern used to retrieve external keys' values, instead of the elements at
+                `key`.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
                 transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
@@ -4854,8 +4915,10 @@ class BaseTransaction:
                 Supported in cluster mode since Valkey version 8.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
-            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
-                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default),
+                sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into
+                double precision floating point numbers.
 
         Command response:
             List[Optional[bytes]]: Returns a list of sorted elements.
@@ -4874,7 +4937,8 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-        The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
+        The `sort_ro` command can be used to sort elements based on different criteria and apply transformations
+        on sorted elements.
         This command is routed depending on the client's `ReadFrom` strategy.
 
         See https://valkey.io/commands/sort for more details.
@@ -4885,7 +4949,8 @@ class BaseTransaction:
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
-            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key
+                themselves.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
                 `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
@@ -4894,8 +4959,10 @@ class BaseTransaction:
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
                 Supported in cluster mode since Valkey version 8.0.
-            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            get_pattern (Optional[TEncodable]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
+                more information.
+            get_pattern (Optional[TEncodable]): A pattern used to retrieve external keys' values, instead of the elements at
+                `key`.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
                 transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
@@ -4907,8 +4974,10 @@ class BaseTransaction:
                 Supported in cluster mode since Valkey version 8.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
-            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
-                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements
+                numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double
+                precision floating point numbers.
 
         Command response:
             List[Optional[bytes]]: Returns a list of sorted elements.
@@ -4930,7 +4999,8 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
-        The `sort` command can be used to sort elements based on different criteria, apply transformations on sorted elements, and store the result in a new key.
+        The `sort` command can be used to sort elements based on different criteria, apply transformations on sorted elements,
+        and store the result in a new key.
         To get the sort result without storing it into a key, see `sort`.
 
         See https://valkey.io/commands/sort for more details.
@@ -4942,7 +5012,8 @@ class BaseTransaction:
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
             destination (TEncodable): The key where the sorted result will be stored.
-            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key
+                themselves.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
                 `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
@@ -4951,8 +5022,10 @@ class BaseTransaction:
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
                 Supported in cluster mode since Valkey version 8.0.
-            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            get_pattern (Optional[TEncodable]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for
+                more information.
+            get_pattern (Optional[TEncodable]): A pattern used to retrieve external keys' values, instead of the elements at
+                `key`.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
                 transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
@@ -4964,8 +5037,10 @@ class BaseTransaction:
                 Supported in cluster mode since Valkey version 8.0.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
-            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
-                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements
+                numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double
+                precision floating point numbers.
 
         Command response:
             int: The number of elements in the sorted key stored at `store`.
