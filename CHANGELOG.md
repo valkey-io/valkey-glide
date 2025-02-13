@@ -22,7 +22,7 @@
 * Go: Add `ZCARD` ([#2838](https://github.com/valkey-io/valkey-glide/pull/2838))
 * Java, Node, Python: Update documentation for CONFIG SET and CONFIG GET ([#2919](https://github.com/valkey-io/valkey-glide/pull/2919))
 * Go: Add `BZPopMin` ([#2849](https://github.com/valkey-io/valkey-glide/pull/2849))
-* Java: Shadow `protobuf` dependency ([#2931](https://github.com/valkey-io/valkey-glide/pull/2931))
+* Java: Shadow `protobuf` dependency ([#2931](https://github.com/valkey-io/valkey-glide/pull/2931) and [#3164](https://github.com/valkey-io/valkey-glide/pull/3164))
 * Java: Add `RESP2` support ([#2383](https://github.com/valkey-io/valkey-glide/pull/2383))
 * Node, Python: Add `IFEQ` option ([#2909](https://github.com/valkey-io/valkey-glide/pull/2909), [#2962](https://github.com/valkey-io/valkey-glide/pull/2962))
 * Java: Add `IFEQ` option ([#2978](https://github.com/valkey-io/valkey-glide/pull/2978))
