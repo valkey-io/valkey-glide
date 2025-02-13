@@ -44,7 +44,7 @@ type SetCommands interface {
 
 	SScan(key string, cursor string) (string, []string, error)
 
-	SScanWithOptions(key string, cursor string, options *options.BaseScanOptions) (string, []string, error)
+	SScanWithOptions(key string, cursor string, options options.BaseScanOptions) (string, []string, error)
 
 	SMove(source string, destination string, member string) (bool, error)
 }

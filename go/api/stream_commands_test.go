@@ -222,7 +222,7 @@ func ExampleGlideClient_XAutoClaimWithOptions() {
 	)
 	client.XReadGroup(group, consumer, map[string]string{key: ">"})
 
-	options := options.NewXAutoClaimOptionsWithCount(1)
+	options := options.NewXAutoClaimOptions().SetCount(1)
 	response, err := client.XAutoClaimWithOptions(key, group, consumer, 0, "0-1", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -252,7 +252,7 @@ func ExampleGlideClusterClient_XAutoClaimWithOptions() {
 	)
 	client.XReadGroup(group, consumer, map[string]string{key: ">"})
 
-	options := options.NewXAutoClaimOptionsWithCount(1)
+	options := options.NewXAutoClaimOptions().SetCount(1)
 	response, err := client.XAutoClaimWithOptions(key, group, consumer, 0, "0-1", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -340,7 +340,7 @@ func ExampleGlideClient_XAutoClaimJustIdWithOptions() {
 	)
 	client.XReadGroup(group, consumer, map[string]string{key: ">"})
 
-	options := options.NewXAutoClaimOptionsWithCount(1)
+	options := options.NewXAutoClaimOptions().SetCount(1)
 	response, err := client.XAutoClaimJustIdWithOptions(key, group, consumer, 0, "0-1", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -370,7 +370,7 @@ func ExampleGlideClusterClient_XAutoClaimJustIdWithOptions() {
 	)
 	client.XReadGroup(group, consumer, map[string]string{key: ">"})
 
-	options := options.NewXAutoClaimOptionsWithCount(1)
+	options := options.NewXAutoClaimOptions().SetCount(1)
 	response, err := client.XAutoClaimJustIdWithOptions(key, group, consumer, 0, "0-1", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1234,7 +1234,7 @@ func ExampleGlideClient_XClaimWithOptions() {
 		return
 	}
 
-	opts := options.NewStreamClaimOptions().SetRetryCount(3)
+	opts := options.NewXClaimOptions().SetRetryCount(3)
 	response, err := client.XClaimWithOptions(key, group, consumer2, result[0].IdleTime, []string{result[0].Id}, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1274,7 +1274,7 @@ func ExampleGlideClusterClient_XClaimWithOptions() {
 		return
 	}
 
-	opts := options.NewStreamClaimOptions().SetRetryCount(3)
+	opts := options.NewXClaimOptions().SetRetryCount(3)
 	response, err := client.XClaimWithOptions(key, group, consumer2, result[0].IdleTime, []string{result[0].Id}, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1392,7 +1392,7 @@ func ExampleGlideClient_XClaimJustIdWithOptions() {
 		return
 	}
 
-	opts := options.NewStreamClaimOptions().SetRetryCount(3)
+	opts := options.NewXClaimOptions().SetRetryCount(3)
 	response, err := client.XClaimJustIdWithOptions(key, group, consumer2, result[0].IdleTime, []string{result[0].Id}, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1432,7 +1432,7 @@ func ExampleGlideClusterClient_XClaimJustIdWithOptions() {
 		return
 	}
 
-	opts := options.NewStreamClaimOptions().SetRetryCount(3)
+	opts := options.NewXClaimOptions().SetRetryCount(3)
 	response, err := client.XClaimJustIdWithOptions(key, group, consumer2, result[0].IdleTime, []string{result[0].Id}, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1488,7 +1488,7 @@ func ExampleGlideClient_XRangeWithOptions() {
 	response, err := client.XRangeWithOptions(key,
 		options.NewStreamBoundary(streamId1.Value(), true),
 		options.NewStreamBoundary(streamId2.Value(), true),
-		options.NewStreamRangeOptions().SetCount(1))
+		options.NewXRangeOptions().SetCount(1))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1507,7 +1507,7 @@ func ExampleGlideClusterClient_XRangeWithOptions() {
 	response, err := client.XRangeWithOptions(key,
 		options.NewStreamBoundary(streamId1.Value(), true),
 		options.NewStreamBoundary(streamId2.Value(), true),
-		options.NewStreamRangeOptions().SetCount(1))
+		options.NewXRangeOptions().SetCount(1))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1570,7 +1570,7 @@ func ExampleGlideClient_XRevRangeWithOptions() {
 	response, err := client.XRevRangeWithOptions(key,
 		options.NewStreamBoundary(streamId2, true),
 		options.NewStreamBoundary(streamId1, true),
-		options.NewStreamRangeOptions().SetCount(2))
+		options.NewXRangeOptions().SetCount(2))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1592,7 +1592,7 @@ func ExampleGlideClusterClient_XRevRangeWithOptions() {
 	response, err := client.XRevRangeWithOptions(key,
 		options.NewStreamBoundary(streamId2, true),
 		options.NewStreamBoundary(streamId1, true),
-		options.NewStreamRangeOptions().SetCount(2))
+		options.NewXRangeOptions().SetCount(2))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

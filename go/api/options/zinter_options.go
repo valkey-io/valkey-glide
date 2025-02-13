@@ -7,26 +7,20 @@ type ZInterOptions struct {
 	aggregate Aggregate
 }
 
-func NewZInterOptions() *ZInterOptions {
-	return &ZInterOptions{}
+func NewZInterOptions() ZInterOptions {
+	return ZInterOptions{}
 }
 
 // SetAggregate sets the aggregate method for the ZInter command.
-func (options *ZInterOptions) SetAggregate(aggregate Aggregate) *ZInterOptions {
+func (options ZInterOptions) SetAggregate(aggregate Aggregate) ZInterOptions {
 	options.aggregate = aggregate
 	return options
 }
 
-func (options *ZInterOptions) ToArgs() ([]string, error) {
-	args := []string{}
-
+func (options ZInterOptions) ToArgs() ([]string, error) {
 	if options.aggregate != "" {
-		aggArgs, err := options.aggregate.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, aggArgs...)
+		return options.aggregate.ToArgs()
 	}
 
-	return args, nil
+	return []string{}, nil
 }

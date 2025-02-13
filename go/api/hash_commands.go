@@ -44,5 +44,5 @@ type HashCommands interface {
 
 	HRandFieldWithCountWithValues(key string, count int64) ([][]string, error)
 
-	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (string, []string, error)
+	HScanWithOptions(key string, cursor string, options options.HashScanOptions) (string, []string, error)
 }
