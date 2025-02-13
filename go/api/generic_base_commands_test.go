@@ -792,20 +792,19 @@ func ExampleGlideClusterClient_Dump() {
 }
 
 func ExampleGlideClient_ObjectFreq() {
-	var client *GlideClient = getExampleGlideClient()                                // example helper function
-	_, err := client.ConfigSet(map[string]string{"maxmemory-policy": "allkeys-lfu"}) // example configuration
-	result, err := client.Set("key1", "someValue")
-	_, err = client.Set("key1", "someOtherValue")
-	result1, err := client.ObjectFreq("key1")
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ConfigSet(map[string]string{"maxmemory-policy": "allkeys-lfu"}) // example configuration
+	client.Set("key1", "someValue")
+	client.Set("key1", "someOtherValue")
+
+	result, err := client.ObjectFreq("key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
 
-	// Output:
-	// OK
-	// {2 false}
+	// Output: {6 false}
 }
 
 func ExampleGlideClusterClient_ObjectFreq() {
