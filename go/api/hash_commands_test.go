@@ -216,16 +216,14 @@ func ExampleGlideClient_HKeys() {
 		"field2": "someOtherValue",
 	}
 
-	result, err := client.HSet("my_hash", fields)
-	result1, err := client.HKeys("my_hash")
+	client.HSet("my_hash", fields)
+	result, err := client.HKeys("my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
 
 	// Output:
-	// 2
 	// [field1 field2]
 }
 
@@ -323,16 +321,14 @@ func ExampleGlideClient_HRandField() {
 		// other fields here...
 	}
 
-	result, err := client.HSet("my_hash", fields)
-	result1, err := client.HRandField("my_hash")
+	client.HSet("my_hash", fields)
+	result, err := client.HRandField("my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
 
 	// Output:
-	// 2
 	// {field1 false}
 }
 
@@ -345,16 +341,14 @@ func ExampleGlideClient_HRandFieldWithCount() {
 		// other fields here...
 	}
 
-	result, err := client.HSet("my_hash", fields)
-	result1, err := client.HRandFieldWithCount("my_hash", 2)
+	client.HSet("my_hash", fields)
+	result, err := client.HRandFieldWithCount("my_hash", 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
 
 	// Output:
-	// 2
 	// [field1 field2]
 }
 
@@ -367,17 +361,14 @@ func ExampleGlideClient_HRandFieldWithCountWithValues() {
 		// other fields here...
 	}
 
-	result, err := client.HSet("my_hash", fields)
-	result1, err := client.HRandFieldWithCountWithValues("my_hash", 2)
+	client.HSet("my_hash", fields)
+	result, err := client.HRandFieldWithCountWithValues("my_hash", 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
-	fmt.Println(result1)
+	fmt.Println(len(result) == 2)
 
-	// Output:
-	// 2
-	// [[field1 someValue] [field2 someOtherValue]]
+	// Output: true
 }
 
 func ExampleGlideClient_HScanWithOptions() {

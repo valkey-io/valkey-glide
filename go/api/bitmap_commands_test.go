@@ -25,6 +25,7 @@ func ExampleGlideClient_SetBit() {
 func ExampleGlideClient_GetBit() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
+	client.SetBit("my_key", 1, 1)
 	result, err := client.GetBit("my_key", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
