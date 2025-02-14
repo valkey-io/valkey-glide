@@ -4,6 +4,8 @@ package api
 
 import (
 	"fmt"
+	"strconv"
+	"time"
 )
 
 func ExampleGlideClient_Select() {
@@ -54,4 +56,58 @@ func ExampleGlideClient_DBSize() {
 
 	// Output:
 	// 1
+}
+
+func ExampleGlideClient_Time() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	timeMargin := int64(5)
+	clientTime := time.Now().Unix()
+	result, err := client.Time()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	serverTime, _ := strconv.ParseInt(result[0], 10, 64)
+	fmt.Println((serverTime - clientTime) < timeMargin)
+
+	// Output: true
+}
+
+func ExampleGlideClusterClient_Time() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	timeMargin := int64(5)
+	clientTime := time.Now().Unix()
+
+	result, err := client.Time()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	serverTime, _ := strconv.ParseInt(result[0], 10, 64)
+	fmt.Println((serverTime - clientTime) < timeMargin)
+
+	// Output: true
+}
+
+func ExampleGlideClient_Info() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	response, err := client.Info()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Printf("response is of type %T\n", response)
+
+	// Output: response is of type string
+}
+
+func ExampleGlideClient_InfoWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	opts := InfoOptions{Sections: []Section{Server}}
+	response, err := client.InfoWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Printf("response is of type %T\n", response)
+
+	// Output: response is of type string
 }
