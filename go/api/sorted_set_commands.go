@@ -14,11 +14,11 @@ import (
 type SortedSetCommands interface {
 	ZAdd(key string, membersScoreMap map[string]float64) (int64, error)
 
-	ZAddWithOptions(key string, membersScoreMap map[string]float64, opts *options.ZAddOptions) (int64, error)
+	ZAddWithOptions(key string, membersScoreMap map[string]float64, opts options.ZAddOptions) (int64, error)
 
 	ZAddIncr(key string, member string, increment float64) (Result[float64], error)
 
-	ZAddIncrWithOptions(key string, member string, increment float64, opts *options.ZAddOptions) (Result[float64], error)
+	ZAddIncrWithOptions(key string, member string, increment float64, opts options.ZAddOptions) (Result[float64], error)
 
 	ZIncrBy(key string, increment float64, member string) (float64, error)
 
@@ -42,7 +42,7 @@ type SortedSetCommands interface {
 		keys []string,
 		scoreFilter options.ScoreFilter,
 		timeoutSecs float64,
-		options *options.ZMPopOptions,
+		options options.ZMPopOptions,
 	) (Result[KeyWithArrayOfMembersAndScores], error)
 
 	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
@@ -59,11 +59,11 @@ type SortedSetCommands interface {
 
 	ZScore(key string, member string) (Result[float64], error)
 
-	ZCount(key string, rangeOptions *options.ZCountRange) (int64, error)
+	ZCount(key string, rangeOptions options.ZCountRange) (int64, error)
 
 	ZScan(key string, cursor string) (string, []string, error)
 
-	ZScanWithOptions(key string, cursor string, options *options.ZScanOptions) (string, []string, error)
+	ZScanWithOptions(key string, cursor string, options options.ZScanOptions) (string, []string, error)
 
 	ZRemRangeByLex(key string, rangeQuery options.RangeByLex) (int64, error)
 
@@ -87,13 +87,13 @@ type SortedSetCommands interface {
 
 	ZInter(keys options.KeyArray) ([]string, error)
 
-	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZInterOptions) (map[string]float64, error)
+	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options options.ZInterOptions) (map[string]float64, error)
 
 	ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 
 	ZInterStoreWithOptions(
 		destination string,
 		keysOrWeightedKeys options.KeysOrWeightedKeys,
-		options *options.ZInterOptions,
+		options options.ZInterOptions,
 	) (int64, error)
 }

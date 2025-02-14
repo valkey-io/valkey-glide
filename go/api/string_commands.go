@@ -14,13 +14,13 @@ import (
 type StringCommands interface {
 	Set(key string, value string) (string, error)
 
-	SetWithOptions(key string, value string, options *options.SetOptions) (Result[string], error)
+	SetWithOptions(key string, value string, options options.SetOptions) (Result[string], error)
 
 	Get(key string) (Result[string], error)
 
 	GetEx(key string) (Result[string], error)
 
-	GetExWithOptions(key string, options *options.GetExOptions) (Result[string], error)
+	GetExWithOptions(key string, options options.GetExOptions) (Result[string], error)
 
 	MSet(keyValueMap map[string]string) (string, error)
 

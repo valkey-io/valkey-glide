@@ -697,7 +697,7 @@ func ExampleGlideClient_RestoreWithOptions() {
 	dump, err := client.Dump("key1")
 	result1, err := client.Del([]string{"key1"})
 	opts := options.NewRestoreOptions().SetReplace().SetABSTTL().SetEviction(options.FREQ, 10)
-	result2, err := client.RestoreWithOptions("key1", 0, dump.Value(), opts)
+	result2, err := client.RestoreWithOptions("key1", 0, dump.Value(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -717,7 +717,7 @@ func ExampleGlideClusterClient_RestoreWithOptions() {
 	dump, err := client.Dump("key1")
 	result1, err := client.Del([]string{"key1"})
 	opts := options.NewRestoreOptions().SetReplace().SetABSTTL().SetEviction(options.FREQ, 10)
-	result2, err := client.RestoreWithOptions("key1", 0, dump.Value(), opts)
+	result2, err := client.RestoreWithOptions("key1", 0, dump.Value(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -929,7 +929,7 @@ func ExampleGlideClient_SortWithOptions() {
 	client.Set("weight_item2", "1")
 	client.Set("weight_item3", "2")
 	result, err := client.LPush("key1", []string{"item1", "item2", "item3"})
-	result1, err := client.SortWithOptions("key1", opts)
+	result1, err := client.SortWithOptions("key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -945,7 +945,7 @@ func ExampleGlideClusterClient_SortWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	opts := options.NewSortOptions().SetIsAlpha(false).SetOrderBy(options.ASC)
 	result, err := client.LPush("key1", []string{"3", "1", "2"})
-	result1, err := client.SortWithOptions("key1", opts)
+	result1, err := client.SortWithOptions("key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -994,7 +994,7 @@ func ExampleGlideClient_SortStoreWithOptions() {
 	client.Set("weight_item2", "1")
 	client.Set("weight_item3", "2")
 	result, err := client.LPush("key1", []string{"item1", "item2", "item3"})
-	result1, err := client.SortStoreWithOptions("key1", "key1_store", opts)
+	result1, err := client.SortStoreWithOptions("key1", "key1_store", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1010,7 +1010,7 @@ func ExampleGlideClusterClient_SortStoreWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	opts := options.NewSortOptions().SetIsAlpha(false).SetOrderBy(options.ASC)
 	result, err := client.LPush("{key}1", []string{"3", "1", "2"})
-	result1, err := client.SortStoreWithOptions("{key}1", "{key}2", opts)
+	result1, err := client.SortStoreWithOptions("{key}1", "{key}2", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1059,7 +1059,7 @@ func ExampleGlideClient_SortReadOnlyWithOptions() {
 	client.Set("weight_item2", "1")
 	client.Set("weight_item3", "2")
 	result, err := client.LPush("key1", []string{"item1", "item2", "item3"})
-	result1, err := client.SortReadOnlyWithOptions("key1", opts)
+	result1, err := client.SortReadOnlyWithOptions("key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1075,7 +1075,7 @@ func ExampleGlideClusterClient_SortReadOnlyWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	opts := options.NewSortOptions().SetIsAlpha(false).SetOrderBy(options.ASC)
 	result, err := client.LPush("key1", []string{"3", "1", "2"})
-	result1, err := client.SortReadOnlyWithOptions("key1", opts)
+	result1, err := client.SortReadOnlyWithOptions("key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1156,7 +1156,7 @@ func ExampleGlideClient_CopyWithOptions() {
 	client.Set("key1", "someValue")
 
 	opts := options.NewCopyOptions().SetReplace()
-	client.CopyWithOptions("key1", "key2", opts)
+	client.CopyWithOptions("key1", "key2", *opts)
 
 	result, err := client.Get("key2")
 	if err != nil {
@@ -1173,7 +1173,7 @@ func ExampleGlideClusterClient_CopyWithOptions() {
 	client.Set("{key}1", "someValue")
 
 	opts := options.NewCopyOptions().SetReplace()
-	client.CopyWithOptions("{key}1", "{key}2", opts)
+	client.CopyWithOptions("{key}1", "{key}2", *opts)
 
 	result, err := client.Get("{key}2")
 	if err != nil {

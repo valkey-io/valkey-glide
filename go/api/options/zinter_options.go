@@ -18,15 +18,9 @@ func (options *ZInterOptions) SetAggregate(aggregate Aggregate) *ZInterOptions {
 }
 
 func (options *ZInterOptions) ToArgs() ([]string, error) {
-	args := []string{}
-
 	if options.aggregate != "" {
-		aggArgs, err := options.aggregate.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, aggArgs...)
+		return options.aggregate.ToArgs()
 	}
 
-	return args, nil
+	return []string{}, nil
 }

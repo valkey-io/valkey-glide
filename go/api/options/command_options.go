@@ -223,7 +223,7 @@ func (scoreFilter ScoreFilter) ToString() (string, error) {
 	}
 }
 
-// Optional arguments to Restore(key string, ttl int64, value string, option *RestoreOptions)
+// Optional arguments to Restore(key string, ttl int64, value string, option RestoreOptions)
 //
 // Note IDLETIME and FREQ modifiers cannot be set at the same time.
 //
@@ -308,7 +308,7 @@ func (opts *InfoOptions) ToArgs() ([]string, error) {
 	return args, nil
 }
 
-// Optional arguments to Copy(source string, destination string, option *CopyOptions)
+// Optional arguments to Copy(source string, destination string, option CopyOptions)
 //
 // [valkey.io]: https://valkey.io/commands/Copy/
 type CopyOptions struct {
@@ -351,16 +351,16 @@ type ZPopOptions struct {
 	count int64
 }
 
-func NewZPopOptions() ZPopOptions {
-	return ZPopOptions{}
+func NewZPopOptions() *ZPopOptions {
+	return &ZPopOptions{}
 }
 
 // The maximum number of popped elements. If not specified, pops one member.
-func (opts ZPopOptions) SetCount(count int64) ZPopOptions {
+func (opts *ZPopOptions) SetCount(count int64) *ZPopOptions {
 	opts.count = count
 	return opts
 }
 
-func (opts ZPopOptions) ToArgs() ([]string, error) {
+func (opts *ZPopOptions) ToArgs() ([]string, error) {
 	return []string{utils.IntToString(opts.count)}, nil
 }
