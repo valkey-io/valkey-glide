@@ -120,6 +120,80 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 	return client.executeCommandWithRoute(requestType, args, nil)
 }
 
+func slotTypeToProtobuf(slotType config.SlotType) (protobuf.SlotTypes, error) {
+	switch slotType {
+	case config.SlotTypePrimary:
+		return protobuf.SlotTypes_Primary, nil
+	case config.SlotTypeReplica:
+		return protobuf.SlotTypes_Replica, nil
+	default:
+		return protobuf.SlotTypes_Primary, &errors.RequestError{Msg: "Invalid slot type"}
+	}
+}
+
+func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
+	switch route := route.(type) {
+	case config.SimpleNodeRoute:
+		{
+			var simpleRoute protobuf.SimpleRoutes
+			switch route {
+			case config.AllNodes:
+				simpleRoute = protobuf.SimpleRoutes_AllNodes
+			case config.AllPrimaries:
+				simpleRoute = protobuf.SimpleRoutes_AllPrimaries
+			case config.RandomRoute:
+				simpleRoute = protobuf.SimpleRoutes_Random
+			default:
+				return nil, &errors.RequestError{Msg: "Invalid simple node route"}
+			}
+			return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: simpleRoute}}, nil
+		}
+	case *config.SlotIdRoute:
+		{
+			slotType, err := slotTypeToProtobuf(route.SlotType)
+			if err != nil {
+				return nil, err
+			}
+			return &protobuf.Routes{
+				Value: &protobuf.Routes_SlotIdRoute{
+					SlotIdRoute: &protobuf.SlotIdRoute{
+						SlotType: slotType,
+						SlotId:   route.SlotID,
+					},
+				},
+			}, nil
+		}
+	case *config.SlotKeyRoute:
+		{
+			slotType, err := slotTypeToProtobuf(route.SlotType)
+			if err != nil {
+				return nil, err
+			}
+			return &protobuf.Routes{
+				Value: &protobuf.Routes_SlotKeyRoute{
+					SlotKeyRoute: &protobuf.SlotKeyRoute{
+						SlotType: slotType,
+						SlotKey:  route.SlotKey,
+					},
+				},
+			}, nil
+		}
+	case *config.ByAddressRoute:
+		{
+			return &protobuf.Routes{
+				Value: &protobuf.Routes_ByAddressRoute{
+					ByAddressRoute: &protobuf.ByAddressRoute{
+						Host: route.Host,
+						Port: route.Port,
+					},
+				},
+			}, nil
+		}
+	default:
+		return nil, &errors.RequestError{Msg: "Invalid route type"}
+	}
+}
+
 func (client *baseClient) executeCommandWithRoute(
 	requestType C.RequestType,
 	args []string,
@@ -142,7 +216,7 @@ func (client *baseClient) executeCommandWithRoute(
 	var routeBytesPtr *C.uchar = nil
 	var routeBytesCount C.uintptr_t = 0
 	if route != nil {
-		routeProto, err := route.ToRoutesProtobuf()
+		routeProto, err := routeToProtobuf(route)
 		if err != nil {
 			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
 		}
