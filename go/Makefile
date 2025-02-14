@@ -120,6 +120,20 @@ unit-test:
 	go test -v ./... -skip 'Example|TestGlideTestSuite' -run Test $(if $(test-filter), -run $(test-filter)) \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
 
+# start redis cluster with random ports.
+start-redis-cluster:
+	@OUTPUT=$$(python3 ../utils/cluster_manager.py start --cluster-mode); \
+	export GLIDE_CLUSTER_NODES=$$(echo "$$OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
+    @echo "Hello"
+
+stop-redis-cluster:
+	../utils/cluster_manager.py stop --prefix cluster
+
+var-test: export GLIDE_CLUSTER_NODES=$$(python3 ../utils/cluster_manager.py start --cluster-mode | grep 'CLUSTER_NODES=' | cut -d'=' -f2);
+var-test:
+	echo "=================================================="
+	echo ${GLIDE_CLUSTER_NODES}
+
 # example tests - skip complete IT suite (including MT)
 example-test:
 	mkdir -p reports
