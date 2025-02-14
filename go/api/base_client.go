@@ -120,6 +120,11 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 	return client.executeCommandWithRoute(requestType, args, nil)
 }
 
+// A dummy interface used to keep `toRoutesProtobuf` private
+type routeImpl interface {
+	toRoutesProtobuf() (*protobuf.Routes, error)
+}
+
 func (client *baseClient) executeCommandWithRoute(
 	requestType C.RequestType,
 	args []string,
@@ -142,7 +147,7 @@ func (client *baseClient) executeCommandWithRoute(
 	var routeBytesPtr *C.uchar = nil
 	var routeBytesCount C.uintptr_t = 0
 	if route != nil {
-		routeProto, err := route.ToRoutesProtobuf()
+		routeProto, err := route.(routeImpl).toRoutesProtobuf()
 		if err != nil {
 			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
 		}

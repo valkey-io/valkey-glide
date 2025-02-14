@@ -17,7 +17,7 @@ import (
 // - [config.SlotKeyRoute]
 // - [config.ByAddressRoute]
 type Route interface {
-	ToRoutesProtobuf() (*protobuf.Routes, error)
+	toRoutesProtobuf() (*protobuf.Routes, error)
 	IsMultiNode() bool
 }
 
@@ -38,7 +38,7 @@ const (
 	RandomRoute
 )
 
-func (simpleNodeRoute SimpleNodeRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
+func (simpleNodeRoute SimpleNodeRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
 	simpleRouteProto, err := mapSimpleNodeRoute(simpleNodeRoute)
 	if err != nil {
 		return nil, err
@@ -98,8 +98,8 @@ func mapSlotType(slotType SlotType) (protobuf.SlotTypes, error) {
 // Request routing configuration overrides the [api.ReadFrom] connection configuration.
 // If SlotTypeReplica is used, the request will be routed to a replica, even if the strategy is ReadFrom [api.PreferReplica].
 type SlotIdRoute struct {
-	slotType SlotType
-	slotID   int32
+	SlotType SlotType
+	SlotID   int32
 	notMultiNode
 }
 
@@ -107,11 +107,11 @@ type SlotIdRoute struct {
 // - slotId: Slot number. There are 16384 slots in a Valkey cluster, and each shard manages a slot range. Unless the slot is
 // known, it's better to route using [api.SlotTypePrimary].
 func NewSlotIdRoute(slotType SlotType, slotId int32) *SlotIdRoute {
-	return &SlotIdRoute{slotType: slotType, slotID: slotId}
+	return &SlotIdRoute{SlotType: slotType, SlotID: slotId}
 }
 
-func (slotIdRoute *SlotIdRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
-	slotType, err := mapSlotType(slotIdRoute.slotType)
+func (slotIdRoute *SlotIdRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
+	slotType, err := mapSlotType(slotIdRoute.SlotType)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (slotIdRoute *SlotIdRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
 		Value: &protobuf.Routes_SlotIdRoute{
 			SlotIdRoute: &protobuf.SlotIdRoute{
 				SlotType: slotType,
-				SlotId:   slotIdRoute.slotID,
+				SlotId:   slotIdRoute.SlotID,
 			},
 		},
 	}
@@ -141,7 +141,7 @@ func NewSlotKeyRoute(slotType SlotType, slotKey string) *SlotKeyRoute {
 	return &SlotKeyRoute{slotType: slotType, slotKey: slotKey}
 }
 
-func (slotKeyRoute *SlotKeyRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
+func (slotKeyRoute *SlotKeyRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
 	slotType, err := mapSlotType(slotKeyRoute.slotType)
 	if err != nil {
 		return nil, err
@@ -196,7 +196,7 @@ func NewByAddressRouteWithHost(host string) (*ByAddressRoute, error) {
 	return &ByAddressRoute{host: split[0], port: int32(port)}, nil
 }
 
-func (byAddressRoute *ByAddressRoute) ToRoutesProtobuf() (*protobuf.Routes, error) {
+func (byAddressRoute *ByAddressRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
 	request := &protobuf.Routes{
 		Value: &protobuf.Routes_ByAddressRoute{
 			ByAddressRoute: &protobuf.ByAddressRoute{
