@@ -132,7 +132,7 @@ func slotTypeToProtobuf(slotType config.SlotType) (protobuf.SlotTypes, error) {
 }
 
 func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
-	switch route.(type) {
+	switch route := route.(type) {
 	case config.SimpleNodeRoute:
 		{
 			var simpleRoute protobuf.SimpleRoutes
@@ -150,7 +150,7 @@ func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 		}
 	case *config.SlotIdRoute:
 		{
-			slotType, err := slotTypeToProtobuf(route.(*config.SlotIdRoute).SlotType)
+			slotType, err := slotTypeToProtobuf(route.SlotType)
 			if err != nil {
 				return nil, err
 			}
@@ -158,14 +158,14 @@ func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 				Value: &protobuf.Routes_SlotIdRoute{
 					SlotIdRoute: &protobuf.SlotIdRoute{
 						SlotType: slotType,
-						SlotId:   route.(*config.SlotIdRoute).SlotID,
+						SlotId:   route.SlotID,
 					},
 				},
 			}, nil
 		}
 	case *config.SlotKeyRoute:
 		{
-			slotType, err := slotTypeToProtobuf(route.(*config.SlotKeyRoute).SlotType)
+			slotType, err := slotTypeToProtobuf(route.SlotType)
 			if err != nil {
 				return nil, err
 			}
@@ -173,7 +173,7 @@ func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 				Value: &protobuf.Routes_SlotKeyRoute{
 					SlotKeyRoute: &protobuf.SlotKeyRoute{
 						SlotType: slotType,
-						SlotKey:  route.(*config.SlotKeyRoute).SlotKey,
+						SlotKey:  route.SlotKey,
 					},
 				},
 			}, nil
@@ -183,8 +183,8 @@ func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 			return &protobuf.Routes{
 				Value: &protobuf.Routes_ByAddressRoute{
 					ByAddressRoute: &protobuf.ByAddressRoute{
-						Host: route.(*config.ByAddressRoute).Host,
-						Port: route.(*config.ByAddressRoute).Port,
+						Host: route.Host,
+						Port: route.Port,
 					},
 				},
 			}, nil
