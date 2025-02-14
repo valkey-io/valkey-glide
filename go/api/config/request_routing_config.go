@@ -98,8 +98,8 @@ func mapSlotType(slotType SlotType) (protobuf.SlotTypes, error) {
 // Request routing configuration overrides the [api.ReadFrom] connection configuration.
 // If SlotTypeReplica is used, the request will be routed to a replica, even if the strategy is ReadFrom [api.PreferReplica].
 type SlotIdRoute struct {
-	SlotType SlotType
-	SlotID   int32
+	slotType SlotType
+	slotID   int32
 	notMultiNode
 }
 
@@ -107,11 +107,11 @@ type SlotIdRoute struct {
 // - slotId: Slot number. There are 16384 slots in a Valkey cluster, and each shard manages a slot range. Unless the slot is
 // known, it's better to route using [api.SlotTypePrimary].
 func NewSlotIdRoute(slotType SlotType, slotId int32) *SlotIdRoute {
-	return &SlotIdRoute{SlotType: slotType, SlotID: slotId}
+	return &SlotIdRoute{slotType: slotType, slotID: slotId}
 }
 
 func (slotIdRoute *SlotIdRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
-	slotType, err := mapSlotType(slotIdRoute.SlotType)
+	slotType, err := mapSlotType(slotIdRoute.slotType)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (slotIdRoute *SlotIdRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
 		Value: &protobuf.Routes_SlotIdRoute{
 			SlotIdRoute: &protobuf.SlotIdRoute{
 				SlotType: slotType,
-				SlotId:   slotIdRoute.SlotID,
+				SlotId:   slotIdRoute.slotID,
 			},
 		},
 	}
