@@ -48,8 +48,6 @@ jobs:
     validate-release-version:
         if: ${{ github.event.inputs.pkg_go_dev_publish }}
         runs-on: ubuntu-latest
-        outputs:
-            RELEASE_VERSION: ${{ steps.release-tag.outputs.RELEASE_VERSION }}
         env:
             INPUT_VERSION: ${{ github.event.inputs.version }}
         steps:
@@ -74,7 +72,7 @@ jobs:
             - name: Output release tag
               id: release-tag
               run: |
-                  echo "RELEASE_VERSION=${{ env.INPUT_VERSION }}" >> $GITHUB_OUTPUT
+                  echo "RELEASE_VERSION=${{ env.INPUT_VERSION }}" >> $GITHUB_ENV
 
     create-binaries:
         needs: [load-platform-matrix]
@@ -146,15 +144,21 @@ jobs:
                   cp lib.h $GITHUB_WORKSPACE/go/
                   mkdir -p $GITHUB_WORKSPACE/go/protobuf
                   cp protobuf/* $GITHUB_WORKSPACE/go/protobuf/
+            # Need to patch it to avoid error which GLIDE mac users may see while building their code
+            # > ... github.com/valkey-io/valkey-glide/go@***/target/release not found
+            # https://github.com/valkey-io/valkey-glide/issues/3177
+            - name: Patch cgo definitions
+              run: |
+                  sed -i '\|// #cgo LDFLAGS: -L../target/release|d' go/api/base_client.go
             - name: Commit and push tag
               run: |
                   git config user.name github-actions
                   git config user.email github-actions@github.com
                   git add -f .
                   git commit -m "Automated commit from GitHub Actions"
-                  git tag go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
-                  git push origin go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
-                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go@${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
+                  git tag go/$RELEASE_VERSION
+                  git push origin go/$RELEASE_VERSION
+                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go@$RELEASE_VERSION
 
     extra-post-commit-test:
         needs:
@@ -181,7 +185,7 @@ jobs:
                   fi
             - uses: actions/checkout@v4
               with:
-                  ref: "go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}"
+                  ref: "go/${{ RELEASE_VERSION }}"
             - uses: actions/setup-go@v5
               with:
                   go-version: "^1.22.0"
@@ -204,13 +208,12 @@ jobs:
               working-directory: go/benchmarks
               run: |
                   # change go/benchmarks/go.mod on the fly
-                  export ESCAPED_VERSION=$(echo "${{ needs.validate-release-version.outputs.RELEASE_VERSION }}" | sed 's/\./\\./g')
                   if [[ "${{ matrix.host.OS }}" == "macos" ]]; then
-                      sed -i '' '/replace github\.com\/valkey-io\/valkey-glide\/go/d' go.mod
-                      sed -i '' "s/github\.com\/valkey-io\/valkey-glide\/go v0\.0\.0/github.com\/valkey-io\/valkey-glide\/go $ESCAPED_VERSION/g" go.mod
+                      sed -i '' '\|replace github\.com/valkey-io/valkey-glide/go|d' go.mod
+                      sed -i '' "s|github\.com/valkey-io/valkey-glide/go v.*|github.com/valkey-io/valkey-glide/go $RELEASE_VERSION|g" go.mod
                   else
-                      sed -i '/replace github\.com\/valkey-io\/valkey-glide\/go/d' go.mod
-                      sed -i "s/github\.com\/valkey-io\/valkey-glide\/go v0\.0\.0/github.com\/valkey-io\/valkey-glide\/go $ESCAPED_VERSION/g" go.mod
+                      sed -i '\|replace github\.com/valkey-io/valkey-glide/go|d' go.mod
+                      sed -i "s|github\.com/valkey-io/valkey-glide/go v.*|github.com/valkey-io/valkey-glide/go $RELEASE_VERSION|g" go.mod
                   fi
                   go mod tidy
                   go run . -minimal -clients glide -concurrentTasks 10 -port ${{ env.PORT }}
