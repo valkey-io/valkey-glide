@@ -27,26 +27,26 @@ type SetOptions struct {
 	Expiry *Expiry
 }
 
-func NewSetOptions() SetOptions {
-	return SetOptions{}
+func NewSetOptions() *SetOptions {
+	return &SetOptions{}
 }
 
-func (setOptions SetOptions) SetConditionalSet(conditionalSet ConditionalSet) SetOptions {
+func (setOptions *SetOptions) SetConditionalSet(conditionalSet ConditionalSet) *SetOptions {
 	setOptions.ConditionalSet = conditionalSet
 	return setOptions
 }
 
-func (setOptions SetOptions) SetReturnOldValue(returnOldValue bool) SetOptions {
+func (setOptions *SetOptions) SetReturnOldValue(returnOldValue bool) *SetOptions {
 	setOptions.ReturnOldValue = returnOldValue
 	return setOptions
 }
 
-func (setOptions SetOptions) SetExpiry(expiry Expiry) SetOptions {
-	setOptions.Expiry = &expiry
+func (setOptions *SetOptions) SetExpiry(expiry *Expiry) *SetOptions {
+	setOptions.Expiry = expiry
 	return setOptions
 }
 
-func (opts SetOptions) ToArgs() ([]string, error) {
+func (opts *SetOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.ConditionalSet != "" {
@@ -82,16 +82,16 @@ type GetExOptions struct {
 	Expiry *Expiry
 }
 
-func NewGetExOptions() GetExOptions {
-	return GetExOptions{}
+func NewGetExOptions() *GetExOptions {
+	return &GetExOptions{}
 }
 
-func (getExOptions GetExOptions) SetExpiry(expiry Expiry) GetExOptions {
-	getExOptions.Expiry = &expiry
+func (getExOptions *GetExOptions) SetExpiry(expiry *Expiry) *GetExOptions {
+	getExOptions.Expiry = expiry
 	return getExOptions
 }
 
-func (opts GetExOptions) ToArgs() ([]string, error) {
+func (opts *GetExOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 
@@ -130,16 +130,16 @@ type Expiry struct {
 	Count uint64
 }
 
-func NewExpiry() Expiry {
-	return Expiry{}
+func NewExpiry() *Expiry {
+	return &Expiry{}
 }
 
-func (ex Expiry) SetType(expiryType ExpiryType) Expiry {
+func (ex *Expiry) SetType(expiryType ExpiryType) *Expiry {
 	ex.Type = expiryType
 	return ex
 }
 
-func (ex Expiry) SetCount(count uint64) Expiry {
+func (ex *Expiry) SetCount(count uint64) *Expiry {
 	ex.Count = count
 	return ex
 }
@@ -161,23 +161,23 @@ type LPosOptions struct {
 	MaxLen int64
 }
 
-func NewLPosOptions() LPosOptions {
-	return LPosOptions{}
+func NewLPosOptions() *LPosOptions {
+	return &LPosOptions{}
 }
 
-func (lposOptions LPosOptions) SetRank(rank int64) LPosOptions {
+func (lposOptions *LPosOptions) SetRank(rank int64) *LPosOptions {
 	lposOptions.IsRankSet = true
 	lposOptions.Rank = rank
 	return lposOptions
 }
 
-func (lposOptions LPosOptions) SetMaxLen(maxLen int64) LPosOptions {
+func (lposOptions *LPosOptions) SetMaxLen(maxLen int64) *LPosOptions {
 	lposOptions.IsMaxLenSet = true
 	lposOptions.MaxLen = maxLen
 	return lposOptions
 }
 
-func (opts LPosOptions) ToArgs() ([]string, error) {
+func (opts *LPosOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	if opts.IsRankSet {
 		args = append(args, RankKeyword, utils.IntToString(opts.Rank))
@@ -237,18 +237,18 @@ type RestoreOptions struct {
 	eviction Eviction
 }
 
-func NewRestoreOptions() RestoreOptions {
-	return RestoreOptions{}
+func NewRestoreOptions() *RestoreOptions {
+	return &RestoreOptions{}
 }
 
 // Custom setter methods to replace existing key.
-func (restoreOption RestoreOptions) SetReplace() RestoreOptions {
+func (restoreOption *RestoreOptions) SetReplace() *RestoreOptions {
 	restoreOption.replace = ReplaceKeyword
 	return restoreOption
 }
 
 // Custom setter methods to represent absolute timestamp (in milliseconds) for TTL.
-func (restoreOption RestoreOptions) SetABSTTL() RestoreOptions {
+func (restoreOption *RestoreOptions) SetABSTTL() *RestoreOptions {
 	restoreOption.absTTL = ABSTTLKeyword
 	return restoreOption
 }
@@ -262,13 +262,13 @@ type Eviction struct {
 }
 
 // Custom setter methods set the idletime/frequency of object.
-func (restoreOption RestoreOptions) SetEviction(evictionType EvictionType, count int64) RestoreOptions {
+func (restoreOption *RestoreOptions) SetEviction(evictionType EvictionType, count int64) *RestoreOptions {
 	restoreOption.eviction.Type = evictionType
 	restoreOption.eviction.Count = count
 	return restoreOption
 }
 
-func (opts RestoreOptions) ToArgs() ([]string, error) {
+func (opts *RestoreOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.replace != "" {
@@ -318,23 +318,23 @@ type CopyOptions struct {
 	dbDestination int64
 }
 
-func NewCopyOptions() CopyOptions {
-	return CopyOptions{replace: false}
+func NewCopyOptions() *CopyOptions {
+	return &CopyOptions{replace: false}
 }
 
 // Custom setter methods to removes the destination key before copying the value to it.
-func (restoreOption CopyOptions) SetReplace() CopyOptions {
+func (restoreOption *CopyOptions) SetReplace() *CopyOptions {
 	restoreOption.replace = true
 	return restoreOption
 }
 
 // Custom setter methods to allows specifying an alternative logical database index for the destination key.
-func (copyOption CopyOptions) SetDBDestination(destinationDB int64) CopyOptions {
+func (copyOption *CopyOptions) SetDBDestination(destinationDB int64) *CopyOptions {
 	copyOption.dbDestination = destinationDB
 	return copyOption
 }
 
-func (opts CopyOptions) ToArgs() ([]string, error) {
+func (opts *CopyOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.replace {
@@ -351,16 +351,16 @@ type ZPopOptions struct {
 	count int64
 }
 
-func NewZPopOptions() ZPopOptions {
-	return ZPopOptions{}
+func NewZPopOptions() *ZPopOptions {
+	return &ZPopOptions{}
 }
 
 // The maximum number of popped elements. If not specified, pops one member.
-func (opts ZPopOptions) SetCount(count int64) ZPopOptions {
+func (opts *ZPopOptions) SetCount(count int64) *ZPopOptions {
 	opts.count = count
 	return opts
 }
 
-func (opts ZPopOptions) ToArgs() ([]string, error) {
+func (opts *ZPopOptions) ToArgs() ([]string, error) {
 	return []string{utils.IntToString(opts.count)}, nil
 }

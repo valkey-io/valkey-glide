@@ -49,7 +49,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue() {
 		suite.verifyOK(client.Set(keyName, initialValue))
 
 		opts := options.NewSetOptions().SetReturnOldValue(true)
-		result, err := client.SetWithOptions(keyName, anotherValue, opts)
+		result, err := client.SetWithOptions(keyName, anotherValue, *opts)
 
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
@@ -62,7 +62,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 		suite.verifyOK(client.Set(key, initialValue))
 
 		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfExists)
-		result, err := client.SetWithOptions(key, anotherValue, opts)
+		result, err := client.SetWithOptions(key, anotherValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
 
@@ -76,7 +76,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfExists)
-		result, err := client.SetWithOptions(key, anotherValue, opts)
+		result, err := client.SetWithOptions(key, anotherValue, *opts)
 
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "", result.Value())
@@ -87,7 +87,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() 
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfDoesNotExist)
-		result, err := client.SetWithOptions(key, anotherValue, opts)
+		result, err := client.SetWithOptions(key, anotherValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
 
@@ -103,7 +103,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey()
 		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfDoesNotExist)
 		suite.verifyOK(client.Set(key, initialValue))
 
-		result, err := client.SetWithOptions(key, anotherValue, opts)
+		result, err := client.SetWithOptions(key, anotherValue, *opts)
 
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "", result.Value())
@@ -120,7 +120,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().
 			SetExpiry(options.NewExpiry().SetType(options.Milliseconds).SetCount(uint64(2000)))
-		result, err := client.SetWithOptions(key, initialValue, opts)
+		result, err := client.SetWithOptions(key, initialValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
 
@@ -129,7 +129,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 		assert.Equal(suite.T(), initialValue, result.Value())
 
 		opts = options.NewSetOptions().SetExpiry(options.NewExpiry().SetType(options.KeepExisting))
-		result, err = client.SetWithOptions(key, anotherValue, opts)
+		result, err = client.SetWithOptions(key, anotherValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
 
@@ -151,7 +151,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().
 			SetExpiry(options.NewExpiry().SetType(options.Milliseconds).SetCount(uint64(100500)))
-		result, err := client.SetWithOptions(key, initialValue, opts)
+		result, err := client.SetWithOptions(key, initialValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
 
@@ -161,7 +161,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 
 		opts = options.NewSetOptions().
 			SetExpiry(options.NewExpiry().SetType(options.Milliseconds).SetCount(uint64(2000)))
-		result, err = client.SetWithOptions(key, anotherValue, opts)
+		result, err = client.SetWithOptions(key, anotherValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
 
@@ -200,7 +200,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_PersistKey() {
 
 		opts := options.NewGetExOptions().
 			SetExpiry(options.NewExpiry().SetType(options.Milliseconds).SetCount(uint64(2000)))
-		result, err := client.GetExWithOptions(key, opts)
+		result, err := client.GetExWithOptions(key, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 
@@ -211,7 +211,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_PersistKey() {
 		time.Sleep(1000 * time.Millisecond)
 
 		opts = options.NewGetExOptions().SetExpiry(options.NewExpiry().SetType(options.Persist))
-		result, err = client.GetExWithOptions(key, opts)
+		result, err = client.GetExWithOptions(key, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 	})
@@ -224,7 +224,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_UpdateExpiry() {
 
 		opts := options.NewGetExOptions().
 			SetExpiry(options.NewExpiry().SetType(options.Milliseconds).SetCount(uint64(2000)))
-		result, err := client.GetExWithOptions(key, opts)
+		result, err := client.GetExWithOptions(key, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 
@@ -245,7 +245,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue_nonExistentKey() 
 		key := uuid.New().String()
 		opts := options.NewSetOptions().SetReturnOldValue(true)
 
-		result, err := client.SetWithOptions(key, anotherValue, opts)
+		result, err := client.SetWithOptions(key, anotherValue, *opts)
 
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "", result.Value())
@@ -1388,7 +1388,7 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), res2.Value())
 
-		res3, err := client.LPosWithOptions(key, "b", options.NewLPosOptions().SetRank(2))
+		res3, err := client.LPosWithOptions(key, "b", *options.NewLPosOptions().SetRank(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(5), res3.Value())
 
@@ -1398,7 +1398,7 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res4)
 
 		// reverse traversal
-		res5, err := client.LPosWithOptions(key, "b", options.NewLPosOptions().SetRank(-2))
+		res5, err := client.LPosWithOptions(key, "b", *options.NewLPosOptions().SetRank(-2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res5.Value())
 
@@ -1406,7 +1406,7 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		res6, err := client.LPosWithOptions(
 			key,
 			"a",
-			options.NewLPosOptions().SetRank(1).SetMaxLen(0),
+			*options.NewLPosOptions().SetRank(1).SetMaxLen(0),
 		)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), res6.Value())
@@ -1415,19 +1415,19 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		res7, err := client.LPosWithOptions(
 			key,
 			"c",
-			options.NewLPosOptions().SetRank(1).SetMaxLen(2),
+			*options.NewLPosOptions().SetRank(1).SetMaxLen(2),
 		)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res7)
 
 		// invalid rank value
-		res8, err := client.LPosWithOptions(key, "a", options.NewLPosOptions().SetRank(0))
+		res8, err := client.LPosWithOptions(key, "a", *options.NewLPosOptions().SetRank(0))
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res8)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		// invalid maxlen value
-		res9, err := client.LPosWithOptions(key, "a", options.NewLPosOptions().SetMaxLen(-1))
+		res9, err := client.LPosWithOptions(key, "a", *options.NewLPosOptions().SetMaxLen(-1))
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res9)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -1492,16 +1492,16 @@ func (suite *GlideTestSuite) TestLPosCount_withOptions() {
 		assert.Equal(suite.T(), int64(6), res1)
 		assert.Nil(suite.T(), err)
 
-		res2, err := client.LPosCountWithOptions(key, "a", int64(0), options.NewLPosOptions().SetRank(1))
+		res2, err := client.LPosCountWithOptions(key, "a", int64(0), *options.NewLPosOptions().SetRank(1))
 		assert.Equal(suite.T(), []int64{0, 1, 4}, res2)
 		assert.Nil(suite.T(), err)
 
-		res3, err := client.LPosCountWithOptions(key, "a", int64(0), options.NewLPosOptions().SetRank(2))
+		res3, err := client.LPosCountWithOptions(key, "a", int64(0), *options.NewLPosOptions().SetRank(2))
 		assert.Equal(suite.T(), []int64{1, 4}, res3)
 		assert.Nil(suite.T(), err)
 
 		// reverse traversal
-		res4, err := client.LPosCountWithOptions(key, "a", int64(0), options.NewLPosOptions().SetRank(-1))
+		res4, err := client.LPosCountWithOptions(key, "a", int64(0), *options.NewLPosOptions().SetRank(-1))
 		assert.Equal(suite.T(), []int64{4, 1, 0}, res4)
 		assert.Nil(suite.T(), err)
 	})
@@ -4853,7 +4853,7 @@ func (suite *GlideTestSuite) TestZPopMin() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"one": float64(1)}, res2)
 
-		res3, err := client.ZPopMinWithOptions(key1, options.NewZPopOptions().SetCount(2))
+		res3, err := client.ZPopMinWithOptions(key1, *options.NewZPopOptions().SetCount(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": float64(2), "three": float64(3)}, res3)
 
@@ -4884,7 +4884,7 @@ func (suite *GlideTestSuite) TestZPopMax() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"three": float64(3)}, res2)
 
-		res3, err := client.ZPopMaxWithOptions(key1, options.NewZPopOptions().SetCount(2))
+		res3, err := client.ZPopMaxWithOptions(key1, *options.NewZPopOptions().SetCount(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": float64(2), "one": float64(1)}, res3)
 
@@ -6268,7 +6268,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), deletedCount)
 		optsReplace := options.NewRestoreOptions().SetReplace()
-		result_test1, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), optsReplace)
+		result_test1, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), *optsReplace)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result_test1.Value())
 		resultGetRestoreKey, err := client.Get(key)
@@ -6280,7 +6280,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test2)
 		opts_test2 := options.NewRestoreOptions().SetABSTTL()
-		result_test2, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), opts_test2)
+		result_test2, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), *opts_test2)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result_test2.Value())
 		resultGet_test2, err := client.Get(key)
@@ -6292,7 +6292,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test3)
 		opts_test3 := options.NewRestoreOptions().SetEviction(options.FREQ, 10)
-		result_test3, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), opts_test3)
+		result_test3, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), *opts_test3)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result_test3.Value())
 		resultGet_test3, err := client.Get(key)
@@ -6304,7 +6304,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test4)
 		opts_test4 := options.NewRestoreOptions().SetEviction(options.IDLETIME, 10)
-		result_test4, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), opts_test4)
+		result_test4, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), *opts_test4)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result_test4.Value())
 		resultGet_test4, err := client.Get(key)
@@ -7428,7 +7428,7 @@ func (suite *GlideTestSuite) TestCopyWithOptions() {
 
 		// Test 1: Check the copy command with options
 		optsCopy := options.NewCopyOptions().SetReplace()
-		resultCopy, err := client.CopyWithOptions(key, key2, optsCopy)
+		resultCopy, err := client.CopyWithOptions(key, key2, *optsCopy)
 		assert.Nil(t, err)
 		assert.True(t, resultCopy)
 

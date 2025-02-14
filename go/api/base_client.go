@@ -4484,7 +4484,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/restore/
 func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
-	return client.RestoreWithOptions(key, ttl, value, options.NewRestoreOptions())
+	return client.RestoreWithOptions(key, ttl, value, *options.NewRestoreOptions())
 }
 
 // Create a key associated with a value that is obtained by

@@ -39,7 +39,7 @@ func ExampleGlideClient_SetWithOptions() {
 		SetExpiry(options.NewExpiry().
 			SetType(options.Seconds).
 			SetCount(5))
-	result, err := client.SetWithOptions("my_key", "my_value", options)
+	result, err := client.SetWithOptions("my_key", "my_value", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -55,7 +55,7 @@ func ExampleGlideClusterClient_SetWithOptions() {
 		SetExpiry(options.NewExpiry().
 			SetType(options.Seconds).
 			SetCount(uint64(5)))
-	result, err := client.SetWithOptions("my_key", "my_value", options)
+	result, err := client.SetWithOptions("my_key", "my_value", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -156,7 +156,7 @@ func ExampleGlideClient_GetExWithOptions() {
 		SetExpiry(options.NewExpiry().
 			SetType(options.Seconds).
 			SetCount(5))
-	result, err := client.GetExWithOptions("my_key", options)
+	result, err := client.GetExWithOptions("my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -177,7 +177,7 @@ func ExampleGlideClusterClient_GetExWithOptions() {
 		SetExpiry(options.NewExpiry().
 			SetType(options.Seconds).
 			SetCount(uint64(5)))
-	result, err := client.GetExWithOptions("my_key", options)
+	result, err := client.GetExWithOptions("my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

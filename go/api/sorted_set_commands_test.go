@@ -192,7 +192,7 @@ func ExampleGlideClient_ZPopMinWithOptions() {
 
 	result, err := client.ZAdd("key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
 	opts := options.NewZPopOptions().SetCount(2)
-	result1, err := client.ZPopMinWithOptions("key1", opts)
+	result1, err := client.ZPopMinWithOptions("key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -209,7 +209,7 @@ func ExampleGlideClusterClient_ZPopMinWithOptions() {
 
 	result, err := client.ZAdd("key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
 	opts := options.NewZPopOptions().SetCount(2)
-	result1, err := client.ZPopMinWithOptions("key1", opts)
+	result1, err := client.ZPopMinWithOptions("key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -258,7 +258,7 @@ func ExampleGlideClient_ZPopMaxWithOptions() {
 
 	result, err := client.ZAdd("key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
 	opts := options.NewZPopOptions().SetCount(2)
-	result1, err := client.ZPopMaxWithOptions("key1", opts)
+	result1, err := client.ZPopMaxWithOptions("key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -275,7 +275,7 @@ func ExampleGlideClusterClient_ZPopMaxWithOptions() {
 
 	result, err := client.ZAdd("key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
 	opts := options.NewZPopOptions().SetCount(2)
-	result1, err := client.ZPopMaxWithOptions("key1", opts)
+	result1, err := client.ZPopMaxWithOptions("key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
