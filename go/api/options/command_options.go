@@ -345,3 +345,22 @@ func (opts CopyOptions) ToArgs() ([]string, error) {
 	}
 	return args, err
 }
+
+// Optional arguments for `ZPopMin` and `ZPopMax` commands.
+type ZPopOptions struct {
+	count int64
+}
+
+func NewZPopOptions() ZPopOptions {
+	return ZPopOptions{}
+}
+
+// The maximum number of popped elements. If not specified, pops one member.
+func (opts ZPopOptions) SetCount(count int64) ZPopOptions {
+	opts.count = count
+	return opts
+}
+
+func (opts ZPopOptions) ToArgs() ([]string, error) {
+	return []string{utils.IntToString(opts.count)}, nil
+}

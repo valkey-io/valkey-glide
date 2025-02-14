@@ -4163,22 +4163,22 @@ func (suite *GlideTestSuite) TestRename() {
 	})
 }
 
-func (suite *GlideTestSuite) TestRenamenx() {
+func (suite *GlideTestSuite) TestRenameNX() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		// Test 1 Check if the renamenx command return true if key was renamed to newKey
+		// Test 1 Check if the RenameNX command return true if key was renamed to newKey
 		key := "{keyName}" + uuid.NewString()
 		key2 := "{keyName}" + uuid.NewString()
 		suite.verifyOK(client.Set(key, initialValue))
-		res1, err := client.Renamenx(key, key2)
+		res1, err := client.RenameNX(key, key2)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), res1)
 
-		// Test 2 Check if the renamenx command return false if newKey already exists.
+		// Test 2 Check if the RenameNX command return false if newKey already exists.
 		key3 := "{keyName}" + uuid.NewString()
 		key4 := "{keyName}" + uuid.NewString()
 		suite.verifyOK(client.Set(key3, initialValue))
 		suite.verifyOK(client.Set(key4, initialValue))
-		res2, err := client.Renamenx(key3, key4)
+		res2, err := client.RenameNX(key3, key4)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), res2)
 	})
@@ -4853,7 +4853,7 @@ func (suite *GlideTestSuite) TestZPopMin() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"one": float64(1)}, res2)
 
-		res3, err := client.ZPopMinWithCount(key1, 2)
+		res3, err := client.ZPopMinWithOptions(key1, options.NewZPopOptions().SetCount(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": float64(2), "three": float64(3)}, res3)
 
@@ -4884,7 +4884,7 @@ func (suite *GlideTestSuite) TestZPopMax() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"three": float64(3)}, res2)
 
-		res3, err := client.ZPopMaxWithCount(key1, 2)
+		res3, err := client.ZPopMaxWithOptions(key1, options.NewZPopOptions().SetCount(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), map[string]float64{"two": float64(2), "one": float64(1)}, res3)
 

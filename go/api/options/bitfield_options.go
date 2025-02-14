@@ -33,9 +33,9 @@ const (
 )
 
 const (
-	get string = "GET"
-	set string = "SET"
-	incrBy string = "INCRBY"
+	get      string = "GET"
+	set      string = "SET"
+	incrBy   string = "INCRBY"
 	overFlow string = "OVERFLOW"
 )
 
