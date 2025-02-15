@@ -146,12 +146,6 @@ jobs:
                   cp lib.h $GITHUB_WORKSPACE/go/
                   mkdir -p $GITHUB_WORKSPACE/go/protobuf
                   cp protobuf/* $GITHUB_WORKSPACE/go/protobuf/
-            # Need to patch it to avoid error which GLIDE mac users may see while building their code
-            # > ... github.com/valkey-io/valkey-glide/go@***/target/release not found
-            # https://github.com/valkey-io/valkey-glide/issues/3177
-            - name: Patch cgo definitions
-              run: |
-                  sed -i '\|// #cgo LDFLAGS: -L../target/release|d' go/api/base_client.go
             - name: Commit and push tag
               run: |
                   RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
