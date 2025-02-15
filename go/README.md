@@ -125,7 +125,7 @@ Development instructions for local building & testing the package are in the [DE
 
 When building an application on macos, a notice like this may appear:
 ```
-ld: warning: '/private/var/folders/2s/h6hvv9ps03xgz_krkkstvq_r0000gn/T/go-link-4186951927/go.o' has malformed LC_DYSYMTAB, expected 123 undefined symbols to start at index 17006, found 174 undefined symbols starting at index 68
+ld: warning: '...' has malformed LC_DYSYMTAB, expected 123 undefined symbols to start at index 17006, found 174 undefined symbols starting at index 68
 ```
 It could be safely ignored. It is not an error, it could be suppressed by setting `LDFLAGS` for go as (described there](https://github.com/golang/go/issues/61229#issuecomment-1988965927).
 We're working on fixing this issue, you can track it in [#3177](https://github.com/valkey-io/valkey-glide/issues/3177).
