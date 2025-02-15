@@ -48,6 +48,8 @@ jobs:
     validate-release-version:
         if: ${{ github.event.inputs.pkg_go_dev_publish }}
         runs-on: ubuntu-latest
+        outputs:
+            RELEASE_VERSION: ${{ steps.release-tag.outputs.RELEASE_VERSION }}
         env:
             INPUT_VERSION: ${{ github.event.inputs.version }}
         steps:
@@ -72,7 +74,7 @@ jobs:
             - name: Output release tag
               id: release-tag
               run: |
-                  echo "RELEASE_VERSION=${{ env.INPUT_VERSION }}" >> $GITHUB_ENV
+                  echo "RELEASE_VERSION=${{ env.INPUT_VERSION }}" >> $GITHUB_OUTPUT
 
     create-binaries:
         needs: [load-platform-matrix]
@@ -152,6 +154,7 @@ jobs:
                   sed -i '\|// #cgo LDFLAGS: -L../target/release|d' go/api/base_client.go
             - name: Commit and push tag
               run: |
+                  RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   git config user.name github-actions
                   git config user.email github-actions@github.com
                   git add -f .
@@ -185,7 +188,7 @@ jobs:
                   fi
             - uses: actions/checkout@v4
               with:
-                  ref: "go/${{ env.RELEASE_VERSION }}"
+                  ref: "go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}"
             - uses: actions/setup-go@v5
               with:
                   go-version: "^1.22.0"
@@ -208,6 +211,7 @@ jobs:
               working-directory: go/benchmarks
               run: |
                   # change go/benchmarks/go.mod on the fly
+                  RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   if [[ "${{ matrix.host.OS }}" == "macos" ]]; then
                       sed -i '' '\|replace github\.com/valkey-io/valkey-glide/go|d' go.mod
                       sed -i '' "s|github\.com/valkey-io/valkey-glide/go v.*|github.com/valkey-io/valkey-glide/go $RELEASE_VERSION|g" go.mod
