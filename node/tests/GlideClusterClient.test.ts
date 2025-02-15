@@ -2386,7 +2386,7 @@ describe("GlideClusterClient", () => {
 
                     await client_for_config_set.configSet(
                         { "availability-zone": az },
-                        { route: { type: "replicaSlotId", id: 12182 } },
+                        { route: { type: "replicaSlotKey", key: "foo" } },
                     );
 
                     // Stage 2: Create AZ affinity client and verify configuration
@@ -2402,11 +2402,8 @@ describe("GlideClusterClient", () => {
                             ),
                         );
 
-                    const key = "foo_{12182}"; // Key targets slot 12182
-                    await client_for_testing_az.set(key, "testvalue");
-
                     for (let i = 0; i < get_calls; i++) {
-                        await client_for_testing_az.get(key);
+                        await client_for_testing_az.get("foo");
                     }
 
                     // Stage 4: Verify GET commands were routed correctly
