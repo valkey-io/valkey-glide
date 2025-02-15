@@ -155,13 +155,8 @@ jobs:
             - name: Commit and push tag
               run: |
                   RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
-                  git config user.name github-actions
-                  git config user.email github-actions@github.com
-                  git add -f .
-                  git commit -m "Automated commit from GitHub Actions"
-                  git tag go/$RELEASE_VERSION
-                  git push origin go/$RELEASE_VERSION
-                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go@$RELEASE_VERSION
+                  echo $RELEASE_VERSION
+                  false
 
     extra-post-commit-test:
         needs:
