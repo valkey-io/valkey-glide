@@ -1,9 +1,7 @@
 [env]
 GLIDE_NAME = { value = "GlideGo", force = true }
 GLIDE_VERSION = "0.1.0"
+MACOSX_DEPLOYMENT_TARGET = "10.0"
 
 # [target.aarch64-apple-darwin]
 # rustflags = ["-mmacosx-version-min=10.0"]
-
-[env]
-MACOSX_DEPLOYMENT_TARGET = "10.0"
