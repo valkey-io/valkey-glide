@@ -4,7 +4,7 @@ package api
 
 // #cgo LDFLAGS: -lglide_rs
 // #cgo !windows LDFLAGS: -lm
-// #cgo darwin LDFLAGS: -framework Security -mmacosx-version-min=10.0
+// #cgo darwin LDFLAGS: -framework Security
 // #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
 // #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
 // #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
