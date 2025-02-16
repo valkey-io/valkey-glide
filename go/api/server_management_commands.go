@@ -21,4 +21,6 @@ type ServerManagementCommands interface {
 	DBSize() (int64, error)
 
 	Time() ([]string, error)
+
+	ConfigRewrite() (string, error)
 }
