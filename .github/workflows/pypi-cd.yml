@@ -250,7 +250,7 @@ jobs:
                   MATURIN_REPOSITORY: pypi
               with:
                   command: upload
-                  args: --skip-existing python/wheels/* python/sdist/*
+                  args: --skip-existing python/sdist/*
 
     test-release:
         if: github.event_name != 'pull_request'
