@@ -3752,7 +3752,7 @@ mod cluster_async {
             |builder| {
                 builder
                     .retries(0)
-                    .periodic_connections_checks(Duration::from_secs(3))
+                    .periodic_connections_checks(Some(Duration::from_secs(3)))
             },
             false,
         );
@@ -3853,6 +3853,168 @@ mod cluster_async {
         .unwrap();
     }
 
+    // This test verifies that if a client's connection to a node is killed and its reconnection is blocked,
+    // commands from the same client to healthy nodes are not delayed.
+    //
+    // The test uses a cluster with 3 shards and disables periodic connection checks.
+    // It uses two clients:
+    //  - A helper client (con_block) that executes a pipeline against shard 0. This pipeline kills
+    //    the main client's (con_tx) connection on shard 0 and blocks its reconnection using a DEBUG SLEEP command to block the engine.
+    //  - The main client connection (con_tx) which is used to send commands.
+    //
+    // The test workflow is as follows:
+    //  1. The helper client (con_block) kills con_tx's connection to shard 0 and blocks reconnection by blocking the engine.
+    //  2. The main client (con_tx) sends a request to shard 0, which should fail and trigger reconnection in the background.
+    //  3. The main client (con_tx) then sends a request wrapped by timeout to a healthy node (routed to slot 10000), which should succeed.
+    //  4. After the blocking sleep expires and reconnection completes, the main client sends another request to shard 0,
+    //     which is expected to return "PONG".
+    //
+    // This demonstrates that a reconnection process to one node does not prevent the same client from
+    // successfully communicating with healthy nodes.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_non_blocking_reconnection_with_transaction() {
+        use std::time::Duration;
+        use tokio::time::timeout;
+
+        // Create a cluster with 3 shards, no periodic checks, and a 2000ms response timeout.
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3, // 3 shards
+            0,
+            |builder| {
+                builder
+                    .retries(1)
+                    .periodic_connections_checks(None)
+                    .response_timeout(Duration::from_millis(2000))
+            },
+            false,
+        );
+
+        block_on_all(async move {
+            // con_block will run the blocking transaction on shard 0.
+            let mut con_block = cluster.async_connection(None).await;
+            // con_tx will be used to trigger reconnection and send commands.
+            let mut con_tx = cluster.async_connection(None).await;
+            let keyslot_bar = 5061;
+
+            // STEP 1: Get the client ID for shard holding 'bar' key using con_tx.
+            let mut cmd_id = redis::cmd("CLIENT");
+            cmd_id.arg("ID");
+            let res = con_tx
+                .route_command(
+                    &cmd_id,
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                        Route::new(keyslot_bar, SlotAddr::Master),
+                    )),
+                )
+                .await;
+            let client_id = match res.unwrap() {
+                Value::Int(id) => id,
+                _ => panic!("Unexpected CLIENT ID response on shard 0"),
+            };
+
+            // STEP 2: Create an atomic transaction (pipeline) that:
+            //   - Kills the connection on shard 0 using the obtained client_id, and
+            //   - Blocks reconnection by executing a DEBUG SLEEP (5 seconds).
+            let mut pipe = redis::pipe();
+            pipe.atomic()
+                .cmd("CLIENT")
+                .arg("KILL")
+                .arg("ID")
+                .arg(client_id)
+                .arg("SKIPME")
+                .arg("NO")
+                .ignore()
+                .cmd("DEBUG")
+                .arg("SLEEP")
+                .arg(1)
+                .ignore();
+
+            // STEP 3: Spawn the transaction on shard 0 via con_block.
+            // Running it concurrently ensures the blocking (DEBUG SLEEP) does not stall the rest of the test.
+            let pipeline_future = tokio::spawn(async move {
+                let tx_res = con_block
+                    .route_pipeline(
+                        &pipe,
+                        0,
+                        2,
+                        SingleNodeRoutingInfo::SpecificNode(Route::new(keyslot_bar, SlotAddr::Master)),
+                    )
+                    .await;
+                assert!(
+                    tx_res.is_ok(),
+                    "Transaction (CLIENT KILL + DEBUG SLEEP) failed on shard 0: {:?}",
+                    tx_res
+                );
+            });
+
+            // STEP 4: Give a short delay to help ensure the pipeline has started.
+            tokio::time::sleep(Duration::from_millis(10)).await;
+
+            // STEP 5: Use con_tx to send a PING to the blocked shard (shard 0)
+            // to trigger reconnection logic.
+            // Wrap with a timeout so it fails quickly.
+            {
+                let mut trigger_set_cmd = redis::cmd("SET");
+                trigger_set_cmd.arg("bar").arg("123");
+                let trigger_res = timeout(
+                    Duration::from_millis(100),
+                    trigger_set_cmd.query_async::<_, String>(&mut con_tx),
+                )
+                .await;
+                match trigger_res {
+                    Err(_) => {},
+                    Ok(Ok(_)) => panic!("Unexpected success on PING to blocked shard; expected ConnectionNotFoundForRoute error"),
+                    Ok(Err(e)) => {
+                        if !e.to_string().contains("ConnectionNotFoundForRoute") {
+                            panic!("Unexpected error on PING to blocked shard: {:?}", e);
+                        }
+                    }
+                }
+            }
+
+            // STEP 6: While reconnection is active, send a SET wrapped by timeout via con_tx to a healthy
+            // shard (routed to slot 10000) to show that healthy requests are processed right away
+            {
+                let mut healthy_set_cmd = redis::cmd("SET");
+                healthy_set_cmd.arg("foo").arg("123");
+                let healthy_res = timeout(
+                    Duration::from_millis(100),
+                    healthy_set_cmd.query_async::<_, String>(&mut con_tx),
+                )
+                .await;
+                match healthy_res {
+                    Ok(Ok(result)) => {
+                        assert_eq!(
+                            result,
+                            "OK",
+                            "Healthy shard (slot 10000) did not return PONG as expected"
+                        );
+                    }
+                    Ok(Err(e)) => panic!("Route command to healthy shard returned error: {:?}", e),
+                    Err(_) => panic!("Healthy shard command timed out"),
+                }
+            }
+
+            // STEP 7: Ensure the pipeline task has completed.
+            pipeline_future.await.unwrap();
+
+            // STEP 8: Send another SET to shard 0 via con_tx and expect it to return "OK".
+            {
+                let mut final_set_cmd = redis::cmd("SET");
+                final_set_cmd.arg("bar").arg("123");
+                let final_res = final_set_cmd.query_async::<_, String>(&mut con_tx).await;
+                assert_eq!(
+                    final_res.unwrap(),
+                    "OK",
+                    "Final check: shard 0 did return OK as expected"
+                );
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_restore_resp3_pubsub_state_passive_disconnect() {
@@ -3880,7 +4042,7 @@ mod cluster_async {
                     .retries(3)
                     .use_protocol(ProtocolVersion::RESP3)
                     .pubsub_subscriptions(client_subscriptions.clone())
-                    .periodic_connections_checks(Duration::from_secs(1))
+                    .periodic_connections_checks(Some(Duration::from_secs(1)))
             },
             false,
         );
@@ -4057,7 +4219,7 @@ mod cluster_async {
             .use_protocol(ProtocolVersion::RESP3)
             .pubsub_subscriptions(client_subscriptions.clone())
             // periodic connection check is required to detect the disconnect from the last node
-            .periodic_connections_checks(Duration::from_secs(1))
+            .periodic_connections_checks(Some(Duration::from_secs(1)))
             // periodic topology check is required to detect topology change
             .periodic_topology_checks(Duration::from_secs(1))
             .slots_refresh_rate_limit(Duration::from_secs(0), 0)
