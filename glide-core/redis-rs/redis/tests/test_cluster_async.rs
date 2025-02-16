@@ -3853,20 +3853,24 @@ mod cluster_async {
         .unwrap();
     }
 
-    // Test verifying that a reconnection process to a paused node does not block commands
-    // from the same client.
+    // This test verifies that if a client's connection to a node is killed and its reconnection is blocked,
+    // commands from the same client to healthy nodes are not delayed.
     //
-    // The test sets up an engine cluster with 3 shards while disabling periodic connection checks.
-    // It then uses a transaction (executed on shard 0) that:
-    //   1. Kills the connection (via `CLIENT KILL` using the client's ID), and
-    //   2. Blocks reconnection by issuing a blocking command (`DEBUG SLEEP 5`).
+    // The test uses a cluster with 3 shards and disables periodic connection checks.
+    // It uses two clients:
+    //  - A helper client (con_block) that executes a pipeline against shard 0. This pipeline kills
+    //    the main client's (con_tx) connection on shard 0 and blocks its reconnection using a DEBUG SLEEP command to block the engine.
+    //  - The main client connection (con_tx) which is used to send commands.
     //
-    // After the pipeline is sent from another client, a request is issued from the main client (con_tx)
-    // to the blocked shard (shard 0) so it identifies the disconnection and applies reconnection logic.
-    // That ping request is expected to return an error containing "ConnectionNotFoundForRoute".
-    // Then, a separate request is issued via con_tx to a healthy shard (routed to slot 10000) to show that
-    // healthy requests are processed. Finally, after the debug sleep is over, another ping request is sent to
-    // shard 0 and is expected to return "PONG".
+    // The test workflow is as follows:
+    //  1. The helper client (con_block) kills con_tx's connection to shard 0 and blocks reconnection by blocking the engine.
+    //  2. The main client (con_tx) sends a request to shard 0, which should fail and trigger reconnection in the background.
+    //  3. The main client (con_tx) then sends a request wrapped by timeout to a healthy node (routed to slot 12182 - cluster keyslot foo), which should succeed.
+    //  4. After the blocking sleep expires and reconnection completes, the main client sends another request to shard 0,
+    //     which is expected to return "PONG".
+    //
+    // This demonstrates that a reconnection process to one node does not prevent the same client from
+    // successfully communicating with healthy nodes.
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_non_blocking_reconnection_with_transaction() {
@@ -3891,15 +3895,16 @@ mod cluster_async {
             let mut con_block = cluster.async_connection(None).await;
             // con_tx will be used to trigger reconnection and send commands.
             let mut con_tx = cluster.async_connection(None).await;
-    
-            // STEP 1: Get the client ID for shard 0 using con_tx.
+            let keyslot_bar = 5061;
+
+            // STEP 1: Get the client ID for shard holding 'bar' key using con_tx.
             let mut cmd_id = redis::cmd("CLIENT");
             cmd_id.arg("ID");
             let res = con_tx
                 .route_command(
                     &cmd_id,
                     RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
-                        Route::new(0, SlotAddr::Master),
+                        Route::new(keyslot_bar, SlotAddr::Master),
                     )),
                 )
                 .await;
@@ -3907,7 +3912,7 @@ mod cluster_async {
                 Value::Int(id) => id,
                 _ => panic!("Unexpected CLIENT ID response on shard 0"),
             };
-    
+
             // STEP 2: Create an atomic transaction (pipeline) that:
             //   - Kills the connection on shard 0 using the obtained client_id, and
             //   - Blocks reconnection by executing a DEBUG SLEEP (5 seconds).
@@ -3924,7 +3929,7 @@ mod cluster_async {
                 .arg("SLEEP")
                 .arg(1)
                 .ignore();
-    
+
             // STEP 3: Spawn the transaction on shard 0 via con_block.
             // Running it concurrently ensures the blocking (DEBUG SLEEP) does not stall the rest of the test.
             let pipeline_future = tokio::spawn(async move {
@@ -3933,7 +3938,7 @@ mod cluster_async {
                         &pipe,
                         0,
                         2,
-                        SingleNodeRoutingInfo::SpecificNode(Route::new(0, SlotAddr::Master)),
+                        SingleNodeRoutingInfo::SpecificNode(Route::new(keyslot_bar, SlotAddr::Master)),
                     )
                     .await;
                 assert!(
@@ -3942,23 +3947,19 @@ mod cluster_async {
                     tx_res
                 );
             });
-    
+
             // STEP 4: Give a short delay to help ensure the pipeline has started.
             tokio::time::sleep(Duration::from_millis(10)).await;
-    
+
             // STEP 5: Use con_tx to send a PING to the blocked shard (shard 0)
             // to trigger reconnection logic.
             // Wrap with a timeout so it fails quickly.
             {
-                let trigger_ping_cmd = redis::cmd("PING");
+                let mut trigger_set_cmd = redis::cmd("SET");
+                trigger_set_cmd.arg("bar").arg("123");
                 let trigger_res = timeout(
                     Duration::from_millis(100),
-                    con_tx.route_command(
-                        &trigger_ping_cmd,
-                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
-                            Route::new(0, SlotAddr::Master),
-                        )),
-                    ),
+                    trigger_set_cmd.query_async::<_, String>(&mut con_tx),
                 )
                 .await;
                 match trigger_res {
@@ -3971,26 +3972,22 @@ mod cluster_async {
                     }
                 }
             }
-    
-            // STEP 6: While reconnection is active, send a PING via con_tx to a healthy shard (routed to slot 10000)
-            // to show that healthy requests are processed.
+
+            // STEP 6: While reconnection is active, send a SET wrapped by timeout via con_tx to a healthy
+            // shard (routed to slot 12182 - cluster keyslot foo) to show that healthy requests are processed right away
             {
-                let healthy_ping_cmd = redis::cmd("PING");
+                let mut healthy_set_cmd = redis::cmd("SET");
+                healthy_set_cmd.arg("foo").arg("123");
                 let healthy_res = timeout(
                     Duration::from_millis(100),
-                    con_tx.route_command(
-                        &healthy_ping_cmd,
-                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
-                            Route::new(10000, SlotAddr::Master),
-                        )),
-                    ),
+                    healthy_set_cmd.query_async::<_, String>(&mut con_tx),
                 )
                 .await;
                 match healthy_res {
                     Ok(Ok(result)) => {
                         assert_eq!(
                             result,
-                            Value::SimpleString("PONG".into()),
+                            "OK",
                             "Healthy shard (slot 10000) did not return PONG as expected"
                         );
                     }
@@ -3998,31 +3995,21 @@ mod cluster_async {
                     Err(_) => panic!("Healthy shard command timed out"),
                 }
             }
-    
-            // STEP 7: Wait for the debug sleep to be over.
-            tokio::time::sleep(Duration::from_millis(2000)).await;
-    
-            // STEP 8: Send another PING to shard 0 via con_tx and expect it to return "PONG".
+
+            // STEP 7: Ensure the pipeline task has completed.
+            pipeline_future.await.unwrap();
+
+            // STEP 8: Send another SET to shard 0 via con_tx and expect it to return "OK".
             {
-                let final_ping_cmd = redis::cmd("PING");
-                let final_res = con_tx
-                    .route_command(
-                        &final_ping_cmd,
-                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
-                            Route::new(0, SlotAddr::Master),
-                        )),
-                    )
-                    .await;
+                let mut final_set_cmd = redis::cmd("SET");
+                final_set_cmd.arg("bar").arg("123");
+                let final_res = final_set_cmd.query_async::<_, String>(&mut con_tx).await;
                 assert_eq!(
-                    final_res,
-                    Ok(Value::SimpleString("PONG".into())),
-                    "Final check: shard 0 did not return PONG as expected"
+                    final_res.unwrap(),
+                    "OK",
+                    "Final check: shard 0 did return OK as expected"
                 );
             }
-    
-            // Ensure the pipeline task has completed.
-            pipeline_future.await.unwrap();
-    
             Ok(())
         })
         .unwrap();

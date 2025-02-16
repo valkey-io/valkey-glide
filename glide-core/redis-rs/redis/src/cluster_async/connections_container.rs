@@ -146,7 +146,7 @@ pub(crate) struct RefreshTaskNotifier {
 }
 
 impl RefreshTaskNotifier {
-    fn new() -> Self {
+    pub fn new() -> Self {
         RefreshTaskNotifier {
             notify: Arc::new(Notify::new()),
         }
@@ -180,6 +180,7 @@ pub(crate) enum RefreshTaskStatus {
     // The task is actively reconnecting. Includes a notifier for tasks to wait on.
     Reconnecting(RefreshTaskNotifier),
     // The task has exceeded the allowed reconnection time.
+    // TODO - To remove it when adding exponential backoff reconnection logic.
     #[allow(dead_code)]
     ReconnectingTooLong,
 }
@@ -194,10 +195,10 @@ impl Drop for RefreshTaskStatus {
 }
 
 impl RefreshTaskStatus {
-    /// Creates a new `RefreshTaskStatus` in the `Reconnecting` status with a fresh `RefreshTaskNotifier`.
-    pub fn new() -> Self {
-        debug!("RefreshTaskStatus: Initialized in Reconnecting status with a new notifier.");
-        RefreshTaskStatus::Reconnecting(RefreshTaskNotifier::new())
+    // Creates a new `RefreshTaskStatus` in the `Reconnecting` state with the provided notifier.
+    pub fn with_notifier(notifier: RefreshTaskNotifier) -> Self {
+        debug!("RefreshTaskStatus: Initialized in Reconnecting status with a provided notifier.");
+        RefreshTaskStatus::Reconnecting(notifier)
     }
 
     // Transitions the current status from `Reconnecting` to `ReconnectingTooLong` in place.
@@ -206,6 +207,7 @@ impl RefreshTaskStatus {
     // using the embedded `RefreshTaskNotifier` and updates the status to `ReconnectingTooLong`.
     //
     // If the status is already `ReconnectingTooLong`, this method does nothing.
+    // TODO - To remove it when adding exponential backoff reconnection logic.
     #[allow(dead_code)]
     pub fn flip_status_to_too_long(&mut self) {
         if let RefreshTaskStatus::Reconnecting(notifier) = self {
@@ -218,32 +220,29 @@ impl RefreshTaskStatus {
             debug!("RefreshTaskStatus: Already in ReconnectingTooLong status.");
         }
     }
-
-    #[allow(dead_code)]
-    pub fn notify_waiting_requests(&mut self) {
-        if let RefreshTaskStatus::Reconnecting(notifier) = self {
-            debug!("RefreshTaskStatus::notify_waiting_requests notify");
-            notifier.notify();
-        } else {
-            debug!("RefreshTaskStatus::notify_waiting_requests - ReconnectingTooLong status.");
-        }
-    }
 }
 
-// Struct combining the task handle and its status
+// Combines a background reconnection task's handle with its current status.
+//
+// This struct is used to track a Tokio task responsible for performing background reconnection.
+// It holds:
+// - `handle`: A `JoinHandle<()>` for the asynchronous reconnection task running in the background.
+// - `status`: The current state of the refresh task.
 #[derive(Debug)]
 pub(crate) struct RefreshTaskState {
+    // Handle to the background reconnection task.
     pub handle: JoinHandle<()>,
+    // Current status of the refresh task.
     pub status: RefreshTaskStatus,
 }
 
 impl RefreshTaskState {
-    // Creates a new `RefreshTaskState` with a `Reconnecting` state and a new notifier.
-    pub fn new(handle: JoinHandle<()>) -> Self {
+    // Creates a new `RefreshTaskState` with a `Reconnecting` status.
+    pub fn new(handle: JoinHandle<()>, notifier: RefreshTaskNotifier) -> Self {
         debug!("RefreshTaskState: Creating a new instance with a Reconnecting state.");
         RefreshTaskState {
             handle,
-            status: RefreshTaskStatus::new(),
+            status: RefreshTaskStatus::with_notifier(notifier),
         }
     }
 }
@@ -283,7 +282,7 @@ impl RefreshConnectionStates {
     pub(crate) fn clear_refresh_state(&mut self) {
         debug!(
             "clear_refresh_state: removing all in-progress refresh connection tasks for addresses: {:?}",
-            self.refresh_address_in_progress.keys().collect::<Vec<_>>()
+            self.refresh_address_in_progress.keys()
         );
 
         // Clear the entire map; Drop handles the cleanup
