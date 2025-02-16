@@ -294,7 +294,8 @@ class BaseClient(CoreCommands):
             else:
                 command.args_vec_pointer = create_leaked_bytes_vec(encoded_args)
             transaction_commands.append(command)
-        request.transaction.commands.extend(transaction_commands)
+        request.batch.commands.extend(transaction_commands)
+        request.batch.is_atomic = True
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 

@@ -367,10 +367,10 @@ impl Client {
                     .into());
             }
         };
-        Self::convert_transaction_values_to_expected_types(pipeline, values, command_count)
+        Self::convert_pipeline_values_to_expected_types(pipeline, values, command_count)
     }
 
-    fn convert_transaction_values_to_expected_types(
+    fn convert_pipeline_values_to_expected_types(
         pipeline: &redis::Pipeline,
         values: Vec<Value>,
         command_count: usize,
@@ -389,12 +389,20 @@ impl Client {
         Ok(Value::Array(values))
     }
 
+    /// Send a pipeline to the server.
+    /// Transaction is a batch of commands that are sent in a single request.
+    /// Unlike a pipelines, transactions are atomic, and in cluster mode, the key-based commands must route to the same slot.
     pub fn send_transaction<'a>(
         &'a mut self,
         pipeline: &'a redis::Pipeline,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         let command_count = pipeline.cmd_iter().count();
+        // The offset is set to command_count + 1 to account for:
+        // 1. The first command, which is the "MULTI" command, that returns "OK"
+        // 2. The "QUEUED" responses for each of the commands in the pipeline (before EXEC)
+        // After these initial responses (OK and QUEUED), we expect a single response,
+        // which is an array containing the results of all the commands in the pipeline.
         let offset = command_count + 1;
         run_with_timeout(Some(self.request_timeout), async move {
             let values = match self.internal_client {
@@ -411,6 +419,31 @@ impl Client {
             }?;
 
             Self::get_transaction_values(pipeline, values, command_count, offset)
+        })
+        .boxed()
+    }
+
+    /// Send a pipeline to the server.
+    /// Pipeline is a batch of commands that are sent in a single request.
+    /// Unlike a transaction, the commands are not executed atomically, and in cluster mode, the commands can be sent to different nodes.
+    pub fn send_pipeline<'a>(
+        &'a mut self,
+        pipeline: &'a redis::Pipeline,
+    ) -> redis::RedisFuture<'a, Value> {
+        let command_count = pipeline.cmd_iter().count();
+
+        run_with_timeout(Some(self.request_timeout), async move {
+            let values = match self.internal_client {
+                ClientWrapper::Standalone(ref mut client) => {
+                    client.send_pipeline(pipeline, 0, command_count).await
+                }
+
+                ClientWrapper::Cluster { ref mut client } => {
+                    client.req_packed_commands(pipeline, 0, command_count).await
+                }
+            }?;
+
+            Self::convert_pipeline_values_to_expected_types(pipeline, values, command_count)
         })
         .boxed()
     }

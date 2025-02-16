@@ -1115,7 +1115,8 @@ export class BaseClient {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
                   callbackIdx,
-                  transaction: command_request.Transaction.create({
+                  batch: command_request.Batch.create({
+                      isAtomic: true,
                       commands: command,
                   }),
                   route,
