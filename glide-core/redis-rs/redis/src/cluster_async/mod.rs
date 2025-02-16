@@ -40,7 +40,7 @@ use crate::{
     commands::cluster_scan::{cluster_scan, ClusterScanArgs, ScanStateRC},
     FromRedisValue, InfoDict,
 };
-use connections_container::{RefreshTaskState, RefreshTaskStatus};
+use connections_container::{RefreshTaskNotifier, RefreshTaskState, RefreshTaskStatus};
 use dashmap::DashMap;
 use std::{
     collections::{HashMap, HashSet},
@@ -1383,7 +1383,7 @@ where
         trace!("refresh_and_update_connections: calling trigger_refresh_connection_tasks");
         let refresh_task_notifiers = Self::trigger_refresh_connection_tasks(
             inner.clone(),
-            addresses.clone(),
+            addresses,
             conn_type,
             check_existing_conn,
         )
@@ -1398,6 +1398,10 @@ where
         .await;
     }
 
+    // Triggers a reconnection Tokio task for each supplied address.
+    // If a refresh task is already running for an address, no new task is created;
+    // instead, the notifier from the existing task is returned.
+    // Returns a vector of notifiers for the refresh tasks (new or existing) corresponding to the supplied addresses.
     async fn trigger_refresh_connection_tasks(
         inner: Arc<InnerCore<C>>,
         addresses: HashSet<String>,
@@ -1418,7 +1422,7 @@ where
                 .get(&address)
             {
                 if let RefreshTaskStatus::Reconnecting(ref notifier) = existing_task.status {
-                    // Clone and store the notifier
+                    // Store the notifier
                     notifiers.push(notifier.get_notifier());
                 }
                 debug!("Skipping refresh for {}: already in progress", address);
@@ -1471,7 +1475,7 @@ where
                         );
                         inner_clone
                             .conn_lock
-                            .write()
+                            .read()
                             .expect(MUTEX_READ_ERR)
                             .replace_or_add_connection_for_address(&address_clone_for_task, node);
                     }
@@ -1501,15 +1505,12 @@ where
                 );
             });
 
-            // Create the RefreshTaskState before spawning the task
-            let refresh_task_state = RefreshTaskState::new(handle);
+            let notifier = RefreshTaskNotifier::new();
+            notifiers.push(notifier.get_notifier());
 
-            // Extract the notifier from the new RefreshTaskState
-            if let RefreshTaskStatus::Reconnecting(ref notifier) = refresh_task_state.status {
-                notifiers.push(notifier.get_notifier());
-            }
+            // Keep the task handle and notifier into the RefreshState of this address
+            let refresh_task_state = RefreshTaskState::new(handle, notifier);
 
-            // Keep the task handle into the RefreshState of this address
             inner
                 .conn_lock
                 .write()
@@ -1893,7 +1894,7 @@ where
             trace!("check_for_topology_diff: calling trigger_refresh_connection_tasks");
             Self::trigger_refresh_connection_tasks(
                 inner,
-                failed_connections.into_iter().collect::<HashSet<String>>(),
+                failed_connections,
                 RefreshConnectionType::OnlyManagementConnection,
                 true,
             )
@@ -2324,7 +2325,7 @@ where
                 if let Some(conn_check) = conn_check {
                     conn_check
                 } else {
-                    // No connection is found for the given route:
+                    // Step 2: Handle cases where no connection is found for the route.
                     // - For key-based commands, attempt redirection to a random node,
                     //   hopefully to be redirected afterwards by a MOVED error.
                     // - For non-key-based commands, avoid attempting redirection to a random node
@@ -2332,7 +2333,6 @@ where
                     //   (e.g., sending management command to a different node than the user asked for); instead, raise the error.
                     let mut conn_check = ConnectionCheck::RandomConnection;
 
-                    // Step 2: Handle cases where no connection is found for the route.
                     let routable_cmd = cmd.and_then(|cmd| Routable::command(&*cmd));
                     if routable_cmd.is_some()
                         && !RoutingInfo::is_key_routing_command(&routable_cmd.unwrap())
@@ -2346,12 +2346,13 @@ where
                     }
 
                     debug!(
-                        "SpecificNode: No connection found for route `{route:?}`. Checking for reconnect tasks before redirecting to a random node."
+                        "SpecificNode: No connection found for route `{route:?}`.
+                        Checking for reconnect tasks before redirecting to a random node."
                     );
 
                     // Step 3: Obtain the reconnect notifier, ensuring the lock is released immediately after.
                     let reconnect_notifier = {
-                        let conn_lock = core.conn_lock.write().expect(MUTEX_READ_ERR);
+                        let conn_lock = core.conn_lock.read().expect(MUTEX_READ_ERR);
                         conn_lock.notifier_for_route(&route).clone()
                     };
 
@@ -2841,7 +2842,7 @@ async fn calculate_topology_from_random_nodes<C>(
         crate::cluster_slotmap::SlotMap,
         crate::cluster_topology::TopologyHash,
     )>,
-    Vec<String>,
+    std::collections::HashSet<String>,
 )
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
@@ -2859,7 +2860,7 @@ where
                 ErrorKind::AllConnectionsUnavailable,
                 "No available connections to refresh slots from",
             ))),
-            vec![],
+            std::collections::HashSet::new(),
         );
     };
     let topology_join_results =
@@ -2875,7 +2876,7 @@ where
             Err(err) if err.is_unrecoverable_error() => Some(address.clone()),
             _ => None,
         })
-        .collect();
+        .collect::<std::collections::HashSet<String>>();
     let topology_values = topology_join_results.iter().filter_map(|(addr, res)| {
         res.as_ref()
             .ok()
