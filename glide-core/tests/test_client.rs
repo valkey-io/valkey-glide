@@ -752,7 +752,7 @@ pub(crate) mod shared_client_tests {
             pipeline
                 .set(&key, "value1")
                 .get(&key)
-                .blpop(&key2, 0.0)
+                .blpop(&key2, 2.0)
                 .get(&key2);
 
             let res = test_basics.client.send_pipeline(&pipeline).await;
