@@ -3951,7 +3951,7 @@ mod cluster_async {
             // STEP 4: Give a short delay to help ensure the pipeline has started.
             tokio::time::sleep(Duration::from_millis(10)).await;
 
-            // STEP 5: Use con_tx to send a PING to the blocked shard (shard 0)
+            // STEP 5: Use con_tx to send a SET to the blocked shard (shard 0)
             // to trigger reconnection logic.
             // Wrap with a timeout so it fails quickly.
             {
