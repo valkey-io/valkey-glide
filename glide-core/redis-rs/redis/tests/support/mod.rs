@@ -238,6 +238,7 @@ impl RedisServer {
         if let Some(config_path) = config_file {
             server_cmd.arg(config_path);
         }
+        server_cmd.arg("--enable-debug-command").arg("yes");
 
         // Load Redis Modules
         for module in modules {
