@@ -276,13 +276,23 @@ public class ConnectionManagerTest {
     @SneakyThrows
     @Test
     public void test_convert_config_with_azaffinity_to_protobuf() {
+        testConvertConfigWithAzAffinity(ReadFrom.AZ_AFFINITY);
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_convert_config_with_azaffinity_replicas_and_primary_to_protobuf() {
+        testConvertConfigWithAzAffinity(ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY);
+    }
+
+    private void testConvertConfigWithAzAffinity(ReadFrom readFrom) throws Exception {
         // setup
         String az = "us-east-1a";
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder()
                         .address(NodeAddress.builder().host(DEFAULT_HOST).port(DEFAULT_PORT).build())
                         .useTLS(true)
-                        .readFrom(ReadFrom.AZ_AFFINITY)
+                        .readFrom(readFrom)
                         .clientAZ(az)
                         .build();
 
@@ -294,7 +304,7 @@ public class ConnectionManagerTest {
                                         .setPort(DEFAULT_PORT)
                                         .build())
                         .setTlsMode(TlsMode.SecureTls)
-                        .setReadFrom(ConnectionRequestOuterClass.ReadFrom.AZAffinity)
+                        .setReadFrom(mapReadFrom(readFrom))
                         .setClientAz(az)
                         .build();
 
@@ -314,16 +324,38 @@ public class ConnectionManagerTest {
     @SneakyThrows
     @Test
     public void test_az_affinity_without_client_az_throws_ConfigurationError() {
+        testAzAffinityWithoutClientAzThrowsConfigurationError(ReadFrom.AZ_AFFINITY);
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_az_affinity_replicas_and_primary_without_client_az_throws_ConfigurationError() {
+        testAzAffinityWithoutClientAzThrowsConfigurationError(
+                ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY);
+    }
+
+    private void testAzAffinityWithoutClientAzThrowsConfigurationError(ReadFrom readFrom) {
         // setup
         String az = "us-east-1a";
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder()
                         .address(NodeAddress.builder().host(DEFAULT_HOST).port(DEFAULT_PORT).build())
                         .useTLS(true)
-                        .readFrom(ReadFrom.AZ_AFFINITY)
+                        .readFrom(readFrom)
                         .build();
 
         // verify
         assertThrows(ConfigurationError.class, () -> connectionManager.connectToValkey(config));
+    }
+
+    private ConnectionRequestOuterClass.ReadFrom mapReadFrom(ReadFrom readFrom) {
+        switch (readFrom) {
+            case AZ_AFFINITY:
+                return ConnectionRequestOuterClass.ReadFrom.AZAffinity;
+            case AZ_AFFINITY_REPLICAS_AND_PRIMARY:
+                return ConnectionRequestOuterClass.ReadFrom.AZAffinityReplicasAndPrimary;
+            default:
+                throw new IllegalArgumentException("Unsupported ReadFrom value: " + readFrom);
+        }
     }
 }
