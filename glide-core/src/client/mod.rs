@@ -604,7 +604,7 @@ async fn create_cluster_client(
     }
 
     // Always use with Glide
-    builder = builder.periodic_connections_checks(CONNECTION_CHECKS_INTERVAL);
+    builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
     let mut con = client.get_async_connection(push_sender).await?;
