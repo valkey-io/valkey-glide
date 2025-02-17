@@ -58,6 +58,76 @@ import {
     waitForNotBusy,
 } from "./TestUtilities";
 
+async function getNumberOfReplicas(
+    client: GlideClusterClient,
+): Promise<number> {
+    const replicationInfo = (await client.info({
+        sections: [InfoOptions.Replication],
+    })) as Record<string, string>;
+    let totalReplicas = 0;
+    Object.values(replicationInfo).forEach((nodeInfo) => {
+        const lines = nodeInfo.split(/\r?\n/);
+        const connectedReplicasLine = lines.find(
+            (line) =>
+                line.startsWith("connected_slaves:") ||
+                line.startsWith("connected_replicas:"),
+        );
+
+        if (connectedReplicasLine) {
+            const parts = connectedReplicasLine.split(":");
+            const numReplicas = parseInt(parts[1], 10);
+
+            if (!isNaN(numReplicas)) {
+                // Sum up replicas from each primary node
+                totalReplicas += numReplicas;
+            }
+        }
+    });
+
+    if (totalReplicas > 0) {
+        return totalReplicas;
+    }
+
+    throw new Error(
+        "Could not find replica information in any node's response",
+    );
+}
+
+async function getNumberOfPrimaries(
+    client: GlideClusterClient,
+): Promise<number> {
+    // Get replication info from ALL nodes
+    const nodeInfo = (await client.info({
+        sections: [InfoOptions.Replication],
+    })) as Record<string, string>;
+
+    let totalPrimaries = 0;
+
+    Object.values(nodeInfo).forEach((nodeData) => {
+        const roleLine = nodeData
+            .split("\n")
+            .find((line) => line.startsWith("role:"));
+
+        if (roleLine) {
+            const role = roleLine
+                .split(":")[1]
+                .trim()
+                .toLowerCase()
+                .replace(/^(master|primary)$/, "primary");
+
+            if (role === "primary") {
+                totalPrimaries += 1;
+            }
+        }
+    });
+
+    if (totalPrimaries > 0) {
+        return totalPrimaries;
+    }
+
+    throw new Error("No primary nodes found in cluster response");
+}
+
 const TIMEOUT = 50000;
 
 describe("GlideClusterClient", () => {
@@ -2170,76 +2240,6 @@ describe("GlideClusterClient", () => {
     );
 
     describe("AZAffinity Read Strategy Tests", () => {
-        async function getNumberOfReplicas(
-            azClient: GlideClusterClient,
-        ): Promise<number> {
-            const replicationInfo = (await azClient.info({
-                sections: [InfoOptions.Replication],
-            })) as Record<string, string>;
-            let totalReplicas = 0;
-            Object.values(replicationInfo).forEach((nodeInfo) => {
-                const lines = nodeInfo.split(/\r?\n/);
-                const connectedReplicasLine = lines.find(
-                    (line) =>
-                        line.startsWith("connected_slaves:") ||
-                        line.startsWith("connected_replicas:"),
-                );
-
-                if (connectedReplicasLine) {
-                    const parts = connectedReplicasLine.split(":");
-                    const numReplicas = parseInt(parts[1], 10);
-
-                    if (!isNaN(numReplicas)) {
-                        // Sum up replicas from each primary node
-                        totalReplicas += numReplicas;
-                    }
-                }
-            });
-
-            if (totalReplicas > 0) {
-                return totalReplicas;
-            }
-
-            throw new Error(
-                "Could not find replica information in any node's response",
-            );
-        }
-
-        async function getNumberOfPrimaries(
-            azClient: GlideClusterClient,
-        ): Promise<number> {
-            // Get replication info from ALL nodes
-            const nodeInfo = (await azClient.info({
-                sections: [InfoOptions.Replication],
-            })) as Record<string, string>;
-
-            let totalPrimaries = 0;
-
-            Object.values(nodeInfo).forEach((nodeData) => {
-                const roleLine = nodeData
-                    .split("\n")
-                    .find((line) => line.startsWith("role:"));
-
-                if (roleLine) {
-                    const role = roleLine
-                        .split(":")[1]
-                        .trim()
-                        .toLowerCase()
-                        .replace(/^(master|primary)$/, "primary");
-
-                    if (role === "primary") {
-                        totalPrimaries += 1;
-                    }
-                }
-            });
-
-            if (totalPrimaries > 0) {
-                return totalPrimaries;
-            }
-
-            throw new Error("No primary nodes found in cluster response");
-        }
-
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "should route GET commands to all replicas with the same AZ using protocol %p",
             async (protocol) => {
@@ -2478,6 +2478,30 @@ describe("GlideClusterClient", () => {
                         await client_for_testing_az.get("foo");
                     }
 
+                    // Retrieve the number of replicas dynamically
+                    const n_replicas = await getNumberOfReplicas(
+                        client_for_testing_az,
+                    );
+
+                    if (n_replicas === 0) {
+                        throw new Error(
+                            "No replicas found in the cluster. Test requires at least one replica.",
+                        );
+                    }
+
+                    // Retrieve the number of primaries dynamically
+                    const n_primaries = await getNumberOfPrimaries(
+                        client_for_testing_az,
+                    );
+
+                    if (n_primaries === 0) {
+                        throw new Error(
+                            "No primaries found in the cluster. Test requires at least one primary.",
+                        );
+                    }
+
+                    const replicas_per_primary = n_replicas / n_primaries;
+
                     // Fetch command stats from all nodes
                     const info_result = (await client_for_testing_az.info({
                         sections: [InfoOptions.Commandstats],
@@ -2492,7 +2516,7 @@ describe("GlideClusterClient", () => {
                     }).length;
 
                     // Validate that the get calls were distributed across replicas, each replica recieved 1 get call
-                    expect(matchingEntriesCount).toBe(4);
+                    expect(matchingEntriesCount).toBe(replicas_per_primary);
                 } finally {
                     // Cleanup: Close the client after test execution
                     client_for_testing_az?.close();
