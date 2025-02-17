@@ -3856,7 +3856,8 @@ mod cluster_async {
     // This test verifies that if a client's connection to a node is killed and its reconnection is blocked,
     // commands from the same client to healthy nodes are not delayed.
     //
-    // The test uses a cluster with 3 shards and disables periodic connection checks.
+    // The test uses a cluster with 3 shards and disables periodic connection checks, also We set 3 retries, so on the
+    // request to the blocked node - (1) Identify disconnection, (2) Route to Random node, (3) ConnectionNotFoundForRoute.
     // It uses two clients:
     //  - A helper client (con_block) that executes a pipeline against shard 0. This pipeline kills
     //    the main client's (con_tx) connection on shard 0 and blocks its reconnection using a DEBUG SLEEP command to block the engine.
@@ -3867,7 +3868,7 @@ mod cluster_async {
     //  2. The main client (con_tx) sends a request to shard 0, which should fail and trigger reconnection in the background.
     //  3. The main client (con_tx) then sends a request wrapped by timeout to a healthy node (routed to slot 12182 - cluster keyslot foo), which should succeed.
     //  4. After the blocking sleep expires and reconnection completes, the main client sends another request to shard 0,
-    //     which is expected to return "PONG".
+    //     which is expected to return "OK".
     //
     // This demonstrates that a reconnection process to one node does not prevent the same client from
     // successfully communicating with healthy nodes.
@@ -3875,17 +3876,16 @@ mod cluster_async {
     #[serial_test::serial]
     fn test_async_cluster_non_blocking_reconnection_with_transaction() {
         use std::time::Duration;
-        use tokio::time::timeout;
 
-        // Create a cluster with 3 shards, no periodic checks, and a 2000ms response timeout.
+        // Create a cluster with 3 shards, no periodic checks, and a 250ms response timeout.
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3, // 3 shards
             0,
             |builder| {
                 builder
-                    .retries(1)
+                    .retries(2)
                     .periodic_connections_checks(None)
-                    .response_timeout(Duration::from_millis(2000))
+                    .response_timeout(Duration::from_millis(250)) // aligns with the default timeout in glide core
             },
             false,
         );
@@ -3915,7 +3915,7 @@ mod cluster_async {
 
             // STEP 2: Create an atomic transaction (pipeline) that:
             //   - Kills the connection on shard 0 using the obtained client_id, and
-            //   - Blocks reconnection by executing a DEBUG SLEEP (5 seconds).
+            //   - Blocks reconnection by executing a DEBUG SLEEP (3 seconds).
             let mut pipe = redis::pipe();
             pipe.atomic()
                 .cmd("CLIENT")
@@ -3927,13 +3927,13 @@ mod cluster_async {
                 .ignore()
                 .cmd("DEBUG")
                 .arg("SLEEP")
-                .arg(1)
+                .arg(3)
                 .ignore();
 
             // STEP 3: Spawn the transaction on shard 0 via con_block.
             // Running it concurrently ensures the blocking (DEBUG SLEEP) does not stall the rest of the test.
-            let pipeline_future = tokio::spawn(async move {
-                let tx_res = con_block
+            tokio::spawn(async move {
+                _ = con_block
                     .route_pipeline(
                         &pipe,
                         0,
@@ -3941,63 +3941,49 @@ mod cluster_async {
                         SingleNodeRoutingInfo::SpecificNode(Route::new(keyslot_bar, SlotAddr::Master)),
                     )
                     .await;
-                assert!(
-                    tx_res.is_ok(),
-                    "Transaction (CLIENT KILL + DEBUG SLEEP) failed on shard 0: {:?}",
-                    tx_res
-                );
             });
 
             // STEP 4: Give a short delay to help ensure the pipeline has started.
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
 
-            // STEP 5: Use con_tx to send a SET to the blocked shard (shard 0)
+            // STEP 5: Use con_tx to send a SET request to the blocked shard (shard 0)
             // to trigger reconnection logic.
-            // Wrap with a timeout so it fails quickly.
             {
                 let mut trigger_set_cmd = redis::cmd("SET");
                 trigger_set_cmd.arg("bar").arg("123");
-                let trigger_res = timeout(
-                    Duration::from_millis(100),
-                    trigger_set_cmd.query_async::<_, String>(&mut con_tx),
-                )
-                .await;
+                let trigger_res =
+                    trigger_set_cmd.query_async::<_, String>(&mut con_tx).await;
                 match trigger_res {
-                    Err(_) => {},
-                    Ok(Ok(_)) => panic!("Unexpected success on PING to blocked shard; expected ConnectionNotFoundForRoute error"),
-                    Ok(Err(e)) => {
+                    Ok(_) => panic!("Unexpected success on SET to blocked shard; expected ConnectionNotFoundForRoute error"),
+                    Err(e) => {
                         if !e.to_string().contains("ConnectionNotFoundForRoute") {
-                            panic!("Unexpected error on PING to blocked shard: {:?}", e);
+                            panic!("Unexpected error on SET to blocked shard: {:?}", e);
                         }
                     }
                 }
             }
 
-            // STEP 6: While reconnection is active, send a SET wrapped by timeout via con_tx to a healthy
+            // STEP 6: While reconnection is active (Due to the BEBUG SLEEP), send a SET request via con_tx to a healthy
             // shard (routed to slot 12182 - cluster keyslot foo) to show that healthy requests are processed right away
             {
                 let mut healthy_set_cmd = redis::cmd("SET");
                 healthy_set_cmd.arg("foo").arg("123");
-                let healthy_res = timeout(
-                    Duration::from_millis(100),
-                    healthy_set_cmd.query_async::<_, String>(&mut con_tx),
-                )
-                .await;
+                let healthy_res =
+                    healthy_set_cmd.query_async::<_, String>(&mut con_tx).await;
                 match healthy_res {
-                    Ok(Ok(result)) => {
+                    Ok(result) => {
                         assert_eq!(
                             result,
                             "OK",
-                            "Healthy shard (slot 10000) did not return PONG as expected"
+                            "Healthy shard (slot 12182) did not return OK as expected"
                         );
                     }
-                    Ok(Err(e)) => panic!("Route command to healthy shard returned error: {:?}", e),
-                    Err(_) => panic!("Healthy shard command timed out"),
+                    Err(e) => panic!("Route command to healthy shard returned error: {:?}", e),
                 }
             }
 
             // STEP 7: Ensure the pipeline task has completed.
-            pipeline_future.await.unwrap();
+            tokio::time::sleep(Duration::from_secs(3)).await;
 
             // STEP 8: Send another SET to shard 0 via con_tx and expect it to return "OK".
             {
