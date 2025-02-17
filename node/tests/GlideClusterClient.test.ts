@@ -93,41 +93,6 @@ async function getNumberOfReplicas(
     );
 }
 
-async function getNumberOfPrimaries(
-    client: GlideClusterClient,
-): Promise<number> {
-    // Get replication info from ALL nodes
-    const nodeInfo = (await client.info({
-        sections: [InfoOptions.Replication],
-    })) as Record<string, string>;
-
-    let totalPrimaries = 0;
-
-    Object.values(nodeInfo).forEach((nodeData) => {
-        const roleLine = nodeData
-            .split("\n")
-            .find((line) => line.startsWith("role:"));
-
-        if (roleLine) {
-            const role = roleLine
-                .split(":")[1]
-                .trim()
-                .toLowerCase()
-                .replace(/^(master|primary)$/, "primary");
-
-            if (role === "primary") {
-                totalPrimaries += 1;
-            }
-        }
-    });
-
-    if (totalPrimaries > 0) {
-        return totalPrimaries;
-    }
-
-    throw new Error("No primary nodes found in cluster response");
-}
-
 const TIMEOUT = 50000;
 
 describe("GlideClusterClient", () => {
@@ -2238,6 +2203,41 @@ describe("GlideClusterClient", () => {
             }
         },
     );
+
+    async function getNumberOfPrimaries(
+        client: GlideClusterClient,
+    ): Promise<number> {
+        // Get replication info from ALL nodes
+        const nodeInfo = (await client.info({
+            sections: [InfoOptions.Replication],
+        })) as Record<string, string>;
+
+        let totalPrimaries = 0;
+
+        Object.values(nodeInfo).forEach((nodeData) => {
+            const roleLine = nodeData
+                .split("\n")
+                .find((line) => line.startsWith("role:"));
+
+            if (roleLine) {
+                const role = roleLine
+                    .split(":")[1]
+                    .trim()
+                    .toLowerCase()
+                    .replace(/^(master|primary)$/, "primary");
+
+                if (role === "primary") {
+                    totalPrimaries += 1;
+                }
+            }
+        });
+
+        if (totalPrimaries > 0) {
+            return totalPrimaries;
+        }
+
+        throw new Error("No primary nodes found in cluster response");
+    }
 
     describe("AZAffinity Read Strategy Tests", () => {
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
