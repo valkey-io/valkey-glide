@@ -433,8 +433,11 @@ impl ClusterClientBuilder {
     /// In addition, for tokio runtime, passive disconnections could be detected instantly,
     /// triggering reestablishment, w/o waiting for the next periodic check.
     #[cfg(feature = "cluster-async")]
-    pub fn periodic_connections_checks(mut self, interval: Duration) -> ClusterClientBuilder {
-        self.builder_params.connections_validation_interval = Some(interval);
+    pub fn periodic_connections_checks(
+        mut self,
+        interval: Option<Duration>,
+    ) -> ClusterClientBuilder {
+        self.builder_params.connections_validation_interval = interval;
         self
     }
 
