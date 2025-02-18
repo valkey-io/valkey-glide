@@ -54,11 +54,11 @@ func (opts *JsonGetOptions) ToArgs() ([]string, error) {
 	}
 
 	if opts.newline != "" {
-		args = append(args, indentKeyword, opts.newline)
+		args = append(args, newlineKeyword, opts.newline)
 	}
 
 	if opts.space != "" {
-		args = append(args, indentKeyword, opts.space)
+		args = append(args, spaceKeyword, opts.space)
 	}
 
 	if opts.noescape {
