@@ -2170,41 +2170,6 @@ describe("GlideClusterClient", () => {
     );
 
     describe("AZAffinity Read Strategy Tests", () => {
-        async function getNumberOfReplicas(
-            azClient: GlideClusterClient,
-        ): Promise<number> {
-            const replicationInfo = (await azClient.info({
-                sections: [InfoOptions.Replication],
-            })) as Record<string, string>;
-            let totalReplicas = 0;
-            Object.values(replicationInfo).forEach((nodeInfo) => {
-                const lines = nodeInfo.split(/\r?\n/);
-                const connectedReplicasLine = lines.find(
-                    (line) =>
-                        line.startsWith("connected_slaves:") ||
-                        line.startsWith("connected_replicas:"),
-                );
-
-                if (connectedReplicasLine) {
-                    const parts = connectedReplicasLine.split(":");
-                    const numReplicas = parseInt(parts[1], 10);
-
-                    if (!isNaN(numReplicas)) {
-                        // Sum up replicas from each primary node
-                        totalReplicas += numReplicas;
-                    }
-                }
-            });
-
-            if (totalReplicas > 0) {
-                return totalReplicas;
-            }
-
-            throw new Error(
-                "Could not find replica information in any node's response",
-            );
-        }
-
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "should route GET commands to all replicas with the same AZ using protocol %p",
             async (protocol) => {
@@ -2212,8 +2177,6 @@ describe("GlideClusterClient", () => {
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
 
                 const az = "us-east-1a";
-                const GET_CALLS_PER_REPLICA = 3;
-
                 let client_for_config_set;
                 let client_for_testing_az;
 
@@ -2224,7 +2187,6 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
-                                { requestTimeout: 3000 },
                             ),
                         );
 
@@ -2234,20 +2196,6 @@ describe("GlideClusterClient", () => {
                         { route: "allNodes" },
                     );
 
-                    // Retrieve the number of replicas dynamically
-                    const n_replicas = await getNumberOfReplicas(
-                        client_for_config_set,
-                    );
-
-                    if (n_replicas === 0) {
-                        throw new Error(
-                            "No replicas found in the cluster. Test requires at least one replica.",
-                        );
-                    }
-
-                    const GET_CALLS = GET_CALLS_PER_REPLICA * n_replicas;
-                    const get_cmdstat = `calls=${GET_CALLS_PER_REPLICA}`;
-
                     // Stage 2: Create AZ affinity client and verify configuration
                     client_for_testing_az =
                         await GlideClusterClient.createClient(
@@ -2255,7 +2203,6 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
-                                    requestTimeout: 3000,
                                     readFrom: "AZAffinity",
                                     clientAz: az,
                                 },
@@ -2273,17 +2220,22 @@ describe("GlideClusterClient", () => {
                         ),
                     );
 
+                    const get_calls_per_replica = 25;
+                    const get_calls = 100;
+                    const get_cmdstat = `cmdstat_get:calls=${get_calls_per_replica}`;
+
                     // Stage 3: Set test data and perform GET operations
                     await client_for_testing_az.set("foo", "testvalue");
 
-                    for (let i = 0; i < GET_CALLS; i++) {
+                    for (let i = 0; i < get_calls; i++) {
                         await client_for_testing_az.get("foo");
                     }
 
                     // Stage 4: Verify GET commands were routed correctly
-                    const info_result = (await client_for_testing_az.info(
-                        { sections: [InfoOptions.All], route: "allNodes" }, // Get both replication and commandstats info
-                    )) as Record<string, string>;
+                    const info_result = (await client_for_testing_az.info({
+                        sections: [InfoOptions.All],
+                        route: "allNodes",
+                    })) as Record<string, string>;
 
                     const matching_entries_count = Object.values(
                         info_result,
@@ -2296,7 +2248,7 @@ describe("GlideClusterClient", () => {
                         return isReplicaNode && infoStr.includes(get_cmdstat);
                     }).length;
 
-                    expect(matching_entries_count).toBe(n_replicas); // Should expect 12 as the cluster was created with 3 primary and 4 replicas, totalling 12 replica nodes
+                    expect(matching_entries_count).toBe(4);
                 } finally {
                     // Cleanup
                     await client_for_config_set?.configSet(
@@ -2316,8 +2268,8 @@ describe("GlideClusterClient", () => {
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
 
                 const az = "us-east-1a";
-                const GET_CALLS = 3;
-                const get_cmdstat = `calls=${GET_CALLS}`;
+                const get_calls = 3;
+                const get_cmdstat = `cmdstat_get:calls=${get_calls}`;
                 let client_for_config_set;
                 let client_for_testing_az;
 
@@ -2328,7 +2280,6 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
-                                { requestTimeout: 3000 },
                             ),
                         );
 
@@ -2341,7 +2292,7 @@ describe("GlideClusterClient", () => {
 
                     await client_for_config_set.configSet(
                         { "availability-zone": az },
-                        { route: { type: "replicaSlotId", id: 12182 } },
+                        { route: { type: "replicaSlotKey", key: "foo" } },
                     );
 
                     // Stage 2: Create AZ affinity client and verify configuration
@@ -2351,15 +2302,13 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
-                                    requestTimeout: 3000,
                                     readFrom: "AZAffinity",
                                     clientAz: az,
                                 },
                             ),
                         );
-                    await client_for_testing_az.set("foo", "testvalue");
 
-                    for (let i = 0; i < GET_CALLS; i++) {
+                    for (let i = 0; i < get_calls; i++) {
                         await client_for_testing_az.get("foo");
                     }
 
@@ -2406,7 +2355,7 @@ describe("GlideClusterClient", () => {
                 // Skip test if version is below 8.0.0
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
 
-                const GET_CALLS = 4;
+                const get_calls = 4;
                 const replica_calls = 1;
                 const get_cmdstat = `cmdstat_get:calls=${replica_calls}`;
                 let client_for_testing_az;
@@ -2421,7 +2370,6 @@ describe("GlideClusterClient", () => {
                                 {
                                     readFrom: "AZAffinity",
                                     clientAz: "non-existing-az",
-                                    requestTimeout: 3000,
                                 },
                             ),
                         );
@@ -2432,7 +2380,7 @@ describe("GlideClusterClient", () => {
                     });
 
                     // Issue GET commands
-                    for (let i = 0; i < GET_CALLS; i++) {
+                    for (let i = 0; i < get_calls; i++) {
                         await client_for_testing_az.get("foo");
                     }
 
@@ -2449,7 +2397,7 @@ describe("GlideClusterClient", () => {
                         return nodeResponses.includes(get_cmdstat);
                     }).length;
 
-                    // Validate that only one replica handled the GET calls
+                    // Validate that the get calls were distributed across replicas, each replica recieved 1 get call
                     expect(matchingEntriesCount).toBe(4);
                 } finally {
                     // Cleanup: Close the client after test execution
