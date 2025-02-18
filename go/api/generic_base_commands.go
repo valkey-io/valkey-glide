@@ -16,19 +16,19 @@ type GenericBaseCommands interface {
 
 	Expire(key string, seconds int64) (bool, error)
 
-	ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (bool, error)
+	ExpireWithOptions(key string, seconds int64, expireCondition options.ExpireCondition) (bool, error)
 
 	ExpireAt(key string, unixTimestampInSeconds int64) (bool, error)
 
-	ExpireAtWithOptions(key string, unixTimestampInSeconds int64, expireCondition ExpireCondition) (bool, error)
+	ExpireAtWithOptions(key string, unixTimestampInSeconds int64, expireCondition options.ExpireCondition) (bool, error)
 
 	PExpire(key string, milliseconds int64) (bool, error)
 
-	PExpireWithOptions(key string, milliseconds int64, expireCondition ExpireCondition) (bool, error)
+	PExpireWithOptions(key string, milliseconds int64, expireCondition options.ExpireCondition) (bool, error)
 
 	PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error)
 
-	PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireCondition ExpireCondition) (bool, error)
+	PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireCondition options.ExpireCondition) (bool, error)
 
 	ExpireTime(key string) (int64, error)
 
@@ -52,7 +52,7 @@ type GenericBaseCommands interface {
 
 	Restore(key string, ttl int64, value string) (Result[string], error)
 
-	RestoreWithOptions(key string, ttl int64, value string, option *RestoreOptions) (Result[string], error)
+	RestoreWithOptions(key string, ttl int64, value string, option options.RestoreOptions) (Result[string], error)
 
 	ObjectEncoding(key string) (Result[string], error)
 
@@ -66,19 +66,19 @@ type GenericBaseCommands interface {
 
 	Sort(key string) ([]Result[string], error)
 
-	SortWithOptions(key string, sortOptions *options.SortOptions) ([]Result[string], error)
+	SortWithOptions(key string, sortOptions options.SortOptions) ([]Result[string], error)
 
 	SortStore(key string, destination string) (int64, error)
 
-	SortStoreWithOptions(key string, destination string, sortOptions *options.SortOptions) (int64, error)
+	SortStoreWithOptions(key string, destination string, sortOptions options.SortOptions) (int64, error)
 
 	SortReadOnly(key string) ([]Result[string], error)
 
-	SortReadOnlyWithOptions(key string, sortOptions *options.SortOptions) ([]Result[string], error)
+	SortReadOnlyWithOptions(key string, sortOptions options.SortOptions) ([]Result[string], error)
 
 	Wait(numberOfReplicas int64, timeout int64) (int64, error)
 
 	Copy(source string, destination string) (bool, error)
 
-	CopyWithOptions(source string, destination string, option *CopyOptions) (bool, error)
+	CopyWithOptions(source string, destination string, option options.CopyOptions) (bool, error)
 }
