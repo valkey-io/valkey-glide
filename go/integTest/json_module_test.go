@@ -72,7 +72,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandMultipleValues() {
 	jsonGetResultWithMultiPaths, err := glidejson.GetWithOptions(
 		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c", "$.c"}))
 	assert.NoError(t, err)
-	assert.Equal(t, "{\"$..c\":[true, 1,2],\"$.c\":[true]}", jsonGetResultWithMultiPaths.Value())
+	assert.Equal(t, "{\"$..c\":[true,1,2],\"$.c\":[true]}", jsonGetResultWithMultiPaths.Value())
 
 	jsonSetResult, err = glidejson.Set(client, key, "$..c", "\"new_value\"")
 	assert.NoError(t, err)
