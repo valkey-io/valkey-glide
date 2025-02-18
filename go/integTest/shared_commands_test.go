@@ -184,8 +184,8 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfEquals() {
 		suite.verifyOK(client.Set(key, initialValue))
 
 		// successful set
-		opts := api.NewSetOptionsBuilder().SetOnlyIfEquals(initialValue)
-		result, err := client.SetWithOptions(key, anotherValue, opts)
+		opts := options.NewSetOptions().SetOnlyIfEquals(initialValue)
+		result, err := client.SetWithOptions(key, anotherValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
 
@@ -194,8 +194,8 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfEquals() {
 		assert.Equal(suite.T(), anotherValue, result.Value())
 
 		// unsuccessful set
-		opts = api.NewSetOptionsBuilder().SetOnlyIfEquals(initialValue)
-		result, err = client.SetWithOptions(key, initialValue, opts)
+		opts = options.NewSetOptions().SetOnlyIfEquals(initialValue)
+		result, err = client.SetWithOptions(key, initialValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), result.IsNil())
 	})
@@ -7079,7 +7079,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		group := uuid.NewString()
 		consumer := uuid.NewString()
 
-		xadd, err := client.XAddWithOptions(key, [][]string{{"a", "b"}, {"c", "d"}}, options.NewXAddOptions().SetId("1-0"))
+		xadd, err := client.XAddWithOptions(key, [][]string{{"a", "b"}, {"c", "d"}}, *options.NewXAddOptions().SetId("1-0"))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "1-0", xadd.Value())
 
@@ -7096,7 +7096,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		assert.Equal(suite.T(), expectedEntry, infoSmall["first-entry"])
 		assert.Equal(suite.T(), expectedEntry, infoSmall["last-entry"])
 
-		xadd, err = client.XAddWithOptions(key, [][]string{{"e", "f"}}, options.NewXAddOptions().SetId("1-1"))
+		xadd, err = client.XAddWithOptions(key, [][]string{{"e", "f"}}, *options.NewXAddOptions().SetId("1-1"))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "1-1", xadd.Value())
 
