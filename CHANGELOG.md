@@ -20,7 +20,6 @@
 * Python: Add support to AzAffinityReplicasAndPrimary read strategy ([#3071](https://github.com/valkey-io/valkey-glide/pull/3071))
 * Node: Add support to AzAffinityReplicasAndPrimary read strategy ([#3063](https://github.com/valkey-io/valkey-glide/pull/3063))
 * Core: Add support to AzAffinityReplicasAndPrimary read strategy ([#2986](https://github.com/valkey-io/valkey-glide/pull/2986))
-* Go: Add `HScan` command ([#2917](https://github.com/valkey-io/valkey-glide/pull/2917))
 * Java, Node, Python: Add transaction commands for JSON module ([#2862](https://github.com/valkey-io/valkey-glide/pull/2862))
 * Java: bump `netty` version ([#2795](https://github.com/valkey-io/valkey-glide/pull/2795))
 * Java: Bump protobuf (protoc) version ([#2796](https://github.com/valkey-io/valkey-glide/pull/2796), [#2800](https://github.com/valkey-io/valkey-glide/pull/2800))
