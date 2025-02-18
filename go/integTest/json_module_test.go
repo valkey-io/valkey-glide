@@ -159,4 +159,14 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandFormatting() {
 	)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedGetResult, actualGetResult.Value())
+
+	expectedGetResult2 := "[\n~{\n~~\"a\":*1.0,\n~~\"b\":*2,\n~~\"c\":*{\n~~~\"d\":*3,\n~~~\"e\":*4\n~~}\n~}\n]"
+	actualGetResult2, err := glidejson.GetWithOptions(
+		client,
+		key,
+		options.NewJsonGetOptionsBuilder().
+			SetPaths([]string{"$"}).SetIndent("~").SetNewline("\n").SetSpace("*"),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedGetResult2, actualGetResult2.Value())
 }

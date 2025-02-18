@@ -2,9 +2,6 @@
 package glidejson
 
 import (
-	"fmt"
-	"reflect"
-
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
@@ -16,16 +13,11 @@ const (
 )
 
 func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap bool) (interface{}, error) {
-	fmt.Println("type===")
-	fmt.Println(reflect.TypeOf(client))
 	switch client.(type) {
 	case *api.GlideClient:
 		return (client.(*api.GlideClient)).CustomCommand(args)
 	case *api.GlideClusterClient:
 		result, err := (client.(*api.GlideClusterClient)).CustomCommand(args)
-		// fmt.Println("result===")
-		// fmt.Println(result.SingleValue())
-		// fmt.Println(reflect.TypeOf(result.SingleValue()))
 		if result.IsEmpty() {
 			return nil, err
 		}
@@ -92,8 +84,6 @@ func GetWithOptions(client api.BaseClient, key string, options *options.JsonGetO
 		return api.CreateNilStringResult(), err
 	}
 	args = append(args, optionalArgs...)
-	fmt.Println("args===")
-	fmt.Println(args)
 	result, err := executeCommand(client, args)
 	if err != nil || result == nil {
 		return api.CreateNilStringResult(), err
