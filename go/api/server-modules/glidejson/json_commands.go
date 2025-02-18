@@ -35,18 +35,38 @@ func executeCommand(client api.BaseClient, args []string) (interface{}, error) {
 	return executeCommandWithReturnMap(client, args, false)
 }
 
+// Sets the JSON value at the specified `path` stored at `key`. This definition of JSON.SET command
+// does not include the optional arguments of the command.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	client - The Valkey GLIDE client to execute the command.
+//	key    - The `key` of the JSON document.
+//	path   - Represents the path within the JSON document where the value will be set. The key
+//	    	will be modified only if `value` is added as the last child in the specified
+//	        `path`, or if the specified `path` acts as the parent of a new child being added.
+//	value  - The value to set at the specific path, in JSON formatted string.
+//
+// Return value:
+//
+//	Returns an api.Result[string] containing "OK" string if the value is successfully set.
+//	If `key` doesn't exist, returns api.CreateNilStringResult().
+//
+// [valkey.io]: https://valkey.io/commands/json.set/
 func Set(
 	client api.BaseClient,
 	key string,
 	path string,
 	value string,
-) (api.Result[string], error) {
+) (string, error) {
 	result, err := executeCommand(client, []string{JsonSet, key, path, value})
 	if err != nil || result == nil {
-		return api.CreateNilStringResult(), err
+		return api.DefaultStringResponse, err
 	}
 
-	return api.CreateStringResult(result.(string)), err
+	return result.(string), err
 }
 
 func SetWithOptions(
