@@ -27,7 +27,7 @@ func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap
 		fmt.Println(result.SingleValue())
 		fmt.Println(reflect.TypeOf(result.SingleValue()))
 		if result.IsEmpty() {
-			return "", err
+			return nil, err
 		}
 		if returnMap {
 			return result.MultiValue(), err
@@ -73,21 +73,24 @@ func SetWithOptions(
 	return result.(string), err
 }
 
-func Get(client api.BaseClient, key string) (string, error) {
+func Get(client api.BaseClient, key string) (api.Result[string], error) {
 	result, err := executeCommand(client, []string{JsonGet, key})
 	if err != nil {
-		return api.DefaultStringResponse, err
+		return api.CreateNilStringResult(), err
 	}
-	return result.(string), err
+	return api.CreateStringResult(result.(string)), err
 }
 
-func GetWithOptions(client api.BaseClient, key string, options *options.JsonGetOptions) (string, error) {
+func GetWithOptions(client api.BaseClient, key string, options *options.JsonGetOptions) (api.Result[string], error) {
 	args := []string{JsonGet, key}
 	optionalArgs, err := options.ToArgs()
 	if err != nil {
-		return api.DefaultStringResponse, err
+		return api.CreateNilStringResult(), err
 	}
 	args = append(args, optionalArgs...)
 	result, err := executeCommand(client, args)
-	return result.(string), err
+	if err != nil {
+		return api.CreateNilStringResult(), err
+	}
+	return api.CreateStringResult(result.(string)), err
 }

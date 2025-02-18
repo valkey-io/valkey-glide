@@ -38,19 +38,19 @@ func (suite *GlideTestSuite) TestModuleGetSetCommand() {
 
 	jsonGetResult, err := glidejson.Get(client, key)
 	assert.NoError(t, err)
-	assert.Equal(t, jsonValue, jsonGetResult)
+	assert.Equal(t, jsonValue, jsonGetResult.Value())
 
 	jsonGetResultWithMultiPaths, err := glidejson.GetWithOptions(
 		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$.a", "$.b"}))
 	assert.NoError(t, err)
-	assert.Equal(t, "{\"$.a\":[1.0],\"$.b\":[2]}", jsonGetResultWithMultiPaths)
+	assert.Equal(t, "{\"$.a\":[1.0],\"$.b\":[2]}", jsonGetResultWithMultiPaths.Value())
 
 	jsonGetResult, err = glidejson.Get(client, "non_existing_key")
 	assert.NoError(t, err)
-	assert.Nil(t, jsonGetResult)
+	assert.True(t, jsonGetResult.IsNil())
 
 	jsonGetResult, err = glidejson.GetWithOptions(
 		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$.d"}))
 	assert.NoError(t, err)
-	assert.Equal(t, "[]", jsonGetResult)
+	assert.Equal(t, "[]", jsonGetResult.Value())
 }
