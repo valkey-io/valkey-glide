@@ -6290,10 +6290,11 @@ func (client *baseClient) ZUnionStoreWithOptions(
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 	zUnionOptions *options.ZUnionOptions,
 ) (int64, error) {
-	args, err := keysOrWeightedKeys.ToArgs()
+	keysArgs, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return defaultIntResponse, err
 	}
+	args := append([]string{destination}, keysArgs...)
 	if zUnionOptions != nil {
 		optionsArgs, err := zUnionOptions.ToArgs()
 		if err != nil {

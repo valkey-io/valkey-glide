@@ -1603,7 +1603,7 @@ func ExampleGlideClient_XInfoStream() {
 	key := "12345"
 	streamId1 := "12345-1"
 
-	client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, options.NewXAddOptions().SetId(streamId1))
+	client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, *options.NewXAddOptions().SetId(streamId1))
 	response, err := client.XInfoStream(key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1643,7 +1643,7 @@ func ExampleGlideClusterClient_XInfoStream() {
 	key := "12345"
 	streamId1 := "12345-1"
 
-	client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, options.NewXAddOptions().SetId(streamId1))
+	client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, *options.NewXAddOptions().SetId(streamId1))
 	response, err := client.XInfoStream(key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1687,7 +1687,7 @@ func ExampleGlideClient_XInfoStreamFullWithOptions() {
 		value := fmt.Sprintf("value%d", i)
 		streamId := fmt.Sprintf("%s-%d", key, i)
 
-		client.XAddWithOptions(key, [][]string{{field, value}}, options.NewXAddOptions().SetId(streamId))
+		client.XAddWithOptions(key, [][]string{{field, value}}, *options.NewXAddOptions().SetId(streamId))
 	}
 
 	options := options.NewXInfoStreamOptionsOptions().SetCount(2)
@@ -1737,7 +1737,7 @@ func ExampleGlideClusterClient_XInfoStreamFullWithOptions() {
 		value := fmt.Sprintf("value%d", i)
 		streamId := fmt.Sprintf("%s-%d", key, i)
 
-		client.XAddWithOptions(key, [][]string{{field, value}}, options.NewXAddOptions().SetId(streamId))
+		client.XAddWithOptions(key, [][]string{{field, value}}, *options.NewXAddOptions().SetId(streamId))
 	}
 
 	options := options.NewXInfoStreamOptionsOptions().SetCount(2)
