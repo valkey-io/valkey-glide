@@ -83,3 +83,20 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandMultipleValues() {
 	assert.NoError(t, err)
 	assert.Equal(t, "[\"new_value\",\"new_value\",\"new_value\"]", jsonGetResult.Value())
 }
+
+func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	key := uuid.New().String()
+	jsonValue := "{\"a\": 1.0, \"b\": 2}"
+
+	jsonSetResult, err := glidejson.SetWithOptions(
+		client,
+		key,
+		"$",
+		jsonValue,
+		options.NewJsonSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", jsonSetResult)
+}
