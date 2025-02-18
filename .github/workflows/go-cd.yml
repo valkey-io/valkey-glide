@@ -33,13 +33,13 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with pkg_go_dev in PACKAGE_MANAGERS and remove "ephemeral" from RUNNER
+                  # Filter entries with pkg_go_dev in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(jq 'map(
-                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pkg_go_dev"]))) 
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pkg_go_dev"])))
                       | .RUNNER = (
                           if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(select(. != "ephemeral"))) 
-                          else .RUNNER 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if . == "ephemeral" then "persistent" else . end) 
                           end
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
@@ -148,13 +148,14 @@ jobs:
                   cp protobuf/* $GITHUB_WORKSPACE/go/protobuf/
             - name: Commit and push tag
               run: |
+                  RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   git config user.name github-actions
                   git config user.email github-actions@github.com
                   git add -f .
                   git commit -m "Automated commit from GitHub Actions"
-                  git tag go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
-                  git push origin go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
-                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go@${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
+                  git tag go/$RELEASE_VERSION
+                  git push origin go/$RELEASE_VERSION
+                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go@$RELEASE_VERSION
 
     extra-post-commit-test:
         needs:
@@ -204,13 +205,13 @@ jobs:
               working-directory: go/benchmarks
               run: |
                   # change go/benchmarks/go.mod on the fly
-                  export ESCAPED_VERSION=$(echo "${{ needs.validate-release-version.outputs.RELEASE_VERSION }}" | sed 's/\./\\./g')
+                  RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   if [[ "${{ matrix.host.OS }}" == "macos" ]]; then
-                      sed -i '' '/replace github\.com\/valkey-io\/valkey-glide\/go/d' go.mod
-                      sed -i '' "s/github\.com\/valkey-io\/valkey-glide\/go v0\.0\.0/github.com\/valkey-io\/valkey-glide\/go $ESCAPED_VERSION/g" go.mod
+                      sed -i '' '\|replace github\.com/valkey-io/valkey-glide/go|d' go.mod
+                      sed -i '' "s|github\.com/valkey-io/valkey-glide/go v.*|github.com/valkey-io/valkey-glide/go $RELEASE_VERSION|g" go.mod
                   else
-                      sed -i '/replace github\.com\/valkey-io\/valkey-glide\/go/d' go.mod
-                      sed -i "s/github\.com\/valkey-io\/valkey-glide\/go v0\.0\.0/github.com\/valkey-io\/valkey-glide\/go $ESCAPED_VERSION/g" go.mod
+                      sed -i '\|replace github\.com/valkey-io/valkey-glide/go|d' go.mod
+                      sed -i "s|github\.com/valkey-io/valkey-glide/go v.*|github.com/valkey-io/valkey-glide/go $RELEASE_VERSION|g" go.mod
                   fi
                   go mod tidy
                   go run . -minimal -clients glide -concurrentTasks 10 -port ${{ env.PORT }}
