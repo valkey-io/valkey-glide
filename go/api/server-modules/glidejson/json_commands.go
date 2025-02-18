@@ -13,11 +13,11 @@ const (
 )
 
 func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap bool) (interface{}, error) {
-	switch client.(type) {
+	switch client:= client.(type) {
 	case *api.GlideClient:
-		return (client.(*api.GlideClient)).CustomCommand(args)
+		return client.CustomCommand(args)
 	case *api.GlideClusterClient:
-		result, err := (client.(*api.GlideClusterClient)).CustomCommand(args)
+		result, err := client.CustomCommand(args)
 		if result.IsEmpty() {
 			return nil, err
 		}
