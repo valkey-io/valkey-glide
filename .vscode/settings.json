@@ -60,5 +60,6 @@
     ],
     "rust-analyzer.cargo.features": "all",
     "dotnet.defaultSolution": "csharp/csharp.sln",
-    "java.compile.nullAnalysis.mode": "automatic"
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

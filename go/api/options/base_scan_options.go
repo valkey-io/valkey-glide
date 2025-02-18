@@ -13,7 +13,7 @@ type BaseScanOptions struct {
 	count int64
 }
 
-func NewBaseScanOptionsBuilder() *BaseScanOptions {
+func NewBaseScanOptions() *BaseScanOptions {
 	return &BaseScanOptions{}
 }
 

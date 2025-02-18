@@ -3,12 +3,12 @@
 
     Examples:
         >>> import json
-        >>> from glide import json_transaction
+        >>> from glide import json_batch
         >>> transaction = ClusterTransaction()
         >>> value = {'a': 1.0, 'b': 2}
         >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
-        >>> json_transaction.set(transaction, "doc", "$", json_str)
-        >>> json_transaction.get(transaction, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
+        >>> json_batch.set(transaction, "doc", "$", json_str)
+        >>> json_batch.get(transaction, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
         >>> result = await glide_client.exec(transaction)
         >>> print result[0] # set result
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.

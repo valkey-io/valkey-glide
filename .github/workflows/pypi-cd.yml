@@ -41,13 +41,13 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with pypi in PACKAGE_MANAGERS and remove "ephemeral" from RUNNER
+                  # Filter entries with pypi in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(jq 'map(
-                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"]))) 
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"])))
                       | .RUNNER = (
                           if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(select(. != "ephemeral"))) 
-                          else .RUNNER 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if . == "ephemeral" then "persistent" else . end) 
                           end
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
@@ -171,7 +171,7 @@ jobs:
                         PROTOC_ARCH="x86_64"
                       elif [[ $ARCH == 'aarch64' ]]; then 
                         PROTOC_ARCH="aarch_64"
-                        export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+                        export CC_aarch64_unknown_linux_gnu=gcc
                         export CFLAGS_aarch64_unknown_linux_gnu="-march=armv8-a"
                       else 
                         echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"

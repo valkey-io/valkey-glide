@@ -18,7 +18,7 @@ The release of Valkey GLIDE was tested on the following platforms:
 
 Linux:
 
-- Ubuntu 24.04.1 (x86_64 and aarch64)
+- Ubuntu 24.04.1 (x86_64/amd64 and arm64/aarch64)
 
 macOS:
 
@@ -26,7 +26,7 @@ macOS:
 
 ## GO supported versions
 
-| Go Version |
+| Go Version     |
 |----------------|
 | 1.20           |
 | 1.22           |
@@ -120,3 +120,12 @@ func main() {
 ### Building & Testing
 
 Development instructions for local building & testing the package are in the [DEVELOPER.md](DEVELOPER.md) file.
+
+### Known issues
+
+When building an application on macos, a notice like this may appear:
+```
+ld: warning: '...' has malformed LC_DYSYMTAB, expected 123 undefined symbols to start at index 17006, found 174 undefined symbols starting at index 68
+```
+It could be safely ignored. It is not an error, it could be suppressed by setting `LDFLAGS` for go as [described there](https://github.com/golang/go/issues/61229#issuecomment-1988965927).
+We're working on fixing this issue, you can track it in [#3177](https://github.com/valkey-io/valkey-glide/issues/3177).

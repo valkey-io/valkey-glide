@@ -59,13 +59,13 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with npm in PACKAGE_MANAGERS and remove "ephemeral" from RUNNER
+                  # Filter entries with npm in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(jq 'map(
-                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"]))) 
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
                       | .RUNNER = (
                           if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(select(. != "ephemeral"))) 
-                          else .RUNNER 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if . == "ephemeral" then "persistent" else . end) 
                           end
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)

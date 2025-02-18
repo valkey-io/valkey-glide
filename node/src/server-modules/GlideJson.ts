@@ -1166,15 +1166,15 @@ export class GlideJson {
  * @example
  * ```typescript
  * const transaction = new Transaction();
- * GlideMultiJson.set(transaction, "doc", ".", '{"a": 1.0, "b": 2}');
- * GlideMultiJson.get(transaction, "doc");
+ * JsonBatch.set(transaction, "doc", ".", '{"a": 1.0, "b": 2}');
+ * JsonBatch.get(transaction, "doc");
  * const result = await client.exec(transaction);
  *
- * console.log(result[0]); // Output: 'OK' - result of GlideMultiJson.set()
- * console.log(result[1]); // Output: '{"a": 1.0, "b": 2}' - result of GlideMultiJson.get()
+ * console.log(result[0]); // Output: 'OK' - result of JsonBatch.set()
+ * console.log(result[1]); // Output: '{"a": 1.0, "b": 2}' - result of JsonBatch.get()
  * ```
  */
-export class GlideMultiJson {
+export class JsonBatch {
     /**
      * Sets the JSON value at the specified `path` stored at `key`.
      *

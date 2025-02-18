@@ -12,9 +12,9 @@ import "github.com/valkey-io/valkey-glide/go/api/options"
 type StreamCommands interface {
 	XAdd(key string, values [][]string) (Result[string], error)
 
-	XAddWithOptions(key string, values [][]string, options *options.XAddOptions) (Result[string], error)
+	XAddWithOptions(key string, values [][]string, options options.XAddOptions) (Result[string], error)
 
-	XTrim(key string, options *options.XTrimOptions) (int64, error)
+	XTrim(key string, options options.XTrimOptions) (int64, error)
 
 	XLen(key string) (int64, error)
 
@@ -26,7 +26,7 @@ type StreamCommands interface {
 		consumer string,
 		minIdleTime int64,
 		start string,
-		options *options.XAutoClaimOptions,
+		options options.XAutoClaimOptions,
 	) (XAutoClaimResponse, error)
 
 	XAutoClaimJustId(
@@ -43,7 +43,7 @@ type StreamCommands interface {
 		consumer string,
 		minIdleTime int64,
 		start string,
-		options *options.XAutoClaimOptions,
+		options options.XAutoClaimOptions,
 	) (XAutoClaimJustIdResponse, error)
 
 	XReadGroup(group string, consumer string, keysAndIds map[string]string) (map[string]map[string][][]string, error)
@@ -52,26 +52,26 @@ type StreamCommands interface {
 		group string,
 		consumer string,
 		keysAndIds map[string]string,
-		options *options.XReadGroupOptions,
+		options options.XReadGroupOptions,
 	) (map[string]map[string][][]string, error)
 
 	XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error)
 
-	XReadWithOptions(keysAndIds map[string]string, options *options.XReadOptions) (map[string]map[string][][]string, error)
+	XReadWithOptions(keysAndIds map[string]string, options options.XReadOptions) (map[string]map[string][][]string, error)
 
 	XDel(key string, ids []string) (int64, error)
 
 	XPending(key string, group string) (XPendingSummary, error)
 
-	XPendingWithOptions(key string, group string, options *options.XPendingOptions) ([]XPendingDetail, error)
+	XPendingWithOptions(key string, group string, options options.XPendingOptions) ([]XPendingDetail, error)
 
 	XGroupSetId(key string, group string, id string) (string, error)
 
-	XGroupSetIdWithOptions(key string, group string, id string, opts *options.XGroupSetIdOptions) (string, error)
+	XGroupSetIdWithOptions(key string, group string, id string, opts options.XGroupSetIdOptions) (string, error)
 
 	XGroupCreate(key string, group string, id string) (string, error)
 
-	XGroupCreateWithOptions(key string, group string, id string, opts *options.XGroupCreateOptions) (string, error)
+	XGroupCreateWithOptions(key string, group string, id string, opts options.XGroupCreateOptions) (string, error)
 
 	XGroupDestroy(key string, group string) (bool, error)
 
@@ -95,7 +95,7 @@ type StreamCommands interface {
 		consumer string,
 		minIdleTime int64,
 		ids []string,
-		options *options.StreamClaimOptions,
+		options options.XClaimOptions,
 	) (map[string][][]string, error)
 
 	XClaimJustId(key string, group string, consumer string, minIdleTime int64, ids []string) ([]string, error)
@@ -106,7 +106,7 @@ type StreamCommands interface {
 		consumer string,
 		minIdleTime int64,
 		ids []string,
-		options *options.StreamClaimOptions,
+		options options.XClaimOptions,
 	) ([]string, error)
 
 	XInfoStream(key string) (map[string]any, error)
@@ -119,7 +119,7 @@ type StreamCommands interface {
 		key string,
 		start options.StreamBoundary,
 		end options.StreamBoundary,
-		options *options.StreamRangeOptions,
+		options options.XRangeOptions,
 	) ([]XRangeResponse, error)
 
 	XRevRange(key string, start options.StreamBoundary, end options.StreamBoundary) ([]XRangeResponse, error)
@@ -128,6 +128,6 @@ type StreamCommands interface {
 		key string,
 		start options.StreamBoundary,
 		end options.StreamBoundary,
-		options *options.StreamRangeOptions,
+		options options.XRangeOptions,
 	) ([]XRangeResponse, error)
 }

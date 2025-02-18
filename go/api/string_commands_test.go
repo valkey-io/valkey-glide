@@ -4,6 +4,8 @@ package api
 
 import (
 	"fmt"
+
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 func ExampleGlideClient_Set() {
@@ -33,11 +35,11 @@ func ExampleGlideClusterClient_Set() {
 func ExampleGlideClient_SetWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	options := NewSetOptionsBuilder().
-		SetExpiry(NewExpiryBuilder().
-			SetType(Seconds).
-			SetCount(uint64(5)))
-	result, err := client.SetWithOptions("my_key", "my_value", options)
+	options := options.NewSetOptions().
+		SetExpiry(options.NewExpiry().
+			SetType(options.Seconds).
+			SetCount(5))
+	result, err := client.SetWithOptions("my_key", "my_value", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -49,11 +51,11 @@ func ExampleGlideClient_SetWithOptions() {
 func ExampleGlideClusterClient_SetWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
-	options := NewSetOptionsBuilder().
-		SetExpiry(NewExpiryBuilder().
-			SetType(Seconds).
+	options := options.NewSetOptions().
+		SetExpiry(options.NewExpiry().
+			SetType(options.Seconds).
 			SetCount(uint64(5)))
-	result, err := client.SetWithOptions("my_key", "my_value", options)
+	result, err := client.SetWithOptions("my_key", "my_value", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -150,11 +152,11 @@ func ExampleGlideClient_GetExWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
 	client.Set("my_key", "my_value")
-	options := NewGetExOptionsBuilder().
-		SetExpiry(NewExpiryBuilder().
-			SetType(Seconds).
-			SetCount(uint64(5)))
-	result, err := client.GetExWithOptions("my_key", options)
+	options := options.NewGetExOptions().
+		SetExpiry(options.NewExpiry().
+			SetType(options.Seconds).
+			SetCount(5))
+	result, err := client.GetExWithOptions("my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -171,11 +173,11 @@ func ExampleGlideClusterClient_GetExWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
 	client.Set("my_key", "my_value")
-	options := NewGetExOptionsBuilder().
-		SetExpiry(NewExpiryBuilder().
-			SetType(Seconds).
+	options := options.NewGetExOptions().
+		SetExpiry(options.NewExpiry().
+			SetType(options.Seconds).
 			SetCount(uint64(5)))
-	result, err := client.GetExWithOptions("my_key", options)
+	result, err := client.GetExWithOptions("my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

@@ -2406,4 +2406,112 @@ describe("GlideClusterClient", () => {
             },
         );
     });
+    describe("AZAffinityReplicasAndPrimary Read Strategy Tests", () => {
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "should route GET commands to primary with the same AZ using protocol %p",
+            async (protocol) => {
+                // Skip test if version is below 8.0.0
+                if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+
+                const az = "us-east-1a";
+                const other_az = "us-east-1b";
+                const get_calls = 4;
+
+                let client_for_config_set;
+                let client_for_testing_az;
+
+                try {
+                    // Stage 1: Configure nodes
+                    client_for_config_set =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                { requestTimeout: 3000 },
+                            ),
+                        );
+                    // Set all nodes for us-east-1b
+                    await client_for_config_set.configResetStat();
+                    await client_for_config_set.configSet(
+                        { "availability-zone": other_az },
+                        { route: "allNodes" },
+                    );
+
+                    // Set AZ for one primary (the last one) to match the client's AZ
+                    await client_for_config_set.configSet(
+                        { "availability-zone": az },
+                        { route: { type: "primarySlotId", id: 12182 } },
+                    );
+
+                    // Create client and verify configuration
+                    client_for_testing_az =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                {
+                                    requestTimeout: 3000,
+                                    readFrom: "AZAffinityReplicasAndPrimary",
+                                    clientAz: az,
+                                },
+                            ),
+                        );
+
+                    // Stage 3: Set test data and perform GET operations
+                    const key = "foo_{12182}"; // Key targets slot 12182
+                    await client_for_testing_az.set(key, "testvalue");
+
+                    for (let i = 0; i < get_calls; i++) {
+                        await client_for_testing_az.get(key);
+                    }
+
+                    // Stage 4: Verify GET commands were routed correctly
+                    const info_result = (await client_for_testing_az.info({
+                        sections: [InfoOptions.All],
+                        route: "allNodes",
+                    })) as Record<string, string>;
+
+                    let matching_entries_count = 0;
+                    let total_get_calls = 0;
+
+                    Object.entries(info_result).forEach(([nodeId, infoStr]) => {
+                        const isPrimaryNode =
+                            infoStr.includes("role:master") ||
+                            infoStr.includes("role:primary");
+
+                        // 1. Use the correct regex pattern
+                        const azMatch = infoStr.match(
+                            /availability_zone:(\S+)/,
+                        );
+                        const nodeAZ = azMatch ? azMatch[1] : "unknown";
+
+                        const isInClientAZ = nodeAZ === az;
+                        const getCalls = parseInt(
+                            (infoStr.match(/cmdstat_get:calls=(\d+)/) ||
+                                [])[1] || "0",
+                        );
+                        total_get_calls += getCalls;
+
+                        if (
+                            isPrimaryNode &&
+                            getCalls === get_calls &&
+                            isInClientAZ
+                        ) {
+                            matching_entries_count++;
+                        } else if (!isInClientAZ && getCalls > 0) {
+                            throw new Error(
+                                `WARNING: GET calls to node not in client AZ: ${nodeId}`,
+                            );
+                        }
+                    });
+
+                    expect(matching_entries_count).toBe(1); // We expect only one primary in the client's AZ to have all the calls
+                    expect(total_get_calls).toBe(get_calls); // We expect the total number of GET calls to match our input
+                } finally {
+                    client_for_config_set?.close();
+                    client_for_testing_az?.close();
+                }
+            },
+        );
+    });
 });

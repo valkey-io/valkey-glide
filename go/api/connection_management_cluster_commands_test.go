@@ -25,7 +25,7 @@ func ExampleGlideClusterClient_PingWithOptions() {
 		PingOptions: &options.PingOptions{
 			Message: "hello",
 		},
-		Route: nil,
+		RouteOption: nil,
 	}
 	result, err := client.PingWithOptions(options)
 	if err != nil {

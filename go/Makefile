@@ -47,10 +47,25 @@ clean:
 build-glide-client:
 	cargo build --release
 	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h --lang c
-	if [ "$$(uname)" = "Darwin" ]; then \
+	@if [ "$$(uname)" = "Darwin" ] && [ "$$(arch)" = "arm64" ]; then \
+		echo "Platform: aarch64-apple-darwin"; \
 		strip -x target/release/libglide_rs.a; \
-	else \
+		mkdir -p rustbin/aarch64-apple-darwin; \
+		cp target/release/libglide_rs.a rustbin/aarch64-apple-darwin/; \
+	elif [ "$$(uname)" = "Linux" ]; then \
 		strip --strip-unneeded target/release/libglide_rs.a; \
+		if [ "$$(arch)" = "arm64" ] || [ "$$(arch)" = "aarch64" ]; then \
+			echo "Platform: aarch64-unknown-linux-gnu"; \
+			mkdir -p rustbin/aarch64-unknown-linux-gnu; \
+			cp target/release/libglide_rs.a rustbin/aarch64-unknown-linux-gnu/; \
+		elif [ "$$(arch)" = "x86_64" ]; then \
+			echo "Platform: x86_64-unknown-linux-gnu"; \
+			mkdir -p rustbin/x86_64-unknown-linux-gnu; \
+			cp target/release/libglide_rs.a rustbin/x86_64-unknown-linux-gnu/; \
+		fi; \
+	else \
+		echo "Unsupported platform: $(shell uname), $(shell arch)"; \
+		exit 1; \
 	fi
 
 

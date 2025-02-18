@@ -75,6 +75,21 @@ def test_convert_config_with_azaffinity_to_protobuf():
     assert request.client_az == az
 
 
+def test_convert_config_with_azaffinity_replicas_and_primary_to_protobuf():
+    az = "us-east-1a"
+    config = BaseClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        use_tls=True,
+        read_from=ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY,
+        client_az=az,
+    )
+    request = config._create_a_protobuf_conn_request()
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode is TlsMode.SecureTls
+    assert request.read_from == ProtobufReadFrom.AZAffinityReplicasAndPrimary
+    assert request.client_az == az
+
+
 def test_connection_timeout_in_protobuf_request():
     connection_timeout = 5000  # in milliseconds
     config = GlideClientConfiguration(

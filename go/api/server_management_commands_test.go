@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 func ExampleGlideClient_Select() {
@@ -102,7 +104,7 @@ func ExampleGlideClient_Info() {
 func ExampleGlideClient_InfoWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	opts := InfoOptions{Sections: []Section{Server}}
+	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
 	response, err := client.InfoWithOptions(opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
