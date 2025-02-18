@@ -1,6 +1,5 @@
 #### Changes
 
-
 * Csharp: updating xUnit, adding xUnit analyser rules and guidelines ([#3035](https://github.com/valkey-io/valkey-glide/pull/3035))
 * Go: Add ZRangeStore ([3105](https://github.com/valkey-io/valkey-glide/pull/3105))
 * Go: Add `ZUNION` ([#3119](https://github.com/valkey-io/valkey-glide/pull/3119))
@@ -38,6 +37,8 @@
 * Node: Fix `zrangeWithScores` (disallow `RangeByLex` as it is not supported) ([#2926](https://github.com/valkey-io/valkey-glide/pull/2926))
 * Core: improve fix in #2381 ([#2929](https://github.com/valkey-io/valkey-glide/pull/2929))
 * Java: Fix `lpopCount` null handling ([#3025](https://github.com/valkey-io/valkey-glide/pull/3025))
+* Core: Fix `opentelemetry` related dependency issue ([#3123](https://github.com/valkey-io/valkey-glide/pull/3123))
+* Node: Fix NPM CD tag ([#3155](https://github.com/valkey-io/valkey-glide/pull/3155))
 
 #### Operational Enhancements
 
