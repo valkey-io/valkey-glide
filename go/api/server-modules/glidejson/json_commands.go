@@ -48,12 +48,13 @@ func Set(
 	key string,
 	path string,
 	value string,
-) (string, error) {
+) (api.Result[string], error) {
 	result, err := executeCommand(client, []string{JsonSet, key, path, value})
-	if err != nil {
-		return api.DefaultStringResponse, err
+	if err != nil || result == nil {
+		return api.CreateNilStringResult(), err
 	}
-	return result.(string), err
+
+	return api.CreateStringResult(result.(string)), err
 }
 
 func SetWithOptions(
@@ -62,15 +63,18 @@ func SetWithOptions(
 	path string,
 	value string,
 	options *options.JsonSetOptions,
-) (string, error) {
+) (api.Result[string], error) {
 	args := []string{JsonSet, key, path, value}
 	optionalArgs, err := options.ToArgs()
 	if err != nil {
-		return api.DefaultStringResponse, err
+		return api.CreateNilStringResult(), err
 	}
 	args = append(args, optionalArgs...)
 	result, err := executeCommand(client, args)
-	return result.(string), err
+	if err != nil || result == nil {
+		return api.CreateNilStringResult(), err
+	}
+	return api.CreateStringResult(result.(string)), err
 }
 
 func Get(client api.BaseClient, key string) (api.Result[string], error) {

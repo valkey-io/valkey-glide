@@ -62,7 +62,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandMultipleValues() {
 	jsonValue := "{\"a\": {\"c\": 1, \"d\": 4}, \"b\": {\"c\": 2}, \"c\": true}"
 	jsonSetResult, err := glidejson.Set(client, key, "$", jsonValue)
 	assert.NoError(t, err)
-	assert.Equal(t, "OK", jsonSetResult)
+	assert.Equal(t, "OK", jsonSetResult.Value())
 
 	jsonGetResult, err := glidejson.GetWithOptions(
 		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
@@ -76,7 +76,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandMultipleValues() {
 
 	jsonSetResult, err = glidejson.Set(client, key, "$..c", "\"new_value\"")
 	assert.NoError(t, err)
-	assert.Equal(t, "OK", jsonSetResult)
+	assert.Equal(t, "OK", jsonSetResult.Value())
 
 	jsonGetResult, err = glidejson.GetWithOptions(
 		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
@@ -98,5 +98,5 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
 		options.NewJsonSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists),
 	)
 	assert.NoError(t, err)
-	assert.Equal(t, "OK", jsonSetResult)
+	assert.True(t, jsonSetResult.IsNil())
 }
