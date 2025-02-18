@@ -282,6 +282,7 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 // Return value:
 //
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
+//
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
 	args, err := echoOptions.ToArgs()

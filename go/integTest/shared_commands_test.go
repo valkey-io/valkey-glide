@@ -61,7 +61,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
-		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfExists)
+		opts := options.NewSetOptions().SetOnlyIfExists()
 		result, err := client.SetWithOptions(key, anotherValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -75,7 +75,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfExists)
+		opts := options.NewSetOptions().SetOnlyIfExists()
 		result, err := client.SetWithOptions(key, anotherValue, *opts)
 
 		assert.Nil(suite.T(), err)
@@ -86,7 +86,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfDoesNotExist)
+		opts := options.NewSetOptions().SetOnlyIfDoesNotExist()
 		result, err := client.SetWithOptions(key, anotherValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -100,7 +100,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		opts := options.NewSetOptions().SetConditionalSet(options.OnlyIfDoesNotExist)
+		opts := options.NewSetOptions().SetOnlyIfDoesNotExist()
 		suite.verifyOK(client.Set(key, initialValue))
 
 		result, err := client.SetWithOptions(key, anotherValue, *opts)

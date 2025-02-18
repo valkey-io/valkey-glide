@@ -138,6 +138,7 @@ func (client *GlideClient) Select(index int64) (string, error) {
 // Return value:
 //
 //	A string with the information for the default sections.
+//
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) Info() (string, error) {
 	return client.InfoWithOptions(options.InfoOptions{Sections: []options.Section{}})
