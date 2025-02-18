@@ -58,41 +58,6 @@ import {
     waitForNotBusy,
 } from "./TestUtilities";
 
-async function getNumberOfReplicas(
-    client: GlideClusterClient,
-): Promise<number> {
-    const replicationInfo = (await client.info({
-        sections: [InfoOptions.Replication],
-    })) as Record<string, string>;
-    let totalReplicas = 0;
-    Object.values(replicationInfo).forEach((nodeInfo) => {
-        const lines = nodeInfo.split(/\r?\n/);
-        const connectedReplicasLine = lines.find(
-            (line) =>
-                line.startsWith("connected_slaves:") ||
-                line.startsWith("connected_replicas:"),
-        );
-
-        if (connectedReplicasLine) {
-            const parts = connectedReplicasLine.split(":");
-            const numReplicas = parseInt(parts[1], 10);
-
-            if (!isNaN(numReplicas)) {
-                // Sum up replicas from each primary node
-                totalReplicas += numReplicas;
-            }
-        }
-    });
-
-    if (totalReplicas > 0) {
-        return totalReplicas;
-    }
-
-    throw new Error(
-        "Could not find replica information in any node's response",
-    );
-}
-
 const TIMEOUT = 50000;
 
 describe("GlideClusterClient", () => {
@@ -2203,6 +2168,41 @@ describe("GlideClusterClient", () => {
             }
         },
     );
+
+    async function getNumberOfReplicas(
+        client: GlideClusterClient,
+    ): Promise<number> {
+        const replicationInfo = (await client.info({
+            sections: [InfoOptions.Replication],
+        })) as Record<string, string>;
+        let totalReplicas = 0;
+        Object.values(replicationInfo).forEach((nodeInfo) => {
+            const lines = nodeInfo.split(/\r?\n/);
+            const connectedReplicasLine = lines.find(
+                (line) =>
+                    line.startsWith("connected_slaves:") ||
+                    line.startsWith("connected_replicas:"),
+            );
+
+            if (connectedReplicasLine) {
+                const parts = connectedReplicasLine.split(":");
+                const numReplicas = parseInt(parts[1], 10);
+
+                if (!isNaN(numReplicas)) {
+                    // Sum up replicas from each primary node
+                    totalReplicas += numReplicas;
+                }
+            }
+        });
+
+        if (totalReplicas > 0) {
+            return totalReplicas;
+        }
+
+        throw new Error(
+            "Could not find replica information in any node's response",
+        );
+    }
 
     async function getNumberOfPrimaries(
         client: GlideClusterClient,
