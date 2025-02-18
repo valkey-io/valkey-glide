@@ -75,7 +75,7 @@ func SetWithOptions(
 
 func Get(client api.BaseClient, key string) (api.Result[string], error) {
 	result, err := executeCommand(client, []string{JsonGet, key})
-	if err != nil {
+	if err != nil || result == nil {
 		return api.CreateNilStringResult(), err
 	}
 	return api.CreateStringResult(result.(string)), err
@@ -89,7 +89,7 @@ func GetWithOptions(client api.BaseClient, key string, options *options.JsonGetO
 	}
 	args = append(args, optionalArgs...)
 	result, err := executeCommand(client, args)
-	if err != nil {
+	if err != nil || result == nil {
 		return api.CreateNilStringResult(), err
 	}
 	return api.CreateStringResult(result.(string)), err
