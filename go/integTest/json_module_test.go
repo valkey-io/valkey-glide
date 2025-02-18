@@ -140,3 +140,23 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
 	assert.NoError(t, err)
 	assert.Equal(t, "4.5", jsonGetResult.Value())
 }
+
+func (suite *GlideTestSuite) TestModuleGetSetCommandFormatting() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	key := uuid.New().String()
+	jsonSetResult, err := glidejson.Set(client, key, "$", "{\"a\": 1.0, \"b\": 2, \"c\": {\"d\": 3, \"e\": 4}}")
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", jsonSetResult.Value())
+	expectedGetResult := "[\n" + "  {\n" + "    \"a\": 1.0,\n" + "    \"b\": 2,\n" + "    \"c\": {\n" +
+		"      \"d\": 3,\n" + "      \"e\": 4\n" + "    }\n" + "  }\n" + "]"
+
+	actualGetResult, err := glidejson.GetWithOptions(
+		client,
+		key,
+		options.NewJsonGetOptionsBuilder().
+			SetPaths([]string{"$"}).SetIndent("  ").SetNewline("\n").SetSpace(" "),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedGetResult, actualGetResult.Value())
+}
