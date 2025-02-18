@@ -14,8 +14,6 @@ package api
 import "C"
 
 import (
-	"fmt"
-
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -71,8 +69,6 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[interface{}], error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
-	fmt.Println("res====")
-	fmt.Println(res)
 	if err != nil {
 		return createEmptyClusterValue[interface{}](), err
 	}
