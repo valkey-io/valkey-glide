@@ -10,7 +10,7 @@ Valkey GLIDE is API-compatible with the following engine versions:
 | Redis                 |   V   |   V   |   V   |   -   |
 
 ## Current Status and upcoming releases
-In the current release, Valkey GLIDE is available for Python, Java and Node.js. Support for GO is actively under development, with plans to include more programming languages in the future.
+In the current release, Valkey GLIDE is available for Python, Java and Node.js. Support for Go is currently in **public preview** and support for C# is **under active development**, with plans to include more programming languages in the future.
 
 #### v1.2 (Dec. 2024)
 - Vector Similarity Search and JSON modules support
@@ -18,13 +18,12 @@ In the current release, Valkey GLIDE is available for Python, Java and Node.js. 
 
 #### v1.3 (Feb. 2025)
 - Public preview for GO support
-- Observability with Open Telemetry
-- Client side metrics
 
 ## Getting Started
 -   [Java](./java/README.md)
 -   [Python](./python/README.md)
 -   [Node](./node/README.md)
+-   [Go](./go/README.md)
 -   [Documentation](https://github.com/valkey-io/valkey-glide/wiki)
 
 ## Getting Help

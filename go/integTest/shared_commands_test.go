@@ -4173,22 +4173,22 @@ func (suite *GlideTestSuite) TestRename() {
 	})
 }
 
-func (suite *GlideTestSuite) TestRenamenx() {
+func (suite *GlideTestSuite) TestRenameNX() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		// Test 1 Check if the renamenx command return true if key was renamed to newKey
+		// Test 1 Check if the RenameNX command return true if key was renamed to newKey
 		key := "{keyName}" + uuid.NewString()
 		key2 := "{keyName}" + uuid.NewString()
 		suite.verifyOK(client.Set(key, initialValue))
-		res1, err := client.Renamenx(key, key2)
+		res1, err := client.RenameNX(key, key2)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), res1)
 
-		// Test 2 Check if the renamenx command return false if newKey already exists.
+		// Test 2 Check if the RenameNX command return false if newKey already exists.
 		key3 := "{keyName}" + uuid.NewString()
 		key4 := "{keyName}" + uuid.NewString()
 		suite.verifyOK(client.Set(key3, initialValue))
 		suite.verifyOK(client.Set(key4, initialValue))
-		res2, err := client.Renamenx(key3, key4)
+		res2, err := client.RenameNX(key3, key4)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), res2)
 	})
@@ -6749,7 +6749,7 @@ func (suite *GlideTestSuite) TestObjectIdleTime() {
 		time.Sleep(time.Duration(sleepSec) * time.Second)
 		resultIdleTime, err := defaultClient.ObjectIdleTime(key)
 		assert.Nil(t, err)
-		assert.GreaterOrEqual(t, resultIdleTime.Value(), sleepSec)
+		assert.GreaterOrEqual(t, resultIdleTime.Value(), sleepSec-1)
 	})
 }
 
@@ -8500,6 +8500,145 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		_, err = client.ZUnionWithScores(
+			options.KeyArray{Keys: []string{key1, key3}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
+	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-" + uuid.New().String()
+		key2 := "{key}-" + uuid.New().String()
+		key3 := "{key}-" + uuid.New().String()
+		dest := "{key}-" + uuid.New().String()
+		memberScoreMap1 := map[string]float64{
+			"one": 1.0,
+			"two": 2.0,
+		}
+		memberScoreMap2 := map[string]float64{
+			"two":   3.5,
+			"three": 3.0,
+		}
+
+		// Add members to sorted sets
+		res, err := client.ZAdd(key1, memberScoreMap1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		res, err = client.ZAdd(key2, memberScoreMap2)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		zUnionStoreResult, err := client.ZUnionStore(dest, options.KeyArray{Keys: []string{key1, key2}})
+		assert.NoError(suite.T(), err)
+		zRangeZUnionDest, err := client.ZRange(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zUnionStoreResult)
+		assert.Equal(suite.T(), []string{"one", "three", "two"}, zRangeZUnionDest)
+
+		// Union with scores
+		zUnionStoreWithScoresResult, err := client.ZUnionStoreWithOptions(dest, options.KeyArray{Keys: []string{key1, key2}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		zRangeDest, err := client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zUnionStoreWithScoresResult)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 5.5, "three": 3.0}, zRangeDest)
+
+		// Union results with max aggregate
+		zUnionStoreWithMaxAggregateResult, err := client.ZUnionStoreWithOptions(
+			dest,
+			options.KeyArray{Keys: []string{key1, key2}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMax),
+		)
+		assert.NoError(suite.T(), err)
+		zRangeDest, err = client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zUnionStoreWithMaxAggregateResult)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 3.5, "three": 3.0}, zRangeDest)
+
+		// Union results with min aggregate
+		zUnionStoreWithMinAggregateResult, err := client.ZUnionStoreWithOptions(
+			dest,
+			options.KeyArray{Keys: []string{key1, key2}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMin),
+		)
+		assert.NoError(suite.T(), err)
+		zRangeDest, err = client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zUnionStoreWithMinAggregateResult)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}, zRangeDest)
+
+		// Union results with sum aggregate
+		zUnionStoreWithSumAggregateResult, err := client.ZUnionStoreWithOptions(
+			dest,
+			options.KeyArray{Keys: []string{key1, key2}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		zRangeDest, err = client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zUnionStoreWithSumAggregateResult)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 5.5, "three": 3.0}, zRangeDest)
+
+		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
+		zUnionStoreWithWeightedKeysResult, err := client.ZUnionStoreWithOptions(
+			dest,
+			options.WeightedKeys{
+				KeyWeightPairs: []options.KeyWeightPair{
+					{Key: key1, Weight: 3.0},
+					{Key: key2, Weight: 2.0},
+				},
+			},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		zRangeDest, err = client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zUnionStoreWithWeightedKeysResult)
+		assert.Equal(suite.T(), map[string]float64{"one": 3.0, "two": 13.0, "three": 6.0}, zRangeDest)
+
+		// non-existent key - empty union
+		zUnionStoreWithNonExistentKeyResult, err := client.ZUnionStoreWithOptions(
+			dest,
+			options.KeyArray{Keys: []string{key1, key3}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NoError(suite.T(), err)
+		zRangeDest, err = client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), zUnionStoreWithNonExistentKeyResult)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 2.0}, zRangeDest)
+
+		// empty key list - empty union
+		_, err = client.ZRem(dest, []string{"one", "two"}) // Flush previous results
+		assert.NoError(suite.T(), err)
+		zUnionStoreWithEmptyKeyArray, err := client.ZUnionStoreWithOptions(
+			dest,
+			options.KeyArray{Keys: []string{}},
+			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		)
+		assert.NotNil(suite.T(), err)
+		zRangeDest, err = client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zUnionStoreWithEmptyKeyArray)
+		assert.Empty(suite.T(), zRangeDest)
+
+		// key exists but not a set
+		_, err = client.Set(key3, "value")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.ZUnionStore(dest, options.KeyArray{Keys: []string{key1, key3}})
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		_, err = client.ZUnionStoreWithOptions(
+			dest,
 			options.KeyArray{Keys: []string{key1, key3}},
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 		)

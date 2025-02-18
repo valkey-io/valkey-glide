@@ -147,14 +147,6 @@ func (client *GlideClient) Select(index int64) (string, error) {
 //
 //	A string with the information for the default sections.
 //
-// Example:
-//
-//	response, err := standaloneClient.Info(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	fmt.Println(response)
-//
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) Info() (string, error) {
 	return client.InfoWithOptions(InfoOptions{[]Section{}})
@@ -171,15 +163,6 @@ func (client *GlideClient) Info() (string, error) {
 // Return value:
 //
 //	A string containing the information for the sections requested.
-//
-// Example:
-//
-//	opts := api.InfoOptions{Sections: []api.Section{api.Server}}
-//	response, err := standaloneClient.InfoWithOptions(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	fmt.Println(response)
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) InfoWithOptions(options InfoOptions) (string, error) {
@@ -217,14 +200,6 @@ func (client *GlideClient) DBSize() (int64, error) {
 //
 //	The provided message
 //
-// For example:
-//
-//	 result, err := client.Echo("Hello World")
-//	 if err != nil {
-//		// handle error
-//	 }
-//	 fmt.Println(result.Value()) // Output: Hello World
-//
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClient) Echo(message string) (Result[string], error) {
 	result, err := client.executeCommand(C.Echo, []string{message})
@@ -240,11 +215,6 @@ func (client *GlideClient) Echo(message string) (Result[string], error) {
 //
 //	Returns "PONG".
 //
-// For example:
-//
-//	result, err := client.Ping()
-//	fmt.Println(result) // Output: PONG
-//
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClient) Ping() (string, error) {
 	return client.PingWithOptions(options.PingOptions{})
@@ -259,12 +229,6 @@ func (client *GlideClient) Ping() (string, error) {
 // Return value:
 //
 //	Returns the copy of message.
-//
-// For example:
-//
-//	options := options.NewPingOptionsBuilder().SetMessage("hello")
-//	result, err := client.PingWithOptions(options)
-//	result: "hello"
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
