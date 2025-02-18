@@ -99,4 +99,44 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
 	)
 	assert.NoError(t, err)
 	assert.True(t, jsonSetResult.IsNil())
+
+	jsonSetResult, err = glidejson.SetWithOptions(
+		client,
+		key,
+		"$",
+		jsonValue,
+		options.NewJsonSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", jsonSetResult.Value())
+
+	jsonSetResult, err = glidejson.SetWithOptions(
+		client,
+		key,
+		"$.a",
+		"4.5",
+		options.NewJsonSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist),
+	)
+	assert.NoError(t, err)
+	assert.True(t, jsonSetResult.IsNil())
+
+	jsonGetResult, err := glidejson.GetWithOptions(
+		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{".a"}))
+	assert.NoError(t, err)
+	assert.Equal(t, "1.0", jsonGetResult.Value())
+
+	jsonSetResult, err = glidejson.SetWithOptions(
+		client,
+		key,
+		"$.a",
+		"4.5",
+		options.NewJsonSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", jsonSetResult.Value())
+
+	jsonGetResult, err = glidejson.GetWithOptions(
+		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{".a"}))
+	assert.NoError(t, err)
+	assert.Equal(t, "4.5", jsonGetResult.Value())
 }
