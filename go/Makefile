@@ -57,7 +57,7 @@ build-glide-client:
 		cp target/release/libglide_rs.a rustbin/aarch64-apple-darwin/; \
 	elif [ "$$(uname)" = "Linux" ]; then \
 		strip --strip-unneeded target/release/libglide_rs.a; \
-		if [ "$$(arch)" = "arm64" ]; then \
+		if [ "$$(arch)" = "arm64" || "$$(arch)" = "aarch64" ]; then \
 			echo "Platform: aarch64-unknown-linux-gnu"; \
 			mkdir -p rustbin/aarch64-unknown-linux-gnu; \
 			cp target/release/libglide_rs.a rustbin/aarch64-unknown-linux-gnu/; \
