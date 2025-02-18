@@ -34,7 +34,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommand() {
 
 	jsonSetResult, err := glidejson.Set(client, key, "$", jsonValue)
 	assert.NoError(t, err)
-	assert.Equal(t, "OK", jsonSetResult)
+	assert.Equal(t, "OK", jsonSetResult.Value())
 
 	jsonGetResult, err := glidejson.Get(client, key)
 	assert.NoError(t, err)
