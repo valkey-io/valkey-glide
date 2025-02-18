@@ -54,3 +54,32 @@ func (suite *GlideTestSuite) TestModuleGetSetCommand() {
 	assert.NoError(t, err)
 	assert.Equal(t, "[]", jsonGetResult.Value())
 }
+
+func (suite *GlideTestSuite) TestModuleGetSetCommandMultipleValues() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	key := uuid.New().String()
+	jsonValue := "{\"a\": {\"c\": 1, \"d\": 4}, \"b\": {\"c\": 2}, \"c\": true}"
+	jsonSetResult, err := glidejson.Set(client, key, "$", jsonValue)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", jsonSetResult)
+
+	jsonGetResult, err := glidejson.GetWithOptions(
+		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
+	assert.NoError(t, err)
+	assert.Equal(t, "[true, 1, 2]", jsonGetResult.Value())
+
+	jsonGetResultWithMultiPaths, err := glidejson.GetWithOptions(
+		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c", "$.c"}))
+	assert.NoError(t, err)
+	assert.Equal(t, "{\"$..c\": [True, 1, 2], \"$.c\": [True]}", jsonGetResultWithMultiPaths.Value())
+
+	jsonSetResult, err = glidejson.Set(client, key, "$..c", "\"new_value\"")
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", jsonSetResult)
+
+	jsonGetResult, err = glidejson.GetWithOptions(
+		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
+	assert.NoError(t, err)
+	assert.Equal(t, "[\"new_value\", \"new_value\", \"new_value\"]", jsonGetResult.Value())
+}
