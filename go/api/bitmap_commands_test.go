@@ -94,11 +94,11 @@ func ExampleGlideClusterClient_BitCount() {
 func ExampleGlideClient_BitCountWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	options := options.NewBitCountOptionsBuilder().
+	options := options.NewBitCountOptions().
 		SetStart(1).
 		SetEnd(1).
 		SetBitmapIndexType(options.BYTE)
-	result, err := client.BitCountWithOptions("my_key", options)
+	result, err := client.BitCountWithOptions("my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -110,11 +110,11 @@ func ExampleGlideClient_BitCountWithOptions() {
 func ExampleGlideClusterClient_BitCountWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
-	options := options.NewBitCountOptionsBuilder().
+	options := options.NewBitCountOptions().
 		SetStart(1).
 		SetEnd(1).
 		SetBitmapIndexType(options.BYTE)
-	result, err := client.BitCountWithOptions("my_key", options)
+	result, err := client.BitCountWithOptions("my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

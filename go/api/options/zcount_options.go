@@ -14,7 +14,7 @@ type ZCountRange struct {
 }
 
 // Create a new Zcount range.
-func NewZCountRangeBuilder(min scoreBoundary, max scoreBoundary) *ZCountRange {
+func NewZCountRange(min scoreBoundary, max scoreBoundary) *ZCountRange {
 	return &ZCountRange{min, max}
 }
 
