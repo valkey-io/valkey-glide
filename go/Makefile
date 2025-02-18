@@ -47,7 +47,8 @@ clean:
 build-glide-client:
 	cargo build --release
 	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h --lang c
-	@if [ "$$(uname)" = "Darwin" ] && [ "$$(arch)" = "arm64" ]; then \
+	echo "before if-clause"
+	if [ "$$(uname)" = "Darwin" ] && [ "$$(arch)" = "arm64" ]; then \
 		echo "Platform: aarch64-apple-darwin"; \
 		strip -x target/release/libglide_rs.a; \
 		mkdir -p rustbin/aarch64-apple-darwin; \
