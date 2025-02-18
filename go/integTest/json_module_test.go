@@ -81,5 +81,5 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandMultipleValues() {
 	jsonGetResult, err = glidejson.GetWithOptions(
 		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
 	assert.NoError(t, err)
-	assert.Equal(t, "[\"new_value\", \"new_value\", \"new_value\"]", jsonGetResult.Value())
+	assert.Equal(t, "[\"new_value\",\"new_value\",\"new_value\"]", jsonGetResult.Value())
 }
