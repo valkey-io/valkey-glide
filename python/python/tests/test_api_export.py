@@ -8,7 +8,7 @@ exported_symbol_list = glide.__all__
 
 
 def _get_export_rename_map():
-    exported_list = glide.__all__
+    glide.__all__
     root_init_file = Path(__file__).parent.parent / "glide" / "__init__.py"
     source_code = root_init_file.read_text()
     tree = ast.parse(source_code)
@@ -142,7 +142,7 @@ class TestAPIExport:
             + "Please review and either export it, or add it to the excluded_symbol_list.\n"
             + "\n".join(
                 [
-                    f"{key}:\n    " + "\n    ".join(value)
+                    f"{key}" + ":" + "\n    " + "\n    ".join(value)
                     for key, value in aggregated_anomalous_symbols.items()
                 ]
             )

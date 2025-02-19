@@ -215,9 +215,9 @@ Run from the main `/python` folder
     isort . --profile black --skip-glob python/glide/protobuf --skip-glob .env
     black . --exclude python/glide/protobuf --exclude .env
     flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics      \
-            --exclude=python/glide/protobuf,.env/* --extend-ignore=E230
+            --exclude=python/glide/protobuf,.env --extend-ignore=E230
     flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127  \
-            --statistics --exclude=python/glide/protobuf,.env/*             \
+            --statistics --exclude=python/glide/protobuf,.env             \
             --extend-ignore=E230
     # run type check
     mypy .

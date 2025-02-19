@@ -1,7 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from enum import Enum
-from typing import List, Optional, Union
 
 
 class Limit:
@@ -93,7 +92,7 @@ class ObjectType(Enum):
 
     HASH = "Hash"
     """
-    Represents a hash data type.    
+    Represents a hash data type.
     """
 
     STREAM = "Stream"
