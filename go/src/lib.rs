@@ -227,9 +227,8 @@ pub unsafe extern "C" fn create_client(
 #[no_mangle]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
-    let client_adapter = unsafe { Arc::from_raw(client_adapter_ptr as *mut ClientAdapter) };
-    let count = Arc::strong_count(&client_adapter);
-    assert!(count == 1, "Client is still in use. {count} references remain.");
+    // This will bring the strong count down to 0 once all client requests are done.
+    unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const ClientAdapter) };
 }
 
 /// Deallocates a `ConnectionResponse`.
@@ -542,7 +541,9 @@ pub unsafe extern "C" fn command(
     let route = Routes::parse_from_bytes(r_bytes).unwrap();
 
     client_adapter.runtime.spawn(async move {
-        let result = client_adapter_clone.client.clone()
+        let result = client_adapter_clone
+            .client
+            .clone()
             .send_command(&cmd, get_route(route, Some(&cmd)))
             .await;
         let value = match result {

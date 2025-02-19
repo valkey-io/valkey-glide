@@ -90,9 +90,10 @@ pub extern "C" fn create_client(
 /// This function should only be called once per pointer created by [create_client]. After calling this function
 /// the `client_ptr` is not in a valid state.
 #[no_mangle]
-pub extern "C" fn close_client(client_ptr: *const c_void) {
-    let count = Arc::strong_count(&unsafe { Arc::from_raw(client_ptr as *mut Client) });
-    assert!(count == 1, "Client is still in use.");
+pub extern "C" fn close_client(client_adapter_ptr: *const c_void) {
+    assert!(!client_adapter_ptr.is_null());
+    // This will bring the strong count down to 0 once all client requests are done.
+    unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const Client) };
 }
 
 /// Expects that key and value will be kept valid until the callback is called.
