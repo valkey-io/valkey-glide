@@ -2471,7 +2471,7 @@ class TestPubSub:
             pattern = "test_*"
 
             client = await create_client(request, cluster_mode)
-            assert type(client) == GlideClusterClient
+            assert isinstance(client, GlideClusterClient)
             # Assert no sharded channels exist yet
             assert await client.pubsub_shardchannels() == []
 
@@ -2495,7 +2495,7 @@ class TestPubSub:
                 request, cluster_mode, pub_sub
             )
 
-            assert type(client2) == GlideClusterClient
+            assert isinstance(client2, GlideClusterClient)
 
             # Test pubsub_shardchannels without pattern
             channels = await client2.pubsub_shardchannels()
@@ -2569,7 +2569,7 @@ class TestPubSub:
             # Create a client and check initial subscribers
             client = await create_client(request, cluster_mode)
 
-            assert type(client) == GlideClusterClient
+            assert isinstance(client, GlideClusterClient)
             assert await client.pubsub_shardnumsub([channel1, channel2, channel3]) == {
                 channel1_bytes: 0,
                 channel2_bytes: 0,
@@ -2584,7 +2584,7 @@ class TestPubSub:
                 request, cluster_mode, pub_sub3
             )
 
-            assert type(client4) == GlideClusterClient
+            assert isinstance(client4, GlideClusterClient)
 
             # Test pubsub_shardnumsub
             subscribers = await client4.pubsub_shardnumsub(
@@ -2644,7 +2644,7 @@ class TestPubSub:
                 request, cluster_mode, pub_sub
             )
 
-            assert type(client2) == GlideClusterClient
+            assert isinstance(client2, GlideClusterClient)
             # Test pubsub_channels
             assert await client2.pubsub_channels() == [regular_channel_bytes]
 
@@ -2701,7 +2701,7 @@ class TestPubSub:
                 request, cluster_mode, pub_sub1, pub_sub2
             )
 
-            assert type(client2) == GlideClusterClient
+            assert isinstance(client2, GlideClusterClient)
 
             # Test pubsub_numsub
             regular_subscribers = await client2.pubsub_numsub(

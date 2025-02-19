@@ -127,9 +127,9 @@ class RangeByScore:
         limit: Optional[Limit] = None,
     ):
         self.start = (
-            start.value["score_arg"] if type(start) == InfBound else start.value
+            start.value["score_arg"] if isinstance(start, InfBound) else start.value
         )
-        self.end = end.value["score_arg"] if type(end) == InfBound else end.value
+        self.end = end.value["score_arg"] if isinstance(end, InfBound) else end.value
         self.limit = limit
 
 
@@ -152,8 +152,10 @@ class RangeByLex:
         end: Union[InfBound, LexBoundary],
         limit: Optional[Limit] = None,
     ):
-        self.start = start.value["lex_arg"] if type(start) == InfBound else start.value
-        self.end = end.value["lex_arg"] if type(end) == InfBound else end.value
+        self.start = (
+            start.value["lex_arg"] if isinstance(start, InfBound) else start.value
+        )
+        self.end = end.value["lex_arg"] if isinstance(end, InfBound) else end.value
         self.limit = limit
 
 

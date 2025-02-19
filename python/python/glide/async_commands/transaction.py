@@ -3135,12 +3135,12 @@ class BaseTransaction:
         """
         score_min = (
             min_score.value["score_arg"]
-            if type(min_score) == InfBound
+            if isinstance(min_score, InfBound)
             else min_score.value
         )
         score_max = (
             max_score.value["score_arg"]
-            if type(max_score) == InfBound
+            if isinstance(max_score, InfBound)
             else max_score.value
         )
         return self.append_command(RequestType.ZCount, [key, score_min, score_max])
@@ -3498,12 +3498,12 @@ class BaseTransaction:
         """
         score_min = (
             min_score.value["score_arg"]
-            if type(min_score) == InfBound
+            if isinstance(min_score, InfBound)
             else min_score.value
         )
         score_max = (
             max_score.value["score_arg"]
-            if type(max_score) == InfBound
+            if isinstance(max_score, InfBound)
             else max_score.value
         )
         return self.append_command(
@@ -3537,10 +3537,10 @@ class BaseTransaction:
                 If `min_lex` is greater than `max_lex`, `0` is returned.
         """
         min_lex_arg = (
-            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+            min_lex.value["lex_arg"] if isinstance(min_lex, InfBound) else min_lex.value
         )
         max_lex_arg = (
-            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+            max_lex.value["lex_arg"] if isinstance(max_lex, InfBound) else max_lex.value
         )
 
         return self.append_command(
@@ -3602,10 +3602,10 @@ class BaseTransaction:
                 If `max_lex < min_lex`, `0` is returned.
         """
         min_lex_arg = (
-            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+            min_lex.value["lex_arg"] if isinstance(min_lex, InfBound) else min_lex.value
         )
         max_lex_arg = (
-            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+            max_lex.value["lex_arg"] if isinstance(max_lex, InfBound) else max_lex.value
         )
 
         return self.append_command(

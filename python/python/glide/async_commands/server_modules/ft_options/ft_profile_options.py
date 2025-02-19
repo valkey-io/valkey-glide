@@ -75,7 +75,7 @@ class FtProfileOptions:
             limited (Optional[bool]): To provide some brief version of the output, otherwise a full verbose output is provided.
         """
         query_type: QueryType = QueryType.SEARCH
-        if type(query_options) == FtAggregateOptions:
+        if isinstance(query_options, FtAggregateOptions):
             query_type = QueryType.AGGREGATE
         return cls(query, query_type, query_options, limited)
 
@@ -106,7 +106,7 @@ class FtProfileOptions:
             args.append(FtProfileKeywords.LIMITED)
         args.extend([FtProfileKeywords.QUERY, self.query])
         if self.query_options:
-            if type(self.query_options) == FtAggregateOptions:
+            if isinstance(self.query_options, FtAggregateOptions):
                 args.extend(cast(FtAggregateOptions, self.query_options).to_args())
             else:
                 args.extend(cast(FtSearchOptions, self.query_options).to_args())
