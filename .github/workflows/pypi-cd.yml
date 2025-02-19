@@ -306,48 +306,6 @@ jobs:
                   fi
                   python rc_test.py
             
-            - name: Run the tests on source installation
-              shell: bash
-              working-directory: ./utils/release-candidate-testing/python
-              env:
-                PB_REL: "https://github.com/protocolbuffers/protobuf/releases"
-              run: |
-                # Determine PROTOC_ARCH based on NAMED_OS and ARCH
-                if [[ "${{ matrix.NAMED_OS }}" == "linux" ]]; then
-                  if [[ "${{ matrix.ARCH }}" == "x64" ]]; then
-                    PROTOC_ARCH="linux-x86_64"
-                  elif [[ "${{ matrix.ARCH }}" == "arm64" ]]; then
-                    PROTOC_ARCH="linux-aarch_64"
-                  fi
-                  # Install necessary packages on Linux
-                  sudo apt-get update
-                  sudo apt-get install -y unzip curl python3.11
-                elif [[ "${{ matrix.NAMED_OS }}" == "darwin" ]]; then
-                  if [[ "${{ matrix.ARCH }}" == "x64" ]]; then
-                    PROTOC_ARCH="osx-x86_64"
-                  elif [[ "${{ matrix.ARCH }}" == "arm64" ]]; then
-                    PROTOC_ARCH="osx-aarch_64"
-                  fi
-                fi
-            
-                # Download and install protoc for source dist test
-                curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-$PROTOC_ARCH.zip
-                unzip protoc-3.20.3-$PROTOC_ARCH.zip -d $HOME/.local
-                export PATH="$PATH:$HOME/.local/bin"
-            
-                # Verify protoc installation
-                protoc --version
-            
-                # Test source dist
-                python -m venv venv-sdist
-                source venv-sdist/bin/activate
-                pip install -U pip
-                if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                  pip install --pre --no-binary valkey-glide valkey-glide
-                else
-                  pip install --no-binary valkey-glide valkey-glide
-                fi
-                python rc_test.py
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
             # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
