@@ -113,6 +113,8 @@ type StreamCommands interface {
 
 	XInfoStreamFullWithOptions(key string, options *options.XInfoStreamOptions) (map[string]any, error)
 
+	XInfoConsumers(key string, group string) ([]XInfoConsumerInfo, error)
+
 	XInfoGroups(key string) ([]XInfoGroupInfo, error)
 
 	XRange(key string, start options.StreamBoundary, end options.StreamBoundary) ([]XRangeResponse, error)
