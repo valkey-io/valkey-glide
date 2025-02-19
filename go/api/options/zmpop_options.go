@@ -27,7 +27,7 @@ func (zmpo *ZMPopOptions) ToArgs() ([]string, error) {
 	var args []string
 
 	if zmpo.countIsSet {
-		args = append(args, "COUNT", utils.IntToString(zmpo.count))
+		args = append(args, CountKeyword, utils.IntToString(zmpo.count))
 	}
 
 	return args, nil

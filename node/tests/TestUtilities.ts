@@ -4,7 +4,10 @@
 
 import { expect } from "@jest/globals";
 import { exec } from "child_process";
+import { promisify } from "util";
+const execAsync = promisify(exec);
 import { v4 as uuidv4 } from "uuid";
+import { Socket } from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
@@ -23,12 +26,12 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
-    GlideMultiJson,
     GlideReturnType,
     GlideString,
     InfBoundary,
     InfoOptions,
     InsertPosition,
+    JsonBatch,
     ListDirection,
     ProtocolVersion,
     ReturnTypeMap,
@@ -183,6 +186,25 @@ export interface Client {
     get: (key: string) => Promise<GlideString | null>;
 }
 
+export async function checkWhichCommandAvailable(
+    valkeyCommand: string,
+    redisCommand: string,
+): Promise<string> {
+    try {
+        if (await checkCommandAvailability(valkeyCommand)) {
+            return valkeyCommand;
+        }
+    } catch {
+        // ignore
+    }
+
+    if (await checkCommandAvailability(redisCommand)) {
+        return redisCommand;
+    }
+
+    throw new Error("No available command found.");
+}
+
 export async function GetAndSetRandomValue(client: Client) {
     const key = uuidv4();
     // Adding random repetition, to prevent the inputs from always having the same alignment.
@@ -193,17 +215,21 @@ export async function GetAndSetRandomValue(client: Client) {
     expect(intoString(result)).toEqual(value);
 }
 
-export function flushallOnPort(port: number): Promise<void> {
-    return new Promise<void>((resolve, reject) =>
-        exec(`redis-cli -p ${port} FLUSHALL`, (error, _, stderr) => {
+export async function flushallOnPort(port: number): Promise<void> {
+    try {
+        const command = await checkWhichCommandAvailable(
+            "valkey-cli",
+            "redis-cli",
+        );
+        exec(`${command} -p ${port} flushall`, (error) => {
             if (error) {
-                console.error(stderr);
-                reject(error);
-            } else {
-                resolve();
+                console.error(`exec error: ${error}`);
+                return;
             }
-        }),
-    );
+        });
+    } catch (error) {
+        console.error(`Error flushing on port ${port}: ${error}`);
+    }
 }
 
 /**
@@ -1889,7 +1915,7 @@ export async function transactionTest(
  * @param baseTransaction - A transaction.
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
  */
-export async function transactionMultiJsonForArrCommands(
+export async function JsonBatchForArrCommands(
     baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
@@ -1897,58 +1923,58 @@ export async function transactionMultiJsonForArrCommands(
     const jsonValue = { a: 1.0, b: 2 };
 
     // JSON.SET
-    GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key, "{ a: 1.0, b: 2 }")', "OK"]);
 
     // JSON.CLEAR
-    GlideMultiJson.clear(baseTransaction, key, { path: "$" });
+    JsonBatch.clear(baseTransaction, key, { path: "$" });
     responseData.push(['clear(key, "bar")', 1]);
 
-    GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key, "$", "{ "a": 1, b: ["one", "two"] }")', "OK"]);
 
     // JSON.GET
-    GlideMultiJson.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseTransaction, key, { path: "." });
     responseData.push(['get(key, {path: "."})', JSON.stringify(jsonValue)]);
 
     const jsonValue2 = { a: 1.0, b: [1, 2] };
-    GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue2));
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue2));
     responseData.push(['set(key, "$", "{ "a": 1, b: ["1", "2"] }")', "OK"]);
 
     // JSON.ARRAPPEND
-    GlideMultiJson.arrappend(baseTransaction, key, "$.b", ["3", "4"]);
+    JsonBatch.arrappend(baseTransaction, key, "$.b", ["3", "4"]);
     responseData.push(['arrappend(key, "$.b", [\'"3"\', \'"4"\'])', [4]]);
 
     // JSON.GET to check JSON.ARRAPPEND was successful.
     const jsonValueAfterAppend = { a: 1.0, b: [1, 2, 3, 4] };
-    GlideMultiJson.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseTransaction, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterAppend),
     ]);
 
     // JSON.ARRINDEX
-    GlideMultiJson.arrindex(baseTransaction, key, "$.b", "2");
+    JsonBatch.arrindex(baseTransaction, key, "$.b", "2");
     responseData.push(['arrindex(key, "$.b", "1")', [1]]);
 
     // JSON.ARRINSERT
-    GlideMultiJson.arrinsert(baseTransaction, key, "$.b", 2, ["5"]);
+    JsonBatch.arrinsert(baseTransaction, key, "$.b", 2, ["5"]);
     responseData.push(['arrinsert(key, "$.b", 4, [\'"5"\'])', [5]]);
 
     // JSON.GET to check JSON.ARRINSERT was successful.
     const jsonValueAfterArrInsert = { a: 1.0, b: [1, 2, 5, 3, 4] };
-    GlideMultiJson.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseTransaction, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterArrInsert),
     ]);
 
     // JSON.ARRLEN
-    GlideMultiJson.arrlen(baseTransaction, key, { path: "$.b" });
+    JsonBatch.arrlen(baseTransaction, key, { path: "$.b" });
     responseData.push(['arrlen(key, "$.b")', [5]]);
 
     // JSON.ARRPOP
-    GlideMultiJson.arrpop(baseTransaction, key, {
+    JsonBatch.arrpop(baseTransaction, key, {
         path: "$.b",
         index: 2,
     });
@@ -1956,19 +1982,19 @@ export async function transactionMultiJsonForArrCommands(
 
     // JSON.GET to check JSON.ARRPOP was successful.
     const jsonValueAfterArrpop = { a: 1.0, b: [1, 2, 3, 4] };
-    GlideMultiJson.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseTransaction, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterArrpop),
     ]);
 
     // JSON.ARRTRIM
-    GlideMultiJson.arrtrim(baseTransaction, key, "$.b", 1, 2);
+    JsonBatch.arrtrim(baseTransaction, key, "$.b", 1, 2);
     responseData.push(['arrtrim(key, "$.b", 2, 3)', [2]]);
 
     // JSON.GET to check JSON.ARRTRIM was successful.
     const jsonValueAfterArrTrim = { a: 1.0, b: [2, 3] };
-    GlideMultiJson.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseTransaction, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterArrTrim),
@@ -1976,7 +2002,7 @@ export async function transactionMultiJsonForArrCommands(
     return responseData;
 }
 
-export async function transactionMultiJson(
+export async function CreateJsonBatchCommands(
     baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
@@ -1984,64 +2010,64 @@ export async function transactionMultiJson(
     const jsonValue = { a: [1, 2], b: [3, 4], c: "c", d: true };
 
     // JSON.SET to create a key for testing commands.
-    GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key, "$")', "OK"]);
 
     // JSON.DEBUG MEMORY
-    GlideMultiJson.debugMemory(baseTransaction, key, { path: "$.a" });
+    JsonBatch.debugMemory(baseTransaction, key, { path: "$.a" });
     responseData.push(['debugMemory(key, "{ path: "$.a" }")', [48]]);
 
     // JSON.DEBUG FIELDS
-    GlideMultiJson.debugFields(baseTransaction, key, { path: "$.a" });
+    JsonBatch.debugFields(baseTransaction, key, { path: "$.a" });
     responseData.push(['debugFields(key, "{ path: "$.a" }")', [2]]);
 
     // JSON.OBJLEN
-    GlideMultiJson.objlen(baseTransaction, key, { path: "." });
+    JsonBatch.objlen(baseTransaction, key, { path: "." });
     responseData.push(["objlen(key)", 4]);
 
     // JSON.OBJKEY
-    GlideMultiJson.objkeys(baseTransaction, key, { path: "." });
+    JsonBatch.objkeys(baseTransaction, key, { path: "." });
     responseData.push(['objkeys(key, "$.")', ["a", "b", "c", "d"]]);
 
     // JSON.NUMINCRBY
-    GlideMultiJson.numincrby(baseTransaction, key, "$.a[*]", 10.0);
+    JsonBatch.numincrby(baseTransaction, key, "$.a[*]", 10.0);
     responseData.push(['numincrby(key, "$.a[*]", 10.0)', "[11,12]"]);
 
     // JSON.NUMMULTBY
-    GlideMultiJson.nummultby(baseTransaction, key, "$.a[*]", 10.0);
+    JsonBatch.nummultby(baseTransaction, key, "$.a[*]", 10.0);
     responseData.push(['nummultby(key, "$.a[*]", 10.0)', "[110,120]"]);
 
     // // JSON.STRAPPEND
-    GlideMultiJson.strappend(baseTransaction, key, '"-test"', { path: "$.c" });
+    JsonBatch.strappend(baseTransaction, key, '"-test"', { path: "$.c" });
     responseData.push(['strappend(key, \'"-test"\', "$.c")', [6]]);
 
     // // JSON.STRLEN
-    GlideMultiJson.strlen(baseTransaction, key, { path: "$.c" });
+    JsonBatch.strlen(baseTransaction, key, { path: "$.c" });
     responseData.push(['strlen(key, "$.c")', [6]]);
 
     // JSON.TYPE
-    GlideMultiJson.type(baseTransaction, key, { path: "$.a" });
+    JsonBatch.type(baseTransaction, key, { path: "$.a" });
     responseData.push(['type(key, "$.a")', ["array"]]);
 
     // JSON.MGET
     const key2 = "{key}:2" + uuidv4();
     const key3 = "{key}:3" + uuidv4();
     const jsonValue2 = { b: [3, 4], c: "c", d: true };
-    GlideMultiJson.set(baseTransaction, key2, "$", JSON.stringify(jsonValue2));
+    JsonBatch.set(baseTransaction, key2, "$", JSON.stringify(jsonValue2));
     responseData.push(['set(key2, "$")', "OK"]);
 
-    GlideMultiJson.mget(baseTransaction, [key, key2, key3], "$.a");
+    JsonBatch.mget(baseTransaction, [key, key2, key3], "$.a");
     responseData.push([
         'json.mget([key, key2, key3], "$.a")',
         ["[[110,120]]", "[]", null],
     ]);
 
     // JSON.TOGGLE
-    GlideMultiJson.toggle(baseTransaction, key, { path: "$.d" });
+    JsonBatch.toggle(baseTransaction, key, { path: "$.d" });
     responseData.push(['toggle(key2, "$.d")', [false]]);
 
     // JSON.RESP
-    GlideMultiJson.resp(baseTransaction, key, { path: "$" });
+    JsonBatch.resp(baseTransaction, key, { path: "$" });
     responseData.push([
         'resp(key, "$")',
         [
@@ -2056,11 +2082,11 @@ export async function transactionMultiJson(
     ]);
 
     // JSON.DEL
-    GlideMultiJson.del(baseTransaction, key, { path: "$.d" });
+    JsonBatch.del(baseTransaction, key, { path: "$.d" });
     responseData.push(['del(key, { path: "$.d" })', 1]);
 
     // JSON.FORGET
-    GlideMultiJson.forget(baseTransaction, key, { path: "$.c" });
+    JsonBatch.forget(baseTransaction, key, { path: "$.c" });
     responseData.push(['forget(key, {path: "$.c" })', 1]);
 
     return responseData;
@@ -2105,4 +2131,49 @@ export async function getServerVersion(
     }
 
     return version;
+}
+
+/**
+ * Check if a command is available on the system
+ */
+export function checkCommandAvailability(command: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        exec(`which ${command}`, (error) => {
+            resolve(!error);
+        });
+    });
+}
+
+/**
+ * Starts a Valkey/Redis-compatible server on the specified port
+ */
+export async function startServer(
+    port: number,
+): Promise<{ process: any; command: string }> {
+    // check which command is available
+    const serverCmd = await checkWhichCommandAvailable(
+        "valkey-server",
+        "redis-server",
+    );
+    // run server, and wait for it to start
+    const serverProcess = await execAsync(`${serverCmd} --port ${port}`)
+        .then(async (process) => {
+            // wait for the server to start
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            // check if the server is running by connecting to it using a socket
+            const client = new Socket();
+            await new Promise<void>((resolve) => {
+                client.connect(port, "localhost", () => {
+                    client.end();
+                    resolve();
+                });
+            });
+            return process;
+        })
+        .catch((err) => {
+            console.error("Failed to start the server:", err);
+            process.exit(1);
+        });
+
+    return { process: serverProcess, command: serverCmd };
 }
