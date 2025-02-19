@@ -110,4 +110,8 @@ type SortedSetCommands interface {
 		keysOrWeightedKeys options.KeysOrWeightedKeys,
 		zUnionOptions *options.ZUnionOptions,
 	) (int64, error)
+
+	ZInterCard(keys []string) (int64, error)
+
+	ZInterCardWithOptions(keys []string, options *options.ZInterCardOptions) (int64, error)
 }
