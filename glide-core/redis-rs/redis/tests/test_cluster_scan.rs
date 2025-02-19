@@ -4,7 +4,6 @@ mod support;
 #[cfg(test)]
 mod test_cluster_scan_async {
     use crate::support::*;
-    use rand::Rng;
     use redis::cluster_routing::{
         MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo, SingleNodeRoutingInfo,
     };
@@ -66,43 +65,6 @@ mod test_cluster_scan_async {
             }
             return Ok(());
         }
-    }
-
-    async fn kill_one_node(
-        cluster: &TestClusterContext,
-        slot_distribution: Vec<(String, String, String, Vec<Vec<u16>>)>,
-    ) -> RoutingInfo {
-        let mut cluster_conn = cluster.async_connection(None).await;
-        let distribution_clone = slot_distribution.clone();
-        let index_of_random_node = rand::thread_rng().gen_range(0..slot_distribution.len());
-        let random_node = distribution_clone.get(index_of_random_node).unwrap();
-        let random_node_route_info = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
-            host: random_node.1.clone(),
-            port: random_node.2.parse::<u16>().unwrap(),
-        });
-        let random_node_id = &random_node.0;
-        // Create connections to all nodes
-        for node in &distribution_clone {
-            if random_node_id == &node.0 {
-                continue;
-            }
-            let node_route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
-                host: node.1.clone(),
-                port: node.2.parse::<u16>().unwrap(),
-            });
-
-            let mut forget_cmd = cmd("CLUSTER");
-            forget_cmd.arg("FORGET").arg(random_node_id);
-            let _: RedisResult<Value> = cluster_conn
-                .route_command(&forget_cmd, node_route.clone())
-                .await;
-        }
-        let mut shutdown_cmd = cmd("SHUTDOWN");
-        shutdown_cmd.arg("NOSAVE");
-        let _: RedisResult<Value> = cluster_conn
-            .route_command(&shutdown_cmd, random_node_route_info.clone())
-            .await;
-        random_node_route_info
     }
 
     #[tokio::test]
@@ -380,7 +342,8 @@ mod test_cluster_scan_async {
                 let cluster_nodes = cluster.get_cluster_nodes().await;
                 let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
                 // simulate node failure
-                let killed_node_routing = kill_one_node(&cluster, slot_distribution.clone()).await;
+                let killed_node_routing =
+                    cluster.kill_one_node(slot_distribution.clone(), None).await;
                 let ready = cluster.wait_for_fail_to_finish(&killed_node_routing).await;
                 match ready {
                     Ok(_) => {}
@@ -1122,7 +1085,7 @@ mod test_cluster_scan_async {
         // Kill one node
         let mut cluster_nodes = cluster.get_cluster_nodes().await;
         let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
-        let killed_node_routing = kill_one_node(&cluster, slot_distribution.clone()).await;
+        let killed_node_routing = cluster.kill_one_node(slot_distribution.clone(), None).await;
         let ready = cluster.wait_for_fail_to_finish(&killed_node_routing).await;
         match ready {
             Ok(_) => {}
@@ -1219,7 +1182,7 @@ mod test_cluster_scan_async {
         // Kill one node
         let cluster_nodes = cluster.get_cluster_nodes().await;
         let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
-        let killed_node_routing = kill_one_node(&cluster, slot_distribution.clone()).await;
+        let killed_node_routing = cluster.kill_one_node(slot_distribution.clone(), None).await;
         let ready = cluster.wait_for_fail_to_finish(&killed_node_routing).await;
         match ready {
             Ok(_) => {}
@@ -1293,7 +1256,7 @@ mod test_cluster_scan_async {
         // Kill one node
         let cluster_nodes = cluster.get_cluster_nodes().await;
         let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
-        let killed_node_routing = kill_one_node(&cluster, slot_distribution.clone()).await;
+        let killed_node_routing = cluster.kill_one_node(slot_distribution.clone(), None).await;
         let ready = cluster.wait_for_fail_to_finish(&killed_node_routing).await;
         match ready {
             Ok(_) => {}

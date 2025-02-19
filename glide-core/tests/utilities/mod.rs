@@ -744,6 +744,19 @@ pub async fn kill_connection(client: &mut impl glide_core::client::GlideClientFo
         .unwrap();
 }
 
+pub async fn kill_connection_for_route(
+    client: &mut impl glide_core::client::GlideClientForTests,
+    route: RoutingInfo,
+) {
+    let mut client_kill_cmd = redis::cmd("CLIENT");
+    client_kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
+
+    let _ = client
+        .send_command(&client_kill_cmd, Some(route))
+        .await
+        .unwrap();
+}
+
 pub enum BackingServer {
     Standalone(Option<RedisServer>),
     Cluster(Option<cluster::RedisCluster>),
