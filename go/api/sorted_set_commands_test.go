@@ -1544,7 +1544,7 @@ func ExampleGlideClient_ZInterCard() {
 	// 3
 }
 
-func ExampleClusterGlideClient_ZInterCard() {
+func ExampleGlideClusterClient_ZInterCard() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
 	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
@@ -1579,7 +1579,7 @@ func ExampleGlideClient_ZInterCardWithOptions() {
 	// 3
 }
 
-func ExampleClusterGlideClient_ZInterCardWithOptions() {
+func ExampleGlideClusterClient_ZInterCardWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
 	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
