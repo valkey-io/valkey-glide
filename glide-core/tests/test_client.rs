@@ -23,13 +23,15 @@ macro_rules! async_assert_eq {
 #[cfg(test)]
 pub(crate) mod shared_client_tests {
     use glide_core::Telemetry;
+    use redis::{cluster_topology::get_slot, cmd};
     use std::collections::HashMap;
 
     use super::*;
     use glide_core::client::{Client, DEFAULT_RESPONSE_TIMEOUT};
+    use redis::cluster_routing::{SingleNodeRoutingInfo, SlotAddr};
     use redis::{
-        cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
-        FromRedisValue, InfoDict, RedisConnectionInfo, Value,
+        cluster_routing::{MultipleNodeRoutingInfo, Route, RoutingInfo},
+        FromRedisValue, InfoDict, Pipeline, RedisConnectionInfo, Value,
     };
     use rstest::rstest;
     use utilities::cluster::*;
@@ -108,7 +110,7 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_pipeline_is_not_routed() {
+    fn test_transaction_is_not_routed() {
         // This test checks that a transaction without user routing isn't routed to a random node before reaching its target.
         // This is tested by checking how many requests each node has received - one of the 6 nodes should have more requests than the others.
         block_on_all(async {
@@ -557,6 +559,433 @@ pub(crate) mod shared_client_tests {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
             }
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_resp_support(
+        #[values(false, true)] use_cluster: bool,
+        #[values(2, 3)] protocol: i64,
+    ) {
+        let protocol_enum = match protocol {
+            2 => redis::ProtocolVersion::RESP2,
+            3 => redis::ProtocolVersion::RESP3,
+            _ => panic!(),
+        };
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    connection_info: Some(RedisConnectionInfo {
+                        protocol: protocol_enum,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let hello: std::collections::HashMap<String, Value> = redis::from_owned_redis_value(
+                test_basics
+                    .client
+                    .send_command(&redis::cmd("HELLO"), None)
+                    .await
+                    .expect("HELLO failed"),
+            )
+            .unwrap();
+            assert_eq!(hello.get("proto").unwrap(), &Value::Int(protocol));
+
+            let (key, field, value, field2, value2) = (
+                generate_random_string(10),
+                generate_random_string(10),
+                generate_random_string(10),
+                generate_random_string(10),
+                generate_random_string(10),
+            );
+            let mut pipeline = Pipeline::new();
+            pipeline.hset(&key, &field, &value);
+            pipeline.hset(&key, &field2, &value2);
+            pipeline.hgetall(&key);
+
+            let result = test_basics
+                .client
+                .send_pipeline(&pipeline)
+                .await
+                .expect("Pipeline failed");
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    Value::Int(1),
+                    Value::Int(1),
+                    Value::Map(vec![
+                        (
+                            Value::BulkString(field.as_bytes().to_vec()),
+                            Value::BulkString(value.as_bytes().to_vec())
+                        ),
+                        (
+                            Value::BulkString(field2.as_bytes().to_vec()),
+                            Value::BulkString(value2.as_bytes().to_vec())
+                        )
+                    ])
+                ]),
+                "Pipeline result: {result:?}"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_return_error(#[values(false, true)] use_cluster: bool) {
+        use redis::ErrorKind;
+
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Generate random keys.
+            let (key, value, key2) = (
+                generate_random_string(10),
+                generate_random_string(10),
+                generate_random_string(10),
+            );
+
+            let mut pipeline = Pipeline::new();
+            pipeline.set(&key, &value).get(&key).llen(&key).get(&key2);
+
+            let res = test_basics.client.send_pipeline(&pipeline).await;
+            assert!(res.is_err(), "Pipeline should fail with wrong type error");
+            let err = res.unwrap_err();
+
+            assert_eq!(
+                err.kind(),
+                ErrorKind::ExtensionError,
+                "Pipeline should fail with response error"
+            );
+            assert!(err.to_string().contains("WRONGTYPE"), "{err:?}");
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_with_blocking_command_returns_null(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    request_timeout: Some(3000), // allow enough time for the BLPOP to timeout
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Generate two random keys.
+            let key = generate_random_string(10);
+            let key2 = generate_random_string(10);
+
+            // Build a pipeline:
+            // 1. SET key to "value1"
+            // 2. GET key (should return "value1")
+            // 3. BLPOP key2 with a 2-second timeout (should return null since key2 is empty)
+            // 4. GET key2 (should return null)
+            let mut pipeline = Pipeline::new();
+            pipeline.set(&key, "value1");
+            pipeline.get(&key);
+            pipeline.blpop(&key2, 1.0);
+            pipeline.get(&key2);
+
+            let result = test_basics
+                .client
+                .send_pipeline(&pipeline)
+                .await
+                .expect("Pipeline failed");
+
+            // Expected results:
+            // - SET returns OK
+            // - GET returns "value1"
+            // - BLPOP returns null (because of timeout)
+            // - GET returns null (key2 was never set)
+            assert_eq!(
+            result,
+            Value::Array(vec![
+                Value::Okay,
+                Value::BulkString(b"value1".to_vec()),
+                Value::Nil,
+                Value::Nil,
+            ]),
+            "Pipeline with blocking command should return null for BLPOP and GET on a non-existent key {result:?}"
+        );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_blocking_command_inside_pipeline_raises_timeout_error(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    request_timeout: Some(1000),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Generate random keys.
+            let (key, key2) = (generate_random_string(10), generate_random_string(10));
+
+            let mut pipeline = Pipeline::new();
+            pipeline
+                .set(&key, "value1")
+                .get(&key)
+                .blpop(&key2, 2.0)
+                .get(&key2);
+
+            let res = test_basics.client.send_pipeline(&pipeline).await;
+            assert!(
+                res.is_err(),
+                "Pipeline should fail with blocking command taking too long"
+            );
+            let err = res.unwrap_err();
+            assert!(err.is_timeout(), "Pipeline should fail with timeout error");
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_can_reconnect(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let (key, value) = (generate_random_string(10), generate_random_string(10));
+            let (key2, value2) = (generate_random_string(10), generate_random_string(10));
+
+            let mut pipeline = Pipeline::new();
+            pipeline
+                .set(&key, &value)
+                .get(&key)
+                .set(&key2, &value2)
+                .get(&key2);
+
+            // kill the connection for `key2`
+            kill_connection_for_route(
+                &mut test_basics.client,
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    get_slot(key2.as_bytes()),
+                    SlotAddr::Master,
+                ))),
+            )
+            .await;
+
+            let res = test_basics
+                .client
+                .send_pipeline(&pipeline)
+                .await
+                .expect("Pipeline failed");
+            assert_eq!(
+                res,
+                Value::Array(vec![
+                    Value::Okay,
+                    Value::BulkString(value.as_bytes().to_vec()),
+                    Value::Okay,
+                    Value::BulkString(value2.as_bytes().to_vec()),
+                ]),
+                "Pipeline result: {res:?}"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_reconnect_after_kill_all_connections(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Generate random keys.
+            let (key, key2) = (generate_random_string(10), generate_random_string(10));
+
+            let mut pipeline = Pipeline::new();
+            pipeline
+                .set(&key, "value1")
+                .get(&key)
+                .set(&key2, "value2")
+                .get(&key2);
+
+            // Kill all connections.
+            kill_connection(&mut test_basics.client).await;
+
+            let res = test_basics
+                .client
+                .send_pipeline(&pipeline)
+                .await
+                .expect("Pipeline failed after killing all connections");
+
+            assert_eq!(
+                res,
+                Value::Array(vec![
+                    Value::Okay,
+                    Value::BulkString("value1".as_bytes().to_vec()),
+                    Value::Okay,
+                    Value::BulkString("value2".as_bytes().to_vec()),
+                ]),
+                "Pipeline result: {res:?}"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_multi_slot_routing(#[values(true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let keys = vec![
+                generate_random_string(10),
+                generate_random_string(10),
+                generate_random_string(10),
+                generate_random_string(10),
+                generate_random_string(10),
+            ];
+
+            let items = keys.iter().map(|key| (key, key)).collect::<Vec<_>>();
+            let expected = keys
+                .iter()
+                .map(|key| Value::BulkString(key.as_bytes().to_vec()))
+                .collect::<Vec<_>>();
+            let mut pipeline = Pipeline::new();
+            pipeline.mset(&items);
+            pipeline.mget(&keys);
+
+            let result = test_basics
+                .client
+                .send_pipeline(&pipeline)
+                .await
+                .expect("Pipeline failed");
+            assert_eq!(
+                result,
+                Value::Array(vec![Value::Okay, Value::Array(expected)]),
+                "Pipeline result: {result:?}"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_all_nodes_routing(#[values(true, false)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut config_set_cmd = cmd("CONFIG");
+            config_set_cmd.arg("SET").arg("appendonly").arg("no");
+            let mut config_get_cmd = cmd("CONFIG");
+            config_get_cmd.arg("GET").arg("appendonly");
+            let mut pipeline = Pipeline::new();
+            pipeline.add_command(config_set_cmd); // AllNodes cmd
+            pipeline.add_command(config_get_cmd); // RandomNode cmd
+
+            let result = test_basics
+                .client
+                .send_pipeline(&pipeline)
+                .await
+                .expect("Pipeline failed");
+
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    Value::Okay,
+                    Value::Map(vec![(
+                        Value::BulkString(b"appendonly".to_vec()),
+                        Value::BulkString(b"no".to_vec()),
+                    )])
+                ]),
+                "Pipeline result: {result:?}"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_all_primary_routing(#[values(true, false)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut pipeline = Pipeline::new();
+            pipeline.add_command(cmd("PING"));
+            pipeline.set(generate_random_string(10), "value");
+            pipeline.add_command(cmd("FLUSHALL"));
+            pipeline.add_command(cmd("DBSIZE")); // AllPrimary cmd + SUM aggregation
+
+            // Execute the pipeline.
+            let result = test_basics
+                .client
+                .send_pipeline(&pipeline)
+                .await
+                .expect("Pipeline execution failed");
+
+            let expected = Value::Array(vec![
+                Value::SimpleString("PONG".to_string()),
+                Value::Okay,
+                Value::Okay,
+                Value::Int(0),
+            ]);
+
+            assert_eq!(result, expected, "Pipeline result: {result:?}");
         });
     }
 

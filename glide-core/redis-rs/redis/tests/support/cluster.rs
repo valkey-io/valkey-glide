@@ -7,8 +7,10 @@ use std::process;
 use std::thread::sleep;
 use std::time::Duration;
 
-use redis::cluster_routing::RoutingInfo;
-use redis::cluster_routing::SingleNodeRoutingInfo;
+use rand::Rng;
+use redis::cluster_routing::MultipleNodeRoutingInfo;
+use redis::cluster_routing::{RoutingInfo, SingleNodeRoutingInfo};
+use redis::cmd;
 use redis::from_redis_value;
 
 #[cfg(feature = "cluster-async")]
@@ -648,7 +650,7 @@ impl TestClusterContext {
     }
 
     // Return the slots distribution of the cluster as a vector of tuples
-    // where the first element is the node id, seconed is host, third is port and the last element is a vector of slots ranges
+    // where the first element is the node id, second is host, third is port and the last element is a vector of slots ranges
     pub fn get_slots_ranges_distribution(
         &self,
         cluster_nodes: &str,
@@ -701,6 +703,119 @@ impl TestClusterContext {
             slot_distribution.push(parsed_node);
         }
         slot_distribution
+    }
+
+    pub async fn kill_one_node(
+        &self,
+        slot_distribution: Vec<(String, String, String, Vec<Vec<u16>>)>,
+        slot: Option<u16>,
+    ) -> RoutingInfo {
+        let mut cluster_conn = self.async_connection(None).await;
+        let distribution_clone = slot_distribution.clone();
+
+        let node_to_kill = if let Some(slot) = slot {
+            // Find the node currently responsible for the slot
+            distribution_clone
+                .iter()
+                .find(|&(_, _, _, slots)| {
+                    slots
+                        .iter()
+                        .any(|nodes_slot| nodes_slot[0] <= slot && slot <= nodes_slot[1])
+                })
+                .expect("No matching node found for the given slot")
+        } else {
+            let index_of_random_node = rand::thread_rng().gen_range(0..slot_distribution.len());
+            distribution_clone
+                .get(index_of_random_node)
+                .expect("Slot distribution is empty")
+        };
+
+        let node_to_kill_route_info = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+            host: node_to_kill.1.clone(),
+            port: node_to_kill.2.parse::<u16>().expect("Invalid port format"),
+        });
+        let node_to_kill_id = &node_to_kill.0;
+        // Create connections to all nodes
+        for node in &distribution_clone {
+            if node_to_kill_id == &node.0 {
+                continue;
+            }
+            let node_route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                host: node.1.clone(),
+                port: node.2.parse::<u16>().expect("Invalid port format"),
+            });
+
+            let mut forget_cmd = cmd("CLUSTER");
+            forget_cmd.arg("FORGET").arg(node_to_kill_id);
+            let _: RedisResult<Value> = cluster_conn
+                .route_command(&forget_cmd, node_route.clone())
+                .await;
+        }
+
+        let mut shutdown_cmd = cmd("SHUTDOWN");
+        shutdown_cmd.arg("NOSAVE");
+        let _: RedisResult<Value> = cluster_conn
+            .route_command(&shutdown_cmd, node_to_kill_route_info.clone())
+            .await;
+
+        node_to_kill_route_info
+    }
+
+    /// Moves a specific slot from its current node to a different node in a the cluster.
+    ///
+    /// This function assumes that the slot is already present in the cluster and that we are
+    /// selecting a new node to move the slot to.
+    pub async fn move_specific_slot(
+        &self,
+        slot_to_move: u16,
+        slot_distribution: Vec<(String, String, String, Vec<Vec<u16>>)>,
+    ) -> RoutingInfo {
+        let mut cluster_conn = self.async_connection(None).await;
+        // Use a reference to the slot distribution so we don't have to clone it.
+        let distribution = &slot_distribution;
+
+        // Find the node currently responsible for the slot.
+        let current_node = distribution
+            .iter()
+            .find(|&(_, _, _, slots)| {
+                slots.iter().any(|slot_range| {
+                    slot_range[0] <= slot_to_move && slot_to_move <= slot_range[1]
+                })
+            })
+            .expect("No node found owning the given slot");
+        let current_node_id = &current_node.0;
+
+        // Select a destination node (different from the current node).
+        let destination_node = distribution
+            .iter()
+            .find(|node| node.0 != *current_node_id)
+            .expect("No destination node found in the distribution");
+
+        // Parse the destination node's port and construct its RoutingInfo.
+        let dest_port: u16 = destination_node
+            .2
+            .parse()
+            .expect("Invalid port format for destination node");
+        let dest_host = destination_node.1.clone();
+        let destination_route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+            host: dest_host,
+            port: dest_port,
+        });
+
+        // Issue the CLUSTER SETSLOT command to move the slot to the destination node.
+        let mut move_cmd = cmd("CLUSTER");
+        move_cmd
+            .arg("SETSLOT")
+            .arg(slot_to_move)
+            .arg("NODE")
+            .arg(destination_node.0.clone());
+        let all_nodes = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
+        if let Err(e) = cluster_conn.route_command(&move_cmd, all_nodes).await {
+            panic!("Failed to move slot: {}", e);
+        }
+
+        // Return the RoutingInfo for the destination node.
+        destination_route
     }
 
     pub async fn get_masters(&self, cluster_nodes: &str) -> Vec<Vec<String>> {

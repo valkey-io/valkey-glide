@@ -223,10 +223,10 @@ import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArrayValueF
 import static glide.utils.ArrayTransformUtils.flattenNestedArrayToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 
+import command_request.CommandRequestOuterClass.Batch;
 import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
-import command_request.CommandRequestOuterClass.Transaction;
 import glide.api.commands.StringBaseCommands;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
@@ -320,7 +320,7 @@ import lombok.NonNull;
 @Getter
 public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /** Command class to send a single request to Valkey. */
-    protected final Transaction.Builder protobufTransaction = Transaction.newBuilder();
+    protected final Batch.Builder protobufTransaction = Batch.newBuilder().setIsAtomic(true);
 
     /**
      * Flag whether transaction commands may return binary data.<br>
