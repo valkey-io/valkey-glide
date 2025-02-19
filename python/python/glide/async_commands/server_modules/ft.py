@@ -148,9 +148,9 @@ async def search(
         ...         ]
         ...     )
         ... )
-        [1, { b'json:1': { b'first': b'42', b'second': b'33' } }] # The first element, 1 is the number of keys returned in the
-                                                                  # search result. The second element is a map of data queried
-                                                                  # per key.
+        [1, { b'json:1': { b'first': b'42', b'second': b'33' } }]
+        # The first element, 1 is the number of keys returned in the search result. The second element is a map of
+        # data queried per key.
     """
     args: List[TEncodable] = [CommandNames.FT_SEARCH, index_name, query]
     if options:
