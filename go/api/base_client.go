@@ -1101,7 +1101,7 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 func (client *baseClient) HScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.HScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1133,12 +1133,12 @@ func (client *baseClient) HScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.HScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1863,7 +1863,7 @@ func (client *baseClient) SUnion(keys []string) (map[string]struct{}, error) {
 func (client *baseClient) SScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.SScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1896,12 +1896,12 @@ func (client *baseClient) SScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.SScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -4433,7 +4433,7 @@ func (client *baseClient) ZScore(key string, member string) (Result[float64], er
 func (client *baseClient) ZScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.ZScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -4464,12 +4464,12 @@ func (client *baseClient) ZScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.ZScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
