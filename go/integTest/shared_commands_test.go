@@ -7124,6 +7124,106 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 	})
 }
 
+func (suite *GlideTestSuite) TestXInfoConsumers() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		group := uuid.NewString()
+		consumer1 := uuid.NewString()
+		consumer2 := uuid.NewString()
+
+		xadd, err := client.XAddWithOptions(
+			key,
+			[][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
+			*options.NewXAddOptions().SetId("0-1"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-1", xadd.Value())
+		xadd, err = client.XAddWithOptions(
+			key,
+			[][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
+			*options.NewXAddOptions().SetId("0-2"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-2", xadd.Value())
+		xadd, err = client.XAddWithOptions(key, [][]string{{"e3_f1", "e3_v1"}}, *options.NewXAddOptions().SetId("0-3"))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-3", xadd.Value())
+
+		suite.verifyOK(client.XGroupCreate(key, group, "0-0"))
+
+		xReadGroup, err := client.XReadGroupWithOptions(
+			group,
+			consumer1,
+			map[string]string{key: ">"},
+			*options.NewXReadGroupOptions().SetCount(1),
+		)
+		assert.NoError(suite.T(), err)
+		expectedResult := map[string]map[string][][]string{
+			key: {
+				"0-1": {{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
+			},
+		}
+		assert.Equal(suite.T(), expectedResult, xReadGroup)
+
+		// Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
+		time.Sleep(2000 * time.Millisecond)
+		info, err := client.XInfoConsumers(key, group)
+		assert.NoError(suite.T(), err)
+		assert.Len(suite.T(), info, 1)
+		assert.Equal(suite.T(), consumer1, info[0].Name)
+		assert.Equal(suite.T(), int64(1), info[0].Pending)
+		assert.Greater(suite.T(), info[0].Idle, int64(0))
+		if suite.serverVersion > "7.2.0" {
+			assert.False(suite.T(), info[0].Inactive.IsNil())
+			assert.Greater(suite.T(), info[0].Inactive.Value(), int64(0))
+		} else {
+			assert.True(suite.T(), info[0].Inactive.IsNil())
+		}
+
+		respBool, err := client.XGroupCreateConsumer(key, group, consumer2)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), respBool)
+
+		xReadGroup, err = client.XReadGroup(group, consumer2, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		expectedResult = map[string]map[string][][]string{
+			key: {
+				"0-2": {{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
+				"0-3": {{"e3_f1", "e3_v1"}},
+			},
+		}
+		assert.Equal(suite.T(), expectedResult, xReadGroup)
+
+		// Verify that xinfo_consumers contains info for 2 consumers now
+		info, err = client.XInfoConsumers(key, group)
+		assert.NoError(suite.T(), err)
+		assert.Len(suite.T(), info, 2)
+
+		// Passing a non-existing key raises an error
+		key = uuid.NewString()
+		_, err = client.XInfoConsumers(key, "_")
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// key exists, but it is not a stream
+		suite.verifyOK(client.Set(key, key))
+		_, err = client.XInfoConsumers(key, "_")
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// Passing a non-existing group raises an error
+		key = uuid.NewString()
+		_, err = client.XAdd(key, [][]string{{"a", "b"}})
+		assert.NoError(suite.T(), err)
+		_, err = client.XInfoConsumers(key, "_")
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// no consumers yet
+		suite.verifyOK(client.XGroupCreate(key, group, "0-0"))
+		info, err = client.XInfoConsumers(key, group)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), info)
+	})
+}
+
 func (suite *GlideTestSuite) TestXInfoGroups() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.NewString()
@@ -8832,6 +8932,62 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 			options.KeyArray{Keys: []string{key1, key3}},
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 		)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZInterCard() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}:1-" + uuid.NewString()
+		key2 := "{key}:2-" + uuid.NewString()
+		key3 := "{key}:3-" + uuid.NewString()
+
+		membersScores1 := map[string]float64{
+			"a": 1.0,
+			"b": 2.0,
+			"c": 3.0,
+		}
+		membersScores2 := map[string]float64{
+			"b": 1.0,
+			"c": 2.0,
+			"d": 3.0,
+		}
+
+		zAddResult1, err := client.ZAdd(key1, membersScores1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zAddResult1)
+
+		zAddResult2, err := client.ZAdd(key2, membersScores2)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zAddResult2)
+
+		res, err := client.ZInterCard([]string{key1, key2})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		res, err = client.ZInterCard([]string{key1, key3})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res)
+
+		res, err = client.ZInterCardWithOptions([]string{key1, key2}, options.NewZInterCardOptions().SetLimit(0))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		res, err = client.ZInterCardWithOptions([]string{key1, key2}, options.NewZInterCardOptions().SetLimit(1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res)
+
+		res, err = client.ZInterCardWithOptions([]string{key1, key2}, options.NewZInterCardOptions().SetLimit(3))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		// key exists but not a set
+		_, err = client.Set(key3, "bar")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.ZInterCardWithOptions([]string{key1, key3}, options.NewZInterCardOptions().SetLimit(3))
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 	})

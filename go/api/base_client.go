@@ -5813,6 +5813,30 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 	return handleStringToAnyMapResponse(result)
 }
 
+// Returns the list of all consumers and their attributes for the given consumer group of the
+// stream stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key   - The key of the stream.
+//	group - The consumer group name.
+//
+// Return value:
+//
+//	An array of [api.XInfoConsumerInfo], where each element contains the attributes
+//	of a consumer for the given consumer group of the stream at `key`.
+//
+// [valkey.io]: https://valkey.io/commands/xinfo-consumers/
+func (client *baseClient) XInfoConsumers(key string, group string) ([]XInfoConsumerInfo, error) {
+	response, err := client.executeCommand(C.XInfoConsumers, []string{key, group})
+	if err != nil {
+		return nil, err
+	}
+	return handleXInfoConsumersResponse(response)
+}
+
 // Returns the list of all consumer groups and their attributes for the stream stored at `key`.
 //
 // See [valkey.io] for details.
@@ -6031,7 +6055,7 @@ func (client *baseClient) ZInterWithScores(
 //
 // Return value:
 //
-//	The number of elements in the resulting sorted set stored at <code>destination</code>.
+//	The number of elements in the resulting sorted set stored at `destination`.
 //
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error) {
@@ -6060,7 +6084,7 @@ func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys opt
 //
 // Return value:
 //
-//	The number of elements in the resulting sorted set stored at <code>destination</code>.
+//	The number of elements in the resulting sorted set stored at `destination`.
 //
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (client *baseClient) ZInterStoreWithOptions(
@@ -6325,6 +6349,55 @@ func (client *baseClient) ZUnionStoreWithOptions(
 		args = append(args, optionsArgs...)
 	}
 	result, err := client.executeCommand(C.ZUnionStore, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns the cardinality of the intersection of the sorted sets specified by `keys`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - The keys of the sorted sets.
+//
+// Return value:
+//
+//	The cardinality of the intersection of the sorted sets.
+//
+// [valkey.io]: https://valkey.io/commands/zintercard/
+func (client *baseClient) ZInterCard(keys []string) (int64, error) {
+	return client.ZInterCardWithOptions(keys, nil)
+}
+
+// Returns the cardinality of the intersection of the sorted sets specified by `keys`.
+// If the intersection cardinality reaches `options.limit` partway through the computation, the
+// algorithm will exit early and yield `options.limit` as the cardinality.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - The keys of the sorted sets.
+//	options - The options for the ZInterCard command, see - [options.ZInterCardOptions].
+//
+// Return value:
+//
+//	The cardinality of the intersection of the sorted sets.
+//
+// [valkey.io]: https://valkey.io/commands/zintercard/
+func (client *baseClient) ZInterCardWithOptions(keys []string, options *options.ZInterCardOptions) (int64, error) {
+	args := append([]string{strconv.Itoa(len(keys))}, keys...)
+	if options != nil {
+		optionsArgs, err := options.ToArgs()
+		if err != nil {
+			return defaultIntResponse, err
+		}
+		args = append(args, optionsArgs...)
+	}
+	result, err := client.executeCommand(C.ZInterCard, args)
 	if err != nil {
 		return defaultIntResponse, err
 	}

@@ -246,6 +246,21 @@ func CreateNilXPendingSummary() XPendingSummary {
 	return XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), make([]ConsumerPendingMessage, 0)}
 }
 
+// XInfoConsumerInfo represents a group information returned by `XInfoConsumers` command.
+type XInfoConsumerInfo struct {
+	// The consumer's name.
+	Name string
+	// The number of entries in the PEL: pending messages for the consumer, which are messages that were delivered but are yet
+	// to be acknowledged.
+	Pending int64
+	// The number of milliseconds that have passed since the consumer's last attempted interaction (Examples: XREADGROUP,
+	// XCLAIM, XAUTOCLAIM).
+	Idle int64
+	// The number of milliseconds that have passed since the consumer's last successful interaction (Examples: XREADGROUP that
+	// actually read some entries into the PEL, XCLAIM/XAUTOCLAIM that actually claimed some entries).
+	Inactive Result[int64]
+}
+
 // XInfoGroupInfo represents a group information returned by `XInfoGroups` command.
 type XInfoGroupInfo struct {
 	// The consumer group's name.
