@@ -80,21 +80,15 @@ mod test_pipeline {
         // Get the initial slot distribution.
         let cluster_nodes = cluster.get_cluster_nodes().await;
         let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
-        println!(
-            "Slot distribution before killing a node: {:?}",
-            slot_distribution
-        );
 
         // Pick a random "bad" key and compute its slot.
         let bad_key = generate_random_string(10);
         let bad_slot = get_slot(&bad_key.as_str().as_bytes());
-        println!("Bad key '{}' hashes to slot {}", bad_key, bad_slot);
 
         // Kill the node that handles the bad_key's slot.
         let killed_node_routing = cluster
             .kill_one_node(slot_distribution.clone(), Some(bad_slot))
             .await;
-        println!("Killed node routing: {:?}", killed_node_routing);
 
         // Wait for cluster failover / recovery.
         cluster
@@ -105,10 +99,8 @@ mod test_pipeline {
         // Get the new slot distribution.
         let new_cluster_nodes = cluster.get_cluster_nodes().await;
         let new_slot_distribution = cluster.get_slots_ranges_distribution(&new_cluster_nodes);
-        println!(
-            "Slot distribution after killing a node: {:?}",
-            new_slot_distribution
-        );
+
+        assert_ne!(slot_distribution, new_slot_distribution, "Slot distribution did not change after killing a node with routing: {killed_node_routing:?}, before: {slot_distribution:?}, after: {new_slot_distribution:?}");
 
         // Extract the slots from the new slot distribution.
         let slots = new_slot_distribution
@@ -130,7 +122,6 @@ mod test_pipeline {
 
         let good_key = good_key_finder();
         let good_key2 = good_key_finder();
-        println!("Good keys chosen: '{}' '{}'", good_key, good_key2);
 
         // Build two pipelines:
         // 1. Pipeline for the bad key.
@@ -155,7 +146,6 @@ mod test_pipeline {
                 SingleNodeRoutingInfo::Random,
             )
             .await;
-        println!("Bad key pipeline result: {:?}", res_bad);
 
         // Execute the pipeline with the good key.
         let res_good = connection
@@ -166,27 +156,46 @@ mod test_pipeline {
                 SingleNodeRoutingInfo::Random,
             )
             .await
-            .expect("Pipeline with good key failed");
-        println!("Good key pipeline result: {:?}", res_good);
+            .expect(&format!(
+                "Pipeline with good key failed. Good keys: '{}' '{}', new slot distribution: {:?}",
+                good_key, good_key2, new_slot_distribution
+            ));
 
         // Assert that the pipeline with the bad key returns an error.
         assert!(
             res_bad.is_err(),
-            "Pipeline with bad key should fail due to killed node"
+            "Pipeline with bad key should fail due to killed node. \
+             Bad key: '{}' (slot {}), killed node routing: {:?}, \
+             initial slot distribution: {:?} \
+             final slot distribution: {:?} \
+             result: {:?}",
+            bad_key,
+            bad_slot,
+            killed_node_routing,
+            slot_distribution,
+            new_slot_distribution,
+            res_bad
         );
         let res_error = res_bad.unwrap_err();
-        assert_eq!(res_error.kind(), ErrorKind::IoError, "{res_error:?}");
+        assert_eq!(
+            res_error.kind(),
+            ErrorKind::IoError,
+            "Unexpected error kind for bad key pipeline. Error: {:?}",
+            res_error
+        );
 
         // Assert that the pipeline with the good key succeeds.
+        let expected = vec![
+            Value::Okay,
+            Value::BulkString(b"value".to_vec()),
+            Value::Okay,
+            Value::BulkString(b"value2".to_vec()),
+        ];
         assert_eq!(
-            res_good,
-            vec![
-                Value::Okay,
-                Value::BulkString(b"value".to_vec()),
-                Value::Okay,
-                Value::BulkString(b"value2".to_vec())
-            ],
-            "Pipeline with good key should succeed"
+            res_good, expected,
+            "Pipeline with good key returned unexpected result. \
+            Good keys: '{}' '{}', result: {:?}",
+            good_key, good_key2, res_good
         );
     }
 
@@ -204,7 +213,7 @@ mod test_pipeline {
     ///   - SET "key" "value"
     ///   - GET "key"
     ///
-    /// - Both keys are serving the same node, so they are in the same sub-pipeline..
+    /// - Both keys are being served by the same node, so they are in the same sub-pipeline..
     /// - We then move the slot of `key` using `move_specific_slot`, which triggers a MOVED error when the
     ///   sub-pipeline is processed.
     /// - Due to the current error handling, the entire sub-pipeline is re-executed.
@@ -226,7 +235,6 @@ mod test_pipeline {
         // Get the current slot distribution.
         let cluster_nodes = cluster.get_cluster_nodes().await;
         let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
-        println!("Slot distribution: {:?}", slot_distribution);
 
         let nodes_and_slots = slot_distribution
             .iter()
@@ -234,7 +242,6 @@ mod test_pipeline {
             .collect::<Vec<_>>();
 
         let (key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
-        println!("Keys chosen: '{}' '{}'", key, key2);
         let key_slot = get_slot(key.as_str().as_bytes());
 
         // Simulate a slot move by moving the slot of `key_slot` to a different node.
@@ -247,7 +254,7 @@ mod test_pipeline {
 
         // Create a pipeline with several commands.
         let mut pipeline = redis::pipe();
-        pipeline.incr(key2, 5).set(&key, "value").get(key);
+        pipeline.incr(&key2, 5).set(&key, "value").get(&key);
 
         // Execute the pipeline.
         // We're using an offset of 0 and expecting 3 commands' responses to be relevant for routing.
@@ -257,20 +264,24 @@ mod test_pipeline {
             .expect("Pipeline execution failed");
 
         // The expected outcome is that the INCR on "ls" increments twice, from 0 to 10.
+        let expected = vec![
+            Value::Int(10),                       // INCR `key2` executed twice (5 + 5)
+            Value::Okay,                          // SET `key`
+            Value::BulkString(b"value".to_vec()), // GET `key`
+        ];
         assert_eq!(
-            result,
-            vec![
-                Value::Int(10),                       // INCR `key2` executed twice (5 + 5)
-                Value::Okay,                          // SET `key2`
-                Value::BulkString(b"value".to_vec())  // GET `key2`
-            ],
-            "{result:?}",
+            result, expected,
+            "Pipeline result did not match expected output.\n\
+             Keys chosen: ('{}', '{}')\n\
+             key_slot: {}\n\
+             Actual result: {:?}",
+            key, key2, key_slot, result
         );
     }
 
     #[tokio::test]
     #[serial_test::serial]
-    async fn test_pipeline_return_moved_error() {
+    async fn test_pipeline_return_moved_error_with_zero_retries() {
         // Create a test cluster with 3 masters and no replicas.
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -283,7 +294,6 @@ mod test_pipeline {
         // Get the current slot distribution.
         let cluster_nodes = cluster.get_cluster_nodes().await;
         let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
-        println!("Slot distribution: {:?}", slot_distribution);
 
         let key = generate_random_string(10);
         let key2 = generate_random_string(10);
@@ -296,7 +306,7 @@ mod test_pipeline {
 
         // Create a pipeline with several commands.
         let mut pipeline = redis::pipe();
-        pipeline.set(&key, "value").get(key).set(key2, "value2");
+        pipeline.set(&key, "value").get(&key).set(&key2, "value2");
 
         // Execute the pipeline.
         let result = connection
@@ -305,10 +315,29 @@ mod test_pipeline {
 
         assert!(
             result.is_err(),
-            "Expected a MOVED error, but got: {result:?}",
+            "Expected a MOVED error, but pipeline succeeded.\n\
+                 Key: '{}'\n\
+                 Key2: '{}'\n\
+                 Slot to move: {}\n\
+                 Pipeline result: {:?}",
+            key,
+            key2,
+            slot_to_move,
+            result
         );
         let err = result.unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::Moved, "{err:?}");
+        assert_eq!(
+            err.kind(),
+            ErrorKind::Moved,
+            "Expected error kind MOVED, but got {:?}.\n\
+             Key: '{}'\n\
+             Key2: '{}'\n\
+             Slot to move: {}",
+            err,
+            key,
+            key2,
+            slot_to_move
+        );
     }
 
     #[tokio::test]
@@ -339,7 +368,11 @@ mod test_pipeline {
             .expect("Pipeline execution failed");
 
         // Ensure all responses are `Value::Nil`.
-        assert_eq!(result, vec![Value::Nil; pipeline.len()], "{result:?}");
+        assert_eq!(
+            result,
+            vec![Value::Nil; pipeline.len()],
+            "Expected all GET responses to be Nil, got: {result:?}"
+        );
 
         let mut info_cmd = cmd("INFO");
         info_cmd.arg("replication").arg("commandstats");
@@ -384,15 +417,16 @@ mod test_pipeline {
             }
         }
 
-        println!("Master GET calls: {}", master_get_calls);
-        println!("Replica GET calls: {}", replica_get_calls);
-
         // Assert that no GET commands were processed on masters
         // and that replicas did process GET commands.
-        assert_eq!(master_get_calls, 0, "Expected no GET calls on masters");
+        assert_eq!(
+            master_get_calls, 0,
+            "Expected no GET calls on masters, but got {master_get_calls}"
+        );
         assert!(
             replica_get_calls == pipeline.len() as i64,
-            "Expected GET calls on replicas, but found none"
+            "Expected {} GET calls on replicas, but got {replica_get_calls}",
+            pipeline.len()
         );
     }
 
@@ -424,7 +458,11 @@ mod test_pipeline {
             .expect("Pipeline execution failed");
 
         // Ensure all responses are `Value::Nil`.
-        assert_eq!(result, vec![Value::Nil; pipeline.len()], "{result:?}");
+        assert_eq!(
+            result,
+            vec![Value::Nil; pipeline.len()],
+            "Expected all GET responses to be Nil, got: {result:?}"
+        );
 
         let mut info_cmd = cmd("INFO");
         info_cmd.arg("replication").arg("commandstats");
@@ -466,15 +504,19 @@ mod test_pipeline {
             }
         }
 
-        println!("Replica GET call distribution: {:?}", replica_counts);
-
-        assert!(
-            replica_counts.len() == 3,
-            "Expected 3 replicas to process GET calls"
+        assert_eq!(
+            replica_counts.len(),
+            3,
+            "Expected 3 replicas to process GET calls, but found {}. INFO output: {:#?}",
+            replica_counts.len(),
+            info_result
         );
+
+        // Assert that each replica processed exactly 5 GET calls.
         assert!(
             replica_counts.iter().all(|&count| count == 5),
-            "Expected each replica to process exactly 5 GET calls"
+            "Expected each replica to process exactly 5 GET calls, but got: {replica_counts:?}. INFO output: {:#?}",
+            info_result
         );
     }
 
