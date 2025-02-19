@@ -228,21 +228,21 @@ jobs:
               working-directory: ./python
               run: |
                   sed -i "s|255.255.255|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
-          
+
             - name: Build source distributions
               uses: PyO3/maturin-action@v1
               with:
                   working-directory: ./python
                   command: sdist
                   args: --out sdist
-            
-            - name: Download binaries 
+
+            - name: Download binaries
               uses: actions/download-artifact@v4
               with:
                   path: python/wheels
                   merge-multiple: true
 
-            - name: Publish binaries and source to PyPI 
+            - name: Publish binaries and source to PyPI
               uses: PyO3/maturin-action@v1
               env:
                   MATURIN_PYPI_TOKEN: ${{ secrets.LIVEPYPI_API_TOKEN }}
