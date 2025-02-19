@@ -132,6 +132,12 @@ jobs:
                   folder_path: "${{ github.workspace }}/python/.cargo"
                   named_os: ${{ matrix.build.NAMED_OS }}
 
+            - name: Fix Python dependencies
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
+              run: |
+                  sudo apt --fix-broken install -y
+
+                
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
