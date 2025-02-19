@@ -66,8 +66,10 @@ class ByAddressRoute(Route):
         """Routes a request to a node by its address
 
         Args:
-            host (str): The endpoint of the node. If `port` is not provided, should be in the f"{address}:{port}" format, where `address` is the preferred endpoint as shown in the output of the `CLUSTER SLOTS` command.
-            port (Optional[int]): The port to access on the node. If port is not provided, `host` is assumed to be in the format f"{address}:{port}".
+            host (str): The endpoint of the node. If `port` is not provided, should be in the f"{address}:{port}" format,
+                where `address` is the preferred endpoint as shown in the output of the `CLUSTER SLOTS` command.
+            port (Optional[int]): The port to access on the node. If port is not provided, `host` is assumed to be in
+                the format f"{address}:{port}".
         """
         super().__init__()
         if port is None:
