@@ -2,14 +2,6 @@
 
 package api
 
-// #cgo LDFLAGS: -lglide_rs
-// #cgo !windows LDFLAGS: -lm
-// #cgo darwin LDFLAGS: -framework Security
-// #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
-// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
-// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
-// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
-// #cgo LDFLAGS: -L../target/release
 // #include "../lib.h"
 import "C"
 
@@ -1186,6 +1178,56 @@ func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendin
 	return pendingDetails, nil
 }
 
+func handleXInfoGroupsResponse(response *C.struct_CommandResponse) ([]XInfoGroupInfo, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	arrData, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := arrayConverter[map[string]interface{}]{
+		nil,
+		false,
+	}.convert(arrData)
+	if err != nil {
+		return nil, err
+	}
+	arr, ok := converted.([]map[string]interface{})
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+	}
+
+	result := make([]XInfoGroupInfo, 0, len(arr))
+
+	for _, group := range arr {
+		info := XInfoGroupInfo{
+			Name:            group["name"].(string),
+			Consumers:       group["consumers"].(int64),
+			Pending:         group["pending"].(int64),
+			LastDeliveredId: group["last-delivered-id"].(string),
+		}
+		switch lag := group["lag"].(type) {
+		case int64:
+			info.Lag = CreateInt64Result(lag)
+		default:
+			info.Lag = CreateNilInt64Result()
+		}
+		switch entriesRead := group["entries-read"].(type) {
+		case int64:
+			info.EntriesRead = CreateInt64Result(entriesRead)
+		default:
+			info.EntriesRead = CreateNilInt64Result()
+		}
+		result = append(result, info)
+	}
+
+	return result, nil
+}
+
 func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[string]interface{}, error) {
 	defer C.free_command_response(response)
 
@@ -1239,7 +1281,6 @@ func handleTimeClusterResponse(response *C.struct_CommandResponse) (ClusterValue
 		for nodeName, nodeTimes := range mapData {
 			multiNodeTimes[nodeName] = nodeTimes
 		}
-
 		return createClusterMultiValue(multiNodeTimes), nil
 	}
 
