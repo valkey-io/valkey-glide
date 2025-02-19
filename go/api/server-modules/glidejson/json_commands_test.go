@@ -12,7 +12,6 @@ import (
 func Example_jsonSet() {
 	var client *api.GlideClient = getExampleGlideClient()
 	result, err := Set(client, "my_key", "$", "{\"a\":1.0,\"b\":2}")
-
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}
@@ -24,7 +23,6 @@ func Example_jsonSet() {
 func ExampleGlideClusterClient_jsonSet() {
 	var client *api.GlideClusterClient = getExampleGlideClusterClient()
 	result, err := Set(client, "my_key", "$", "{\"a\":1.0,\"b\":2}")
-
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}
@@ -42,7 +40,6 @@ func Example_jsonSetWithOptions() {
 		"{\"a\": 1.0, \"b\": 2}",
 		glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
 	)
-
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}
@@ -60,7 +57,6 @@ func ExampleGlideClusterClient_jsonSetWithOptions() {
 		"{\"a\": 1.0, \"b\": 2}",
 		glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
 	)
-
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}
