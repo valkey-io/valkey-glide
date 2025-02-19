@@ -10,34 +10,55 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.configuration.AdvancedGlideClientConfiguration;
+import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
+import glide.api.models.configuration.BackoffStrategy;
+import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration;
+import glide.api.models.exceptions.ClosingException;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(10) // seconds
 public class ConnectionTests {
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
     @SneakyThrows
-    public void basic_client() {
-        var regularClient = GlideClient.createClient(commonClientConfig().build()).get();
+    public void basic_client(ProtocolVersion protocol) {
+        var regularClient =
+                GlideClient.createClient(commonClientConfig().protocol(protocol).build()).get();
         regularClient.close();
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
     @SneakyThrows
-    public void cluster_client() {
-        var clusterClient = GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+    public void cluster_client(ProtocolVersion protocol) {
+        var clusterClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get();
         clusterClient.close();
     }
 
@@ -48,6 +69,35 @@ public class ConnectionTests {
                                 .readFrom(ReadFrom.AZ_AFFINITY)
                                 .clientAZ(az)
                                 .requestTimeout(2000)
+                                .build())
+                .get();
+    }
+
+    @SneakyThrows
+    public BaseClient createConnectionTimeoutClient(
+            Boolean clusterMode,
+            int connectionTimeout,
+            int requestTimeout,
+            BackoffStrategy backoffStrategy) {
+        if (clusterMode) {
+            var advancedConfiguration =
+                    AdvancedGlideClusterClientConfiguration.builder()
+                            .connectionTimeout(connectionTimeout)
+                            .build();
+            return GlideClusterClient.createClient(
+                            commonClusterClientConfig()
+                                    .advancedConfiguration(advancedConfiguration)
+                                    .requestTimeout(requestTimeout)
+                                    .build())
+                    .get();
+        }
+        var advancedConfiguration =
+                AdvancedGlideClientConfiguration.builder().connectionTimeout(connectionTimeout).build();
+        return GlideClient.createClient(
+                        commonClientConfig()
+                                .advancedConfiguration(advancedConfiguration)
+                                .requestTimeout(requestTimeout)
+                                .reconnectStrategy(backoffStrategy)
                                 .build())
                 .get();
     }
@@ -200,6 +250,164 @@ public class ConnectionTests {
         long matchingEntries =
                 infoData.values().stream().filter(value -> value.contains(getCmdstat)).count();
         assertEquals(4, matchingEntries);
+        azTestClient.close();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void test_connection_timeout(boolean clusterMode) {
+        var backoffStrategy =
+                BackoffStrategy.builder().exponentBase(2).factor(100).numOfRetries(1).build();
+        var client = createConnectionTimeoutClient(clusterMode, 250, 20000, backoffStrategy);
+
+        // Runnable for long-running DEBUG SLEEP command
+        Runnable debugSleepTask =
+                () -> {
+                    try {
+                        if (client instanceof GlideClusterClient) {
+                            ((GlideClusterClient) client)
+                                    .customCommand(new String[] {"DEBUG", "sleep", "7"}, ALL_NODES)
+                                    .get();
+                        } else if (client instanceof GlideClient) {
+                            ((GlideClient) client).customCommand(new String[] {"DEBUG", "sleep", "7"}).get();
+                        }
+                    } catch (InterruptedException | ExecutionException e) {
+                        throw new RuntimeException("Error during DEBUG SLEEP command", e);
+                    }
+                };
+
+        // Runnable for testing connection failure due to timeout
+        Runnable failToConnectTask =
+                () -> {
+                    try {
+                        Thread.sleep(1000); // Wait to ensure the debug sleep command is running
+                        ExecutionException executionException =
+                                assertThrows(
+                                        ExecutionException.class,
+                                        () -> createConnectionTimeoutClient(clusterMode, 100, 250, backoffStrategy));
+                        assertInstanceOf(ClosingException.class, executionException.getCause());
+                        assertTrue(executionException.getMessage().toLowerCase().contains("timed out"));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Thread was interrupted", e);
+                    }
+                };
+
+        // Runnable for testing successful connection
+        Runnable connectToClientTask =
+                () -> {
+                    try {
+                        Thread.sleep(1000); // Wait to ensure the debug sleep command is running
+                        var timeoutClient =
+                                createConnectionTimeoutClient(clusterMode, 10000, 250, backoffStrategy);
+                        assertEquals(timeoutClient.set("key", "value").get(), "OK");
+                        timeoutClient.close();
+                    } catch (Exception e) {
+                        throw new RuntimeException("Error during successful connection attempt", e);
+                    }
+                };
+
+        // Execute all tasks concurrently
+        ExecutorService executorService = Executors.newFixedThreadPool(3);
+        try {
+            executorService.invokeAll(
+                    List.of(
+                            Executors.callable(debugSleepTask),
+                            Executors.callable(failToConnectTask),
+                            Executors.callable(connectToClientTask)));
+        } finally {
+            executorService.shutdown();
+            // Clean up the main client
+            if (client != null) {
+                client.close();
+            }
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_az_affinity_replicas_and_primary_routes_to_primary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
+
+        String az = "us-east-1a";
+        String otherAz = "us-east-1b";
+        int nGetCalls = 4;
+        String getCmdstat = String.format("cmdstat_get:calls=%d", nGetCalls);
+
+        // Create client for setting the configs
+        GlideClusterClient configSetClient =
+                GlideClusterClient.createClient(azClusterClientConfig().requestTimeout(2000).build()).get();
+
+        // Reset stats and set all nodes to other_az
+        assertEquals(configSetClient.configResetStat().get(), OK);
+        configSetClient.configSet(Map.of("availability-zone", otherAz), ALL_NODES).get();
+
+        // Set primary for slot 12182 to az
+        configSetClient
+                .configSet(
+                        Map.of("availability-zone", az),
+                        new RequestRoutingConfiguration.SlotIdRoute(12182, PRIMARY))
+                .get();
+
+        // Verify primary AZ
+        ClusterValue<Map<String, String>> primaryAzResult =
+                configSetClient
+                        .configGet(
+                                new String[] {"availability-zone"},
+                                new RequestRoutingConfiguration.SlotIdRoute(12182, PRIMARY))
+                        .get();
+        assertEquals(
+                az,
+                primaryAzResult.getSingleValue().get("availability-zone"),
+                "Primary for slot 12182 is not in the expected AZ " + az);
+
+        configSetClient.close();
+
+        // Create test client with AZ_AFFINITY_REPLICAS_AND_PRIMARY configuration
+        GlideClusterClient azTestClient =
+                GlideClusterClient.createClient(
+                                azClusterClientConfig()
+                                        .readFrom(ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY)
+                                        .clientAZ(az)
+                                        .requestTimeout(2000)
+                                        .build())
+                        .get();
+
+        // Execute GET commands
+        for (int i = 0; i < nGetCalls; i++) {
+            azTestClient.get("foo").get();
+        }
+
+        ClusterValue<String> infoResult =
+                azTestClient.info(new InfoOptions.Section[] {InfoOptions.Section.ALL}, ALL_NODES).get();
+        Map<String, String> infoData = infoResult.getMultiValue();
+
+        // Check that only the primary in the specified AZ handled all GET calls
+        long matchingEntries =
+                infoData.values().stream()
+                        .filter(
+                                value ->
+                                        value.contains(getCmdstat)
+                                                && value.contains(az)
+                                                && value.contains("role:master"))
+                        .count();
+        assertEquals(1, matchingEntries, "Exactly one primary in AZ should handle all calls");
+
+        // Verify total GET calls
+        long totalGetCalls =
+                infoData.values().stream()
+                        .filter(value -> value.contains("cmdstat_get:calls="))
+                        .mapToInt(
+                                value -> {
+                                    int startIndex =
+                                            value.indexOf("cmdstat_get:calls=") + "cmdstat_get:calls=".length();
+                                    int endIndex = value.indexOf(",", startIndex);
+                                    return Integer.parseInt(value.substring(startIndex, endIndex));
+                                })
+                        .sum();
+        assertEquals(nGetCalls, totalGetCalls, "Total GET calls mismatch");
+
         azTestClient.close();
     }
 }

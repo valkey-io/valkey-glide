@@ -108,7 +108,7 @@ protoc -Iprotobuf=${GLIDE_ROOT}/glide-core/src/protobuf/    \
 cd python
 python3 -m venv .env
 source .env/bin/activate
-pip install -r requirements.txt
+pip install -r dev_requirements.txt
 ```
 
 ## Build the package (in release mode):
@@ -124,7 +124,8 @@ maturin develop --release --strip
 # Running tests
 ---
 
-Ensure that you have installed `redis-server` or `valkey-server` along with `redis-cli` or `valkey-cli` on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/). You can get Valkey from the following link: [Valkey Download](https://valkey.io/download/).
+Ensure you have installed `valkey-server` and `valkey-cli` on your host (or `redis-server` and `redis-cli`). 
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 
 From a terminal, change directory to the GLIDE source folder and type:
 
@@ -210,7 +211,7 @@ Run from the main `/python` folder
     ```bash
     cd $HOME/src/valkey-glide/python
     source .env/bin/activate
-    pip install -r requirements.txt
+    pip install -r dev_requirements.txt
     isort . --profile black --skip-glob python/glide/protobuf --skip-glob .env
     black . --exclude python/glide/protobuf --exclude .env
     flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics      \
@@ -235,6 +236,6 @@ Run from the main `/python` folder
 
 -   [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
 -   [isort](https://marketplace.visualstudio.com/items?itemName=ms-python.isort)
--   [Black Formetter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter)
+-   [Black Formatter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter)
 -   [Flake8](https://marketplace.visualstudio.com/items?itemName=ms-python.flake8)
 -   [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)

@@ -4,7 +4,10 @@
 
 import { expect } from "@jest/globals";
 import { exec } from "child_process";
+import { promisify } from "util";
+const execAsync = promisify(exec);
 import { v4 as uuidv4 } from "uuid";
+import { Socket } from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
@@ -28,6 +31,7 @@ import {
     InfBoundary,
     InfoOptions,
     InsertPosition,
+    JsonBatch,
     ListDirection,
     ProtocolVersion,
     ReturnTypeMap,
@@ -182,6 +186,25 @@ export interface Client {
     get: (key: string) => Promise<GlideString | null>;
 }
 
+export async function checkWhichCommandAvailable(
+    valkeyCommand: string,
+    redisCommand: string,
+): Promise<string> {
+    try {
+        if (await checkCommandAvailability(valkeyCommand)) {
+            return valkeyCommand;
+        }
+    } catch {
+        // ignore
+    }
+
+    if (await checkCommandAvailability(redisCommand)) {
+        return redisCommand;
+    }
+
+    throw new Error("No available command found.");
+}
+
 export async function GetAndSetRandomValue(client: Client) {
     const key = uuidv4();
     // Adding random repetition, to prevent the inputs from always having the same alignment.
@@ -192,17 +215,21 @@ export async function GetAndSetRandomValue(client: Client) {
     expect(intoString(result)).toEqual(value);
 }
 
-export function flushallOnPort(port: number): Promise<void> {
-    return new Promise<void>((resolve, reject) =>
-        exec(`redis-cli -p ${port} FLUSHALL`, (error, _, stderr) => {
+export async function flushallOnPort(port: number): Promise<void> {
+    try {
+        const command = await checkWhichCommandAvailable(
+            "valkey-cli",
+            "redis-cli",
+        );
+        exec(`${command} -p ${port} flushall`, (error) => {
             if (error) {
-                console.error(stderr);
-                reject(error);
-            } else {
-                resolve();
+                console.error(`exec error: ${error}`);
+                return;
             }
-        }),
-    );
+        });
+    } catch (error) {
+        console.error(`Error flushing on port ${port}: ${error}`);
+    }
 }
 
 /**
@@ -1884,6 +1911,188 @@ export async function transactionTest(
 }
 
 /**
+ * Populates a transaction with JSON commands to test.
+ * @param baseTransaction - A transaction.
+ * @returns Array of tuples, where first element is a test name/description, second - expected return value.
+ */
+export async function JsonBatchForArrCommands(
+    baseTransaction: ClusterTransaction,
+): Promise<[string, GlideReturnType][]> {
+    const responseData: [string, GlideReturnType][] = [];
+    const key = "{key}:1" + uuidv4();
+    const jsonValue = { a: 1.0, b: 2 };
+
+    // JSON.SET
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    responseData.push(['set(key, "{ a: 1.0, b: 2 }")', "OK"]);
+
+    // JSON.CLEAR
+    JsonBatch.clear(baseTransaction, key, { path: "$" });
+    responseData.push(['clear(key, "bar")', 1]);
+
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    responseData.push(['set(key, "$", "{ "a": 1, b: ["one", "two"] }")', "OK"]);
+
+    // JSON.GET
+    JsonBatch.get(baseTransaction, key, { path: "." });
+    responseData.push(['get(key, {path: "."})', JSON.stringify(jsonValue)]);
+
+    const jsonValue2 = { a: 1.0, b: [1, 2] };
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue2));
+    responseData.push(['set(key, "$", "{ "a": 1, b: ["1", "2"] }")', "OK"]);
+
+    // JSON.ARRAPPEND
+    JsonBatch.arrappend(baseTransaction, key, "$.b", ["3", "4"]);
+    responseData.push(['arrappend(key, "$.b", [\'"3"\', \'"4"\'])', [4]]);
+
+    // JSON.GET to check JSON.ARRAPPEND was successful.
+    const jsonValueAfterAppend = { a: 1.0, b: [1, 2, 3, 4] };
+    JsonBatch.get(baseTransaction, key, { path: "." });
+    responseData.push([
+        'get(key, {path: "."})',
+        JSON.stringify(jsonValueAfterAppend),
+    ]);
+
+    // JSON.ARRINDEX
+    JsonBatch.arrindex(baseTransaction, key, "$.b", "2");
+    responseData.push(['arrindex(key, "$.b", "1")', [1]]);
+
+    // JSON.ARRINSERT
+    JsonBatch.arrinsert(baseTransaction, key, "$.b", 2, ["5"]);
+    responseData.push(['arrinsert(key, "$.b", 4, [\'"5"\'])', [5]]);
+
+    // JSON.GET to check JSON.ARRINSERT was successful.
+    const jsonValueAfterArrInsert = { a: 1.0, b: [1, 2, 5, 3, 4] };
+    JsonBatch.get(baseTransaction, key, { path: "." });
+    responseData.push([
+        'get(key, {path: "."})',
+        JSON.stringify(jsonValueAfterArrInsert),
+    ]);
+
+    // JSON.ARRLEN
+    JsonBatch.arrlen(baseTransaction, key, { path: "$.b" });
+    responseData.push(['arrlen(key, "$.b")', [5]]);
+
+    // JSON.ARRPOP
+    JsonBatch.arrpop(baseTransaction, key, {
+        path: "$.b",
+        index: 2,
+    });
+    responseData.push(['arrpop(key, {path: "$.b", index: 4})', ["5"]]);
+
+    // JSON.GET to check JSON.ARRPOP was successful.
+    const jsonValueAfterArrpop = { a: 1.0, b: [1, 2, 3, 4] };
+    JsonBatch.get(baseTransaction, key, { path: "." });
+    responseData.push([
+        'get(key, {path: "."})',
+        JSON.stringify(jsonValueAfterArrpop),
+    ]);
+
+    // JSON.ARRTRIM
+    JsonBatch.arrtrim(baseTransaction, key, "$.b", 1, 2);
+    responseData.push(['arrtrim(key, "$.b", 2, 3)', [2]]);
+
+    // JSON.GET to check JSON.ARRTRIM was successful.
+    const jsonValueAfterArrTrim = { a: 1.0, b: [2, 3] };
+    JsonBatch.get(baseTransaction, key, { path: "." });
+    responseData.push([
+        'get(key, {path: "."})',
+        JSON.stringify(jsonValueAfterArrTrim),
+    ]);
+    return responseData;
+}
+
+export async function CreateJsonBatchCommands(
+    baseTransaction: ClusterTransaction,
+): Promise<[string, GlideReturnType][]> {
+    const responseData: [string, GlideReturnType][] = [];
+    const key = "{key}:1" + uuidv4();
+    const jsonValue = { a: [1, 2], b: [3, 4], c: "c", d: true };
+
+    // JSON.SET to create a key for testing commands.
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    responseData.push(['set(key, "$")', "OK"]);
+
+    // JSON.DEBUG MEMORY
+    JsonBatch.debugMemory(baseTransaction, key, { path: "$.a" });
+    responseData.push(['debugMemory(key, "{ path: "$.a" }")', [48]]);
+
+    // JSON.DEBUG FIELDS
+    JsonBatch.debugFields(baseTransaction, key, { path: "$.a" });
+    responseData.push(['debugFields(key, "{ path: "$.a" }")', [2]]);
+
+    // JSON.OBJLEN
+    JsonBatch.objlen(baseTransaction, key, { path: "." });
+    responseData.push(["objlen(key)", 4]);
+
+    // JSON.OBJKEY
+    JsonBatch.objkeys(baseTransaction, key, { path: "." });
+    responseData.push(['objkeys(key, "$.")', ["a", "b", "c", "d"]]);
+
+    // JSON.NUMINCRBY
+    JsonBatch.numincrby(baseTransaction, key, "$.a[*]", 10.0);
+    responseData.push(['numincrby(key, "$.a[*]", 10.0)', "[11,12]"]);
+
+    // JSON.NUMMULTBY
+    JsonBatch.nummultby(baseTransaction, key, "$.a[*]", 10.0);
+    responseData.push(['nummultby(key, "$.a[*]", 10.0)', "[110,120]"]);
+
+    // // JSON.STRAPPEND
+    JsonBatch.strappend(baseTransaction, key, '"-test"', { path: "$.c" });
+    responseData.push(['strappend(key, \'"-test"\', "$.c")', [6]]);
+
+    // // JSON.STRLEN
+    JsonBatch.strlen(baseTransaction, key, { path: "$.c" });
+    responseData.push(['strlen(key, "$.c")', [6]]);
+
+    // JSON.TYPE
+    JsonBatch.type(baseTransaction, key, { path: "$.a" });
+    responseData.push(['type(key, "$.a")', ["array"]]);
+
+    // JSON.MGET
+    const key2 = "{key}:2" + uuidv4();
+    const key3 = "{key}:3" + uuidv4();
+    const jsonValue2 = { b: [3, 4], c: "c", d: true };
+    JsonBatch.set(baseTransaction, key2, "$", JSON.stringify(jsonValue2));
+    responseData.push(['set(key2, "$")', "OK"]);
+
+    JsonBatch.mget(baseTransaction, [key, key2, key3], "$.a");
+    responseData.push([
+        'json.mget([key, key2, key3], "$.a")',
+        ["[[110,120]]", "[]", null],
+    ]);
+
+    // JSON.TOGGLE
+    JsonBatch.toggle(baseTransaction, key, { path: "$.d" });
+    responseData.push(['toggle(key2, "$.d")', [false]]);
+
+    // JSON.RESP
+    JsonBatch.resp(baseTransaction, key, { path: "$" });
+    responseData.push([
+        'resp(key, "$")',
+        [
+            [
+                "{",
+                ["a", ["[", 110, 120]],
+                ["b", ["[", 3, 4]],
+                ["c", "c-test"],
+                ["d", "false"],
+            ],
+        ],
+    ]);
+
+    // JSON.DEL
+    JsonBatch.del(baseTransaction, key, { path: "$.d" });
+    responseData.push(['del(key, { path: "$.d" })', 1]);
+
+    // JSON.FORGET
+    JsonBatch.forget(baseTransaction, key, { path: "$.c" });
+    responseData.push(['forget(key, {path: "$.c" })', 1]);
+
+    return responseData;
+}
+
+/**
  * This function gets server version using info command in glide client.
  *
  * @param addresses - Addresses containing host and port for the valkey server.
@@ -1922,4 +2131,49 @@ export async function getServerVersion(
     }
 
     return version;
+}
+
+/**
+ * Check if a command is available on the system
+ */
+export function checkCommandAvailability(command: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        exec(`which ${command}`, (error) => {
+            resolve(!error);
+        });
+    });
+}
+
+/**
+ * Starts a Valkey/Redis-compatible server on the specified port
+ */
+export async function startServer(
+    port: number,
+): Promise<{ process: any; command: string }> {
+    // check which command is available
+    const serverCmd = await checkWhichCommandAvailable(
+        "valkey-server",
+        "redis-server",
+    );
+    // run server, and wait for it to start
+    const serverProcess = await execAsync(`${serverCmd} --port ${port}`)
+        .then(async (process) => {
+            // wait for the server to start
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            // check if the server is running by connecting to it using a socket
+            const client = new Socket();
+            await new Promise<void>((resolve) => {
+                client.connect(port, "localhost", () => {
+                    client.end();
+                    resolve();
+                });
+            });
+            return process;
+        })
+        .catch((err) => {
+            console.error("Failed to start the server:", err);
+            process.exit(1);
+        });
+
+    return { process: serverProcess, command: serverCmd };
 }

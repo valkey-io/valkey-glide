@@ -2,6 +2,7 @@
 
 use super::get_redis_connection_info;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
+use super::{to_duration, DEFAULT_CONNECTION_TIMEOUT};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
 use crate::client::types::ReadFrom as ClientReadFrom;
 use crate::retry_strategies::RetryStrategy;
@@ -15,6 +16,7 @@ use redis::{PushInfo, RedisError, RedisResult, Value};
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 use telemetrylib::Telemetry;
 use tokio::sync::mpsc;
 use tokio::task;
@@ -26,6 +28,10 @@ enum ReadFrom {
         latest_read_replica_index: Arc<AtomicUsize>,
     },
     AZAffinity {
+        client_az: String,
+        last_read_replica_index: Arc<AtomicUsize>,
+    },
+    AZAffinityReplicasAndPrimary {
         client_az: String,
         last_read_replica_index: Arc<AtomicUsize>,
     },
@@ -128,6 +134,12 @@ impl StandaloneClient {
         let discover_az = matches!(
             connection_request.read_from,
             Some(ClientReadFrom::AZAffinity(_))
+                | Some(ClientReadFrom::AZAffinityReplicasAndPrimary(_))
+        );
+
+        let connection_timeout = to_duration(
+            connection_request.connection_timeout,
+            DEFAULT_CONNECTION_TIMEOUT,
         );
 
         let mut stream = stream::iter(connection_request.addresses.iter())
@@ -143,6 +155,7 @@ impl StandaloneClient {
                     tls_mode.unwrap_or(TlsMode::NoTls),
                     &push_sender,
                     discover_az,
+                    connection_timeout,
                 )
                 .await
                 .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -298,6 +311,57 @@ impl StandaloneClient {
         }
     }
 
+    async fn round_robin_read_from_replica_az_awareness_replicas_and_primary(
+        &self,
+        latest_read_replica_index: &Arc<AtomicUsize>,
+        client_az: String,
+    ) -> &ReconnectingConnection {
+        let initial_index = latest_read_replica_index.load(Ordering::Relaxed);
+        let mut retries = 0usize;
+
+        // Step 1: Try to find a replica in the same AZ
+        loop {
+            retries = retries.saturating_add(1);
+            // Looped through all replicas; no connected replica found in the same AZ.
+            if retries >= self.inner.nodes.len() {
+                break;
+            }
+
+            // Calculate index based on initial index and check count.
+            let index = (initial_index + retries) % self.inner.nodes.len();
+            let replica = &self.inner.nodes[index];
+
+            // Attempt to get a connection and retrieve the replica's AZ.
+            if let Ok(connection) = replica.get_connection().await {
+                if let Some(replica_az) = connection.get_az().as_deref() {
+                    if replica_az == client_az {
+                        // Update `latest_used_replica` with the index of this replica.
+                        let _ = latest_read_replica_index.compare_exchange_weak(
+                            initial_index,
+                            index,
+                            Ordering::Relaxed,
+                            Ordering::Relaxed,
+                        );
+                        return replica;
+                    }
+                }
+            }
+        }
+
+        // Step 2: Check if primary is in the same AZ
+        let primary = self.get_primary_connection();
+        if let Ok(connection) = primary.get_connection().await {
+            if let Some(primary_az) = connection.get_az().as_deref() {
+                if primary_az == client_az {
+                    return primary;
+                }
+            }
+        }
+
+        // Step 3: Fall back to any available replica using round-robin
+        self.round_robin_read_from_replica(latest_read_replica_index)
+    }
+
     async fn get_connection(&self, readonly: bool) -> &ReconnectingConnection {
         if self.inner.nodes.len() == 1 || !readonly {
             return self.get_primary_connection();
@@ -313,6 +377,16 @@ impl StandaloneClient {
                 last_read_replica_index,
             } => {
                 self.round_robin_read_from_replica_az_awareness(
+                    last_read_replica_index,
+                    client_az.to_string(),
+                )
+                .await
+            }
+            ReadFrom::AZAffinityReplicasAndPrimary {
+                client_az,
+                last_read_replica_index,
+            } => {
+                self.round_robin_read_from_replica_az_awareness_replicas_and_primary(
                     last_read_replica_index,
                     client_az.to_string(),
                 )
@@ -552,6 +626,7 @@ async fn get_connection_and_replication_info(
     tls_mode: TlsMode,
     push_sender: &Option<mpsc::UnboundedSender<PushInfo>>,
     discover_az: bool,
+    connection_timeout: Duration,
 ) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
     let result = ReconnectingConnection::new(
         address,
@@ -560,6 +635,7 @@ async fn get_connection_and_replication_info(
         tls_mode,
         push_sender.clone(),
         discover_az,
+        connection_timeout,
     )
     .await;
     let reconnecting_connection = match result {
@@ -598,6 +674,12 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
             client_az: az,
             last_read_replica_index: Default::default(),
         },
+        Some(super::ReadFrom::AZAffinityReplicasAndPrimary(az)) => {
+            ReadFrom::AZAffinityReplicasAndPrimary {
+                client_az: az,
+                last_read_replica_index: Default::default(),
+            }
+        }
         None => ReadFrom::Primary,
     }
 }

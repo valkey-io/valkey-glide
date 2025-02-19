@@ -59,8 +59,16 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Get the matrix from the matrix.json file, without the object that has the IMAGE key
-                  export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"]))))' < .github/json_matrices/build-matrix.json | jq -c .)"
+                  # Filter entries with npm in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
+                  export PLATFORM_MATRIX=$(jq 'map(
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
+                      | .RUNNER = (
+                          if (.RUNNER | type == "array") 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if . == "ephemeral" then "persistent" else . end) 
+                          end
+                      )
+                  )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     publish-binaries:
@@ -158,12 +166,12 @@ jobs:
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
-                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  if [[ "${RELEASE_VERSION}" == *"rc"* ]]
                   then
-                    echo "This is a release candidate: ${GITHUB_REF:11}"
+                    echo "This is a release candidate: ${RELEASE_VERSION}"
                     export npm_tag="next"
                   else
-                    echo "This is a stable release: ${GITHUB_REF:11}"
+                    echo "This is a stable release: ${RELEASE_VERSION}"
                     export npm_tag="latest"
                   fi
                   echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
@@ -171,7 +179,7 @@ jobs:
             - name: Check that the release version dont have typo init
               if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
               run: |
-                  echo "The release version "${GITHUB_REF:11}" contains a typo, please fix it"
+                  echo "The release version "${RELEASE_VERSION}" contains a typo, please fix it"
                   echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
                   exit 1
 
@@ -308,23 +316,18 @@ jobs:
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
-            - name: install Redis and git for alpine
+            - name: install redis and git for alpine
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
               run: |
                   apk update
-                  apk add redis git
+                  apk add git redis
                   node -v
 
-            - name: install Redis and Python for ubuntu
+            - name: install Python for ubuntu
               if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
               run: |
                   sudo apt-get update
-                  sudo apt-get install redis-server python3
-
-            - name: install Redis, Python for macos
-              if: ${{ contains(matrix.build.RUNNER, 'mac') }}
-              run: |
-                  brew install redis python3
+                  sudo apt-get install python3
 
             - name: Checkout
               if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
@@ -338,6 +341,13 @@ jobs:
                   npm-scope: ${{ vars.NPM_SCOPE }}
                   npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
                   arch: ${{ matrix.build.ARCH }}
+
+            - name: Install engine
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
+              uses: ./.github/workflows/install-engine
+              with:
+                  engine-version: "8.0"
+                  target: ${{ matrix.build.target }}
 
             - name: Setup node
               if: ${{ !contains(matrix.build.TARGET, 'musl') }}
@@ -361,7 +371,7 @@ jobs:
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
-                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  if [[ "${RELEASE_VERSION}" == *"rc"* ]]
                   then
                     echo "This is a release candidate"
                     export npm_tag="next"

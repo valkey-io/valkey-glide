@@ -3,7 +3,7 @@
 package api
 
 import (
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 // SortedSetCommands supports commands and transactions for the "Sorted Set Commands" group for standalone and cluster clients.
@@ -12,184 +12,106 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#sorted-set
 type SortedSetCommands interface {
-	// Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the set.
-	//   membersScoreMap - A map of members to their scores.
-	//
-	// Return value:
-	//   Result[int64] - The number of members added to the set.
-	//
-	// Example:
-	//   res, err := client.ZAdd(key, map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
-	//   fmt.Println(res.Value()) // Output: 3
-	//
-	// [valkey.io]: https://valkey.io/commands/zadd/
-	ZAdd(key string, membersScoreMap map[string]float64) (Result[int64], error)
+	ZAdd(key string, membersScoreMap map[string]float64) (int64, error)
 
-	// Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the set.
-	//   membersScoreMap - A map of members to their scores.
-	//   opts - The options for the command. See [ZAddOptions] for details.
-	//
-	// Return value:
-	//   Result[int64] - The number of members added to the set. If CHANGED is set, the number of members that were updated.
-	//
-	// Example:
-	//   res, err := client.ZAddWithOptions(key, map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0},
-	//   									options.NewZAddOptionsBuilder().SetChanged(true).Build())
-	//   fmt.Println(res.Value()) // Output: 3
-	//
-	// [valkey.io]: https://valkey.io/commands/zadd/
-	ZAddWithOptions(key string, membersScoreMap map[string]float64, opts *options.ZAddOptions) (Result[int64], error)
+	ZAddWithOptions(key string, membersScoreMap map[string]float64, opts options.ZAddOptions) (int64, error)
 
-	// Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the set.
-	//   member - The member to add to.
-	//   increment - The increment to add to the member's score.
-	//
-	// Return value:
-	//   Result[float64] - The new score of the member.
-	//
-	// Example:
-	//   res, err := client.ZAddIncr(key, "one", 1.0)
-	//   fmt.Println(res.Value()) // Output: 1.0
-	//
-	// [valkey.io]: https://valkey.io/commands/zadd/
 	ZAddIncr(key string, member string, increment float64) (Result[float64], error)
 
-	// Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the set.
-	//   member - The member to add to.
-	//   increment - The increment to add to the member's score.
-	//   opts - The options for the command. See [ZAddOptions] for details.
-	//
-	// Return value:
-	//   Result[float64] - The new score of the member.
-	//
-	// Example:
-	//   res, err := client.ZAddIncrWithOptions(key, "one", 1.0, options.NewZAddOptionsBuilder().SetChanged(true))
-	//   fmt.Println(res.Value()) // Output: 1.0
-	//
-	// [valkey.io]: https://valkey.io/commands/zadd/
-	ZAddIncrWithOptions(key string, member string, increment float64, opts *options.ZAddOptions) (Result[float64], error)
+	ZAddIncrWithOptions(key string, member string, increment float64, opts options.ZAddOptions) (Result[float64], error)
 
-	// Increments the score of member in the sorted set stored at key by increment.
-	// If member does not exist in the sorted set, it is added with increment as its score.
-	// If key does not exist, a new sorted set with the specified member as its sole member
-	// is created.
-	//
-	// see [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the sorted set.
-	//   increment - The score increment.
-	//   member - A member of the sorted set.
-	//
-	// Return value:
-	//   The new score of member.
-	//
-	// Example:
-	//   res, err := client.ZIncrBy("myzset", 2.0, "one")
-	//   fmt.Println(res.Value()) // Output: 2.0
-	//
-	// [valkey.io]: https://valkey.io/commands/zincrby/
-	ZIncrBy(key string, increment float64, member string) (Result[float64], error)
+	ZIncrBy(key string, increment float64, member string) (float64, error)
 
-	// Removes and returns the member with the lowest score from the sorted set
-	// stored at the specified `key`.
-	//
-	// see [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the sorted set.
-	//
-	// Return value:
-	//   A map containing the removed member and its corresponding score.
-	//   If `key` doesn't exist, it will be treated as an empty sorted set and the
-	//   command returns an empty map.
-	//
-	// Example:
-	//   res, err := client.zpopmin("mySortedSet")
-	//   fmt.Println(res.Value()) // Output: map["member1":5.0]
-	//
-	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMin(key string) (map[Result[string]]Result[float64], error)
+	ZPopMin(key string) (map[string]float64, error)
 
-	// Removes and returns up to `count` members with the lowest scores from the sorted set
-	// stored at the specified `key`.
-	//
-	// see [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the sorted set.
-	//   count - The number of members to remove.
-	//
-	// Return value:
-	//   A map containing the removed members and their corresponding scores.
-	//   If `key` doesn't exist, it will be treated as an empty sorted set and the
-	//   command returns an empty map.
-	//
-	// Example:
-	//   res, err := client.ZPopMinWithCount("mySortedSet", 2)
-	//   fmt.Println(res.Value()) // Output: map["member1":5.0, "member2":6.0]
-	//
-	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMinWithCount(key string, count int64) (map[Result[string]]Result[float64], error)
+	ZPopMinWithOptions(key string, options options.ZPopOptions) (map[string]float64, error)
 
-	// Removes and returns the member with the highest score from the sorted set stored at the
-	// specified `key`.
-	//
-	// see [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the sorted set.
-	//
-	// Return value:
-	//   A map containing the removed member and its corresponding score.
-	//   If `key` doesn't exist, it will be treated as an empty sorted set and the
-	//   command returns an empty map.
-	//
-	// Example:
-	//   res, err := client.zpopmax("mySortedSet")
-	//   fmt.Println(res.Value()) // Output: map["member2":8.0]
-	//
-	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMax(key string) (map[Result[string]]Result[float64], error)
+	ZPopMax(key string) (map[string]float64, error)
 
-	// Removes and returns up to `count` members with the highest scores from the sorted set
-	// stored at the specified `key`.
-	//
-	// see [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the sorted set.
-	//   count - The number of members to remove.
-	//
-	// Return value:
-	//   A map containing the removed members and their corresponding scores.
-	//   If `key` doesn't exist, it will be treated as an empty sorted set and the
-	//   command returns an empty map.
-	//
-	// Example:
-	//   res, err := client.ZPopMaxWithCount("mySortedSet", 2)
-	//   fmt.Println(res.Value()) // Output: map["member1":5.0, "member2":6.0]
-	//
-	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[float64], error)
+	ZPopMaxWithOptions(key string, options options.ZPopOptions) (map[string]float64, error)
+
+	ZRem(key string, members []string) (int64, error)
+
+	ZCard(key string) (int64, error)
+
+	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
+
+	BZMPop(keys []string, scoreFilter options.ScoreFilter, timeoutSecs float64) (Result[KeyWithArrayOfMembersAndScores], error)
+
+	BZMPopWithOptions(
+		keys []string,
+		scoreFilter options.ScoreFilter,
+		timeoutSecs float64,
+		options options.ZMPopOptions,
+	) (Result[KeyWithArrayOfMembersAndScores], error)
+
+	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
+
+	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[string]float64, error)
+
+	ZRangeStore(destination string, key string, rangeQuery options.ZRangeQuery) (int64, error)
+
+	ZRank(key string, member string) (Result[int64], error)
+
+	ZRankWithScore(key string, member string) (Result[int64], Result[float64], error)
+
+	ZRevRank(key string, member string) (Result[int64], error)
+
+	ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error)
+
+	ZScore(key string, member string) (Result[float64], error)
+
+	ZCount(key string, rangeOptions options.ZCountRange) (int64, error)
+
+	ZScan(key string, cursor string) (string, []string, error)
+
+	ZScanWithOptions(key string, cursor string, options options.ZScanOptions) (string, []string, error)
+
+	ZRemRangeByLex(key string, rangeQuery options.RangeByLex) (int64, error)
+
+	ZRemRangeByRank(key string, start int64, stop int64) (int64, error)
+
+	ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error)
+
+	ZDiff(keys []string) ([]string, error)
+
+	ZDiffWithScores(keys []string) (map[string]float64, error)
+
+	ZRandMember(key string) (Result[string], error)
+
+	ZRandMemberWithCount(key string, count int64) ([]string, error)
+
+	ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error)
+
+	ZMScore(key string, members []string) ([]Result[float64], error)
+
+	ZDiffStore(destination string, keys []string) (int64, error)
+
+	ZInter(keys options.KeyArray) ([]string, error)
+
+	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options options.ZInterOptions) (map[string]float64, error)
+
+	ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
+
+	ZInterStoreWithOptions(
+		destination string,
+		keysOrWeightedKeys options.KeysOrWeightedKeys,
+		options options.ZInterOptions,
+	) (int64, error)
+
+	ZUnion(keys options.KeyArray) ([]string, error)
+
+	ZUnionWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZUnionOptions) (map[string]float64, error)
+
+	ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
+
+	ZUnionStoreWithOptions(
+		destination string,
+		keysOrWeightedKeys options.KeysOrWeightedKeys,
+		zUnionOptions *options.ZUnionOptions,
+	) (int64, error)
+
+	ZInterCard(keys []string) (int64, error)
+
+	ZInterCardWithOptions(keys []string, options *options.ZInterCardOptions) (int64, error)
 }

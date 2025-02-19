@@ -115,7 +115,7 @@ jobs:
               working-directory: ./python
               run: |
                   source .env/bin/activate
-                  pip install -r requirements.txt
+                  pip install -r dev_requirements.txt
                   cd python/tests/
                   pytest --asyncio-mode=auto --html=pytest_report.html --self-contained-html
 
@@ -178,7 +178,7 @@ jobs:
               working-directory: ./python
               run: |
                   source .env/bin/activate
-                  pip install -r requirements.txt
+                  pip install -r dev_requirements.txt
                   cd python/tests/
                   pytest --asyncio-mode=auto -k test_pubsub --html=pytest_report.html --self-contained-html
 
@@ -303,7 +303,7 @@ jobs:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
         environment: AWS_ACTIONS
         name: Running Module Tests
-        runs-on: [self-hosted, linux, ARM64]
+        runs-on: [self-hosted, linux, ARM64, persistent]
         timeout-minutes: 15
 
         steps:

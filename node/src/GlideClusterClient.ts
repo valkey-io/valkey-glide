@@ -4,7 +4,9 @@
 
 import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
+import { Writer } from "protobufjs";
 import {
+    AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
     Decoder,
@@ -16,6 +18,7 @@ import {
     convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
+    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -23,7 +26,6 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
-    ClusterScanOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -190,7 +192,25 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
      * Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
      */
     pubsubSubscriptions?: GlideClusterClientConfiguration.PubSubSubscriptions;
+    /**
+     * Advanced configuration settings for the client.
+     */
+    advancedConfiguration?: AdvancedGlideClusterClientConfiguration;
 };
+
+/**
+ * Represents advanced configuration settings for creating a {@link GlideClusterClient | GlideClusterClient} used in {@link GlideClusterClientConfiguration | GlideClusterClientConfiguration}.
+ *
+ *
+ * @example
+ * ```typescript
+ * const config: AdvancedGlideClusterClientConfiguration = {
+ *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ * };
+ * ```
+ */
+export type AdvancedGlideClusterClientConfiguration =
+    AdvancedBaseClientConfiguration & {};
 
 /**
  * If the command's routing is to one node we will get T as a response type,
@@ -504,6 +524,14 @@ export class GlideClusterClient extends BaseClient {
         }
 
         this.configurePubsub(options, configuration);
+
+        if (options.advancedConfiguration) {
+            this.configureAdvancedConfigurationBase(
+                options.advancedConfiguration,
+                configuration,
+            );
+        }
+
         return configuration;
     }
     /**
@@ -607,11 +635,41 @@ export class GlideClusterClient extends BaseClient {
         cursor: ClusterScanCursor,
         options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
+        this.ensureClientIsOpen();
         // separate decoder option from scan options
-        const { decoder, ...scanOptions } = options || {};
+        const { decoder = this.defaultDecoder, ...scanOptions } = options || {};
         const cursorId = cursor.getCursor();
         const command = this.scanOptionsToProto(cursorId, scanOptions);
-        return this.createWritePromise(command, { decoder });
+
+        return new Promise((resolve, reject) => {
+            const callbackIdx = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIdx] = [
+                (resolveAns: [ClusterScanCursor, GlideString[]]) => {
+                    try {
+                        resolve([
+                            new ClusterScanCursor(resolveAns[0].toString()),
+                            resolveAns[1],
+                        ]);
+                    } catch (error) {
+                        reject(error);
+                    }
+                },
+                reject,
+                decoder,
+            ];
+            this.writeOrBufferRequest(
+                new command_request.CommandRequest({
+                    callbackIdx,
+                    clusterScan: command,
+                }),
+                (message: command_request.CommandRequest, writer: Writer) => {
+                    command_request.CommandRequest.encodeDelimited(
+                        message,
+                        writer,
+                    );
+                },
+            );
+        });
     }
 
     /**
@@ -916,6 +974,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Reads the configuration parameters of the running server.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
@@ -954,6 +1013,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Sets configuration parameters to the specified values.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * The command will be routed to all nodes, unless `route` is provided.
      *
@@ -1735,10 +1795,40 @@ export class GlideClusterClient extends BaseClient {
             keys: [],
             args: options?.args?.map(Buffer.from),
         });
-        return this.createWritePromise<ClusterGlideRecord<GlideReturnType>>(
-            scriptInvocation,
-            options,
-        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+        return this.createScriptInvocationWithRoutePromise<
+            ClusterGlideRecord<GlideReturnType>
+        >(scriptInvocation, options).then((res) =>
+            convertClusterGlideRecord(res, true, options?.route),
+        );
+    }
+
+    private async createScriptInvocationWithRoutePromise<T = GlideString>(
+        command: command_request.ScriptInvocation,
+        options?: { args?: GlideString[] } & DecoderOption & RouteOption,
+    ) {
+        this.ensureClientIsOpen();
+
+        return new Promise<T>((resolve, reject) => {
+            const callbackIdx = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIdx] = [
+                resolve,
+                reject,
+                options?.decoder,
+            ];
+            this.writeOrBufferRequest(
+                new command_request.CommandRequest({
+                    callbackIdx,
+                    scriptInvocation: command,
+                    route: this.toProtobufRoute(options?.route),
+                }),
+                (message: command_request.CommandRequest, writer: Writer) => {
+                    command_request.CommandRequest.encodeDelimited(
+                        message,
+                        writer,
+                    );
+                },
+            );
+        });
     }
 
     /**

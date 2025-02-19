@@ -27,6 +27,7 @@ jobs:
             NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
             RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
             JAVA_ATTRIBUTIONS: "java/THIRD_PARTY_LICENSES_JAVA"
+            GO_ATTRIBUTIONS: "go/THIRD_PARTY_LICENSES_GO"
             INPUT_TARGET_BRANCH: ${{ github.event.inputs.branch_name }}
             EVENT_NAME: ${{ github.event_name }}
             HEAD_REF: ${{ github.head_ref }}
@@ -74,11 +75,11 @@ jobs:
               with:
                   repository: "oss-review-toolkit/ort"
                   path: "./ort"
-                  ref: "26.0.0"
+                  ref: "44.0.0"
                   submodules: recursive
 
             - name: Install Rust toolchain
-              uses: dtolnay/rust-toolchain@1.78
+              uses: dtolnay/rust-toolchain@1.82
 
             - name: Build and install ORT
               if: steps.cache-ort.outputs.cache-hit != 'true'
@@ -93,16 +94,15 @@ jobs:
                   cat << EOF > ~/.ort/config/config.yml
                   ort:
                     analyzer:
+                      skip_excluded: true
                       allowDynamicVersions: true
                       enabledPackageManagers: [Cargo, NPM, PIP, GradleInspector]
                   EOF
                   cat ~/.ort/config/config.yml
 
               ### NodeJS ###
-            - name: Set up Node.js 16.x
+            - name: Set up Node.js
               uses: actions/setup-node@v4
-              with:
-                  node-version: 16.x
 
             - name: Create package.json file for the Node wrapper
               uses: ./.github/workflows/node-create-package-file
@@ -157,10 +157,26 @@ jobs:
                   distribution: "temurin"
                   java-version: 11
 
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Build java artifact
+              working-directory: ./java
+              run: |
+                  ./gradlew publishToMavenLocal -x buildRust -x javadoc
+
             - name: Run ORT tools for Java
               uses: ./.github/workflows/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/java"
+
+            - name: Run ORT tools for Go
+              uses: ./.github/workflows/run-ort-tools
+              with:
+                  folder_path: "${{ github.workspace }}/go"
 
               ### Get licenses ###
             - name: Retrieve licenses list
@@ -215,7 +231,8 @@ jobs:
                   cp node/ort_results/NOTICE_DEFAULT $NODE_ATTRIBUTIONS
                   cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
                   cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
-                  GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS`
+                  cp go/ort_results/NOTICE_DEFAULT $GO_ATTRIBUTIONS
+                  GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS`
                   if [ -n "$GIT_DIFF" ]; then
                     echo "FOUND_DIFF=true" >> $GITHUB_ENV
                   else
@@ -231,7 +248,7 @@ jobs:
                   git config --global user.email "valkey-glide@lists.valkey.io"
                   git config --global user.name "ort-bot"
                   git checkout -b ${ORT_DIFF_BRANCH_NAME}
-                  git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS
+                  git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS
                   git commit -m "Updated attribution files" -s
                   git push --set-upstream origin ${ORT_DIFF_BRANCH_NAME} -f
 
@@ -262,6 +279,7 @@ jobs:
                     "${{ env.NODE_ATTRIBUTIONS }}"
                     "${{ env.RUST_ATTRIBUTIONS }}"
                     "${{ env.JAVA_ATTRIBUTIONS }}"
+                    "${{ env.GO_ATTRIBUTIONS }}"
                   )
 
                   MESSAGE="WARNING! The attribution files differ in this PR. Please ensure an updating PR is issued using a scheduled or manual run of this workflow!"

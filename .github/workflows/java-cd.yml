@@ -35,8 +35,16 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Get the matrix from the matrix.json file, without the object that has the IMAGE key
-                  export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["maven"])))' < .github/json_matrices/build-matrix.json | jq -c .)"
+                  # Filter entries with maven in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
+                  export PLATFORM_MATRIX=$(jq 'map(
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["maven"])))
+                      | .RUNNER = (
+                          if (.RUNNER | type == "array") 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if . == "ephemeral" then "persistent" else . end) 
+                          end
+                      )
+                  )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     set-release-version:
@@ -225,6 +233,10 @@ jobs:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         runs-on: ${{ matrix.host.RUNNER }}
         steps:
+            - name: Setup self-hosted runner access
+              if: ${{matrix.host.TARGET == 'aarch64-unknown-linux-gnu' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/action-runner-ilia/_work/valkey-glide
+
             - name: Checkout
               uses: actions/checkout@v4
 

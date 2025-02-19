@@ -30,9 +30,10 @@ from glide.async_commands.core import (
     FunctionRestorePolicy,
     InfoSection,
     InsertPosition,
+    OnlyIfEqual,
     UpdateOptions,
 )
-from glide.async_commands.server_modules import ft, glide_json
+from glide.async_commands.server_modules import ft, glide_json, json_batch
 from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
     FtAggregateClause,
@@ -111,6 +112,8 @@ from glide.async_commands.transaction import (
     TTransaction,
 )
 from glide.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
@@ -176,6 +179,8 @@ __all__ = [
     "TGlideClient",
     "TTransaction",
     # Config
+    "AdvancedGlideClientConfiguration",
+    "AdvancedGlideClusterClientConfiguration",
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
@@ -221,6 +226,7 @@ __all__ = [
     "Script",
     "ScoreBoundary",
     "ConditionalChange",
+    "OnlyIfEqual",
     "ExpireOptions",
     "ExpiryGetEx",
     "ExpirySet",
@@ -267,6 +273,7 @@ __all__ = [
     "PubSubMsg",
     # Json
     "glide_json",
+    "json_batch",
     "JsonGetOptions",
     "JsonArrIndexOptions",
     "JsonArrPopOptions",

@@ -13,6 +13,8 @@ Linux:
 -   Ubuntu 22.04.1 (x86_64 and aarch64)
 -   Amazon Linux 2023 (AL2023) (x86_64)
 
+**Note: Currently Alpine Linux / MUSL is NOT supported due to an incompatibility with a native Java component.**
+
 macOS:
 
 -   macOS 14.7 (Apple silicon/aarch_64)
@@ -90,7 +92,7 @@ dependencies {
 ```
 
 Maven:
-- **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the pom.xml file.
+- **IMPORTANT** must include a `classifier`. Please use this dependency block, or both the dependency and the extension blocks if you're using `os-maven-plugin`, and add it to the pom.xml file.
 ```xml
 
 <!--osx-aarch_64-->
@@ -116,6 +118,24 @@ Maven:
    <classifier>linux-x86_64</classifier>
    <version>[1.0.0,2.0.0)</version>
 </dependency>
+
+<!--with os-maven-plugin-->
+<build>
+    <extensions>
+        <extension>
+            <groupId>kr.motd.maven</groupId>
+            <artifactId>os-maven-plugin</artifactId>
+        </extension>
+    </extensions>
+</build>
+<dependencies>
+    <dependency>
+        <groupId>io.valkey</groupId>
+        <artifactId>valkey-glide</artifactId>
+        <classifier>${os.detected.classifier}</classifier>
+        <version>[1.0.0,2.0.0)</version>
+    </dependency>
+</dependencies>
 ```
 
 SBT:

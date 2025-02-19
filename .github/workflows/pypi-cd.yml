@@ -41,8 +41,16 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Get the matrix from the matrix.json file, without the object that has the IMAGE key
-                  export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"]))))' < .github/json_matrices/build-matrix.json | jq -c .)"
+                  # Filter entries with pypi in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
+                  export PLATFORM_MATRIX=$(jq 'map(
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"])))
+                      | .RUNNER = (
+                          if (.RUNNER | type == "array") 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if . == "ephemeral" then "persistent" else . end) 
+                          end
+                      )
+                  )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     start-self-hosted-runner:
@@ -163,7 +171,7 @@ jobs:
                         PROTOC_ARCH="x86_64"
                       elif [[ $ARCH == 'aarch64' ]]; then 
                         PROTOC_ARCH="aarch_64"
-                        export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+                        export CC_aarch64_unknown_linux_gnu=gcc
                         export CFLAGS_aarch64_unknown_linux_gnu="-march=armv8-a"
                       else 
                         echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
@@ -223,7 +231,7 @@ jobs:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-            
+
             - name: checkout
               uses: actions/checkout@v4
 
@@ -232,31 +240,11 @@ jobs:
               with:
                   python-version: 3.12
 
-            - name: Install engine Ubuntu ARM
-              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
-              shell: bash
-              # in self hosted runner we first want to check that engine is not already installed
-              run: |
-                  if [[ $(`which redis-server`) == '' ]]
-                  then
-                    sudo apt-get update
-                    sudo apt-get install -y redis-server
-                  else
-                    echo "Redis is already installed"
-                  fi
-
-            - name: Install engine Ubuntu x86
-              if: ${{ matrix.build.TARGET == 'x86_64-unknown-linux-gnu' }}
-              shell: bash
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y redis-server
-
-            - name: Install engine MacOS
-              if: ${{ matrix.build.OS == 'macos' }}
-              shell: bash
-              run: |
-                  brew install redis
+            - name: Install engine
+              uses: ./.github/workflows/install-engine
+              with:
+                  engine-version: "8.0"
+                  target: ${{ matrix.build.target }}
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash

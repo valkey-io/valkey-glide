@@ -66,7 +66,7 @@ async def create_two_clients_with_pubsub(
         cluster_mode_pubsub=cluster_mode_pubsub1,
         standalone_mode_pubsub=standalone_mode_pubsub1,
         protocol=protocol,
-        timeout=timeout,
+        request_timeout=timeout,
     )
     try:
         client2 = await create_client(
@@ -75,7 +75,7 @@ async def create_two_clients_with_pubsub(
             cluster_mode_pubsub=cluster_mode_pubsub2,
             standalone_mode_pubsub=standalone_mode_pubsub2,
             protocol=protocol,
-            timeout=timeout,
+            request_timeout=timeout,
         )
     except Exception as e:
         await client1.close()
