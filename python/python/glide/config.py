@@ -46,6 +46,11 @@ class ReadFrom(Enum):
     Spread the read requests between replicas in the same client's AZ (Aviliablity zone) in a round robin manner,
     falling back to other replicas or the primary if needed
     """
+    AZ_AFFINITY_REPLICAS_AND_PRIMARY = ProtobufReadFrom.AZAffinityReplicasAndPrimary
+    """
+    Spread the read requests among nodes within the client's Availability Zone (AZ) in a round robin manner,
+    prioritizing local replicas, then the local primary, and falling back to any replica or the primary if needed.
+    """
 
 
 class ProtocolVersion(Enum):
@@ -200,8 +205,8 @@ class BaseClientConfiguration:
                 stuck in case of a queue backlog.
                 If not set, a default value will be used.
             client_az (Optional[str]): Availability Zone of the client.
-                If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas
-                within the specified AZ if exits.
+                If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
+                If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to nodes (first replicas then primary) within the specified AZ if they exist.
             advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
         """
         self.addresses = addresses
@@ -218,6 +223,11 @@ class BaseClientConfiguration:
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
                 "client_az must be set when read_from is set to AZ_AFFINITY"
+            )
+
+        if read_from == ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY and not client_az:
+            raise ValueError(
+                "client_az must be set when read_from is set to AZ_AFFINITY_REPLICAS_AND_PRIMARY"
             )
 
     def _create_a_protobuf_conn_request(
@@ -314,10 +324,9 @@ class GlideClientConfiguration(BaseClientConfiguration):
             stuck in case of a queue backlog.
             If not set, a default value will be used.
         client_az (Optional[str]): Availability Zone of the client.
-            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
-            the specified AZ if exits.
-        advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client,
-            see `AdvancedGlideClientConfiguration`.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
+            If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to nodes (first replicas then primary) within the specified AZ if they exist.
+        advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client, see `AdvancedGlideClientConfiguration`.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -478,10 +487,9 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             stuck in case of a queue backlog.
             If not set, a default value will be used.
         client_az (Optional[str]): Availability Zone of the client.
-            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
-            the specified AZ if exits.
-        advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client,
-            see `AdvancedGlideClusterClientConfiguration`.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
+            If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to nodes (first replicas then primary) within the specified AZ if they exist.
+        advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client, see `AdvancedGlideClusterClientConfiguration`.
 
 
     Notes:

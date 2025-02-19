@@ -2,13 +2,6 @@
 
 package api
 
-// #cgo LDFLAGS: -lglide_rs
-// #cgo !windows LDFLAGS: -lm
-// #cgo darwin LDFLAGS: -framework Security
-// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
-// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
-// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
-// #cgo LDFLAGS: -L../target/release
 // #include "../lib.h"
 import "C"
 
@@ -148,7 +141,7 @@ func (client *GlideClient) Select(index int64) (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) Info() (string, error) {
-	return client.InfoWithOptions(InfoOptions{[]Section{}})
+	return client.InfoWithOptions(options.InfoOptions{Sections: []options.Section{}})
 }
 
 // Gets information and statistics about the server.
@@ -164,8 +157,12 @@ func (client *GlideClient) Info() (string, error) {
 //	A string containing the information for the sections requested.
 //
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *GlideClient) InfoWithOptions(options InfoOptions) (string, error) {
-	result, err := client.executeCommand(C.Info, options.toArgs())
+func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string, error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	result, err := client.executeCommand(C.Info, optionArgs)
 	if err != nil {
 		return defaultStringResponse, err
 	}
@@ -231,7 +228,11 @@ func (client *GlideClient) Ping() (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
-	result, err := client.executeCommand(C.Ping, pingOptions.ToArgs())
+	optionArgs, err := pingOptions.ToArgs()
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	result, err := client.executeCommand(C.Ping, optionArgs)
 	if err != nil {
 		return defaultStringResponse, err
 	}

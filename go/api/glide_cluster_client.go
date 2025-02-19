@@ -2,13 +2,6 @@
 
 package api
 
-// #cgo LDFLAGS: -lglide_rs
-// #cgo !windows LDFLAGS: -lm
-// #cgo darwin LDFLAGS: -framework Security
-// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
-// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
-// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
-// #cgo LDFLAGS: -L../target/release
 // #include "../lib.h"
 import "C"
 
@@ -115,9 +108,13 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //	When a single node route is given, command returns a string containing the information for the sections requested.
 //
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (ClusterValue[string], error) {
-	if options.Route == nil {
-		response, err := client.executeCommand(C.Info, options.toArgs())
+func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOptions) (ClusterValue[string], error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if options.RouteOption == nil || options.RouteOption.Route == nil {
+		response, err := client.executeCommand(C.Info, optionArgs)
 		if err != nil {
 			return createEmptyClusterValue[string](), err
 		}
@@ -127,11 +124,11 @@ func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (C
 		}
 		return createClusterMultiValue[string](data), nil
 	}
-	response, err := client.executeCommandWithRoute(C.Info, options.toArgs(), *options.Route)
+	response, err := client.executeCommandWithRoute(C.Info, optionArgs, options.Route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
-	if (*options.Route).IsMultiNode() {
+	if options.Route.IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
 			return createEmptyClusterValue[string](), err
@@ -182,7 +179,7 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 //
 // Return value:
 //
-// Returns "PONG".
+//	Returns "PONG".
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) Ping() (string, error) {
@@ -198,7 +195,7 @@ func (client *GlideClusterClient) Ping() (string, error) {
 //
 // Parameters:
 //
-//	pingOptions - The PingOptions type.
+//	pingOptions - The [ClusterPingOptions] type.
 //
 // Return value:
 //
@@ -206,27 +203,26 @@ func (client *GlideClusterClient) Ping() (string, error) {
 //
 // For example:
 //
-//	route := config.Route(config.RandomRoute)
-//	opts  := options.ClusterPingOptions{
-//			 PingOptions: &options.PingOptions{
-//			   Message: "Hello",
-//			 },
-//			 Route: &route,
-//		 }
+//	route := options.RouteOption{config.RandomRoute}
+//	opts  := options.ClusterPingOptions{ &options.PingOptions{ "Hello" }, &route }
 //	result, err := clusterClient.PingWithOptions(opts)
 //	fmt.Println(result) // Output: Hello
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (string, error) {
-	if pingOptions.Route == nil {
-		response, err := client.executeCommand(C.Ping, pingOptions.ToArgs())
+	args, err := pingOptions.ToArgs()
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	if pingOptions.RouteOption == nil || pingOptions.RouteOption.Route == nil {
+		response, err := client.executeCommand(C.Ping, args)
 		if err != nil {
 			return defaultStringResponse, err
 		}
 		return handleStringResponse(response)
 	}
 
-	response, err := client.executeCommandWithRoute(C.Ping, pingOptions.ToArgs(), *pingOptions.Route)
+	response, err := client.executeCommandWithRoute(C.Ping, args, pingOptions.Route)
 	if err != nil {
 		return defaultStringResponse, err
 	}
@@ -241,14 +237,13 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 //
 // Parameters:
 //
-//	options - The TimeOptions type.
+//	options - The [RouteOption] type.
 //
 // Return value:
 //
 // The current server time as a String array with two elements: A UNIX TIME and the amount
 // of microseconds already elapsed in the current second.
 // The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
-//
 // [valkey.io]: https://valkey.io/commands/time/
 func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (ClusterValue[[]string], error) {
 	result, err := client.executeCommandWithRoute(C.Time, []string{}, opts.Route)
@@ -260,11 +255,9 @@ func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (Clu
 
 // Returns the number of keys in the database.
 //
-// See [valkey.io] for details.
-//
 // Parameters:
 //
-//	options - The options for DBSize.
+//	options - The [RouteOption] type.
 //
 // Return value:
 //
@@ -284,7 +277,7 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 // Parameters:
 //
-//	message - The provided message.
+//	echoOptions - The [ClusterEchoOptions] type.
 //
 // Return value:
 //
@@ -292,12 +285,19 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
-	response, err := client.executeCommandWithRoute(C.Echo, echoOptions.ToArgs(),
-		echoOptions.RouteOption.Route)
+	args, err := echoOptions.ToArgs()
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
-	if echoOptions.RouteOption.Route != nil &&
+	var route config.Route
+	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil {
+		route = echoOptions.RouteOption.Route
+	}
+	response, err := client.executeCommandWithRoute(C.Echo, args, route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil &&
 		(echoOptions.RouteOption.Route).IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {

@@ -10,7 +10,7 @@ import (
 
 // Optional arguments to `ZAdd` in [SortedSetCommands]
 type ZAddOptions struct {
-	conditionalChange ConditionalChange
+	conditionalChange ConditionalSet
 	updateOptions     UpdateOptions
 	changed           bool
 	incr              bool
@@ -18,12 +18,12 @@ type ZAddOptions struct {
 	member            string
 }
 
-func NewZAddOptionsBuilder() *ZAddOptions {
+func NewZAddOptions() *ZAddOptions {
 	return &ZAddOptions{}
 }
 
 // `conditionalChange` defines conditions for updating or adding elements with `ZADD` command.
-func (options *ZAddOptions) SetConditionalChange(c ConditionalChange) *ZAddOptions {
+func (options *ZAddOptions) SetConditionalChange(c ConditionalSet) *ZAddOptions {
 	options.conditionalChange = c
 	return options
 }
@@ -77,16 +77,6 @@ func (opts *ZAddOptions) ToArgs() ([]string, error) {
 
 	return args, err
 }
-
-// A ConditionalSet defines whether a new value should be set or not.
-type ConditionalChange string
-
-const (
-	// Only update elements that already exist. Don't add new elements. Equivalent to "XX" in the Valkey API.
-	OnlyIfExists ConditionalChange = "XX"
-	// Only add new elements. Don't update already existing elements. Equivalent to "NX" in the Valkey API.
-	OnlyIfDoesNotExist ConditionalChange = "NX"
-)
 
 type UpdateOptions string
 

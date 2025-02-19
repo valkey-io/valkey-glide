@@ -1089,6 +1089,7 @@ where
         let discover_az = matches!(
             cluster_params.read_from_replicas,
             crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(_)
+                | crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_)
         );
 
         let glide_connection_options = GlideConnectionOptions {
