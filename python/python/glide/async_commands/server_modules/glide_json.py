@@ -1,21 +1,22 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 """Glide module for `JSON` commands.
 
-    Examples:
+Examples:
 
-        >>> from glide import glide_json
-        >>> import json
-        >>> value = {'a': 1.0, 'b': 2}
-        >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
-        >>> await json.set(client, "doc", "$", json_str)
-            'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-        >>> json_get = await glide_json.get(client, "doc", "$") # Returns the value at path '$' in the JSON document stored at
-                                                                # `doc` as JSON string.
-        >>> print(json_get)
-            b"[{\"a\":1.0,\"b\":2}]"
-        >>> json.loads(str(json_get))
-            [{"a": 1.0, "b" :2}] # JSON object retrieved from the key `doc` using json.loads()
-        """
+    >>> from glide import glide_json
+    >>> import json
+    >>> value = {'a': 1.0, 'b': 2}
+    >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
+    >>> await json.set(client, "doc", "$", json_str)
+        'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
+    >>> json_get = await glide_json.get(client, "doc", "$") # Returns the value at path '$' in the JSON document stored at
+                                                            # `doc` as JSON string.
+    >>> print(json_get)
+        b"[{\"a\":1.0,\"b\":2}]"
+    >>> json.loads(str(json_get))
+        [{"a": 1.0, "b" :2}] # JSON object retrieved from the key `doc` using json.loads()
+
+"""
 from typing import List, Optional, Union, cast
 
 from glide.async_commands.core import ConditionalChange

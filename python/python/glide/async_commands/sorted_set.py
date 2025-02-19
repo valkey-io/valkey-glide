@@ -313,7 +313,7 @@ def _create_zrange_args(
 
 
 def separate_keys(
-    keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]]
+    keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]],
 ) -> Tuple[List[TEncodable], List[TEncodable]]:
     """
     Returns separate lists of keys and weights in case of weighted keys.

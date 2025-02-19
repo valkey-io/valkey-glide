@@ -1,23 +1,24 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 """Glide module for `JSON` commands in transaction.
 
-    Examples:
-        >>> import json
-        >>> from glide import json_batch
-        >>> transaction = ClusterTransaction()
-        >>> value = {'a': 1.0, 'b': 2}
-        >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
-        >>> json_batch.set(transaction, "doc", "$", json_str)
-        >>> json_batch.get(transaction, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as
-                                                    # JSON string.
-        >>> result = await glide_client.exec(transaction)
-        >>> print result[0] # set result
-            'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-        >>> print result[1] # get result
-            b"[{\"a\":1.0,\"b\":2}]"
-        >>> print json.loads(str(result[1]))
-            [{"a": 1.0, "b": 2}] # JSON object retrieved from the key `doc` using json.loads()
-        """
+Examples:
+    >>> import json
+    >>> from glide import json_batch
+    >>> transaction = ClusterTransaction()
+    >>> value = {'a': 1.0, 'b': 2}
+    >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
+    >>> json_batch.set(transaction, "doc", "$", json_str)
+    >>> json_batch.get(transaction, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as
+                                                # JSON string.
+    >>> result = await glide_client.exec(transaction)
+    >>> print result[0] # set result
+        'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
+    >>> print result[1] # get result
+        b"[{\"a\":1.0,\"b\":2}]"
+    >>> print json.loads(str(result[1]))
+        [{"a": 1.0, "b": 2}] # JSON object retrieved from the key `doc` using json.loads()
+
+"""
 
 from typing import List, Optional, Union
 
