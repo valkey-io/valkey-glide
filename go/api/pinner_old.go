@@ -1,3 +1,5 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 //go:build !go1.21
 
 package api
