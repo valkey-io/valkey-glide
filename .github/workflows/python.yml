@@ -117,7 +117,7 @@ jobs:
                   source .env/bin/activate
                   pip install -r dev_requirements.txt
                   cd python/tests/
-                  pytest --asyncio-mode=auto --html=pytest_report.html --self-contained-html
+                  pytest -v --asyncio-mode=auto --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.12' }}
@@ -180,7 +180,7 @@ jobs:
                   source .env/bin/activate
                   pip install -r dev_requirements.txt
                   cd python/tests/
-                  pytest --asyncio-mode=auto -k test_pubsub --html=pytest_report.html --self-contained-html
+                  pytest -v --asyncio-mode=auto -k test_pubsub --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()
@@ -286,7 +286,7 @@ jobs:
               run: |
                   source .env/bin/activate
                   cd python/tests/
-                  pytest --asyncio-mode=auto --html=pytest_report.html --self-contained-html
+                  pytest -v --asyncio-mode=auto --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()
@@ -326,7 +326,7 @@ jobs:
               run: |
                   source .env/bin/activate
                   cd python/tests/
-                  pytest --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
+                  pytest -v --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()

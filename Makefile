@@ -48,7 +48,7 @@ python-lint: .build/python_deps
 			--extend-ignore=E230
 
 python-test: .build/python_deps check-redis-server
-	cd python && PYTHONPATH=$(PY_PATH):$(PY_GLIDE_PATH) .env/bin/pytest --asyncio-mode=auto
+	cd python && PYTHONPATH=$(PY_PATH):$(PY_GLIDE_PATH) .env/bin/pytest -v --asyncio-mode=auto
 
 .build/python_deps:
 	@echo "$(GREEN)Generating protobuf files...$(RESET)"
