@@ -73,7 +73,7 @@ jobs:
     publish-binaries:
         needs: [start-self-hosted-runner, load-platform-matrix]
         if: github.repository_owner == 'valkey-io'
-        name: Publish binaries as artifacts
+        name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
         timeout-minutes: 35
         strategy:
@@ -132,12 +132,6 @@ jobs:
                   folder_path: "${{ github.workspace }}/python/.cargo"
                   named_os: ${{ matrix.build.NAMED_OS }}
 
-            - name: Fix Python dependencies
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
-              run: |
-                  sudo apt --fix-broken install -y
-
-                
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
@@ -204,7 +198,6 @@ jobs:
                   path: python/wheels
                   if-no-files-found: error
 
-     
     build-source-dist-and-publish-to-pypi:
         if: github.event_name != 'pull_request'
         name: Publish the base PyPi package
@@ -298,7 +291,7 @@ jobs:
                     echo "PIP_PRE=false" >> $GITHUB_ENV
                   fi
 
-            - name: Run the tests on wheel installation
+            - name: Run the tests
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
@@ -311,7 +304,6 @@ jobs:
                     pip install valkey-glide
                   fi
                   python rc_test.py
-            
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
             # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
