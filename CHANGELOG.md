@@ -1,5 +1,5 @@
 #### Changes
-
+* Go: Add JSON.SET and JSON.GET ([3115](https://github.com/valkey-io/valkey-glide/pull/3115))
 * Csharp: updating xUnit, adding xUnit analyser rules and guidelines ([#3035](https://github.com/valkey-io/valkey-glide/pull/3035))
 * Go: Add ZRangeStore ([3105](https://github.com/valkey-io/valkey-glide/pull/3105))
 * Go: Add `ZUNION` ([#3119](https://github.com/valkey-io/valkey-glide/pull/3119))
