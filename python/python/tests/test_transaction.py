@@ -33,7 +33,6 @@ from glide.async_commands.sorted_set import (
     GeoUnit,
     InfBound,
     LexBoundary,
-    OrderBy,
     RangeByIndex,
     ScoreBoundary,
     ScoreFilter,
@@ -176,250 +175,361 @@ async def transaction_test(
             }
         )
 
-    transaction.dbsize()
-    args.append(0)
-
-    transaction.set(key, value)
-    args.append(OK)
-    transaction.setrange(key, 0, value)
-    args.append(len(value))
-    transaction.get(key)
-    args.append(value_bytes)
-    transaction.get(key.encode())
-    args.append(value_bytes)
-    transaction.type(key)
-    args.append(b"string")
-    transaction.type(key.encode())
-    args.append(b"string")
-    transaction.echo(value)
-    args.append(value_bytes)
-    transaction.echo(value.encode())
-    args.append(value_bytes)
-    transaction.strlen(key)
-    args.append(len(value))
-    transaction.strlen(key.encode())
-    args.append(len(value))
-    transaction.append(key, value)
-    args.append(len(value) * 2)
-
-    transaction.persist(key)
-    args.append(False)
-    transaction.ttl(key)
-    args.append(-1)
-    if not await check_if_server_version_lt(glide_client, "7.0.0"):
-        transaction.expiretime(key)
-        args.append(-1)
-        transaction.pexpiretime(key)
-        args.append(-1)
-
-    if not await check_if_server_version_lt(glide_client, "6.2.0"):
-        transaction.copy(key, key2, replace=True)
-        args.append(True)
-
-    transaction.rename(key, key2)
-    args.append(OK)
-
-    transaction.exists([key2])
-    args.append(1)
-    transaction.touch([key2])
-    args.append(1)
-
-    transaction.delete([key2])
-    args.append(1)
-    transaction.get(key2)
-    args.append(None)
-
-    transaction.set(key, value)
-    args.append(OK)
-    transaction.getrange(key, 0, -1)
-    args.append(value_bytes)
-    transaction.getdel(key)
-    args.append(value_bytes)
-    transaction.getdel(key)
-    args.append(None)
-
-    transaction.mset({key: value, key2: value2})
-    args.append(OK)
-    transaction.msetnx({key: value, key2: value2})
-    args.append(False)
-    transaction.mget([key, key2])
-    args.append([value_bytes, value2_bytes])
-
-    transaction.renamenx(key, key2)
-    args.append(False)
-
-    transaction.incr(key3)
-    args.append(1)
-    transaction.incrby(key3, 2)
-    args.append(3)
-
-    transaction.decr(key3)
-    args.append(2)
-    transaction.decrby(key3, 2)
-    args.append(0)
-
-    transaction.incrbyfloat(key3, 0.5)
-    args.append(0.5)
-
-    transaction.unlink([key3])
-    args.append(1)
-
-    transaction.ping()
-    args.append(b"PONG")
-
-    transaction.config_set({"timeout": "1000"})
-    args.append(OK)
-    transaction.config_get(["timeout"])
-    args.append({b"timeout": b"1000"})
-    if not await check_if_server_version_lt(glide_client, "7.0.0"):
-        transaction.config_set({"timeout": "2000", "cluster-node-timeout": "16000"})
-        args.append(OK)
-        transaction.config_get(["timeout", "cluster-node-timeout"])
-        args.append({b"timeout": b"2000", b"cluster-node-timeout": b"16000"})
-
-    transaction.hset(key4, {key: value, key2: value2})
-    args.append(2)
-    transaction.hget(key4, key2)
-    args.append(value2_bytes)
-    transaction.hlen(key4)
-    args.append(2)
-    transaction.hvals(key4)
-    args.append([value_bytes, value2_bytes])
-    transaction.hkeys(key4)
-    args.append([key.encode(), key2.encode()])
-    transaction.hsetnx(key4, key, value)
-    args.append(False)
-    transaction.hincrby(key4, key3, 5)
-    args.append(5)
-    transaction.hincrbyfloat(key4, key3, 5.5)
-    args.append(10.5)
-
-    transaction.hexists(key4, key)
-    args.append(True)
-    transaction.hmget(key4, [key, "nonExistingField", key2])
-    args.append([value_bytes, None, value2_bytes])
-    transaction.hgetall(key4)
-    key3_bytes = key3.encode()
-    args.append(
-        {
-            key.encode(): value_bytes,
-            key2.encode(): value2_bytes,
-            key3_bytes: b"10.5",
-        }
+    # To fix flake8's complexity analysis, we break down the argument appending into 6
+    # helper functions.
+    await helper1(
+        transaction,
+        glide_client,
+        key,
+        key2,
+        value,
+        value_bytes,
+        value2,
+        value2_bytes,
+        args,
     )
-    transaction.hdel(key4, [key, key2])
-    args.append(2)
-    transaction.hscan(key4, "0")
-    args.append([b"0", [key3.encode(), b"10.5"]])
-    transaction.hscan(key4, "0", match="*", count=10)
-    args.append([b"0", [key3.encode(), b"10.5"]])
+
+    await helper2(
+        transaction,
+        glide_client,
+        key,
+        key2,
+        key3,
+        key4,
+        value,
+        value_bytes,
+        value2,
+        value2_bytes,
+        args,
+    )
+
+    await helper3(
+        transaction,
+        glide_client,
+        key5,
+        key6,
+        key7,
+        key9,
+        value,
+        value_bytes,
+        value2,
+        value2_bytes,
+        value3,
+        value3_bytes,
+        args,
+    )
+
+    await helper4(
+        transaction, glide_client, key8, key10, key13, key14, key15, key19, key20, args
+    )
+
+    await helper5(transaction, glide_client, key11, key12, key17, key18, key20, args)
+
+    await helper6(
+        transaction,
+        keyslot,
+        glide_client,
+        key,
+        key7,
+        key16,
+        key22,
+        key23,
+        key24,
+        key25,
+        key26,
+        key27,
+        args,
+    )
+
+    return args
+
+
+async def helper6(
+    transaction,
+    keyslot,
+    glide_client,
+    key,
+    key7,
+    key16,
+    key22,
+    key23,
+    key24,
+    key25,
+    key26,
+    key27,
+    args,
+):
     if not await check_if_server_version_lt(glide_client, "8.0.0"):
-        transaction.hscan(key4, "0", match="*", count=10, no_values=True)
-        args.append([b"0", [key3.encode()]])
-    transaction.hrandfield(key4)
-    args.append(key3_bytes)
-    transaction.hrandfield_count(key4, 1)
-    args.append([key3_bytes])
-    transaction.hrandfield_withvalues(key4, 1)
-    args.append([[key3_bytes, b"10.5"]])
-    transaction.hstrlen(key4, key3)
-    args.append(4)
-
-    transaction.client_getname()
-    args.append(None)
-
-    transaction.lpush(key5, [value, value, value2, value2])
-    args.append(4)
-    transaction.llen(key5)
-    args.append(4)
-    transaction.lindex(key5, 0)
-    args.append(value2_bytes)
-    transaction.lpop(key5)
-    args.append(value2_bytes)
-    transaction.lrem(key5, 1, value)
-    args.append(1)
-    transaction.ltrim(key5, 0, 1)
-    args.append(OK)
-    transaction.lrange(key5, 0, -1)
-    args.append([value2_bytes, value_bytes])
-    transaction.lmove(key5, key6, ListDirection.LEFT, ListDirection.LEFT)
-    args.append(value2_bytes)
-    transaction.blmove(key6, key5, ListDirection.LEFT, ListDirection.LEFT, 1)
-    args.append(value2_bytes)
-    transaction.lpop_count(key5, 2)
-    args.append([value2_bytes, value_bytes])
-    transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
-    args.append(0)
-    if not await check_if_server_version_lt(glide_client, "7.0.0"):
-        transaction.lpush(key5, [value, value2])
+        transaction.hset(f"{{{keyslot}}}: 1", {"name": "Alice", "age": "30"})
         args.append(2)
-        transaction.lmpop([key5], ListDirection.LEFT)
-        args.append({key5.encode(): [value2_bytes]})
-        transaction.blmpop([key5], ListDirection.LEFT, 0.1)
-        args.append({key5.encode(): [value_bytes]})
+        transaction.hset(f"{{{keyslot}}}: 2", {"name": "Bob", "age": "25"})
+        args.append(2)
+        transaction.lpush(key26, ["2", "1"])
+        args.append(2)
+        transaction.sort(
+            key26,
+            by_pattern=f"{{{keyslot}}}: *->age",
+            get_patterns=[f"{{{keyslot}}}: *->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append([b"Bob", b"Alice"])
+        transaction.sort_store(
+            key26,
+            key27,
+            by_pattern=f"{{{keyslot}}}: *->age",
+            get_patterns=[f"{{{keyslot}}}: *->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append(2)
 
-    transaction.rpush(key6, [value, value2, value2])
-    args.append(3)
-    transaction.rpop(key6)
-    args.append(value2_bytes)
-    transaction.rpop_count(key6, 2)
-    args.append([value2_bytes, value_bytes])
-
-    transaction.rpushx(key9, ["_"])
-    args.append(0)
-    transaction.lpushx(key9, ["_"])
-    args.append(0)
-    transaction.lpush(key9, [value, value2, value3])
-    args.append(3)
-    transaction.blpop([key9], 1)
-    args.append([key9.encode(), value3_bytes])
-    transaction.brpop([key9], 1)
-    args.append([key9.encode(), value_bytes])
-    transaction.lset(key9, 0, value2)
+    transaction.sadd(key7, ["one"])
+    args.append(1)
+    transaction.srandmember(key7)
+    args.append(b"one")
+    transaction.srandmember_count(key7, 1)
+    args.append([b"one"])
+    transaction.flushall(FlushMode.ASYNC)
     args.append(OK)
+    transaction.flushall()
+    args.append(OK)
+    transaction.flushdb(FlushMode.ASYNC)
+    args.append(OK)
+    transaction.flushdb()
+    args.append(OK)
+    transaction.set(key, "foo")
+    args.append(OK)
+    transaction.random_key()
+    args.append(key.encode())
 
-    transaction.sadd(key7, ["foo", "bar"])
+    min_version = "6.0.6"
+    if not await check_if_server_version_lt(glide_client, min_version):
+        transaction.rpush(key25, ["a", "a", "b", "c", "a", "b"])
+        args.append(6)
+        transaction.lpos(key25, "a")
+        args.append(0)
+        transaction.lpos(key25, "a", 1, 0, 0)
+        args.append([0, 1, 4])
+
+    min_version = "6.2.0"
+    if not await check_if_server_version_lt(glide_client, min_version):
+        transaction.flushall(FlushMode.SYNC)
+        args.append(OK)
+        transaction.flushdb(FlushMode.SYNC)
+        args.append(OK)
+
+    min_version = "6.2.0"
+    if not await check_if_server_version_lt(glide_client, min_version):
+        transaction.set(key22, "value")
+        args.append(OK)
+        transaction.getex(key22)
+        args.append(b"value")
+        transaction.getex(key22, ExpiryGetEx(ExpiryTypeGetEx.SEC, 1))
+        args.append(b"value")
+
+    min_version = "7.0.0"
+    if not await check_if_server_version_lt(glide_client, min_version):
+        transaction.zadd(key16, {"a": 1, "b": 2, "c": 3, "d": 4})
+        args.append(4)
+        transaction.bzmpop([key16], ScoreFilter.MAX, 0.1)
+        args.append([key16.encode(), {b"d": 4.0}])
+        transaction.bzmpop([key16], ScoreFilter.MIN, 0.1, 2)
+        args.append([key16.encode(), {b"a": 1.0, b"b": 2.0}])
+
+        transaction.mset({key23: "abcd1234", key24: "bcdef1234"})
+        args.append(OK)
+        transaction.lcs(key23, key24)
+        args.append(b"bcd1234")
+        transaction.lcs_len(key23, key24)
+        args.append(7)
+        transaction.lcs_idx(key23, key24)
+        args.append({b"matches": [[[4, 7], [5, 8]], [[1, 3], [0, 2]]], b"len": 7})
+        transaction.lcs_idx(key23, key24, min_match_len=4)
+        args.append({b"matches": [[[4, 7], [5, 8]]], b"len": 7})
+        transaction.lcs_idx(key23, key24, with_match_len=True)
+        args.append({b"matches": [[[4, 7], [5, 8], 4], [[1, 3], [0, 2], 3]], b"len": 7})
+
+    transaction.pubsub_channels(pattern="*")
+    args.append([])
+    transaction.pubsub_numpat()
+    args.append(0)
+    transaction.pubsub_numsub()
+    args.append({})
+
+
+async def helper5(transaction, glide_client, key11, key12, key17, key18, key20, args):
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
+        transaction.set(key20, "foobar")
+        args.append(OK)
+        transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
+        args.append(17)
+        transaction.bitpos(key20, 1, OffsetOptions(44, 50, BitmapIndexType.BIT))
+        args.append(46)
+
+    if not await check_if_server_version_lt(glide_client, "8.0.0"):
+        transaction.set(key20, "foobar")
+        args.append(OK)
+        transaction.bitcount(key20, OffsetOptions(0))
+        args.append(26)
+
+    transaction.geoadd(
+        key12,
+        {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+        },
+    )
     args.append(2)
-    transaction.smismember(key7, ["foo", "baz"])
-    args.append([True, False])
-    transaction.sdiffstore(key7, [key7])
+    transaction.geodist(key12, "Palermo", "Catania")
+    args.append(166274.1516)
+    transaction.geohash(key12, ["Palermo", "Catania", "Place"])
+    args.append([b"sqc8b49rny0", b"sqdtr74hyu0", None])
+    transaction.geopos(key12, ["Palermo", "Catania", "Place"])
+    # The comparison allows for a small tolerance level due to potential precision errors in floating-point calculations
+    # No worries, Python can handle it, therefore, this shouldn't fail
+    args.append(
+        [
+            [13.36138933897018433, 38.11555639549629859],
+            [15.08726745843887329, 37.50266842333162032],
+            None,
+        ]
+    )
+
+    transaction.geosearch(
+        key12, "Catania", GeoSearchByRadius(200, GeoUnit.KILOMETERS), OrderBy.ASC
+    )
+    args.append([b"Catania", b"Palermo"])
+    transaction.geosearchstore(
+        key12,
+        key12,
+        GeospatialData(15, 37),
+        GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+        store_dist=True,
+    )
     args.append(2)
-    transaction.srem(key7, ["foo"])
+
+    transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-1"))
+    args.append(b"0-1")
+    transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-2"))
+    args.append(b"0-2")
+    transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-3"))
+    args.append(b"0-3")
+    transaction.xlen(key11)
+    args.append(3)
+    transaction.xread({key11: "0-2"})
+    args.append({key11.encode(): {b"0-3": [[b"foo", b"bar"]]}})
+    transaction.xrange(key11, IdBound("0-1"), IdBound("0-1"))
+    args.append({b"0-1": [[b"foo", b"bar"]]})
+    transaction.xrevrange(key11, IdBound("0-1"), IdBound("0-1"))
+    args.append({b"0-1": [[b"foo", b"bar"]]})
+    transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
-    transaction.sscan(key7, "0")
-    args.append([b"0", [b"bar"]])
-    transaction.sscan(key7, "0", match="*", count=10)
-    args.append([b"0", [b"bar"]])
-    transaction.smembers(key7)
-    args.append({b"bar"})
-    transaction.scard(key7)
-    args.append(1)
-    transaction.sismember(key7, "bar")
+    transaction.xinfo_groups(key11)
+    args.append([])
+
+    group_name1 = get_random_string(10)
+    group_name2 = get_random_string(10)
+    consumer = get_random_string(10)
+    transaction.xgroup_create(key11, group_name1, "0-2")
+    args.append(OK)
+    transaction.xgroup_create(
+        key11, group_name2, "0-0", StreamGroupOptions(make_stream=True)
+    )
+    args.append(OK)
+    transaction.xinfo_consumers(key11, group_name1)
+    args.append([])
+    transaction.xgroup_create_consumer(key11, group_name1, consumer)
     args.append(True)
-    transaction.spop(key7)
-    args.append(b"bar")
-    transaction.sadd(key7, ["foo", "bar"])
-    args.append(2)
-    transaction.sunionstore(key7, [key7, key7])
-    args.append(2)
-    transaction.sinter([key7, key7])
-    args.append({b"foo", b"bar"})
-    transaction.sunion([key7, key7])
-    args.append({b"foo", b"bar"})
-    transaction.sinterstore(key7, [key7, key7])
-    args.append(2)
-    if not await check_if_server_version_lt(glide_client, "7.0.0"):
-        transaction.sintercard([key7, key7])
-        args.append(2)
-        transaction.sintercard([key7, key7], 1)
-        args.append(1)
-    transaction.sdiff([key7, key7])
-    args.append(set())
-    transaction.spop_count(key7, 4)
-    args.append({b"foo", b"bar"})
-    transaction.smove(key7, key7, "non_existing_member")
-    args.append(False)
+    transaction.xgroup_set_id(key11, group_name1, "0-2")
+    args.append(OK)
+    transaction.xreadgroup({key11: ">"}, group_name1, consumer)
+    args.append({key11.encode(): {b"0-3": [[b"foo", b"bar"]]}})
+    transaction.xreadgroup(
+        {key11: "0-3"}, group_name1, consumer, StreamReadGroupOptions(count=2)
+    )
+    args.append({key11.encode(): {}})
+    transaction.xclaim(key11, group_name1, consumer, 0, ["0-1"])
+    args.append({})
+    transaction.xclaim(
+        key11, group_name1, consumer, 0, ["0-3"], StreamClaimOptions(is_force=True)
+    )
+    args.append({b"0-3": [[b"foo", b"bar"]]})
+    transaction.xclaim_just_id(key11, group_name1, consumer, 0, ["0-3"])
+    args.append([b"0-3"])
+    transaction.xclaim_just_id(
+        key11, group_name1, consumer, 0, ["0-4"], StreamClaimOptions(is_force=True)
+    )
+    args.append([])
 
+    transaction.xpending(key11, group_name1)
+    args.append([1, b"0-3", b"0-3", [[consumer.encode(), b"1"]]])
+
+    min_version = "6.2.0"
+    if not await check_if_server_version_lt(glide_client, min_version):
+        transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
+        transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
+        # if using Valkey 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+        # Entries List because they no longer exist in the stream
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
+            args.append(
+                [b"0-0", {b"0-3": [[b"foo", b"bar"]]}]
+            )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
+            args.append(
+                [b"0-0", [b"0-3"]]
+            )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
+        else:
+            args.append(
+                [b"0-0", {b"0-3": [[b"foo", b"bar"]]}, []]
+            )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
+            args.append(
+                [b"0-0", [b"0-3"], []]
+            )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
+
+    transaction.xack(key11, group_name1, ["0-3"])
+    args.append(1)
+    transaction.xpending_range(key11, group_name1, MinId(), MaxId(), 1)
+    args.append([])
+    transaction.xgroup_del_consumer(key11, group_name1, consumer)
+    args.append(0)
+    transaction.xgroup_destroy(key11, group_name1)
+    args.append(True)
+    transaction.xgroup_destroy(key11, group_name2)
+    args.append(True)
+
+    transaction.xdel(key11, ["0-3", "0-5"])
+    args.append(1)
+
+    transaction.lpush(key17, ["2", "1", "4", "3", "a"])
+    args.append(5)
+    transaction.sort(
+        key17,
+        limit=Limit(1, 4),
+        order=OrderBy.ASC,
+        alpha=True,
+    )
+    args.append([b"2", b"3", b"4", b"a"])
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
+        transaction.sort_ro(
+            key17,
+            limit=Limit(1, 4),
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append([b"2", b"3", b"4", b"a"])
+    transaction.sort_store(
+        key17,
+        key18,
+        limit=Limit(1, 4),
+        order=OrderBy.ASC,
+        alpha=True,
+    )
+    args.append(4)
+
+
+async def helper4(
+    transaction, glide_client, key8, key10, key13, key14, key15, key19, key20, args
+):
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3, "four": 4})
     args.append(4.0)
     transaction.zrank(key8, "one")
@@ -558,272 +668,283 @@ async def transaction_test(
     )
     args.append([609])
 
-    if not await check_if_server_version_lt(glide_client, "7.0.0"):
-        transaction.set(key20, "foobar")
-        args.append(OK)
-        transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
-        args.append(17)
-        transaction.bitpos(key20, 1, OffsetOptions(44, 50, BitmapIndexType.BIT))
-        args.append(46)
 
-    if not await check_if_server_version_lt(glide_client, "8.0.0"):
-        transaction.set(key20, "foobar")
-        args.append(OK)
-        transaction.bitcount(key20, OffsetOptions(0))
-        args.append(26)
-
-    transaction.geoadd(
-        key12,
-        {
-            "Palermo": GeospatialData(13.361389, 38.115556),
-            "Catania": GeospatialData(15.087269, 37.502669),
-        },
-    )
-    args.append(2)
-    transaction.geodist(key12, "Palermo", "Catania")
-    args.append(166274.1516)
-    transaction.geohash(key12, ["Palermo", "Catania", "Place"])
-    args.append([b"sqc8b49rny0", b"sqdtr74hyu0", None])
-    transaction.geopos(key12, ["Palermo", "Catania", "Place"])
-    # The comparison allows for a small tolerance level due to potential precision errors in floating-point calculations
-    # No worries, Python can handle it, therefore, this shouldn't fail
-    args.append(
-        [
-            [13.36138933897018433, 38.11555639549629859],
-            [15.08726745843887329, 37.50266842333162032],
-            None,
-        ]
-    )
-
-    transaction.geosearch(
-        key12, "Catania", GeoSearchByRadius(200, GeoUnit.KILOMETERS), OrderBy.ASC
-    )
-    args.append([b"Catania", b"Palermo"])
-    transaction.geosearchstore(
-        key12,
-        key12,
-        GeospatialData(15, 37),
-        GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
-        store_dist=True,
-    )
-    args.append(2)
-
-    transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-1"))
-    args.append(b"0-1")
-    transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-2"))
-    args.append(b"0-2")
-    transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-3"))
-    args.append(b"0-3")
-    transaction.xlen(key11)
-    args.append(3)
-    transaction.xread({key11: "0-2"})
-    args.append({key11.encode(): {b"0-3": [[b"foo", b"bar"]]}})
-    transaction.xrange(key11, IdBound("0-1"), IdBound("0-1"))
-    args.append({b"0-1": [[b"foo", b"bar"]]})
-    transaction.xrevrange(key11, IdBound("0-1"), IdBound("0-1"))
-    args.append({b"0-1": [[b"foo", b"bar"]]})
-    transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
-    args.append(1)
-    transaction.xinfo_groups(key11)
-    args.append([])
-
-    group_name1 = get_random_string(10)
-    group_name2 = get_random_string(10)
-    consumer = get_random_string(10)
-    consumer2 = get_random_string(10)
-    transaction.xgroup_create(key11, group_name1, "0-2")
-    args.append(OK)
-    transaction.xgroup_create(
-        key11, group_name2, "0-0", StreamGroupOptions(make_stream=True)
-    )
-    args.append(OK)
-    transaction.xinfo_consumers(key11, group_name1)
-    args.append([])
-    transaction.xgroup_create_consumer(key11, group_name1, consumer)
-    args.append(True)
-    transaction.xgroup_set_id(key11, group_name1, "0-2")
-    args.append(OK)
-    transaction.xreadgroup({key11: ">"}, group_name1, consumer)
-    args.append({key11.encode(): {b"0-3": [[b"foo", b"bar"]]}})
-    transaction.xreadgroup(
-        {key11: "0-3"}, group_name1, consumer, StreamReadGroupOptions(count=2)
-    )
-    args.append({key11.encode(): {}})
-    transaction.xclaim(key11, group_name1, consumer, 0, ["0-1"])
-    args.append({})
-    transaction.xclaim(
-        key11, group_name1, consumer, 0, ["0-3"], StreamClaimOptions(is_force=True)
-    )
-    args.append({b"0-3": [[b"foo", b"bar"]]})
-    transaction.xclaim_just_id(key11, group_name1, consumer, 0, ["0-3"])
-    args.append([b"0-3"])
-    transaction.xclaim_just_id(
-        key11, group_name1, consumer, 0, ["0-4"], StreamClaimOptions(is_force=True)
-    )
-    args.append([])
-
-    transaction.xpending(key11, group_name1)
-    args.append([1, b"0-3", b"0-3", [[consumer.encode(), b"1"]]])
-
-    min_version = "6.2.0"
-    if not await check_if_server_version_lt(glide_client, min_version):
-        transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
-        transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
-        # if using Valkey 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
-        # Entries List because they no longer exist in the stream
-        if await check_if_server_version_lt(glide_client, "7.0.0"):
-            args.append(
-                [b"0-0", {b"0-3": [[b"foo", b"bar"]]}]
-            )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
-            args.append(
-                [b"0-0", [b"0-3"]]
-            )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
-        else:
-            args.append(
-                [b"0-0", {b"0-3": [[b"foo", b"bar"]]}, []]
-            )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
-            args.append(
-                [b"0-0", [b"0-3"], []]
-            )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
-
-    transaction.xack(key11, group_name1, ["0-3"])
-    args.append(1)
-    transaction.xpending_range(key11, group_name1, MinId(), MaxId(), 1)
-    args.append([])
-    transaction.xgroup_del_consumer(key11, group_name1, consumer)
-    args.append(0)
-    transaction.xgroup_destroy(key11, group_name1)
-    args.append(True)
-    transaction.xgroup_destroy(key11, group_name2)
-    args.append(True)
-
-    transaction.xdel(key11, ["0-3", "0-5"])
-    args.append(1)
-
-    transaction.lpush(key17, ["2", "1", "4", "3", "a"])
-    args.append(5)
-    transaction.sort(
-        key17,
-        limit=Limit(1, 4),
-        order=OrderBy.ASC,
-        alpha=True,
-    )
-    args.append([b"2", b"3", b"4", b"a"])
-    if not await check_if_server_version_lt(glide_client, "7.0.0"):
-        transaction.sort_ro(
-            key17,
-            limit=Limit(1, 4),
-            order=OrderBy.ASC,
-            alpha=True,
-        )
-        args.append([b"2", b"3", b"4", b"a"])
-    transaction.sort_store(
-        key17,
-        key18,
-        limit=Limit(1, 4),
-        order=OrderBy.ASC,
-        alpha=True,
-    )
+async def helper3(
+    transaction,
+    glide_client,
+    key5,
+    key6,
+    key7,
+    key9,
+    value,
+    value_bytes,
+    value2,
+    value2_bytes,
+    value3,
+    value3_bytes,
+    args,
+):
+    transaction.lpush(key5, [value, value, value2, value2])
     args.append(4)
-    if not await check_if_server_version_lt(glide_client, "8.0.0"):
-        transaction.hset(f"{{{keyslot}}}:1", {"name": "Alice", "age": "30"})
-        args.append(2)
-        transaction.hset(f"{{{keyslot}}}:2", {"name": "Bob", "age": "25"})
-        args.append(2)
-        transaction.lpush(key26, ["2", "1"])
-        args.append(2)
-        transaction.sort(
-            key26,
-            by_pattern=f"{{{keyslot}}}:*->age",
-            get_patterns=[f"{{{keyslot}}}:*->name"],
-            order=OrderBy.ASC,
-            alpha=True,
-        )
-        args.append([b"Bob", b"Alice"])
-        transaction.sort_store(
-            key26,
-            key27,
-            by_pattern=f"{{{keyslot}}}:*->age",
-            get_patterns=[f"{{{keyslot}}}:*->name"],
-            order=OrderBy.ASC,
-            alpha=True,
-        )
-        args.append(2)
-
-    transaction.sadd(key7, ["one"])
+    transaction.llen(key5)
+    args.append(4)
+    transaction.lindex(key5, 0)
+    args.append(value2_bytes)
+    transaction.lpop(key5)
+    args.append(value2_bytes)
+    transaction.lrem(key5, 1, value)
     args.append(1)
-    transaction.srandmember(key7)
-    args.append(b"one")
-    transaction.srandmember_count(key7, 1)
-    args.append([b"one"])
-    transaction.flushall(FlushMode.ASYNC)
+    transaction.ltrim(key5, 0, 1)
     args.append(OK)
-    transaction.flushall()
-    args.append(OK)
-    transaction.flushdb(FlushMode.ASYNC)
-    args.append(OK)
-    transaction.flushdb()
-    args.append(OK)
-    transaction.set(key, "foo")
-    args.append(OK)
-    transaction.random_key()
-    args.append(key.encode())
-
-    min_version = "6.0.6"
-    if not await check_if_server_version_lt(glide_client, min_version):
-        transaction.rpush(key25, ["a", "a", "b", "c", "a", "b"])
-        args.append(6)
-        transaction.lpos(key25, "a")
-        args.append(0)
-        transaction.lpos(key25, "a", 1, 0, 0)
-        args.append([0, 1, 4])
-
-    min_version = "6.2.0"
-    if not await check_if_server_version_lt(glide_client, min_version):
-        transaction.flushall(FlushMode.SYNC)
-        args.append(OK)
-        transaction.flushdb(FlushMode.SYNC)
-        args.append(OK)
-
-    min_version = "6.2.0"
-    if not await check_if_server_version_lt(glide_client, min_version):
-        transaction.set(key22, "value")
-        args.append(OK)
-        transaction.getex(key22)
-        args.append(b"value")
-        transaction.getex(key22, ExpiryGetEx(ExpiryTypeGetEx.SEC, 1))
-        args.append(b"value")
-
-    min_version = "7.0.0"
-    if not await check_if_server_version_lt(glide_client, min_version):
-        transaction.zadd(key16, {"a": 1, "b": 2, "c": 3, "d": 4})
-        args.append(4)
-        transaction.bzmpop([key16], ScoreFilter.MAX, 0.1)
-        args.append([key16.encode(), {b"d": 4.0}])
-        transaction.bzmpop([key16], ScoreFilter.MIN, 0.1, 2)
-        args.append([key16.encode(), {b"a": 1.0, b"b": 2.0}])
-
-        transaction.mset({key23: "abcd1234", key24: "bcdef1234"})
-        args.append(OK)
-        transaction.lcs(key23, key24)
-        args.append(b"bcd1234")
-        transaction.lcs_len(key23, key24)
-        args.append(7)
-        transaction.lcs_idx(key23, key24)
-        args.append({b"matches": [[[4, 7], [5, 8]], [[1, 3], [0, 2]]], b"len": 7})
-        transaction.lcs_idx(key23, key24, min_match_len=4)
-        args.append({b"matches": [[[4, 7], [5, 8]]], b"len": 7})
-        transaction.lcs_idx(key23, key24, with_match_len=True)
-        args.append({b"matches": [[[4, 7], [5, 8], 4], [[1, 3], [0, 2], 3]], b"len": 7})
-
-    transaction.pubsub_channels(pattern="*")
-    args.append([])
-    transaction.pubsub_numpat()
+    transaction.lrange(key5, 0, -1)
+    args.append([value2_bytes, value_bytes])
+    transaction.lmove(key5, key6, ListDirection.LEFT, ListDirection.LEFT)
+    args.append(value2_bytes)
+    transaction.blmove(key6, key5, ListDirection.LEFT, ListDirection.LEFT, 1)
+    args.append(value2_bytes)
+    transaction.lpop_count(key5, 2)
+    args.append([value2_bytes, value_bytes])
+    transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
     args.append(0)
-    transaction.pubsub_numsub()
-    args.append({})
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
+        transaction.lpush(key5, [value, value2])
+        args.append(2)
+        transaction.lmpop([key5], ListDirection.LEFT)
+        args.append({key5.encode(): [value2_bytes]})
+        transaction.blmpop([key5], ListDirection.LEFT, 0.1)
+        args.append({key5.encode(): [value_bytes]})
 
-    return args
+    transaction.rpush(key6, [value, value2, value2])
+    args.append(3)
+    transaction.rpop(key6)
+    args.append(value2_bytes)
+    transaction.rpop_count(key6, 2)
+    args.append([value2_bytes, value_bytes])
+
+    transaction.rpushx(key9, ["_"])
+    args.append(0)
+    transaction.lpushx(key9, ["_"])
+    args.append(0)
+    transaction.lpush(key9, [value, value2, value3])
+    args.append(3)
+    transaction.blpop([key9], 1)
+    args.append([key9.encode(), value3_bytes])
+    transaction.brpop([key9], 1)
+    args.append([key9.encode(), value_bytes])
+    transaction.lset(key9, 0, value2)
+    args.append(OK)
+
+    transaction.sadd(key7, ["foo", "bar"])
+    args.append(2)
+    transaction.smismember(key7, ["foo", "baz"])
+    args.append([True, False])
+    transaction.sdiffstore(key7, [key7])
+    args.append(2)
+    transaction.srem(key7, ["foo"])
+    args.append(1)
+    transaction.sscan(key7, "0")
+    args.append([b"0", [b"bar"]])
+    transaction.sscan(key7, "0", match="*", count=10)
+    args.append([b"0", [b"bar"]])
+    transaction.smembers(key7)
+    args.append({b"bar"})
+    transaction.scard(key7)
+    args.append(1)
+    transaction.sismember(key7, "bar")
+    args.append(True)
+    transaction.spop(key7)
+    args.append(b"bar")
+    transaction.sadd(key7, ["foo", "bar"])
+    args.append(2)
+    transaction.sunionstore(key7, [key7, key7])
+    args.append(2)
+    transaction.sinter([key7, key7])
+    args.append({b"foo", b"bar"})
+    transaction.sunion([key7, key7])
+    args.append({b"foo", b"bar"})
+    transaction.sinterstore(key7, [key7, key7])
+    args.append(2)
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
+        transaction.sintercard([key7, key7])
+        args.append(2)
+        transaction.sintercard([key7, key7], 1)
+        args.append(1)
+    transaction.sdiff([key7, key7])
+    args.append(set())
+    transaction.spop_count(key7, 4)
+    args.append({b"foo", b"bar"})
+    transaction.smove(key7, key7, "non_existing_member")
+    args.append(False)
+
+
+async def helper2(
+    transaction,
+    glide_client,
+    key,
+    key2,
+    key3,
+    key4,
+    value,
+    value_bytes,
+    value2,
+    value2_bytes,
+    args,
+):
+    transaction.incr(key3)
+    args.append(1)
+    transaction.incrby(key3, 2)
+    args.append(3)
+
+    transaction.decr(key3)
+    args.append(2)
+    transaction.decrby(key3, 2)
+    args.append(0)
+
+    transaction.incrbyfloat(key3, 0.5)
+    args.append(0.5)
+
+    transaction.unlink([key3])
+    args.append(1)
+
+    transaction.ping()
+    args.append(b"PONG")
+
+    transaction.config_set({"timeout": "1000"})
+    args.append(OK)
+    transaction.config_get(["timeout"])
+    args.append({b"timeout": b"1000"})
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
+        transaction.config_set({"timeout": "2000", "cluster-node-timeout": "16000"})
+        args.append(OK)
+        transaction.config_get(["timeout", "cluster-node-timeout"])
+        args.append({b"timeout": b"2000", b"cluster-node-timeout": b"16000"})
+
+    transaction.hset(key4, {key: value, key2: value2})
+    args.append(2)
+    transaction.hget(key4, key2)
+    args.append(value2_bytes)
+    transaction.hlen(key4)
+    args.append(2)
+    transaction.hvals(key4)
+    args.append([value_bytes, value2_bytes])
+    transaction.hkeys(key4)
+    args.append([key.encode(), key2.encode()])
+    transaction.hsetnx(key4, key, value)
+    args.append(False)
+    transaction.hincrby(key4, key3, 5)
+    args.append(5)
+    transaction.hincrbyfloat(key4, key3, 5.5)
+    args.append(10.5)
+
+    transaction.hexists(key4, key)
+    args.append(True)
+    transaction.hmget(key4, [key, "nonExistingField", key2])
+    args.append([value_bytes, None, value2_bytes])
+    transaction.hgetall(key4)
+    key3_bytes = key3.encode()
+    args.append(
+        {
+            key.encode(): value_bytes,
+            key2.encode(): value2_bytes,
+            key3_bytes: b"10.5",
+        }
+    )
+    transaction.hdel(key4, [key, key2])
+    args.append(2)
+    transaction.hscan(key4, "0")
+    args.append([b"0", [key3.encode(), b"10.5"]])
+    transaction.hscan(key4, "0", match="*", count=10)
+    args.append([b"0", [key3.encode(), b"10.5"]])
+    if not await check_if_server_version_lt(glide_client, "8.0.0"):
+        transaction.hscan(key4, "0", match="*", count=10, no_values=True)
+        args.append([b"0", [key3.encode()]])
+    transaction.hrandfield(key4)
+    args.append(key3_bytes)
+    transaction.hrandfield_count(key4, 1)
+    args.append([key3_bytes])
+    transaction.hrandfield_withvalues(key4, 1)
+    args.append([[key3_bytes, b"10.5"]])
+    transaction.hstrlen(key4, key3)
+    args.append(4)
+
+    transaction.client_getname()
+    args.append(None)
+
+
+async def helper1(
+    transaction, glide_client, key, key2, value, value_bytes, value2, value2_bytes, args
+):
+    transaction.dbsize()
+    args.append(0)
+
+    transaction.set(key, value)
+    args.append(OK)
+    transaction.setrange(key, 0, value)
+    args.append(len(value))
+    transaction.get(key)
+    args.append(value_bytes)
+    transaction.get(key.encode())
+    args.append(value_bytes)
+    transaction.type(key)
+    args.append(b"string")
+    transaction.type(key.encode())
+    args.append(b"string")
+    transaction.echo(value)
+    args.append(value_bytes)
+    transaction.echo(value.encode())
+    args.append(value_bytes)
+    transaction.strlen(key)
+    args.append(len(value))
+    transaction.strlen(key.encode())
+    args.append(len(value))
+    transaction.append(key, value)
+    args.append(len(value) * 2)
+
+    transaction.persist(key)
+    args.append(False)
+    transaction.ttl(key)
+    args.append(-1)
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
+        transaction.expiretime(key)
+        args.append(-1)
+        transaction.pexpiretime(key)
+        args.append(-1)
+
+    if not await check_if_server_version_lt(glide_client, "6.2.0"):
+        transaction.copy(key, key2, replace=True)
+        args.append(True)
+
+    transaction.rename(key, key2)
+    args.append(OK)
+
+    transaction.exists([key2])
+    args.append(1)
+    transaction.touch([key2])
+    args.append(1)
+
+    transaction.delete([key2])
+    args.append(1)
+    transaction.get(key2)
+    args.append(None)
+
+    transaction.set(key, value)
+    args.append(OK)
+    transaction.getrange(key, 0, -1)
+    args.append(value_bytes)
+    transaction.getdel(key)
+    args.append(value_bytes)
+    transaction.getdel(key)
+    args.append(None)
+
+    transaction.mset({key: value, key2: value2})
+    args.append(OK)
+    transaction.msetnx({key: value, key2: value2})
+    args.append(False)
+    transaction.mget([key, key2])
+    args.append([value_bytes, value2_bytes])
+
+    transaction.renamenx(key, key2)
+    args.append(False)
 
 
 @pytest.mark.asyncio
@@ -1065,7 +1186,7 @@ class TestTransaction:
         transaction.get(key1)
         result = await glide_client.exec(transaction)
         assert result is not None
-        assert result[2] == True
+        assert result[2] is True
         assert result[3] == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
