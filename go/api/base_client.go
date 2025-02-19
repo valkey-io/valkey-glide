@@ -5826,29 +5826,6 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 //	An array of [api.XInfoGroupInfo], where each element represents the
 //	attributes of a consumer group for the stream at `key`.
 //
-// Example:
-//
-//	info, err := client.XInfoGroups(key)
-//	info:
-//	// []XInfoGroupInfo {
-//	// 	XInfoGroupInfo {
-//	// 		Name: "mygroup",
-//	// 		Consumers: 2,
-//	// 		Pending: 2,
-//	// 		LastDeliveredId: "1638126030001-0",
-//	// 		EntriesRead: {2 false},                 // Added in version 7.0.0
-//	// 		Lag: {0 false},                         // Added in version 7.0.0
-//	// 	},
-//	// 	XInfoGroupInfo {
-//	// 		Name: "some-other-group",
-//	// 		Consumers: 1,
-//	// 		Pending: 0,
-//	// 		LastDeliveredId: "0-0",
-//	// 		EntriesRead: {0 true},                  // Added in version 7.0.0
-//	// 		Lag: {1 false},                         // Added in version 7.0.0
-//	// 	}
-//	// }
-//
 // [valkey.io]: https://valkey.io/commands/xinfo-groups/
 func (client *baseClient) XInfoGroups(key string) ([]XInfoGroupInfo, error) {
 	response, err := client.executeCommand(C.XInfoGroups, []string{key})

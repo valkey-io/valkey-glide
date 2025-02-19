@@ -7130,7 +7130,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		group := uuid.NewString()
 		consumer := uuid.NewString()
 
-		suite.verifyOK(client.XGroupCreateWithOptions(key, group, "0-0", options.NewXGroupCreateOptions().SetMakeStream()))
+		suite.verifyOK(client.XGroupCreateWithOptions(key, group, "0-0", *options.NewXGroupCreateOptions().SetMakeStream()))
 
 		// one empty group exists
 		xinfo, err := client.XInfoGroups(key)
@@ -7162,18 +7162,18 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		xadd, err := client.XAddWithOptions(
 			key,
 			[][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
-			options.NewXAddOptions().SetId("0-1"),
+			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(
 			key,
 			[][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
-			options.NewXAddOptions().SetId("0-2"),
+			*options.NewXAddOptions().SetId("0-2"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-2", xadd.Value())
-		xadd, err = client.XAddWithOptions(key, [][]string{{"e3_f1", "e3_v1"}}, options.NewXAddOptions().SetId("0-3"))
+		xadd, err = client.XAddWithOptions(key, [][]string{{"e3_f1", "e3_v1"}}, *options.NewXAddOptions().SetId("0-3"))
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-3", xadd.Value())
 
