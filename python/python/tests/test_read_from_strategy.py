@@ -39,7 +39,7 @@ class TestAZAffinity:
         """Test that the client with az affinity strategy will only route to the 1 replica with the same az"""
         az = "us-east-1a"
         GET_CALLS = 3
-        get_cmdstat = f"cmdstat_get:calls={GET_CALLS}"
+        get_cmdstat = "cmdstat_get" + ":" + f"calls={GET_CALLS}"
 
         client_for_config_set = await create_client(
             request,
@@ -90,7 +90,7 @@ class TestAZAffinity:
         changed_az_count = sum(
             1
             for node in info_result.values()
-            if f"availability_zone:{az}" in node.decode()
+            if ("availability_zone" + ":" + f"{az}") in node.decode()
         )
         assert changed_az_count == 1
         await client_for_testing_az.close()
@@ -105,7 +105,10 @@ class TestAZAffinity:
         cluster_mode: bool,
         protocol: ProtocolVersion,
     ):
-        """Test that the client with AZ affinity strategy routes in a round-robin manner to all replicas within the specified AZ"""
+        """
+        Test that the client with AZ affinity strategy routes in a round-robin manner to all replicas within the
+        specified AZ
+        """
 
         az = "us-east-1a"
         client_for_config_set = await create_client(
@@ -144,7 +147,7 @@ class TestAZAffinity:
 
         n_replicas = await self._get_num_replicas(client_for_testing_az)
         GET_CALLS = 4 * n_replicas
-        get_cmdstat = f"cmdstat_get:calls={GET_CALLS // n_replicas}"
+        get_cmdstat = "cmdstat_get" + ":" + f"calls={GET_CALLS // n_replicas}"
 
         for _ in range(GET_CALLS):
             await client_for_testing_az.get("foo")
@@ -191,7 +194,7 @@ class TestAZAffinity:
 
         n_replicas = await self._get_num_replicas(client_for_testing_az)
         # We expect the calls to be distributed evenly among the replicas
-        get_cmdstat = f"cmdstat_get:calls={GET_CALLS // n_replicas}"
+        get_cmdstat = "cmdstat_get" + ":" + f"calls={GET_CALLS // n_replicas}"
 
         info_result = await client_for_testing_az.info(
             [InfoSection.COMMAND_STATS, InfoSection.SERVER], AllNodes()

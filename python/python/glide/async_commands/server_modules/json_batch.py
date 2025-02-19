@@ -8,7 +8,8 @@
         >>> value = {'a': 1.0, 'b': 2}
         >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
         >>> json_batch.set(transaction, "doc", "$", json_str)
-        >>> json_batch.get(transaction, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
+        >>> json_batch.get(transaction, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as
+                                                    # JSON string.
         >>> result = await glide_client.exec(transaction)
         >>> print result[0] # set result
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
@@ -18,7 +19,7 @@
             [{"a": 1.0, "b": 2}] # JSON object retrieved from the key `doc` using json.loads()
         """
 
-from typing import List, Optional, Union, cast
+from typing import List, Optional, Union
 
 from glide.async_commands.core import ConditionalChange
 from glide.async_commands.server_modules.glide_json import (
@@ -28,7 +29,6 @@ from glide.async_commands.server_modules.glide_json import (
 )
 from glide.async_commands.transaction import TTransaction
 from glide.constants import TEncodable
-from glide.protobuf.command_request_pb2 import RequestType
 
 
 def set(
@@ -45,7 +45,8 @@ def set(
         transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): Represents the path within the JSON document where the value will be set.
-            The key will be modified only if `value` is added as the last child in the specified `path`, or if the specified `path` acts as the parent of a new child being added.
+            The key will be modified only if `value` is added as the last child in the specified `path`, or if the specified
+            `path` acts as the parent of a new child being added.
         value (TEncodable): The value to set at the specific path, in JSON formatted bytes or str.
         set_condition (Optional[ConditionalChange]): Set the value only if the given condition is met (within the key or path).
             Equivalent to [`XX` | `NX`] in the RESP API. Defaults to None.
@@ -73,8 +74,10 @@ def get(
     Args:
         transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
-        paths (Optional[Union[TEncodable, List[TEncodable]]]): The path or list of paths within the JSON document. Default to None.
-        options (Optional[JsonGetOptions]): Options for formatting the byte representation of the JSON data. See `JsonGetOptions`.
+        paths (Optional[Union[TEncodable, List[TEncodable]]]): The path or list of paths within the JSON document.
+            Default to None.
+        options (Optional[JsonGetOptions]): Options for formatting the byte representation of the JSON data.
+            See `JsonGetOptions`.
 
     Command response:
         TJsonResponse[Optional[bytes]]:
@@ -88,8 +91,10 @@ def get(
                     If `path` doesn't exist, an error is raised.
                     If `key` doesn't exist, returns None.
             If multiple paths are given:
-                Returns a stringified JSON object in bytes, in which each path is a key, and it's corresponding value, is the value as if the path was executed in the command as a single path.
-        In case of multiple paths, and `paths` are a mix of both JSONPath and legacy path, the command behaves as if all are JSONPath paths.
+                Returns a stringified JSON object in bytes, in which each path is a key, and it's corresponding value, is the
+                value as if the path was executed in the command as a single path.
+        In case of multiple paths, and `paths` are a mix of both JSONPath and legacy path, the command behaves as if all are
+        JSONPath paths.
         For more information about the returned type, see `TJsonResponse`.
     """
     args = ["JSON.GET", key]
@@ -152,8 +157,8 @@ def arrappend(
     Command response:
         TJsonResponse[int]:
             For JSONPath (`path` starts with `$`):
-                Returns a list of integer replies for every possible path, indicating the new length of the array after appending `values`,
-                or None for JSON values matching the path that are not an array.
+                Returns a list of integer replies for every possible path, indicating the new length of the array after
+                appending `values`, or None for JSON values matching the path that are not an array.
                 If `path` doesn't exist, an empty array will be returned.
             For legacy path (`path` doesn't start with `$`):
                 Returns the length of the array after appending `values` to the array at `path`.
@@ -174,12 +179,14 @@ def arrindex(
     options: Optional[JsonArrIndexOptions] = None,
 ) -> TTransaction:
     """
-    Searches for the first occurrence of a scalar JSON value (i.e., a value that is neither an object nor an array) within arrays at the specified `path` in the JSON document stored at `key`.
+    Searches for the first occurrence of a scalar JSON value (i.e., a value that is neither an object nor an array) within
+    arrays at the specified `path` in the JSON document stored at `key`.
 
     If specified, `options.start` and `options.end` define an inclusive-to-exclusive search range within the array.
     (Where `options.start` is inclusive and `options.end` is exclusive).
 
-    Out-of-range indices adjust to the nearest valid position, and negative values count from the end (e.g., `-1` is the last element, `-2` the second last).
+    Out-of-range indices adjust to the nearest valid position, and negative values count from the end
+    (e.g., `-1` is the last element, `-2` the second last).
 
     Setting `options.end` to `0` behaves like `-1`, extending the range to the array's end (inclusive).
 
@@ -190,18 +197,20 @@ def arrindex(
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document.
         value (TEncodable): The value to search for within the arrays.
-        options (Optional[JsonArrIndexOptions]): Options specifying an inclusive `start` index and an optional exclusive `end` index for a range-limited search.
+        options (Optional[JsonArrIndexOptions]): Options specifying an inclusive `start` index and an optional exclusive `end`
+            index for a range-limited search.
             Defaults to the full array if not provided. See `JsonArrIndexOptions`.
 
     Command response:
         Optional[Union[int, List[int]]]:
             For JSONPath (`path` starts with `$`):
-                Returns an array of integers for every possible path, indicating of the first occurrence of `value` within the array,
-                or None for JSON values matching the path that are not an array.
+                Returns an array of integers for every possible path, indicating of the first occurrence of `value` within the
+                array, or None for JSON values matching the path that are not an array.
                 A returned value of `-1` indicates that the value was not found in that particular array.
                 If `path` does not exist, an empty array will be returned.
             For legacy path (`path` doesn't start with `$`):
-                Returns an integer representing the index of the first occurrence of `value` within the array at the specified path.
+                Returns an integer representing the index of the first occurrence of `value` within the array at the specified
+                path.
                 A returned value of `-1` indicates that the value was not found in that particular array.
                 If multiple paths match, the index of the value from the first matching array is returned.
                 If the JSON value at the `path` is not an array or if `path` does not exist, an error is raised.
@@ -223,7 +232,8 @@ def arrinsert(
     values: List[TEncodable],
 ) -> TTransaction:
     """
-    Inserts one or more values into the array at the specified `path` within the JSON document stored at `key`, before the given `index`.
+    Inserts one or more values into the array at the specified `path` within the JSON document stored at `key`, before the
+    given `index`.
 
     Args:
         transaction (TTransaction): The transaction to execute the command.
@@ -293,7 +303,8 @@ def arrpop(
     Args:
         transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
-        options (Optional[JsonArrPopOptions]): Options including the path and optional index. See `JsonArrPopOptions`. Default to None.
+        options (Optional[JsonArrPopOptions]): Options including the path and optional index. See `JsonArrPopOptions`.
+            Default to None.
             If not specified, attempts to pop the last element from the root value if it's an array.
             If the root value is not an array, an error will be raised.
 
@@ -324,7 +335,8 @@ def arrtrim(
     end: int,
 ) -> TTransaction:
     """
-    Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray [start, end], both inclusive.
+    Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray
+    [start, end], both inclusive.
     If `start` < 0, it is treated as 0.
     If `end` >= size (size of the array), it is treated as size-1.
     If `start` >= size or `start` > `end`, the array is emptied and 0 is returned.
@@ -339,7 +351,8 @@ def arrtrim(
     Command response:
         TJsonResponse[int]:
             For JSONPath (`path` starts with '$'):
-                Returns a list of integer replies for every possible path, indicating the new length of the array, or None for JSON values matching the path that are not an array.
+                Returns a list of integer replies for every possible path, indicating the new length of the array, or None for
+                JSON values matching the path that are not an array.
                 If a value is an empty array, its corresponding return value is 0.
                 If `path` doesn't exist, an empty array will be returned.
             For legacy path (`path` doesn't starts with `$`):
@@ -370,7 +383,8 @@ def clear(
     Command response:
         int: The number of containers cleared, numeric values zeroed, and booleans toggled to `false`,
         and string values converted to empty strings.
-        If `path` doesn't exist, or the value at `path` is already empty (e.g., an empty array, object, or string), 0 is returned.
+        If `path` doesn't exist, or the value at `path` is already empty (e.g., an empty array, object, or string),
+        0 is returned.
         If `key doesn't exist, an error is raised.
     """
     args = ["JSON.CLEAR", key]
@@ -388,7 +402,8 @@ def debug_fields(
     """
     Returns the number of fields of the JSON value at the specified `path` within the JSON document stored at `key`.
     - **Primitive Values**: Each non-container JSON value (e.g., strings, numbers, booleans, and null) counts as one field.
-    - **Arrays and Objects:**: Each item in an array and each key-value pair in an object is counted as one field. (Each top-level value counts as one field, regardless of it's type.)
+    - **Arrays and Objects:**: Each item in an array and each key-value pair in an object is counted as one field.
+        (Each top-level value counts as one field, regardless of it's type.)
         - Their nested values are counted recursively and added to the total.
         - **Example**: For the JSON `{"a": 1, "b": [2, 3, {"c": 4}]}`, the count would be:
             - Top-level: 2 fields (`"a"` and `"b"`)
@@ -513,7 +528,8 @@ def numincrby(
     Command response:
         bytes:
             For JSONPath (`path` starts with `$`):
-                Returns a bytes string representation of an array of bulk strings, indicating the new values after incrementing for each matched `path`.
+                Returns a bytes string representation of an array of bulk strings, indicating the new values after
+                incrementing for each matched `path`.
                 If a value is not a number, its corresponding return value will be `null`.
                 If `path` doesn't exist, a byte string representation of an empty array will be returned.
             For legacy path (`path` doesn't start with `$`):
@@ -546,7 +562,8 @@ def nummultby(
     Command response:
         bytes:
             For JSONPath (`path` starts with `$`):
-                Returns a bytes string representation of an array of bulk strings, indicating the new values after multiplication for each matched `path`.
+                Returns a bytes string representation of an array of bulk strings, indicating the new values after
+                multiplication for each matched `path`.
                 If a value is not a number, its corresponding return value will be `null`.
                 If `path` doesn't exist, a byte string representation of an empty array will be returned.
             For legacy path (`path` doesn't start with `$`):
@@ -567,7 +584,8 @@ def objlen(
     path: Optional[TEncodable] = None,
 ) -> TTransaction:
     """
-    Retrieves the number of key-value pairs in the object stored at the specified `path` within the JSON document stored at `key`.
+    Retrieves the number of key-value pairs in the object stored at the specified `path` within the JSON document stored at
+    `key`.
 
     Args:
         transaction (TTransaction): The transaction to execute the command.
@@ -640,8 +658,10 @@ def resp(
     JSON integers are mapped to RESP Integers.\n
     JSON doubles are mapped to RESP Bulk Strings.\n
     JSON strings are mapped to RESP Bulk Strings.\n
-    JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.\n
-    JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.\n
+    JSON arrays are represented as RESP arrays, where the first element is the simple string
+    [, followed by the array's elements.\n
+    JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs,
+    each of which is a RESP bulk string.\n
 
     Args:
         transaction (TTransaction): The transaction to execute the command.
@@ -679,13 +699,15 @@ def strappend(
     Args:
         transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
-        value (TEncodable): The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
+        value (TEncodable): The value to append to the string. Must be wrapped with single quotes. For example,
+            to append "foo", pass '"foo"'.
         path (Optional[TEncodable]): The path within the JSON document. Default to None.
 
     Command response:
         TJsonResponse[int]:
             For JSONPath (`path` starts with `$`):
-                Returns a list of integer replies for every possible path, indicating the length of the resulting string after appending `value`,
+                Returns a list of integer replies for every possible path, indicating the length of the resulting string after
+                appending `value`,
                 or None for JSON values matching the path that are not string.
                 If `key` doesn't exist, an error is raised.
             For legacy path (`path` doesn't start with `$`):

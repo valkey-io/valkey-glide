@@ -163,8 +163,10 @@ async def client_cleanup(
     """
     This function tries its best to clear state assosiated with client
     Its explicitly calls client.close() and deletes the object
-    In addition, it tries to clean up cluster mode subsciptions since it was found the closing the client via close() is not enough.
-    Note that unsubscribing is not feasible in the current implementation since its unknown on which node the subs are configured
+    In addition, it tries to clean up cluster mode subsciptions since it was found the closing the client via close() is
+    not enough.
+    Note that unsubscribing is not feasible in the current implementation since its unknown on which node the subs
+    are configured
     """
 
     if client is None:
@@ -403,10 +405,12 @@ class TestPubSub:
         self, request, cluster_mode: bool
     ):
         """
-        Tests publishing and receiving messages across many channels in exact PUBSUB, ensuring coexistence of async and sync retrieval methods.
+        Tests publishing and receiving messages across many channels in exact PUBSUB, ensuring coexistence of async and sync
+        retrieval methods.
 
         This test covers scenarios where multiple channels each receive their own unique message.
-        It verifies that messages are correctly published and received using both async and sync methods to ensure that both methods
+        It verifies that messages are correctly published and received using both async and sync methods to ensure that
+        both methods
         can coexist and function correctly.
         """
         listening_client, publishing_client = None, None
@@ -906,7 +910,8 @@ class TestPubSub:
         subscriptions. It covers the following scenarios:
         - Subscribing to multiple channels with exact names and verifying message reception.
         - Subscribing to channels using a pattern and verifying message reception.
-        - Ensuring that messages are correctly published and received using different retrieval methods (async, sync, callback).
+        - Ensuring that messages are correctly published and received using different retrieval methods
+          (async, sync, callback).
         """
         listening_client, publishing_client = None, None
         try:
@@ -1018,7 +1023,8 @@ class TestPubSub:
         subscriptions. It covers the following scenarios:
         - Subscribing to multiple channels with exact names and verifying message reception.
         - Subscribing to channels using a pattern and verifying message reception.
-        - Ensuring that messages are correctly published and received using different retrieval methods (async, sync, callback).
+        - Ensuring that messages are correctly published and received using different retrieval methods
+          (async, sync, callback).
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
@@ -1180,7 +1186,8 @@ class TestPubSub:
         - Subscribing to multiple channels with exact names and verifying message reception.
         - Subscribing to channels using a pattern and verifying message reception.
         - Subscribing to channels using a with sharded subscription and verifying message reception.
-        - Ensuring that messages are correctly published and received using different retrieval methods (async, sync, callback).
+        - Ensuring that messages are correctly published and received using different retrieval methods
+          (async, sync, callback).
         """
         listening_client, publishing_client = None, None
         try:
@@ -1190,19 +1197,21 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    10
-                )
+                "{{{}}}".format("channel")
+                + ":"
+                + "{}".format(get_random_string(5)): get_random_string(10)
                 for _ in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
-                    5
-                )
+                "{{{}}}".format("pattern")
+                + ":"
+                + "{}".format(get_random_string(5)): get_random_string(5)
                 for _ in range(NUM_CHANNELS)
             }
             sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}:{get_random_string(10)}": get_random_string(7)
+                f"{SHARD_PREFIX}"
+                + ":"
+                + "f{get_random_string(10)}": get_random_string(7)
                 for _ in range(NUM_CHANNELS)
             }
 
@@ -1313,7 +1322,8 @@ class TestPubSub:
         - Subscribing to multiple channels with exact names and verifying message reception.
         - Subscribing to channels using a pattern and verifying message reception.
         - Subscribing to channels using a sharded subscription and verifying message reception.
-        - Ensuring that messages are correctly published and received using different retrieval methods (async, sync, callback).
+        - Ensuring that messages are correctly published and received using different retrieval methods
+          (async, sync, callback).
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
@@ -1349,7 +1359,9 @@ class TestPubSub:
                 for _ in range(NUM_CHANNELS)
             }
             sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}:{get_random_string(10)}": get_random_string(7)
+                f"{SHARD_PREFIX}"
+                + ":"
+                + "f{get_random_string(10)}": get_random_string(7)
                 for _ in range(NUM_CHANNELS)
             }
 
@@ -1532,12 +1544,14 @@ class TestPubSub:
         Tests combined PUBSUB with different channel modes using the same channel name.
         One publishing clients, 3 listening clients, one for each mode.
 
-        This test verifies that separate clients can correctly handle subscriptions for exact, pattern, and sharded channels with the same name.
+        This test verifies that separate clients can correctly handle subscriptions for exact, pattern, and sharded channels
+        with the same name.
         It covers the following scenarios:
         - Subscribing to an exact channel and verifying message reception.
         - Subscribing to a pattern channel and verifying message reception.
         - Subscribing to a sharded channel and verifying message reception.
-        - Ensuring that messages are correctly published and received using different retrieval methods (async, sync, callback).
+        - Ensuring that messages are correctly published and received using different retrieval methods
+          (async, sync, callback).
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
@@ -1701,7 +1715,8 @@ class TestPubSub:
         for exact and pattern channels with the same name. It covers the following scenarios:
         - Subscribing to an exact channel and verifying message reception.
         - Subscribing to a pattern channel and verifying message reception.
-        - Ensuring that messages are correctly published and received using different retrieval methods (async, sync, callback).
+        - Ensuring that messages are correctly published and received using different retrieval methods
+          (async, sync, callback).
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
@@ -1801,7 +1816,8 @@ class TestPubSub:
         - Subscribing to an exact channel and verifying message reception.
         - Subscribing to a pattern channel and verifying message reception.
         - Subscribing to a sharded channel and verifying message reception.
-        - Ensuring that messages are correctly published and received using different retrieval methods (async, sync, callback).
+        - Ensuring that messages are correctly published and received using different retrieval methods
+          (async, sync, callback).
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
@@ -1938,7 +1954,8 @@ class TestPubSub:
             await client_cleanup(client_dont_care, None)
 
     @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
+        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
+        + "to vary across platforms and server versions"
     )
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pubsub_exact_max_size_message(self, request, cluster_mode: bool):
@@ -2007,7 +2024,8 @@ class TestPubSub:
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
+        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
+        + "to vary across platforms and server versions"
     )
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_sharded_max_size_message(self, request, cluster_mode: bool):
@@ -2084,7 +2102,8 @@ class TestPubSub:
             await client_cleanup(publishing_client, None)
 
     @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
+        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
+        + "to vary across platforms and server versions"
     )
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pubsub_exact_max_size_message_callback(
@@ -2141,7 +2160,8 @@ class TestPubSub:
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
+        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
+        + "to vary across platforms and server versions"
     )
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_sharded_max_size_message_callback(

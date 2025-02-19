@@ -45,9 +45,11 @@ class FtProfileOptions:
         Initialize a new FtProfileOptions instance.
 
         Args:
-            query (TEncodable): The query that is being profiled. This is the query argument from the FT.AGGREGATE/FT.SEARCH command.
+            query (TEncodable): The query that is being profiled. This is the query argument from the
+                FT.AGGREGATE/FT.SEARCH command.
             query_type (Optional[QueryType]): The type of query to be profiled.
-            query_options (Optional[Union[FtSearchOptions, FtAggregateOptions]]): The arguments/options for the FT.AGGREGATE/FT.SEARCH command being profiled.
+            query_options (Optional[Union[FtSearchOptions, FtAggregateOptions]]): The arguments/options for the
+                FT.AGGREGATE/FT.SEARCH command being profiled.
             limited (Optional[bool]): To provide some brief version of the output, otherwise a full verbose output is provided.
         """
         self.query = query
@@ -66,8 +68,10 @@ class FtProfileOptions:
         A class method to create FtProfileOptions with FT.SEARCH/FT.AGGREGATE options.
 
         Args:
-            query (TEncodable): The query that is being profiled. This is the query argument from the FT.AGGREGATE/FT.SEARCH command.
-            query_options (Optional[Union[FtSearchOptions, FtAggregateOptions]]): The arguments/options for the FT.AGGREGATE/FT.SEARCH command being profiled.
+            query (TEncodable): The query that is being profiled. This is the query argument from the
+                FT.AGGREGATE/FT.SEARCH command.
+            query_options (Optional[Union[FtSearchOptions, FtAggregateOptions]]): The arguments/options for the
+                FT.AGGREGATE/FT.SEARCH command being profiled.
             limited (Optional[bool]): To provide some brief version of the output, otherwise a full verbose output is provided.
         """
         query_type: QueryType = QueryType.SEARCH
@@ -83,7 +87,8 @@ class FtProfileOptions:
         A class method to create FtProfileOptions with QueryType.
 
         Args:
-            query (TEncodable): The query that is being profiled. This is the query argument from the FT.AGGREGATE/FT.SEARCH command.
+            query (TEncodable): The query that is being profiled. This is the query argument from the
+                FT.AGGREGATE/FT.SEARCH command.
             query_type (QueryType): The type of query to be profiled.
             limited (Optional[bool]): To provide some brief version of the output, otherwise a full verbose output is provided.
         """

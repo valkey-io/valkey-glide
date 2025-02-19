@@ -91,7 +91,8 @@ class ProtobufCodec:
             # Recieved only partial response
             raise PartialMessageException("Recieved only a partial response")
         offset = new_pos
-        msg_buf = read_bytes_view[offset : (offset + msg_len)]
+        end = offset + msg_len
+        msg_buf = read_bytes_view[offset:end]
         offset += msg_len
         message = message_class()
         message.ParseFromString(msg_buf)

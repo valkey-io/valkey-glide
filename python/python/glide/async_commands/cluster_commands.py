@@ -408,7 +408,8 @@ class ClusterCommands(CoreCommands):
                         b"description": None,
                         b"flags": {b"no-writes"},
                     }],
-                    b"library_code": b"#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+                    b"library_code": b"#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) " \\
+                                     b"return args[1] end)"
                 }]
 
         Since: Valkey 7.0.0.
@@ -729,7 +730,11 @@ class ClusterCommands(CoreCommands):
             >>> await client.time()
                 [b'1710925775', b'913580']
             >>> await client.time(AllNodes())
-                {b'addr': [b'1710925775', b'913580'], b'addr2': [b'1710925775', b'913580'], b'addr3': [b'1710925775', b'913580']}
+                {
+                    b'addr': [b'1710925775', b'913580'],
+                    b'addr2': [b'1710925775', b'913580'],
+                    b'addr3': [b'1710925775', b'913580']
+                }
         """
         return cast(
             TClusterResponse[List[bytes]],
@@ -756,7 +761,8 @@ class ClusterCommands(CoreCommands):
             >>> await client.lastsave()
                 1710925775  # Unix time of the last DB save
             >>> await client.lastsave(AllNodes())
-                {b'addr1': 1710925775, b'addr2': 1710925775, b'addr3': 1710925775}  # Unix time of the last DB save on each node
+                {b'addr1': 1710925775, b'addr2': 1710925775, b'addr3': 1710925775}  # Unix time of the last DB save on
+                                                                                    # each node
         """
         return cast(
             TClusterResponse[int],
@@ -832,7 +838,8 @@ class ClusterCommands(CoreCommands):
         Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
 
         Note that it is valid to call this command without channels. In this case, it will just return an empty map.
-        The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+        The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of
+        subscriptions.
 
         See https://valkey.io/commands/pubsub-shardnumsub for more details.
 
@@ -1093,7 +1100,8 @@ class ClusterCommands(CoreCommands):
         This command is similar to the SCAN command but is designed to work in a cluster environment.
         For each iteration, the new cursor object should be used to continue the scan.
         Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
-        For more information about the Cluster Scan implementation, see [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan).
+        For more information about the Cluster Scan implementation, see
+        [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan).
 
         Like the SCAN command, the method can be used to iterate over the keys in the database,
         returning all keys the database has from when the scan started until the scan ends.
@@ -1110,7 +1118,8 @@ class ClusterCommands(CoreCommands):
                 This parameter serves as a hint to the server on the number of steps to perform in each iteration.
                 The default value is 10.
             type (Optional[ObjectType]): The type of object to scan for.
-            allow_non_covered_slots (bool): If set to True, the scan will perform even if some slots are not covered by any node.
+            allow_non_covered_slots (bool): If set to True, the scan will perform even if some slots are not covered by any
+                node.
                 It's important to note that when set to True, the scan has no guarantee to cover all keys in the cluster,
                 and the method loses its way to validate the progress of the scan. Defaults to False.
 
@@ -1129,7 +1138,14 @@ class ClusterCommands(CoreCommands):
             >>> print(all_keys)  # [b'key1', b'key2', b'key3']
 
             >>> # Iterate over keys matching the pattern "*key*".
-            >>> await client.mset({b"key1": b"value1", b"key2": b"value2", b"not_my_key": b"value3", b"something_else": b"value4"})
+            >>> await client.mset(
+            ...     {
+            ...         b"key1": b"value1",
+            ...         b"key2": b"value2",
+            ...         b"not_my_key": b"value3",
+            ...         b"something_else": b"value4"
+            ...     }
+            ... )
             >>> cursor = ClusterScanCursor()
             >>> all_keys = []
             >>> while not cursor.is_finished():
@@ -1194,8 +1210,8 @@ class ClusterCommands(CoreCommands):
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
-            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
-                case the client will route the command to the nodes defined by `route`. Defaults to None.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
+                which case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
             TOK: A simple `OK` response.
@@ -1224,8 +1240,8 @@ class ClusterCommands(CoreCommands):
 
         Returns:
             TOK: A simple `OK` response.
-            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
-                case the client will route the command to the nodes defined by `route`. Defaults to None.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
+                which case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Examples:
             >>> await client.script_kill()
@@ -1284,8 +1300,8 @@ class ClusterCommands(CoreCommands):
         Args:
             script (Script): The Lua script to execute.
             args (Optional[List[TEncodable]]): The non-key arguments for the script.
-            route (Optional[Route]): The command will be routed automatically to a random node, unless `route` is provided, in which
-                case the client will route the command to the nodes defined by `route`. Defaults to None.
+            route (Optional[Route]): The command will be routed automatically to a random node, unless `route` is provided, in
+                which case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
             TResult: a value that depends on the script that was executed.

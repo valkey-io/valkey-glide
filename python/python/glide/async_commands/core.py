@@ -480,11 +480,21 @@ class CoreCommands(Protocol):
 
                 # ONLY_IF_EXISTS -> Only set the key if it already exists
                 # expiry -> Set the amount of time until key expires
-            >>> await client.set("key", "new_value",conditional_set=ConditionalChange.ONLY_IF_EXISTS, expiry=ExpirySet(ExpiryType.SEC, 5))
+            >>> await client.set(
+            ...     "key",
+            ...     "new_value",
+            ...     conditional_set=ConditionalChange.ONLY_IF_EXISTS,
+            ...     expiry=ExpirySet(ExpiryType.SEC, 5)
+            ... )
                 'OK' # Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
 
                 # ONLY_IF_DOES_NOT_EXIST -> Only set key if it does not already exist
-            >>> await client.set("key", "value", conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,return_old_value=True)
+            >>> await client.set(
+            ...     "key",
+            ...     "value",
+            ...     conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+            ...     return_old_value=True
+            ... )
                 b'new_value' # Returns the old value of "key".
             >>> await client.get("key")
                 b'new_value' # Value wasn't modified back to being "value" because of "NX" flag.
@@ -2791,7 +2801,11 @@ class CoreCommands(Protocol):
         Example:
             >>> await client.xadd("mystream", [("field", "value"), ("field2", "value2")])
                 b"1615957011958-0"  # Example stream entry ID.
-            >>> await client.xadd("non_existing_stream", [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1", make_stream=False))
+            >>> await client.xadd(
+            ...     "non_existing_stream",
+            ...     [(field, "foo1"), (field2, "bar1")],
+            ...     StreamAddOptions(id="0-1", make_stream=False)
+            ... )
                 None  # The key doesn't exist, therefore, None is returned.
             >>> await client.xadd("non_existing_stream", [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1"))
                 b"0-1"  # Returns the stream id.
@@ -3345,7 +3359,14 @@ class CoreCommands(Protocol):
                 - `num_delivered`: The number of times this message was delivered.
 
         Examples:
-            >>> await client.xpending_range("my_stream", "my_group", MinId(), MaxId(), 10, StreamPendingOptions(consumer_name="my_consumer"))
+            >>> await client.xpending_range(
+            ...     "my_stream",
+            ...     "my_group",
+            ...     MinId(),
+            ...     MaxId(),
+            ...     10,
+            ...     StreamPendingOptions(consumer_name="my_consumer")
+            ... )
                 [[b"1-0", b"my_consumer", 1234, 1], [b"1-1", b"my_consumer", 1123, 1]]
                 # Extended stream entry information for the pending entries associated with "my_consumer".
         """
@@ -3864,9 +3885,22 @@ class CoreCommands(Protocol):
             If `changed` is set, returns the number of elements updated in the sorted set.
 
         Examples:
-            >>> await client.geoadd("my_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geoadd(
+            ...     "my_sorted_set",
+            ...     {
+            ...         "Palermo": GeospatialData(13.361389, 38.115556),
+            ...         "Catania": GeospatialData(15.087269, 37.502669)
+            ...     }
+            ... )
                 2  # Indicates that two elements have been added to the sorted set "my_sorted_set".
-            >>> await client.geoadd("my_sorted_set", {"Palermo": GeospatialData(14.361389, 38.115556)}, existing_options=ConditionalChange.XX, changed=True)
+            >>> await client.geoadd(
+            ...     "my_sorted_set",
+            ...     {
+            ...         "Palermo": GeospatialData(14.361389, 38.115556)
+            ...     },
+            ...     existing_options=ConditionalChange.XX,
+            ...     changed=True
+            ... )
                 1  # Updates the position of an existing member in the sorted set "my_sorted_set".
         """
         args = [key]
@@ -3912,7 +3946,13 @@ class CoreCommands(Protocol):
             If one or both members do not exist, or if the key does not exist, returns None.
 
         Examples:
-            >>> await client.geoadd("my_geo_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geoadd(
+            ...     "my_geo_set",
+            ...     {
+            ...         "Palermo": GeospatialData(13.361389, 38.115556),
+            ...         "Catania": GeospatialData(15.087269, 37.502669)
+            ...     }
+            ... )
             >>> await client.geodist("my_geo_set", "Palermo", "Catania")
                 166274.1516  # Indicates the distance between "Palermo" and "Catania" in meters.
             >>> await client.geodist("my_geo_set", "Palermo", "Palermo", unit=GeoUnit.KILOMETERS)
@@ -3948,7 +3988,13 @@ class CoreCommands(Protocol):
             If a member does not exist in the sorted set, a None value is returned for that member.
 
         Examples:
-            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geoadd(
+            ...     "my_geo_sorted_set",
+            ...     {
+            ...         "Palermo": GeospatialData(13.361389, 38.115556),
+            ...         "Catania": GeospatialData(15.087269, 37.502669)
+            ...     }
+            ... )
             >>> await client.geohash("my_geo_sorted_set", ["Palermo", "Catania", "some city])
                 ["sqc8b49rny0", "sqdtr74hyu0", None]  # Indicates the GeoHash bytes strings for the specified members.
         """
@@ -3963,8 +4009,8 @@ class CoreCommands(Protocol):
         members: List[TEncodable],
     ) -> List[Optional[List[float]]]:
         """
-        Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored at
-        `key`.
+        Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored
+        at `key`.
 
         See https://valkey.io/commands/geopos for more details.
 
@@ -3977,7 +4023,13 @@ class CoreCommands(Protocol):
             If a member does not exist, its position will be None.
 
         Example:
-            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geoadd(
+            ...     "my_geo_sorted_set",
+            ...     {
+            ...         "Palermo": GeospatialData(13.361389, 38.115556),
+            ...         "Catania": GeospatialData(15.087269, 37.502669)
+            ...     }
+            ... )
             >>> await client.geopos("my_geo_sorted_set", ["Palermo", "Catania", "NonExisting"])
                 [[13.36138933897018433, 38.11555639549629859], [15.08726745843887329, 37.50266842333162032], None]
         """
@@ -3998,7 +4050,8 @@ class CoreCommands(Protocol):
         with_hash: bool = False,
     ) -> List[Union[bytes, List[Union[bytes, float, int, List[float]]]]]:
         """
-        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area.
+        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular
+        area.
 
         See https://valkey.io/commands/geosearch/ for more details.
 
@@ -4032,11 +4085,32 @@ class CoreCommands(Protocol):
                 List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
 
         Examples:
-            >>> await client.geoadd("my_geo_sorted_set", {"edge1": GeospatialData(12.758489, 38.788135), "edge2": GeospatialData(17.241510, 38.788135)}})
-            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geoadd(
+            ...     "my_geo_sorted_set",
+            ...     {
+            ...         "edge1": GeospatialData(12.758489, 38.788135),
+            ...         "edge2": GeospatialData(17.241510, 38.788135)
+            ...     }
+            ... )
+            >>> await client.geoadd(
+            ...     "my_geo_sorted_set",
+            ...     {
+            ...         "Palermo": GeospatialData(13.361389, 38.115556),
+            ...         "Catania": GeospatialData(15.087269, 37.502669)
+            ...     }
+            ... )
             >>> await client.geosearch("my_geo_sorted_set", "Catania", GeoSearchByRadius(175, GeoUnit.MILES), OrderBy.DESC)
-                ['Palermo', 'Catania'] # Returned the locations names within the radius of 175 miles, with the center being 'Catania' from farthest to nearest.
-            >>> await client.geosearch("my_geo_sorted_set", GeospatialData(15, 37), GeoSearchByBox(400, 400, GeoUnit.KILOMETERS), OrderBy.DESC, with_coord=true, with_dist=true, with_hash=true)
+                ['Palermo', 'Catania'] # Returned the locations names within the radius of 175 miles, with the center being
+                                       # 'Catania' from farthest to nearest.
+            >>> await client.geosearch(
+            ...     "my_geo_sorted_set",
+            ...     GeospatialData(15, 37),
+            ...     GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+            ...     OrderBy.DESC,
+            ...     with_coord=true,
+            ...     with_dist=true,
+            ...     with_hash=true
+            ... )
                 [
                     [
                         b"Catania",
@@ -4054,7 +4128,8 @@ class CoreCommands(Protocol):
                         b"edge1",
                         [279.7405, 3479273021651468, [12.75848776102066, 38.78813451624225]],
                     ],
-                ]  # Returns locations within the square box of 400 km, with the center being a specific point, from nearest to farthest with the dist, hash and coords.
+                ]  # Returns locations within the square box of 400 km, with the center being a specific point, from nearest
+                   # to farthest with the dist, hash and coords.
 
         Since: Valkey version 6.2.0.
         """
@@ -4113,15 +4188,34 @@ class CoreCommands(Protocol):
             int: The number of elements in the resulting sorted set stored at `destination`.
 
         Examples:
-            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
-            >>> await client.geosearchstore("my_dest_sorted_set", "my_geo_sorted_set", "Catania", GeoSearchByRadius(175, GeoUnit.MILES))
+            >>> await client.geoadd(
+            ...     "my_geo_sorted_set",
+            ...     {
+            ...         "Palermo": GeospatialData(13.361389, 38.115556),
+            ...         "Catania": GeospatialData(15.087269, 37.502669)
+            ...     }
+            ... )
+            >>> await client.geosearchstore(
+            ...     "my_dest_sorted_set",
+            ...     "my_geo_sorted_set",
+            ...     "Catania",
+            ...     GeoSearchByRadius(175, GeoUnit.MILES)
+            ... )
                 2 # Number of elements stored in "my_dest_sorted_set".
             >>> await client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
-                {b"Palermo": 3479099956230698.0, b"Catania": 3479447370796909.0} # The elements within te search area, with their geohash as score.
-            >>> await client.geosearchstore("my_dest_sorted_set", "my_geo_sorted_set", GeospatialData(15, 37), GeoSearchByBox(400, 400, GeoUnit.KILOMETERS), store_dist=True)
+                {b"Palermo": 3479099956230698.0, b"Catania": 3479447370796909.0} # The elements within te search area, with
+                                                                                 # their geohash as score.
+            >>> await client.geosearchstore(
+            ...     "my_dest_sorted_set",
+            ...     "my_geo_sorted_set",
+            ...     GeospatialData(15, 37),
+            ...     GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+            ...     store_dist=True
+            ... )
                 2 # Number of elements stored in "my_dest_sorted_set", with distance as score.
             >>> await client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
-                {b"Catania": 56.4412578701582, b"Palermo": 190.44242984775784} # The elements within te search area, with the distance as score.
+                {b"Catania": 56.4412578701582, b"Palermo": 190.44242984775784} # The elements within te search area, with the
+                                                                               # distance as score.
 
         Since: Valkey version 6.2.0.
         """
@@ -4175,7 +4269,15 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2})
                 2  # Indicates that two elements have been added to the sorted set "my_sorted_set."
-            >>> await client.zadd("existing_sorted_set", {"member1": 15.0, "member2": 5.5}, existing_options=ConditionalChange.XX, changed=True)
+            >>> await client.zadd(
+            ...     "existing_sorted_set",
+            ...     {
+            ...         "member1": 15.0,
+            ...         "member2": 5.5
+            ...     },
+            ...     existing_options=ConditionalChange.XX,
+            ...     changed=True
+            ... )
                 2  # Updates the scores of two existing members in the sorted set "existing_sorted_set."
         """
         args = [key]
@@ -4312,8 +4414,13 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zcount("my_sorted_set", ScoreBoundary(5.0 , is_inclusive=true) , InfBound.POS_INF)
-                2  # Indicates that there are 2 members with scores between 5.0 (not exclusive) and +inf in the sorted set "my_sorted_set".
-            >>> await client.zcount("my_sorted_set", ScoreBoundary(5.0 , is_inclusive=true) , ScoreBoundary(10.0 , is_inclusive=false))
+                2  # Indicates that there are 2 members with scores between 5.0 (not exclusive) and +inf in the sorted set
+                   # "my_sorted_set".
+            >>> await client.zcount(
+            ...     "my_sorted_set",
+            ...     ScoreBoundary(5.0 , is_inclusive=true),
+            ...     ScoreBoundary(10.0 , is_inclusive=false)
+            ... )
                 1  # Indicates that there is one ScoreBoundary with 5.0 < score <= 10.0 in the sorted set "my_sorted_set".
         """
         score_min = (
@@ -4610,7 +4717,8 @@ class CoreCommands(Protocol):
         Args:
             destination (TEncodable): The key for the destination sorted set.
             source (TEncodable): The key of the source sorted set.
-            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
+            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range
+            query to perform.
                 - For range queries by index (rank), use RangeByIndex.
                 - For range queries by lexicographical order, use RangeByLex.
                 - For range queries by score, use RangeByScore.
@@ -4621,9 +4729,11 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zrangestore("destination_key", "my_sorted_set", RangeByIndex(0, 2), True)
-                3  # The 3 members with the highest scores from "my_sorted_set" were stored in the sorted set at "destination_key".
+                3  # The 3 members with the highest scores from "my_sorted_set" were stored in the sorted set at
+                   # "destination_key".
             >>> await client.zrangestore("destination_key", "my_sorted_set", RangeByScore(InfBound.NEG_INF, ScoreBoundary(3)))
-                2  # The 2 members with scores between negative infinity and 3 (inclusive) from "my_sorted_set" were stored in the sorted set at "destination_key".
+                2  # The 2 members with scores between negative infinity and 3 (inclusive) from "my_sorted_set" were stored in
+                   # the sorted set at "destination_key".
         """
         args = _create_zrange_args(source, range_query, reverse, False, destination)
 
@@ -4665,7 +4775,8 @@ class CoreCommands(Protocol):
         member: TEncodable,
     ) -> Optional[List[Union[int, float]]]:
         """
-        Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
+        Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
+        lowest to highest.
 
         See https://valkey.io/commands/zrank for more details.
 
@@ -4679,7 +4790,8 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zrank_withscore("my_sorted_set", "member2")
-                [1 , 6.0]  # Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set "my_sorted_set".
+                [1 , 6.0]  # Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set
+                           # "my_sorted_set".
             >>> await client.zrank_withscore("my_sorted_set", "non_existing_member")
                 None  # Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
 
@@ -4805,8 +4917,13 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zremrangebyscore("my_sorted_set",  ScoreBoundary(5.0 , is_inclusive=true) , InfBound.POS_INF)
-                2  # Indicates that  2 members with scores between 5.0 (not exclusive) and +inf have been removed from the sorted set "my_sorted_set".
-            >>> await client.zremrangebyscore("non_existing_sorted_set", ScoreBoundary(5.0 , is_inclusive=true) , ScoreBoundary(10.0 , is_inclusive=false))
+                2  # Indicates that  2 members with scores between 5.0 (not exclusive) and +inf have been removed from the
+                   # sorted set "my_sorted_set".
+            >>> await client.zremrangebyscore(
+            ...     "non_existing_sorted_set",
+            ...     ScoreBoundary(5.0 , is_inclusive=true),
+            ...     ScoreBoundary(10.0 , is_inclusive=false)
+            ... )
                 0  # Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
         """
         score_min = (
@@ -4855,7 +4972,8 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zremrangebylex("my_sorted_set",  LexBoundary("a", is_inclusive=False), LexBoundary("e"))
-                4  # Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "my_sorted_set".
+                4  # Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive),
+                   # have been removed from "my_sorted_set".
             >>> await client.zremrangebylex("non_existing_sorted_set", InfBound.NEG_INF, LexBoundary("e"))
                 0  # Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
         """
@@ -4899,7 +5017,8 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zremrangebyrank("my_sorted_set", 0, 4)
-                5  # Indicates that 5 elements, with ranks ranging from 0 to 4 (inclusive), have been removed from "my_sorted_set".
+                5  # Indicates that 5 elements, with ranks ranging from 0 to 4 (inclusive), have been removed from
+                   # "my_sorted_set".
             >>> await client.zremrangebyrank("my_sorted_set", 0, 4)
                 0  # Indicates that nothing was removed.
         """
@@ -4917,7 +5036,8 @@ class CoreCommands(Protocol):
         max_lex: Union[InfBound, LexBoundary],
     ) -> int:
         """
-        Returns the number of members in the sorted set stored at `key` with lexicographical values between `min_lex` and `max_lex`.
+        Returns the number of members in the sorted set stored at `key` with lexicographical values between `min_lex` and
+        `max_lex`.
 
         See https://valkey.io/commands/zlexcount/ for more details.
 
@@ -4937,9 +5057,15 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zlexcount("my_sorted_set",  LexBoundary("c" , is_inclusive=True), InfBound.POS_INF)
-                2  # Indicates that there are 2 members with lexicographical values between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
-            >>> await client.zlexcount("my_sorted_set", LexBoundary("c" , is_inclusive=True), LexBoundary("k" , is_inclusive=False))
-                1  # Indicates that there is one member with LexBoundary "c" <= lexicographical value < "k" in the sorted set "my_sorted_set".
+                2  # Indicates that there are 2 members with lexicographical values between "c" (inclusive) and positive
+                   # infinity in the sorted set "my_sorted_set".
+            >>> await client.zlexcount(
+            ...     "my_sorted_set",
+            ...     LexBoundary("c" , is_inclusive=True),
+            ...     LexBoundary("k" , is_inclusive=False)
+            ... )
+                1  # Indicates that there is one member with LexBoundary "c" <= lexicographical value < "k" in the sorted set
+                   # "my_sorted_set".
         """
         min_lex_arg = (
             min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
@@ -5141,7 +5267,8 @@ class CoreCommands(Protocol):
         aggregation_type: Optional[AggregationType] = None,
     ) -> Mapping[bytes, float]:
         """
-        Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of intersecting elements with scores.
+        Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of intersecting
+        elements with scores.
         To get the elements only, see `zinter`.
         To store the result in a key as a sorted set, see `zinterstore`.
 
@@ -5208,7 +5335,8 @@ class CoreCommands(Protocol):
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {b'member1': 20}  # "member1" is now stored in "my_sorted_set" with score of 20.
             >>> await client.zinterstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX)
-                1 # Indicates that the sorted set "my_sorted_set" contains one element, and its score is the maximum score between the sets.
+                1 # Indicates that the sorted set "my_sorted_set" contains one element, and its score is the maximum score
+                  # between the sets.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {b'member1': 10.5}  # "member1" is now stored in "my_sorted_set" with score of 10.5.
         """
@@ -5323,7 +5451,8 @@ class CoreCommands(Protocol):
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {b'member1': 20, b'member2': 8.2}
             >>> await client.zunionstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX)
-                2 # Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
+                2 # Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score
+                  # between the sets.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {b'member1': 10.5, b'member2': 8.2}
         """
@@ -5554,7 +5683,8 @@ class CoreCommands(Protocol):
             >>> await client.zintercard(["key1", "key2"])
                 2  # Indicates that the intersection of the sorted sets at "key1" and "key2" has a cardinality of 2.
             >>> await client.zintercard(["key1", "key2"], 1)
-                1  # A `limit` of 1 was provided, so the intersection computation exits early and yields the `limit` value of 1.
+                1  # A `limit` of 1 was provided, so the intersection computation exits early and yields the `limit` value
+                   # of 1.
 
         Since: Valkey version 7.0.0.
         """
@@ -5883,7 +6013,10 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.set("my_key", "A")  # "A" has binary value 01000001
-            >>> await client.bitfield("my_key", [BitFieldSet(UnsignedEncoding(2), BitOffset(1), 3), BitFieldGet(UnsignedEncoding(2), BitOffset(1))])
+            >>> await client.bitfield(
+            ...     "my_key",
+            ...     [BitFieldSet(UnsignedEncoding(2), BitOffset(1), 3), BitFieldGet(UnsignedEncoding(2), BitOffset(1))]
+            ... )
                 [2, 3]  # The old value at offset 1 with an unsigned encoding of 2 was 2. The new value at offset 1 with an
                         # unsigned encoding of 2 is 3.
         """

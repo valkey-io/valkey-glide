@@ -115,7 +115,8 @@ async def search(
     options: Optional[FtSearchOptions],
 ) -> FtSearchResponse:
     """
-    Uses the provided query expression to locate keys within an index. Once located, the count and/or the content of indexed fields within those keys can be returned.
+    Uses the provided query expression to locate keys within an index. Once located, the count and/or the content of indexed
+    fields within those keys can be returned.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -124,8 +125,11 @@ async def search(
         options (Optional[FtSearchOptions]): The search options.
 
     Returns:
-        FtSearchResponse: A two element array, where first element is count of documents in result set, and the second element, which has the format Mapping[TEncodable, Mapping[TEncodable, TEncodable]] is a mapping between document names and map of their attributes.
-        If count(option in `FtSearchOptions`) is set to true or limit(option in `FtSearchOptions`) is set to FtSearchLimit(0, 0), the command returns array with only one element - the count of the documents.
+        FtSearchResponse: A two element array, where first element is count of documents in result set, and the second
+            element, which has the format Mapping[TEncodable, Mapping[TEncodable, TEncodable]] is a mapping between document
+            names and map of their attributes.
+        If count(option in `FtSearchOptions`) is set to true or limit(option in `FtSearchOptions`) is set to
+            FtSearchLimit(0, 0), the command returns array with only one element - the count of the documents.
 
     Examples:
         For the following example to work the following must already exist:
@@ -133,8 +137,20 @@ async def search(
         - A key named {json:}1 with value {"a":1, "b":2}
 
         >>> from glide import ft
-        >>> await ft.search(glide_client, "idx", "*", options=FtSeachOptions(return_fields=[ReturnField(field_identifier="first"), ReturnField(field_identifier="second")]))
-        [1, { b'json:1': { b'first': b'42', b'second': b'33' } }] # The first element, 1 is the number of keys returned in the search result. The second element is a map of data queried per key.
+        >>> await ft.search(
+        ...     glide_client,
+        ...     "idx",
+        ...     "*",
+        ...     options=FtSeachOptions(
+        ...         return_fields=[
+        ...             ReturnField(field_identifier="first"),
+        ...             ReturnField(field_identifier="second")
+        ...         ]
+        ...     )
+        ... )
+        [1, { b'json:1': { b'first': b'42', b'second': b'33' } }] # The first element, 1 is the number of keys returned in the
+                                                                  # search result. The second element is a map of data queried
+                                                                  # per key.
     """
     args: List[TEncodable] = [CommandNames.FT_SEARCH, index_name, query]
     if options:
@@ -220,7 +236,8 @@ async def info(client: TGlideClient, index_name: TEncodable) -> FtInfoResponse:
         FtInfoResponse: Nested maps with info about the index. See example for more details.
 
     Examples:
-        An index with name 'myIndex', 1 text field and 1 vector field is already created for gettting the output of this example.
+        An index with name 'myIndex', 1 text field and 1 vector field is already created for gettting the output of this
+        example.
         >>> from glide import ft
         >>> await ft.info(glide_client, "myIndex")
             [
@@ -236,7 +253,26 @@ async def info(client: TGlideClient, index_name: TEncodable) -> FtInfoResponse:
                         b'type', b'VECTOR',
                         b'option', b'',
                         b'vector_params', [
-                            b'algorithm', b'HNSW', b'data_type', b'FLOAT32', b'dimension', 2, b'distance_metric', b'L2', b'initial_capacity', 1000, b'current_capacity', 1000, b'maximum_edges', 16, b'ef_construction', 200, b'ef_runtime', 10, b'epsilon', b'0.01'
+                            b'algorithm',
+                            b'HNSW',
+                            b'data_type',
+                            b'FLOAT32',
+                            b'dimension',
+                            2,
+                            b'distance_metric',
+                            b'L2',
+                            b'initial_capacity',
+                            1000,
+                            b'current_capacity',
+                            1000,
+                            b'maximum_edges',
+                            16,
+                            b'ef_construction',
+                            200,
+                            b'ef_runtime',
+                            10,
+                            b'epsilon',
+                            b'0.01'
                         ]
                     ],
                     [
@@ -313,7 +349,8 @@ async def aggregate(
     options: Optional[FtAggregateOptions],
 ) -> FtAggregateResponse:
     """
-    A superset of the FT.SEARCH command, it allows substantial additional processing of the keys selected by the query expression.
+    A superset of the FT.SEARCH command, it allows substantial additional processing of the keys selected by the query
+    expression.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -322,12 +359,34 @@ async def aggregate(
         options (Optional[FtAggregateOptions]): The optional arguments for the command.
 
     Returns:
-        FtAggregateResponse: An array containing a mapping of field name and associated value as returned after the last stage of the command.
+        FtAggregateResponse: An array containing a mapping of field name and associated value as returned after the last stage
+            of the command.
 
     Examples:
         >>> from glide import ft
-        >>> await ft.aggregate(glide_client, "myIndex", "*", FtAggregateOptions(loadFields=["__key"], clauses=[GroupBy(["@condition"], [Reducer("COUNT", [], "bicycles")])]))
-            [{b'condition': b'refurbished', b'bicycles': b'1'}, {b'condition': b'new', b'bicycles': b'5'}, {b'condition': b'used', b'bicycles': b'4'}]
+        >>> await ft.aggregate(
+        ...     glide_client,
+        ...     "myIndex",
+        ...     "*",
+        ...     FtAggregateOptions(
+        ...         loadFields=["__key"],
+        ...         clauses=[GroupBy(["@condition"], [Reducer("COUNT", [], "bicycles")])]
+        ...    )
+        ... )
+            [
+                {
+                    b'condition': b'refurbished',
+                    b'bicycles': b'1'
+                },
+                {
+                    b'condition': b'new',
+                    b'bicycles': b'5'
+                },
+                {
+                    b'condition': b'used',
+                    b'bicycles': b'4'
+                }
+            ]
     """
     args: List[TEncodable] = [CommandNames.FT_AGGREGATE, index_name, query]
     if options:
@@ -347,11 +406,21 @@ async def profile(
         options (FtProfileOptions): Options for the command.
 
     Returns:
-        FtProfileResponse: A two-element array. The first element contains results of query being profiled, the second element stores profiling information.
+        FtProfileResponse: A two-element array. The first element contains results of query being profiled, the second element
+            stores profiling information.
 
     Examples:
-        >>> ftSearchOptions = FtSeachOptions(return_fields=[ReturnField(field_identifier="a", alias="a_new"), ReturnField(field_identifier="b", alias="b_new")])
-        >>> await ft.profile(glide_client, "myIndex", FtProfileOptions.from_query_options(query="*", queryOptions=ftSearchOptions))
+        >>> ftSearchOptions = FtSeachOptions(
+        ...     return_fields=[
+        ...         ReturnField(field_identifier="a", alias="a_new"),
+        ...         ReturnField(field_identifier="b", alias="b_new")
+        ...     ]
+        ... )
+        >>> await ft.profile(
+        ...     glide_client,
+        ...     "myIndex",
+        ...     FtProfileOptions.from_query_options(query="*", queryOptions=ftSearchOptions)
+        ... )
             [
                 [
                     2,
