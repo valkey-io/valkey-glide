@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -59,13 +58,13 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	}
 
 	// info with option or with multiple options without route
-	sections := []api.Section{api.Cpu}
+	sections := []options.Section{options.Cpu}
 	if suite.serverVersion >= "7.0.0" {
-		sections = append(sections, api.Memory)
+		sections = append(sections, options.Memory)
 	}
-	opts := api.ClusterInfoOptions{
-		InfoOptions: &api.InfoOptions{Sections: sections},
-		Route:       nil,
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: nil,
 	}
 	response, err := client.InfoWithOptions(opts)
 	assert.NoError(t, err)
@@ -77,9 +76,9 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	}
 
 	// same sections with random route
-	opts = api.ClusterInfoOptions{
-		InfoOptions: &api.InfoOptions{Sections: sections},
-		Route:       config.RandomRoute.ToPtr(),
+	opts = options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: &options.RouteOption{Route: config.RandomRoute},
 	}
 	response, err = client.InfoWithOptions(opts)
 	assert.NoError(t, err)
@@ -94,9 +93,9 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	}
 
 	// default sections, multi node route
-	opts = api.ClusterInfoOptions{
+	opts = options.ClusterInfoOptions{
 		InfoOptions: nil,
-		Route:       config.AllPrimaries.ToPtr(),
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
 	}
 	response, err = client.InfoWithOptions(opts)
 	assert.NoError(t, err)
@@ -152,7 +151,7 @@ func (suite *GlideTestSuite) TestPingWithOptions_NoRoute() {
 		PingOptions: &options.PingOptions{
 			Message: "hello",
 		},
-		Route: nil,
+		RouteOption: nil,
 	}
 	result, err := client.PingWithOptions(options)
 	assert.Nil(suite.T(), err)
@@ -161,12 +160,11 @@ func (suite *GlideTestSuite) TestPingWithOptions_NoRoute() {
 
 func (suite *GlideTestSuite) TestPingWithOptions_WithRoute() {
 	client := suite.defaultClusterClient()
-	route := config.Route(config.AllNodes)
 	options := options.ClusterPingOptions{
 		PingOptions: &options.PingOptions{
 			Message: "hello",
 		},
-		Route: &route,
+		RouteOption: &options.RouteOption{Route: config.AllNodes},
 	}
 	result, err := client.PingWithOptions(options)
 	assert.Nil(suite.T(), err)
@@ -180,7 +178,7 @@ func (suite *GlideTestSuite) TestPingWithOptions_InvalidRoute() {
 		PingOptions: &options.PingOptions{
 			Message: "hello",
 		},
-		Route: &invalidRoute,
+		RouteOption: &options.RouteOption{Route: invalidRoute},
 	}
 	result, err := client.PingWithOptions(options)
 	assert.NotNil(suite.T(), err)
@@ -202,8 +200,7 @@ func (suite *GlideTestSuite) TestTimeWithoutRoute() {
 
 func (suite *GlideTestSuite) TestTimeWithAllNodesRoute() {
 	client := suite.defaultClusterClient()
-	route := config.Route(config.AllNodes)
-	options := options.RouteOption{Route: route}
+	options := options.RouteOption{Route: config.AllNodes}
 	result, err := client.TimeWithOptions(options)
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), result)

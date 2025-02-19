@@ -52,7 +52,7 @@ describe("Validation of Exported Symbols", () => {
 
         for (const file of filesWithNodeCode) {
             const sourceCode = await f.readFile(file, "utf8");
-            const sourceFile = await ts.createSourceFile(
+            const sourceFile = ts.createSourceFile(
                 file,
                 sourceCode,
                 ts.ScriptTarget.Latest,
@@ -123,7 +123,7 @@ async function getFiles(folderName: string): Promise<string[]> {
 
 function visitRoot(root: ts.Node) {
     // (Root Level)->(Level 1)
-    const children: ts.Node[] = root.getChildren();
+    const children: readonly ts.Node[] = root.getChildren();
     const resultList: string[] = [];
 
     // (Root Level) -> (Level 1) -> Level 2. This is the level in the AST where all the exported symbols in a file are present.

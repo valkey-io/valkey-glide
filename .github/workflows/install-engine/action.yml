@@ -26,7 +26,7 @@ runs:
     # TODO: self-hosted runners are actually cloning the repo, using the cache from the previous run
     # will not work as expected. We need to find a way to cache the valkey repo on the runner itself.
     steps:
-        - name: Cache Valkey
+        - name: Cache Valkey for non self hosted runners
           if: ${{!contains(inputs.target, 'aarch64-unknown') }}
           uses: actions/cache@v4
           id: cache-valkey
@@ -35,18 +35,21 @@ runs:
                   ~/valkey
               key: valkey-${{ inputs.engine-version }}-${{ inputs.target }}
 
-        # if no cache hit, build the engine
-        - name: Build Valkey
+        - name: Prepare Valkey sources
           if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
           shell: bash
           run: |
-              echo "Building valkey ${{ inputs.engine-version }}"
-              cd ~
+              echo "Cloning and checking out Valkey ${{ inputs.engine-version }}"
+              cd ~/
+              if [[ -d valkey ]]; then
+                echo "Removing existing valkey directory..."
+                rm -fR valkey
+              fi
               git clone https://github.com/valkey-io/valkey.git
               cd valkey
               git checkout ${{ inputs.engine-version }}
 
-        - name: Install engine
+        - name: Build and install engine
           shell: bash
           run: |
               cd ~/valkey
