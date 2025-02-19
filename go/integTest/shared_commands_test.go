@@ -7134,18 +7134,18 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		xadd, err := client.XAddWithOptions(
 			key,
 			[][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
-			options.NewXAddOptions().SetId("0-1"),
+			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(
 			key,
 			[][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
-			options.NewXAddOptions().SetId("0-2"),
+			*options.NewXAddOptions().SetId("0-2"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-2", xadd.Value())
-		xadd, err = client.XAddWithOptions(key, [][]string{{"e3_f1", "e3_v1"}}, options.NewXAddOptions().SetId("0-3"))
+		xadd, err = client.XAddWithOptions(key, [][]string{{"e3_f1", "e3_v1"}}, *options.NewXAddOptions().SetId("0-3"))
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-3", xadd.Value())
 
@@ -7155,7 +7155,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 			group,
 			consumer1,
 			map[string]string{key: ">"},
-			options.NewXReadGroupOptions().SetCount(1),
+			*options.NewXReadGroupOptions().SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
 		expectedResult := map[string]map[string][][]string{

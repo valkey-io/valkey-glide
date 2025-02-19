@@ -5780,6 +5780,39 @@ func (client *baseClient) XInfoStream(key string) (map[string]interface{}, error
 	return handleStringToAnyMapResponse(result)
 }
 
+// Returns detailed information about the stream stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key  - The key of the stream.
+//	opts - Stream info options.
+//
+// Return value:
+//
+//	A detailed stream information for the given `key`. See the example for a sample response.
+//
+// [valkey.io]: https://valkey.io/commands/xinfo-stream/
+func (client *baseClient) XInfoStreamFullWithOptions(
+	key string,
+	opts *options.XInfoStreamOptions,
+) (map[string]interface{}, error) {
+	args := []string{key, options.FullKeyword}
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
+	}
+	result, err := client.executeCommand(C.XInfoStream, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringToAnyMapResponse(result)
+}
+
 // Returns the list of all consumers and their attributes for the given consumer group of the
 // stream stored at `key`.
 //
@@ -5815,39 +5848,6 @@ func (client *baseClient) XInfoConsumers(key string, group string) ([]XInfoConsu
 		return nil, err
 	}
 	return handleXInfoConsumersResponse(response)
-}
-
-// Returns detailed information about the stream stored at `key`.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	key  - The key of the stream.
-//	opts - Stream info options.
-//
-// Return value:
-//
-//	A detailed stream information for the given `key`. See the example for a sample response.
-//
-// [valkey.io]: https://valkey.io/commands/xinfo-stream/
-func (client *baseClient) XInfoStreamFullWithOptions(
-	key string,
-	opts *options.XInfoStreamOptions,
-) (map[string]interface{}, error) {
-	args := []string{key, options.FullKeyword}
-	if opts != nil {
-		optionArgs, err := opts.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, optionArgs...)
-	}
-	result, err := client.executeCommand(C.XInfoStream, args)
-	if err != nil {
-		return nil, err
-	}
-	return handleStringToAnyMapResponse(result)
 }
 
 // Reads or modifies the array of bits representing the string that is held at key
