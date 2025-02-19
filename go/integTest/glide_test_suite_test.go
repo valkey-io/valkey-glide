@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -227,6 +229,15 @@ func (suite *GlideTestSuite) runWithDefaultClients(test func(client api.BaseClie
 	suite.runWithClients(clients, test)
 }
 
+func (suite *GlideTestSuite) runParallelizedWithDefaultClients(
+	parallelism int,
+	count int64,
+	test func(client api.BaseClient),
+) {
+	clients := suite.getDefaultClients()
+	suite.runParallelizedWithClients(clients, parallelism, count, test)
+}
+
 func (suite *GlideTestSuite) getDefaultClients() []api.BaseClient {
 	return []api.BaseClient{suite.defaultClient(), suite.defaultClusterClient()}
 }
@@ -271,6 +282,29 @@ func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(
 	for _, client := range clients {
 		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
 			test(client)
+		})
+	}
+}
+
+func (suite *GlideTestSuite) runParallelizedWithClients(
+	clients []api.BaseClient,
+	parallelism int,
+	count int64,
+	test func(client api.BaseClient),
+) {
+	for _, client := range clients {
+		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
+			var wg sync.WaitGroup
+			wg.Add(parallelism)
+			for i := 0; i < parallelism; i++ {
+				go func() {
+					defer wg.Done()
+					for !suite.T().Failed() && atomic.AddInt64(&count, -1) > 0 {
+						test(client)
+					}
+				}()
+			}
+			wg.Wait()
 		})
 	}
 }

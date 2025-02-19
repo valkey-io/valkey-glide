@@ -7,6 +7,9 @@ import (
 	"unsafe"
 )
 
+// pinner is a wrapper of a runtime.Pinner making the interface
+// compatible to the cgo.Handle in the Go < 1.21.
+// Note that this make a pinner can only hold one unsafe.Pointer.
 type pinner struct {
 	r runtime.Pinner
 }
