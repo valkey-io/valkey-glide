@@ -1534,6 +1534,57 @@ func ExampleGlideClient_ZInterCard() {
 	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 	client.ZAdd("key2", map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
 
+	res, err := client.ZInterCard([]string{"key1", "key2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(res)
+
+	// Output:
+	// 3
+}
+
+func ExampleClusterGlideClient_ZInterCard() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+	client.ZAdd("key2", map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
+
+	res, err := client.ZInterCard([]string{"key1", "key2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(res)
+
+	// Output:
+	// 3
+}
+
+func ExampleGlideClient_ZInterCardWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+	client.ZAdd("key2", map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
+
+	res, err := client.ZInterCardWithOptions(
+		[]string{"key1", "key2"},
+		options.NewZInterCardOptions().SetLimit(5),
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(res)
+
+	// Output:
+	// 3
+}
+
+func ExampleClusterGlideClient_ZInterCardWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+	client.ZAdd("key2", map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
+
 	res, err := client.ZInterCardWithOptions(
 		[]string{"key1", "key2"},
 		options.NewZInterCardOptions().SetLimit(5),
