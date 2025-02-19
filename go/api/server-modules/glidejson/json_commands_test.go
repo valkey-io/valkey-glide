@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/api"
-	"github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
+	"github.com/valkey-io/valkey-glide/go/api/options"
+	glideoptions "github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
 )
 
 func Example_jsonSet() {
@@ -39,7 +40,7 @@ func Example_jsonSetWithOptions() {
 		"key",
 		"$",
 		"{\"a\": 1.0, \"b\": 2}",
-		options.NewJsonSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist),
+		glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
 	)
 
 	if err != nil {
@@ -57,7 +58,7 @@ func ExampleGlideClusterClient_jsonSetWithOptions() {
 		"key",
 		"$",
 		"{\"a\": 1.0, \"b\": 2}",
-		options.NewJsonSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist),
+		glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
 	)
 
 	if err != nil {
@@ -66,4 +67,60 @@ func ExampleGlideClusterClient_jsonSetWithOptions() {
 	fmt.Println(jsonSetResult)
 
 	// Output: OK
+}
+
+func Example_jsonGet() {
+	var client *api.GlideClient = getExampleGlideClient()
+	jsonValue := "{\"a\":1.0,\"b\":2}"
+	_, err := Set(client, "key", "$", jsonValue)
+
+	jsonGetResult, err := Get(client, "key")
+	if err != nil {
+		fmt.Println("JSON.SET example failed with an error: ", err)
+	}
+	fmt.Println(jsonGetResult.Value())
+
+	// Output: "{\"a\":1.0,\"b\":2}"
+}
+
+func ExampleGlideClusterClient_jsonGet() {
+	var client *api.GlideClusterClient = getExampleGlideClusterClient()
+	jsonValue := "{\"a\":1.0,\"b\":2}"
+	_, err := Set(client, "key", "$", jsonValue)
+
+	jsonGetResult, err := Get(client, "key")
+	if err != nil {
+		fmt.Println("JSON.SET example failed with an error: ", err)
+	}
+	fmt.Println(jsonGetResult.Value())
+
+	// Output: "{\"a\":1.0,\"b\":2}"
+}
+
+func Example_jsonGetWithOptions() {
+	var client *api.GlideClient = getExampleGlideClient()
+	jsonValue := "{\"a\": {\"c\": 1, \"d\": 4}, \"b\": {\"c\": 2}, \"c\": true}"
+	_, err := Set(client, "key", "$", jsonValue)
+	jsonGetResult, err := GetWithOptions(
+		client, "key", glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
+	if err != nil {
+		fmt.Println("JSON.SET example failed with an error: ", err)
+	}
+	fmt.Println(jsonGetResult.Value())
+
+	// Output: "[true,1,2]"
+}
+
+func ExampleGlideClusterClient_jsonGetWithOptions() {
+	var client *api.GlideClusterClient = getExampleGlideClusterClient()
+	jsonValue := "{\"a\": {\"c\": 1, \"d\": 4}, \"b\": {\"c\": 2}, \"c\": true}"
+	_, err := Set(client, "key", "$", jsonValue)
+	jsonGetResult, err := GetWithOptions(
+		client, "key", glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
+	if err != nil {
+		fmt.Println("JSON.SET example failed with an error: ", err)
+	}
+	fmt.Println(jsonGetResult.Value())
+
+	// Output: "[true,1,2]"
 }

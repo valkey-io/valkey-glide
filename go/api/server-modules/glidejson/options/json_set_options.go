@@ -2,18 +2,18 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/api"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 type JsonSetOptions struct {
-	ConditionalSet api.ConditionalSet
+	ConditionalSet options.ConditionalSet
 }
 
 func NewJsonSetOptionsBuilder() *JsonSetOptions {
 	return &JsonSetOptions{}
 }
 
-func (jsonSetOptions *JsonSetOptions) SetConditionalSet(conditionalSet api.ConditionalSet) *JsonSetOptions {
+func (jsonSetOptions *JsonSetOptions) SetConditionalSet(conditionalSet options.ConditionalSet) *JsonSetOptions {
 	jsonSetOptions.ConditionalSet = conditionalSet
 	return jsonSetOptions
 }

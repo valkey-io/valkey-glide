@@ -7,10 +7,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/api"
-  "github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 	"github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson"
-	"github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
+	glideoptions "github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
 )
 
 func (suite *GlideTestSuite) TestModuleVerifyJsonLoaded() {
@@ -43,7 +42,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommand() {
 	assert.Equal(t, jsonValue, jsonGetResult.Value())
 
 	jsonGetResultWithMultiPaths, err := glidejson.GetWithOptions(
-		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$.a", "$.b"}))
+		client, key, glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$.a", "$.b"}))
 	assert.NoError(t, err)
 	assert.Equal(t, "{\"$.a\":[1.0],\"$.b\":[2]}", jsonGetResultWithMultiPaths.Value())
 
@@ -52,7 +51,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommand() {
 	assert.True(t, jsonGetResult.IsNil())
 
 	jsonGetResult, err = glidejson.GetWithOptions(
-		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$.d"}))
+		client, key, glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$.d"}))
 	assert.NoError(t, err)
 	assert.Equal(t, "[]", jsonGetResult.Value())
 }
@@ -67,12 +66,12 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandMultipleValues() {
 	assert.Equal(t, "OK", jsonSetResult)
 
 	jsonGetResult, err := glidejson.GetWithOptions(
-		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
+		client, key, glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
 	assert.NoError(t, err)
 	assert.Equal(t, "[true,1,2]", jsonGetResult.Value())
 
 	jsonGetResultWithMultiPaths, err := glidejson.GetWithOptions(
-		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c", "$.c"}))
+		client, key, glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c", "$.c"}))
 	assert.NoError(t, err)
 	assert.Equal(t, "{\"$..c\":[true,1,2],\"$.c\":[true]}", jsonGetResultWithMultiPaths.Value())
 
@@ -81,7 +80,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandMultipleValues() {
 	assert.Equal(t, "OK", jsonSetResult)
 
 	jsonGetResult, err = glidejson.GetWithOptions(
-		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
+		client, key, glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
 	assert.NoError(t, err)
 	assert.Equal(t, "[\"new_value\",\"new_value\",\"new_value\"]", jsonGetResult.Value())
 }
@@ -97,7 +96,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
 		key,
 		"$",
 		jsonValue,
-		options.NewJsonSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists),
+		glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfExists),
 	)
 	assert.NoError(t, err)
 	assert.True(t, jsonSetResult.IsNil())
@@ -107,7 +106,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
 		key,
 		"$",
 		jsonValue,
-		options.NewJsonSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist),
+		glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
 	)
 	assert.NoError(t, err)
 	assert.Equal(t, "OK", jsonSetResult.Value())
@@ -117,13 +116,13 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
 		key,
 		"$.a",
 		"4.5",
-		options.NewJsonSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist),
+		glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
 	)
 	assert.NoError(t, err)
 	assert.True(t, jsonSetResult.IsNil())
 
 	jsonGetResult, err := glidejson.GetWithOptions(
-		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{".a"}))
+		client, key, glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{".a"}))
 	assert.NoError(t, err)
 	assert.Equal(t, "1.0", jsonGetResult.Value())
 
@@ -132,13 +131,13 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
 		key,
 		"$.a",
 		"4.5",
-		options.NewJsonSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists),
+		glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfExists),
 	)
 	assert.NoError(t, err)
 	assert.Equal(t, "OK", jsonSetResult.Value())
 
 	jsonGetResult, err = glidejson.GetWithOptions(
-		client, key, options.NewJsonGetOptionsBuilder().SetPaths([]string{".a"}))
+		client, key, glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{".a"}))
 	assert.NoError(t, err)
 	assert.Equal(t, "4.5", jsonGetResult.Value())
 }
@@ -156,7 +155,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandFormatting() {
 	actualGetResult, err := glidejson.GetWithOptions(
 		client,
 		key,
-		options.NewJsonGetOptionsBuilder().
+		glideoptions.NewJsonGetOptionsBuilder().
 			SetPaths([]string{"$"}).SetIndent("  ").SetNewline("\n").SetSpace(" "),
 	)
 	assert.NoError(t, err)
@@ -166,7 +165,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandFormatting() {
 	actualGetResult2, err := glidejson.GetWithOptions(
 		client,
 		key,
-		options.NewJsonGetOptionsBuilder().
+		glideoptions.NewJsonGetOptionsBuilder().
 			SetPaths([]string{"$"}).SetIndent("~").SetNewline("\n").SetSpace("*"),
 	)
 	assert.NoError(t, err)
