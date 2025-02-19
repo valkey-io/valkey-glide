@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/options"
@@ -1776,6 +1777,71 @@ func ExampleGlideClusterClient_XInfoStreamFullWithOptions() {
 	//   "radix-tree-nodes": 2,
 	//   "recorded-first-entry-id": "12345-1"
 	// }
+}
+
+func ExampleGlideClient_XInfoConsumers() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	key := uuid.NewString()
+	group := "myGroup"
+
+	// create an empty stream with a group
+	client.XGroupCreateWithOptions(key, group, "0-0", *options.NewXGroupCreateOptions().SetMakeStream())
+	// add couple of entries
+	client.XAddWithOptions(key, [][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}}, *options.NewXAddOptions().SetId("0-1"))
+	client.XAddWithOptions(key, [][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}}, *options.NewXAddOptions().SetId("0-2"))
+	// read them
+	client.XReadGroup(group, "myConsumer", map[string]string{key: ">"})
+	// get the info
+	time.Sleep(100 * time.Millisecond)
+	response, err := client.XInfoConsumers(key, group)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// Expanded:
+	fmt.Printf("Consumer name:  %s\n", response[0].Name)
+	fmt.Printf("PEL count:      %d\n", response[0].Pending)
+	// exact values of `Idle` and `Inactive` depend on timing
+	fmt.Printf("Idle > 0:       %t\n", response[0].Idle > 0)
+	fmt.Printf("Inactive > 0:   %t\n", response[0].Inactive.Value() > 0) // Added in version 7.0.0
+	// Output:
+	// Consumer name:  myConsumer
+	// PEL count:      2
+	// Idle > 0:       true
+	// Inactive > 0:   true
+}
+
+func ExampleGlideClusterClient_XInfoConsumers() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	key := uuid.NewString()
+	group := "myGroup"
+	consumer := "myConsumer"
+
+	// create an empty stream with a group
+	client.XGroupCreateWithOptions(key, group, "0-0", *options.NewXGroupCreateOptions().SetMakeStream())
+	// add couple of entries
+	client.XAddWithOptions(key, [][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}}, *options.NewXAddOptions().SetId("0-1"))
+	client.XAddWithOptions(key, [][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}}, *options.NewXAddOptions().SetId("0-2"))
+	// read them
+	client.XReadGroupWithOptions(group, consumer, map[string]string{key: ">"}, *options.NewXReadGroupOptions().SetCount(1))
+	// get the info
+	time.Sleep(100 * time.Millisecond)
+	response, err := client.XInfoConsumers(key, group)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// Expanded:
+	fmt.Printf("Consumer name:  %s\n", response[0].Name)
+	fmt.Printf("PEL count:      %d\n", response[0].Pending)
+	// exact values of `Idle` and `Inactive` depend on timing
+	fmt.Printf("Idle > 0:       %t\n", response[0].Idle > 0)
+	fmt.Printf("Inactive > 0:   %t\n", response[0].Inactive.Value() > 0) // Added in version 7.0.0
+	// Output:
+	// Consumer name:  myConsumer
+	// PEL count:      1
+	// Idle > 0:       true
+	// Inactive > 0:   true
 }
 
 func ExampleGlideClient_XInfoGroups() {
