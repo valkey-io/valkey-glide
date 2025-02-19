@@ -314,9 +314,10 @@ class TestAZAffinity:
                 elif node_az != az and get_calls > 0:
                     pytest.fail(f"GET calls found on node not in AZ {az}")
 
-            assert (
-                matching_entries_count == 1
-            ), f"Exactly one primary in AZ should handle all calls. Matching entries: {matching_entries_count}, Total GET calls: {total_get_calls}"
+            assert matching_entries_count == 1, (
+                "Exactly one primary in AZ should handle all calls. "
+                f"Matching entries: {matching_entries_count}, Total GET calls: {total_get_calls}"
+            )
             assert (
                 total_get_calls == GET_CALLS
             ), f"Total GET calls mismatch, expected {GET_CALLS}, got {total_get_calls}"

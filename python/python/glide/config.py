@@ -205,8 +205,10 @@ class BaseClientConfiguration:
                 stuck in case of a queue backlog.
                 If not set, a default value will be used.
             client_az (Optional[str]): Availability Zone of the client.
-                If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
-                If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to nodes (first replicas then primary) within the specified AZ if they exist.
+                If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas
+                within the specified AZ if exits.
+                If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed
+                to nodes (first replicas then primary) within the specified AZ if they exist.
             advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
         """
         self.addresses = addresses
@@ -324,9 +326,12 @@ class GlideClientConfiguration(BaseClientConfiguration):
             stuck in case of a queue backlog.
             If not set, a default value will be used.
         client_az (Optional[str]): Availability Zone of the client.
-            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
-            If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to nodes (first replicas then primary) within the specified AZ if they exist.
-        advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client, see `AdvancedGlideClientConfiguration`.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
+            the specified AZ if exits.
+            If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to
+            nodes (first replicas then primary) within the specified AZ if they exist.
+        advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client,
+            see `AdvancedGlideClientConfiguration`.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -487,9 +492,12 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             stuck in case of a queue backlog.
             If not set, a default value will be used.
         client_az (Optional[str]): Availability Zone of the client.
-            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
-            If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to nodes (first replicas then primary) within the specified AZ if they exist.
-        advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client, see `AdvancedGlideClusterClientConfiguration`.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
+            the specified AZ if exits.
+            If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to
+            nodes (first replicas then primary) within the specified AZ if they exist.
+        advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client,
+            see `AdvancedGlideClusterClientConfiguration`.
 
 
     Notes:
