@@ -4,6 +4,8 @@
 * Go: Add ZRangeStore ([3105](https://github.com/valkey-io/valkey-glide/pull/3105))
 * Go: Add `ZUNION` ([#3119](https://github.com/valkey-io/valkey-glide/pull/3119))
 * Go: Add `ZUNIONSTORE` ([#3136](https://github.com/valkey-io/valkey-glide/pull/3136))
+* Go: Add `ZInterCard` ([#3078](https://github.com/valkey-io/valkey-glide/issues/3078))
+
 
 #### Breaking Changes
 
@@ -29,8 +31,6 @@
 * Node, Python: Add `IFEQ` option ([#2909](https://github.com/valkey-io/valkey-glide/pull/2909), [#2962](https://github.com/valkey-io/valkey-glide/pull/2962))
 * Java: Add `IFEQ` option ([#2978](https://github.com/valkey-io/valkey-glide/pull/2978))
 * Core: Add AzAffinityReplicasAndPrimary Read Strategy([#2986](https://github.com/valkey-io/valkey-glide/pull/2986))
-* Go: Add `ZInterCard` ([#3078](https://github.com/valkey-io/valkey-glide/issues/3078))
-
 #### Breaking Changes
 
 #### Fixes
