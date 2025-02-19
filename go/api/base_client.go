@@ -5828,19 +5828,6 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 //		An array of [api.XInfoConsumerInfo], where each element contains the attributes
 //	    of a consumer for the given consumer group of the stream at `key`.
 //
-// Example:
-//
-//	info, err := client.XInfoConsumers(key, group)
-//	info:
-//	// []XInfoConsumerInfo {
-//	// 	XInfoConsumerInfo {
-//	// 		Name: "Alice",
-//	// 		Pending: 2,
-//	// 		Idle: 9104628,
-//	// 		Inactive: {18104698 false},             // Added in version 7.2.0
-//	// 	},
-//	// }
-//
 // [valkey.io]: https://valkey.io/commands/xinfo-consumers/
 func (client *baseClient) XInfoConsumers(key string, group string) ([]XInfoConsumerInfo, error) {
 	response, err := client.executeCommand(C.XInfoConsumers, []string{key, group})
