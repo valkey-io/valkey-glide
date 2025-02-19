@@ -1,16 +1,10 @@
 import asyncio
-from typing import List, Tuple, Optional
-
-from glide.async_commands.server_modules import glide_json as json
-from glide.async_commands.server_modules import ft
-from glide.constants import OK, FtSearchResponse, TEncodable
-
 import uuid
+from typing import List, Optional, Tuple
 
+from glide import AllNodes, ClosingError
+from glide import ConnectionError as GlideConnectionError
 from glide import (
-    AllNodes,
-    ClosingError,
-    ConnectionError as GlideConnectionError,
     GlideClusterClient,
     GlideClusterClientConfiguration,
     InfoSection,
@@ -18,9 +12,10 @@ from glide import (
     LogLevel,
     NodeAddress,
     RequestError,
-    TimeoutError as GlideTimeoutError,
 )
-
+from glide import TimeoutError as GlideTimeoutError
+from glide.async_commands.server_modules import ft
+from glide.async_commands.server_modules import glide_json as json
 from glide.async_commands.server_modules.ft_options.ft_create_options import (
     DataType,
     DistanceMetricType,
@@ -34,11 +29,12 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     VectorFieldAttributesHnsw,
     VectorType,
 )
-
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSearchOptions,
     ReturnField,
 )
+from glide.constants import OK, FtSearchResponse, TEncodable
+
 
 async def create_client(
     nodes_list: Optional[List[Tuple[str, int]]] = None
@@ -69,6 +65,7 @@ async def create_client(
     )
     return await GlideClusterClient.create(config)
 
+
 async def app_logic(client: GlideClusterClient):
     """
     Executes the main logic of the application, performing basic operations
@@ -84,24 +81,22 @@ async def app_logic(client: GlideClusterClient):
     json_key2 = prefix + "2"
     json_value1 = {"a": 11111, "b": 2, "c": 3}
     json_value2 = {"a": 22222, "b": 2, "c": 3}
-    create_response = await ft.create(client, index,
-                    schema=[
-                        NumericField("$.a", "a"),
-                        NumericField("$.b", "b"),
-                    ],
-                options=FtCreateOptions(DataType.JSON),
-            )
-    Logger.log(LogLevel.INFO, "app", f"Create response is = {create_response!r}")   # 'OK'
+    create_response = await ft.create(
+        client,
+        index,
+        schema=[
+            NumericField("$.a", "a"),
+            NumericField("$.b", "b"),
+        ],
+        options=FtCreateOptions(DataType.JSON),
+    )
+    Logger.log(
+        LogLevel.INFO, "app", f"Create response is = {create_response!r}"
+    )  # 'OK'
 
     # Create a json key.
-    assert (
-        await json.set(client, json_key1, "$", json.dumps(json_value1))
-        == OK
-    )
-    assert (
-        await json.set(client, json_key2, "$", json.dumps(json_value2))
-        == OK
-    )
+    assert await json.set(client, json_key1, "$", json.dumps(json_value1)) == OK
+    assert await json.set(client, json_key2, "$", json.dumps(json_value2)) == OK
 
     # Search for the vector
     search_response = await ft.search(client, index, "*", options=ft_search_options)

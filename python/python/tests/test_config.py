@@ -9,14 +9,11 @@ from glide.config import (
     NodeAddress,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
-    ProtocolVersion,
     ReadFrom,
 )
-from glide.glide_client import GlideClient, GlideClusterClient
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide.protobuf.connection_request_pb2 import TlsMode
-from tests.conftest import create_client
 
 
 def test_default_client_config():

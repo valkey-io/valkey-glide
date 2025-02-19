@@ -34,7 +34,8 @@ TSingleNodeRoute = Union[RandomNode, SlotKeyRoute, SlotIdRoute, ByAddressRoute]
 # When specifying legacy path (path doesn't start with `$`), response will be T
 # Otherwise, (when specifying JSONPath), response will be List[Optional[T]].
 #
-# TJsonResponse is designed to handle scenarios where some paths may not contain valid values, especially with JSONPath targeting multiple paths.
+# TJsonResponse is designed to handle scenarios where some paths may not contain valid values, especially with JSONPath
+# targeting multiple paths.
 # In such cases, the response may include None values, represented as `Optional[T]` in the list.
 # This type provides flexibility for commands where a subset of the paths may return None.
 #
@@ -44,13 +45,15 @@ TJsonResponse = Union[T, List[Optional[T]]]
 # When specifying legacy path (path doesn't start with `$`), response will be T
 # Otherwise, (when specifying JSONPath), response will be List[T].
 # This type represents the response format for commands that apply to every path and every type in a JSON document.
-# It covers both singular and multiple paths, ensuring that the command returns valid results for each matched path without None values.
+# It covers both singular and multiple paths, ensuring that the command returns valid results for each matched path
+# without None values.
 #
 # TJsonUniversalResponse is considered "universal" because it applies to every matched path and
 # guarantees valid, non-null results across all paths, covering both singular and multiple paths.
 # This type is used for commands that return results from all matched paths, ensuring that each
 # path contains meaningful values without None entries (unless it's part of the commands response).
-# It is typically used in scenarios where each target is expected to yield a valid response. For commands that are valid for all target types.
+# It is typically used in scenarios where each target is expected to yield a valid response. For commands that are valid
+# for all target types.
 #
 # For more information, see: https://redis.io/docs/data-types/json/path/ .
 TJsonUniversalResponse = Union[T, List[T]]
@@ -62,7 +65,8 @@ TFunctionListResponse = List[
     ]
 ]
 # Response for function stats command on a single node.
-# The response holds a map with 2 keys: Current running function / script and information about it, and the engines and the information about it.
+# The response holds a map with 2 keys: Current running function / script and information about it, and the engines and
+# the information about it.
 TFunctionStatsSingleNodeResponse = Mapping[
     bytes,
     Union[
