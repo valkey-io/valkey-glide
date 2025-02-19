@@ -41,13 +41,13 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with pypi in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
+                  # Filter entries with pypi in PACKAGE_MANAGERS and remove "ephemeral" from RUNNER
                   export PLATFORM_MATRIX=$(jq 'map(
-                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"])))
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"]))) 
                       | .RUNNER = (
-                          if (.RUNNER | type == "array")
-                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end))
-                          else (if . == "ephemeral" then "persistent" else . end)
+                          if (.RUNNER | type == "array") 
+                          then (.RUNNER | map(select(. != "ephemeral"))) 
+                          else .RUNNER 
                           end
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
