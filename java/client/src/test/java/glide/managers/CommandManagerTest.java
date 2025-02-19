@@ -299,15 +299,15 @@ public class CommandManagerTest {
         var requestBuilder = captor.getValue();
 
         // verify
-        assertTrue(requestBuilder.hasTransaction());
-        assertEquals(3, requestBuilder.getTransaction().getCommandsCount());
+        assertTrue(requestBuilder.hasBatch());
+        assertEquals(3, requestBuilder.getBatch().getCommandsCount());
 
         LinkedList<ByteString> resultPayloads = new LinkedList<>();
         resultPayloads.add(ByteString.copyFromUtf8("one"));
         resultPayloads.add(ByteString.copyFromUtf8("two"));
         resultPayloads.add(ByteString.copyFromUtf8("three"));
         for (command_request.CommandRequestOuterClass.Command command :
-                requestBuilder.getTransaction().getCommandsList()) {
+                requestBuilder.getBatch().getCommandsList()) {
             assertEquals(CustomCommand, command.getRequestType());
             assertEquals(ByteString.copyFromUtf8("GETSTRING"), command.getArgsArray().getArgs(0));
             assertEquals(resultPayloads.pop(), command.getArgsArray().getArgs(1));
