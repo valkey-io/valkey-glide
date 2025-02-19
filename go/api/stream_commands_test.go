@@ -1777,3 +1777,75 @@ func ExampleGlideClusterClient_XInfoStreamFullWithOptions() {
 	//   "recorded-first-entry-id": "12345-1"
 	// }
 }
+
+func ExampleGlideClient_XInfoGroups() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	key := uuid.NewString()
+	group := "myGroup"
+
+	// create an empty stream with a group
+	client.XGroupCreateWithOptions(key, group, "0-0", *options.NewXGroupCreateOptions().SetMakeStream())
+	// add couple of entries
+	client.XAddWithOptions(key, [][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}}, *options.NewXAddOptions().SetId("0-1"))
+	client.XAddWithOptions(key, [][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}}, *options.NewXAddOptions().SetId("0-2"))
+	// read them
+	client.XReadGroup(group, "myConsumer", map[string]string{key: ">"})
+	// get the info
+	response, err := client.XInfoGroups(key)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(response)
+	// Expanded:
+	fmt.Printf("Group name:             %s\n", response[0].Name)
+	fmt.Printf("Consumers count:        %d\n", response[0].Consumers)
+	fmt.Printf("PEL count:              %d\n", response[0].Pending)
+	fmt.Printf("Last delivered message: %s\n", response[0].LastDeliveredId)
+	fmt.Printf("Entries read:           %d\n", response[0].EntriesRead.Value()) // Added in version 7.0.0
+	fmt.Printf("Lag:                    %d\n", response[0].Lag.Value())         // Added in version 7.0.0
+	// Output:
+	// [{myGroup 1 2 0-2 {2 false} {0 false}}]
+	// Group name:             myGroup
+	// Consumers count:        1
+	// PEL count:              2
+	// Last delivered message: 0-2
+	// Entries read:           2
+	// Lag:                    0
+}
+
+func ExampleGlideClusterClient_XInfoGroups() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	key := uuid.NewString()
+	group := "myGroup"
+
+	// create an empty stream with a group
+	client.XGroupCreateWithOptions(key, group, "0-0", *options.NewXGroupCreateOptions().SetMakeStream())
+	// add couple of entries
+	client.XAddWithOptions(key, [][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}}, *options.NewXAddOptions().SetId("0-1"))
+	client.XAddWithOptions(key, [][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}}, *options.NewXAddOptions().SetId("0-2"))
+	// read them
+	client.XReadGroup(group, "myConsumer", map[string]string{key: ">"})
+	// get the info
+	response, err := client.XInfoGroups(key)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(response)
+	// Expanded:
+	fmt.Printf("Group name:             %s\n", response[0].Name)
+	fmt.Printf("Consumers count:        %d\n", response[0].Consumers)
+	fmt.Printf("PEL count:              %d\n", response[0].Pending)
+	fmt.Printf("Last delivered message: %s\n", response[0].LastDeliveredId)
+	fmt.Printf("Entries read:           %d\n", response[0].EntriesRead.Value()) // Added in version 7.0.0
+	fmt.Printf("Lag:                    %d\n", response[0].Lag.Value())         // Added in version 7.0.0
+	// Output:
+	// [{myGroup 1 2 0-2 {2 false} {0 false}}]
+	// Group name:             myGroup
+	// Consumers count:        1
+	// PEL count:              2
+	// Last delivered message: 0-2
+	// Entries read:           2
+	// Lag:                    0
+}
