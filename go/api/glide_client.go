@@ -160,7 +160,7 @@ func (client *GlideClient) Info() (string, error) {
 func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Info, optionArgs)
 	if err != nil {
@@ -230,7 +230,7 @@ func (client *GlideClient) Ping() (string, error) {
 func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
 	optionArgs, err := pingOptions.ToArgs()
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Ping, optionArgs)
 	if err != nil {

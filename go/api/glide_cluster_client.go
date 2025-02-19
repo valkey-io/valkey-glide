@@ -212,7 +212,7 @@ func (client *GlideClusterClient) Ping() (string, error) {
 func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (string, error) {
 	args, err := pingOptions.ToArgs()
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	if pingOptions.RouteOption == nil || pingOptions.RouteOption.Route == nil {
 		response, err := client.executeCommand(C.Ping, args)
