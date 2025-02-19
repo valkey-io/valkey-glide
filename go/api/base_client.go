@@ -5813,6 +5813,30 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 	return handleStringToAnyMapResponse(result)
 }
 
+// Returns the list of all consumers and their attributes for the given consumer group of the
+// stream stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key   - The key of the stream.
+//	group - The consumer group name.
+//
+// Return value:
+//
+//	An array of [api.XInfoConsumerInfo], where each element contains the attributes
+//	of a consumer for the given consumer group of the stream at `key`.
+//
+// [valkey.io]: https://valkey.io/commands/xinfo-consumers/
+func (client *baseClient) XInfoConsumers(key string, group string) ([]XInfoConsumerInfo, error) {
+	response, err := client.executeCommand(C.XInfoConsumers, []string{key, group})
+	if err != nil {
+		return nil, err
+	}
+	return handleXInfoConsumersResponse(response)
+}
+
 // Returns the list of all consumer groups and their attributes for the stream stored at `key`.
 //
 // See [valkey.io] for details.
