@@ -41,13 +41,13 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with pypi in PACKAGE_MANAGERS and remove "ephemeral" from RUNNER
+                  # Filter entries with pypi in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(jq 'map(
-                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"]))) 
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"])))
                       | .RUNNER = (
                           if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(select(. != "ephemeral"))) 
-                          else .RUNNER 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
                           end
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
@@ -310,31 +310,35 @@ jobs:
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               env:
-                  PB_REL: "https://github.com/protocolbuffers/protobuf/releases"
+                PB_REL: "https://github.com/protocolbuffers/protobuf/releases"
               run: |
-                # Install protobuf compiler for source distriburtion test
-                if [[ $(`which apt`) != '' ]]
-                then
-                  echo "installing unzip and curl"
+                # Determine PROTOC_ARCH based on NAMED_OS and ARCH
+                if [[ "${{ matrix.NAMED_OS }}" == "linux" ]]; then
+                  if [[ "${{ matrix.ARCH }}" == "x64" ]]; then
+                    PROTOC_ARCH="linux-x86_64"
+                  elif [[ "${{ matrix.ARCH }}" == "arm64" ]]; then
+                    PROTOC_ARCH="linux-aarch_64"
+                  fi
+                  # Install necessary packages on Linux
                   sudo apt-get update
-                  sudo apt install unzip curl python3.13 -y
+                  sudo apt-get install -y unzip curl python3.11
+                elif [[ "${{ matrix.NAMED_OS }}" == "darwin" ]]; then
+                  if [[ "${{ matrix.ARCH }}" == "x64" ]]; then
+                    PROTOC_ARCH="osx-x86_64"
+                  elif [[ "${{ matrix.ARCH }}" == "arm64" ]]; then
+                    PROTOC_ARCH="osx-aarch_64"
+                  fi
                 fi
-                ARCH=`uname -p`
-                if [[ $ARCH == 'x86_64' ]]; then 
-                  PROTOC_ARCH="x86_64"
-                elif [[ $ARCH == 'aarch64' ]]; then 
-                  PROTOC_ARCH="aarch_64"
-                  export CC_aarch64_unknown_linux_gnu=gcc
-                  export CFLAGS_aarch64_unknown_linux_gnu="-march=armv8-a"
-                else 
-                  echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
-                  exit 1 
-                fi
-                curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-${PROTOC_ARCH}.zip
-                unzip protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d $HOME/.local
+            
+                # Download and install protoc for source dist test
+                curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-$PROTOC_ARCH.zip
+                unzip protoc-3.20.3-$PROTOC_ARCH.zip -d $HOME/.local
                 export PATH="$PATH:$HOME/.local/bin"
-                
-                # test source dist
+            
+                # Verify protoc installation
+                protoc --version
+            
+                # Test source dist
                 python -m venv venv-sdist
                 source venv-sdist/bin/activate
                 pip install -U pip
