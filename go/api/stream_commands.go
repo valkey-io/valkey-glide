@@ -115,6 +115,8 @@ type StreamCommands interface {
 
 	XInfoConsumers(key string, group string) ([]XInfoConsumerInfo, error)
 
+	XInfoGroups(key string) ([]XInfoGroupInfo, error)
+
 	XRange(key string, start options.StreamBoundary, end options.StreamBoundary) ([]XRangeResponse, error)
 
 	XRangeWithOptions(

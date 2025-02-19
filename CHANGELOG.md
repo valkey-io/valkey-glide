@@ -5,6 +5,7 @@
 * Go: Add `ZUNION` ([#3119](https://github.com/valkey-io/valkey-glide/pull/3119))
 * Go: Add `ZUNIONSTORE` ([#3136](https://github.com/valkey-io/valkey-glide/pull/3136))
 * Go: Add `XINFO CONSUMERS` ([#3120](https://github.com/valkey-io/valkey-glide/pull/3120))
+* Go: Add `XINFO GROUPS` ([#3106](https://github.com/valkey-io/valkey-glide/pull/3106))
 
 #### Breaking Changes
 
