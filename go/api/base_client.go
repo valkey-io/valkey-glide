@@ -6009,7 +6009,7 @@ func (client *baseClient) ZInterWithScores(
 //
 // Return value:
 //
-//	The number of elements in the resulting sorted set stored at <code>destination</code>.
+//	The number of elements in the resulting sorted set stored at `destination`.
 //
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error) {
@@ -6038,7 +6038,7 @@ func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys opt
 //
 // Return value:
 //
-//	The number of elements in the resulting sorted set stored at <code>destination</code>.
+//	The number of elements in the resulting sorted set stored at `destination`.
 //
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (client *baseClient) ZInterStoreWithOptions(
