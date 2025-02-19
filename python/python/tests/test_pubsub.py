@@ -1197,21 +1197,19 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}".format("channel")
-                + ":"
-                + "{}".format(get_random_string(5)): get_random_string(10)
+                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
+                    10
+                )
                 for _ in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}".format("pattern")
-                + ":"
-                + "{}".format(get_random_string(5)): get_random_string(5)
+                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
+                    5
+                )
                 for _ in range(NUM_CHANNELS)
             }
             sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}"
-                + ":"
-                + "f{get_random_string(10)}": get_random_string(7)
+                f"{SHARD_PREFIX}: {get_random_string(10)}": get_random_string(7)
                 for _ in range(NUM_CHANNELS)
             }
 
@@ -1359,9 +1357,7 @@ class TestPubSub:
                 for _ in range(NUM_CHANNELS)
             }
             sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}"
-                + ":"
-                + "f{get_random_string(10)}": get_random_string(7)
+                f"{SHARD_PREFIX}: {get_random_string(10)}": get_random_string(7)
                 for _ in range(NUM_CHANNELS)
             }
 
