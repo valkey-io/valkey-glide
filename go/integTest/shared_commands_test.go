@@ -7124,6 +7124,176 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 	})
 }
 
+func (suite *GlideTestSuite) TestXInfoGroups() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		group := uuid.NewString()
+		consumer := uuid.NewString()
+
+		suite.verifyOK(client.XGroupCreateWithOptions(key, group, "0-0", *options.NewXGroupCreateOptions().SetMakeStream()))
+
+		// one empty group exists
+		xinfo, err := client.XInfoGroups(key)
+		assert.NoError(suite.T(), err)
+		if suite.serverVersion < "7.0.0" {
+			assert.Equal(suite.T(), []api.XInfoGroupInfo{
+				{
+					Name:            group,
+					Consumers:       0,
+					Pending:         0,
+					LastDeliveredId: "0-0",
+					EntriesRead:     api.CreateNilInt64Result(),
+					Lag:             api.CreateNilInt64Result(),
+				},
+			}, xinfo)
+		} else {
+			assert.Equal(suite.T(), []api.XInfoGroupInfo{
+				{
+					Name:            group,
+					Consumers:       0,
+					Pending:         0,
+					LastDeliveredId: "0-0",
+					EntriesRead:     api.CreateNilInt64Result(),
+					Lag:             api.CreateInt64Result(0),
+				},
+			}, xinfo)
+		}
+
+		xadd, err := client.XAddWithOptions(
+			key,
+			[][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
+			*options.NewXAddOptions().SetId("0-1"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-1", xadd.Value())
+		xadd, err = client.XAddWithOptions(
+			key,
+			[][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
+			*options.NewXAddOptions().SetId("0-2"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-2", xadd.Value())
+		xadd, err = client.XAddWithOptions(key, [][]string{{"e3_f1", "e3_v1"}}, *options.NewXAddOptions().SetId("0-3"))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-3", xadd.Value())
+
+		// same as previous check, bug lag = 3, there are 3 messages unread
+		xinfo, err = client.XInfoGroups(key)
+		assert.NoError(suite.T(), err)
+		if suite.serverVersion < "7.0.0" {
+			assert.Equal(suite.T(), []api.XInfoGroupInfo{
+				{
+					Name:            group,
+					Consumers:       0,
+					Pending:         0,
+					LastDeliveredId: "0-0",
+					EntriesRead:     api.CreateNilInt64Result(),
+					Lag:             api.CreateNilInt64Result(),
+				},
+			}, xinfo)
+		} else {
+			assert.Equal(suite.T(), []api.XInfoGroupInfo{
+				{
+					Name:            group,
+					Consumers:       0,
+					Pending:         0,
+					LastDeliveredId: "0-0",
+					EntriesRead:     api.CreateNilInt64Result(),
+					Lag:             api.CreateInt64Result(3),
+				},
+			}, xinfo)
+		}
+
+		xReadGroup, err := client.XReadGroup(group, consumer, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		expectedResult := map[string]map[string][][]string{
+			key: {
+				"0-1": {{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
+				"0-2": {{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
+				"0-3": {{"e3_f1", "e3_v1"}},
+			},
+		}
+		assert.Equal(suite.T(), expectedResult, xReadGroup)
+
+		// after reading, `lag` is reset, and `pending`, consumer count and last ID are set
+		xinfo, err = client.XInfoGroups(key)
+		assert.NoError(suite.T(), err)
+		if suite.serverVersion < "7.0.0" {
+			assert.Equal(suite.T(), []api.XInfoGroupInfo{
+				{
+					Name:            group,
+					Consumers:       1,
+					Pending:         3,
+					LastDeliveredId: "0-3",
+					EntriesRead:     api.CreateNilInt64Result(),
+					Lag:             api.CreateNilInt64Result(),
+				},
+			}, xinfo)
+		} else {
+			assert.Equal(suite.T(), []api.XInfoGroupInfo{
+				{
+					Name:            group,
+					Consumers:       1,
+					Pending:         3,
+					LastDeliveredId: "0-3",
+					EntriesRead:     api.CreateInt64Result(3),
+					Lag:             api.CreateInt64Result(0),
+				},
+			}, xinfo)
+		}
+
+		xack, err := client.XAck(key, group, []string{"0-1"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), xack)
+
+		// once message ack'ed, pending counter decreased
+		xinfo, err = client.XInfoGroups(key)
+		assert.NoError(suite.T(), err)
+		if suite.serverVersion < "7.0.0" {
+			assert.Equal(suite.T(), []api.XInfoGroupInfo{
+				{
+					Name:            group,
+					Consumers:       1,
+					Pending:         2,
+					LastDeliveredId: "0-3",
+					EntriesRead:     api.CreateNilInt64Result(),
+					Lag:             api.CreateNilInt64Result(),
+				},
+			}, xinfo)
+		} else {
+			assert.Equal(suite.T(), []api.XInfoGroupInfo{
+				{
+					Name:            group,
+					Consumers:       1,
+					Pending:         2,
+					LastDeliveredId: "0-3",
+					EntriesRead:     api.CreateInt64Result(3),
+					Lag:             api.CreateInt64Result(0),
+				},
+			}, xinfo)
+		}
+
+		// Passing a non-existing key raises an error
+		key = uuid.NewString()
+		_, err = client.XInfoGroups(key)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// key exists, but it is not a stream
+		suite.verifyOK(client.Set(key, key))
+		_, err = client.XInfoGroups(key)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// create a second stream
+		key = uuid.NewString()
+		_, err = client.XAdd(key, [][]string{{"1", "2"}})
+		assert.NoError(suite.T(), err)
+		// no group yet exists
+		xinfo, err = client.XInfoGroups(key)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), xinfo)
+	})
+}
+
 func (suite *GlideTestSuite) TestSetBit_SetSingleBit() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
