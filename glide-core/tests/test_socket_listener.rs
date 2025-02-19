@@ -23,13 +23,14 @@ mod socket_listener {
     use super::*;
     use command_request::{CommandRequest, RequestType};
     use glide_core::command_request::command::{Args, ArgsArray};
-    use glide_core::command_request::{Command, Transaction};
+    use glide_core::command_request::{Batch, Command};
     use glide_core::response::{response, ConstantResponse, Response};
     use glide_core::scripts_container::add_script;
     use protobuf::{EnumOrUnknown, Message};
     use redis::{Cmd, ConnectionAddr, FromRedisValue, Value};
     use rstest::rstest;
     use std::mem::size_of;
+    use std::vec;
     use tokio::{net::UnixListener, runtime::Builder};
 
     /// An enum representing the values of the request type field for testing purposes
@@ -287,24 +288,24 @@ mod socket_listener {
         write_request(buffer, socket, request);
     }
 
-    fn write_transaction_request(
+    fn write_batch_request(
         buffer: &mut Vec<u8>,
         socket: &mut UnixStream,
         callback_index: u32,
         commands_components: Vec<CommandComponents>,
+        is_atomic: bool,
     ) {
         let mut request = CommandRequest::new();
         request.callback_idx = callback_index;
-        let mut transaction = Transaction::new();
-        transaction.commands.reserve(commands_components.len());
+        let mut batch = Batch::new();
+        batch.commands.reserve(commands_components.len());
+        batch.is_atomic = is_atomic;
 
         for components in commands_components {
-            transaction.commands.push(get_command(components));
+            batch.commands.push(get_command(components));
         }
 
-        request.command = Some(command_request::command_request::Command::Transaction(
-            transaction,
-        ));
+        request.command = Some(command_request::command_request::Command::Batch(batch));
 
         write_request(buffer, socket, request);
     }
@@ -1196,7 +1197,7 @@ mod socket_listener {
             },
         ];
         let mut buffer = Vec::with_capacity(200);
-        write_transaction_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands);
+        write_batch_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands, true);
 
         assert_value_response(
             &mut buffer,
@@ -1208,6 +1209,118 @@ mod socket_listener {
                 Value::Okay,
                 Value::Nil,
             ]),
+        );
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_send_pipeline_and_get_array_of_results(
+        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
+    ) {
+        let test_basics = setup_test_basics(Tls::NoTls, TestServer::Shared, use_cluster);
+        let mut socket = test_basics
+            .socket
+            .try_clone()
+            .expect("Failed to clone socket");
+
+        const CALLBACK_INDEX: u32 = 0;
+        // making sure both keys are in a different slot
+        let key = format!("{{abc}}f{}", generate_random_string(KEY_LENGTH));
+        let key2 = format!("{{xyz}}f{}", generate_random_string(KEY_LENGTH));
+
+        let commands = vec![
+            CommandComponents {
+                args: vec![key.clone().into(), "bar".to_string().into()],
+                args_pointer: true,
+                request_type: RequestType::Set.into(),
+            },
+            CommandComponents {
+                args: vec!["GET".to_string().into(), key.clone().into()],
+                args_pointer: false,
+                request_type: RequestType::CustomCommand.into(),
+            },
+            CommandComponents {
+                args: vec![key.clone().into(), key2.clone().into()],
+                args_pointer: false,
+                request_type: RequestType::MGet.into(),
+            },
+            CommandComponents {
+                args: vec![],
+                args_pointer: false,
+                request_type: RequestType::DBSize.into(), // Aggregation of sum
+            },
+        ];
+        let mut buffer = Vec::with_capacity(200);
+        write_batch_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands, false);
+
+        assert_value_response(
+            &mut buffer,
+            Some(&mut socket),
+            CALLBACK_INDEX,
+            Value::Array(vec![
+                Value::Okay,
+                Value::BulkString(vec![b'b', b'a', b'r']),
+                Value::Array(vec![Value::BulkString(vec![b'b', b'a', b'r']), Value::Nil]),
+                Value::Int(1),
+            ]),
+        );
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_send_pipeline_and_get_error(
+        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
+    ) {
+        let mut test_basics = setup_test_basics(Tls::NoTls, TestServer::Shared, use_cluster);
+        let mut socket = test_basics
+            .socket
+            .try_clone()
+            .expect("Failed to clone socket");
+
+        const CALLBACK_INDEX: u32 = 0;
+        let key = generate_random_string(KEY_LENGTH);
+        let commands = vec![
+            CommandComponents {
+                args: vec![key.clone().into(), "bar".to_string().into()],
+                args_pointer: true,
+                request_type: RequestType::Set.into(),
+            },
+            CommandComponents {
+                args: vec!["GET".to_string().into(), key.clone().into()],
+                args_pointer: false,
+                request_type: RequestType::CustomCommand.into(),
+            },
+            CommandComponents {
+                args: vec![key.clone().into(), "random_key".into()],
+                args_pointer: false,
+                request_type: RequestType::MGet.into(),
+            },
+            CommandComponents {
+                args: vec![key.clone().into()],
+                args_pointer: false,
+                request_type: RequestType::LLen.into(),
+            },
+            CommandComponents {
+                args: vec!["FLUSHALL".to_string().into()],
+                args_pointer: false,
+                request_type: RequestType::CustomCommand.into(),
+            },
+            CommandComponents {
+                args: vec![key.into()],
+                args_pointer: false,
+                request_type: RequestType::Get.into(),
+            },
+        ];
+        let mut buffer = Vec::with_capacity(200);
+        write_batch_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands, false);
+
+        assert_error_response(
+            &mut buffer,
+            &mut test_basics.socket,
+            CALLBACK_INDEX,
+            ResponseType::RequestError,
         );
     }
 
