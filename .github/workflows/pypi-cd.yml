@@ -305,20 +305,45 @@ jobs:
                     pip install valkey-glide
                   fi
                   python rc_test.py
-
+            
             - name: Run the tests on source installation
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
+              env:
+                  PB_REL: "https://github.com/protocolbuffers/protobuf/releases"
               run: |
-                  python -m venv venv-sdist
-                  source venv-sdist/bin/activate
-                  pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install --pre --no-binary valkey-glide valkey-glide
-                  else
-                    pip install --no-binary valkey-glide valkey-glide
-                  fi
-                  python rc_test.py
+                # Install protobuf compiler for source distriburtion test
+                if [[ $(`which apt`) != '' ]]
+                then
+                  echo "installing unzip and curl"
+                  sudo apt-get update
+                  sudo apt install unzip curl python3.13 -y
+                fi
+                ARCH=`uname -p`
+                if [[ $ARCH == 'x86_64' ]]; then 
+                  PROTOC_ARCH="x86_64"
+                elif [[ $ARCH == 'aarch64' ]]; then 
+                  PROTOC_ARCH="aarch_64"
+                  export CC_aarch64_unknown_linux_gnu=gcc
+                  export CFLAGS_aarch64_unknown_linux_gnu="-march=armv8-a"
+                else 
+                  echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
+                  exit 1 
+                fi
+                curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-${PROTOC_ARCH}.zip
+                unzip protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d $HOME/.local
+                export PATH="$PATH:$HOME/.local/bin"
+                
+                # test source dist
+                python -m venv venv-sdist
+                source venv-sdist/bin/activate
+                pip install -U pip
+                if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
+                  pip install --pre --no-binary valkey-glide valkey-glide
+                else
+                  pip install --no-binary valkey-glide valkey-glide
+                fi
+                python rc_test.py
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
             # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
