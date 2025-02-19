@@ -313,7 +313,8 @@ public class CommandManager {
      *     adding a callback id.
      */
     protected CommandRequest.Builder prepareCommandRequest(Transaction transaction) {
-        return CommandRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+        // TODO: rename to getProtobufBatch
+        return CommandRequest.newBuilder().setBatch(transaction.getProtobufTransaction().build());
     }
 
     /**
@@ -387,8 +388,9 @@ public class CommandManager {
     protected CommandRequest.Builder prepareCommandRequest(
             ClusterTransaction transaction, Optional<Route> route) {
 
+        // TODO: rename to getProtobufBatch
         CommandRequest.Builder builder =
-                CommandRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+                CommandRequest.newBuilder().setBatch(transaction.getProtobufTransaction().build());
 
         return route.isPresent() ? prepareCommandRequestRoute(builder, route.get()) : builder;
     }

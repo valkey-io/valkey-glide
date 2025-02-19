@@ -2,92 +2,6 @@
 #![cfg(feature = "cluster-async")]
 mod support;
 
-use std::cell::Cell;
-use tokio::sync::Mutex;
-
-use lazy_static::lazy_static;
-
-lazy_static! {
-    static ref CLUSTER_VERSION: Mutex<Cell<usize>> = Mutex::<Cell<usize>>::default();
-}
-
-/// Check if the current cluster version is less than `min_version`.
-/// At first, the func check for the Valkey version and if none exists, then the Redis version is checked.
-async fn engine_version_less_than(min_version: &str) -> bool {
-    let test_version = crate::get_cluster_version().await;
-    let min_version_usize = crate::version_to_usize(min_version).unwrap();
-    if test_version < min_version_usize {
-        println!(
-            "The engine version is {:?}, which is lower than {:?}",
-            test_version, min_version
-        );
-        return true;
-    }
-    false
-}
-
-/// Static function to get the engine version. When version looks like 8.0.0 -> 80000 and 12.0.1 -> 120001.
-async fn get_cluster_version() -> usize {
-    let cluster_version = CLUSTER_VERSION.lock().await;
-    if cluster_version.get() == 0 {
-        let cluster = crate::support::TestClusterContext::new(3, 0);
-
-        let mut connection = cluster.async_connection(None).await;
-
-        let cmd = redis::cmd("INFO");
-        let info = connection
-            .route_command(
-                &cmd,
-                redis::cluster_routing::RoutingInfo::SingleNode(
-                    redis::cluster_routing::SingleNodeRoutingInfo::Random,
-                ),
-            )
-            .await
-            .unwrap();
-
-        let info_result = redis::from_owned_redis_value::<String>(info).unwrap();
-
-        cluster_version.set(
-            parse_version_from_info(info_result.clone())
-                .unwrap_or_else(|| panic!("Invalid version string in INFO : {info_result}")),
-        );
-    }
-    cluster_version.get()
-}
-
-fn parse_version_from_info(info: String) -> Option<usize> {
-    // check for valkey_version
-    if let Some(version) = info
-        .lines()
-        .find_map(|line| line.strip_prefix("valkey_version:"))
-    {
-        return version_to_usize(version);
-    }
-
-    // check for redis_version if no valkey_version was found
-    if let Some(version) = info
-        .lines()
-        .find_map(|line| line.strip_prefix("redis_version:"))
-    {
-        return version_to_usize(version);
-    }
-    None
-}
-
-/// Takes a version string (e.g., 8.2.1) and converts it to a usize (e.g., 80201)
-/// version 12.10.0 will became 121000
-fn version_to_usize(version: &str) -> Option<usize> {
-    version
-        .split('.')
-        .enumerate()
-        .map(|(index, part)| {
-            part.parse::<usize>()
-                .ok()
-                .map(|num| num * 10_usize.pow(2 * (2 - index) as u32))
-        })
-        .sum()
-}
-
 #[cfg(test)]
 mod cluster_async {
     use std::{
@@ -299,7 +213,7 @@ mod cluster_async {
 
     async fn test_az_affinity_helper(strategy_variant: StrategyVariant) {
         // Skip test if version is less then Valkey 8.0
-        if crate::engine_version_less_than("8.0").await {
+        if engine_version_less_than("8.0").await {
             return;
         }
 
@@ -411,7 +325,7 @@ mod cluster_async {
 
     async fn test_all_replicas_helper(strategy_variant: StrategyVariant) {
         // Skip test if version is less then Valkey 8.0
-        if crate::engine_version_less_than("8.0").await {
+        if engine_version_less_than("8.0").await {
             return;
         }
 
