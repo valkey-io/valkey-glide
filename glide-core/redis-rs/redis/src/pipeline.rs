@@ -5,12 +5,12 @@ use crate::connection::ConnectionLike;
 use crate::types::{
     from_owned_redis_value, ErrorKind, FromRedisValue, HashSet, RedisResult, ToRedisArgs, Value,
 };
+use std::sync::Arc;
 
 /// Represents a redis command pipeline.
 #[derive(Clone)]
 pub struct Pipeline {
-    // TODO - make this Arc
-    commands: Vec<Cmd>,
+    commands: Vec<Arc<Cmd>>,
     transaction_mode: bool,
     ignored_commands: HashSet<usize>,
 }
@@ -224,18 +224,18 @@ impl Pipeline {
     }
 
     /// Returns the command at the given index, or `None` if the index is out of bounds.
-    pub fn get_command(&self, index: usize) -> Option<&Cmd> {
+    pub fn get_command(&self, index: usize) -> Option<&Arc<Cmd>> {
         self.commands.get(index)
     }
 }
 
-fn encode_pipeline(cmds: &[Cmd], atomic: bool) -> Vec<u8> {
+fn encode_pipeline(cmds: &[Arc<Cmd>], atomic: bool) -> Vec<u8> {
     let mut rv = vec![];
     write_pipeline(&mut rv, cmds, atomic);
     rv
 }
 
-fn write_pipeline(rv: &mut Vec<u8>, cmds: &[Cmd], atomic: bool) {
+fn write_pipeline(rv: &mut Vec<u8>, cmds: &[Arc<Cmd>], atomic: bool) {
     let cmds_len = cmds.iter().map(cmd_len).sum();
 
     if atomic {
@@ -250,7 +250,6 @@ fn write_pipeline(rv: &mut Vec<u8>, cmds: &[Cmd], atomic: bool) {
         exec.write_packed_command_preallocated(rv);
     } else {
         rv.reserve(cmds_len);
-
         for cmd in cmds {
             cmd.write_packed_command_preallocated(rv);
         }
@@ -263,8 +262,8 @@ macro_rules! implement_pipeline_commands {
         impl $struct_name {
             /// Adds a command to the cluster pipeline.
             #[inline]
-            pub fn add_command(&mut self, cmd: Cmd) -> &mut Self {
-                self.commands.push(cmd);
+            pub fn add_command<T: Into<Arc<Cmd>>>(&mut self, cmd: T) -> &mut Self {
+                self.commands.push(cmd.into());
                 self
             }
 
@@ -275,8 +274,8 @@ macro_rules! implement_pipeline_commands {
                 self.add_command(cmd(name))
             }
 
-            /// Returns an iterator over all the commands currently in this pipeline
-            pub fn cmd_iter(&self) -> impl Iterator<Item = &Cmd> {
+            /// Returns an iterator over all the commands currently in the pipeline.
+            pub fn cmd_iter(&self) -> impl Iterator<Item = &Arc<Cmd>> {
                 self.commands.iter()
             }
 
@@ -323,7 +322,7 @@ macro_rules! implement_pipeline_commands {
                     0 => panic!("No command on stack"),
                     x => x - 1,
                 };
-                &mut self.commands[idx]
+                Arc::make_mut(&mut self.commands[idx])
             }
 
             fn make_pipeline_results(&self, resp: Vec<Value>) -> Value {
