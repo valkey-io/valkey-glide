@@ -23,6 +23,24 @@ type KeyWithMemberAndScore struct {
 	Score  float64
 }
 
+// Response of the [ZMPop] and [BZMPop] command.
+type KeyWithArrayOfMembersAndScores struct {
+	Key              string
+	MembersAndScores []MemberAndScore
+}
+
+// MemberAndScore is used by ZRANDMEMBER, which return an object consisting of the sorted set member, and its score.
+type MemberAndScore struct {
+	Member string
+	Score  float64
+}
+
+// Response type of [XRange] and [XRevRange] commands.
+type XRangeResponse struct {
+	StreamId string
+	Entries  [][]string
+}
+
 // Response type of [XAutoClaim] command.
 type XAutoClaimResponse struct {
 	NextEntry       string
@@ -77,18 +95,29 @@ func CreateNilKeyWithMemberAndScoreResult() Result[KeyWithMemberAndScore] {
 	return Result[KeyWithMemberAndScore]{val: KeyWithMemberAndScore{"", "", 0.0}, isNil: true}
 }
 
+func CreateKeyWithArrayOfMembersAndScoresResult(
+	kmsVals KeyWithArrayOfMembersAndScores,
+) Result[KeyWithArrayOfMembersAndScores] {
+	return Result[KeyWithArrayOfMembersAndScores]{val: kmsVals, isNil: false}
+}
+
+func CreateNilKeyWithArrayOfMembersAndScoresResult() Result[KeyWithArrayOfMembersAndScores] {
+	return Result[KeyWithArrayOfMembersAndScores]{val: KeyWithArrayOfMembersAndScores{"", nil}, isNil: true}
+}
+
 // Enum to distinguish value types stored in `ClusterValue`
 type ValueType int
 
 const (
 	SingleValue ValueType = 1
 	MultiValue  ValueType = 2
+	NoValue     ValueType = 3
 )
 
 // Enum-like structure which stores either a single-node response or multi-node response.
 // Multi-node response stored in a map, where keys are hostnames or "<ip>:<port>" strings.
 //
-// For example:
+// Example:
 //
 //	// Command failed:
 //	value, err := clusterClient.CustomCommand(args)
@@ -96,25 +125,33 @@ const (
 //	err != nil: true
 //
 //	// Command returns response from multiple nodes:
-//	value, _ := clusterClient.info()
-//	node, nodeResponse := range value.Value().(map[string]interface{}) {
-//	    response := nodeResponse.(string)
+//	value, _ := clusterClient.Info()
+//	for node, nodeResponse := range value.MultiValue() {
+//	    response := nodeResponse
 //	    // `node` stores cluster node IP/hostname, `response` stores the command output from that node
 //	}
 //
 //	// Command returns a response from single node:
-//	value, _ := clusterClient.infoWithRoute(Random{})
-//	response := value.Value().(string)
+//	value, _ := clusterClient.InfoWithOptions(api.ClusterInfoOptions{InfoOptions: nil, Route: api.RandomRoute.ToPtr()})
+//	response := value.SingleValue()
 //	// `response` stores the command output from a cluster node
 type ClusterValue[T any] struct {
-	valueType ValueType
-	value     Result[T]
+	valueType   ValueType
+	singleValue T
+	mutiValue   map[string]T
 }
 
-func (value ClusterValue[T]) Value() T {
-	return value.value.Value()
+// Get the single value stored (value returned by a single cluster node).
+func (value ClusterValue[T]) SingleValue() T {
+	return value.singleValue
 }
 
+// Get the multi value stored (value returned by multiple cluster nodes).
+func (value ClusterValue[T]) MultiValue() map[string]T {
+	return value.mutiValue
+}
+
+// Get the value type
 func (value ClusterValue[T]) ValueType() ValueType {
 	return value.valueType
 }
@@ -128,36 +165,35 @@ func (value ClusterValue[T]) IsMultiValue() bool {
 }
 
 func (value ClusterValue[T]) IsEmpty() bool {
-	return value.value.IsNil()
+	return value.valueType == NoValue
 }
 
-func CreateClusterValue[T any](data T) ClusterValue[T] {
+func createClusterValue[T any](data any) ClusterValue[T] {
 	switch any(data).(type) {
 	case map[string]interface{}:
-		return CreateClusterMultiValue(data)
+		return createClusterMultiValue(data.(map[string]T))
 	default:
-		return CreateClusterSingleValue(data)
+		return createClusterSingleValue(data.(T))
 	}
 }
 
-func CreateClusterSingleValue[T any](data T) ClusterValue[T] {
+func createClusterSingleValue[T any](data T) ClusterValue[T] {
 	return ClusterValue[T]{
-		valueType: SingleValue,
-		value:     Result[T]{val: data, isNil: false},
+		valueType:   SingleValue,
+		singleValue: data,
 	}
 }
 
-func CreateClusterMultiValue[T any](data T) ClusterValue[T] {
+func createClusterMultiValue[T any](data map[string]T) ClusterValue[T] {
 	return ClusterValue[T]{
 		valueType: MultiValue,
-		value:     Result[T]{val: data, isNil: false},
+		mutiValue: data,
 	}
 }
 
-func CreateEmptyClusterValue() ClusterValue[interface{}] {
-	var empty interface{}
-	return ClusterValue[interface{}]{
-		value: Result[interface{}]{val: empty, isNil: true},
+func createEmptyClusterValue[T any]() ClusterValue[T] {
+	return ClusterValue[T]{
+		valueType: NoValue,
 	}
 }
 
@@ -206,4 +242,39 @@ type XPendingDetail struct {
 
 func CreateNilXPendingSummary() XPendingSummary {
 	return XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), make([]ConsumerPendingMessage, 0)}
+}
+
+// XInfoConsumerInfo represents a group information returned by `XInfoConsumers` command.
+type XInfoConsumerInfo struct {
+	// The consumer's name.
+	Name string
+	// The number of entries in the PEL: pending messages for the consumer, which are messages that were delivered but are yet
+	// to be acknowledged.
+	Pending int64
+	// The number of milliseconds that have passed since the consumer's last attempted interaction (Examples: XREADGROUP,
+	// XCLAIM, XAUTOCLAIM).
+	Idle int64
+	// The number of milliseconds that have passed since the consumer's last successful interaction (Examples: XREADGROUP that
+	// actually read some entries into the PEL, XCLAIM/XAUTOCLAIM that actually claimed some entries).
+	Inactive Result[int64]
+}
+
+// XInfoGroupInfo represents a group information returned by `XInfoGroups` command.
+type XInfoGroupInfo struct {
+	// The consumer group's name.
+	Name string
+	// The number of consumers in the group.
+	Consumers int64
+	// The length of the group's Pending Entries List (PEL), which are messages that were delivered but are yet to be
+	// acknowledged.
+	Pending int64
+	// The ID of the last entry delivered to the group's consumers.
+	LastDeliveredId string
+	// The logical "read counter" of the last entry delivered to the group's consumers.
+	// Included in the response only on valkey 7.0.0 and above.
+	EntriesRead Result[int64]
+	// The number of entries in the stream that are still waiting to be delivered to the group's consumers, or a `nil` when
+	// that number can't be determined.
+	// Included in the response only on valkey 7.0.0 and above.
+	Lag Result[int64]
 }

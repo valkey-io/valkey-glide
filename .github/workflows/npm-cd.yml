@@ -59,8 +59,16 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Get the matrix from the matrix.json file, without the object that has the IMAGE key
-                  export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"]))))' < .github/json_matrices/build-matrix.json | jq -c .)"
+                  # Filter entries with npm in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
+                  export PLATFORM_MATRIX=$(jq 'map(
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
+                      | .RUNNER = (
+                          if (.RUNNER | type == "array") 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if . == "ephemeral" then "persistent" else . end) 
+                          end
+                      )
+                  )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     publish-binaries:
@@ -158,12 +166,12 @@ jobs:
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
-                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  if [[ "${RELEASE_VERSION}" == *"rc"* ]]
                   then
-                    echo "This is a release candidate: ${GITHUB_REF:11}"
+                    echo "This is a release candidate: ${RELEASE_VERSION}"
                     export npm_tag="next"
                   else
-                    echo "This is a stable release: ${GITHUB_REF:11}"
+                    echo "This is a stable release: ${RELEASE_VERSION}"
                     export npm_tag="latest"
                   fi
                   echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
@@ -171,7 +179,7 @@ jobs:
             - name: Check that the release version dont have typo init
               if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
               run: |
-                  echo "The release version "${GITHUB_REF:11}" contains a typo, please fix it"
+                  echo "The release version "${RELEASE_VERSION}" contains a typo, please fix it"
                   echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
                   exit 1
 
@@ -363,7 +371,7 @@ jobs:
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
-                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  if [[ "${RELEASE_VERSION}" == *"rc"* ]]
                   then
                     echo "This is a release candidate"
                     export npm_tag="next"

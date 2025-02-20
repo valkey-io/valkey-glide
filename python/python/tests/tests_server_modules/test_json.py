@@ -4,27 +4,22 @@ import copy
 import json as OuterJson
 import random
 import typing
-from typing import List
 
 import pytest
-from glide.async_commands.core import ConditionalChange, InfoSection
+from glide.async_commands.core import ConditionalChange
 from glide.async_commands.server_modules import glide_json as json
-from glide.async_commands.server_modules import json_transaction
+from glide.async_commands.server_modules import json_batch
 from glide.async_commands.server_modules.glide_json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide.async_commands.transaction import (
-    BaseTransaction,
-    ClusterTransaction,
-    Transaction,
-)
+from glide.async_commands.transaction import ClusterTransaction
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
 from glide.glide_client import GlideClusterClient, TGlideClient
-from tests.test_async_client import get_random_string, parse_info_response
+from tests.test_async_client import get_random_string
 
 
 def get_random_value(value_type="str"):
@@ -343,7 +338,7 @@ class TestJson:
         assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
         assert await json.delete(glide_client, key) == 1
         assert await json.delete(glide_client, key) == 0
-        assert await json.get(glide_client, key, "$") == None
+        assert await json.get(glide_client, key, "$") is None
 
         # Non-existing keys
         assert await json.delete(glide_client, "non_existing_key", "$") == 0
@@ -380,7 +375,7 @@ class TestJson:
         assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
         assert await json.forget(glide_client, key) == 1
         assert await json.forget(glide_client, key) == 0
-        assert await json.get(glide_client, key, "$") == None
+        assert await json.get(glide_client, key, "$") is None
 
         # Non-existing keys
         assert await json.forget(glide_client, "non_existing_key", "$") == 0
@@ -414,7 +409,7 @@ class TestJson:
 
         # path doesn't exist
         assert await json.objkeys(glide_client, key, "$.non_existing_path") == []
-        assert await json.objkeys(glide_client, key, "non_existing_path") == None
+        assert await json.objkeys(glide_client, key, "non_existing_path") is None
 
         # Value at path isnt an object
         assert await json.objkeys(glide_client, key, "$.a") == [[]]
@@ -422,8 +417,8 @@ class TestJson:
             assert await json.objkeys(glide_client, key, ".a")
 
         # Non-existing key
-        assert await json.objkeys(glide_client, "non_exiting_key", "$") == None
-        assert await json.objkeys(glide_client, "non_exiting_key", ".") == None
+        assert await json.objkeys(glide_client, "non_exiting_key", "$") is None
+        assert await json.objkeys(glide_client, "non_exiting_key", ".") is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -570,8 +565,8 @@ class TestJson:
             await json.objlen(glide_client, key, ".a")
 
         # Non-existing key
-        assert await json.objlen(glide_client, "non_exiting_key", "$") == None
-        assert await json.objlen(glide_client, "non_exiting_key", ".") == None
+        assert await json.objlen(glide_client, "non_exiting_key", "$") is None
+        assert await json.objlen(glide_client, "non_exiting_key", ".") is None
 
         assert await json.set(glide_client, key, "$", '{"a": 1, "b": 2, "c":3, "d":4}')
         assert await json.objlen(glide_client, key) == 4
@@ -617,7 +612,11 @@ class TestJson:
     async def test_json_clear(self, glide_client: TGlideClient):
         key = get_random_string(5)
 
-        json_value = '{"obj":{"a":1, "b":2}, "arr":[1,2,3], "str": "foo", "bool": true, "int": 42, "float": 3.14, "nullVal": null}'
+        json_value = (
+            '{"obj":{"a":1, "b":2}, "arr":[1,2,3], '
+            '"str": "foo", "bool": true, "int": 42, '
+            '"float": 3.14, "nullVal": null}'
+        )
         assert await json.set(glide_client, key, "$", json_value) == OK
 
         assert await json.clear(glide_client, key, "$.*") == 6
@@ -631,7 +630,11 @@ class TestJson:
         assert await json.set(glide_client, key, "$", json_value) == OK
         assert await json.clear(glide_client, key, "*") == 6
 
-        json_value = '{"a": 1, "b": {"a": [5, 6, 7], "b": {"a": true}}, "c": {"a": "value", "b": {"a": 3.5}}, "d": {"a": {"foo": "foo"}}, "nullVal": null}'
+        json_value = (
+            '{"a": 1, "b": {"a": [5, 6, 7], "b": {"a": true}}, '
+            '"c": {"a": "value", "b": {"a": 3.5}}, "d": {"a": '
+            '{"foo": "foo"}}, "nullVal": null}'
+        )
         assert await json.set(glide_client, key, "$", json_value) == OK
 
         assert await json.clear(glide_client, key, "b.a[1:3]") == 2
@@ -708,7 +711,8 @@ class TestJson:
         result = await json.numincrby(glide_client, key, "$.key7", 51)
         assert result == b"[null]"  # Expect null
 
-        # Check increment for all numbers in the document using JSON Path (First Null: key3 as an entire object. Second Null: The path checks under key3, which is an object, for numeric values).
+        # Check increment for all numbers in the document using JSON Path (First Null: key3 as an entire object.
+        # Second Null: The path checks under key3, which is an object, for numeric values).
         result = await json.numincrby(glide_client, key, "$..*", 5)
         assert (
             result
@@ -1265,7 +1269,7 @@ class TestJson:
 
         # Test for non-existent key
         result = await json.debug_fields(glide_client, "non_existent_key", "$.key10")
-        assert result == None
+        assert result is None
 
         # Test no provided path
         # Total Fields (19) - breakdown:
@@ -1318,7 +1322,7 @@ class TestJson:
 
         # Test for non-existent key
         result = await json.debug_fields(glide_client, "non_existent_key", ".key10")
-        assert result == None
+        assert result is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1375,7 +1379,7 @@ class TestJson:
         assert result == []
         # Test for non-existent key
         result = await json.debug_memory(glide_client, "non_existent_key", "$.key10")
-        assert result == None
+        assert result is None
         # Test no provided path
         # Total Memory (504 bytes) - visual breakdown:
         # ├── Root Object Overhead (129 bytes)
@@ -1421,7 +1425,7 @@ class TestJson:
             await json.debug_memory(glide_client, key, ".key11")
         # Test for non-existent key
         result = await json.debug_memory(glide_client, "non_existent_key", ".key10")
-        assert result == None
+        assert result is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @typing.no_type_check
@@ -1688,7 +1692,8 @@ class TestJson:
         assert result == [
             0,
             -1,
-        ]  # Only "gamma" at index 0 of level3[0] is found; gamma at index 2 of level3[1] is excluded as its not within the search range.
+        ]  # Only "gamma" at index 0 of level3[0] is found; gamma at index 2 of level3[1] is excluded as its not within the
+        # search range.
 
         # Check for passing start = 0, end = 0 in JSONPath syntax
         result = await json.arrindex(
@@ -2089,9 +2094,9 @@ class TestJson:
         assert await json.arrpop(glide_client, key2, JsonArrPopOptions("$[0]", 10)) == [
             None
         ]
-        assert await json.arrpop(glide_client, key2, JsonArrPopOptions("[0]")) == None
+        assert await json.arrpop(glide_client, key2, JsonArrPopOptions("[0]")) is None
         assert (
-            await json.arrpop(glide_client, key2, JsonArrPopOptions("[0]", 10)) == None
+            await json.arrpop(glide_client, key2, JsonArrPopOptions("[0]", 10)) is None
         )
 
         # non jsonpath pops from all matching paths, even if one result is being returned
@@ -2107,7 +2112,7 @@ class TestJson:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_json_transaction_array(self, glide_client: GlideClusterClient):
+    async def test_json_batch_array(self, glide_client: GlideClusterClient):
         transaction = ClusterTransaction()
 
         key = get_random_string(5)
@@ -2115,22 +2120,20 @@ class TestJson:
         json_value2 = {"a": 1.0, "b": [1, 2]}
 
         # Test 'set', 'get', and 'clear' commands
-        json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value1))
-        json_transaction.clear(transaction, key, "$")
-        json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value1))
-        json_transaction.get(transaction, key, ".")
+        json_batch.set(transaction, key, "$", OuterJson.dumps(json_value1))
+        json_batch.clear(transaction, key, "$")
+        json_batch.set(transaction, key, "$", OuterJson.dumps(json_value1))
+        json_batch.get(transaction, key, ".")
 
         # Test array related commands
-        json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value2))
-        json_transaction.arrappend(transaction, key, "$.b", ["3", "4"])
-        json_transaction.arrindex(transaction, key, "$.b", "2")
-        json_transaction.arrinsert(transaction, key, "$.b", 2, ["5"])
-        json_transaction.arrlen(transaction, key, "$.b")
-        json_transaction.arrpop(
-            transaction, key, JsonArrPopOptions(path="$.b", index=2)
-        )
-        json_transaction.arrtrim(transaction, key, "$.b", 1, 2)
-        json_transaction.get(transaction, key, ".")
+        json_batch.set(transaction, key, "$", OuterJson.dumps(json_value2))
+        json_batch.arrappend(transaction, key, "$.b", ["3", "4"])
+        json_batch.arrindex(transaction, key, "$.b", "2")
+        json_batch.arrinsert(transaction, key, "$.b", 2, ["5"])
+        json_batch.arrlen(transaction, key, "$.b")
+        json_batch.arrpop(transaction, key, JsonArrPopOptions(path="$.b", index=2))
+        json_batch.arrtrim(transaction, key, "$.b", 1, 2)
+        json_batch.get(transaction, key, ".")
 
         result = await glide_client.exec(transaction)
         assert isinstance(result, list)
@@ -2153,7 +2156,7 @@ class TestJson:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_json_transaction(self, glide_client: GlideClusterClient):
+    async def test_json_batch(self, glide_client: GlideClusterClient):
         transaction = ClusterTransaction()
 
         key = f"{{key}}-1{get_random_string(5)}"
@@ -2161,43 +2164,43 @@ class TestJson:
         key3 = f"{{key}}-3{get_random_string(5)}"
         json_value = {"a": [1, 2], "b": [3, 4], "c": "c", "d": True}
 
-        json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value))
+        json_batch.set(transaction, key, "$", OuterJson.dumps(json_value))
 
         # Test debug commands
-        json_transaction.debug_memory(transaction, key, "$.a")
-        json_transaction.debug_fields(transaction, key, "$.a")
+        json_batch.debug_memory(transaction, key, "$.a")
+        json_batch.debug_fields(transaction, key, "$.a")
 
         # Test obj commands
-        json_transaction.objlen(transaction, key, ".")
-        json_transaction.objkeys(transaction, key, ".")
+        json_batch.objlen(transaction, key, ".")
+        json_batch.objkeys(transaction, key, ".")
 
         # Test num commands
-        json_transaction.numincrby(transaction, key, "$.a[*]", 10.0)
-        json_transaction.nummultby(transaction, key, "$.a[*]", 10.0)
+        json_batch.numincrby(transaction, key, "$.a[*]", 10.0)
+        json_batch.nummultby(transaction, key, "$.a[*]", 10.0)
 
         # Test str commands
-        json_transaction.strappend(transaction, key, '"-test"', "$.c")
-        json_transaction.strlen(transaction, key, "$.c")
+        json_batch.strappend(transaction, key, '"-test"', "$.c")
+        json_batch.strlen(transaction, key, "$.c")
 
         # Test type command
-        json_transaction.type(transaction, key, "$.a")
+        json_batch.type(transaction, key, "$.a")
 
         # Test mget command
         json_value2 = {"b": [3, 4], "c": "c", "d": True}
-        json_transaction.set(transaction, key2, "$", OuterJson.dumps(json_value2))
-        json_transaction.mget(transaction, [key, key2, key3], "$.a")
+        json_batch.set(transaction, key2, "$", OuterJson.dumps(json_value2))
+        json_batch.mget(transaction, [key, key2, key3], "$.a")
 
         # Test toggle command
-        json_transaction.toggle(transaction, key, "$.d")
+        json_batch.toggle(transaction, key, "$.d")
 
         # Test resp command
-        json_transaction.resp(transaction, key, "$")
+        json_batch.resp(transaction, key, "$")
 
         # Test del command
-        json_transaction.delete(transaction, key, "$.d")
+        json_batch.delete(transaction, key, "$.d")
 
         # Test forget command
-        json_transaction.forget(transaction, key, "$.c")
+        json_batch.forget(transaction, key, "$.c")
 
         result = await glide_client.exec(transaction)
         assert isinstance(result, list)

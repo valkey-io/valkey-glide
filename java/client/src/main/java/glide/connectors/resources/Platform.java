@@ -26,6 +26,13 @@ public class Platform {
         private final boolean isNIOAvailable;
     }
 
+    /**
+     * String which accumulates with report of checking platform capabilities. Thrown with an
+     * exception if neither epoll/kqueue available. TODO: replace with logging Note: logging into
+     * files may be unavailable in AWS lambda.
+     */
+    private static String debugInfo = "Detailed report of checking platform capabilities\n";
+
     /** Detected platform (OS + JVM) capabilities. Not supposed to be changed in runtime. */
     @Getter
     private static Capabilities capabilities =

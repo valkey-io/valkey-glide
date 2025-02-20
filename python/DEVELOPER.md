@@ -124,7 +124,8 @@ maturin develop --release --strip
 # Running tests
 ---
 
-Ensure that you have installed `redis-server` or `valkey-server` along with `redis-cli` or `valkey-cli` on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/). You can get Valkey from the following link: [Valkey Download](https://valkey.io/download/).
+Ensure you have installed `valkey-server` and `valkey-cli` on your host (or `redis-server` and `redis-cli`). 
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 
 From a terminal, change directory to the GLIDE source folder and type:
 
@@ -132,7 +133,7 @@ From a terminal, change directory to the GLIDE source folder and type:
 cd $HOME/src/valkey-glide
 cd python
 source .env/bin/activate
-pytest --asyncio-mode=auto
+pytest -v --asyncio-mode=auto
 ```
 
 To run modules tests:
@@ -141,7 +142,7 @@ To run modules tests:
 cd $HOME/src/valkey-glide
 cd python
 source .env/bin/activate
-pytest --asyncio-mode=auto -k "test_server_modules.py"
+pytest -v --asyncio-mode=auto -k "test_server_modules.py"
 ```
 
 **TIP:** to run a specific test, append `-k <test_name>` to the `pytest` execution line
@@ -149,7 +150,7 @@ pytest --asyncio-mode=auto -k "test_server_modules.py"
 To run tests against an already running servers, change the `pytest` line above to this:
 
 ```bash
-pytest --asyncio-mode=auto --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
+pytest -v --asyncio-mode=auto --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 ```
 
 # Generate protobuf files
@@ -214,9 +215,9 @@ Run from the main `/python` folder
     isort . --profile black --skip-glob python/glide/protobuf --skip-glob .env
     black . --exclude python/glide/protobuf --exclude .env
     flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics      \
-            --exclude=python/glide/protobuf,.env/* --extend-ignore=E230
+            --exclude=python/glide/protobuf,.env --extend-ignore=E230
     flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127  \
-            --statistics --exclude=python/glide/protobuf,.env/*             \
+            --statistics --exclude=python/glide/protobuf,.env             \
             --extend-ignore=E230
     # run type check
     mypy .

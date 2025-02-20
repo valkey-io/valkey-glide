@@ -15,7 +15,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/api"
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 type GlideTestSuite struct {
@@ -141,17 +143,16 @@ func runClusterManager(suite *GlideTestSuite, args []string, ignoreExitCode bool
 func getServerVersion(suite *GlideTestSuite) string {
 	var err error = nil
 	if len(suite.standaloneHosts) > 0 {
-		config := api.NewGlideClientConfiguration().
+		clientConfig := api.NewGlideClientConfiguration().
 			WithAddress(&suite.standaloneHosts[0]).
 			WithUseTLS(suite.tls).
 			WithRequestTimeout(5000)
 
-		client, err := api.NewGlideClient(config)
+		client, err := api.NewGlideClient(clientConfig)
 		if err == nil && client != nil {
 			defer client.Close()
-			// TODO use info command
-			info, _ := client.CustomCommand([]string{"info", "server"})
-			return extractServerVersion(suite, info.(string))
+			info, _ := client.InfoWithOptions(options.InfoOptions{Sections: []options.Section{options.Server}})
+			return extractServerVersion(suite, info)
 		}
 	}
 	if len(suite.clusterHosts) == 0 {
@@ -161,19 +162,22 @@ func getServerVersion(suite *GlideTestSuite) string {
 		suite.T().Fatal("No server hosts configured")
 	}
 
-	config := api.NewGlideClusterClientConfiguration().
+	clientConfig := api.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5000)
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := api.NewGlideClusterClient(clientConfig)
 	if err == nil && client != nil {
 		defer client.Close()
-		// TODO use info command with route
-		info, _ := client.CustomCommand([]string{"info", "server"})
-		for _, value := range info.Value().(map[string]interface{}) {
-			return extractServerVersion(suite, value.(string))
-		}
+
+		info, _ := client.InfoWithOptions(
+			options.ClusterInfoOptions{
+				InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+				RouteOption: &options.RouteOption{Route: config.RandomRoute},
+			},
+		)
+		return extractServerVersion(suite, info.SingleValue())
 	}
 	suite.T().Fatalf("Can't connect to any server to get version: %s", err.Error())
 	return ""

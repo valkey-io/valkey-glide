@@ -2,17 +2,17 @@
 
 package api
 
-// #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../lib.h"
 import "C"
 
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"unsafe"
 
-	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
 )
 
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
@@ -373,6 +373,33 @@ func handleFloatOrNilResponse(response *C.struct_CommandResponse) (Result[float6
 	return CreateFloat64Result(float64(response.float_value)), nil
 }
 
+// elements in the array could be `null`, but array isn't
+func handleFloatOrNilArrayResponse(response *C.struct_CommandResponse) ([]Result[float64], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice := make([]Result[float64], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		if v.response_type == C.Null {
+			slice = append(slice, CreateNilFloat64Result())
+			continue
+		}
+
+		err := checkResponseType(&v, C.Float, false)
+		if err != nil {
+			return nil, err
+		}
+
+		slice = append(slice, CreateFloat64Result(float64(v.float_value)))
+	}
+
+	return slice, nil
+}
+
 func handleLongAndDoubleOrNullResponse(response *C.struct_CommandResponse) (Result[int64], Result[float64], error) {
 	defer C.free_command_response(response)
 
@@ -562,6 +589,71 @@ func handleKeyWithMemberAndScoreResponse(response *C.struct_CommandResponse) (Re
 	return CreateKeyWithMemberAndScoreResult(KeyWithMemberAndScore{key, member, score}), nil
 }
 
+func handleKeyWithArrayOfMembersAndScoresResponse(
+	response *C.struct_CommandResponse,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	defer C.free_command_response(response)
+
+	if response.response_type == uint32(C.Null) {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), nil
+	}
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), typeErr
+	}
+
+	slice, err := parseArray(response)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	arr := slice.([]interface{})
+	key := arr[0].(string)
+	converted, err := mapConverter[float64]{
+		nil,
+		false,
+	}.convert(arr[1])
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+	res, ok := converted.(map[string]float64)
+
+	if !ok {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
+			Msg: fmt.Sprintf("unexpected type of second element: %T", converted),
+		}
+	}
+	memberAndScoreArray := make([]MemberAndScore, 0, len(res))
+
+	for k, v := range res {
+		memberAndScoreArray = append(memberAndScoreArray, MemberAndScore{k, v})
+	}
+
+	return CreateKeyWithArrayOfMembersAndScoresResult(KeyWithArrayOfMembersAndScores{key, memberAndScoreArray}), nil
+}
+
+func handleMemberAndScoreArrayResponse(response *C.struct_CommandResponse) ([]MemberAndScore, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []MemberAndScore
+	for _, arr := range slice.([]interface{}) {
+		pair := arr.([]interface{})
+		result = append(result, MemberAndScore{pair[0].(string), pair[1].(float64)})
+	}
+	return result, nil
+}
+
 func handleScanResponse(response *C.struct_CommandResponse) (string, []string, error) {
 	defer C.free_command_response(response)
 
@@ -741,12 +833,94 @@ func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (
 	return claimedEntries, nil
 }
 
-func handleMapOfArrayOfStringArrayOrNilResponse(response *C.struct_CommandResponse) (map[string][][]string, error) {
+func handleXRangeResponse(response *C.struct_CommandResponse) ([]XRangeResponse, error) {
+	defer C.free_command_response(response)
+
 	if response.response_type == uint32(C.Null) {
 		return nil, nil
 	}
 
-	return handleMapOfArrayOfStringArrayResponse(response)
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	mapData, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := mapConverter[[][]string]{
+		arrayConverter[[]string]{
+			arrayConverter[string]{
+				nil,
+				false,
+			},
+			false,
+		},
+		false,
+	}.convert(mapData)
+	if err != nil {
+		return nil, err
+	}
+	claimedEntries, ok := converted.(map[string][][]string)
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+	}
+
+	xRangeResponseArray := make([]XRangeResponse, 0, len(claimedEntries))
+
+	for k, v := range claimedEntries {
+		xRangeResponseArray = append(xRangeResponseArray, XRangeResponse{k, v})
+	}
+
+	sort.Slice(xRangeResponseArray, func(i, j int) bool {
+		return xRangeResponseArray[i].StreamId < xRangeResponseArray[j].StreamId
+	})
+	return xRangeResponseArray, nil
+}
+
+func handleXRevRangeResponse(response *C.struct_CommandResponse) ([]XRangeResponse, error) {
+	defer C.free_command_response(response)
+
+	if response.response_type == uint32(C.Null) {
+		return nil, nil
+	}
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	mapData, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := mapConverter[[][]string]{
+		arrayConverter[[]string]{
+			arrayConverter[string]{
+				nil,
+				false,
+			},
+			false,
+		},
+		false,
+	}.convert(mapData)
+	if err != nil {
+		return nil, err
+	}
+	claimedEntries, ok := converted.(map[string][][]string)
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+	}
+
+	xRangeResponseArray := make([]XRangeResponse, 0, len(claimedEntries))
+
+	for k, v := range claimedEntries {
+		xRangeResponseArray = append(xRangeResponseArray, XRangeResponse{k, v})
+	}
+
+	sort.Slice(xRangeResponseArray, func(i, j int) bool {
+		return xRangeResponseArray[i].StreamId > xRangeResponseArray[j].StreamId
+	})
+	return xRangeResponseArray, nil
 }
 
 func handleXAutoClaimResponse(response *C.struct_CommandResponse) (XAutoClaimResponse, error) {
@@ -1002,4 +1176,161 @@ func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendin
 	}
 
 	return pendingDetails, nil
+}
+
+func handleXInfoConsumersResponse(response *C.struct_CommandResponse) ([]XInfoConsumerInfo, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	arrData, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := arrayConverter[map[string]interface{}]{
+		nil,
+		false,
+	}.convert(arrData)
+	if err != nil {
+		return nil, err
+	}
+	arr, ok := converted.([]map[string]interface{})
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+	}
+
+	result := make([]XInfoConsumerInfo, 0, len(arr))
+
+	for _, group := range arr {
+		info := XInfoConsumerInfo{
+			Name:    group["name"].(string),
+			Pending: group["pending"].(int64),
+			Idle:    group["idle"].(int64),
+		}
+		switch inactive := group["inactive"].(type) {
+		case int64:
+			info.Inactive = CreateInt64Result(inactive)
+		default:
+			info.Inactive = CreateNilInt64Result()
+		}
+		result = append(result, info)
+	}
+
+	return result, nil
+}
+
+func handleXInfoGroupsResponse(response *C.struct_CommandResponse) ([]XInfoGroupInfo, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	arrData, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := arrayConverter[map[string]interface{}]{
+		nil,
+		false,
+	}.convert(arrData)
+	if err != nil {
+		return nil, err
+	}
+	arr, ok := converted.([]map[string]interface{})
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+	}
+
+	result := make([]XInfoGroupInfo, 0, len(arr))
+
+	for _, group := range arr {
+		info := XInfoGroupInfo{
+			Name:            group["name"].(string),
+			Consumers:       group["consumers"].(int64),
+			Pending:         group["pending"].(int64),
+			LastDeliveredId: group["last-delivered-id"].(string),
+		}
+		switch lag := group["lag"].(type) {
+		case int64:
+			info.Lag = CreateInt64Result(lag)
+		default:
+			info.Lag = CreateNilInt64Result()
+		}
+		switch entriesRead := group["entries-read"].(type) {
+		case int64:
+			info.EntriesRead = CreateInt64Result(entriesRead)
+		default:
+			info.EntriesRead = CreateNilInt64Result()
+		}
+		result = append(result, info)
+	}
+
+	return result, nil
+}
+
+func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[string]interface{}, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	result, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	return result.(map[string]interface{}), nil
+}
+
+func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[string][]string, error) {
+	defer C.free_command_response(response)
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := mapConverter[[]string]{
+		next:     arrayConverter[string]{},
+		canBeNil: false,
+	}.convert(data)
+	if err != nil {
+		return nil, err
+	}
+	mapResult, ok := result.(map[string][]string)
+	if !ok {
+		return nil, &errors.RequestError{Msg: "Unexpected conversion result type"}
+	}
+
+	return mapResult, nil
+}
+
+func handleTimeClusterResponse(response *C.struct_CommandResponse) (ClusterValue[[]string], error) {
+	// Handle multi-node response
+	if err := checkResponseType(response, C.Map, true); err == nil {
+		mapData, err := handleRawStringArrayMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[[]string](), err
+		}
+		multiNodeTimes := make(map[string][]string)
+		for nodeName, nodeTimes := range mapData {
+			multiNodeTimes[nodeName] = nodeTimes
+		}
+		return createClusterMultiValue(multiNodeTimes), nil
+	}
+
+	// Handle single node response
+	data, err := handleStringArrayResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[[]string](), err
+	}
+	return createClusterSingleValue(data), nil
 }

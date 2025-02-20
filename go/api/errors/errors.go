@@ -2,7 +2,6 @@
 
 package errors
 
-// #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../../lib.h"
 import "C"
 
