@@ -2,17 +2,17 @@
 
 package api
 
-// #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../lib.h"
 import "C"
 
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"unsafe"
 
-	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
 )
 
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
@@ -833,12 +833,94 @@ func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (
 	return claimedEntries, nil
 }
 
-func handleMapOfArrayOfStringArrayOrNilResponse(response *C.struct_CommandResponse) (map[string][][]string, error) {
+func handleXRangeResponse(response *C.struct_CommandResponse) ([]XRangeResponse, error) {
+	defer C.free_command_response(response)
+
 	if response.response_type == uint32(C.Null) {
 		return nil, nil
 	}
 
-	return handleMapOfArrayOfStringArrayResponse(response)
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	mapData, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := mapConverter[[][]string]{
+		arrayConverter[[]string]{
+			arrayConverter[string]{
+				nil,
+				false,
+			},
+			false,
+		},
+		false,
+	}.convert(mapData)
+	if err != nil {
+		return nil, err
+	}
+	claimedEntries, ok := converted.(map[string][][]string)
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+	}
+
+	xRangeResponseArray := make([]XRangeResponse, 0, len(claimedEntries))
+
+	for k, v := range claimedEntries {
+		xRangeResponseArray = append(xRangeResponseArray, XRangeResponse{k, v})
+	}
+
+	sort.Slice(xRangeResponseArray, func(i, j int) bool {
+		return xRangeResponseArray[i].StreamId < xRangeResponseArray[j].StreamId
+	})
+	return xRangeResponseArray, nil
+}
+
+func handleXRevRangeResponse(response *C.struct_CommandResponse) ([]XRangeResponse, error) {
+	defer C.free_command_response(response)
+
+	if response.response_type == uint32(C.Null) {
+		return nil, nil
+	}
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	mapData, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := mapConverter[[][]string]{
+		arrayConverter[[]string]{
+			arrayConverter[string]{
+				nil,
+				false,
+			},
+			false,
+		},
+		false,
+	}.convert(mapData)
+	if err != nil {
+		return nil, err
+	}
+	claimedEntries, ok := converted.(map[string][][]string)
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+	}
+
+	xRangeResponseArray := make([]XRangeResponse, 0, len(claimedEntries))
+
+	for k, v := range claimedEntries {
+		xRangeResponseArray = append(xRangeResponseArray, XRangeResponse{k, v})
+	}
+
+	sort.Slice(xRangeResponseArray, func(i, j int) bool {
+		return xRangeResponseArray[i].StreamId > xRangeResponseArray[j].StreamId
+	})
+	return xRangeResponseArray, nil
 }
 
 func handleXAutoClaimResponse(response *C.struct_CommandResponse) (XAutoClaimResponse, error) {
@@ -1096,6 +1178,114 @@ func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendin
 	return pendingDetails, nil
 }
 
+func handleXInfoConsumersResponse(response *C.struct_CommandResponse) ([]XInfoConsumerInfo, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	arrData, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := arrayConverter[map[string]interface{}]{
+		nil,
+		false,
+	}.convert(arrData)
+	if err != nil {
+		return nil, err
+	}
+	arr, ok := converted.([]map[string]interface{})
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+	}
+
+	result := make([]XInfoConsumerInfo, 0, len(arr))
+
+	for _, group := range arr {
+		info := XInfoConsumerInfo{
+			Name:    group["name"].(string),
+			Pending: group["pending"].(int64),
+			Idle:    group["idle"].(int64),
+		}
+		switch inactive := group["inactive"].(type) {
+		case int64:
+			info.Inactive = CreateInt64Result(inactive)
+		default:
+			info.Inactive = CreateNilInt64Result()
+		}
+		result = append(result, info)
+	}
+
+	return result, nil
+}
+
+func handleXInfoGroupsResponse(response *C.struct_CommandResponse) ([]XInfoGroupInfo, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	arrData, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := arrayConverter[map[string]interface{}]{
+		nil,
+		false,
+	}.convert(arrData)
+	if err != nil {
+		return nil, err
+	}
+	arr, ok := converted.([]map[string]interface{})
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+	}
+
+	result := make([]XInfoGroupInfo, 0, len(arr))
+
+	for _, group := range arr {
+		info := XInfoGroupInfo{
+			Name:            group["name"].(string),
+			Consumers:       group["consumers"].(int64),
+			Pending:         group["pending"].(int64),
+			LastDeliveredId: group["last-delivered-id"].(string),
+		}
+		switch lag := group["lag"].(type) {
+		case int64:
+			info.Lag = CreateInt64Result(lag)
+		default:
+			info.Lag = CreateNilInt64Result()
+		}
+		switch entriesRead := group["entries-read"].(type) {
+		case int64:
+			info.EntriesRead = CreateInt64Result(entriesRead)
+		default:
+			info.EntriesRead = CreateNilInt64Result()
+		}
+		result = append(result, info)
+	}
+
+	return result, nil
+}
+
+func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[string]interface{}, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	result, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	return result.(map[string]interface{}), nil
+}
+
 func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[string][]string, error) {
 	defer C.free_command_response(response)
 	typeErr := checkResponseType(response, C.Map, false)
@@ -1134,7 +1324,6 @@ func handleTimeClusterResponse(response *C.struct_CommandResponse) (ClusterValue
 		for nodeName, nodeTimes := range mapData {
 			multiNodeTimes[nodeName] = nodeTimes
 		}
-
 		return createClusterMultiValue(multiNodeTimes), nil
 	}
 

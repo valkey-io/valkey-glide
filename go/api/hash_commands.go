@@ -2,7 +2,7 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+import "github.com/valkey-io/valkey-glide/go/api/options"
 
 // Supports commands and transactions for the "Hash" group of commands for standalone and cluster clients.
 //
@@ -44,5 +44,5 @@ type HashCommands interface {
 
 	HRandFieldWithCountWithValues(key string, count int64) ([][]string, error)
 
-	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (string, []string, error)
+	HScanWithOptions(key string, cursor string, options options.HashScanOptions) (string, []string, error)
 }

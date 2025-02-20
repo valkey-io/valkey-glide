@@ -46,11 +46,32 @@ clean:
 
 build-glide-client:
 	cargo build --release
-	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h
+	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h --lang c
+	@if [ "$$(uname)" = "Darwin" ] && [ "$$(arch)" = "arm64" ]; then \
+		echo "Platform: aarch64-apple-darwin"; \
+		strip -x target/release/libglide_rs.a; \
+		mkdir -p rustbin/aarch64-apple-darwin; \
+		cp target/release/libglide_rs.a rustbin/aarch64-apple-darwin/; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		strip --strip-unneeded target/release/libglide_rs.a; \
+		if [ "$$(arch)" = "arm64" ] || [ "$$(arch)" = "aarch64" ]; then \
+			echo "Platform: aarch64-unknown-linux-gnu"; \
+			mkdir -p rustbin/aarch64-unknown-linux-gnu; \
+			cp target/release/libglide_rs.a rustbin/aarch64-unknown-linux-gnu/; \
+		elif [ "$$(arch)" = "x86_64" ]; then \
+			echo "Platform: x86_64-unknown-linux-gnu"; \
+			mkdir -p rustbin/x86_64-unknown-linux-gnu; \
+			cp target/release/libglide_rs.a rustbin/x86_64-unknown-linux-gnu/; \
+		fi; \
+	else \
+		echo "Unsupported platform: $(shell uname), $(shell arch)"; \
+		exit 1; \
+	fi
+
 
 build-glide-client-debug:
 	cargo build
-	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h
+	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h --lang c
 
 generate-protobuf:
 	rm -rf protobuf
@@ -77,13 +98,27 @@ format:
 	gofumpt -w .
 	golines -w --shorten-comments -m 127 .
 
-# unit tests - skip complete IT suite (including MT)
+# unit tests - skip complete IT suite (including MT), and examples
+# due to a bug in go 1.20 and 1.21, we need to use -run flag to get -skip flag to work
 unit-test:
 	mkdir -p reports
 	set -o pipefail; \
-	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.so|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
-	go test -v -race ./... -skip TestGlideTestSuite $(if $(test-filter), -testify.m $(test-filter)) \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/glide/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
+	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
+	go test -v -race ./... -skip 'Example|TestGlideTestSuite' -run Test $(if $(test-filter), -run $(test-filter)) \
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
+
+# example tests - skip complete IT suite (including MT)
+example-test:
+	mkdir -p reports
+	set -o pipefail; \
+	../utils/cluster_manager.py start -p 6379 -r 0
+	../utils/cluster_manager.py start --cluster-mode -p 7001 7002 7003 7004 7005 7006
+	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
+    go test -v -race ./... -skip Test $(if $(test-filter), -run $(test-filter)) \
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/api \
+    | go-test-report -o reports/example-tests.html -t example-test > /dev/null)
+
+	../utils/cluster_manager.py stop --prefix cluster
 
 # integration tests - run subtask with skipping modules tests
 integ-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule $(if $(test-filter), -testify.m $(test-filter))
@@ -96,12 +131,12 @@ modules-test: __it
 __it:
 	mkdir -p reports
 	set -o pipefail; \
-	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.so|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
+	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v -race ./integTest/... \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
 	$(if $(cluster-endpoints), --cluster-endpoints=$(cluster-endpoints)) \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/glide/integTest | go-test-report -o reports/integ-tests.html -t integ-test > /dev/null)
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/integTest | go-test-report -o reports/integ-tests.html -t integ-test > /dev/null)
 # code above ^ is similar to `go test .... -json | go-test-report ....`, but it also prints plain text output to stdout
 # `go test` prints plain text, tee duplicates it to stdout and to `test2json` which is coupled with `go-test-report` to generate the report

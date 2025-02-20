@@ -147,7 +147,8 @@ class BaseClient(CoreCommands):
         All open futures will be closed with an exception.
 
         Args:
-            err_message (Optional[str]): If not None, this error message will be passed along with the exceptions when closing all open futures.
+            err_message (Optional[str]): If not None, this error message will be passed along with the exceptions when
+            closing all open futures.
             Defaults to None.
         """
         self._is_closed = True

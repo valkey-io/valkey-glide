@@ -4,12 +4,11 @@ package options
 
 // This struct represents the optional arguments for the ZINTER command.
 type ZInterOptions struct {
-	keysOrWeightedKeys KeysOrWeightedKeys
-	aggregate          Aggregate
+	aggregate Aggregate
 }
 
-func NewZInterOptionsBuilder(keysOrWeightedKeys KeysOrWeightedKeys) *ZInterOptions {
-	return &ZInterOptions{keysOrWeightedKeys: keysOrWeightedKeys}
+func NewZInterOptions() *ZInterOptions {
+	return &ZInterOptions{}
 }
 
 // SetAggregate sets the aggregate method for the ZInter command.
@@ -19,15 +18,9 @@ func (options *ZInterOptions) SetAggregate(aggregate Aggregate) *ZInterOptions {
 }
 
 func (options *ZInterOptions) ToArgs() ([]string, error) {
-	args := []string{}
-
-	if options.keysOrWeightedKeys != nil {
-		args = append(args, options.keysOrWeightedKeys.ToArgs()...)
-	}
-
 	if options.aggregate != "" {
-		args = append(args, options.aggregate.ToArgs()...)
+		return options.aggregate.ToArgs()
 	}
 
-	return args, nil
+	return []string{}, nil
 }

@@ -2,7 +2,7 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+import "github.com/valkey-io/valkey-glide/go/api/options"
 
 // Supports commands and transactions for the "Set" group of commands for standalone and cluster clients.
 //
@@ -44,7 +44,7 @@ type SetCommands interface {
 
 	SScan(key string, cursor string) (string, []string, error)
 
-	SScanWithOptions(key string, cursor string, options *options.BaseScanOptions) (string, []string, error)
+	SScanWithOptions(key string, cursor string, options options.BaseScanOptions) (string, []string, error)
 
 	SMove(source string, destination string, member string) (bool, error)
 }

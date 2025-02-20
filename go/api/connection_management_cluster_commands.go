@@ -2,7 +2,7 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+import "github.com/valkey-io/valkey-glide/go/api/options"
 
 // Supports commands and transactions for the "Connection Management" group of commands for cluster client.
 //
@@ -13,6 +13,8 @@ type ConnectionManagementClusterCommands interface {
 	Ping() (string, error)
 
 	PingWithOptions(pingOptions options.ClusterPingOptions) (string, error)
+
+	Echo(message string) (Result[string], error)
 
 	EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error)
 }
