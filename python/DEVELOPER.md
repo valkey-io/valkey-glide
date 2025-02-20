@@ -133,7 +133,7 @@ From a terminal, change directory to the GLIDE source folder and type:
 cd $HOME/src/valkey-glide
 cd python
 source .env/bin/activate
-pytest --asyncio-mode=auto
+pytest -v --asyncio-mode=auto
 ```
 
 To run modules tests:
@@ -142,7 +142,7 @@ To run modules tests:
 cd $HOME/src/valkey-glide
 cd python
 source .env/bin/activate
-pytest --asyncio-mode=auto -k "test_server_modules.py"
+pytest -v --asyncio-mode=auto -k "test_server_modules.py"
 ```
 
 **TIP:** to run a specific test, append `-k <test_name>` to the `pytest` execution line
@@ -150,7 +150,7 @@ pytest --asyncio-mode=auto -k "test_server_modules.py"
 To run tests against an already running servers, change the `pytest` line above to this:
 
 ```bash
-pytest --asyncio-mode=auto --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
+pytest -v --asyncio-mode=auto --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 ```
 
 # Generate protobuf files
