@@ -29,18 +29,17 @@ impl RotatingBuffer {
                 let start_pos = prev_position + bytes_read;
                 if (start_pos + request_len as usize) > buffer_len {
                     break;
-                } else {
-                    match T::parse_from_tokio_bytes(
-                        &buffer.slice(start_pos..start_pos + request_len as usize),
-                    ) {
-                        Ok(request) => {
-                            prev_position += request_len as usize + bytes_read;
-                            results.push(request);
-                        }
-                        Err(err) => {
-                            log_error("parse input", format!("Failed to parse request: {err}"));
-                            return Err(err.into());
-                        }
+                }
+                match T::parse_from_tokio_bytes(
+                    &buffer.slice(start_pos..start_pos + request_len as usize),
+                ) {
+                    Ok(request) => {
+                        prev_position += request_len as usize + bytes_read;
+                        results.push(request);
+                    }
+                    Err(err) => {
+                        log_error("parse input", format!("Failed to parse request: {err}"));
+                        return Err(err.into());
                     }
                 }
             } else {
@@ -68,7 +67,7 @@ mod tests {
     use crate::command_request::{command, command_request};
     use crate::command_request::{Command, CommandRequest, RequestType};
     use bytes::BufMut;
-    use rand::{distributions::Alphanumeric, Rng};
+    use rand::{distr::Alphanumeric, Rng};
     use rstest::rstest;
 
     fn write_length(buffer: &mut BytesMut, length: u32) {
@@ -161,7 +160,7 @@ mod tests {
     }
 
     fn generate_random_string(length: usize) -> String {
-        rand::thread_rng()
+        rand::rng()
             .sample_iter(&Alphanumeric)
             .take(length)
             .map(char::from)
