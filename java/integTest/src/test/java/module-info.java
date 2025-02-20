@@ -1,8 +1,8 @@
 module glide.integTest {
-    exports glide;
-    exports glide.cluster;
-    exports glide.modules;
-    exports glide.standalone;
+    opens glide;
+    opens glide.cluster;
+    opens glide.modules;
+    opens glide.standalone;
 
     requires glide.api;
     requires com.google.gson;
