@@ -31,7 +31,6 @@ type BaseClient interface {
 	SetCommands
 	StreamCommands
 	SortedSetCommands
-	ConnectionManagementCommands
 	HyperLogLogCommands
 	GenericBaseCommands
 	BitmapCommands
@@ -3104,52 +3103,6 @@ func (client *baseClient) BLMove(
 	return handleStringOrNilResponse(result)
 }
 
-// Pings the server.
-//
-// Return value:
-//
-//	Returns "PONG".
-//
-// For example:
-//
-//	result, err := client.Ping()
-//
-// [valkey.io]: https://valkey.io/commands/ping/
-func (client *baseClient) Ping() (string, error) {
-	result, err := client.executeCommand(C.Ping, []string{})
-	if err != nil {
-		return defaultStringResponse, err
-	}
-
-	return handleStringResponse(result)
-}
-
-// Pings the server with a custom message.
-//
-// Parameters:
-//
-//	message - A message to include in the `PING` command.
-//
-// Return value:
-//
-//	Returns the copy of message.
-//
-// For example:
-//
-//	result, err := client.PingWithMessage("Hello")
-//
-// [valkey.io]: https://valkey.io/commands/ping/
-func (client *baseClient) PingWithMessage(message string) (string, error) {
-	args := []string{message}
-
-	result, err := client.executeCommand(C.Ping, args)
-	if err != nil {
-		return defaultStringResponse, err
-	}
-
-	return handleStringResponse(result)
-}
-
 // Del removes the specified keys from the database. A key is ignored if it does not exist.
 //
 // Note:
@@ -4518,6 +4471,147 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 	return handleKeyWithMemberAndScoreResponse(result)
 }
 
+// Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
+// given keys being checked in the order they are provided.
+// BZMPop is the blocking variant of [baseClient.ZMPop].
+//
+// Note:
+//   - When in cluster mode, all keys must map to the same hash slot.
+//   - BZMPop is a client blocking command, see [Blocking Commands] for more details and best practices.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys          - An array of keys to lists.
+//	scoreFilter   - The element pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest
+//					scores accordingly.
+//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
+//					indefinitely.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	- The key name of the set from which the element was popped.
+//	- An array of member scores of the popped elements.
+//	Returns `nil` if no member could be popped and the timeout expired.
+//
+// For example:
+//
+//	result, err := client.ZAdd("my_list", map[string]float64{"five": 5.0, "six": 6.0})
+//	result, err := client.BZMPop([]string{"my_list"}, api.MAX, float64(0.1))
+//	result["my_list"] = []MemberAndScore{{Member: "six", Score: 6.0}}
+//
+// [valkey.io]: https://valkey.io/commands/bzmpop/
+// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+func (client *baseClient) BZMPop(
+	keys []string,
+	scoreFilter ScoreFilter,
+	timeoutSecs float64,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.toString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-3 {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
+			Msg: "Length overflow for the provided keys",
+		}
+	}
+
+	// args slice will have 3 more arguments with the keys provided.
+	args := make([]string, 0, len(keys)+3)
+	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, scoreFilterStr)
+	result, err := client.executeCommand(C.BZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
+}
+
+// Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
+// given keys being checked in the order they are provided.
+// BZMPop is the blocking variant of [baseClient.ZMPop].
+//
+// Note:
+//   - When in cluster mode, all keys must map to the same hash slot.
+//   - BZMPop is a client blocking command, see [Blocking Commands] for more details and best practices.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys          - An array of keys to lists.
+//	scoreFilter   - The element pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest
+//					scores accordingly.
+//	count         - The maximum number of popped elements.
+//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	- The key name of the set from which the element was popped.
+//	- An array of member scores of the popped elements.
+//	Returns `nil` if no member could be popped and the timeout expired.
+//
+// For example:
+//
+//	result, err := client.ZAdd("my_list", map[string]float64{"five": 5.0, "six": 6.0})
+//	result, err := client.BZMPopWithOptions([]string{"my_list"}, api.MAX, 0.1, options.NewZMPopOptions().SetCount(2))
+//	result["my_list"] = []MemberAndScore{{Member: "six", Score: 6.0}, {Member: "five", Score 5.0}}
+//
+// [valkey.io]: https://valkey.io/commands/bzmpop/
+// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+func (client *baseClient) BZMPopWithOptions(
+	keys []string,
+	scoreFilter ScoreFilter,
+	timeoutSecs float64,
+	opts *options.ZMPopOptions,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.toString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-5 {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
+			Msg: "Length overflow for the provided keys",
+		}
+	}
+
+	// args slice will have 5 more arguments with the keys provided.
+	args := make([]string, 0, len(keys)+5)
+	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, scoreFilterStr)
+	if opts != nil {
+		optionArgs, err := opts.ToArgs()
+		if err != nil {
+			return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		}
+		args = append(args, optionArgs...)
+	}
+	result, err := client.executeCommand(C.BZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
+}
+
 // Returns the specified range of elements in the sorted set stored at `key`.
 // `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
 //
@@ -5595,34 +5689,6 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
-// Echo the provided message back.
-// The command will be routed a random node.
-//
-// Parameters:
-//
-//	message - The provided message.
-//
-// Return value:
-//
-//	The provided message
-//
-// For example:
-//
-//	 result, err := client.Echo("Hello World")
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: Hello World
-//
-// [valkey.io]: https://valkey.io/commands/echo/
-func (client *baseClient) Echo(message string) (Result[string], error) {
-	result, err := client.executeCommand(C.Echo, []string{message})
-	if err != nil {
-		return CreateNilStringResult(), err
-	}
-	return handleStringOrNilResponse(result)
-}
-
 // Destroys the consumer group `group` for the stream stored at `key`.
 //
 // See [valkey.io] for details.
@@ -5809,6 +5875,118 @@ func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeB
 		return 0, err
 	}
 	return handleIntResponse(result)
+}
+
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//
+// Return value:
+//
+//	A string representing a random member from the sorted set.
+//	If the sorted set does not exist or is empty, the response will be `nil`.
+//
+// Example:
+//
+//	member, err := client.ZRandMember("key1")
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMember(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//	An array of members from the sorted set.
+//	If the sorted set does not exist or is empty, the response will be an empty array.
+//
+// Example:
+//
+//	members, err := client.ZRandMemberWithCount("key1", -5)
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMemberWithCount(key string, count int64) ([]string, error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns a random member from the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//	An array of `MemberAndScore` objects, which store member names and their respective scores.
+//	If the sorted set does not exist or is empty, the response will be an empty array.
+//
+// Example:
+//
+//	membersAndScores, err := client.ZRandMemberWithCountWithScores("key1", 5)
+//
+// [valkey.io]: https://valkey.io/commands/zrandmember/
+func (client *baseClient) ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error) {
+	result, err := client.executeCommand(C.ZRandMember, []string{key, utils.IntToString(count), options.WithScores})
+	if err != nil {
+		return nil, err
+	}
+	return handleMemberAndScoreArrayResponse(result)
+}
+
+// Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Parameters:
+//
+//	key     - The key of the sorted set.
+//	members - A list of members in the sorted set.
+//
+// Return value:
+//
+//	An array of scores corresponding to `members`.
+//	If a member does not exist in the sorted set, the corresponding value in the list will be `nil`.
+//
+// Example:
+//
+//	result, err := client.ZMScore(key, []string{"member1", "non_existent_member", "member2"})
+//	result: [{1.0 false} {0 true} {2.0 false}]
+//
+// [valkey.io]: https://valkey.io/commands/zmscore/
+func (client *baseClient) ZMScore(key string, members []string) ([]Result[float64], error) {
+	response, err := client.executeCommand(C.ZMScore, append([]string{key}, members...))
+	if err != nil {
+		return nil, err
+	}
+	return handleFloatOrNilArrayResponse(response)
 }
 
 // Returns the logarithmic access frequency counter of a Valkey object stored at key.
@@ -6818,4 +6996,198 @@ func (client *baseClient) XRevRangeWithOptions(
 		return nil, err
 	}
 	return handleMapOfArrayOfStringArrayOrNilResponse(result)
+}
+
+// Reads or modifies the array of bits representing the string that is held at key
+// based on the specified sub commands.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key          -  The key of the string.
+//	subCommands  -  The subCommands to be performed on the binary value of the string at
+//	                key, which could be any of the following:
+//	                  - [BitFieldGet].
+//	                  - [BitFieldSet].
+//	                  - [BitFieldIncrby].
+//	                  - [BitFieldOverflow].
+//		            Use `options.NewBitFieldGet()` to specify a  BitField GET command.
+//		            Use `options.NewBitFieldSet()` to specify a BitField SET command.
+//		            Use `options.NewBitFieldIncrby()` to specify a BitField INCRYBY command.
+//		            Use `options.BitFieldOverflow()` to specify a BitField OVERFLOW command.
+//
+// Return value:
+//
+//	Result from the executed subcommands.
+//	  - BitFieldGet returns the value in the binary representation of the string.
+//	  - BitFieldSet returns the previous value before setting the new value in the binary representation.
+//	  - BitFieldIncrBy returns the updated value after increasing or decreasing the bits.
+//	  - BitFieldOverflow controls the behavior of subsequent operations and returns
+//	    a result based on the specified overflow type (WRAP, SAT, FAIL).
+//
+// Example:
+//
+//	commands := []options.BitFieldSubCommands{
+//		options.BitFieldGet(options.SignedInt, 8, 16),
+//		options.BitFieldOverflow(options.SAT),
+//		options.NewBitFieldSet(options.UnsignedInt, 4, 0, 7),
+//	    options.BitFieldIncrBy(options.SignedInt, 5, 100, 1),
+//	}
+//	result, err := client.BitField("mykey", commands)
+//	result: [{0 false} {7 false} {15 false}]
+//
+// [valkey.io]: https://valkey.io/commands/bitfield/
+func (client *baseClient) BitField(key string, subCommands []options.BitFieldSubCommands) ([]Result[int64], error) {
+	args := make([]string, 0, 10)
+	args = append(args, key)
+
+	for _, cmd := range subCommands {
+		cmdArgs, err := cmd.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, cmdArgs...)
+	}
+
+	result, err := client.executeCommand(C.BitField, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleIntOrNilArrayResponse(result)
+}
+
+// Reads the array of bits representing the string that is held at key
+// based on the specified  sub commands.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key          -  The key of the string.
+//	subCommands  -  The read-only subCommands to be performed on the binary value
+//	                of the string at key, which could be:
+//	                  - [BitFieldGet].
+//		            Use `options.NewBitFieldGet()` to specify a BitField GET command.
+//
+// Return value:
+//
+//	Result from the executed GET subcommands.
+//	  - BitFieldGet returns the value in the binary representation of the string.
+//
+// Example:
+//
+//	 commands := []options.BitFieldROCommands{
+//		options.BitFieldGet(options.SignedInt, 8, 16),
+//	  }
+//	 result, err := client.BitFieldRO("mykey", commands)
+//	 result: [{42 false}]
+//
+// [valkey.io]: https://valkey.io/commands/bitfield_ro/
+func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCommands) ([]Result[int64], error) {
+	args := make([]string, 0, 10)
+	args = append(args, key)
+
+	for _, cmd := range commands {
+		cmdArgs, err := cmd.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, cmdArgs...)
+	}
+
+	result, err := client.executeCommand(C.BitFieldReadOnly, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleIntOrNilArrayResponse(result)
+}
+
+// Returns the server time.
+//
+// Return value:
+// The current server time as a String array with two elements:
+// A UNIX TIME and the amount of microseconds already elapsed in the current second.
+// The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
+//
+// For example:
+//
+//	result, err := client.Time()
+//	result: [{1737051660} {994688}]
+//
+// [valkey.io]: https://valkey.io/commands/time/
+func (client *baseClient) Time() ([]string, error) {
+	result, err := client.executeCommand(C.Time, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the intersection of members from sorted sets specified by the given `keys`.
+// To get the elements with their scores, see [ZInterWithScores].
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - The keys of the sorted sets, see - [options.KeyArray].
+//
+// Return value:
+//
+//	The resulting sorted set from the intersection.
+//
+// Example:
+//
+//	res, err := client.ZInter(options.NewKeyArray("key1", "key2", "key3"))
+//	fmt.Println(res) // []string{"member1", "member2", "member3"}
+//
+// [valkey.io]: https://valkey.io/commands/zinter/
+func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
+	args := keys.ToArgs()
+	result, err := client.executeCommand(C.ZInter, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the intersection of members and their scores from sorted sets specified by the given
+// `keysOrWeightedKeys`.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	options - The options for the ZInter command, see - [options.ZInterOptions].
+//
+// Return value:
+//
+//	A map of members to their scores.
+//
+// Example:
+//
+//	res, err := client.ZInterWithScores(options.NewZInterOptionsBuilder(options.NewKeyArray("key1", "key2", "key3")))
+//	fmt.Println(res) // map[member1:1.0 member2:2.0 member3:3.0]
+//
+// [valkey.io]: https://valkey.io/commands/zinter/
+func (client *baseClient) ZInterWithScores(zInterOptions *options.ZInterOptions) (map[string]float64, error) {
+	args, err := zInterOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, options.WithScores)
+	result, err := client.executeCommand(C.ZInter, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringDoubleMapResponse(result)
 }

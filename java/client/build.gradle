@@ -267,8 +267,8 @@ class NettyResourceTransformer implements Transformer {
 
     @Override
     void transform(TransformerContext context) {
-        String updatedPath = context.path.replace("io.netty", "shadow.io.netty")
-        String updatedContent = context.is.getText().replace("io.netty", "shadow.io.netty")
+        String updatedPath = context.path.replace("io.netty", "glide.io.netty")
+        String updatedContent = context.is.getText().replace("io.netty", "glide.io.netty")
         resources.put(updatedPath, updatedContent)
     }
 
@@ -285,50 +285,6 @@ class NettyResourceTransformer implements Transformer {
 
             outputStream.putNextEntry(entry)
             outputStream.write(resourceEntry.value.getBytes())
-            outputStream.closeEntry()
-        }
-    }
-}
-
-@CacheableTransformer
-class NettyResourceTransformer2 implements Transformer {
-
-    // A map of resource file paths to be modified
-    private Map<String, String> resources = [:]
-
-    @Override
-    boolean canTransformResource(FileTreeElement fileTreeElement) {
-        fileTreeElement.name.contains('io.netty.channel.epoll.EpollEventLoopGroup')
-            || fileTreeElement.name.contains('io.netty.channel.kqueue.KQueueEventLoopGroup')
-    }
-
-    @Override
-    void transform(TransformerContext context) {
-        String updatedPath = context.path //.replace("io.netty", "shadow.io.netty")
-        String updatedContent = context.is.getText() //.replace("io.netty", "shadow.io.netty")
-        resources.put(updatedPath, updatedContent)
-    }
-
-    @Override
-    boolean hasTransformedResource() {
-        resources.size() > 0
-    }
-
-    @Override
-    void modifyOutputStream(ZipOutputStream outputStream, boolean preserveFileTimestamps) {
-        for (resourceEntry in resources) {
-            ZipEntry entry = new ZipEntry(resourceEntry.key)
-            entry.time = TransformerContext.getEntryTimestamp(preserveFileTimestamps, entry.time)
-
-            outputStream.putNextEntry(entry)
-            outputStream.write(resourceEntry.value.getBytes())
-            outputStream.closeEntry()
-
-            entry = new ZipEntry(resourceEntry.key.replace("io.netty", "shadow.io.netty"))
-            entry.time = TransformerContext.getEntryTimestamp(preserveFileTimestamps, entry.time)
-
-            outputStream.putNextEntry(entry)
-            outputStream.write(resourceEntry.value.replace("io.netty", "shadow.io.netty").getBytes())
             outputStream.closeEntry()
         }
     }
@@ -337,17 +293,15 @@ class NettyResourceTransformer2 implements Transformer {
 shadowJar {
     dependsOn('copyNativeLib')
     archiveClassifier = osdetector.classifier
+    excludes.remove("module-info.class")
+    //enableRelocation = true // auto relocation
+    relocate('io.netty', 'glide.io.netty')
+    relocate('com.google.protobuf', 'glide.com.google.protobuf')
     mergeServiceFiles()
-//    enableRelocation = true // auto relocation
-    relocate('io.netty', 'shadow.io.netty') {
-//        exclude 'io.netty.channel.epoll.EpollEventLoopGroup'
-//        exclude 'io.netty.channel.kqueue.KQueueEventLoopGroup'
-    }
 
-    relocate 'META-INF/native/libnetty', 'META-INF/native/libshadow_netty'
-    relocate 'META-INF/native/netty', 'META-INF/native/shadow_netty'
+    relocate 'META-INF/native/libnetty', 'META-INF/native/libglide_netty'
+    relocate 'META-INF/native/netty', 'META-INF/native/glide_netty'
     transform(NettyResourceTransformer.class)
-//    transform(NettyResourceTransformer2.class)
 }
 
 sourcesJar {

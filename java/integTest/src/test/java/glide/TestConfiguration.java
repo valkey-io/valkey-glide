@@ -4,11 +4,11 @@ package glide;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 
-import com.vdurmont.semver4j.Semver;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.logging.Logger;
+import org.semver4j.Semver;
 
 public final class TestConfiguration {
     // All servers are hosted on localhost
