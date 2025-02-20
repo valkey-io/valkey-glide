@@ -2,7 +2,6 @@
 package glide.api.models.configuration;
 
 import java.util.List;
-
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;

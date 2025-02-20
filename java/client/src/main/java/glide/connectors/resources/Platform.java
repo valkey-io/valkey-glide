@@ -95,7 +95,6 @@ public class Platform {
                         System.getProperty("os.version"),
                         System.getProperty("os.arch"));
 
-        throw new RuntimeException(
-                errorMessage + debugInfo);
+        throw new RuntimeException(errorMessage + debugInfo);
     }
 }

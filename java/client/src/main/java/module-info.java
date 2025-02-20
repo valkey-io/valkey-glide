@@ -15,14 +15,11 @@ module glide.api {
     exports glide.api.models.exceptions;
     exports glide.api.commands.servermodules;
 
-    //requires io.netty.codec; // remove?
-    requires io.netty.common;
-    requires io.netty.transport;
-    requires io.netty.transport.classes.epoll;
-    requires io.netty.transport.classes.kqueue;
-    requires io.netty.transport.unix.common;
+    // TODO get rid of `java.logging` dependency if possible
+    // See https://github.com/grpc/grpc-java/issues/2415 for reference
+    // Probably we could create a custom `LogResolver` or `LogManager` to redirect
+    // all logs into GLIDE's logging API
+    requires java.logging; // required by shadowed protobuf
     requires static lombok;
     requires org.apache.commons.lang3;
-    requires java.logging;
-    requires io.netty.buffer;
 }
