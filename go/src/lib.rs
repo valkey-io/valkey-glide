@@ -131,13 +131,15 @@ pub struct ConnectionResponse {
 }
 
 /// A `GlideClient` adapter.
-// TODO: Remove allow(dead_code) once connection logic is implemented
-#[allow(dead_code)]
 pub struct ClientAdapter {
-    client: GlideClient,
+    runtime: Runtime,
+    core: Arc<CommandExecutionCore>,
+}
+
+struct CommandExecutionCore {
     success_callback: SuccessCallback,
     failure_callback: FailureCallback,
-    runtime: Runtime,
+    client: GlideClient,
 }
 
 fn create_client_internal(
@@ -160,12 +162,12 @@ fn create_client_internal(
     let client = runtime
         .block_on(GlideClient::new(ConnectionRequest::from(request), None))
         .map_err(|err| err.to_string())?;
-    Ok(ClientAdapter {
-        client,
+    let core = Arc::new(CommandExecutionCore {
         success_callback,
         failure_callback,
-        runtime,
-    })
+        client,
+    });
+    Ok(ClientAdapter { runtime, core })
 }
 
 /// Creates a new `ClientAdapter` with a new `GlideClient` configured using a Protobuf `ConnectionRequest`.
@@ -522,7 +524,7 @@ pub unsafe extern "C" fn command(
         Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
     };
 
-    let client_adapter_clone = client_adapter.clone();
+    let core = client_adapter.core.clone();
 
     let arg_vec =
         unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) };
@@ -541,7 +543,7 @@ pub unsafe extern "C" fn command(
     let route = Routes::parse_from_bytes(r_bytes).unwrap();
 
     client_adapter.runtime.spawn(async move {
-        let result = client_adapter_clone
+        let result = core
             .client
             .clone()
             .send_command(&cmd, get_route(route, Some(&cmd)))
@@ -555,7 +557,7 @@ pub unsafe extern "C" fn command(
                 let c_err_str = CString::into_raw(
                     CString::new(message).expect("Couldn't convert error message to CString"),
                 );
-                unsafe { (client_adapter_clone.failure_callback)(channel, c_err_str, error_type) };
+                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
                 return;
             }
         };
@@ -564,10 +566,7 @@ pub unsafe extern "C" fn command(
 
         unsafe {
             match result {
-                Ok(message) => (client_adapter_clone.success_callback)(
-                    channel,
-                    Box::into_raw(Box::new(message)),
-                ),
+                Ok(message) => (core.success_callback)(channel, Box::into_raw(Box::new(message))),
                 Err(err) => {
                     let message = errors::error_message(&err);
                     let error_type = errors::error_type(&err);
@@ -575,7 +574,7 @@ pub unsafe extern "C" fn command(
                     let c_err_str = CString::into_raw(
                         CString::new(message).expect("Couldn't convert error message to CString"),
                     );
-                    (client_adapter_clone.failure_callback)(channel, c_err_str, error_type);
+                    (core.failure_callback)(channel, c_err_str, error_type);
                 }
             };
         }

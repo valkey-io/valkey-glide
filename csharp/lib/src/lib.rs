@@ -22,10 +22,14 @@ pub enum Level {
 }
 
 pub struct Client {
+    runtime: Runtime,
+    core: Arc<CommandExecutionCore>,
+}
+
+struct CommandExecutionCore {
     client: GlideClient,
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (), // TODO - add specific error codes
-    runtime: Runtime,
 }
 
 fn create_connection_request(host: String, port: u32, use_tls: bool) -> client::ConnectionRequest {
@@ -61,12 +65,12 @@ fn create_client_internal(
         .build()?;
     let _runtime_handle = runtime.enter();
     let client = runtime.block_on(GlideClient::new(request, None)).unwrap(); // TODO - handle errors.
-    Ok(Client {
-        client,
+    let core = Arc::new(CommandExecutionCore {
         success_callback,
         failure_callback,
-        runtime,
-    })
+        client,
+    });
+    Ok(Client { runtime, core })
 }
 
 /// Creates a new client to the given address. The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns.
@@ -114,16 +118,15 @@ pub unsafe extern "C" fn command(
         Arc::increment_strong_count(client_ptr);
         Arc::from_raw(client_ptr as *mut Client)
     };
-    let core_client_clone = client.clone();
 
     // The safety of these needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
     let args_address = args as usize;
 
-    let mut client_clone = client.client.clone();
+    let core = client.core.clone();
     client.runtime.spawn(async move {
         let Some(mut cmd) = request_type.get_command() else {
             unsafe {
-                (core_client_clone.failure_callback)(callback_index); // TODO - report errors
+                (core.failure_callback)(callback_index); // TODO - report errors
                 return;
             }
         };
@@ -136,17 +139,17 @@ pub unsafe extern "C" fn command(
             cmd.arg(c_str.to_bytes());
         }
 
-        let result = client_clone
+        let result = core
+            .client
+            .clone()
             .send_command(&cmd, None)
             .await
             .and_then(Option::<CString>::from_owned_redis_value);
         unsafe {
             match result {
-                Ok(None) => (core_client_clone.success_callback)(callback_index, std::ptr::null()),
-                Ok(Some(c_str)) => {
-                    (core_client_clone.success_callback)(callback_index, c_str.as_ptr())
-                }
-                Err(_) => (core_client_clone.failure_callback)(callback_index), // TODO - report errors
+                Ok(None) => (core.success_callback)(callback_index, std::ptr::null()),
+                Ok(Some(c_str)) => (core.success_callback)(callback_index, c_str.as_ptr()),
+                Err(_) => (core.failure_callback)(callback_index), // TODO - report errors
             };
         }
     });
