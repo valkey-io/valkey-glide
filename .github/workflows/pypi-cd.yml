@@ -80,6 +80,8 @@ jobs:
             fail-fast: false
             matrix:
                 build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+        outputs:
+            release_version: ${{ steps.set_version.outputs.RELEASE_VERSION }}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
@@ -91,6 +93,7 @@ jobs:
                   submodules: "true"
 
             - name: Set the release version
+              id: set_version
               shell: bash
               run: |
                   if ${{ env.EVENT_NAME == 'pull_request' }}; then
@@ -101,6 +104,7 @@ jobs:
                     R_VERSION=${GITHUB_REF:11}
                   fi
                   echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_OUTPUT
               env:
                   EVENT_NAME: ${{ github.event_name }}
                   INPUT_VERSION: ${{ github.event.inputs.version }}
@@ -206,23 +210,11 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v4
-              with:
-                  submodules: "true"
 
             - name: Set the release version
               shell: bash
               run: |
-                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
-                    R_VERSION="255.255.255"
-                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
-                    R_VERSION="${{ env.INPUT_VERSION }}"
-                  else
-                    R_VERSION=${GITHUB_REF:11}
-                  fi
-                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-              env:
-                  EVENT_NAME: ${{ github.event_name }}
-                  INPUT_VERSION: ${{ github.event.inputs.version }}
+                  echo "RELEASE_VERSION=${{needs.publish-binaries.outputs.release_version}}" >> $GITHUB_ENV
 
             - name: Set the package version for Python
               working-directory: ./python
