@@ -6407,3 +6407,29 @@ func (client *baseClient) ZInterCardWithOptions(keys []string, options *options.
 	}
 	return handleIntResponse(result)
 }
+
+// Returns the number of elements in the sorted set at key with a value between min and max.
+//
+// Available for Valkey 6.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	rangeQuery - The range query to apply to the sorted set.
+//
+// Return value:
+//
+//	The number of elements in the sorted set at key with a value between min and max.
+//
+// [valkey.io]: https://valkey.io/commands/zlexcount/
+func (client *baseClient) ZLexCount(key string, rangeQuery *options.RangeByLex) (int64, error) {
+	args := []string{key}
+	args = append(args, rangeQuery.ToArgsLexCount()...)
+	result, err := client.executeCommand(C.ZLexCount, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
