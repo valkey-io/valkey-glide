@@ -96,7 +96,20 @@ impl GlidePaths {
 
     /// Returns the path to the socket file as PathBuf.
     pub fn glide_sock_file_path() -> PathBuf {
-        Self::glide_sock_temp_dir().join(SOCKET_FILE_NAME)
+        match Self::glide_sock_temp_dir().exists() {
+            true => Self::glide_sock_temp_dir().join(SOCKET_FILE_NAME),
+            false => {
+                std::fs::create_dir_all(Self::glide_sock_temp_dir())
+                    .map_err(|e| {
+                        log_warn(
+                            "Socket directory creation",
+                            format!("Error creating socket directory: {e}"),
+                        )
+                    })
+                    .ok();
+                Self::glide_sock_temp_dir().join(SOCKET_FILE_NAME)
+            }
+        }
     }
 
     /// Removes the socket file.
