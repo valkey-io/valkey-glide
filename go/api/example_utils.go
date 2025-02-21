@@ -12,11 +12,15 @@ import (
 
 var clusterNodes = flag.String("clusternodes", "", "AddressNodes for running Valkey/Redis cluster nodes")
 
-var clusterClient *GlideClusterClient
-var clusterOnce sync.Once
+var (
+	clusterClient *GlideClusterClient
+	clusterOnce   sync.Once
+)
 
-var standaloneClient *GlideClient
-var standaloneOnce sync.Once
+var (
+	standaloneClient *GlideClient
+	standaloneOnce   sync.Once
+)
 
 var initOnce sync.Once
 
