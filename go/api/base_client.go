@@ -278,7 +278,7 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 func (client *baseClient) Set(key string, value string) (string, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -416,7 +416,7 @@ func (client *baseClient) GetExWithOptions(key string, options options.GetExOpti
 func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -671,7 +671,7 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
 	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -730,7 +730,7 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	result, err := client.executeCommand(C.LCS, []string{key1, key2})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -1101,7 +1101,7 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 func (client *baseClient) HScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.HScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1133,12 +1133,12 @@ func (client *baseClient) HScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.HScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1863,7 +1863,7 @@ func (client *baseClient) SUnion(keys []string) (map[string]struct{}, error) {
 func (client *baseClient) SScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.SScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1896,12 +1896,12 @@ func (client *baseClient) SScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.SScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -2014,7 +2014,7 @@ func (client *baseClient) LIndex(key string, index int64) (Result[string], error
 func (client *baseClient) LTrim(key string, start int64, end int64) (string, error) {
 	result, err := client.executeCommand(C.LTrim, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -2494,7 +2494,7 @@ func (client *baseClient) BLMPopCount(
 func (client *baseClient) LSet(key string, index int64, element string) (string, error) {
 	result, err := client.executeCommand(C.LSet, []string{key, utils.IntToString(index), element})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -3091,7 +3091,7 @@ func (client *baseClient) Unlink(keys []string) (int64, error) {
 func (client *baseClient) Type(key string) (string, error) {
 	result, err := client.executeCommand(C.Type, []string{key})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -3146,7 +3146,7 @@ func (client *baseClient) Touch(keys []string) (int64, error) {
 func (client *baseClient) Rename(key string, newKey string) (string, error) {
 	result, err := client.executeCommand(C.Rename, []string{key, newKey})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -4433,7 +4433,7 @@ func (client *baseClient) ZScore(key string, member string) (Result[float64], er
 func (client *baseClient) ZScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.ZScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -4464,12 +4464,12 @@ func (client *baseClient) ZScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.ZScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -4586,7 +4586,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 	args := append([]string{key, group, id}, optionArgs...)
 	result, err := client.executeCommand(C.XGroupCreate, args)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -4772,7 +4772,7 @@ func (client *baseClient) XGroupSetIdWithOptions(
 	args := append([]string{key, group, id}, optionArgs...)
 	result, err := client.executeCommand(C.XGroupSetId, args)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
