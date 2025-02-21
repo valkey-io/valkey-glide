@@ -564,16 +564,6 @@ async fn handle_requests(
     task::yield_now().await;
 }
 
-pub fn close_socket(socket_path: &String) {
-    log_info("close_socket", format!("closing socket at {socket_path}"));
-    if let Err(err) = GlidePaths::remove_socket_file() {
-        log_warn(
-            "close_socket",
-            format!("Failed to remove socket file: {err}"),
-        );
-    }
-}
-
 async fn create_client(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
@@ -794,9 +784,9 @@ pub fn start_socket_listener_internal<InitCallback>(
     static INITIALIZED_SOCKETS: Lazy<RwLock<HashSet<String>>> =
         Lazy::new(|| RwLock::new(HashSet::new()));
 
-    let socket_path = match socket_path {
+    let socket_file_path = match socket_path {
         Some(path) => path,
-        None => GlidePaths::glide_socket_path(),
+        None => GlidePaths::glide_socket_file_path_string(),
     };
 
     {
@@ -804,8 +794,8 @@ pub fn start_socket_listener_internal<InitCallback>(
         let initialized_sockets = INITIALIZED_SOCKETS
             .read()
             .expect("Failed to acquire sockets db read guard");
-        if initialized_sockets.contains(&socket_path) {
-            init_callback(Ok(socket_path.clone()));
+        if initialized_sockets.contains(&socket_file_path) {
+            init_callback(Ok(socket_file_path.clone()));
             return;
         }
     }
@@ -814,12 +804,12 @@ pub fn start_socket_listener_internal<InitCallback>(
     let mut sockets_write_guard = INITIALIZED_SOCKETS
         .write()
         .expect("Failed to acquire sockets db write guard");
-    if sockets_write_guard.contains(&socket_path) {
-        init_callback(Ok(socket_path.clone()));
+    if sockets_write_guard.contains(&socket_file_path) {
+        init_callback(Ok(socket_file_path.clone()));
         return;
     }
     let (tx, rx) = std::sync::mpsc::channel();
-    let socket_path_cloned = socket_path.clone();
+    let socket_file_path_cloned = socket_file_path.clone();
     let init_callback_cloned = init_callback.clone();
     let tx_cloned = tx.clone();
     thread::Builder::new()
@@ -839,12 +829,13 @@ pub fn start_socket_listener_internal<InitCallback>(
                 runtime.block_on(async move {
                     // Check if the socket file is occupied, if so, remove it.
                     // Since we checked above if the socket is already initialized, if the file exists, it is a leftover from a previous run.
-                    let remove_res = GlidePaths::remove_socket_file();
-                    let listener_socket = match UnixListener::bind(socket_path_cloned.clone()) {
+                    let _ = GlidePaths::remove_socket_file();
+                    let listener_socket = match UnixListener::bind(socket_file_path_cloned.clone())
+                    {
                         Err(err) => {
                             log_error(
                                 "listen_on_socket",
-                                format!("Error failed to bind listening socket: {err}, removing socket file results in {remove_res:?}"),
+                                format!("Error failed to bind listening socket: {err}"),
                             );
                             return Err(err);
                         }
@@ -853,7 +844,7 @@ pub fn start_socket_listener_internal<InitCallback>(
 
                     // Signal initialization is successful.
                     let _ = tx.send(true);
-                    init_callback_cloned(Ok(socket_path_cloned.clone()));
+                    init_callback_cloned(Ok(socket_file_path_cloned.clone()));
 
                     let local_set_pool = LocalPoolHandle::new(num_cpus::get());
                     loop {
@@ -874,14 +865,11 @@ pub fn start_socket_listener_internal<InitCallback>(
 
                     // ensure socket file removal
                     drop(listener_socket);
-                    let _ = std::fs::remove_file(socket_path_cloned.clone());
+                    let _ = GlidePaths::remove_socket_file();
                     let mut sockets_write_guard = INITIALIZED_SOCKETS
                         .write()
                         .expect("Failed to acquire sockets db write guard");
-                    sockets_write_guard.remove(&socket_path_cloned);
-                    if let Err(err) = GlidePaths::remove_socket_dir() {
-                        log_warn("Socket directory removal", format!("Error removing socket directory: {err}"));
-                    }
+                    sockets_write_guard.remove(&socket_file_path_cloned);
                     Ok(())
                 })
             };
@@ -896,7 +884,7 @@ pub fn start_socket_listener_internal<InitCallback>(
 
     let _ = rx.recv().map(|res| {
         if res {
-            sockets_write_guard.insert(socket_path);
+            sockets_write_guard.insert(socket_file_path);
         }
     });
 }

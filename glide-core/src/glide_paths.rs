@@ -83,33 +83,31 @@ impl GlidePaths {
     }
 
     /// Returns the path to the temporary directory where the socket file is stored.
-    pub fn glide_sock_temp_dir() -> PathBuf {
-        std::env::temp_dir()
+    pub fn glide_sock_dir_path() -> PathBuf {
+        let path = std::env::temp_dir()
             .join(GLIDE_BASE_FOLDER_NAME)
-            .join(std::process::id().to_string())
+            .join(std::process::id().to_string());
+        if !path.exists() {
+            std::fs::create_dir_all(&path)
+                .map_err(|e| {
+                    log_warn(
+                        "Socket directory creation",
+                        format!("Error creating socket directory: {e}"),
+                    )
+                })
+                .ok();
+        }
+        path
     }
 
-    /// Returns the path to the socket file.
-    pub fn glide_socket_path() -> String {
+    /// Returns the path to the socket file as a string.
+    pub fn glide_socket_file_path_string() -> String {
         pathbuf_to_string(&Self::glide_sock_file_path())
     }
 
     /// Returns the path to the socket file as PathBuf.
     pub fn glide_sock_file_path() -> PathBuf {
-        match Self::glide_sock_temp_dir().exists() {
-            true => Self::glide_sock_temp_dir().join(SOCKET_FILE_NAME),
-            false => {
-                std::fs::create_dir_all(Self::glide_sock_temp_dir())
-                    .map_err(|e| {
-                        log_warn(
-                            "Socket directory creation",
-                            format!("Error creating socket directory: {e}"),
-                        )
-                    })
-                    .ok();
-                Self::glide_sock_temp_dir().join(SOCKET_FILE_NAME)
-            }
-        }
+        Self::glide_sock_dir_path().join(SOCKET_FILE_NAME)
     }
 
     /// Removes the socket file.
@@ -127,7 +125,7 @@ impl GlidePaths {
 
     /// Removes the socket directory.
     pub fn remove_socket_dir() -> Result<(), std::io::Error> {
-        let results = std::fs::remove_dir_all(Self::glide_sock_temp_dir());
+        let results = std::fs::remove_dir_all(Self::glide_sock_dir_path());
         if let Err(e) = results {
             log_warn(
                 "Socket directory removal",
@@ -152,7 +150,7 @@ impl GlidePaths {
 impl Default for GlidePaths {
     fn default() -> Self {
         GlidePaths {
-            glide_temp_dir: Self::glide_sock_temp_dir(),
+            glide_temp_dir: Self::glide_sock_dir_path(),
             glide_file: Self::glide_sock_file_path(),
         }
     }

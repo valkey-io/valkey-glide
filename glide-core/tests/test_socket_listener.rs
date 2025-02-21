@@ -2,6 +2,7 @@
 
 #![cfg(feature = "socket-layer")]
 use glide_core::*;
+use logger_core::log_warn;
 use rsevents::{Awaitable, EventState, ManualResetEvent};
 use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -512,6 +513,15 @@ mod socket_listener {
             _cluster: cluster,
             socket,
         }
+    }
+
+    pub fn close_socket(socket_path: &String) {
+        if let Err(err) = std::fs::remove_file(socket_path) {
+            log_warn(
+                "close_socket",
+                format!("Failed to remove socket directory: {err}"),
+            );
+        };
     }
 
     #[rstest]
