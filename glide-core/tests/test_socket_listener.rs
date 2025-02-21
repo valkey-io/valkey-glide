@@ -7,6 +7,7 @@ use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::{os::unix::net::UnixStream, thread};
 mod utilities;
+use glide_paths::{GlidePaths, SOCKET_FILE_NAME};
 use integer_encoding::VarInt;
 use utilities::cluster::*;
 use utilities::*;
@@ -516,26 +517,27 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_working_after_socket_listener_was_dropped() {
-        let socket_path = get_socket_path_from_name(format!(
+        let socket_path = format!(
             "{}_test_working_after_socket_listener_was_dropped",
             std::process::id()
-        ));
-        close_socket(&socket_path);
+        );
+        let paths = GlidePaths::from_strings(&socket_path, SOCKET_FILE_NAME);
+        close_socket(&paths.glide_file_to_string());
         // create a socket listener and drop it, to simulate a panic in a previous iteration.
         Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap()
             .block_on(async {
-                let _ = UnixListener::bind(socket_path.clone()).unwrap();
+                let _ = UnixListener::bind(paths.glide_file_to_string()).unwrap();
                 // UDS sockets require explicit removal of the socket file
-                close_socket(&socket_path);
+                close_socket(&paths.glide_file_to_string());
             });
 
         const CALLBACK_INDEX: u32 = 99;
         let mut test_basics = setup_test_basics_with_socket_path(
             Tls::NoTls,
-            Some(socket_path.clone()),
+            Some(paths.glide_file_to_string()),
             TestServer::Shared,
         );
         let key = generate_random_string(KEY_LENGTH);
@@ -550,17 +552,18 @@ mod socket_listener {
         );
 
         assert_null_response(&mut buffer, &mut test_basics.socket, CALLBACK_INDEX);
-        close_socket(&socket_path);
+        close_socket(&paths.glide_file_to_string());
     }
 
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_multiple_listeners_competing_for_the_socket() {
-        let socket_path = get_socket_path_from_name(format!(
+        let socket_path = format!(
             "{}_test_multiple_listeners_competing_for_the_socket",
             std::process::id()
-        ));
-        close_socket(&socket_path);
+        );
+        let paths = GlidePaths::from_strings(&socket_path, SOCKET_FILE_NAME);
+        close_socket(&paths.glide_file_to_string());
         let server = Arc::new(RedisServer::new(ServerType::Tcp { tls: false }));
 
         thread::scope(|scope| {
@@ -572,7 +575,7 @@ mod socket_listener {
                         let address = server.get_client_addr();
                         let mut socket = setup_socket(
                             Tls::NoTls,
-                            Some(socket_path.clone()),
+                            Some(paths.glide_file_to_string()),
                             &[address],
                             ClusterMode::Disabled,
                         );
@@ -592,7 +595,7 @@ mod socket_listener {
                     .unwrap();
             }
         });
-        close_socket(&socket_path);
+        close_socket(&paths.glide_file_to_string());
     }
 
     #[rstest]
