@@ -123,16 +123,17 @@ unit-test:
 # start redis cluster with random ports.
 start-redis-cluster:
 	@OUTPUT=$$(python3 ../utils/cluster_manager.py start --cluster-mode); \
-	export GLIDE_CLUSTER_NODES=$$(echo "$$OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
-    @echo "Hello"
+	GLIDE_CLUSTER_NODES=$$(echo "$$OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
+	echo $$GLIDE_CLUSTER_NODES
 
 stop-redis-cluster:
 	../utils/cluster_manager.py stop --prefix cluster
 
-var-test: export GLIDE_CLUSTER_NODES=$$(python3 ../utils/cluster_manager.py start --cluster-mode | grep 'CLUSTER_NODES=' | cut -d'=' -f2);
 var-test:
-	echo "=================================================="
-	echo ${GLIDE_CLUSTER_NODES}
+	@OUTPUT=$$(python3 ../utils/cluster_manager.py start --cluster-mode); \
+	GLIDE_CLUSTER_NODES=$$(echo "$$OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
+	echo "=================================================="; \
+	echo $$GLIDE_CLUSTER_NODES
 
 # example tests - skip complete IT suite (including MT)
 example-test:
@@ -141,9 +142,9 @@ example-test:
 	../utils/cluster_manager.py start -p 6379 -r 0
 	../utils/cluster_manager.py start --cluster-mode -p 7001 7002 7003 7004 7005 7006
 	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
-    go test -v ./... -skip Test $(if $(test-filter), -run $(test-filter)) \
+	go test -v -race ./api -skip Test $(if $(test-filter), -run $(test-filter)) -standalonenode 127.0.0.1:6379  -clusternodes 127.0.0.1:7006,127.0.0.1:7004,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7005 \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/api \
-    | go-test-report -o reports/example-tests.html -t example-test > /dev/null)
+	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
 
 	../utils/cluster_manager.py stop --prefix cluster
 

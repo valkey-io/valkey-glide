@@ -5,64 +5,69 @@ package api
 import (
 	"flag"
 	"fmt"
+	"sync"
 )
 
 var clusterNodes = flag.String("clusternodes", "", "AddressNodes for running Valkey/Redis cluster nodes")
 var standaloneNode = flag.String("standalonenode", "", "Address for running Valkey/Redis standalone node")
 
+var clusterClient *GlideClusterClient
+var clusterOnce sync.Once
+
+var standaloneClient *GlideClient
+var standaloneOnce sync.Once
+
+var initOnce sync.Once
+
 // getExampleGlideClient returns a GlideClient instance for testing purposes.
 // This function is used in the examples of the GlideClient methods.
 func getExampleGlideClient() *GlideClient {
-	// Read the GLIDE_CLUSTER_NODES environment variable
-	if standaloneNode == nil {
-		fmt.Println("Standalone Node not set")
-	} else {
-		fmt.Println("Standalone Node set to: ", *clusterNodes)
-	}
+	// Parse flags only once after the test framework has had a chance to set the flags.
+	// This is necessary because the test framework sets the flags after the init function is called.
+	initOnce.Do(func() {
+		flag.Parse()
+	})
 
-	config := NewGlideClientConfiguration().
-		WithAddress(new(NodeAddress)) // use default address
+	standaloneOnce.Do(func() {
+		config := NewGlideClientConfiguration().
+			WithAddress(new(NodeAddress)) // use default address
 
-	client, err := NewGlideClient(config)
-	if err != nil {
-		fmt.Println("error connecting to database: ", err)
-	}
+		client, err := NewGlideClient(config)
+		if err != nil {
+			fmt.Println("error connecting to database: ", err)
+		}
 
-	_, err = client.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
+		standaloneClient = client.(*GlideClient)
+	})
+
+	// Flush the database before each test to ensure a clean state.
+	_, err := standaloneClient.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
 
-	return client.(*GlideClient)
+	return standaloneClient
 }
 
 func getExampleGlideClusterClient() *GlideClusterClient {
-	if clusterNodes == nil {
-		fmt.Println("Cluster Nodes not set")
-	} else {
-		fmt.Println("Cluster Nodes set to: ", clusterNodes)
-	}
+	clusterOnce.Do(func() {
+		config := NewGlideClusterClientConfiguration().
+			WithAddress(&NodeAddress{Host: "localhost", Port: 7001}).
+			WithRequestTimeout(5000)
 
-	config := NewGlideClusterClientConfiguration().
-		WithAddress(&NodeAddress{Host: "localhost", Port: 7001}).
-		WithRequestTimeout(5000)
+		client, err := NewGlideClusterClient(config)
+		if err != nil {
+			fmt.Println("error connecting to database: ", err)
+		}
 
-	client, err := NewGlideClusterClient(config)
-	if err != nil {
-		fmt.Println("error connecting to database: ", err)
-	}
+		clusterClient = client.(*GlideClusterClient)
+	})
 
-	_, err = client.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
+	// Flush the database before each test to ensure a clean state.
+	_, err := clusterClient.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
 
-	return client.(*GlideClusterClient)
+	return clusterClient
 }
-
-// CompareUnorderedSlices compares two unordered slices of structs and returns if both are equal.
-// func CompareUnorderedSlices[T any](slice1, slice2 []T) bool {
-// 	return cmp.Equal(slice1, slice2, cmpopts.SortSlices(func(a, b T) bool {
-// 		return fmt.Sprintf("%v", a) < fmt.Sprintf("%v", b)
-// 	}))
-// }
