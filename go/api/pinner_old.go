@@ -18,7 +18,7 @@ type pinner struct {
 
 func (p *pinner) Pin(v unsafe.Pointer) unsafe.Pointer {
 	p.h = cgo.NewHandle(v)
-	return unsafe.Pointer(&p.h)
+	return unsafe.Pointer(p.h) // Note that unsafe.Pointer(&p.h) is incorrect.
 }
 
 func (p *pinner) Unpin() {
@@ -26,5 +26,5 @@ func (p *pinner) Unpin() {
 }
 
 func getPinnedPtr(v unsafe.Pointer) unsafe.Pointer {
-	return (*(*cgo.Handle)(v)).Value().(unsafe.Pointer)
+	return (cgo.Handle)(v).Value().(unsafe.Pointer)
 }

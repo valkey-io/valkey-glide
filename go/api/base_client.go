@@ -229,12 +229,12 @@ func (client *baseClient) executeCommandWithRoute(
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
 
 	pinner := pinner{}
-	pinnedChannelPtr := pinner.Pin(resultChannelPtr)
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
 	defer pinner.Unpin()
 
 	C.command(
 		client.coreClient,
-		C.uintptr_t(uintptr(pinnedChannelPtr)),
+		C.uintptr_t(pinnedChannelPtr),
 		uint32(requestType),
 		C.size_t(len(args)),
 		cArgsPtr,
