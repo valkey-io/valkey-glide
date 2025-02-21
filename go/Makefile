@@ -1,3 +1,5 @@
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 SHELL:=/bin/bash
 
 install-build-tools:
@@ -89,6 +91,15 @@ lint:
 	staticcheck ./...
 	gofumpt -d .
 	golines --dry-run --shorten-comments -m 127 .
+	declare -i MISSING_HEADERS=0; \
+	for file in `find . -type f -name '*.go' | grep -v protobuf`; do \
+		head -1 $$file | grep '// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0' > /dev/null ; \
+		if [[ $$? > 0 ]]; then \
+			echo Missing licence header in $$file ; \
+			((++MISSING_HEADERS)) ; \
+		fi; \
+	done; \
+	exit $$MISSING_HEADERS
 
 lint-ci: lint
 	if [ "$$(gofumpt -l . | wc -l)" -gt 0 ]; then exit 1; fi
