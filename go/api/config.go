@@ -253,8 +253,7 @@ func (config *GlideClientConfiguration) WithClientName(clientName string) *Glide
 	return config
 }
 
-// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client. Will be used with CLIENT SETNAME command
-// during connection establishment.
+// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
 func (config *GlideClientConfiguration) WithClientAZ(clientAZ string) *GlideClientConfiguration {
 	config.clientAZ = clientAZ
 	return config
@@ -350,8 +349,7 @@ func (config *GlideClusterClientConfiguration) WithClientName(clientName string)
 	return config
 }
 
-// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client. Will be used with CLIENT SETNAME command
-// during connection establishment.
+// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
 func (config *GlideClusterClientConfiguration) WithClientAZ(clientAZ string) *GlideClusterClientConfiguration {
 	config.clientAZ = clientAZ
 	return config
