@@ -1420,8 +1420,8 @@ impl Route {
 
 /// Choose a random slot from `0..SLOT_SIZE` (excluding)
 fn random_slot() -> u16 {
-    let mut rng = rand::thread_rng();
-    rng.gen_range(0..crate::cluster_topology::SLOT_SIZE)
+    let mut rng = rand::rng();
+    rng.random_range(0..crate::cluster_topology::SLOT_SIZE)
 }
 
 #[cfg(test)]
