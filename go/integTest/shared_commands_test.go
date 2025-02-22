@@ -4602,6 +4602,12 @@ func (suite *GlideTestSuite) TestXRead() {
 		case <-finished:
 			assert.Fail(suite.T(), "Infinite block finished")
 		case <-time.After(3 * time.Second):
+			_, err := client.XAdd(
+				key1,
+				[][]string{{"k1_field1", "k1_value1"}, {"k1_field1", "k1_value2"}},
+			)
+			assert.Nil(suite.T(), err)
+			<-finished
 		}
 		testClient.Close()
 	})

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"sync"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
@@ -70,6 +71,7 @@ type clientConfiguration interface {
 }
 
 type baseClient struct {
+	mu         sync.RWMutex
 	coreClient unsafe.Pointer
 }
 
@@ -102,11 +104,14 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 		return nil, &errors.ConnectionError{Msg: message}
 	}
 
-	return &baseClient{cResponse.conn_ptr}, nil
+	return &baseClient{coreClient: cResponse.conn_ptr}, nil
 }
 
 // Close terminates the client by closing all associated resources.
 func (client *baseClient) Close() {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
 	if client.coreClient == nil {
 		return
 	}
@@ -198,6 +203,9 @@ func (client *baseClient) executeCommandWithRoute(
 	args []string,
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+
 	if client.coreClient == nil {
 		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
 	}

@@ -8,6 +8,7 @@
 * Go: Add `XINFO GROUPS` ([#3106](https://github.com/valkey-io/valkey-glide/pull/3106))
 * Go: Add `ZInterCard` ([#3078](https://github.com/valkey-io/valkey-glide/issues/3078))
 * Go: Add `ZLEXCOUNT` ([#3140](https://github.com/valkey-io/valkey-glide/pull/3140))
+* Go: Fix data race on baseClient.coreClient with `sync.RWMutex` ([#3236](https://github.com/valkey-io/valkey-glide/pull/3236))
 
 #### Breaking Changes
 
