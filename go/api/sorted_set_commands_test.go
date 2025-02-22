@@ -1534,7 +1534,7 @@ func ExampleGlideClient_ZInterCard() {
 	key2 := "{testkey}-2"
 
 	client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	client.ZAdd(key2, map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
+	client.ZAdd(key2, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "e": 4.0})
 
 	res, err := client.ZInterCard([]string{key1, key2})
 	if err != nil {
@@ -1552,9 +1552,9 @@ func ExampleGlideClusterClient_ZInterCard() {
 	key2 := "{testkey}-2"
 
 	client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	client.ZAdd(key2, map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
+	client.ZAdd(key2, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "e": 4.0})
 
-	res, err := client.ZInterCard([]string{"key1", "key2"})
+	res, err := client.ZInterCard([]string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1570,7 +1570,7 @@ func ExampleGlideClient_ZInterCardWithOptions() {
 	key2 := "{testkey}-2"
 
 	client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	client.ZAdd(key2, map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
+	client.ZAdd(key2, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "e": 4.0})
 
 	res, err := client.ZInterCardWithOptions(
 		[]string{key1, key2},
@@ -1591,7 +1591,7 @@ func ExampleGlideClusterClient_ZInterCardWithOptions() {
 	key2 := "{testkey}-2"
 
 	client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	client.ZAdd(key2, map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
+	client.ZAdd(key2, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "e": 4.0})
 
 	res, err := client.ZInterCardWithOptions(
 		[]string{key1, key2},
