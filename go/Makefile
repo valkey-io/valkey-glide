@@ -72,7 +72,7 @@ build-glide-client:
 			cp target/release/libglide_rs.a rustbin/x86_64-unknown-linux-gnu/; \
 		fi; \
 	else \
-		echo "Unsupported platform: $(shell uname), $(shell arch)"; \
+		echo "Unsupported platform: $(shell uname), $(shell uname -m)"; \
 		exit 1; \
 	fi
 
