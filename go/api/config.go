@@ -2,7 +2,11 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/protobuf"
+import (
+	"errors"
+
+	"github.com/valkey-io/valkey-glide/go/protobuf"
+)
 
 const (
 	DefaultHost = "localhost"
@@ -60,11 +64,26 @@ const (
 	// PreferReplica - Spread the requests between all replicas in a round-robin manner. If no replica is available, route the
 	// requests to the primary.
 	PreferReplica
+	// Spread the read requests between replicas in the same client's AZ (Aviliablity zone) in a
+	// round-robin manner, falling back to other replicas or the primary if needed.
+	AzAffinity
+	// Spread the read requests among nodes within the client's Availability Zone (AZ) in a round
+	// robin manner, prioritizing local replicas, then the local primary, and falling back to any
+	// replica or the primary if needed.
+	AZ_AFFINITY_REPLICAS_AND_PRIMARY
 )
 
 func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 	if readFrom == PreferReplica {
 		return protobuf.ReadFrom_PreferReplica
+	}
+
+	if readFrom == AzAffinity {
+		return protobuf.ReadFrom_AZAffinity
+	}
+
+	if readFrom == AZ_AFFINITY_REPLICAS_AND_PRIMARY {
+		return protobuf.ReadFrom_AZAffinityReplicasAndPrimary
 	}
 
 	return protobuf.ReadFrom_Primary
@@ -77,6 +96,7 @@ type baseClientConfiguration struct {
 	readFrom       ReadFrom
 	requestTimeout int
 	clientName     string
+	clientAZ       string
 }
 
 func (config *baseClientConfiguration) toProtobuf() *protobuf.ConnectionRequest {
@@ -102,6 +122,18 @@ func (config *baseClientConfiguration) toProtobuf() *protobuf.ConnectionRequest 
 
 	if config.clientName != "" {
 		request.ClientName = config.clientName
+	}
+
+	if config.clientAZ != "" {
+		request.ClientAz = config.clientAZ
+	}
+
+	if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
+		request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
+		if config.clientAZ == "" {
+			panic(
+				errors.New("client AZ must be set when using AZ affinity or AZ affinity with replicas and primary"))
+		}
 	}
 
 	return &request
@@ -221,6 +253,12 @@ func (config *GlideClientConfiguration) WithClientName(clientName string) *Glide
 	return config
 }
 
+// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
+func (config *GlideClientConfiguration) WithClientAZ(clientAZ string) *GlideClientConfiguration {
+	config.clientAZ = clientAZ
+	return config
+}
+
 // WithReconnectStrategy sets the [BackoffStrategy] used to determine how and when to reconnect, in case of connection
 // failures. If not set, a default backoff strategy will be used.
 func (config *GlideClientConfiguration) WithReconnectStrategy(strategy *BackoffStrategy) *GlideClientConfiguration {
@@ -308,5 +346,11 @@ func (config *GlideClusterClientConfiguration) WithRequestTimeout(requestTimeout
 // establishment.
 func (config *GlideClusterClientConfiguration) WithClientName(clientName string) *GlideClusterClientConfiguration {
 	config.clientName = clientName
+	return config
+}
+
+// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
+func (config *GlideClusterClientConfiguration) WithClientAZ(clientAZ string) *GlideClusterClientConfiguration {
+	config.clientAZ = clientAZ
 	return config
 }
