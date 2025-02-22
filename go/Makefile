@@ -49,18 +49,24 @@ clean:
 build-glide-client:
 	cargo build --release
 	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h --lang c
-	@if [ "$$(uname)" = "Darwin" ] && [ "$$(arch)" = "arm64" ]; then \
-		echo "Platform: aarch64-apple-darwin"; \
+	@if [ "$$(uname)" = "Darwin" ]; then \
 		strip -x target/release/libglide_rs.a; \
-		mkdir -p rustbin/aarch64-apple-darwin; \
-		cp target/release/libglide_rs.a rustbin/aarch64-apple-darwin/; \
+		if [ "$$(uname -m)" = "arm64" ]; then \
+			echo "Platform: aarch64-apple-darwin"; \
+			mkdir -p rustbin/aarch64-apple-darwin; \
+			cp target/release/libglide_rs.a rustbin/aarch64-apple-darwin/; \
+		elif [ "$$(uname -m)" = "x86_64" ]; then \
+			echo "Platform: x86_64-apple-darwin"; \
+			mkdir -p rustbin/x86_64-apple-darwin; \
+			cp target/release/libglide_rs.a rustbin/x86_64-apple-darwin/; \
+		fi; \
 	elif [ "$$(uname)" = "Linux" ]; then \
 		strip --strip-unneeded target/release/libglide_rs.a; \
-		if [ "$$(arch)" = "arm64" ] || [ "$$(arch)" = "aarch64" ]; then \
+		if [ "$$(uname -m)" = "arm64" ] || [ "$$(uname -m)" = "aarch64" ]; then \
 			echo "Platform: aarch64-unknown-linux-gnu"; \
 			mkdir -p rustbin/aarch64-unknown-linux-gnu; \
 			cp target/release/libglide_rs.a rustbin/aarch64-unknown-linux-gnu/; \
-		elif [ "$$(arch)" = "x86_64" ]; then \
+		elif [ "$$(uname -m)" = "x86_64" ]; then \
 			echo "Platform: x86_64-unknown-linux-gnu"; \
 			mkdir -p rustbin/x86_64-unknown-linux-gnu; \
 			cp target/release/libglide_rs.a rustbin/x86_64-unknown-linux-gnu/; \
