@@ -15,6 +15,7 @@
 * Java: replacing map usage in response handling with LinkedHashMap ([#3324](https://github.com/valkey-io/valkey-glide/pull/3324))
 * Go: Fix Rust binary size ([#3508](https://github.com/valkey-io/valkey-glide/pull/3508))
 * JAVA: remove reference to outdated build task in DEVELOPER.md ([#3393](https://github.com/valkey-io/valkey-glide/pull/3393))
+* Python: Add source distribution upload to the PyPi-cd workflow ([#3214](https://github.com/valkey-io/valkey-glide/pull/3214))
 
 ## 1.3.2 (2025-04-06)
 
