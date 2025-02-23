@@ -41,7 +41,7 @@ jobs:
                       | .RUNNER = (
                           if (.RUNNER | type == "array") 
                           then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
-                          else (if . == "ephemeral" then "persistent" else . end) 
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
                           end
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
