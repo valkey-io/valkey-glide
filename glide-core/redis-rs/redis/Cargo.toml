@@ -26,8 +26,8 @@ ryu = "1.0"
 itoa = "1.0"
 
 # Strum is a set of macros and traits for working with enums and strings easier in Rust.
-strum = "0.26"
-strum_macros = "0.26"
+strum = "0.27"
+strum_macros = "0.27"
 
 # This is a dependency that already exists in url
 percent-encoding = "2.1"
@@ -160,13 +160,13 @@ disable-client-setinfo = []
 tls = ["tls-native-tls"] # use "tls-native-tls" instead
 
 [dev-dependencies]
-rand = "0.8"
+rand = "0.9"
 socket2 = "0.5"
 assert_approx_eq = "1.0"
 fnv = "1.0.5"
 futures = "0.3"
 futures-time = "3"
-criterion = "0.4"
+criterion = "0.5"
 partial-io = { version = "0.5", features = ["tokio", "quickcheck1"] }
 quickcheck = "1.0.3"
 tokio = { version = "1", features = [
@@ -175,11 +175,11 @@ tokio = { version = "1", features = [
     "rt-multi-thread",
     "time",
 ] }
-tempfile = "=3.6.0"
+tempfile = "3.17"
 once_cell = "1"
 anyhow = "1"
 sscanf = "0.4.1"
-serial_test = "^2"
+serial_test = "^3"
 versions = "6.3"
 which = "7.0.1"
 

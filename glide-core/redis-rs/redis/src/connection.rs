@@ -908,18 +908,11 @@ pub(crate) fn create_rustls_config(
         native_certs
             .certs
             .iter()
-            .map(|der| root_store.add(der.to_owned()))
-            .collect::<Result<(), _>>()?;
+            .try_for_each(|der| root_store.add(der.to_owned()))?;
     } else {
         fail!((
             ErrorKind::InvalidClientConfig,
-            "Unable to load native certificates",
-            native_certs
-                .errors
-                .iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<_>>()
-                .join("\n")
+            "Unable to load native certificates"
         ));
     }
 

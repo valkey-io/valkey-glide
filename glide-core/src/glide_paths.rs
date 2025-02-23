@@ -85,7 +85,7 @@ impl GlidePaths {
 
     /// Replace the glide_file with a new path.
     pub fn set_glide_file_string(&mut self, glide_file: &str) {
-        self.glide_file = string_to_pathbuf(&glide_file);
+        self.glide_file = string_to_pathbuf(glide_file);
     }
 }
 
