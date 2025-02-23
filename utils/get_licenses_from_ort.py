@@ -47,7 +47,7 @@ APPROVED_PACKAGES = [
     "PyPI::pathspec:0.12.1",
     "PyPI::certifi:2023.11.17",
     "Crate::ring:0.17.8",
-    "Maven:org.json:json:20231013"
+    "Maven:org.json:json:20231013",
 ]
 SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 
@@ -85,6 +85,7 @@ ort_results_per_lang = [
     OrtResults("Node", "node/ort_results"),
     OrtResults("Java", "java/ort_results"),
     OrtResults("Rust", "glide-core/ort_results"),
+    OrtResults("Go", "go/ort_results"),
 ]
 
 all_licenses_set: Set = set()
@@ -118,7 +119,10 @@ for ort_result in ort_results_per_lang:
                         package_license = PackageLicense(
                             package["id"], ort_result.name, license
                         )
-                        if license not in APPROVED_LICENSES and package["id"] not in APPROVED_PACKAGES:
+                        if (
+                            license not in APPROVED_LICENSES
+                            and package["id"] not in APPROVED_PACKAGES
+                        ):
                             unknown_licenses.append(package_license)
                         else:
                             final_packages.append(package_license)
