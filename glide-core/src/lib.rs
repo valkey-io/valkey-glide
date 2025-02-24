@@ -15,4 +15,6 @@ pub mod scripts_container;
 pub use client::ConnectionRequest;
 pub mod cluster_scan_container;
 pub mod request_type;
+// pub use telemetrylib::Adar;
 pub use telemetrylib::Telemetry;
+pub use telemetrylib::{GlideOpenTelemetry, GlideSpan};
