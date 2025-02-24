@@ -50,8 +50,8 @@ impl<C> NodePipelineContext<C> {
     }
 
     // Adds a command to the pipeline and records its index
-    fn add_command(&mut self, cmd: Cmd, index: usize, inner_index: Option<usize>) {
-        self.pipeline.add_command(cmd);
+    fn add_command(&mut self, cmd: Arc<Cmd>, index: usize, inner_index: Option<usize>) {
+        self.pipeline.add_command_with_arc(cmd);
         self.command_indices.push((index, inner_index));
     }
 }
@@ -73,7 +73,7 @@ pub fn add_command_to_node_pipeline_map<C>(
     pipeline_map: &mut NodePipelineMap<C>,
     address: String,
     connection: C,
-    cmd: Cmd,
+    cmd: Arc<Cmd>,
     index: usize,
     inner_index: Option<usize>,
 ) {
@@ -120,7 +120,9 @@ where
     let mut response_policies = Vec::new();
 
     for (index, cmd) in pipeline.cmd_iter().enumerate() {
-        match RoutingInfo::for_routable(cmd).unwrap_or(SingleNode(SingleNodeRoutingInfo::Random)) {
+        match RoutingInfo::for_routable(cmd.as_ref())
+            .unwrap_or(SingleNode(SingleNodeRoutingInfo::Random))
+        {
             SingleNode(route) => {
                 handle_pipeline_single_node_routing(
                     &mut pipelines_per_node,
@@ -177,7 +179,7 @@ where
                         handle_pipeline_multi_slot_routing(
                             &mut pipelines_per_node,
                             core.clone(),
-                            cmd,
+                            cmd.clone(),
                             index,
                             slots,
                         )
@@ -203,7 +205,7 @@ where
 /// - `index`: The position of the command in the overall pipeline.
 pub async fn handle_pipeline_single_node_routing<C>(
     pipeline_map: &mut NodePipelineMap<C>,
-    cmd: Cmd,
+    cmd: Arc<Cmd>,
     routing: InternalSingleNodeRouting<C>,
     core: Core<C>,
     index: usize,
@@ -220,10 +222,9 @@ where
         }
     }
 
-    let (address, conn) =
-        ClusterConnInner::get_connection(routing, core, Some(Arc::new(cmd.clone())))
-            .await
-            .map_err(|err| (OperationTarget::NotFound, err))?;
+    let (address, conn) = ClusterConnInner::get_connection(routing, core, Some(cmd.clone()))
+        .await
+        .map_err(|err| (OperationTarget::NotFound, err))?;
     add_command_to_node_pipeline_map(pipeline_map, address, conn, cmd, index, None);
     Ok(())
 }
@@ -245,7 +246,7 @@ where
 pub async fn handle_pipeline_multi_slot_routing<C>(
     pipelines_by_connection: &mut NodePipelineMap<C>,
     core: Core<C>,
-    cmd: &Cmd,
+    cmd: Arc<Cmd>,
     index: usize,
     slots: Vec<(Route, Vec<usize>)>,
 ) -> Result<(), (OperationTarget, RedisError)>
@@ -260,7 +261,7 @@ where
         };
         if let Some((address, conn)) = conn {
             // create the sub-command for the slot
-            let new_cmd = command_for_multi_slot_indices(cmd, indices.iter());
+            let new_cmd = Arc::new(command_for_multi_slot_indices(cmd.as_ref(), indices.iter()));
             add_command_to_node_pipeline_map(
                 pipelines_by_connection,
                 address,
@@ -530,7 +531,7 @@ pub fn route_for_pipeline(pipeline: &crate::Pipeline) -> RedisResult<Option<Rout
         // should be routed to a different slot, since the server will return an error indicating this.
         pipeline
             .cmd_iter()
-            .map(route_for_command)
+            .map(|cmd| route_for_command(cmd.as_ref()))
             .try_fold(None, |chosen_route, next_cmd_route| {
                 match (chosen_route, next_cmd_route) {
                     (None, _) => Ok(next_cmd_route),
