@@ -4,6 +4,7 @@ import string
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
 import pytest
+from async_lru import alru_cache
 from glide.async_commands.core import InfoSection
 from glide.constants import (
     TClusterResponse,
@@ -76,10 +77,16 @@ def get_random_string(length):
     return result_str
 
 
-async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
-    # TODO: change to pytest fixture after sync client is implemented
+@alru_cache
+async def grab_server_version(client: TGlideClient) -> str:
     info = parse_info_response(await client.info([InfoSection.SERVER]))
     version_str = info.get("valkey_version") or info.get("redis_version")
+    return version_str
+
+
+async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
+    # TODO: change to pytest fixture after sync client is implemented
+    version_str = await grab_server_version(client)
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
