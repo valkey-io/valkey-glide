@@ -104,13 +104,10 @@ from tests.utils.utils import (
 
 @pytest.mark.asyncio
 class TestGlideClients:
+    @pytest.mark.skip_if_version_below("7.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_register_client_name_and_version(self, glide_client: TGlideClient):
-        min_version = "7.2.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            # TODO: change it to pytest fixture after we'll implement a sync client
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert isinstance(info, bytes)
         info_str = info.decode()
@@ -483,13 +480,10 @@ class TestCommands:
         assert res == OK
         assert await glide_client.get(key) == value2.encode()
 
+    @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_set_return_old_value(self, glide_client: TGlideClient):
-        min_version = "6.2.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            # TODO: change it to pytest fixture after we'll implement a sync client
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         key = get_random_string(10)
         value = get_random_string(10)
         res = await glide_client.set(key, value)
@@ -1363,13 +1357,10 @@ class TestCommands:
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(endless_blpop_call(), timeout=3)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lmpop(self, glide_client: TGlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
         key3 = f"{{test}}-3-f{get_random_string(10)}"
@@ -1402,13 +1393,10 @@ class TestCommands:
         with pytest.raises(RequestError):
             await glide_client.lmpop([key3], ListDirection.LEFT, 1)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_blmpop(self, glide_client: TGlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
         key3 = f"{{test}}-3-f{get_random_string(10)}"
@@ -2087,13 +2075,10 @@ class TestCommands:
         assert await glide_client.sinterstore(string_key, [key2]) == 1
         assert await glide_client.smembers(string_key) == {b"c"}
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sintercard(self, glide_client: TGlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         key1 = f"{{testKey}}{get_random_string(10)}"
         key2 = f"{{testKey}}{get_random_string(10)}"
         key3 = f"{{testKey}}{get_random_string(10)}"
@@ -4636,13 +4621,10 @@ class TestCommands:
         with pytest.raises(RequestError):
             await glide_client.zdiffstore(key4, [string_key, key1])
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_bzmpop(self, glide_client: TGlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
         non_existing_key = "{test}-non_existing_key"
@@ -4796,11 +4778,8 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.skip_if_version_below("7.0.0")
     async def test_zintercard(self, glide_client: TGlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         key1 = f"{{testKey}}1-{get_random_string(10)}"
         key2 = f"{{testKey}}2-{get_random_string(10)}"
         string_key = f"{{testKey}}4-{get_random_string(10)}"
@@ -4836,13 +4815,10 @@ class TestCommands:
         with pytest.raises(RequestError):
             await glide_client.zintercard([string_key])
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zmpop(self, glide_client: TGlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
         non_existing_key = "{test}-non_existing_key"
@@ -6591,13 +6567,10 @@ class TestCommands:
                 string_key, group_name, consumer, 1, [stream_id1_0], claim_options
             )
 
+    @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xautoclaim(self, glide_client: TGlideClient, protocol):
-        min_version = "6.2.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             version7_or_above = False
         else:
@@ -6697,15 +6670,12 @@ class TestCommands:
                 stream_id1_3.encode(),
             ]
 
+    @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xautoclaim_edge_cases_and_failures(
         self, glide_client: TGlideClient, protocol
     ):
-        min_version = "6.2.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             version7_or_above = False
         else:
@@ -7698,13 +7668,10 @@ class TestCommands:
                 set_key, [BitFieldSet(SignedEncoding(3), BitOffset(1), 2)]
             )
 
+    @pytest.mark.skip_if_version_below("6.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_bitfield_read_only(self, glide_client: TGlideClient):
-        min_version = "6.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         set_key = get_random_string(10)
@@ -7909,13 +7876,10 @@ class TestCommands:
         refcount = await glide_client.object_refcount(string_key)
         assert refcount is not None and refcount >= 0
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_load(self, glide_client: TGlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
@@ -7960,16 +7924,13 @@ class TestCommands:
 
         assert await glide_client.function_flush(FlushMode.SYNC) is OK
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
     async def test_function_load_cluster_with_route(
         self, glide_client: GlideClusterClient, single_route: bool
     ):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
@@ -8076,13 +8037,10 @@ class TestCommands:
             for functions in function_list.values():
                 assert functions == []
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_list(self, glide_client: TGlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         original_functions_count = len(await glide_client.function_list())
 
         lib_name = f"mylib1C{get_random_string(5)}"
@@ -8138,16 +8096,13 @@ class TestCommands:
             None,
         )
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
     async def test_function_list_with_routing(
         self, glide_client: GlideClusterClient, single_route: bool
     ):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
 
         lib_name = f"mylib1C{get_random_string(5)}"
@@ -8226,15 +8181,12 @@ class TestCommands:
                     code,
                 )
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_list_with_multiple_functions(
         self, glide_client: TGlideClient
     ):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         await glide_client.function_flush()
         assert len(await glide_client.function_list()) == 0
 
@@ -8273,13 +8225,10 @@ class TestCommands:
             None,
         )
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_flush(self, glide_client: TGlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            pytest.skip(f"Valkey version required >= {min_version}")
-
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
@@ -8306,16 +8255,13 @@ class TestCommands:
         # Clean up by flushing functions again
         await glide_client.function_flush()
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
     async def test_function_flush_with_routing(
         self, glide_client: GlideClusterClient, single_route: bool
     ):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            pytest.skip(f"Valkey version required >= {min_version}")
-
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
@@ -8361,13 +8307,10 @@ class TestCommands:
         # Clean up by flushing functions again
         assert await glide_client.function_flush(route=route) == OK
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_delete(self, glide_client: TGlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            pytest.skip(f"Valkey version required >= {min_version}")
-
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
@@ -8389,16 +8332,13 @@ class TestCommands:
             await glide_client.function_delete(lib_name)
         assert "Library not found" in str(e)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
     async def test_function_delete_with_routing(
         self, glide_client: GlideClusterClient, single_route: bool
     ):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            pytest.skip(f"Valkey version required >= {min_version}")
-
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
@@ -8433,13 +8373,10 @@ class TestCommands:
             await glide_client.function_delete(lib_name)
         assert "Library not found" in str(e)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_stats(self, glide_client: TGlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         lib_name = "functionStats_without_route"
         func_name = lib_name
         assert await glide_client.function_flush(FlushMode.SYNC) == OK
@@ -8477,15 +8414,12 @@ class TestCommands:
                 cast(TFunctionStatsSingleNodeResponse, node_response), [], 0, 0
             )
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [False, True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_stats_running_script(
         self, request, cluster_mode, protocol, glide_client: TGlideClient
     ):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
@@ -8533,16 +8467,13 @@ class TestCommands:
         await test_client.close()
         await test_client2.close()
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
     async def test_function_stats_with_routing(
         self, glide_client: GlideClusterClient, single_route: bool
     ):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         route = (
             SlotKeyRoute(SlotType.PRIMARY, get_random_string(10))
             if single_route
@@ -8601,15 +8532,12 @@ class TestCommands:
                     cast(TFunctionStatsSingleNodeResponse, node_response), [], 0, 0
                 )
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_kill_no_write(
         self, request, cluster_mode, protocol, glide_client: TGlideClient
     ):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
@@ -8661,15 +8589,12 @@ class TestCommands:
         assert "NotBusy" in str(e)
         await test_client.close()
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [False, True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_kill_write_is_unkillable(
         self, request, cluster_mode, protocol, glide_client: TGlideClient
     ):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, False)
@@ -8712,13 +8637,10 @@ class TestCommands:
         )
         await test_client.close()
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_fcall_with_key(self, glide_client: GlideClusterClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         key1 = f"{{testKey}}1-{get_random_string(10)}"
         key2 = f"{{testKey}}2-{get_random_string(10)}"
         keys: List[TEncodable] = [key1, key2]
@@ -8759,13 +8681,10 @@ class TestCommands:
 
         assert await glide_client.function_flush(FlushMode.SYNC, route) is OK
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_fcall_readonly_function(self, glide_client: GlideClusterClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         lib_name = f"fcall_readonly_function{get_random_string(5)}"
         # intentionally using a REPLICA route
         replicaRoute = SlotKeyRoute(SlotType.REPLICA, lib_name)
@@ -8809,13 +8728,10 @@ class TestCommands:
             == 42
         )
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_dump_restore_standalone(self, glide_client: GlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         assert await glide_client.function_flush(FlushMode.SYNC) is OK
 
         # Dump an empty lib
@@ -8881,15 +8797,12 @@ class TestCommands:
         )
         assert await glide_client.fcall(name2, arguments=["meow", "woem"]) == 2
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_dump_restore_cluster(
         self, glide_client: GlideClusterClient
     ):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         assert await glide_client.function_flush(FlushMode.SYNC) is OK
 
         # Dump an empty lib
@@ -9081,13 +8994,10 @@ class TestCommands:
             assert await glide_client.flushdb(FlushMode.SYNC) == OK
             assert await glide_client.dbsize() == 0
 
+    @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_getex(self, glide_client: TGlideClient):
-        min_version = "6.2.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         key1 = get_random_string(10)
         non_existing_key = get_random_string(10)
         value = get_random_string(10)
@@ -9117,13 +9027,10 @@ class TestCommands:
         )
         assert await glide_client.ttl(key1) == -1
 
+    @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_copy_no_database(self, glide_client: TGlideClient):
-        min_version = "6.2.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         source = f"{{testKey}}1-{get_random_string(10)}"
         destination = f"{{testKey}}2-{get_random_string(10)}"
         value1 = get_random_string(5)
@@ -9151,13 +9058,10 @@ class TestCommands:
         assert await glide_client.copy(source, destination, replace=True) is True
         assert await glide_client.get(destination) == value2.encode()
 
+    @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_copy_database(self, glide_client: GlideClient):
-        min_version = "6.2.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         source = get_random_string(10)
         destination = get_random_string(10)
         value1 = get_random_string(5)
@@ -9410,12 +9314,10 @@ class TestCommands:
             await glide_client.restore(key2, 0, bytesData, replace=True, frequency=-10)
         assert "Invalid FREQ value" in str(e)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lcs(self, glide_client: GlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         key1 = "testKey1"
         value1 = "abcd"
         key2 = "testKey2"
@@ -9434,12 +9336,10 @@ class TestCommands:
         with pytest.raises(RequestError):
             await glide_client.lcs(key1, lcs_non_string_key)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lcs_len(self, glide_client: GlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         key1 = "testKey1"
         value1 = "abcd"
         key2 = "testKey2"
@@ -9458,12 +9358,10 @@ class TestCommands:
         with pytest.raises(RequestError):
             await glide_client.lcs_len(key1, lcs_non_string_key)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lcs_idx(self, glide_client: GlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         key1 = "testKey1"
         value1 = "abcd1234"
         key2 = "testKey2"
@@ -9603,13 +9501,10 @@ class TestCommands:
     async def test_unwatch_with_route(self, glide_client: GlideClusterClient):
         assert await glide_client.unwatch(RandomNode()) == OK
 
+    @pytest.mark.skip_if_version_below("6.0.6")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lpos(self, glide_client: TGlideClient):
-        min_version = "6.0.6"
-        if await check_if_server_version_lt(glide_client, min_version):
-            # TODO: change it to pytest fixture after we'll implement a sync client
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         key = f"{{key}}-1{get_random_string(5)}"
         non_list_key = f"{{key}}-2{get_random_string(5)}"
         mylist: List[TEncodable] = ["a", "a", "b", "c", "a", "b"]
@@ -10711,13 +10606,10 @@ class TestScripts:
         await test_client.close()
         await test_client2.close()
 
+    @pytest.mark.skip_if_version_below("8.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_show(self, glide_client: TGlideClient):
-        min_version = "8.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         code = f"return '{get_random_string(5)}'"
         script = Script(code)
 

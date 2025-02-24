@@ -1166,13 +1166,10 @@ class TestTransaction:
         transaction.clear()
         assert len(transaction.commands) == 0
 
+    @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_standalone_copy_transaction(self, glide_client: GlideClient):
-        min_version = "6.2.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
-
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(10))  # to get the same slot
         key1 = "{{{}}}:{}".format(
