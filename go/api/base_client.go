@@ -3576,7 +3576,7 @@ func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 	return handleStringDoubleMapResponse(result)
 }
 
-// Removes and returns up to `count` members with the lowest scores from the sorted set
+// Removes and returns multiple members with the lowest scores from the sorted set
 // stored at the specified `key`.
 //
 // see [valkey.io] for details.
@@ -3584,7 +3584,7 @@ func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 // Parameters:
 //
 //	key - The key of the sorted set.
-//	count - The number of members to remove.
+//	options - Pop options, see [options.ZPopOptions].
 //
 // Return value:
 //
