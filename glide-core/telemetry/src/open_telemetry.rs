@@ -1,3 +1,5 @@
+use dashmap::DashMap;
+use lazy_static::lazy_static;
 use opentelemetry::global::ObjectSafeSpan;
 use opentelemetry::trace::{SpanKind, TraceContextExt, TraceError};
 use opentelemetry::{global, trace::Tracer};
@@ -353,6 +355,25 @@ impl GlideOpenTelemetry {
     /// Trigger a shutdown procedure flushing all remaining traces
     pub fn shutdown() {
         global::shutdown_tracer_provider();
+    }
+
+    /// Retrive a span from the map by command request id
+    pub fn get_span_by_id(request_id: u32) -> Option<GlideSpan> {
+        GLIDE_REQUEST_TO_SPAN
+            .get(&request_id)
+            .map(|span| span.clone())
+    }
+
+    /// Insert a span into the map by command request id
+    pub fn set_span_by_id(span: GlideSpan, request_id: u32) {
+        GLIDE_REQUEST_TO_SPAN.insert(request_id, span.clone());
+    }
+
+    /// Remove a span from the map by command request id
+    pub fn remove_span_by_id(request_id: u32) -> Option<GlideSpan> {
+        GLIDE_REQUEST_TO_SPAN
+            .remove(&request_id)
+            .map(|(_, span)| span)
     }
 }
 

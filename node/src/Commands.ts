@@ -77,6 +77,7 @@ function createCommand(
     requestType: command_request.RequestType,
     args: GlideString[],
 ): command_request.Command {
+
     const singleCommand = command_request.Command.create({
         requestType,
     });
