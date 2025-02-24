@@ -536,6 +536,28 @@ impl Drop for ClusterScanCursor {
 }
 
 #[napi]
+#[derive(Default)]
+pub struct OpenTelemetrySpansMap {
+    cmd_to_span_map: Mutex<HashMap<u32, GlideSpan>>,
+}
+
+// lazy_static! {
+//     static ref GLOBAL_SPANS_MAP: Mutex<Option<OpenTelemetrySpansMap>> = Mutex::new(None);
+// }
+
+#[napi]
+impl OpenTelemetrySpansMap {
+    #[napi(constructor)]
+    #[allow(dead_code)]
+    pub fn new(new_map: Option<Mutex<HashMap<u32, GlideSpan>>>) -> Self {
+        match new_map {
+            Some(cmd_to_span_map) => OpenTelemetrySpansMap { cmd_to_span_map },
+            None => OpenTelemetrySpansMap::default(),
+        }
+    }
+}
+
+#[napi]
 pub fn get_statistics(env: Env) -> Result<JsObject> {
     let total_connections = Telemetry::total_connections().to_string();
     let total_clients = Telemetry::total_clients().to_string();
@@ -544,4 +566,10 @@ pub fn get_statistics(env: Env) -> Result<JsObject> {
     stats.set_named_property("total_clients", total_clients)?;
 
     Ok(stats)
+}
+
+#[napi]
+pub fn new_span(name: String, request_id: u32) {
+    let span = GlideOpenTelemetry::new_span(&name);
+    GlideOpenTelemetry::set_span_by_id(span, request_id);
 }

@@ -10,7 +10,7 @@ import {
     createLeakedOtelSpan,
     dropOtelSpan,
     getStatistics,
-    valueFromSplitPointer,
+    valueFromSplitPointer
 } from "glide-rs";
 import Long from "long";
 import * as net from "net";
