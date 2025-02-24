@@ -8,7 +8,7 @@ import {
     Script,
     StartSocketConnection,
     getStatistics,
-    valueFromSplitPointer,
+    valueFromSplitPointer
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
