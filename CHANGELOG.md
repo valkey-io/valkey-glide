@@ -8,6 +8,7 @@
 * Go: Add `XINFO GROUPS` ([#3106](https://github.com/valkey-io/valkey-glide/pull/3106))
 * Go: Add `ZInterCard` ([#3078](https://github.com/valkey-io/valkey-glide/issues/3078))
 * Go: Add `ZLEXCOUNT` ([#3140](https://github.com/valkey-io/valkey-glide/pull/3140))
+* Go: Updating examples for `ZInterCard` ([#3232](https://github.com/valkey-io/valkey-glide/pull/3232))
 
 #### Breaking Changes
 
