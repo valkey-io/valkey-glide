@@ -1,4 +1,3 @@
-#![allow(clippy::useless_conversion)]
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use bytes::Bytes;
