@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
@@ -6,7 +6,22 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <NuGetAudit>false</NuGetAudit>
+    <WarningLevel>0</WarningLevel>
+    <Configurations>Debug;Release;Lint</Configurations>
+  </PropertyGroup>
+  <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Lint'">
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <NuGetAudit>true</NuGetAudit>
+    <WarningLevel>4</WarningLevel>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <!-- Workaround for https://github.com/dotnet/roslyn/issues/41640 -->
@@ -16,8 +31,12 @@
   </PropertyGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Condition="'$(Configuration)' == 'Debug'" Command="cargo build" />
-    <Exec Condition="'$(Configuration)' == 'Release'" Command="cargo build --release" />
+    <Exec Condition="'$(Configuration)' == 'Debug'" Command="cargo build" EnvironmentVariables="CARGO_TERM_COLOR=always" ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
+    </Exec>
+    <Exec Condition="'$(Configuration)' == 'Release'" Command="cargo build --release" EnvironmentVariables="CARGO_TERM_COLOR=always" ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
+    </Exec>
   </Target>
 
   <ItemGroup>

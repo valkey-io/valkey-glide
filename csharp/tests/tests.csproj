@@ -7,9 +7,25 @@
     <LangVersion>preview</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <NuGetAudit>false</NuGetAudit>
+    <WarningLevel>0</WarningLevel>
     <IsPackable>false</IsPackable>
     <OutputType>exe</OutputType>
+    <Configurations>Debug;Release;Lint</Configurations>
+  </PropertyGroup>
+
+  <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Lint'">
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <NuGetAudit>true</NuGetAudit>
+    <WarningLevel>4</WarningLevel>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <!-- Workaround for https://github.com/dotnet/roslyn/issues/41640 -->
