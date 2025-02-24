@@ -6,7 +6,7 @@ use futures_util::{
 };
 #[cfg(feature = "aio")]
 use std::pin::Pin;
-use std::{fmt, io};
+use std::{borrow::Borrow, fmt, io};
 
 use crate::connection::ConnectionLike;
 use crate::pipeline::Pipeline;
@@ -217,8 +217,9 @@ where
     total_len
 }
 
-pub(crate) fn cmd_len(cmd: &Cmd) -> usize {
-    args_len(cmd.args_iter(), cmd.cursor.unwrap_or(0))
+pub(crate) fn cmd_len(cmd: &impl Borrow<Cmd>) -> usize {
+    let cmd_ref: &Cmd = cmd.borrow();
+    args_len(cmd_ref.args_iter(), cmd_ref.cursor.unwrap_or(0))
 }
 
 fn encode_command<'a, I>(args: I, cursor: u64) -> Vec<u8>

@@ -424,7 +424,7 @@ mod cluster_async {
     #[tokio::test]
     async fn test_az_affinity_replicas_and_primary_prefers_local_primary() {
         // Skip test if version is less than Valkey 8.0
-        if crate::engine_version_less_than("8.0").await {
+        if engine_version_less_than("8.0").await {
             return;
         }
 
