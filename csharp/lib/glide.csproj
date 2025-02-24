@@ -39,7 +39,7 @@
     </Exec>
   </Target>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' != 'Lint'">
     <Content Include="$(MSBuildThisFileDirectory)target/$(Configuration.ToLower())/glide_rs.dll" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>%(FileName)%(Extension)</Link>
