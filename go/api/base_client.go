@@ -2957,7 +2957,7 @@ func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+//	`true` if the timeout was set. `false` if the    timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
@@ -3882,7 +3882,7 @@ func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
 func (client *baseClient) ZPopMinWithOptions(key string, options options.ZPopOptions) (map[string]float64, error) {
-	optArgs, err := options.ToArgs()
+	optArgs, err := options.ToArgs(false)
 	if err != nil {
 		return nil, err
 	}
@@ -3935,7 +3935,7 @@ func (client *baseClient) ZPopMax(key string) (map[string]float64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
 func (client *baseClient) ZPopMaxWithOptions(key string, options options.ZPopOptions) (map[string]float64, error) {
-	optArgs, err := options.ToArgs()
+	optArgs, err := options.ToArgs(false)
 	if err != nil {
 		return nil, err
 	}
@@ -6794,6 +6794,126 @@ func (client *baseClient) ZLexCount(key string, rangeQuery *options.RangeByLex) 
 		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
+}
+
+//	Blocks the connection until it pops and returns a member-score pair
+//	with the highest score from the first non-empty sorted set.
+//
+// See [valkey.io] for details.
+//
+// Note :
+//
+// When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// Parameters:
+//
+//	keys - An array of keys to check for elements.
+//	timeoutSecs - The maximum number of seconds to block (0 blocks indefinitely).
+//
+// Return value:
+//
+//	A `KeyWithMemberAndScore` struct containing the key from which the member was popped,
+//	the popped member, and its score. If no element could be popped and the timeout expired,
+//	returns `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/bzpopmax/
+func (client *baseClient) BZPopMax(
+	keys []string,
+	timeoutSecs float64,
+) (Result[KeyWithMemberAndScore], error) {
+	args := append(keys, utils.FloatToString(timeoutSecs))
+
+	result, err := client.executeCommand(C.BZPopMax, args)
+	if err != nil {
+		return CreateNilKeyWithMemberAndScoreResult(), err
+	}
+
+	return handleKeyWithMemberAndScoreResponse(result)
+}
+
+// ZMPopWithOptions Removes and returns up to `count` members from the first non-empty sorted set
+// among the provided `keys`, based on the specified `scoreFilter` criteria.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - A list of keys representing sorted sets to check for elements.
+//	scoreFilter - Specifies whether to pop members with the lowest (`options.MIN`)
+//	 or highest (`options.MAX`) scores.
+//	opts -  Additional options, such as specifying the maximum number of elements to pop.
+//
+// Return value:
+//
+//	A `Result` containing a `KeyWithArrayOfMembersAndScores` object.
+//	If no elements could be popped from the provided keys, returns `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/zmpop/
+func (client *baseClient) ZMPopWithOptions(
+	keys []string,
+	scoreFilter options.ScoreFilter,
+	opts options.ZPopOptions,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.ToString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	optArgs, err := opts.ToArgs(true)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	args := append([]string{strconv.Itoa(len(keys))}, keys...)
+	args = append(args, scoreFilterStr)
+	args = append(args, optArgs...)
+
+	result, err := client.executeCommand(C.ZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
+}
+
+// Pops one or more member-score pairs from the first non-empty sorted set,
+// with the given keys being checked in the order provided.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - An array of keys to check for elements.
+//	scoreFilter - Pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest scores.
+//
+// Return value:
+//
+//	 A `KeyWithArrayOfMembersAndScores` struct containing:
+//	- The key from which the elements were popped.
+//	- An array of member-score pairs of the popped elements.
+//	  Returns `nil` if no member could be popped.
+//
+// [valkey.io]: https://valkey.io/commands/zmpop/
+func (client *baseClient) ZMPop(
+	keys []string,
+	scoreFilter options.ScoreFilter,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.ToString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	args := make([]string, 0, len(keys)+3)
+	args = append(args, strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, scoreFilterStr)
+
+	result, err := client.executeCommand(C.ZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
 }
 
 // Adds geospatial members with their positions to the specified sorted set stored at `key`.
