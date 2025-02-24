@@ -4,11 +4,21 @@ using System.Runtime.InteropServices;
 
 using Glide;
 
+using Microsoft.VisualStudio.TestPlatform.Utilities;
+
 using static Tests.Integration.IntegrationTestBase;
 
 namespace Tests.Integration;
 public class GetAndSet : IClassFixture<IntegrationTestBase>
 {
+
+    private readonly ITestOutputHelper output;
+
+    public GetAndSet(ITestOutputHelper output)
+    {
+        this.output = output;
+    }
+
     private async Task GetAndSetValues(AsyncClient client, string key, string value)
     {
         Assert.Equal("OK", await client.SetAsync(key, value));
