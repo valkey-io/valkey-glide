@@ -1,5 +1,16 @@
 #### Changes
 
+#### Breaking Changes
+
+#### Fixes
+
+* Go: Fix channel passing from Go to Rust by using `runtime.Pinner` or `cgo.Handle` ([#3208](https://github.com/valkey-io/valkey-glide/pull/3208))
+
+#### Operational Enhancements
+
+## 1.3.0 (2025-02-14)
+
+#### Changes
 
 * Java: Add support to AzAffinityReplicasAndPrimary read strategy ([#3083](https://github.com/valkey-io/valkey-glide/pull/3083))
 * Python: Add support to AzAffinityReplicasAndPrimary read strategy ([#3071](https://github.com/valkey-io/valkey-glide/pull/3071))
