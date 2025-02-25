@@ -47,9 +47,9 @@ GLIDE has a native component which appears to be incompatible with `GLIBC` shipp
 /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found
 /lib64/libm.so.6: version `GLIBC_2.29' not found
 ```
-You can get `GLIBC` version of your OS by running `ldd --version`. `GLIBC` versions `2.26`, `2.27`, `2.30`, `2.31` and `>2.34` are not supported.
+You can get the `GLIBC` version included in your OS by running `ldd --version`. `GLIBC` versions `2.26`, `2.27`, `2.30`, `2.31` and `>2.34` are not supported.
 Keep in mind, that derived OSes, like **Ubuntu 20**, Linux Mint, Pop!_OS and some [AWS Lambda runtimes](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) are incompatible too. It is recommended to use newer environments to avoid issues.
-We are hardly working on it to resolve that. You can track this in [#3218](https://github.com/valkey-io/valkey-glide/issues/3218).
+We are working hard to resolve this issue. You can track our progress in issue [#3218](https://github.com/valkey-io/valkey-glide/issues/3218).
 
 ## Contributing
 
