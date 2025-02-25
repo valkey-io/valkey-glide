@@ -1530,11 +1530,13 @@ func ExampleGlideClusterClient_ZUnionStoreWithOptions() {
 
 func ExampleGlideClient_ZInterCard() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
+	key1 := "{testkey}-1"
+	key2 := "{testkey}-2"
 
-	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	client.ZAdd("key2", map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
+	client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+	client.ZAdd(key2, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "e": 4.0})
 
-	res, err := client.ZInterCard([]string{"key1", "key2"})
+	res, err := client.ZInterCard([]string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1546,11 +1548,13 @@ func ExampleGlideClient_ZInterCard() {
 
 func ExampleGlideClusterClient_ZInterCard() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	key1 := "{testkey}-1"
+	key2 := "{testkey}-2"
 
-	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	client.ZAdd("key2", map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
+	client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+	client.ZAdd(key2, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "e": 4.0})
 
-	res, err := client.ZInterCard([]string{"key1", "key2"})
+	res, err := client.ZInterCard([]string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1562,12 +1566,14 @@ func ExampleGlideClusterClient_ZInterCard() {
 
 func ExampleGlideClient_ZInterCardWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
+	key1 := "{testkey}-1"
+	key2 := "{testkey}-2"
 
-	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	client.ZAdd("key2", map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
+	client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+	client.ZAdd(key2, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "e": 4.0})
 
 	res, err := client.ZInterCardWithOptions(
-		[]string{"key1", "key2"},
+		[]string{key1, key2},
 		options.NewZInterCardOptions().SetLimit(5),
 	)
 	if err != nil {
@@ -1581,12 +1587,14 @@ func ExampleGlideClient_ZInterCardWithOptions() {
 
 func ExampleGlideClusterClient_ZInterCardWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	key1 := "{testkey}-1"
+	key2 := "{testkey}-2"
 
-	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	client.ZAdd("key2", map[string]float64{"e": 1.0, "f": 2.0, "g": 3.0, "h": 4.0})
+	client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+	client.ZAdd(key2, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "e": 4.0})
 
 	res, err := client.ZInterCardWithOptions(
-		[]string{"key1", "key2"},
+		[]string{key1, key2},
 		options.NewZInterCardOptions().SetLimit(5),
 	)
 	if err != nil {
