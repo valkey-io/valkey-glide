@@ -40,6 +40,17 @@ If you have any questions, feature requests, encounter issues, or need assistanc
 9. Any unusual aspects of your environment or deployment
 10. Log files
 
+## Known issues
+
+GLIDE has a native component which appears to be incompatible with `GLIBC` shipped in Amazon Linux 2 (AL2), Debian 11. Client crashes with one of the following errors:
+```
+/lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found
+/lib64/libm.so.6: version `GLIBC_2.29' not found
+```
+You can get `GLIBC` version of your OS by running `ldd --version`. `GLIBC` versions `2.26`, `2.27`, `2.30`, `2.31` and `>2.34` are not supported.
+Keep in mind, that derived OSes, like **Ubuntu 20**, Linux Mint, Pop!_OS and some [AWS Lambda runtimes](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) are incompatible too. It is recommended to use newer environments to avoid issues.
+We are hardly working on it to resolve that. You can track this in [#3218](https://github.com/valkey-io/valkey-glide/issues/3218).
+
 ## Contributing
 
 GitHub is a platform for collaborative coding. If you're interested in writing code, we encourage you to contribute by submitting pull requests from forked copies of this repository. Additionally, please consider creating GitHub issues for reporting bugs and suggesting new features. Feel free to comment on issues that interest. For more info see [Contributing](./CONTRIBUTING.md).
