@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"sync"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
@@ -72,7 +73,9 @@ type clientConfiguration interface {
 }
 
 type baseClient struct {
+	pending    map[unsafe.Pointer]struct{}
 	coreClient unsafe.Pointer
+	mu         sync.Mutex
 }
 
 // Creates a connection by invoking the `create_client` function from Rust library via FFI.
@@ -104,17 +107,26 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 		return nil, &errors.ConnectionError{Msg: message}
 	}
 
-	return &baseClient{cResponse.conn_ptr}, nil
+	return &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}, nil
 }
 
 // Close terminates the client by closing all associated resources.
 func (client *baseClient) Close() {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
 	if client.coreClient == nil {
 		return
 	}
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
+
+	for channelPtr := range client.pending {
+		resultChannel := *(*chan payload)(channelPtr)
+		resultChannel <- payload{value: nil, error: &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}}
+	}
+	client.pending = nil
 }
 
 func (client *baseClient) executeCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
@@ -200,9 +212,6 @@ func (client *baseClient) executeCommandWithRoute(
 	args []string,
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
-	if client.coreClient == nil {
-		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
-	}
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
@@ -227,12 +236,20 @@ func (client *baseClient) executeCommandWithRoute(
 		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
 	}
 
-	resultChannel := make(chan payload)
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
 
 	pinner := pinner{}
 	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
 	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
 
 	C.command(
 		client.coreClient,
@@ -244,7 +261,16 @@ func (client *baseClient) executeCommandWithRoute(
 		routeBytesPtr,
 		routeBytesCount,
 	)
+	client.mu.Unlock()
+
 	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
 	if payload.error != nil {
 		return nil, payload.error
 	}
