@@ -56,7 +56,7 @@ fn create_client_internal(
     let request = create_connection_request(host_string, port, use_tls);
     let runtime = Builder::new_multi_thread()
         .enable_all()
-        .thread_name("GLIDE for Redis C# thread")
+        .thread_name("GLIDE C# thread")
         .build()?;
     let _runtime_handle = runtime.enter();
     let client = runtime.block_on(GlideClient::new(request, None)).unwrap(); // TODO - handle errors.
