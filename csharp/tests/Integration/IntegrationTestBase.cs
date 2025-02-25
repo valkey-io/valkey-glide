@@ -14,7 +14,7 @@ public class IntegrationTestBase : IDisposable
     {
         public static List<uint> STANDALONE_PORTS { get; internal set; } = [];
         public static List<uint> CLUSTER_PORTS { get; internal set; } = [];
-        public static Version REDIS_VERSION { get; internal set; } = new();
+        public static Version SERVER_VERSION { get; internal set; } = new();
     }
 
     private readonly IMessageSink _diagnosticMessageSink;
@@ -36,33 +36,33 @@ public class IntegrationTestBase : IDisposable
         _scriptDir = Path.Combine(projectDir, "..", "utils");
 
         // Stop all if weren't stopped on previous test run
-        StopRedis(false);
+        StopServer(false);
 
         // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
         Directory.Delete(Path.Combine(_scriptDir, "clusters"), true);
 
         // Start cluster
-        TestConfiguration.CLUSTER_PORTS = StartRedis(true);
+        TestConfiguration.CLUSTER_PORTS = StartServer(true);
         // Start standalone
-        TestConfiguration.STANDALONE_PORTS = StartRedis(false);
+        TestConfiguration.STANDALONE_PORTS = StartServer(false);
         // Get redis version
-        TestConfiguration.REDIS_VERSION = GetRedisVersion();
+        TestConfiguration.SERVER_VERSION = GetServerVersion();
 
         TestConsoleWriteLine($"Cluster ports = {string.Join(',', TestConfiguration.CLUSTER_PORTS)}");
         TestConsoleWriteLine($"Standalone ports = {string.Join(',', TestConfiguration.STANDALONE_PORTS)}");
-        TestConsoleWriteLine($"Redis version = {TestConfiguration.REDIS_VERSION}");
+        TestConsoleWriteLine($"Redis version = {TestConfiguration.SERVER_VERSION}");
     }
 
     public void Dispose() =>
         // Stop all
-        StopRedis(true);
+        StopServer(true);
 
     private readonly string _scriptDir;
 
     private void TestConsoleWriteLine(string message) =>
         _ = _diagnosticMessageSink.OnMessage(new DiagnosticMessage(message));
 
-    internal List<uint> StartRedis(bool cluster, bool tls = false, string? name = null)
+    internal List<uint> StartServer(bool cluster, bool tls = false, string? name = null)
     {
         string cmd = $"start {(cluster ? "--cluster-mode" : "-r 0")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
         return ParsePortsFromOutput(RunClusterManager(cmd, false));
@@ -71,7 +71,7 @@ public class IntegrationTestBase : IDisposable
     /// <summary>
     /// Stop <b>all</b> instances on the given <paramref name="name"/>.
     /// </summary>
-    internal void StopRedis(bool keepLogs, string? name = null)
+    internal void StopServer(bool keepLogs, string? name = null)
     {
         string cmd = $"stop --prefix {name ?? "cluster"} {(keepLogs ? "--keep-folder" : "")}";
         _ = RunClusterManager(cmd, true);
@@ -120,7 +120,7 @@ public class IntegrationTestBase : IDisposable
         return ports;
     }
 
-    private static Version GetRedisVersion()
+    private static Version GetServerVersion()
     {
         ProcessStartInfo info = new()
         {
