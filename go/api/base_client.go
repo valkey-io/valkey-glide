@@ -122,6 +122,8 @@ func (client *baseClient) Close() {
 	C.close_client(client.coreClient)
 	client.coreClient = nil
 
+	// iterating the channel map while holding the lock guarantees those unsafe.Pointers is still valid
+	// because holding the lock guarantees the owner of the unsafe.Pointer hasn't exit.
 	for channelPtr := range client.pending {
 		resultChannel := *(*chan payload)(channelPtr)
 		resultChannel <- payload{value: nil, error: &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}}
@@ -250,7 +252,6 @@ func (client *baseClient) executeCommandWithRoute(
 		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
-
 	C.command(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
