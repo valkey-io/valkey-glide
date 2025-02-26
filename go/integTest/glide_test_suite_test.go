@@ -285,34 +285,3 @@ func (suite *GlideTestSuite) SkipIfServerVersionLowerThanBy(version string) {
 		suite.T().Skipf("This feature is added in version %s", version)
 	}
 }
-
-// func (suite *GlideTestSuite) runWithAzClient(test func(client api.BaseClient)) {
-// 	clients := suite.getAzClient()
-// 	suite.runWithClients(clients, test)
-// }
-
-// func (suite *GlideTestSuite) getAzClient() []api.BaseClient {
-// 	return []api.BaseClient{suite.AzClient(), suite.AzClusterClient()}
-// }
-
-func (suite *GlideTestSuite) AzClient() api.GlideClientCommands {
-	config := api.NewGlideClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(suite.tls).
-		WithRequestTimeout(5000).
-		WithReadFrom(api.AzAffinity).
-		WithClientName("client name").
-		WithClientAZ("us-east-1a")
-	return suite.client(config)
-}
-
-func (suite *GlideTestSuite) AzClusterClient() api.GlideClusterClientCommands {
-	config := api.NewGlideClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
-		WithRequestTimeout(5000).
-		WithReadFrom(api.AzAffinity).
-		WithClientName("client name").
-		WithClientAZ("us-east-1a")
-	return suite.clusterClient(config)
-}

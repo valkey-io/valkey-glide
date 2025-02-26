@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/api"
@@ -161,6 +163,253 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 		}
 	}
 	assert.Equal(suite.T(), nReplicas, matchingEntriesCount)
+
+	clientForTestingAz.Close()
+}
+
+func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
+	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+
+	const nGetCalls = 3
+	const nReplicaCalls = 1
+	getCmdStat := fmt.Sprintf("cmdstat_get:calls=%d", nReplicaCalls)
+
+	clientForTestingAz := suite.clusterClient(api.NewGlideClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(2000).
+		WithReadFrom(api.AzAffinity).
+		WithClientAZ("non-existing-az"))
+
+	// Reset stats
+	resetStatResult, err := clientForTestingAz.CustomCommandWithRoute(
+		[]string{"CONFIG", "RESETSTAT"}, config.AllNodes)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", resetStatResult.SingleValue())
+
+	// Execute GET commands
+	for i := 0; i < nGetCalls; i++ {
+		_, err := clientForTestingAz.Get("foo")
+		assert.NoError(suite.T(), err)
+	}
+
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		options.ClusterInfoOptions{
+			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Commandstats}},
+			RouteOption: &options.RouteOption{Route: config.AllNodes},
+		},
+	)
+	assert.NoError(suite.T(), err)
+
+	// We expect the calls to be distributed evenly among the replicas
+	matchingEntriesCount := 0
+	for _, value := range infoResult.MultiValue() {
+		if strings.Contains(value, getCmdStat) {
+			matchingEntriesCount++
+		}
+	}
+	assert.Equal(suite.T(), 3, matchingEntriesCount)
+
+	clientForTestingAz.Close()
+}
+
+func (suite *GlideTestSuite) TestConnectionTimeoutClusterMode() {
+	suite.testConnectionTimeout(true)
+}
+
+func (suite *GlideTestSuite) TestConnectionTimeoutStandaloneMode() {
+	suite.testConnectionTimeout(false)
+}
+
+func (suite *GlideTestSuite) testConnectionTimeout(clusterMode bool) {
+	fmt.Println("Starting TestConnectionTimeout")
+
+	backoffStrategy := api.NewBackoffStrategy(2, 100, 1)
+	client, err := suite.createConnectionTimeoutClient(clusterMode, 250, 20000, backoffStrategy)
+	assert.NoError(suite.T(), err)
+
+	// Runnable for long-running DEBUG SLEEP command
+	debugSleepTask := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				suite.T().Errorf("Recovered in debugSleepTask: %v", r)
+			}
+		}()
+		if clusterClient, ok := client.(api.GlideClusterClientCommands); ok {
+			_, err := clusterClient.CustomCommandWithRoute([]string{"DEBUG", "sleep", "7"}, config.AllNodes)
+			if err != nil {
+				suite.T().Errorf("Error during DEBUG SLEEP command: %v", err)
+			}
+		} else if glideClient, ok := client.(api.GlideClientCommands); ok {
+			_, err := glideClient.CustomCommand([]string{"DEBUG", "sleep", "7"})
+			if err != nil {
+				suite.T().Errorf("Error during DEBUG SLEEP command: %v", err)
+			}
+		}
+	}
+
+	// Runnable for testing connection failure due to timeout
+	failToConnectTask := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				suite.T().Errorf("Recovered in failToConnectTask: %v", r)
+			}
+		}()
+		time.Sleep(1 * time.Second) // Wait to ensure the debug sleep command is running
+		_, err := suite.createConnectionTimeoutClient(clusterMode, 100, 250, backoffStrategy)
+		assert.Error(suite.T(), err)
+		assert.True(suite.T(), strings.Contains(err.Error(), "timed out"))
+	}
+
+	// Runnable for testing successful connection
+	connectToClientTask := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				suite.T().Errorf("Recovered in connectToClientTask: %v", r)
+			}
+		}()
+		time.Sleep(1 * time.Second) // Wait to ensure the debug sleep command is running
+		timeoutClient, err := suite.createConnectionTimeoutClient(clusterMode, 10000, 250, backoffStrategy)
+		assert.NoError(suite.T(), err)
+		if timeoutClient != nil {
+			defer timeoutClient.Close()
+			result, err := timeoutClient.Set("key", "value")
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), "OK", result)
+		}
+	}
+
+	// Execute all tasks concurrently
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		debugSleepTask()
+	}()
+	go func() {
+		defer wg.Done()
+		failToConnectTask()
+	}()
+	go func() {
+		defer wg.Done()
+		connectToClientTask()
+	}()
+	wg.Wait()
+
+	// Clean up the main client
+	if client != nil {
+		client.Close()
+	}
+	fmt.Println("Finished TestConnectionTimeout")
+}
+
+func (suite *GlideTestSuite) createConnectionTimeoutClient(
+	clusterMode bool,
+	connectTimeout, requestTimeout int,
+	backoffStrategy *api.BackoffStrategy,
+) (api.BaseClient, error) {
+	if clusterMode {
+		clientConfig := api.NewGlideClusterClientConfiguration().
+			WithAddress(&suite.clusterHosts[0]).
+			WithUseTLS(suite.tls).
+			WithAdvancedConfiguration(
+				api.NewAdvancedGlideClusterClientConfiguration().WithConnectionTimeout(connectTimeout)).
+			WithRequestTimeout(requestTimeout)
+		return api.NewGlideClusterClient(clientConfig)
+	} else {
+		clientConfig := api.NewGlideClientConfiguration().
+			WithAddress(&suite.standaloneHosts[0]).
+			WithUseTLS(suite.tls).
+			WithAdvancedConfiguration(
+				api.NewAdvancedGlideClientConfiguration().WithConnectionTimeout(connectTimeout)).
+			WithRequestTimeout(requestTimeout).
+			WithReconnectStrategy(backoffStrategy)
+		return api.NewGlideClient(clientConfig)
+	}
+}
+
+func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
+	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+
+	az := "us-east-1a"
+	otherAz := "us-east-1b"
+	const nGetCalls = 4
+	getCmdStat := fmt.Sprintf("cmdstat_get:calls=%d", nGetCalls)
+
+	// Create client for setting the configs
+	clientForConfigSet := suite.clusterClient(api.NewGlideClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(2000))
+
+	// Reset stats and set all nodes to otherAz
+	resetStatResult, err := clientForConfigSet.CustomCommandWithRoute(
+		[]string{"CONFIG", "RESETSTAT"}, config.AllNodes)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", resetStatResult.SingleValue())
+
+	_, err = clientForConfigSet.CustomCommandWithRoute(
+		[]string{"CONFIG", "SET", "availability-zone", otherAz}, config.AllNodes)
+	assert.NoError(suite.T(), err)
+
+	// Set primary for slot 12182 to az
+	_, err = clientForConfigSet.CustomCommandWithRoute(
+		[]string{"CONFIG", "SET", "availability-zone", az}, config.NewSlotIdRoute(config.SlotTypePrimary, 12182))
+	assert.NoError(suite.T(), err)
+
+	// Verify primary AZ
+	primaryAzResult, err := clientForConfigSet.CustomCommandWithRoute(
+		[]string{"CONFIG", "GET", "availability-zone"}, config.NewSlotIdRoute(config.SlotTypePrimary, 12182))
+	assert.NoError(suite.T(), err)
+	fmt.Println("primeAZresult:-------------------------")
+	fmt.Println(primaryAzResult.MultiValue())
+	assert.Equal(suite.T(), az, primaryAzResult.MultiValue()["availability-zone"])
+
+	clientForConfigSet.Close()
+
+	// Create test client with AZ_AFFINITY_REPLICAS_AND_PRIMARY configuration
+	clientForTestingAz := suite.clusterClient(api.NewGlideClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(2000).
+		WithReadFrom(api.AzAffinityReplicaAndPrimary).
+		WithClientAZ(az))
+
+	// Execute GET commands
+	for i := 0; i < nGetCalls; i++ {
+		_, err := clientForTestingAz.Get("foo")
+		assert.NoError(suite.T(), err)
+	}
+
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		options.ClusterInfoOptions{
+			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.All}},
+			RouteOption: &options.RouteOption{Route: config.AllNodes},
+		},
+	)
+	assert.NoError(suite.T(), err)
+
+	// Check that only the primary in the specified AZ handled all GET calls
+	matchingEntriesCount := 0
+	for _, value := range infoResult.MultiValue() {
+		if strings.Contains(value, getCmdStat) && strings.Contains(value, az) && strings.Contains(value, "role:master") {
+			matchingEntriesCount++
+		}
+	}
+	assert.Equal(suite.T(), 1, matchingEntriesCount)
+
+	// Verify total GET calls
+	totalGetCalls := 0
+	for _, value := range infoResult.MultiValue() {
+		if strings.Contains(value, "cmdstat_get:calls=") {
+			startIndex := strings.Index(value, "cmdstat_get:calls=") + len("cmdstat_get:calls=")
+			endIndex := strings.Index(value[startIndex:], ",") + startIndex
+			calls, err := strconv.Atoi(value[startIndex:endIndex])
+			assert.NoError(suite.T(), err)
+			totalGetCalls += calls
+		}
+	}
+	assert.Equal(suite.T(), nGetCalls, totalGetCalls)
 
 	clientForTestingAz.Close()
 }
