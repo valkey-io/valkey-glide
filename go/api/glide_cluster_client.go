@@ -6,8 +6,6 @@ package api
 import "C"
 
 import (
-	"fmt"
-
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 	"github.com/valkey-io/valkey-glide/go/utils"
@@ -355,7 +353,6 @@ func (client *GlideClusterClient) ConfigSetWithOptions(parameters map[string]str
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClusterClient) ConfigGetWithOptions(args []string, opts options.RouteOption) (ClusterValue[interface{}], error) {
 	res, err := client.executeCommandWithRoute(C.ConfigGet, args, opts.Route)
-	fmt.Println("res:", res)
 	if err != nil {
 		return createEmptyClusterValue[interface{}](), err
 	}
