@@ -328,7 +328,9 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 //	OK if all configurations have been successfully set. Otherwise, raises an error.
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
-func (client *GlideClusterClient) ConfigSetWithOptions(parameters map[string]string, opts options.RouteOption) (string, error) {
+func (client *GlideClusterClient) ConfigSetWithOptions(
+	parameters map[string]string, opts options.RouteOption,
+) (string, error) {
 	result, err := client.executeCommandWithRoute(C.ConfigSet, utils.MapToString(parameters), opts.Route)
 	if err != nil {
 		return defaultStringResponse, err
@@ -351,7 +353,9 @@ func (client *GlideClusterClient) ConfigSetWithOptions(parameters map[string]str
 //	A map of values corresponding to the configuration parameters.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
-func (client *GlideClusterClient) ConfigGetWithOptions(args []string, opts options.RouteOption) (ClusterValue[interface{}], error) {
+func (client *GlideClusterClient) ConfigGetWithOptions(
+	args []string, opts options.RouteOption,
+) (ClusterValue[interface{}], error) {
 	res, err := client.executeCommandWithRoute(C.ConfigGet, args, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[interface{}](), err
