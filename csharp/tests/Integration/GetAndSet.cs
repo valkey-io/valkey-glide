@@ -22,40 +22,37 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
         await GetAndSetValues(client, key, value);
     }
 
-    [Fact]
-    public async Task GetReturnsLastSet()
-    {
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(TestConfiguration.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task GetReturnsLastSet(AsyncClient client) =>
         await GetAndSetRandomValues(client);
-    }
 
-    [Fact]
-    public async Task GetAndSetCanHandleNonASCIIUnicode()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(TestConfiguration.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task GetAndSetCanHandleNonASCIIUnicode(AsyncClient client)
     {
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
         string key = Guid.NewGuid().ToString();
         string value = "שלום hello 汉字";
         await GetAndSetValues(client, key, value);
     }
 
-    [Fact]
-    public async Task GetReturnsNull()
-    {
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(TestConfiguration.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task GetReturnsNull(AsyncClient client) =>
         Assert.Null(await client.GetAsync(Guid.NewGuid().ToString()));
-    }
 
-    [Fact]
-    public async Task GetReturnsEmptyString()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(TestConfiguration.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task GetReturnsEmptyString(AsyncClient client)
     {
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
         string key = Guid.NewGuid().ToString();
         string value = string.Empty;
         await GetAndSetValues(client, key, value);
     }
 
-    [Fact]
-    public async Task HandleVeryLargeInput()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(TestConfiguration.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task HandleVeryLargeInput(AsyncClient client)
     {
         // TODO invesitage and fix
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
@@ -63,7 +60,6 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
             //"Flaky on MacOS"
             return;
         }
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
 
         string key = Guid.NewGuid().ToString();
         string value = Guid.NewGuid().ToString();
@@ -76,10 +72,11 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
         await GetAndSetValues(client, key, value);
     }
 
-    // This test is slow and hardly a unit test, but it caught timing and releasing issues in the past,
+    // This test is slow, but it caught timing and releasing issues in the past,
     // so it's being kept.
-    [Fact]
-    public void ConcurrentOperationsWork()
+    [Theory(DisableDiscoveryEnumeration = true), Trait("duration", "long")]
+    [MemberData(nameof(TestConfiguration.TestClients), MemberType = typeof(TestConfiguration))]
+    public void ConcurrentOperationsWork(AsyncClient client)
     {
         // TODO investigate and fix
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
@@ -87,7 +84,6 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
             return;
         }
 
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
         List<Task> operations = [];
 
         for (int i = 0; i < 1000; ++i)

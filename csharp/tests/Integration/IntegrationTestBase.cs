@@ -2,6 +2,8 @@
 
 using System.Diagnostics;
 
+using Glide;
+
 using Xunit.Runner.Common;
 using Xunit.Sdk;
 
@@ -12,9 +14,29 @@ public class IntegrationTestBase : IDisposable
 {
     internal class TestConfiguration
     {
-        public static List<uint> STANDALONE_PORTS { get; internal set; } = [];
-        public static List<uint> CLUSTER_PORTS { get; internal set; } = [];
+        public static List<(string, uint)> STANDALONE_HOSTS { get; internal set; } = [];
+        public static List<(string, uint)> CLUSTER_HOSTS { get; internal set; } = [];
         public static Version SERVER_VERSION { get; internal set; } = new();
+
+        public static AsyncClient DefaultStandaloneClient() => new(STANDALONE_HOSTS[0].Item1, STANDALONE_HOSTS[0].Item2, false);
+
+        private static TheoryData<AsyncClient> s_testClients = [];
+
+        public static TheoryData<AsyncClient> TestClients
+        {
+            get
+            {
+                if (s_testClients.Count == 0)
+                {
+                    s_testClients = [DefaultStandaloneClient()];
+                }
+                return s_testClients;
+            }
+
+            private set => s_testClients = value;
+        }
+
+        public static void ResetTestClients() => s_testClients = [];
     }
 
     private readonly IMessageSink _diagnosticMessageSink;
@@ -39,17 +61,21 @@ public class IntegrationTestBase : IDisposable
         StopServer(false);
 
         // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
-        Directory.Delete(Path.Combine(_scriptDir, "clusters"), true);
+        string clusterLogsDir = Path.Combine(_scriptDir, "clusters");
+        if (Directory.Exists(clusterLogsDir))
+        {
+            Directory.Delete(clusterLogsDir, true);
+        }
 
         // Start cluster
-        TestConfiguration.CLUSTER_PORTS = StartServer(true);
+        TestConfiguration.CLUSTER_HOSTS = StartServer(true);
         // Start standalone
-        TestConfiguration.STANDALONE_PORTS = StartServer(false);
+        TestConfiguration.STANDALONE_HOSTS = StartServer(false);
         // Get redis version
         TestConfiguration.SERVER_VERSION = GetServerVersion();
 
-        TestConsoleWriteLine($"Cluster ports = {string.Join(',', TestConfiguration.CLUSTER_PORTS)}");
-        TestConsoleWriteLine($"Standalone ports = {string.Join(',', TestConfiguration.STANDALONE_PORTS)}");
+        TestConsoleWriteLine($"Cluster hosts = {string.Join(", ", TestConfiguration.CLUSTER_HOSTS)}");
+        TestConsoleWriteLine($"Standalone hosts = {string.Join(", ", TestConfiguration.STANDALONE_HOSTS)}");
         TestConsoleWriteLine($"Redis version = {TestConfiguration.SERVER_VERSION}");
     }
 
@@ -62,10 +88,10 @@ public class IntegrationTestBase : IDisposable
     private void TestConsoleWriteLine(string message) =>
         _ = _diagnosticMessageSink.OnMessage(new DiagnosticMessage(message));
 
-    internal List<uint> StartServer(bool cluster, bool tls = false, string? name = null)
+    internal List<(string, uint)> StartServer(bool cluster, bool tls = false, string? name = null)
     {
         string cmd = $"start {(cluster ? "--cluster-mode" : "-r 0")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
-        return ParsePortsFromOutput(RunClusterManager(cmd, false));
+        return ParseHostsFromOutput(RunClusterManager(cmd, false));
     }
 
     /// <summary>
@@ -101,9 +127,9 @@ public class IntegrationTestBase : IDisposable
             : output ?? "";
     }
 
-    private static List<uint> ParsePortsFromOutput(string output)
+    private static List<(string, uint)> ParseHostsFromOutput(string output)
     {
-        List<uint> ports = [];
+        List<(string, uint)> result = [];
         foreach (string line in output.Split("\n"))
         {
             if (!line.StartsWith("CLUSTER_NODES="))
@@ -114,10 +140,11 @@ public class IntegrationTestBase : IDisposable
             string[] addresses = line.Split("=")[1].Split(",");
             foreach (string address in addresses)
             {
-                ports.Add(uint.Parse(address.Split(":")[1]));
+                string[] parts = address.Split(":");
+                result.Add((parts[0], uint.Parse(parts[1])));
             }
         }
-        return ports;
+        return result;
     }
 
     private static Version GetServerVersion()

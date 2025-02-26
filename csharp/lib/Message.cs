@@ -100,7 +100,9 @@ internal class Message<T>(int index, MessageContainer<T> container) : INotifyCom
     }
 
     // Holding the client prevents it from being CG'd until all operations complete.
+#pragma warning disable IDE0052 // Remove unread private members
     private object? _client;
+#pragma warning restore IDE0052 // Remove unread private members
 
 
     public void OnCompleted(Action continuation)
