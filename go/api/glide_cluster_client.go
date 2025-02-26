@@ -6,8 +6,11 @@ package api
 import "C"
 
 import (
+	"fmt"
+
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/utils"
 )
 
 // GlideClusterClient interface compliance check.
@@ -310,4 +313,55 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 		return createEmptyClusterValue[string](), err
 	}
 	return createClusterSingleValue[string](data), nil
+}
+
+// Sets configuration parameters to the specified values.<br>
+// Starting from server version 7, command supports multiple parameters.<br>
+// The command will be sent to all nodes.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//	parameters -  A map consisting of configuration parameters and their respective values to set.
+//
+// Return value:
+//
+//	OK if all configurations have been successfully set. Otherwise, raises an error.
+//
+// [valkey.io]: https://valkey.io/commands/config-set/
+func (client *GlideClusterClient) ConfigSetWithOptions(parameters map[string]string, opts options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(C.ConfigSet, utils.MapToString(parameters), opts.Route)
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Get the values of configuration parameters.
+// Starting from server version 7, command supports multiple parameters.
+// The command will be sent to a random node.
+//
+// Parameters:
+//
+//		route - Specifies the routing configuration for the command. The client will route the
+//		        command to the nodes defined by route.
+//	 	parameters -  An array of configuration parameter names to retrieve values for.
+//
+// Return value:
+//
+//	A map of values corresponding to the configuration parameters.
+//
+// [valkey.io]: https://valkey.io/commands/config-get/
+func (client *GlideClusterClient) ConfigGetWithOptions(args []string, opts options.RouteOption) (ClusterValue[interface{}], error) {
+	res, err := client.executeCommandWithRoute(C.ConfigGet, args, opts.Route)
+	fmt.Println("res:", res)
+	if err != nil {
+		return createEmptyClusterValue[interface{}](), err
+	}
+	data, err := handleInterfaceResponse(res)
+	if err != nil {
+		return createEmptyClusterValue[interface{}](), err
+	}
+	return createClusterValue[interface{}](data), nil
 }

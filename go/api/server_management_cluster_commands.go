@@ -17,4 +17,8 @@ type ServerManagementClusterCommands interface {
 	TimeWithOptions(routeOption options.RouteOption) (ClusterValue[[]string], error)
 
 	DBSizeWithOptions(routeOption options.RouteOption) (int64, error)
+
+	ConfigSetWithOptions(parameters map[string]string, routeOption options.RouteOption) (string, error)
+
+	ConfigGetWithOptions(parameters []string, routeOption options.RouteOption) (ClusterValue[interface{}], error)
 }
