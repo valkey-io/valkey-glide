@@ -43,12 +43,12 @@ python-lint: .build/python_deps
 		black . --exclude python/glide/protobuf --exclude .env && 						\
 		flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics      		\
 			--exclude=python/glide/protobuf,.env/* --extend-ignore=E230				&&	\
-		flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127  		\
+		flake8 . --count --max-complexity=12 --max-line-length=127  		\
 			--statistics --exclude=python/glide/protobuf,.env/*             			\
 			--extend-ignore=E230
 
 python-test: .build/python_deps check-redis-server
-	cd python && PYTHONPATH=$(PY_PATH):$(PY_GLIDE_PATH) .env/bin/pytest --asyncio-mode=auto
+	cd python && PYTHONPATH=$(PY_PATH):$(PY_GLIDE_PATH) .env/bin/pytest -v --asyncio-mode=auto
 
 .build/python_deps:
 	@echo "$(GREEN)Generating protobuf files...$(RESET)"

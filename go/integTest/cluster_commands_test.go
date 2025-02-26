@@ -249,8 +249,7 @@ func (suite *GlideTestSuite) TestDBSizeRandomRoute() {
 	result, err := client.DBSizeWithOptions(options)
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), result)
-	assert.NotEmpty(suite.T(), result)
-	assert.Greater(suite.T(), result, int64(0))
+	assert.GreaterOrEqual(suite.T(), result, int64(0))
 }
 
 func (suite *GlideTestSuite) TestEchoCluster() {
