@@ -53,7 +53,7 @@ type payload struct {
 //export successCallback
 func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandResponse) {
 	response := cResponse
-	resultChannel := *(*chan payload)(channelPtr)
+	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
 	resultChannel <- payload{value: response, error: nil}
 }
 
@@ -61,7 +61,7 @@ func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandRespo
 func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
 	defer C.free_error_message(cErrorMessage)
 	msg := C.GoString(cErrorMessage)
-	resultChannel := *(*chan payload)(channelPtr)
+	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
 	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
 }
 
@@ -209,9 +209,6 @@ func (client *baseClient) executeCommandWithRoute(
 		argLengthsPtr = &argLengths[0]
 	}
 
-	resultChannel := make(chan payload)
-	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
-
 	var routeBytesPtr *C.uchar = nil
 	var routeBytesCount C.uintptr_t = 0
 	if route != nil {
@@ -228,9 +225,16 @@ func (client *baseClient) executeCommandWithRoute(
 		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
 	}
 
+	resultChannel := make(chan payload)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
 	C.command(
 		client.coreClient,
-		C.uintptr_t(resultChannelPtr),
+		C.uintptr_t(pinnedChannelPtr),
 		uint32(requestType),
 		C.size_t(len(args)),
 		cArgsPtr,
