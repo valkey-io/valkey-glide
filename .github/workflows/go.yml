@@ -134,7 +134,7 @@ jobs:
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
               with:
-                  go-version: "1.22.0"
+                  go-version: "1.22"
                   cache-dependency-path: go/go.sum
 
             - name: Install protoc
@@ -235,13 +235,13 @@ jobs:
             - name: Set up Go
               uses: actions/setup-go@v5
               with:
-                  go-version: "1.20.0"
+                  go-version: "1.20"
                   cache-dependency-path: go/go.sum
 
             - name: Build and test
               working-directory: ./go
               run: |
-                  make install-tools-go1.20.0 build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  make install-tools-go1.20 build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
 
             - name: Upload test reports
               if: always()
