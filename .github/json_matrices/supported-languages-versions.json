@@ -21,7 +21,7 @@
     },
     {
         "language": "go",
-        "versions": ["1.22.0", "1.20.0"],
-        "always-run-versions": ["1.22.0", "1.20.0"]
+        "versions": ["1.22", "1.20"],
+        "always-run-versions": ["1.22", "1.20"]
     }
 ]
