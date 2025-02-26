@@ -1,7 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use glide_core::{GlideOpenTelemetry, GlideSpan, Telemetry};
-// use glide_core::Adar;
 
 use redis::GlideConnectionOptions;
 
@@ -28,6 +27,7 @@ use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
 use std::collections::HashMap;
 use std::ptr::from_mut;
 use std::str;
+use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
@@ -418,6 +418,21 @@ pub fn create_leaked_double(float: f64) -> [u32; 2] {
     split_pointer(pointer)
 }
 
+/// Creates an open telemetry span with the given name and returns a pointer to the span
+#[napi]
+pub fn create_leaked_otel_span(name: String) -> BigInt {
+    let span = GlideOpenTelemetry::new_span(&name);
+    return BigInt::from(Arc::into_raw(Arc::new(span)) as u64);
+}
+
+#[napi]
+pub fn drop_otel_span(span_ptr: BigInt) {
+    let span_ptr = span_ptr.get_u64().1;
+    if span_ptr != 0 {
+        unsafe { drop(Arc::from_raw(span_ptr as *const GlideSpan)) };
+    }
+}
+
 #[napi]
 /// A wrapper for a script object. As long as this object is alive, the script's code is saved in memory, and can be resent to the server.
 struct Script {
@@ -510,28 +525,6 @@ impl Drop for ClusterScanCursor {
 }
 
 #[napi]
-#[derive(Default)]
-pub struct OpenTelemetrySpansMap {
-    cmd_to_span_map: Mutex<HashMap<u32, GlideSpan>>,
-}
-
-// lazy_static! {
-//     static ref GLOBAL_SPANS_MAP: Mutex<Option<OpenTelemetrySpansMap>> = Mutex::new(None);
-// }
-
-#[napi]
-impl OpenTelemetrySpansMap {
-    #[napi(constructor)]
-    #[allow(dead_code)]
-    pub fn new(new_map: Option<Mutex<HashMap<u32, GlideSpan>>>) -> Self {
-        match new_map {
-            Some(cmd_to_span_map) => OpenTelemetrySpansMap { cmd_to_span_map },
-            None => OpenTelemetrySpansMap::default(),
-        }
-    }
-}
-
-#[napi]
 pub fn get_statistics(env: Env) -> Result<JsObject> {
     let total_connections = Telemetry::total_connections().to_string();
     let total_clients = Telemetry::total_clients().to_string();
@@ -542,8 +535,8 @@ pub fn get_statistics(env: Env) -> Result<JsObject> {
     Ok(stats)
 }
 
-#[napi]
-pub fn new_span(name: String, request_id: u32) {
-    let span = GlideOpenTelemetry::new_span(&name);
-    GlideOpenTelemetry::set_span_by_id(span, request_id);
-}
+// #[napi]
+// pub fn new_span(name: String, request_id: u32) {
+//     let span = GlideOpenTelemetry::new_span(&name);
+//     GlideOpenTelemetry::set_span_by_id(span, request_id);
+// }

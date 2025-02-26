@@ -7,6 +7,7 @@ import {
     DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
+    createLeakedOtelSpan,
     getStatistics,
     valueFromSplitPointer
 } from "glide-rs";
@@ -1064,6 +1065,12 @@ export class BaseClient {
         const route = this.toProtobufRoute(options?.route);
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
+            
+            //TODO: check the request type.
+            let commandObj = Array.isArray(command)? "Batch": (JSON.parse(JSON.stringify(command))).requestType;
+            console.log("Request Type:", commandObj);
+            //TODO: creates the span only if the otel config exits
+            let spanPtr = createLeakedOtelSpan(commandObj);
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
