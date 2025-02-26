@@ -242,7 +242,7 @@ jobs:
             - name: Build and test
               working-directory: ./go
               run: |
-                  make install-tools-go1.20.0 build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  make install-tools-go1.20 build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
 
             - name: Upload test reports
               if: always()
