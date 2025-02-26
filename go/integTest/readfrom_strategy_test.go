@@ -222,8 +222,6 @@ func (suite *GlideTestSuite) TestConnectionTimeoutStandaloneMode() {
 }
 
 func (suite *GlideTestSuite) testConnectionTimeout(clusterMode bool) {
-	fmt.Println("Starting TestConnectionTimeout")
-
 	backoffStrategy := api.NewBackoffStrategy(2, 100, 1)
 	client, err := suite.createConnectionTimeoutClient(clusterMode, 250, 20000, backoffStrategy)
 	assert.NoError(suite.T(), err)
@@ -300,7 +298,6 @@ func (suite *GlideTestSuite) testConnectionTimeout(clusterMode bool) {
 	if client != nil {
 		client.Close()
 	}
-	fmt.Println("Finished TestConnectionTimeout")
 }
 
 func (suite *GlideTestSuite) createConnectionTimeoutClient(
@@ -361,8 +358,6 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	primaryAzResult, err := clientForConfigSet.CustomCommandWithRoute(
 		[]string{"CONFIG", "GET", "availability-zone"}, config.NewSlotIdRoute(config.SlotTypePrimary, 12182))
 	assert.NoError(suite.T(), err)
-	fmt.Println("primeAZresult:-------------------------")
-	fmt.Println(primaryAzResult.MultiValue())
 	assert.Equal(suite.T(), az, primaryAzResult.MultiValue()["availability-zone"])
 
 	clientForConfigSet.Close()
