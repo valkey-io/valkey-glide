@@ -10,8 +10,10 @@ import (
 	"sync"
 )
 
-var clusterNodes = flag.String("clusternodes", "", "AddressNodes for running Valkey/Redis cluster nodes")
-var standaloneNode = flag.String("standalonenode", "", "AddressNode for running Valkey/Redis standalone node")
+var (
+	clusterNodes   = flag.String("clusternodes", "", "AddressNodes for running Valkey/Redis cluster nodes")
+	standaloneNode = flag.String("standalonenode", "", "AddressNode for running Valkey/Redis standalone node")
+)
 
 var (
 	clusterClient *GlideClusterClient
