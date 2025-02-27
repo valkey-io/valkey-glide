@@ -525,12 +525,27 @@ impl Client {
                     Some(ResponsePolicy::AllSucceeded),
                 ));
                 let mut cmd = redis::cmd("AUTH");
+                match self.internal_client {
+                    ClientWrapper::Cluster { ref mut client } => {
+                        match client.get_username().await? {
+                            Value::SimpleString(username) => {
+                                cmd.arg(username);
+                            }
+                            _ => {}
+                        }
+                    }
+                    ClientWrapper::Standalone(_) => {
+                        // Standalone mode doesn't support username
+                    }
+                }
                 cmd.arg(password);
                 self.send_command(&cmd, Some(routing)).await
+                }
             }
         }
     }
-}
+    
+
 
 fn load_cmd(code: &[u8]) -> Cmd {
     let mut cmd = redis::cmd("SCRIPT");
