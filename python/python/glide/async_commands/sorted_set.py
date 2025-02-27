@@ -116,7 +116,8 @@ class RangeByScore:
     Args:
         start (Union[InfBound, ScoreBoundary]): The start score boundary.
         end (Union[InfBound, ScoreBoundary]): The end score boundary.
-        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class for more information.
+        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit`
+            class for more information.
     """
 
     def __init__(
@@ -126,9 +127,9 @@ class RangeByScore:
         limit: Optional[Limit] = None,
     ):
         self.start = (
-            start.value["score_arg"] if type(start) == InfBound else start.value
+            start.value["score_arg"] if isinstance(start, InfBound) else start.value
         )
-        self.end = end.value["score_arg"] if type(end) == InfBound else end.value
+        self.end = end.value["score_arg"] if isinstance(end, InfBound) else end.value
         self.limit = limit
 
 
@@ -141,7 +142,8 @@ class RangeByLex:
     Args:
         start (Union[InfBound, LexBoundary]): The start lexicographic boundary.
         end (Union[InfBound, LexBoundary]): The end lexicographic boundary.
-        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class for more information.
+        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class
+            for more information.
     """
 
     def __init__(
@@ -150,8 +152,10 @@ class RangeByLex:
         end: Union[InfBound, LexBoundary],
         limit: Optional[Limit] = None,
     ):
-        self.start = start.value["lex_arg"] if type(start) == InfBound else start.value
-        self.end = end.value["lex_arg"] if type(end) == InfBound else end.value
+        self.start = (
+            start.value["lex_arg"] if isinstance(start, InfBound) else start.value
+        )
+        self.end = end.value["lex_arg"] if isinstance(end, InfBound) else end.value
         self.limit = limit
 
 
@@ -309,7 +313,7 @@ def _create_zrange_args(
 
 
 def separate_keys(
-    keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]]
+    keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]],
 ) -> Tuple[List[TEncodable], List[TEncodable]]:
     """
     Returns separate lists of keys and weights in case of weighted keys.
