@@ -357,14 +357,14 @@ func main() {
 
 ## Behind the Scenes: Technical Architecture
 
-```ascii
-┌──────────┐      ┌─────┐      ┌──────────┐      ┌──────────┐      ┌──────────┐
-│          │      │     │      │          │      │          │      │          │
-│   Go     │─────▶│     │─────▶│ C Header │─────▶│   Rust   │─────▶│  Valkey  │
-│ Wrapper  │      │ CGO │      │ cbindgen │      │   Core   │      │  Server  │
-│          │◀─────│     │◀─────│          │◀─────│          │◀─────│          │
-│          │      │     │      │          │      │          │      │          │
-└──────────┘      └─────┘      └──────────┘      └──────────┘      └──────────┘
+```text
++------------+      +------+      +------------+      +------------+      +------------+
+|            |      |      |      |            |      |            |      |            |
+|    Go      |----->|      |----->|  C Header  |----->|    Rust    |----->|   Valkey   |
+|  Wrapper   |      |  CGO |      |  cbindgen  |      |    Core    |      |   Server   |
+|            |<-----|      |<-----|            |<-----|            |<-----|            |
+|            |      |      |      |            |      |            |      |            |
++------------+      +------+      +------------+      +------------+      +------------+
 ```
 
 Valkey GLIDE's Go wrapper brings the power of Valkey to Go developers through a sophisticated multi-language architecture.
