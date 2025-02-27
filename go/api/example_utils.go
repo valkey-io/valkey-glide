@@ -30,15 +30,12 @@ func initFlags() {
 	// This is necessary because the test framework sets the flags after the init function is called.
 	initOnce.Do(func() {
 		flag.Parse()
-		fmt.Println("clusterNodes:", *clusterNodes)
-		fmt.Println("standaloneNode:", *standaloneNode)
 	})
 }
 
 // getExampleGlideClient returns a GlideClient instance for testing purposes.
 // This function is used in the examples of the GlideClient methods.
 func getExampleGlideClient() *GlideClient {
-
 	standaloneOnce.Do(func() {
 		initFlags()
 		addresses := parseHosts(*standaloneNode)
@@ -90,7 +87,6 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 func parseHosts(addresses string) []NodeAddress {
 	var result []NodeAddress
 
-	fmt.Println("parseHosts: ", addresses)
 	if addresses == "" {
 		result = append(result, *new(NodeAddress))
 	} else {
