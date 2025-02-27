@@ -124,11 +124,14 @@ unit-test:
 example-test:
 	mkdir -p reports
 	set -o pipefail; \
-	../utils/cluster_manager.py start -p 6379 -r 0
-	@OUTPUT=$$(python3 ../utils/cluster_manager.py start --cluster-mode); \
-	GLIDE_CLUSTER_NODES=$$(echo "$$OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
+	@NODE_OUTPUT=$$(python3 ../utils/cluster_manager.py start -r 0); \
+	GLIDE_NODE=$$(echo "$$NODE_OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
+    echo "GLIDE_NODE=$$GLIDE_NODE"; \
+	@CLUSTER_OUTPUT=$$(python3 ../utils/cluster_manager.py start --cluster-mode); \
+	GLIDE_CLUSTER_NODES=$$(echo "$$CLUSTER_OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
+    echo "GLIDE_CLUSTER_NODES=$$GLIDE_CLUSTER_NODES"; \
 	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
-	go test -v ./api -skip Test $(if $(test-filter), -run $(test-filter)) -clusternodes $$GLIDE_CLUSTER_NODES \
+	go test -v ./api -skip Test $(if $(test-filter), -run $(test-filter)) -clusternodes $$GLIDE_CLUSTER_NODES -standalonenode $$GLIDE_NODE\
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/api \
 	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
 

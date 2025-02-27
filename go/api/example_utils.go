@@ -11,6 +11,7 @@ import (
 )
 
 var clusterNodes = flag.String("clusternodes", "", "AddressNodes for running Valkey/Redis cluster nodes")
+var standaloneNode = flag.String("standalonenode", "", "AddressNode for running Valkey/Redis standalone node")
 
 var (
 	clusterClient *GlideClusterClient
@@ -24,18 +25,25 @@ var (
 
 var initOnce sync.Once
 
-// getExampleGlideClient returns a GlideClient instance for testing purposes.
-// This function is used in the examples of the GlideClient methods.
-func getExampleGlideClient() *GlideClient {
+func initFlags() {
 	// Parse flags only once after the test framework has had a chance to set the flags.
 	// This is necessary because the test framework sets the flags after the init function is called.
 	initOnce.Do(func() {
 		flag.Parse()
+		fmt.Println("clusterNodes:", *clusterNodes)
+		fmt.Println("standaloneNode:", *standaloneNode)
 	})
+}
+
+// getExampleGlideClient returns a GlideClient instance for testing purposes.
+// This function is used in the examples of the GlideClient methods.
+func getExampleGlideClient() *GlideClient {
 
 	standaloneOnce.Do(func() {
+		initFlags()
+		addresses := parseHosts(*standaloneNode)
 		config := NewGlideClientConfiguration().
-			WithAddress(new(NodeAddress)) // use default address
+			WithAddress(&addresses[0]) // use default address
 
 		client, err := NewGlideClient(config)
 		if err != nil {
@@ -56,6 +64,7 @@ func getExampleGlideClient() *GlideClient {
 
 func getExampleGlideClusterClient() *GlideClusterClient {
 	clusterOnce.Do(func() {
+		initFlags()
 		addresses := parseHosts(*clusterNodes)
 		config := NewGlideClusterClientConfiguration().
 			WithAddress(&addresses[0]).
@@ -81,16 +90,21 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 func parseHosts(addresses string) []NodeAddress {
 	var result []NodeAddress
 
-	addressList := strings.Split(addresses, ",")
-	for _, address := range addressList {
-		parts := strings.Split(address, ":")
-		port, err := strconv.Atoi(parts[1])
-		if err != nil {
-			fmt.Printf("Failed to parse port from string %s: %s", parts[1], err.Error())
-			continue
-		}
+	fmt.Println("parseHosts: ", addresses)
+	if addresses == "" {
+		result = append(result, *new(NodeAddress))
+	} else {
+		addressList := strings.Split(addresses, ",")
+		for _, address := range addressList {
+			parts := strings.Split(address, ":")
+			port, err := strconv.Atoi(parts[1])
+			if err != nil {
+				fmt.Printf("Failed to parse port from string %s: %s", parts[1], err.Error())
+				continue
+			}
 
-		result = append(result, NodeAddress{Host: parts[0], Port: port})
+			result = append(result, NodeAddress{Host: parts[0], Port: port})
+		}
 	}
 	return result
 }
