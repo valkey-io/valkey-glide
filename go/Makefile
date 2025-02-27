@@ -124,7 +124,7 @@ unit-test:
 example-test:
 	mkdir -p reports
 	set -o pipefail; \
-	NODE_OUTPUT=$$(python3 ../utils/cluster_manager.py start -r 0); \
+	NODE_OUTPUT=$$(python3 ../utils/cluster_manager.py start); \
 	GLIDE_NODE=$$(echo "$$NODE_OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
 	echo "GLIDE_NODE=$$GLIDE_NODE"; \
 	CLUSTER_OUTPUT=$$(python3 ../utils/cluster_manager.py start --cluster-mode); \
