@@ -1,5 +1,4 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-#![allow(clippy::useless_conversion)]
 
 use bytes::Bytes;
 use glide_core::client::FINISHED_SCAN_CURSOR;
