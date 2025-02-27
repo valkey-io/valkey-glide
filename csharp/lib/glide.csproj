@@ -23,7 +23,7 @@
   <ItemGroup>
     <Content Include="$(MSBuildThisFileDirectory)target/$(Configuration.ToLower())/glide_rs.dll" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>%(FileName)%(Extension)</Link>
+      <Link>lib%(FileName)%(Extension)</Link>
     </Content>
     <Content Include="$(MSBuildThisFileDirectory)target/$(Configuration.ToLower())/libglide_rs.so" Condition="$([MSBuild]::IsOSPlatform('Linux'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
