@@ -516,3 +516,10 @@ func (suite *GlideTestSuite) TestTime_Error() {
 	assert.Nil(suite.T(), results)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
+
+func (suite *GlideTestSuite) TestClientId() {
+	client := suite.defaultClient()
+	result, err := client.ClientId()
+	assert.Nil(suite.T(), err)
+	assert.Greater(suite.T(), result, int64(0))
+}
