@@ -357,7 +357,7 @@ func main() {
 
 ## Behind the Scenes: Technical Architecture
 
-```
+```ascii
 ┌──────────┐      ┌─────┐      ┌──────────┐      ┌──────────┐      ┌──────────┐
 │          │      │     │      │          │      │          │      │          │
 │   Go     │─────▶│     │─────▶│ C Header │─────▶│   Rust   │─────▶│  Valkey  │
