@@ -14,11 +14,11 @@ public class IntegrationTestBase : IDisposable
 {
     internal class TestConfiguration
     {
-        public static List<(string, uint)> STANDALONE_HOSTS { get; internal set; } = [];
-        public static List<(string, uint)> CLUSTER_HOSTS { get; internal set; } = [];
+        public static List<(string host, uint port)> STANDALONE_HOSTS { get; internal set; } = [];
+        public static List<(string host, uint port)> CLUSTER_HOSTS { get; internal set; } = [];
         public static Version SERVER_VERSION { get; internal set; } = new();
 
-        public static AsyncClient DefaultStandaloneClient() => new(STANDALONE_HOSTS[0].Item1, STANDALONE_HOSTS[0].Item2, false);
+        public static AsyncClient DefaultStandaloneClient() => new(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port, false);
 
         private static TheoryData<AsyncClient> s_testClients = [];
 
@@ -88,7 +88,7 @@ public class IntegrationTestBase : IDisposable
     private void TestConsoleWriteLine(string message) =>
         _ = _diagnosticMessageSink.OnMessage(new DiagnosticMessage(message));
 
-    internal List<(string, uint)> StartServer(bool cluster, bool tls = false, string? name = null)
+    internal List<(string host, uint port)> StartServer(bool cluster, bool tls = false, string? name = null)
     {
         string cmd = $"start {(cluster ? "--cluster-mode" : "-r 0")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
         return ParseHostsFromOutput(RunClusterManager(cmd, false));
@@ -127,9 +127,9 @@ public class IntegrationTestBase : IDisposable
             : output ?? "";
     }
 
-    private static List<(string, uint)> ParseHostsFromOutput(string output)
+    private static List<(string host, uint port)> ParseHostsFromOutput(string output)
     {
-        List<(string, uint)> result = [];
+        List<(string host, uint port)> hosts = [];
         foreach (string line in output.Split("\n"))
         {
             if (!line.StartsWith("CLUSTER_NODES="))
@@ -141,10 +141,10 @@ public class IntegrationTestBase : IDisposable
             foreach (string address in addresses)
             {
                 string[] parts = address.Split(":");
-                result.Add((parts[0], uint.Parse(parts[1])));
+                hosts.Add((parts[0], uint.Parse(parts[1])));
             }
         }
-        return result;
+        return hosts;
     }
 
     private static Version GetServerVersion()
