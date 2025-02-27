@@ -75,7 +75,6 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-
 	fmt.Println(result)
 
 	// Output: 0
@@ -89,7 +88,6 @@ func ExampleGlideClusterClient_ConfigSetWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-
 	fmt.Println(result)
 
 	// Output: OK
