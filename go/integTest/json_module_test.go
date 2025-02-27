@@ -140,8 +140,16 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandFormatting() {
 	t := suite.T()
 	key := uuid.New().String()
 	suite.verifyOK(glidejson.Set(client, key, "$", "{\"a\": 1.0, \"b\": 2, \"c\": {\"d\": 3, \"e\": 4}}"))
-	expectedGetResult := "[\n" + "  {\n" + "    \"a\": 1.0,\n" + "    \"b\": 2,\n" + "    \"c\": {\n" +
-		"      \"d\": 3,\n" + "      \"e\": 4\n" + "    }\n" + "  }\n" + "]"
+	expectedGetResult := "[\n" +
+		"  {\n" +
+		"    \"a\": 1.0,\n" +
+		"    \"b\": 2,\n" +
+		"    \"c\": {\n" +
+		"      \"d\": 3,\n" +
+		"      \"e\": 4\n" +
+		"    }\n" +
+		"  }\n" +
+		"]"
 
 	actualGetResult, err := glidejson.GetWithOptions(
 		client,
