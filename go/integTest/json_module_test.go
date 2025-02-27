@@ -33,9 +33,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommand() {
 	key := uuid.New().String()
 	jsonValue := "{\"a\":1.0,\"b\":2}"
 
-	jsonSetResult, err := glidejson.Set(client, key, "$", jsonValue)
-	assert.NoError(t, err)
-	assert.Equal(t, "OK", jsonSetResult)
+	suite.verifyOK(glidejson.Set(client, key, "$", jsonValue))
 
 	jsonGetResult, err := glidejson.Get(client, key)
 	assert.NoError(t, err)
@@ -61,9 +59,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandMultipleValues() {
 	t := suite.T()
 	key := uuid.New().String()
 	jsonValue := "{\"a\": {\"c\": 1, \"d\": 4}, \"b\": {\"c\": 2}, \"c\": true}"
-	jsonSetResult, err := glidejson.Set(client, key, "$", jsonValue)
-	assert.NoError(t, err)
-	assert.Equal(t, "OK", jsonSetResult)
+	suite.verifyOK(glidejson.Set(client, key, "$", jsonValue))
 
 	jsonGetResult, err := glidejson.GetWithOptions(
 		client, key, *glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
@@ -74,10 +70,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandMultipleValues() {
 		client, key, *glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c", "$.c"}))
 	assert.NoError(t, err)
 	assert.Equal(t, "{\"$..c\":[true,1,2],\"$.c\":[true]}", jsonGetResultWithMultiPaths.Value())
-
-	jsonSetResult, err = glidejson.Set(client, key, "$..c", "\"new_value\"")
-	assert.NoError(t, err)
-	assert.Equal(t, "OK", jsonSetResult)
+	suite.verifyOK(glidejson.Set(client, key, "$..c", "\"new_value\""))
 
 	jsonGetResult, err = glidejson.GetWithOptions(
 		client, key, *glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
@@ -146,9 +139,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandFormatting() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 	key := uuid.New().String()
-	jsonSetResult, err := glidejson.Set(client, key, "$", "{\"a\": 1.0, \"b\": 2, \"c\": {\"d\": 3, \"e\": 4}}")
-	assert.NoError(t, err)
-	assert.Equal(t, "OK", jsonSetResult)
+	suite.verifyOK(glidejson.Set(client, key, "$", "{\"a\": 1.0, \"b\": 2, \"c\": {\"d\": 3, \"e\": 4}}"))
 	expectedGetResult := "[\n" + "  {\n" + "    \"a\": 1.0,\n" + "    \"b\": 2,\n" + "    \"c\": {\n" +
 		"      \"d\": 3,\n" + "      \"e\": 4\n" + "    }\n" + "  }\n" + "]"
 
