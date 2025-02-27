@@ -10,18 +10,16 @@ type EchoOptions struct {
 // Optional arguments for `Echo` for cluster client
 type ClusterEchoOptions struct {
 	*EchoOptions
-	// Specifies the routing configuration for the command.
-	// The client will route the command to the nodes defined by *Route*.
 	*RouteOption
 }
 
-func (opts *EchoOptions) ToArgs() []string {
+func (opts *EchoOptions) ToArgs() ([]string, error) {
 	if opts == nil {
-		return []string{}
+		return []string{}, nil
 	}
 	args := []string{}
 	if opts.Message != "" {
 		args = append(args, opts.Message)
 	}
-	return args
+	return args, nil
 }

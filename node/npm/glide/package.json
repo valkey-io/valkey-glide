@@ -1,5 +1,5 @@
 {
-    "name": "${scope}${pkg_name}",
+    "name": "valkey-glide",
     "types": "build-ts/index.d.ts",
     "version": "${package_version}",
     "description": "General Language Independent Driver for the Enterprise (GLIDE) for Valkey",
@@ -33,11 +33,11 @@
     },
     "homepage": "https://github.com/valkey-io/valkey-glide#readme",
     "devDependencies": {
-        "@types/node": "^18.11.18",
-        "@typescript-eslint/eslint-plugin": "^5.48.0",
-        "@typescript-eslint/parser": "^5.48.0",
+        "@types/node": "^22.13.1",
+        "@typescript-eslint/eslint-plugin": "^8.24.0",
+        "@typescript-eslint/parser": "^8.24.0",
         "eslint": "^8.31.0",
-        "typescript": "^4.9.4"
+        "typescript": "^5.7.3"
     },
     "optionalDependencies": {
         "${scope}valkey-glide-darwin-arm64": "${package_version}",

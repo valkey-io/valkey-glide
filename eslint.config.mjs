@@ -2,21 +2,21 @@
 import eslint from "@eslint/js";
 import prettierConfig from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
-import jsdoc from "eslint-plugin-jsdoc";
 
 export default tseslint.config(
     eslint.configs.recommended,
     ...tseslint.configs.recommended,
     ...tseslint.configs.stylistic,
-    { files: ["**/*.js"], ...tseslint.configs.disableTypeChecked },
+    { files: [ "**/*.js" ], ...tseslint.configs.disableTypeChecked },
     {
         ignores: [
             "*/ProtobufMessage.*",
             "**/*.d.ts",
             "node_modules/**",
-            "build-ts/**",
+            "**/build-ts/**",
+            "build/**",
             "jest.config.js",
-            "docs/**"
+            "docs/**",
         ],
     },
     {
@@ -55,14 +55,18 @@ export default tseslint.config(
                     next: "*",
                 },
             ],
-            "@typescript-eslint/indent": ["error", 4, {
-            "SwitchCase": 1,
-            "ObjectExpression": 1,
-            "FunctionDeclaration": {"parameters": "first"},
-            "FunctionExpression": {"parameters": "first"},
-            "ignoredNodes": ["TSTypeParameterInstantiation"]
-        }],
+            "@typescript-eslint/indent": [
+                "error",
+                4,
+                {
+                    SwitchCase: 1,
+                    ObjectExpression: 1,
+                    FunctionDeclaration: { parameters: "first" },
+                    FunctionExpression: { parameters: "first" },
+                    ignoredNodes: [ "TSTypeParameterInstantiation" ],
+                },
+            ],
         },
     },
-    prettierConfig,
+    prettierConfig
 );

@@ -6,7 +6,7 @@ import pytest
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_client import TGlideClient
 from tests.conftest import (
     NEW_PASSWORD,
     WRONG_PASSWORD,
@@ -66,6 +66,7 @@ class TestAuthCommands:
         assert value == b"test_value"
         await glide_client.update_connection_password(None)
         await kill_connections(management_client)
+        await asyncio.sleep(1)
         # Verify that the client is able to immediateAuth with the new password after client is killed
         result = await glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=True

@@ -54,7 +54,7 @@ function toBuffersArray(args: GlideString[]) {
 }
 
 /**
- * @internal
+ * @test
  */
 export function parseInfoResponse(response: string): Record<string, string> {
     const lines = response.split("\n");

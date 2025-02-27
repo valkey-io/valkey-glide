@@ -581,6 +581,9 @@ async fn create_cluster_client(
     let read_from_strategy = request.read_from.unwrap_or_default();
     builder = builder.read_from(match read_from_strategy {
         ReadFrom::AZAffinity(az) => ReadFromReplicaStrategy::AZAffinity(az),
+        ReadFrom::AZAffinityReplicasAndPrimary(az) => {
+            ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(az)
+        }
         ReadFrom::PreferReplica => ReadFromReplicaStrategy::RoundRobin,
         ReadFrom::Primary => ReadFromReplicaStrategy::AlwaysFromPrimary,
     });
@@ -604,7 +607,7 @@ async fn create_cluster_client(
     }
 
     // Always use with Glide
-    builder = builder.periodic_connections_checks(CONNECTION_CHECKS_INTERVAL);
+    builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
     let mut con = client.get_async_connection(push_sender).await?;
@@ -738,6 +741,8 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
                     ReadFrom::Primary => "Only primary",
                     ReadFrom::PreferReplica => "Prefer replica",
                     ReadFrom::AZAffinity(_) => "Prefer replica in user's availability zone",
+                    ReadFrom::AZAffinityReplicasAndPrimary(_) =>
+                        "Prefer replica and primary in user's availability zone",
                 }
             )
         })
