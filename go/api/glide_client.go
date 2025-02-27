@@ -302,3 +302,18 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	}
 	return handleStringResponse(result)
 }
+
+// Gets the current connection id.
+//
+// Return value:
+//
+//	The id of the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-id/
+func (client *GlideClient) ClientId() (int64, error) {
+	result, err := client.executeCommand(C.ClientId, []string{})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
