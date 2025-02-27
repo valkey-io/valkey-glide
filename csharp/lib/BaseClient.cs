@@ -128,7 +128,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     #region RequestType
 
     // TODO: generate this with a bindings generator
-    private enum RequestType
+    protected enum RequestType
     {
         InvalidRequest = 0,
         CustomCommand = 1,
