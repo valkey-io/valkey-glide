@@ -36,6 +36,8 @@ build-debug: build-glide-client-debug generate-protobuf
 
 clean:
 	go clean
+	go clean -cache
+	cargo clean
 	rm -f lib.h
 	rm -f benchmarks/benchmarks
 	rm -rf protobuf
@@ -116,7 +118,6 @@ format:
 unit-test:
 	mkdir -p reports
 	set -o pipefail; \
-	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v ./... -skip 'Example|TestGlideTestSuite' -run Test $(if $(test-filter), -run $(test-filter)) \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
 
@@ -126,11 +127,9 @@ example-test:
 	set -o pipefail; \
 	../utils/cluster_manager.py start -p 6379 -r 0
 	../utils/cluster_manager.py start --cluster-mode -p 7001 7002 7003 7004 7005 7006
-	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
-    go test -v ./... -skip Test $(if $(test-filter), -run $(test-filter)) \
+	go test -v ./... -skip Test $(if $(test-filter), -run $(test-filter)) \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/api \
-    | go-test-report -o reports/example-tests.html -t example-test > /dev/null)
-
+	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
 	../utils/cluster_manager.py stop --prefix cluster
 
 # integration tests - run subtask with skipping modules tests
@@ -144,7 +143,6 @@ modules-test: __it
 __it:
 	mkdir -p reports
 	set -o pipefail; \
-	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v ./integTest/... \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \

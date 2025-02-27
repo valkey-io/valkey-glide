@@ -4,6 +4,7 @@ package api
 
 // #cgo LDFLAGS: -lglide_rs
 // #cgo !windows LDFLAGS: -lm
+// #cgo linux LDFLAGS: -ldl
 // #cgo darwin LDFLAGS: -framework Security
 // #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
 // #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
