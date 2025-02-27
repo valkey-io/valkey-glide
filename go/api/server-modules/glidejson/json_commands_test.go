@@ -6,7 +6,7 @@ import (
 
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/options"
-	glideoptions "github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
+	jsonOptions "github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
 )
 
 func Example_jsonSet() {
@@ -38,7 +38,7 @@ func Example_jsonSetWithOptions() {
 		"key",
 		"$",
 		"{\"a\": 1.0, \"b\": 2}",
-		glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
+		*jsonOptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
 	)
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
@@ -55,7 +55,7 @@ func ExampleGlideClusterClient_jsonSetWithOptions() {
 		"key",
 		"$",
 		"{\"a\": 1.0, \"b\": 2}",
-		glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
+		*jsonOptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
 	)
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
@@ -98,7 +98,7 @@ func Example_jsonGetWithOptions() {
 	jsonValue := "{\"a\": {\"c\": 1, \"d\": 4}, \"b\": {\"c\": 2}, \"c\": true}"
 	_, err := Set(client, "key", "$", jsonValue)
 	jsonGetResult, err := GetWithOptions(
-		client, "key", glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
+		client, "key", *jsonOptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}
@@ -112,7 +112,7 @@ func ExampleGlideClusterClient_jsonGetWithOptions() {
 	jsonValue := "{\"a\": {\"c\": 1, \"d\": 4}, \"b\": {\"c\": 2}, \"c\": true}"
 	_, err := Set(client, "key", "$", jsonValue)
 	jsonGetResult, err := GetWithOptions(
-		client, "key", glideoptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
+		client, "key", *jsonOptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}

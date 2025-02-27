@@ -43,10 +43,3 @@ func getExampleGlideClusterClient() *api.GlideClusterClient {
 
 	return client.(*api.GlideClusterClient)
 }
-
-// CompareUnorderedSlices compares two unordered slices of structs and returns if both are equal.
-// func CompareUnorderedSlices[T any](slice1, slice2 []T) bool {
-// 	return cmp.Equal(slice1, slice2, cmpopts.SortSlices(func(a, b T) bool {
-// 		return fmt.Sprintf("%v", a) < fmt.Sprintf("%v", b)
-// 	}))
-// }
