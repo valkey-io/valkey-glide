@@ -6,7 +6,6 @@ package api
 import "C"
 
 import (
-	"fmt"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
@@ -319,7 +318,7 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 // Helper function to perform the cluster scan.
 func (client *GlideClusterClient) clusterScan(
 	cursor *options.ClusterScanCursor,
-	opts *options.ClusterScanOptions,
+	opts options.ClusterScanOptions,
 ) (*C.struct_CommandResponse, error) {
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
@@ -340,13 +339,9 @@ func (client *GlideClusterClient) clusterScan(
 	c_cursor := C.new_cluster_cursor(cStr)
 	defer C.free(unsafe.Pointer(cStr))
 
-	args := []string{}
-	if opts != nil {
-		var err error
-		args, err = opts.ToArgs()
-		if err != nil {
-			return nil, err
-		}
+	args, err := opts.ToArgs()
+	if err != nil {
+		return nil, err
 	}
 
 	var cArgsPtr *C.uintptr_t = nil
@@ -404,16 +399,14 @@ func (client *GlideClusterClient) clusterScan(
 //
 // Returns:
 //
-//	The ID of the next cursor.
-//	List of keys found for this cursor ID.
+//	The ID of the next cursor and a list of keys found for this cursor ID.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClusterClient) Scan(
 	cursor *options.ClusterScanCursor,
 ) (string, []string, error) {
-	response, err := client.clusterScan(cursor, nil)
+	response, err := client.clusterScan(cursor, *options.NewClusterScanOptions())
 	if err != nil {
-		fmt.Println(err)
 		return DefaultStringResponse, []string{}, err
 	}
 
@@ -443,17 +436,15 @@ func (client *GlideClusterClient) Scan(
 //
 // Returns:
 //
-//	The ID of the next cursor.
-//	List of keys found for this cursor ID.
+//	The ID of the next cursor and a list of keys found for this cursor ID.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClusterClient) ScanWithOptions(
 	cursor *options.ClusterScanCursor,
-	opts *options.ClusterScanOptions,
+	opts options.ClusterScanOptions,
 ) (string, []string, error) {
 	response, err := client.clusterScan(cursor, opts)
 	if err != nil {
-		fmt.Println(err)
 		return DefaultStringResponse, []string{}, err
 	}
 

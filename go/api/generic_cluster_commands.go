@@ -19,5 +19,5 @@ type GenericClusterCommands interface {
 
 	Scan(cursor *options.ClusterScanCursor) (string, []string, error)
 
-	ScanWithOptions(cursor *options.ClusterScanCursor, opts *options.ClusterScanOptions) (string, []string, error)
+	ScanWithOptions(cursor *options.ClusterScanCursor, opts options.ClusterScanOptions) (string, []string, error)
 }

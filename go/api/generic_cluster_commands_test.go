@@ -89,7 +89,7 @@ func ExampleGlideClusterClient_ScanWithOptions_match() {
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, opts)
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
@@ -124,7 +124,7 @@ func ExampleGlideClusterClient_ScanWithOptions_count() {
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, opts)
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
@@ -164,7 +164,7 @@ func ExampleGlideClusterClient_ScanWithOptions_type() {
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, opts)
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}

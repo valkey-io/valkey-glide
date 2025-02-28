@@ -379,7 +379,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, opts)
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
 		assert.NoError(t, err)
 		allKeys = append(allKeys, keys...)
 
@@ -404,7 +404,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	matchedKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, opts)
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
 		assert.NoError(t, err)
 		matchedKeys = append(matchedKeys, keys...)
 
@@ -431,7 +431,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	matchedTypeKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, opts)
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
 		assert.NoError(t, err)
 		matchedTypeKeys = append(matchedTypeKeys, keys...)
 
@@ -480,7 +480,7 @@ func (suite *GlideTestSuite) TestClusterScanWithObjectTypeAndPattern() {
 	allKeys := make([]string, 0, 100)
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, opts)
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
 		assert.NoError(t, err)
 		allKeys = append(allKeys, keys...)
 
@@ -521,7 +521,7 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 		keysOf1 := []string{}
 		keysOf100 := []string{}
 
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, options.NewClusterScanOptions().SetCount(1))
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetCount(1))
 		assert.NoError(t, err)
 		keysOf1 = append(keysOf1, keys...)
 		allKeys = append(allKeys, keysOf1...)
@@ -531,7 +531,7 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 			break
 		}
 
-		nextCursor, keys, err = client.ScanWithOptions(&cursor, options.NewClusterScanOptions().SetCount(100))
+		nextCursor, keys, err = client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetCount(100))
 		assert.NoError(t, err)
 		keysOf100 = append(keysOf100, keys...)
 		allKeys = append(allKeys, keysOf100...)
@@ -575,7 +575,7 @@ func (suite *GlideTestSuite) TestClusterScanWithMatch() {
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, options.NewClusterScanOptions().SetMatch("key-*"))
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetMatch("key-*"))
 		assert.NoError(t, err)
 
 		allKeys = append(allKeys, keys...)
@@ -647,7 +647,7 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 	for !cursor.HasFinished() {
 		nextCursor, keys, err := client.ScanWithOptions(
 			&cursor,
-			options.NewClusterScanOptions().SetType(options.ObjectTypeList),
+			*options.NewClusterScanOptions().SetType(options.ObjectTypeList),
 		)
 		assert.NoError(t, err)
 
