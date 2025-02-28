@@ -320,7 +320,11 @@ func (client *GlideClusterClient) clusterScan(
 	opts *options.ClusterScanOptions,
 ) (*C.struct_CommandResponse, error) {
 	resultChannel := make(chan payload)
-	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
 
 	// TODO: fix and use this instead of creating a whole new cursor
 	// c_cursor := cursor.GetCursor()
@@ -343,7 +347,7 @@ func (client *GlideClusterClient) clusterScan(
 
 	C.request_cluster_scan(
 		client.coreClient,
-		C.uintptr_t(resultChannelPtr),
+		C.uintptr_t(pinnedChannelPtr),
 		c_cursor,
 		C.size_t(len(args)),
 		cArgsPtr,

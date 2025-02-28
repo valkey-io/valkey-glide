@@ -664,7 +664,7 @@ impl ClusterScanCursor {
 
     #[no_mangle]
     pub extern "C" fn get_cursor(&self) -> *const c_char {
-        self.cursor.clone()
+        self.cursor
     }
 }
 
@@ -679,12 +679,29 @@ impl Default for ClusterScanCursor {
 
 impl Drop for ClusterScanCursor {
     fn drop(&mut self) {
-        let c_str = unsafe { CStr::from_ptr(self.cursor.clone()) };
+        let c_str = unsafe { CStr::from_ptr(self.cursor) };
         let temp_str = c_str.to_str().expect("Must be UTF-8");
         glide_core::cluster_scan_container::remove_scan_state_cursor(temp_str.to_string());
     }
 }
 
+/// CGO method which allows the Go client to request a cluster scan command to be executed.
+///
+/// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
+/// `channel` is a pointer to a valid payload buffer which is created in the Go client.
+/// `cursor` is a ClusterScanCursor struct to hold relevant cursor information.
+/// `arg_count` keeps track of how many option arguments are passed in the Go client.
+/// `args` is a pointer to C string representation of the string args passed in Go.
+/// `args_len` is a pointer to the lengths of the C string representation of the string args passed in Go.
+/// `success_callback` is the callback that will be called when a command succeeds.
+/// `failure_callback` is the callback that will be called when a command fails.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be valid until `close_client` is called.
+/// * `channel` must be valid until it is passed in a call to [`free_command_response`].
+/// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 #[no_mangle]
 pub unsafe extern "C" fn request_cluster_scan(
     client_adapter_ptr: *const c_void,
@@ -706,9 +723,7 @@ pub unsafe extern "C" fn request_cluster_scan(
     let temp_str = c_str.to_str().expect("Must be UTF-8");
     let cursor_id = temp_str.to_string();
 
-    let cluster_scan_args: ClusterScanArgs;
-
-    if arg_count > 0 {
+    let cluster_scan_args: ClusterScanArgs = if arg_count > 0 {
         let arg_vec = unsafe {
             convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len)
         };
@@ -759,10 +774,10 @@ pub unsafe extern "C" fn request_cluster_scan(
         if !object_type.is_empty() {
             cluster_scan_args_builder = cluster_scan_args_builder.with_object_type(converted_type);
         }
-        cluster_scan_args = cluster_scan_args_builder.build()
+        cluster_scan_args_builder.build()
     } else {
-        cluster_scan_args = ClusterScanArgs::builder().build();
-    }
+        ClusterScanArgs::builder().build()
+    };
 
     let scan_state_cursor = match get_cluster_scan_cursor(cursor_id) {
         Ok(existing_cursor) => existing_cursor,
