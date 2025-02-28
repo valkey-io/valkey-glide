@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 use glide_core::client::Client as GlideClient;
+use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use glide_core::command_request::SimpleRoutes;
 use glide_core::command_request::{Routes, SlotTypes};
 use glide_core::connection_request;
@@ -14,8 +15,13 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
+use redis::ClusterScanArgs;
+use redis::ObjectType;
+use redis::ScanStateRC;
 use redis::{Cmd, RedisResult, Value};
+use std::ffi::CStr;
 use std::slice::from_raw_parts;
+use std::str;
 use std::{
     ffi::{c_void, CString},
     mem,
@@ -638,4 +644,167 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> SlotAddr {
             SlotTypes::Replica => SlotAddr::ReplicaRequired,
         })
         .expect("Received unexpected slot id type")
+}
+
+// TODO: implement safety checking with all the string conversions
+#[repr(C)]
+pub struct ClusterScanCursor {
+    cursor: *mut c_char,
+}
+
+impl ClusterScanCursor {
+    #[no_mangle]
+    pub extern "C" fn new_cluster_cursor(new_cursor: *mut c_char) -> Self {
+        if !new_cursor.is_null() {
+            ClusterScanCursor { cursor: new_cursor }
+        } else {
+            ClusterScanCursor::default()
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn get_cursor(&self) -> *const c_char {
+        self.cursor.clone()
+    }
+}
+
+impl Default for ClusterScanCursor {
+    fn default() -> Self {
+        let default_value = CString::new("0").unwrap();
+        ClusterScanCursor {
+            cursor: default_value.into_raw(),
+        }
+    }
+}
+
+impl Drop for ClusterScanCursor {
+    fn drop(&mut self) {
+        let c_str = unsafe { CStr::from_ptr(self.cursor.clone()) };
+        let temp_str = c_str.to_str().expect("Must be UTF-8");
+        glide_core::cluster_scan_container::remove_scan_state_cursor(temp_str.to_string());
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn request_cluster_scan(
+    client_adapter_ptr: *const c_void,
+    channel: usize,
+    cursor: ClusterScanCursor,
+    arg_count: c_ulong,
+    args: *const usize,
+    args_len: *const c_ulong,
+) {
+    let client_adapter =
+        unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
+    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before
+    // all operations have completed.
+    let ptr_address = client_adapter_ptr as usize;
+
+    let mut client_clone = client_adapter.client.clone();
+
+    let c_str = unsafe { CStr::from_ptr(cursor.get_cursor()) };
+    let temp_str = c_str.to_str().expect("Must be UTF-8");
+    let cursor_id = temp_str.to_string();
+
+    let cluster_scan_args: ClusterScanArgs;
+
+    if arg_count > 0 {
+        let arg_vec = unsafe {
+            convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len)
+        };
+
+        let mut pattern: &[u8] = &[];
+        let mut object_type: &[u8] = &[];
+        let mut count: &[u8] = &[];
+
+        for i in 0..arg_count as usize {
+            match arg_vec[i] {
+                b"MATCH" => pattern = arg_vec[i + 1],
+                b"TYPE" => object_type = arg_vec[i + 1],
+                b"COUNT" => count = arg_vec[i + 1],
+                _ => {}
+            }
+        }
+
+        // Convert back to proper types
+        let converted_count = match str::from_utf8(count) {
+            Ok(v) => {
+                if !count.is_empty() {
+                    str::parse::<u32>(v).unwrap()
+                } else {
+                    10 // default count value
+                }
+            }
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+
+        let converted_pattern = match str::from_utf8(pattern) {
+            Ok(v) => v,
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+
+        let converted_type = match str::from_utf8(object_type) {
+            Ok(v) => ObjectType::from(v.to_string()),
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+
+        let mut cluster_scan_args_builder = ClusterScanArgs::builder();
+        if !count.is_empty() {
+            cluster_scan_args_builder = cluster_scan_args_builder.with_count(converted_count);
+        }
+        if !pattern.is_empty() {
+            cluster_scan_args_builder =
+                cluster_scan_args_builder.with_match_pattern(converted_pattern);
+        }
+        if !object_type.is_empty() {
+            cluster_scan_args_builder = cluster_scan_args_builder.with_object_type(converted_type);
+        }
+        cluster_scan_args = cluster_scan_args_builder.build()
+    } else {
+        cluster_scan_args = ClusterScanArgs::builder().build();
+    }
+
+    let scan_state_cursor = match get_cluster_scan_cursor(cursor_id) {
+        Ok(existing_cursor) => existing_cursor,
+        Err(_error) => ScanStateRC::new(),
+    };
+
+    client_adapter.runtime.spawn(async move {
+        let result = client_clone
+            .cluster_scan(&scan_state_cursor, cluster_scan_args)
+            .await;
+        let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
+        let value = match result {
+            Ok(value) => value,
+            Err(err) => {
+                let message = errors::error_message(&err);
+                let error_type = errors::error_type(&err);
+
+                let c_err_str = CString::into_raw(
+                    CString::new(message).expect("Couldn't convert error message to CString"),
+                );
+                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
+                return;
+            }
+        };
+
+        let result: RedisResult<CommandResponse> = valkey_value_to_command_response(value);
+
+        unsafe {
+            match result {
+                Ok(message) => {
+                    (client_adapter.success_callback)(channel, Box::into_raw(Box::new(message)))
+                }
+                Err(err) => {
+                    let message = errors::error_message(&err);
+                    let error_type = errors::error_type(&err);
+
+                    let c_err_str = CString::into_raw(
+                        CString::new(message).expect("Couldn't convert error message to CString"),
+                    );
+                    (client_adapter.failure_callback)(channel, c_err_str, error_type);
+                }
+            };
+        }
+    });
 }

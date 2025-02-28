@@ -6,6 +6,9 @@ package api
 import "C"
 
 import (
+	"fmt"
+	"unsafe"
+
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -310,4 +313,60 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 		return createEmptyClusterValue[string](), err
 	}
 	return createClusterSingleValue[string](data), nil
+}
+
+func (client *GlideClusterClient) clusterScan(
+	cursor *options.ClusterScanCursor,
+	opts *options.ClusterScanOptions,
+) (*C.struct_CommandResponse, error) {
+	resultChannel := make(chan payload)
+	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
+
+	// TODO: fix and use this instead of creating a whole new cursor
+	// c_cursor := cursor.GetCursor()
+	cStr := C.CString(cursor.GetCursor())
+	c_cursor := C.new_cluster_cursor(cStr)
+	defer C.free(unsafe.Pointer(cStr))
+
+	args, err := opts.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+
+	var cArgsPtr *C.uintptr_t = nil
+	var argLengthsPtr *C.ulong = nil
+	if len(args) > 0 {
+		cArgs, argLengths := toCStrings(args)
+		cArgsPtr = &cArgs[0]
+		argLengthsPtr = &argLengths[0]
+	}
+
+	C.request_cluster_scan(
+		client.coreClient,
+		C.uintptr_t(resultChannelPtr),
+		c_cursor,
+		C.size_t(len(args)),
+		cArgsPtr,
+		argLengthsPtr,
+	)
+
+	payload := <-resultChannel
+	if payload.error != nil {
+		return nil, payload.error
+	}
+
+	return payload.value, nil
+}
+
+func (client *GlideClusterClient) ScanWithOptions(
+	cursor *options.ClusterScanCursor,
+	opts *options.ClusterScanOptions,
+) (string, []string, error) {
+	response, err := client.clusterScan(cursor, opts)
+	if err != nil {
+		fmt.Println(err)
+		return DefaultStringResponse, []string{}, err
+	}
+
+	return handleScanResponse(response)
 }
