@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -320,12 +321,20 @@ func (client *GlideClusterClient) clusterScan(
 	cursor *options.ClusterScanCursor,
 	opts *options.ClusterScanOptions,
 ) (*C.struct_CommandResponse, error) {
-	resultChannel := make(chan payload)
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
 
 	pinner := pinner{}
 	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
 	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "Cluster Scan failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
 
 	cStr := C.CString(cursor.GetCursor())
 	c_cursor := C.new_cluster_cursor(cStr)
@@ -356,8 +365,16 @@ func (client *GlideClusterClient) clusterScan(
 		cArgsPtr,
 		argLengthsPtr,
 	)
+	client.mu.Unlock()
 
 	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
 	if payload.error != nil {
 		return nil, payload.error
 	}
