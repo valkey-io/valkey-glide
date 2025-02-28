@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 func ExampleGlideClusterClient_CustomCommand() {
@@ -27,4 +28,152 @@ func ExampleGlideClusterClient_CustomCommandWithRoute() {
 	fmt.Println(result.SingleValue().(string))
 
 	// Output: PONG
+}
+
+func ExampleGlideClusterClient_Scan() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	keysToSet := map[string]string{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": "value3",
+	}
+
+	_, err := client.MSet(keysToSet)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	cursor := *options.NewClusterScanCursor()
+	allKeys := []string{}
+
+	for !cursor.HasFinished() {
+		nextCursor, keys, err := client.Scan(&cursor)
+		if err != nil {
+			fmt.Println("Glide example failed with an error: ", err)
+		}
+		allKeys = append(allKeys, keys...)
+
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
+	}
+
+	// Elements will contain values [key1 key2 key3] but because order
+	// can vary, we just check the length
+	fmt.Println(len(allKeys))
+
+	// Output: 3
+}
+
+func ExampleGlideClusterClient_ScanWithOptions_match() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	keysToSet := map[string]string{
+		"key-1":         "value1",
+		"key-2":         "value2",
+		"key3":          "value3",
+		"nonPatternKey": "value4",
+	}
+
+	_, err := client.MSet(keysToSet)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	_, err = client.SAdd("someKey", []string{"value"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	cursor := *options.NewClusterScanCursor()
+	opts := options.NewClusterScanOptions().SetMatch("key-*")
+	allKeys := []string{}
+
+	for !cursor.HasFinished() {
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, opts)
+		if err != nil {
+			fmt.Println("Glide example failed with an error: ", err)
+		}
+		allKeys = append(allKeys, keys...)
+
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
+	}
+
+	// Elements will contain values [key-1 key-2] but because order
+	// can vary, we just check the length
+	fmt.Println(len(allKeys))
+
+	// Output: 2
+}
+
+func ExampleGlideClusterClient_ScanWithOptions_count() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	keysToSet := map[string]string{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": "value3",
+	}
+
+	_, err := client.MSet(keysToSet)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	cursor := *options.NewClusterScanCursor()
+	opts := options.NewClusterScanOptions().SetCount(10)
+	allKeys := []string{}
+
+	for !cursor.HasFinished() {
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, opts)
+		if err != nil {
+			fmt.Println("Glide example failed with an error: ", err)
+		}
+		allKeys = append(allKeys, keys...)
+
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
+	}
+
+	// Elements will contain values [key1 key2 key3] but because order
+	// can vary, we just check the length
+	fmt.Println(len(allKeys))
+
+	// Output: 3
+}
+
+func ExampleGlideClusterClient_ScanWithOptions_type() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	keysToSet := map[string]string{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": "value3",
+	}
+
+	_, err := client.MSet(keysToSet)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	_, err = client.SAdd("someKey", []string{"value"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	cursor := *options.NewClusterScanCursor()
+	opts := options.NewClusterScanOptions().SetType(options.ObjectTypeSet)
+	allKeys := []string{}
+
+	for !cursor.HasFinished() {
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, opts)
+		if err != nil {
+			fmt.Println("Glide example failed with an error: ", err)
+		}
+		allKeys = append(allKeys, keys...)
+
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
+	}
+
+	fmt.Println(allKeys)
+
+	// Output: [someKey]
 }

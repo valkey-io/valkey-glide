@@ -315,6 +315,7 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 	return createClusterSingleValue[string](data), nil
 }
 
+// Helper function to perform the cluster scan.
 func (client *GlideClusterClient) clusterScan(
 	cursor *options.ClusterScanCursor,
 	opts *options.ClusterScanOptions,
@@ -326,15 +327,17 @@ func (client *GlideClusterClient) clusterScan(
 	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
 	defer pinner.Unpin()
 
-	// TODO: fix and use this instead of creating a whole new cursor
-	// c_cursor := cursor.GetCursor()
 	cStr := C.CString(cursor.GetCursor())
 	c_cursor := C.new_cluster_cursor(cStr)
 	defer C.free(unsafe.Pointer(cStr))
 
-	args, err := opts.ToArgs()
-	if err != nil {
-		return nil, err
+	args := []string{}
+	if opts != nil {
+		var err error
+		args, err = opts.ToArgs()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var cArgsPtr *C.uintptr_t = nil
@@ -362,6 +365,71 @@ func (client *GlideClusterClient) clusterScan(
 	return payload.value, nil
 }
 
+// Incrementally iterates over the keys in the cluster.
+// The method returns a list containing the next cursor and a list of keys.
+//
+// This command is similar to the SCAN command but is designed to work in a cluster environment.
+// For each iteration, a new cursor object should be used to continue the scan.
+// Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
+// For more information about the Cluster Scan implementation, see
+// https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan.
+//
+// Like the SCAN command, the method can be used to iterate over the keys in the database,
+// returning all keys the database has from when the scan started until the scan ends.
+// The same key can be returned in multiple scan iterations.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	cursor - The [ClusterScanCursor] object that wraps the scan state.
+//	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
+//
+// Returns:
+//
+//	The ID of the next cursor.
+//	List of keys found for this cursor ID.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClusterClient) Scan(
+	cursor *options.ClusterScanCursor,
+) (string, []string, error) {
+	response, err := client.clusterScan(cursor, nil)
+	if err != nil {
+		fmt.Println(err)
+		return DefaultStringResponse, []string{}, err
+	}
+
+	return handleScanResponse(response)
+}
+
+// Incrementally iterates over the keys in the cluster.
+// The method returns a list containing the next cursor and a list of keys.
+//
+// This command is similar to the SCAN command but is designed to work in a cluster environment.
+// For each iteration, a new cursor object should be used to continue the scan.
+// Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
+// For more information about the Cluster Scan implementation, see
+// https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan.
+//
+// Like the SCAN command, the method can be used to iterate over the keys in the database,
+// returning all keys the database has from when the scan started until the scan ends.
+// The same key can be returned in multiple scan iterations.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	cursor - The [ClusterScanCursor] object that wraps the scan state.
+//	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
+//	opts - The scan options. Can specify MATCH, COUNT, and TYPE configurations.
+//
+// Returns:
+//
+//	The ID of the next cursor.
+//	List of keys found for this cursor ID.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClusterClient) ScanWithOptions(
 	cursor *options.ClusterScanCursor,
 	opts *options.ClusterScanOptions,

@@ -314,7 +314,67 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 	_, err = client.MSet(keysToSet)
 	assert.NoError(t, err)
 
-	cursor := *options.NewClusterScanCursor("0")
+	cursor := *options.NewClusterScanCursor()
+	allKeys := make([]string, 0, len(keysToSet))
+
+	for !cursor.HasFinished() {
+		nextCursor, keys, err := client.Scan(&cursor)
+		assert.NoError(t, err)
+		allKeys = append(allKeys, keys...)
+
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
+	}
+
+	assert.ElementsMatch(t, allKeys, []string{"key1", "key2", "key3"})
+
+	// Ensure clean start
+	_, err = client.CustomCommand([]string{"FLUSHALL"})
+	assert.NoError(t, err)
+
+	expectedKeys := make([]string, 0, 100)
+	// Test bigger example
+	for i := 0; i < 100; i++ {
+		key := uuid.NewString()
+
+		expectedKeys = append(expectedKeys, key)
+
+		_, err := client.Set(key, "value")
+		assert.NoError(t, err)
+	}
+
+	cursor = *options.NewClusterScanCursor()
+	allKeys = make([]string, 0, 100)
+
+	for !cursor.HasFinished() {
+		nextCursor, keys, err := client.Scan(&cursor)
+		assert.NoError(t, err)
+		allKeys = append(allKeys, keys...)
+
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
+	}
+
+	assert.ElementsMatch(t, allKeys, expectedKeys)
+}
+
+func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Ensure clean start
+	_, err := client.CustomCommand([]string{"FLUSHALL"})
+	assert.NoError(t, err)
+
+	// Iterate over all keys in the cluster
+	keysToSet := map[string]string{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": "value3",
+	}
+
+	_, err = client.MSet(keysToSet)
+	assert.NoError(t, err)
+
+	cursor := *options.NewClusterScanCursor()
 	opts := options.NewClusterScanOptions().SetCount(10)
 	allKeys := []string{}
 
@@ -323,7 +383,7 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 		assert.NoError(t, err)
 		allKeys = append(allKeys, keys...)
 
-		cursor = *options.NewClusterScanCursor(nextCursor)
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, allKeys, []string{"key1", "key2", "key3"})
@@ -339,7 +399,7 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 	_, err = client.MSet(keysToSet)
 	assert.NoError(t, err)
 
-	cursor = *options.NewClusterScanCursor("0")
+	cursor = *options.NewClusterScanCursor()
 	opts = options.NewClusterScanOptions().SetCount(10).SetMatch("*key*")
 	matchedKeys := []string{}
 
@@ -348,7 +408,7 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 		assert.NoError(t, err)
 		matchedKeys = append(matchedKeys, keys...)
 
-		cursor = *options.NewClusterScanCursor(nextCursor)
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, matchedKeys, []string{"key1", "key2", "key3", "notMykey"})
@@ -366,7 +426,7 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 	_, err = client.SAdd("thisIsASet", []string{"someValue"})
 	assert.NoError(t, err)
 
-	cursor = *options.NewClusterScanCursor("0")
+	cursor = *options.NewClusterScanCursor()
 	opts = options.NewClusterScanOptions().SetType(options.ObjectTypeSet)
 	matchedTypeKeys := []string{}
 
@@ -375,7 +435,7 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 		assert.NoError(t, err)
 		matchedTypeKeys = append(matchedTypeKeys, keys...)
 
-		cursor = *options.NewClusterScanCursor(nextCursor)
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, matchedTypeKeys, []string{"thisIsASet"})
@@ -392,13 +452,13 @@ func (suite *GlideTestSuite) TestClusterScanWithObjectTypeAndPattern() {
 	_, err := client.CustomCommand([]string{"FLUSHALL"})
 	assert.NoError(t, err)
 
-	expectedKeys := []string{}
-	unexpectedTypeKeys := []string{}
-	unexpectedPatternKeys := []string{}
+	expectedKeys := make([]string, 0, 100)
+	unexpectedTypeKeys := make([]string, 0, 100)
+	unexpectedPatternKeys := make([]string, 0, 100)
 
 	for i := 0; i < 100; i++ {
-		key := "{key}-" + uuid.NewString()
-		unexpectedTypeKey := "{key}-" + uuid.NewString()
+		key := "key-" + uuid.NewString()
+		unexpectedTypeKey := "key-" + uuid.NewString()
 		unexpectedPatternKey := uuid.NewString()
 
 		expectedKeys = append(expectedKeys, key)
@@ -415,16 +475,16 @@ func (suite *GlideTestSuite) TestClusterScanWithObjectTypeAndPattern() {
 		assert.NoError(t, err)
 	}
 
-	cursor := *options.NewClusterScanCursor("0")
-	opts := options.NewClusterScanOptions().SetMatch("{key}*").SetType(options.ObjectTypeString)
-	allKeys := []string{}
+	cursor := *options.NewClusterScanCursor()
+	opts := options.NewClusterScanOptions().SetMatch("key-*").SetType(options.ObjectTypeString)
+	allKeys := make([]string, 0, 100)
 
 	for !cursor.HasFinished() {
 		nextCursor, keys, err := client.ScanWithOptions(&cursor, opts)
 		assert.NoError(t, err)
 		allKeys = append(allKeys, keys...)
 
-		cursor = *options.NewClusterScanCursor(nextCursor)
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, allKeys, expectedKeys)
@@ -444,27 +504,28 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 	_, err := client.CustomCommand([]string{"FLUSHALL"})
 	assert.NoError(t, err)
 
-	expectedKeys := []string{}
+	expectedKeys := make([]string, 0, 100)
 
 	for i := 0; i < 100; i++ {
-		key := "{key}-" + uuid.NewString()
+		key := "key-" + uuid.NewString()
 		expectedKeys = append(expectedKeys, key)
 		_, err := client.Set(key, "value")
 		assert.NoError(t, err)
 	}
 
-	cursor := *options.NewClusterScanCursor("0")
-	keysOf1 := []string{}
-	keysOf100 := []string{}
-	allKeys := []string{}
+	cursor := *options.NewClusterScanCursor()
+	allKeys := make([]string, 0, 100)
 	successfulScans := 0
 
 	for !cursor.HasFinished() {
+		keysOf1 := []string{}
+		keysOf100 := []string{}
+
 		nextCursor, keys, err := client.ScanWithOptions(&cursor, options.NewClusterScanOptions().SetCount(1))
 		assert.NoError(t, err)
 		keysOf1 = append(keysOf1, keys...)
 		allKeys = append(allKeys, keysOf1...)
-		cursor = *options.NewClusterScanCursor(nextCursor)
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 
 		if cursor.HasFinished() {
 			break
@@ -474,7 +535,7 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 		assert.NoError(t, err)
 		keysOf100 = append(keysOf100, keys...)
 		allKeys = append(allKeys, keysOf100...)
-		cursor = *options.NewClusterScanCursor(nextCursor)
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 
 		if len(keysOf1) < len(keysOf100) {
 			successfulScans += 1
@@ -497,7 +558,7 @@ func (suite *GlideTestSuite) TestClusterScanWithMatch() {
 	unexpectedKeys := []string{}
 
 	for i := 0; i < 10; i++ {
-		key := "{key}-" + uuid.NewString()
+		key := "key-" + uuid.NewString()
 		unexpectedKey := uuid.NewString()
 
 		expectedKeys = append(expectedKeys, key)
@@ -510,15 +571,15 @@ func (suite *GlideTestSuite) TestClusterScanWithMatch() {
 		assert.NoError(t, err)
 	}
 
-	cursor := *options.NewClusterScanCursor("0")
+	cursor := *options.NewClusterScanCursor()
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, options.NewClusterScanOptions().SetMatch("{key}-*"))
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, options.NewClusterScanOptions().SetMatch("key-*"))
 		assert.NoError(t, err)
 
 		allKeys = append(allKeys, keys...)
-		cursor = *options.NewClusterScanCursor(nextCursor)
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, allKeys, expectedKeys)
@@ -543,7 +604,7 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 	streamKeys := []string{}
 
 	for i := 0; i < 10; i++ {
-		key := "{key}-" + uuid.NewString()
+		key := "key-" + uuid.NewString()
 		stringKeys = append(stringKeys, key)
 
 		setKey := "{setKey}-" + uuid.NewString()
@@ -580,7 +641,7 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 		assert.NoError(t, err)
 	}
 
-	cursor := *options.NewClusterScanCursor("0")
+	cursor := *options.NewClusterScanCursor()
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
@@ -591,7 +652,7 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 		assert.NoError(t, err)
 
 		allKeys = append(allKeys, keys...)
-		cursor = *options.NewClusterScanCursor(nextCursor)
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, allKeys, listKeys)

@@ -11,14 +11,21 @@ import (
 
 var FINISHED_SCAN_CURSOR = "finished"
 
-// TODO: Clean this up into a better file (currently has a problem where golang
-// treates the C type differently)
+// This struct is used to keep track of the cursor of a cluster scan.
 type ClusterScanCursor struct {
 	cursor string
 }
 
-// Create a new ClusterScanCursor
-func NewClusterScanCursor(new_cursor string) *ClusterScanCursor {
+// Create a new ClusterScanCursor with a default value
+func NewClusterScanCursor() *ClusterScanCursor {
+	cStr := C.CString("0")
+	C.new_cluster_cursor(cStr)
+	defer C.free(unsafe.Pointer(cStr))
+	return &ClusterScanCursor{cursor: "0"}
+}
+
+// Create a new ClusterScanCursor with a specified value
+func NewClusterScanCursorWithId(new_cursor string) *ClusterScanCursor {
 	cStr := C.CString(new_cursor)
 	C.new_cluster_cursor(cStr)
 	defer C.free(unsafe.Pointer(cStr))
