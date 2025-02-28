@@ -649,12 +649,12 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> SlotAddr {
 // This struct is used to keep track of the cursor of a cluster scan.
 #[repr(C)]
 pub struct ClusterScanCursor {
-    cursor: *mut c_char,
+    cursor: *const c_char,
 }
 
 impl ClusterScanCursor {
     #[no_mangle]
-    pub extern "C" fn new_cluster_cursor(new_cursor: *mut c_char) -> Self {
+    pub extern "C" fn new_cluster_cursor(new_cursor: *const c_char) -> Self {
         if !new_cursor.is_null() {
             ClusterScanCursor { cursor: new_cursor }
         } else {
