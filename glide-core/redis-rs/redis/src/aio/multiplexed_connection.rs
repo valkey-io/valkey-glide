@@ -418,6 +418,7 @@ pub struct MultiplexedConnection {
     protocol: ProtocolVersion,
     push_manager: PushManager,
     availability_zone: Option<String>,
+    username: Option<String>,
     password: Option<String>,
 }
 
@@ -479,6 +480,7 @@ impl MultiplexedConnection {
             .with_response_timeout(response_timeout)
             .with_push_manager(pm)
             .with_protocol(connection_info.redis.protocol)
+            .with_username(connection_info.redis.username.clone())
             .with_password(connection_info.redis.password.clone())
             .with_availability_zone(None)
             .build()
@@ -596,6 +598,13 @@ impl MultiplexedConnection {
         Ok(Value::Okay)
     }
 
+    /// Get the username used to authenticate with the server.
+    /// If `None` is provided, the password will be removed.
+    /// Get the username used to authenticate with the server.
+    pub fn get_username(&self) -> Option<String> {
+        self.username.clone()
+    }
+
     /// Creates a new `MultiplexedConnectionBuilder` for constructing a `MultiplexedConnection`.
     pub(crate) fn builder(pipeline: Pipeline<Vec<u8>>) -> MultiplexedConnectionBuilder {
         MultiplexedConnectionBuilder::new(pipeline)
@@ -609,6 +618,7 @@ pub struct MultiplexedConnectionBuilder {
     response_timeout: Option<Duration>,
     push_manager: Option<PushManager>,
     protocol: Option<ProtocolVersion>,
+    username: Option<String>,
     password: Option<String>,
     /// Represents the node's availability zone
     availability_zone: Option<String>,
@@ -623,6 +633,7 @@ impl MultiplexedConnectionBuilder {
             response_timeout: None,
             push_manager: None,
             protocol: None,
+            username: None,
             password: None,
             availability_zone: None,
         }
@@ -652,6 +663,12 @@ impl MultiplexedConnectionBuilder {
         self
     }
 
+    /// Sets the username for the `MultiplexedConnectionBuilder`.
+    pub fn with_username(mut self, username: Option<String>) -> Self {
+        self.username = username;
+        self
+    }
+
     /// Sets the password for the `MultiplexedConnectionBuilder`.
     pub fn with_password(mut self, password: Option<String>) -> Self {
         self.password = password;
@@ -672,6 +689,7 @@ impl MultiplexedConnectionBuilder {
             .unwrap_or(DEFAULT_CONNECTION_ATTEMPT_TIMEOUT);
         let push_manager = self.push_manager.unwrap_or_default();
         let protocol = self.protocol.unwrap_or_default();
+        let username = self.username;
         let password = self.password;
 
         let con = MultiplexedConnection {
@@ -680,6 +698,7 @@ impl MultiplexedConnectionBuilder {
             response_timeout,
             push_manager,
             protocol,
+            username,
             password,
             availability_zone: self.availability_zone,
         };
