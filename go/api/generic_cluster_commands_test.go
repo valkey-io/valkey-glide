@@ -105,6 +105,46 @@ func ExampleGlideClusterClient_ScanWithOptions_match() {
 	// Output: 2
 }
 
+func ExampleGlideClusterClient_ScanWithOptions_matchNonUTF8() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	keysToSet := map[string]string{
+		"key\xc0\xc1-1": "value1",
+		"key-2":         "value2",
+		"key\xf9\xc1-3": "value3",
+	}
+
+	_, err := client.MSet(keysToSet)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	_, err = client.SAdd("someKey", []string{"value"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	cursor := *options.NewClusterScanCursor()
+	opts := options.NewClusterScanOptions().SetMatch("key\xc0\xc1-*")
+	allKeys := []string{}
+
+	for !cursor.HasFinished() {
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
+		if err != nil {
+			fmt.Println("Glide example failed with an error: ", err)
+		}
+		allKeys = append(allKeys, keys...)
+
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
+	}
+
+	// Elements will contain value [key\xc0\xc1-1] but since it is
+	// an invalid utf8 character, we just check the length
+	fmt.Println(len(allKeys))
+
+	// Output: 1
+}
+
 func ExampleGlideClusterClient_ScanWithOptions_count() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 

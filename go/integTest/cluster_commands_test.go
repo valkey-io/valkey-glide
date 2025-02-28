@@ -444,6 +444,41 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	assert.NotContains(t, matchedTypeKeys, "key3")
 }
 
+func (suite *GlideTestSuite) TestBasicClusterScanWithInvalidUTF8Pattern() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Ensure clean start
+	_, err := client.CustomCommand([]string{"FLUSHALL"})
+	assert.NoError(t, err)
+
+	// Iterate over all keys in the cluster
+	keysToSet := map[string]string{
+		"key\xc0\xc1-1": "value1",
+		"key-2":         "value2",
+		"key\xf9\xc1-3": "value3",
+		"someKey":       "value4",
+		"\xc0\xc1key-5": "value5",
+	}
+
+	_, err = client.MSet(keysToSet)
+	assert.NoError(t, err)
+
+	cursor := *options.NewClusterScanCursor()
+	opts := options.NewClusterScanOptions().SetMatch("key\xc0\xc1-*")
+	allKeys := []string{}
+
+	for !cursor.HasFinished() {
+		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
+		assert.NoError(t, err)
+		allKeys = append(allKeys, keys...)
+
+		cursor = *options.NewClusterScanCursorWithId(nextCursor)
+	}
+
+	assert.ElementsMatch(t, allKeys, []string{"key\xc0\xc1-1"})
+}
+
 func (suite *GlideTestSuite) TestClusterScanWithObjectTypeAndPattern() {
 	client := suite.defaultClusterClient()
 	t := suite.T()

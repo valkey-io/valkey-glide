@@ -753,11 +753,6 @@ pub unsafe extern "C" fn request_cluster_scan(
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
         };
 
-        let converted_pattern = match str::from_utf8(pattern) {
-            Ok(v) => v,
-            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-        };
-
         let converted_type = match str::from_utf8(object_type) {
             Ok(v) => ObjectType::from(v.to_string()),
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
@@ -768,8 +763,7 @@ pub unsafe extern "C" fn request_cluster_scan(
             cluster_scan_args_builder = cluster_scan_args_builder.with_count(converted_count);
         }
         if !pattern.is_empty() {
-            cluster_scan_args_builder =
-                cluster_scan_args_builder.with_match_pattern(converted_pattern);
+            cluster_scan_args_builder = cluster_scan_args_builder.with_match_pattern(pattern);
         }
         if !object_type.is_empty() {
             cluster_scan_args_builder = cluster_scan_args_builder.with_object_type(converted_type);
