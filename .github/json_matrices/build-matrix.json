@@ -2,6 +2,7 @@
     {
         "OS": "ubuntu",
         "NAMED_OS": "linux",
+        "OS_VERSION": "ubuntu-latest",
         "RUNNER": "ubuntu-latest",
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-gnu",
@@ -12,16 +13,17 @@
     {
         "OS": "ubuntu",
         "NAMED_OS": "linux",
+        "OS_VERSION": "ubuntu-20.04",
         "RUNNER": "ubuntu-20.04",
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-gnu",
         "PACKAGE_MANAGERS": ["pkg_go_dev"],
-        "run": "always",
         "languages": ["go"]
     },
     {
         "OS": "ubuntu",
         "NAMED_OS": "linux",
+        "OS_VERSION": "ubuntu-self-hosted",
         "RUNNER": ["self-hosted", "Linux", "ARM64", "ephemeral"],
         "ARCH": "arm64",
         "TARGET": "aarch64-unknown-linux-gnu",
@@ -31,6 +33,7 @@
     {
         "OS": "macos",
         "NAMED_OS": "darwin",
+        "OS_VERSION": "macos-14",
         "RUNNER": "macos-14",
         "ARCH": "arm64",
         "TARGET": "aarch64-apple-darwin",
@@ -40,6 +43,7 @@
     {
         "OS": "ubuntu",
         "NAMED_OS": "linux",
+        "OS_VERSION": "ubuntu-self-hosted",
         "ARCH": "arm64",
         "TARGET": "aarch64-unknown-linux-musl",
         "RUNNER": ["self-hosted", "Linux", "ARM64", "ephemeral"],
@@ -51,6 +55,7 @@
     {
         "OS": "ubuntu",
         "NAMED_OS": "linux",
+        "OS_VERSION": "lts-alpine",
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-musl",
         "RUNNER": "ubuntu-latest",
@@ -62,6 +67,7 @@
     {
         "OS": "amazon-linux",
         "NAMED_OS": "linux",
+        "OS_VERSION": "amazonlinux:latest",
         "RUNNER": "ubuntu-latest",
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-gnu",

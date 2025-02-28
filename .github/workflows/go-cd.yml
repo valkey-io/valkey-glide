@@ -105,6 +105,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  os-version: ${{ matrix.host.OS_VERSION }}
             - name: Build Go client
               working-directory: go
               run: |
@@ -193,6 +194,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: "8.0"
+                  os-version: ${{ matrix.host.OS_VERSION }}
             - name: Start standalone Valkey server
               working-directory: utils
               id: start-server

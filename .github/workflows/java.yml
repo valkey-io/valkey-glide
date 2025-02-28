@@ -99,6 +99,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+                  os-version: ${{ matrix.host.OS_VERSION }}
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -180,6 +181,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+                  os-version: ${{ matrix.host.OS_VERSION }}
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
