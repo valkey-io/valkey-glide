@@ -646,7 +646,7 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> SlotAddr {
         .expect("Received unexpected slot id type")
 }
 
-// TODO: implement safety checking with all the string conversions
+// This struct is used to keep track of the cursor of a cluster scan.
 #[repr(C)]
 pub struct ClusterScanCursor {
     cursor: *mut c_char,
