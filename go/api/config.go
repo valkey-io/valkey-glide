@@ -99,7 +99,7 @@ type baseClientConfiguration struct {
 	clientAZ       string
 }
 
-func (config *baseClientConfiguration) toProtobuf() *protobuf.ConnectionRequest {
+func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
 	request := protobuf.ConnectionRequest{}
 	for _, address := range config.addresses {
 		request.Addresses = append(request.Addresses, address.toProtobuf())
@@ -131,12 +131,11 @@ func (config *baseClientConfiguration) toProtobuf() *protobuf.ConnectionRequest 
 	if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
 		request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
 		if config.clientAZ == "" {
-			panic(
-				errors.New("client AZ must be set when using AZ affinity or AZ affinity with replicas and primary"))
+			return nil, errors.New("client AZ must be set when using AZ affinity or AZ affinity with replicas and primary")
 		}
 	}
 
-	return &request
+	return &request, nil
 }
 
 // BackoffStrategy represents the strategy used to determine how and when to reconnect, in case of connection failures. The
@@ -186,7 +185,10 @@ func NewGlideClientConfiguration() *GlideClientConfiguration {
 }
 
 func (config *GlideClientConfiguration) toProtobuf() *protobuf.ConnectionRequest {
-	request := config.baseClientConfiguration.toProtobuf()
+	request, err := config.baseClientConfiguration.toProtobuf()
+	if err != nil {
+		return nil
+	}
 	request.ClusterModeEnabled = false
 	if config.reconnectStrategy != nil {
 		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
@@ -288,7 +290,10 @@ func NewGlideClusterClientConfiguration() *GlideClusterClientConfiguration {
 }
 
 func (config *GlideClusterClientConfiguration) toProtobuf() *protobuf.ConnectionRequest {
-	request := config.baseClientConfiguration.toProtobuf()
+	request, err := config.baseClientConfiguration.toProtobuf()
+	if err != nil {
+		return nil
+	}
 	request.ClusterModeEnabled = true
 	return request
 }
