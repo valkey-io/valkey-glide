@@ -534,9 +534,11 @@ impl Client {
                             _ => {}
                         }
                     }
-                    ClientWrapper::Standalone(_) => {
-                        // Standalone mode doesn't support username
-                    }
+                    ClientWrapper::Standalone(ref mut client) => {
+                        if let Ok(Some(username)) = client.get_username().await {
+                            cmd.arg(username);
+                        }
+                    }                    
                 }
                 cmd.arg(password);
                 self.send_command(&cmd, Some(routing)).await
