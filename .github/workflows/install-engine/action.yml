@@ -37,7 +37,7 @@ runs:
           with:
               path: |
                   ~/valkey
-              key: valkey-${{ inputs.engine-version }}-${{ inputs.target }}-${{ os-version }}
+              key: valkey-${{ inputs.engine-version }}-${{ inputs.target }}-${{ inputs.os-version }}
 
         - name: Prepare Valkey sources
           if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
