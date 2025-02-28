@@ -30,10 +30,12 @@ func NewClusterScanCursorWithId(newCursor string) *ClusterScanCursor {
 	return &ClusterScanCursor{cursor: newCursor}
 }
 
+// Returns the cursor ID associated with this cursor object.
 func (clusterScanCursor *ClusterScanCursor) GetCursor() string {
 	return clusterScanCursor.cursor
 }
 
+// Checks to see if the cursor ID indicates the scan has finished.
 func (clusterScanCursor *ClusterScanCursor) HasFinished() bool {
 	return clusterScanCursor.cursor == FINISHED_SCAN_CURSOR
 }
