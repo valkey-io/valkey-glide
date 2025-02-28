@@ -4571,7 +4571,8 @@ func (suite *GlideTestSuite) TestXRead() {
 		// but we wrap the test with timeout to avoid test failing or stuck forever
 		finished := make(chan bool)
 		go func() {
-			testClient.XReadWithOptions(map[string]string{key1: "0-1"}, *options.NewXReadOptions().SetBlock(0))
+			_, err := testClient.XReadWithOptions(map[string]string{key1: "0-1"}, *options.NewXReadOptions().SetBlock(0))
+			assert.IsType(suite.T(), &errors.ClosingError{}, err)
 			finished <- true
 		}()
 		select {
@@ -4580,6 +4581,7 @@ func (suite *GlideTestSuite) TestXRead() {
 		case <-time.After(3 * time.Second):
 		}
 		testClient.Close()
+		<-finished
 	})
 }
 
