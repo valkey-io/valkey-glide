@@ -653,8 +653,14 @@ pub struct ClusterScanCursor {
 }
 
 impl ClusterScanCursor {
+    /// Creates a new Cluster Scan Cursor.
+    ///
+    /// # Safety
+    ///
+    /// Unsafe because we will be creating a cursor object that has a reference
+    /// to a C string allocated within the Go client.
     #[no_mangle]
-    pub extern "C" fn new_cluster_cursor(new_cursor: *const c_char) -> Self {
+    pub unsafe extern "C" fn new_cluster_cursor(new_cursor: *const c_char) -> Self {
         if !new_cursor.is_null() {
             ClusterScanCursor { cursor: new_cursor }
         } else {
@@ -663,7 +669,7 @@ impl ClusterScanCursor {
     }
 
     #[no_mangle]
-    pub extern "C" fn get_cursor(&self) -> *const c_char {
+    fn get_cursor(&self) -> *const c_char {
         self.cursor
     }
 }
