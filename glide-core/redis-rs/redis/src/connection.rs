@@ -898,8 +898,22 @@ pub(crate) fn create_rustls_config(
         not(feature = "tls-native-tls"),
         not(feature = "tls-rustls-webpki-roots")
     ))]
-    for cert in load_native_certs()? {
-        root_store.add(cert)?;
+    let native_certs = load_native_certs();
+    #[cfg(all(
+        feature = "tls-rustls",
+        not(feature = "tls-native-tls"),
+        not(feature = "tls-rustls-webpki-roots")
+    ))]
+    if native_certs.errors.is_empty() {
+        native_certs
+            .certs
+            .iter()
+            .try_for_each(|der| root_store.add(der.to_owned()))?;
+    } else {
+        fail!((
+            ErrorKind::InvalidClientConfig,
+            "Unable to load native certificates"
+        ));
     }
 
     let config = rustls::ClientConfig::builder();
@@ -939,7 +953,7 @@ pub(crate) fn create_rustls_config(
             config
                 .dangerous()
                 .set_certificate_verifier(Arc::new(NoCertificateVerification {
-                    supported: rustls::crypto::ring::default_provider()
+                    supported: rustls::crypto::aws_lc_rs::default_provider()
                         .signature_verification_algorithms,
                 }));
 
