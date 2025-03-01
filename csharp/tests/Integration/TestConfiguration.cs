@@ -1,6 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 using Glide;
 
@@ -10,6 +11,8 @@ namespace Tests.Integration;
 
 public class TestConfiguration : IDisposable
 {
+    public static bool IsMacOs => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
     public static List<(string host, uint port)> STANDALONE_HOSTS { get; internal set; } = [];
     public static List<(string host, uint port)> CLUSTER_HOSTS { get; internal set; } = [];
     public static Version SERVER_VERSION { get; internal set; } = new();

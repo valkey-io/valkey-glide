@@ -1,7 +1,5 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using System.Runtime.InteropServices;
-
 using Glide;
 
 namespace Tests.Integration;
@@ -9,11 +7,10 @@ namespace Tests.Integration;
 public class SharedClientTests(TestConfiguration config)
 {
     // TODO: investigate and fix tests failing/flaky on MacOS
-    public static bool IsMacOs => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
     public TestConfiguration Config { get; } = config;
 
-    [Theory(DisableDiscoveryEnumeration = true, Skip = "Flaky on MacOS", SkipWhen = nameof(IsMacOs))]
+    [Theory(DisableDiscoveryEnumeration = true, Skip = "Flaky on MacOS", SkipWhen = nameof(config.IsMacOs), SkipType = typeof(TestConfiguration))]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task HandleVeryLargeInput(AsyncClient client)
     {
@@ -30,7 +27,7 @@ public class SharedClientTests(TestConfiguration config)
 
     // This test is slow, but it caught timing and releasing issues in the past,
     // so it's being kept.
-    [Theory(DisableDiscoveryEnumeration = true, Skip = "Flaky on MacOS", SkipWhen = nameof(IsMacOs))]
+    [Theory(DisableDiscoveryEnumeration = true, Skip = "Flaky on MacOS", SkipWhen = nameof(config.IsMacOs), SkipType = typeof(TestConfiguration))]
     [Trait("duration", "long")]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public void ConcurrentOperationsWork(AsyncClient client)
