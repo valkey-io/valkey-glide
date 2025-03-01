@@ -9,7 +9,6 @@ use crate::retry_strategies::RetryStrategy;
 use futures::{future, stream, StreamExt};
 use logger_core::log_debug;
 use logger_core::log_warn;
-use rand::Rng;
 use redis::aio::ConnectionLike;
 use redis::cluster_routing::{self, is_readonly_cmd, ResponsePolicy, Routable, RoutingInfo};
 use redis::{PushInfo, RedisError, RedisResult, Value};
@@ -129,7 +128,7 @@ impl StandaloneClient {
         let tls_mode = connection_request.tls_mode;
         let node_count = connection_request.addresses.len();
         // randomize pubsub nodes, maybe a batter option is to always use the primary
-        let pubsub_node_index = rand::thread_rng().gen_range(0..node_count);
+        let pubsub_node_index = rand::random_range(0..node_count);
         let pubsub_addr = &connection_request.addresses[pubsub_node_index];
         let discover_az = matches!(
             connection_request.read_from,

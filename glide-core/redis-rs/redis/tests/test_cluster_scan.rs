@@ -74,7 +74,7 @@ mod test_cluster_scan_async {
     ) -> RoutingInfo {
         let mut cluster_conn = cluster.async_connection(None).await;
         let distribution_clone = slot_distribution.clone();
-        let index_of_random_node = rand::thread_rng().gen_range(0..slot_distribution.len());
+        let index_of_random_node = rand::rng().random_range(0..slot_distribution.len());
         let random_node = distribution_clone.get(index_of_random_node).unwrap();
         let random_node_route_info = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
             host: random_node.1.clone(),

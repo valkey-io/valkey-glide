@@ -4,7 +4,7 @@ use bytes::{Bytes, BytesMut};
 use integer_encoding::VarInt;
 use logger_core::log_error;
 use protobuf::Message;
-use std::io;
+use std::{io, ops::Add};
 
 /// An object handling a arranging read buffers, and parsing the data in the buffers into requests.
 pub struct RotatingBuffer {
@@ -24,23 +24,26 @@ impl RotatingBuffer {
         let mut results: Vec<T> = vec![];
         let mut prev_position = 0;
         let buffer_len = buffer.len();
+        let mut request_len: usize;
         while prev_position < buffer_len {
-            if let Some((request_len, bytes_read)) = u32::decode_var(&buffer[prev_position..]) {
-                let start_pos = prev_position + bytes_read;
-                if (start_pos + request_len as usize) > buffer_len {
+            if let Some((decoded_request_len, bytes_read)) =
+                u32::decode_var(&buffer[prev_position..])
+            {
+                request_len = decoded_request_len.try_into().unwrap_or_default();
+                let start_pos = prev_position.add(bytes_read);
+                if (start_pos.add(request_len)) > buffer_len {
                     break;
-                } else {
-                    match T::parse_from_tokio_bytes(
-                        &buffer.slice(start_pos..start_pos + request_len as usize),
-                    ) {
-                        Ok(request) => {
-                            prev_position += request_len as usize + bytes_read;
-                            results.push(request);
-                        }
-                        Err(err) => {
-                            log_error("parse input", format!("Failed to parse request: {err}"));
-                            return Err(err.into());
-                        }
+                }
+                match T::parse_from_tokio_bytes(
+                    &buffer.slice(start_pos..start_pos.add(request_len)),
+                ) {
+                    Ok(request) => {
+                        prev_position = prev_position.add(request_len).add(bytes_read);
+                        results.push(request);
+                    }
+                    Err(err) => {
+                        log_error("parse input", format!("Failed to parse request: {err}"));
+                        return Err(err.into());
                     }
                 }
             } else {
@@ -68,7 +71,7 @@ mod tests {
     use crate::command_request::{command, command_request};
     use crate::command_request::{Command, CommandRequest, RequestType};
     use bytes::BufMut;
-    use rand::{distributions::Alphanumeric, Rng};
+    use rand::{distr::Alphanumeric, Rng};
     use rstest::rstest;
 
     fn write_length(buffer: &mut BytesMut, length: u32) {
@@ -161,7 +164,7 @@ mod tests {
     }
 
     fn generate_random_string(length: usize) -> String {
-        rand::thread_rng()
+        rand::rng()
             .sample_iter(&Alphanumeric)
             .take(length)
             .map(char::from)

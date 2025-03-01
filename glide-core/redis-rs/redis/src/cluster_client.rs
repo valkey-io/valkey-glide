@@ -85,7 +85,7 @@ impl RetryParams {
         let clamped_wait = base_wait
             .min(self.max_wait_time)
             .max(self.min_wait_time + 1);
-        let jittered_wait = rand::thread_rng().gen_range(self.min_wait_time..clamped_wait);
+        let jittered_wait = rand::rng().random_range(self.min_wait_time..clamped_wait);
         Duration::from_millis(jittered_wait)
     }
 }
@@ -121,7 +121,7 @@ impl SlotsRefreshRateLimit {
     pub(crate) fn wait_duration(&self) -> Duration {
         let duration_jitter = match self.max_jitter_milli {
             0 => Duration::from_millis(0),
-            _ => Duration::from_millis(rand::thread_rng().gen_range(0..self.max_jitter_milli)),
+            _ => Duration::from_millis(rand::rng().random_range(0..self.max_jitter_milli)),
         };
         self.interval_duration.add(duration_jitter)
     }

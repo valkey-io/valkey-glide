@@ -11,7 +11,7 @@ use glide_core::{
 };
 use integer_encoding::VarInt;
 use protobuf::Message;
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{distr::Alphanumeric, Rng};
 
 fn benchmark(
     c: &mut Criterion,
@@ -102,7 +102,7 @@ fn benchmark_split_data(
 }
 
 fn generate_random_string(length: usize) -> bytes::Bytes {
-    let s: String = rand::thread_rng()
+    let s: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(length)
         .map(char::from)
