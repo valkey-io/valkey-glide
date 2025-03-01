@@ -4,46 +4,38 @@ using System.Diagnostics;
 
 using Glide;
 
-using Xunit.Runner.Common;
-using Xunit.Sdk;
+[assembly: AssemblyFixture(typeof(Tests.Integration.TestConfiguration))]
 
-// Note: All IT should be in the same namespace
 namespace Tests.Integration;
 
-public class IntegrationTestBase : IDisposable
+public class TestConfiguration : IDisposable
 {
-    internal class TestConfiguration
+    public static List<(string host, uint port)> STANDALONE_HOSTS { get; internal set; } = [];
+    public static List<(string host, uint port)> CLUSTER_HOSTS { get; internal set; } = [];
+    public static Version SERVER_VERSION { get; internal set; } = new();
+
+    public static AsyncClient DefaultStandaloneClient() => new(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port, false);
+
+    private static TheoryData<AsyncClient> s_testClients = [];
+
+    public static TheoryData<AsyncClient> TestClients
     {
-        public static List<(string host, uint port)> STANDALONE_HOSTS { get; internal set; } = [];
-        public static List<(string host, uint port)> CLUSTER_HOSTS { get; internal set; } = [];
-        public static Version SERVER_VERSION { get; internal set; } = new();
-
-        public static AsyncClient DefaultStandaloneClient() => new(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port, false);
-
-        private static TheoryData<AsyncClient> s_testClients = [];
-
-        public static TheoryData<AsyncClient> TestClients
+        get
         {
-            get
+            if (s_testClients.Count == 0)
             {
-                if (s_testClients.Count == 0)
-                {
-                    s_testClients = [DefaultStandaloneClient()];
-                }
-                return s_testClients;
+                s_testClients = [DefaultStandaloneClient()];
             }
-
-            private set => s_testClients = value;
+            return s_testClients;
         }
 
-        public static void ResetTestClients() => s_testClients = [];
+        private set => s_testClients = value;
     }
 
-    private readonly IMessageSink _diagnosticMessageSink;
+    public static void ResetTestClients() => s_testClients = [];
 
-    public IntegrationTestBase(IMessageSink diagnosticMessageSink)
+    public TestConfiguration()
     {
-        _diagnosticMessageSink = diagnosticMessageSink;
         string? projectDir = Directory.GetCurrentDirectory();
         while (!(Path.GetFileName(projectDir) == "csharp" || projectDir == null))
         {
@@ -62,22 +54,25 @@ public class IntegrationTestBase : IDisposable
 
         // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
         string clusterLogsDir = Path.Combine(_scriptDir, "clusters");
-        if (Directory.Exists(clusterLogsDir))
+        try
         {
             Directory.Delete(clusterLogsDir, true);
         }
+        catch (DirectoryNotFoundException) { }
 
         // Start cluster
-        TestConfiguration.CLUSTER_HOSTS = StartServer(true);
+        CLUSTER_HOSTS = StartServer(true);
         // Start standalone
-        TestConfiguration.STANDALONE_HOSTS = StartServer(false);
+        STANDALONE_HOSTS = StartServer(false);
         // Get redis version
-        TestConfiguration.SERVER_VERSION = GetServerVersion();
+        SERVER_VERSION = GetServerVersion();
 
-        TestConsoleWriteLine($"Cluster hosts = {string.Join(", ", TestConfiguration.CLUSTER_HOSTS)}");
-        TestConsoleWriteLine($"Standalone hosts = {string.Join(", ", TestConfiguration.STANDALONE_HOSTS)}");
-        TestConsoleWriteLine($"Redis version = {TestConfiguration.SERVER_VERSION}");
+        TestConsoleWriteLine($"Cluster hosts = {string.Join(", ", CLUSTER_HOSTS)}");
+        TestConsoleWriteLine($"Standalone hosts = {string.Join(", ", STANDALONE_HOSTS)}");
+        TestConsoleWriteLine($"Server version = {SERVER_VERSION}");
     }
+
+    ~TestConfiguration() => Dispose();
 
     public void Dispose() =>
         // Stop all
@@ -86,11 +81,11 @@ public class IntegrationTestBase : IDisposable
     private readonly string _scriptDir;
 
     private void TestConsoleWriteLine(string message) =>
-        _ = _diagnosticMessageSink.OnMessage(new DiagnosticMessage(message));
+        TestContext.Current.SendDiagnosticMessage(message);
 
     internal List<(string host, uint port)> StartServer(bool cluster, bool tls = false, string? name = null)
     {
-        string cmd = $"start {(cluster ? "--cluster-mode" : "-r 0")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
+        string cmd = $"start {(cluster ? "--cluster-mode" : "")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
         return ParseHostsFromOutput(RunClusterManager(cmd, false));
     }
 
