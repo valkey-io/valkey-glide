@@ -15,9 +15,9 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::ClusterScanArgs;
 use redis::ObjectType;
 use redis::ScanStateRC;
+use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, RedisResult, Value};
 use std::ffi::CStr;
 use std::slice::from_raw_parts;
@@ -750,12 +750,32 @@ pub unsafe extern "C" fn request_cluster_scan(
                     10 // default count value
                 }
             }
-            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+            Err(e) => {
+                let redis_err = RedisError::from(e);
+                let message = errors::error_message(&redis_err);
+                let error_type = errors::error_type(&redis_err);
+
+                let c_err_str = CString::into_raw(
+                    CString::new(message).expect("Couldn't convert error message to CString"),
+                );
+                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
+                return;
+            }
         };
 
         let converted_type = match str::from_utf8(object_type) {
             Ok(v) => ObjectType::from(v.to_string()),
-            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+            Err(e) => {
+                let redis_err = RedisError::from(e);
+                let message = errors::error_message(&redis_err);
+                let error_type = errors::error_type(&redis_err);
+
+                let c_err_str = CString::into_raw(
+                    CString::new(message).expect("Couldn't convert error message to CString"),
+                );
+                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
+                return;
+            }
         };
 
         let mut cluster_scan_args_builder = ClusterScanArgs::builder();

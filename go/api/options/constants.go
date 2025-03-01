@@ -178,7 +178,7 @@ const (
 	Everything Section = "everything"
 )
 
-// Indentifies Scan Type of ClusterScan command
+// Identifies Scan Type of ClusterScan command
 type ObjectType string
 
 const (
