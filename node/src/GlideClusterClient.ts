@@ -613,7 +613,7 @@ export class GlideClusterClient extends BaseClient {
         command.cursor = cursor;
 
         if (options?.match) {
-            command.matchPattern = Buffer.from(options.match);
+            command.matchPattern = Buffer.from(options.match as string);
         }
 
         if (options?.count) {
@@ -1793,7 +1793,7 @@ export class GlideClusterClient extends BaseClient {
         const scriptInvocation = command_request.ScriptInvocation.create({
             hash: script.getHash(),
             keys: [],
-            args: options?.args?.map(Buffer.from),
+            args: options?.args?.map((arg) => Buffer.from(arg as string)),
         });
         return this.createScriptInvocationWithRoutePromise<
             ClusterGlideRecord<GlideReturnType>
