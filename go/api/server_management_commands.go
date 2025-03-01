@@ -25,4 +25,6 @@ type ServerManagementCommands interface {
 	DBSize() (int64, error)
 
 	Time() ([]string, error)
+
+	ConfigResetStat() (string, error)
 }
