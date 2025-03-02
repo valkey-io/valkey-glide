@@ -527,27 +527,22 @@ impl Client {
                 let mut cmd = redis::cmd("AUTH");
                 match self.internal_client {
                     ClientWrapper::Cluster { ref mut client } => {
-                        match client.get_username().await? {
-                            Value::SimpleString(username) => {
-                                cmd.arg(username);
-                            }
-                            _ => {}
+                        if let Ok(Value::SimpleString(username)) = client.get_username().await {
+                            cmd.arg(username);
                         }
                     }
                     ClientWrapper::Standalone(ref mut client) => {
                         if let Ok(Some(username)) = client.get_username().await {
                             cmd.arg(username);
                         }
-                    }                    
+                    }
                 }
                 cmd.arg(password);
                 self.send_command(&cmd, Some(routing)).await
-                }
             }
         }
     }
-    
-
+}
 
 fn load_cmd(code: &[u8]) -> Cmd {
     let mut cmd = redis::cmd("SCRIPT");
