@@ -689,12 +689,39 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "opentelemetry configs_%p",
+        "opentelemetry config_%p",
         async (protocol) => {
-            const client = GlideClusterClient.createClient({
-                ...getClientConfigurationOption(cluster.getAddresses(), protocol), advancedConfiguration:{openTelemetryConfig: {collectorEndPoint: "https://eifrah-aws.github.io/glide-for-redis"}}},
-                // htttttps://eifrah-aws.github.io/glide-for-redis
-            )
+            GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+                advancedConfiguration: {
+                    openTelemetryConfig: {
+                        collectorEndPoint: "https://valid-endpoint",
+                    },
+                },
+            });
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry config wrong parameter_%p",
+        async (protocol) => {
+            await expect(
+                GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                    advancedConfiguration: {
+                        openTelemetryConfig: {
+                            collectorEndPoint: "wrong.endpoint",
+                            spanFlushIntervalMs: 400,
+                        },
+                    },
+                }),
+            ).rejects.toThrowError(/InvalidInput/i); // Ensure InvalidInput error
         },
     );
 
