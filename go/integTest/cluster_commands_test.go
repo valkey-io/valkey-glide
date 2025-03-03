@@ -316,16 +316,15 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 
 	cursor := *options.NewClusterScanCursor()
 	allKeys := make([]string, 0, len(keysToSet))
+	var keys []string
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.Scan(&cursor)
+		cursor, keys, err = client.Scan(&cursor)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
 		}
 		allKeys = append(allKeys, keys...)
-
-		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, allKeys, []string{"key1", "key2", "key3"})
@@ -349,14 +348,12 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 	allKeys = make([]string, 0, 100)
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.Scan(&cursor)
+		cursor, keys, err = client.Scan(&cursor)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
 		}
 		allKeys = append(allKeys, keys...)
-
-		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, allKeys, expectedKeys)
@@ -383,16 +380,15 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	cursor := *options.NewClusterScanCursor()
 	opts := options.NewClusterScanOptions().SetCount(10)
 	allKeys := []string{}
+	var keys []string
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(&cursor, *opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
 		}
 		allKeys = append(allKeys, keys...)
-
-		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, allKeys, []string{"key1", "key2", "key3"})
@@ -413,14 +409,12 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	matchedKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(&cursor, *opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
 		}
 		matchedKeys = append(matchedKeys, keys...)
-
-		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, matchedKeys, []string{"key1", "key2", "key3", "notMykey"})
@@ -443,14 +437,12 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	matchedTypeKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(&cursor, *opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
 		}
 		matchedTypeKeys = append(matchedTypeKeys, keys...)
-
-		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, matchedTypeKeys, []string{"thisIsASet"})
@@ -459,7 +451,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	assert.NotContains(t, matchedTypeKeys, "key3")
 }
 
-func (suite *GlideTestSuite) TestBasicClusterScanWithInvalidUTF8Pattern() {
+func (suite *GlideTestSuite) TestBasicClusterScanWithNonUTF8Pattern() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 
@@ -484,14 +476,13 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithInvalidUTF8Pattern() {
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
+		var keys []string
+		cursor, keys, err = client.ScanWithOptions(&cursor, *opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
 		}
 		allKeys = append(allKeys, keys...)
-
-		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, allKeys, []string{"key\xc0\xc1-1"})
@@ -533,14 +524,13 @@ func (suite *GlideTestSuite) TestClusterScanWithObjectTypeAndPattern() {
 	allKeys := make([]string, 0, 100)
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, *opts)
+		var keys []string
+		cursor, keys, err = client.ScanWithOptions(&cursor, *opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
 		}
 		allKeys = append(allKeys, keys...)
-
-		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, allKeys, expectedKeys)
@@ -577,27 +567,26 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 		keysOf1 := []string{}
 		keysOf100 := []string{}
 
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetCount(1))
+		var keys []string
+		cursor, keys, err = client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetCount(1))
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
 		}
 		keysOf1 = append(keysOf1, keys...)
 		allKeys = append(allKeys, keysOf1...)
-		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 
 		if cursor.HasFinished() {
 			break
 		}
 
-		nextCursor, keys, err = client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetCount(100))
+		cursor, keys, err = client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetCount(100))
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
 		}
 		keysOf100 = append(keysOf100, keys...)
 		allKeys = append(allKeys, keysOf100...)
-		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 
 		if len(keysOf1) < len(keysOf100) {
 			successfulScans += 1
@@ -637,14 +626,14 @@ func (suite *GlideTestSuite) TestClusterScanWithMatch() {
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetMatch("key-*"))
+		var keys []string
+		cursor, keys, err = client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetMatch("key-*"))
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
 		}
 
 		allKeys = append(allKeys, keys...)
-		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, allKeys, expectedKeys)
@@ -710,7 +699,8 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
-		nextCursor, keys, err := client.ScanWithOptions(
+		var keys []string
+		cursor, keys, err = client.ScanWithOptions(
 			&cursor,
 			*options.NewClusterScanOptions().SetType(options.ObjectTypeList),
 		)
@@ -720,7 +710,6 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 		}
 
 		allKeys = append(allKeys, keys...)
-		cursor = *options.NewClusterScanCursorWithId(nextCursor)
 	}
 
 	assert.ElementsMatch(t, allKeys, listKeys)

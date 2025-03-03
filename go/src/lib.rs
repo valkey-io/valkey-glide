@@ -668,7 +668,6 @@ impl ClusterScanCursor {
         }
     }
 
-    #[no_mangle]
     fn get_cursor(&self) -> *const c_char {
         self.cursor
     }

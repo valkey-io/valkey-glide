@@ -17,7 +17,7 @@ type GenericClusterCommands interface {
 
 	CustomCommandWithRoute(args []string, route config.Route) (ClusterValue[interface{}], error)
 
-	Scan(cursor *options.ClusterScanCursor) (string, []string, error)
+	Scan(cursor *options.ClusterScanCursor) (options.ClusterScanCursor, []string, error)
 
-	ScanWithOptions(cursor *options.ClusterScanCursor, opts options.ClusterScanOptions) (string, []string, error)
+	ScanWithOptions(cursor *options.ClusterScanCursor, opts options.ClusterScanOptions) (options.ClusterScanCursor, []string, error)
 }

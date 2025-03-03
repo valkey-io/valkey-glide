@@ -404,13 +404,14 @@ func (client *GlideClusterClient) clusterScan(
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClusterClient) Scan(
 	cursor *options.ClusterScanCursor,
-) (string, []string, error) {
+) (options.ClusterScanCursor, []string, error) {
 	response, err := client.clusterScan(cursor, *options.NewClusterScanOptions())
 	if err != nil {
-		return DefaultStringResponse, []string{}, err
+		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
 	}
 
-	return handleScanResponse(response)
+	nextCursor, keys, err := handleScanResponse(response)
+	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
 
 // Incrementally iterates over the keys in the cluster.
@@ -442,11 +443,12 @@ func (client *GlideClusterClient) Scan(
 func (client *GlideClusterClient) ScanWithOptions(
 	cursor *options.ClusterScanCursor,
 	opts options.ClusterScanOptions,
-) (string, []string, error) {
+) (options.ClusterScanCursor, []string, error) {
 	response, err := client.clusterScan(cursor, opts)
 	if err != nil {
-		return DefaultStringResponse, []string{}, err
+		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
 	}
 
-	return handleScanResponse(response)
+	nextCursor, keys, err := handleScanResponse(response)
+	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
