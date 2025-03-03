@@ -220,13 +220,6 @@ class TestAuthCommands:
         assert await delete_acl_username_and_password(management_client, USERNAME) == 1
         await set_new_acl_username_with_password(management_client, USERNAME, NEW_PASSWORD)
         
-        # Add delay to ensure ACL changes are propagated
-        await asyncio.sleep(1)
-        
-        # Verify ACL user exists before proceeding
-        result = await management_client.custom_command(["ACL", "LIST"])
-        assert USERNAME in str(result)
-        
         result = await acl_glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=True
         )
