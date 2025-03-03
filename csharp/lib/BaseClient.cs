@@ -6,18 +6,23 @@ using System.Runtime.InteropServices;
 using Glide.Commands;
 using Glide.Internals;
 
+using static Glide.ConnectionConfiguration;
+
 namespace Glide;
 
 public abstract class BaseClient : IDisposable, IStringBaseCommands
 {
     #region public methods
-    protected BaseClient(string host, uint port, bool useTLS)
+    protected BaseClient(BaseClientConfiguration config)
     {
         _successCallbackDelegate = SuccessCallback;
         nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(_successCallbackDelegate);
         _failureCallbackDelegate = FailureCallback;
         nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(_failureCallbackDelegate);
-        _clientPointer = CreateClientFfi(host, port, useTLS, successCallbackPointer, failureCallbackPointer);
+        nint configPtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(ConnectionRequest)));
+        Marshal.StructureToPtr(config.ToRequest(), configPtr, false);
+        _clientPointer = CreateClientFfi(configPtr, successCallbackPointer, failureCallbackPointer);
+        Marshal.FreeHGlobal(configPtr);
         if (_clientPointer == IntPtr.Zero)
         {
             throw new Exception("Failed creating a client");
@@ -118,7 +123,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     private delegate void IntAction(IntPtr arg);
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_client")]
-    private static extern IntPtr CreateClientFfi(string host, uint port, bool useTLS, IntPtr successCallback, IntPtr failureCallback);
+    private static extern IntPtr CreateClientFfi(IntPtr config, IntPtr successCallback, IntPtr failureCallback);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_client")]
     private static extern void CloseClientFfi(IntPtr client);
