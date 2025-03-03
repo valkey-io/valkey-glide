@@ -7,7 +7,7 @@ var (
 	defaultFloatResponse  float64
 	defaultBoolResponse   bool
 	defaultIntResponse    int64
-	defaultStringResponse string
+	DefaultStringResponse string
 )
 
 type Result[T any] struct {
@@ -172,6 +172,8 @@ func createClusterValue[T any](data any) ClusterValue[T] {
 	switch any(data).(type) {
 	case map[string]interface{}:
 		return createClusterMultiValue(data.(map[string]T))
+	case nil:
+		return createEmptyClusterValue[T]()
 	default:
 		return createClusterSingleValue(data.(T))
 	}
