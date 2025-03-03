@@ -4,8 +4,10 @@ use opentelemetry::trace::TraceContextExt;
 use opentelemetry::{global, trace::Tracer};
 use opentelemetry_otlp::Protocol;
 use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::export::trace::SpanExporter;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::runtime::Tokio;
+use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -270,6 +272,15 @@ impl GlideOpenTelemetryConfigBuilder {
     }
 }
 
+fn build_exporter(
+    batch_config: BatchConfig,
+    exporter: impl SpanExporter + 'static,
+) -> BatchSpanProcessor<Tokio> {
+    BatchSpanProcessor::builder(exporter, Tokio)
+        .with_batch_config(batch_config)
+        .build()
+}
+
 #[derive(Clone)]
 pub struct GlideOpenTelemetry {}
 
@@ -286,12 +297,7 @@ impl GlideOpenTelemetry {
         let trace_exporter = match config.trace_exporter {
             GlideOpenTelemetryTraceExporter::File(p) => {
                 let exporter = crate::SpanExporterFile::new(p);
-                opentelemetry_sdk::trace::BatchSpanProcessor::builder(
-                    exporter,
-                    opentelemetry_sdk::runtime::Tokio,
-                )
-                .with_batch_config(batch_config)
-                .build()
+                build_exporter(batch_config, exporter)
             }
             GlideOpenTelemetryTraceExporter::Http(url) => {
                 let exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -299,13 +305,8 @@ impl GlideOpenTelemetry {
                     .with_endpoint(url)
                     .with_protocol(Protocol::HttpBinary)
                     .build()
-                    .unwrap();
-                opentelemetry_sdk::trace::BatchSpanProcessor::builder(
-                    exporter,
-                    opentelemetry_sdk::runtime::Tokio,
-                )
-                .with_batch_config(batch_config)
-                .build()
+                    .expect("Failed to create OTLP SpanExporter");
+                build_exporter(batch_config, exporter)
             }
             GlideOpenTelemetryTraceExporter::Grpc(url) => {
                 let exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -313,13 +314,9 @@ impl GlideOpenTelemetry {
                     .with_endpoint(url)
                     .with_protocol(Protocol::Grpc)
                     .build()
-                    .unwrap();
-                opentelemetry_sdk::trace::BatchSpanProcessor::builder(
-                    exporter,
-                    opentelemetry_sdk::runtime::Tokio,
-                )
-                .with_batch_config(batch_config)
-                .build()
+                    .expect("Failed to create OTLP SpanExporter");
+
+                build_exporter(batch_config, exporter)
             }
         };
 
