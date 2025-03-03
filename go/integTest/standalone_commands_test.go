@@ -522,7 +522,7 @@ func (suite *GlideTestSuite) TestClientGetSetName() {
 	t := suite.T()
 
 	suite.verifyOK(client.ClientSetName("ConnectionName"))
-	result, err = clien.ClientGetName()
+	result, err := client.ClientGetName()
 	assert.Nil(t, err)
 	assert.Equal(t, result, "ConnectionName")
 }
