@@ -6,6 +6,8 @@ package api
 import "C"
 
 import (
+	"fmt"
+
 	"github.com/valkey-io/valkey-glide/go/api/options"
 	"github.com/valkey-io/valkey-glide/go/utils"
 )
@@ -233,6 +235,38 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 		return defaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Ping, optionArgs)
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Gets the name of the current connection.
+//
+// Return value:
+//
+//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//
+// [valkey.io]: https://valkey.io/commands/client-getname/
+func (client *GlideClient) ClientGetName() (string, error) {
+	result, err := client.executeCommand(C.ClientGetName, []string{})
+	fmt.Println("result", result)
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Set the name of the current connection.
+//
+// Return value:
+//
+//	OK - when connection name is set
+//
+// [valkey.io]: https://valkey.io/commands/client-setname/
+func (client *GlideClient) ClientSetName(connectionName string) (string, error) {
+	result, err := client.executeCommand(C.ClientSetName, []string{connectionName})
+	fmt.Println("result", result)
 	if err != nil {
 		return defaultStringResponse, err
 	}
