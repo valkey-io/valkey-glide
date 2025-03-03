@@ -6,8 +6,6 @@ package api
 import "C"
 
 import (
-	"fmt"
-
 	"github.com/valkey-io/valkey-glide/go/api/options"
 	"github.com/valkey-io/valkey-glide/go/utils"
 )
@@ -250,7 +248,6 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 // [valkey.io]: https://valkey.io/commands/client-getname/
 func (client *GlideClient) ClientGetName() (string, error) {
 	result, err := client.executeCommand(C.ClientGetName, []string{})
-	fmt.Println("result", result)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -266,7 +263,6 @@ func (client *GlideClient) ClientGetName() (string, error) {
 // [valkey.io]: https://valkey.io/commands/client-setname/
 func (client *GlideClient) ClientSetName(connectionName string) (string, error) {
 	result, err := client.executeCommand(C.ClientSetName, []string{connectionName})
-	fmt.Println("result", result)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
