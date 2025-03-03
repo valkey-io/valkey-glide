@@ -214,6 +214,7 @@ To test with logs output:
 -   Add `init_logger();` call in the beginning of the desired test, note that all logs from all tests will be collected from that point.
 -   `RUST_LOG` indicate the desired log level to collect. Options are `error, warn, info, debug, trace`.
 
+
     $ RUST_LOG=<log level> cargo test --locked -p redis -- --nocapture --test-threads=1
 
 To run a specific test with logs output:
