@@ -666,17 +666,17 @@ export interface BaseClientConfiguration {
  *
  * ### OpenTelemetry
  *
- * - **openTelemetryConfigs**: Use the `openTelemetryConfigs` property to specify the endpoint of the collector to export the measurments.
+ * - **openTelemetryConfig**: Use the `openTelemetryConfig` property to specify the endpoint of the collector to export the measurments.
  *   - **Collector EndPoint**: Set `collectorEndPoint` to specify the endpoint of the collector to export the measurments.
- *   - **Span Flush Interval**: Set `spanFlushInterval` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 500 will be used.
- * 
+ *   - **Span Flush Interval Ms**: Set `spanFlushIntervalMs` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 500 will be used.
+ *
  * @example
  * ```typescript
  * const config: AdvancedBaseClientConfiguration = {
  *   connectionTimeout: 5000, // 5 seconds
  *   openTelemetryConfig: {
  *      collectorEndPoint: 'https://127.0.0.1',
- *      spanFlushInterval: 500,
+ *      spanFlushIntervalMs: 500,
  *   },
  * };
  * ```
@@ -693,13 +693,16 @@ export interface AdvancedBaseClientConfiguration {
      * Configartion for OpenTelemetry if exits.
      */
     openTelemetryConfig?: {
+        /**
+         * The client collector address to export the measurments.
+         */
         collectorEndPoint: string;
         /**
          * The duration in milliseconds the data will exported to the collector.
          * If interval is not specified, 500 will be used.
          */
-        spanFlushInterval?: number;
-    }
+        spanFlushIntervalMs?: number;
+    };
 }
 
 /**
