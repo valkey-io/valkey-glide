@@ -182,6 +182,7 @@ sscanf = "0.4.1"
 serial_test = "^2"
 versions = "6.3"
 which = "7.0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 
 [[test]]
 name = "test_async"
