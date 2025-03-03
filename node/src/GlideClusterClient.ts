@@ -613,7 +613,10 @@ export class GlideClusterClient extends BaseClient {
         command.cursor = cursor;
 
         if (options?.match) {
-            command.matchPattern = Buffer.from(options.match);
+            command.matchPattern =
+                typeof options.match === "string"
+                    ? Buffer.from(options.match)
+                    : options.match;
         }
 
         if (options?.count) {
@@ -1359,14 +1362,14 @@ export class GlideClusterClient extends BaseClient {
             res.length == 0
                 ? (res as FunctionListResponse) // no libs
                 : ((Array.isArray(res[0])
-                      ? // single node response
-                        ((res as GlideRecord<unknown>[]).map(
-                            convertGlideRecordToRecord,
-                        ) as FunctionListResponse)
-                      : // multi node response
-                        convertGlideRecordToRecord(
-                            res as GlideRecord<unknown>,
-                        )) as ClusterResponse<FunctionListResponse>),
+                    ? // single node response
+                    ((res as GlideRecord<unknown>[]).map(
+                        convertGlideRecordToRecord,
+                    ) as FunctionListResponse)
+                    : // multi node response
+                    convertGlideRecordToRecord(
+                        res as GlideRecord<unknown>,
+                    )) as ClusterResponse<FunctionListResponse>),
         );
     }
 
@@ -1793,7 +1796,9 @@ export class GlideClusterClient extends BaseClient {
         const scriptInvocation = command_request.ScriptInvocation.create({
             hash: script.getHash(),
             keys: [],
-            args: options?.args?.map(Buffer.from),
+            args: options?.args?.map((arg) =>
+                typeof arg === "string" ? Buffer.from(arg) : arg,
+            ),
         });
         return this.createScriptInvocationWithRoutePromise<
             ClusterGlideRecord<GlideReturnType>
