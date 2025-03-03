@@ -823,7 +823,7 @@ impl Client {
                 .with_trace_exporter(trace_exporter)
                 .build();
 
-            GlideOpenTelemetry::initialise(config);
+            let _ = GlideOpenTelemetry::initialise(config);
         };
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
