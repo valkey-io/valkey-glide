@@ -63,6 +63,7 @@ criterion = { version = "^0.5", features = ["html_reports", "async_tokio"] }
 which = "6"
 ctor = "0.2.2"
 redis = { path = "./redis-rs/redis", features = ["tls-rustls-insecure"] }
+telemetrylib = { path = "./telemetry" }
 iai-callgrind = "0.14"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 glide-core = { path = ".", features = [

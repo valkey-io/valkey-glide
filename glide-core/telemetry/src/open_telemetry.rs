@@ -1,11 +1,11 @@
 use opentelemetry::global::ObjectSafeSpan;
-use opentelemetry::trace::SpanKind;
-use opentelemetry::trace::TraceContextExt;
+use opentelemetry::trace::{SpanKind, TraceContextExt, TraceError};
 use opentelemetry::{global, trace::Tracer};
-use opentelemetry_otlp::Protocol;
-use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_otlp::{Protocol, WithExportConfig};
+use opentelemetry_sdk::export::trace::SpanExporter;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::runtime::Tokio;
+use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -270,6 +270,15 @@ impl GlideOpenTelemetryConfigBuilder {
     }
 }
 
+fn build_exporter(
+    batch_config: BatchConfig,
+    exporter: impl SpanExporter + 'static,
+) -> BatchSpanProcessor<Tokio> {
+    BatchSpanProcessor::builder(exporter, Tokio)
+        .with_batch_config(batch_config)
+        .build()
+}
+
 #[derive(Clone)]
 pub struct GlideOpenTelemetry {}
 
@@ -278,7 +287,7 @@ impl GlideOpenTelemetry {
     /// Initialise the open telemetry library with a file system exporter
     ///
     /// This method should be called once for the given **process**
-    pub fn initialise(config: GlideOpenTelemetryConfig) {
+    pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), TraceError> {
         let batch_config = opentelemetry_sdk::trace::BatchConfigBuilder::default()
             .with_scheduled_delay(config.span_flush_interval)
             .build();
@@ -286,40 +295,24 @@ impl GlideOpenTelemetry {
         let trace_exporter = match config.trace_exporter {
             GlideOpenTelemetryTraceExporter::File(p) => {
                 let exporter = crate::SpanExporterFile::new(p);
-                opentelemetry_sdk::trace::BatchSpanProcessor::builder(
-                    exporter,
-                    opentelemetry_sdk::runtime::Tokio,
-                )
-                .with_batch_config(batch_config)
-                .build()
+                build_exporter(batch_config, exporter)
             }
             GlideOpenTelemetryTraceExporter::Http(url) => {
                 let exporter = opentelemetry_otlp::SpanExporter::builder()
                     .with_http()
                     .with_endpoint(url)
                     .with_protocol(Protocol::HttpBinary)
-                    .build()
-                    .unwrap();
-                opentelemetry_sdk::trace::BatchSpanProcessor::builder(
-                    exporter,
-                    opentelemetry_sdk::runtime::Tokio,
-                )
-                .with_batch_config(batch_config)
-                .build()
+                    .build()?;
+                build_exporter(batch_config, exporter)
             }
             GlideOpenTelemetryTraceExporter::Grpc(url) => {
                 let exporter = opentelemetry_otlp::SpanExporter::builder()
                     .with_tonic()
                     .with_endpoint(url)
                     .with_protocol(Protocol::Grpc)
-                    .build()
-                    .unwrap();
-                opentelemetry_sdk::trace::BatchSpanProcessor::builder(
-                    exporter,
-                    opentelemetry_sdk::runtime::Tokio,
-                )
-                .with_batch_config(batch_config)
-                .build()
+                    .build()?;
+
+                build_exporter(batch_config, exporter)
             }
         };
 
@@ -328,6 +321,7 @@ impl GlideOpenTelemetry {
             .with_span_processor(trace_exporter)
             .build();
         global::set_tracer_provider(provider);
+        Ok(())
     }
 
     pub fn get_span_interval(config: GlideOpenTelemetryConfig) -> u64 {
@@ -391,7 +385,7 @@ mod tests {
                 .with_flush_interval(std::time::Duration::from_millis(100))
                 .with_trace_exporter(GlideOpenTelemetryTraceExporter::File(PathBuf::from("/tmp")))
                 .build();
-            GlideOpenTelemetry::initialise(config);
+            let _ = GlideOpenTelemetry::initialise(config);
             create_test_spans().await;
 
             // Read the file content
@@ -441,7 +435,7 @@ mod tests {
                     "http://test.com".to_string(),
                 ))
                 .build();
-            GlideOpenTelemetry::initialise(config);
+            let _ = GlideOpenTelemetry::initialise(config);
             create_test_spans().await;
         });
     }
@@ -459,7 +453,7 @@ mod tests {
                     "grpc://test.com".to_string(),
                 ))
                 .build();
-            GlideOpenTelemetry::initialise(config);
+            let _ = GlideOpenTelemetry::initialise(config);
             create_test_spans().await;
         });
     }

@@ -216,25 +216,8 @@ mod cluster_async {
                 GlideOpenTelemetryTraceExporter::from_str("http://valid-url.com").unwrap(),
             )
             .build();
-        let result = std::panic::catch_unwind(|| {
-            GlideOpenTelemetry::initialise(glide_ot_config.clone());
-        });
-        assert!(result.is_err(), "Expected a panic but no panic occurred");
-
-        // Check the panic message
-        if let Err(err) = result {
-            let panic_msg = err
-                .downcast_ref::<String>()
-                .map(String::as_str)
-                .or_else(|| err.downcast_ref::<&str>().copied())
-                .unwrap_or("Unknown panic message");
-
-            assert!(
-                panic_msg.contains("not yet implemented: HTTP protocol is not implemented yet!"),
-                "Unexpected panic message: {}",
-                panic_msg
-            );
-        }
+        let result = GlideOpenTelemetry::initialise(glide_ot_config.clone());
+        assert!(result.is_ok(), "Expected Ok(()), but got Err: {:?}", result);
     }
 
     #[tokio::test]
