@@ -1521,6 +1521,7 @@ where
                 .insert(address.clone(), refresh_task_state);
         }
         debug!("trigger_refresh_connection_tasks: Done");
+        // check
         notifiers
     }
 
