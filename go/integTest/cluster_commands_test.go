@@ -301,7 +301,6 @@ func (suite *GlideTestSuite) TestClientGetNameCluster() {
 
 	// ClientId with option or with multiple options without route
 	opts := options.RouteOption{Route: nil}
-	assert.True(t, response.IsSingleValue())
 	response, err := client.ClientGetNameWithOptions(opts)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
