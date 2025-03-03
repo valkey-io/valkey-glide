@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/valkey-io/valkey-glide/go/api/config"
 )
 
 var (
@@ -78,7 +80,7 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 	})
 
 	// Flush the database before each test to ensure a clean state.
-	_, err := clusterClient.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
+	_, err := clusterClient.CustomCommandWithRoute([]string{"FLUSHALL"}, config.AllPrimaries) // todo: replace with client.FlushAll() when implemented
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
