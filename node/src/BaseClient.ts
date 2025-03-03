@@ -3861,8 +3861,12 @@ export class BaseClient {
     ): Promise<GlideReturnType> {
         const scriptInvocation = command_request.ScriptInvocation.create({
             hash: script.getHash(),
-            keys: options?.keys?.map(Buffer.from),
-            args: options?.args?.map(Buffer.from),
+            keys: options?.keys?.map((key) =>
+                typeof key === "string" ? Buffer.from(key) : key,
+            ),
+            args: options?.args?.map((arg) =>
+                typeof arg === "string" ? Buffer.from(arg) : arg,
+            ),
         });
         return this.createScriptInvocationPromise(scriptInvocation, options);
     }
