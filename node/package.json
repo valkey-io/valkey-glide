@@ -62,8 +62,7 @@
         "ts-jest": "^29.2.5",
         "ts-node": "^10.9.2",
         "typescript": "^5.6.3",
-        "uuid": "^11.0.3",
-        "@types/node": ">=22.10.0 <22.13.7"
+        "uuid": "^11.0.3"
     },
     "author": "Valkey GLIDE Maintainers",
     "license": "Apache-2.0",
