@@ -252,7 +252,7 @@ func (client *GlideClient) ClientGetName() (string, error) {
 	result, err := client.executeCommand(C.ClientGetName, []string{})
 	fmt.Println("result", result)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -268,7 +268,7 @@ func (client *GlideClient) ClientSetName(connectionName string) (string, error) 
 	result, err := client.executeCommand(C.ClientSetName, []string{connectionName})
 	fmt.Println("result", result)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
