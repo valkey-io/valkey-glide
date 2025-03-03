@@ -612,8 +612,8 @@ func ExampleGlideClient_LCS() {
 	}
 	fmt.Println(result)
 
-	// LCS is only available in 7.0 and above. It will fail in any release < 7.0
-	// 8.0 Output: h o
+	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
+	// Output: h o
 }
 
 func ExampleGlideClusterClient_LCS() {
