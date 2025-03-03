@@ -49,7 +49,7 @@ GLIDE has a native component which appears to be incompatible with `GLIBC` shipp
 ```
 You can get the `GLIBC` version included in your OS by running `ldd --version`. `GLIBC` versions `2.26`, `2.27`, `2.30`, and `2.31` are not supported.
 Keep in mind, that derived OSes, like **Ubuntu 20**, Linux Mint, Pop!_OS and some [AWS Lambda runtimes](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) are incompatible too. It is recommended to use newer environments to avoid issues.
-We are working hard to resolve this issue. You can track our progress in issue [#3218](https://github.com/valkey-io/valkey-glide/issues/3218).
+We are working hard to resolve this issue. You can track our progress in issue [#3291](https://github.com/valkey-io/valkey-glide/issues/3291).
 
 ## Contributing
 
