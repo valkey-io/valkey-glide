@@ -617,18 +617,6 @@ impl StandaloneClient {
             .update_connection_password(password.clone())
             .await
     }
-
-    pub async fn get_username(
-        &mut self
-    ) -> RedisResult<Option<String>> {
-        let connection = self.get_connection(false)
-            .await
-            .get_connection()
-            .await?;
-            
-        Ok(connection.get_username())
-    }
-
 }
 
 async fn get_connection_and_replication_info(
