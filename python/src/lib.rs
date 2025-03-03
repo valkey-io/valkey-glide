@@ -142,16 +142,13 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         );
 
         Python::with_gil(|py| {
-            let py_dict = PyDict::new_bound(py);
+            let py_dict = PyDict::new(py);
 
             for (key, value) in stats_map {
-                py_dict.set_item(
-                    PyString::new_bound(py, &key),
-                    PyString::new_bound(py, &value),
-                )?;
+                py_dict.set_item(PyString::new(py, &key), PyString::new(py, &value))?;
             }
 
-            Ok(py_dict.into_py(py))
+            Ok(py_dict.into_pyobject(py).unwrap().into_any().unbind())
         })
     }
 
@@ -170,16 +167,18 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                 Python::with_gil(|py| {
                     match socket_path {
                         Ok(path) => {
-                            let _ = init_callback.call_bound(py, (path, py.None()), None);
+                            let _ = init_callback.call(py, (path, py.None()), None);
                         }
                         Err(error_message) => {
-                            let _ = init_callback.call_bound(py, (py.None(), error_message), None);
+                            let _ = init_callback.call(py, (py.None(), error_message), None);
                         }
                     };
                 });
             }
         });
-        Ok(Python::with_gil(|py| "OK".into_py(py)))
+        Ok(Python::with_gil(|py| {
+            "OK".into_pyobject(py).unwrap().into_any().unbind()
+        }))
     }
 
     fn iter_to_value<TIterator>(
@@ -202,53 +201,61 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         match val {
             Value::Nil => Ok(py.None()),
             Value::SimpleString(str) => {
-                let data_bytes = PyBytes::new_bound(py, str.as_bytes());
-                Ok(data_bytes.into_py(py))
+                let data_bytes = PyBytes::new(py, str.as_bytes());
+                Ok(data_bytes.into_pyobject(py).unwrap().into_any().unbind())
             }
-            Value::Okay => Ok("OK".into_py(py)),
-            Value::Int(num) => Ok(num.into_py(py)),
+            Value::Okay => Ok("OK".into_pyobject(py).unwrap().into_any().unbind()),
+            Value::Int(num) => Ok(num.into_pyobject(py).unwrap().into_any().unbind()),
             Value::BulkString(data) => {
-                let data_bytes = PyBytes::new_bound(py, &data);
-                Ok(data_bytes.into_py(py))
+                let data_bytes = PyBytes::new(py, &data);
+                Ok(data_bytes.into_pyobject(py).unwrap().into_any().unbind())
             }
             Value::Array(bulk) => {
-                let elements: Bound<PyList> = PyList::new_bound(py, iter_to_value(py, bulk)?);
-                Ok(elements.into_py(py))
+                let elements: Bound<PyList> = PyList::new(py, iter_to_value(py, bulk)?)?;
+                Ok(elements.into_pyobject(py).unwrap().into_any().unbind())
             }
             Value::Map(map) => {
-                let dict = PyDict::new_bound(py);
+                let dict = PyDict::new(py);
                 for (key, value) in map {
                     dict.set_item(resp_value_to_py(py, key)?, resp_value_to_py(py, value)?)?;
                 }
-                Ok(dict.into_py(py))
+                Ok(dict.into_pyobject(py).unwrap().into_any().unbind())
             }
             Value::Attribute { data, attributes } => {
-                let dict = PyDict::new_bound(py);
+                let dict = PyDict::new(py);
                 let value = resp_value_to_py(py, *data)?;
                 let attributes = resp_value_to_py(py, Value::Map(attributes))?;
                 dict.set_item("value", value)?;
                 dict.set_item("attributes", attributes)?;
-                Ok(dict.into_py(py))
+                Ok(dict.into_pyobject(py).unwrap().into_any().unbind())
             }
             Value::Set(set) => {
                 let set = iter_to_value(py, set)?;
-                let set = PySet::new_bound(py, set.iter())?;
-                Ok(set.into_py(py))
+                let set = PySet::new(py, set.iter())?;
+                Ok(set.into_pyobject(py).unwrap().into_any().unbind())
             }
-            Value::Double(double) => Ok(PyFloat::new_bound(py, double).into_py(py)),
-            Value::Boolean(boolean) => Ok(PyBool::new_bound(py, boolean).into_py(py)),
+            Value::Double(double) => Ok(PyFloat::new(py, double)
+                .into_pyobject(py)
+                .unwrap()
+                .into_any()
+                .unbind()),
+            Value::Boolean(boolean) => Ok(<pyo3::Bound<'_, PyBool> as Clone>::clone(
+                &PyBool::new(py, boolean).into_pyobject(py).unwrap(),
+            )
+            .unbind()
+            .into()),
             Value::VerbatimString { format: _, text } => {
                 // TODO create MATCH on the format
-                let data_bytes = PyBytes::new_bound(py, text.as_bytes());
-                Ok(data_bytes.into_py(py))
+                let data_bytes = PyBytes::new(py, text.as_bytes());
+                Ok(data_bytes.into_pyobject(py).unwrap().into_any().unbind())
             }
-            Value::BigNumber(bigint) => Ok(bigint.into_py(py)),
+            Value::BigNumber(bigint) => Ok(bigint.into_pyobject(py).unwrap().into_any().unbind()),
             Value::Push { kind, data } => {
-                let dict = PyDict::new_bound(py);
+                let dict = PyDict::new(py);
                 dict.set_item("kind", format!("{kind:?}"))?;
-                let values: Bound<PyList> = PyList::new_bound(py, iter_to_value(py, data)?);
+                let values: Bound<PyList> = PyList::new(py, iter_to_value(py, data)?)?;
                 dict.set_item("values", values)?;
-                Ok(dict.into_py(py))
+                Ok(dict.into_pyobject(py).unwrap().into_any().unbind())
             }
         }
     }
