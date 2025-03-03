@@ -124,6 +124,7 @@ unit-test:
 example-test:
 	mkdir -p reports
 	set -o pipefail; \
+    trap '../utils/cluster_manager.py stop --prefix cluster' EXIT; \
 	NODE_OUTPUT=$$(python3 ../utils/cluster_manager.py start); \
 	GLIDE_NODE=$$(echo "$$NODE_OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
 	echo "GLIDE_NODE=$$GLIDE_NODE"; \
@@ -134,8 +135,6 @@ example-test:
 	go test -v ./api -skip Test $(if $(test-filter), -run $(test-filter)) -clusternodes $$GLIDE_CLUSTER_NODES -standalonenode $$GLIDE_NODE \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/api \
 	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
-
-	../utils/cluster_manager.py stop --prefix cluster
 
 # integration tests - run subtask with skipping modules tests
 integ-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule $(if $(test-filter), -testify.m $(test-filter))
