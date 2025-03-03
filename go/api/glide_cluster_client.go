@@ -311,3 +311,30 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 	}
 	return createClusterSingleValue[string](data), nil
 }
+
+// Gets the name of the current connection.
+//
+// Return value:
+//
+//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//
+// [valkey.io]: https://valkey.io/commands/client-getname/
+func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOption) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(C.ClientGetName, []string{}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if opts.Route != nil &&
+		(opts.Route).IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}

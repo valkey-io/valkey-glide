@@ -15,4 +15,8 @@ type ConnectionManagementCommands interface {
 	PingWithOptions(pingOptions options.PingOptions) (string, error)
 
 	Echo(message string) (Result[string], error)
+
+	ClientGetName() (string, error)
+
+	ClientSetName(connectionName string) (string, error)
 }
