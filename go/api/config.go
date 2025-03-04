@@ -184,10 +184,10 @@ func NewGlideClientConfiguration() *GlideClientConfiguration {
 	return &GlideClientConfiguration{}
 }
 
-func (config *GlideClientConfiguration) toProtobuf() *protobuf.ConnectionRequest {
+func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
 	request, err := config.baseClientConfiguration.toProtobuf()
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	request.ClusterModeEnabled = false
 	if config.reconnectStrategy != nil {
@@ -198,7 +198,7 @@ func (config *GlideClientConfiguration) toProtobuf() *protobuf.ConnectionRequest
 		request.DatabaseId = uint32(config.databaseId)
 	}
 
-	return request
+	return request, nil
 }
 
 // WithAddress adds an address for a known node in the cluster to this configuration's list of addresses. WithAddress can be
@@ -289,13 +289,13 @@ func NewGlideClusterClientConfiguration() *GlideClusterClientConfiguration {
 	}
 }
 
-func (config *GlideClusterClientConfiguration) toProtobuf() *protobuf.ConnectionRequest {
+func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
 	request, err := config.baseClientConfiguration.toProtobuf()
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	request.ClusterModeEnabled = true
-	return request
+	return request, nil
 }
 
 // WithAddress adds an address for a known node in the cluster to this configuration's list of addresses. WithAddress can be

@@ -68,7 +68,7 @@ func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorTyp
 }
 
 type clientConfiguration interface {
-	toProtobuf() *protobuf.ConnectionRequest
+	toProtobuf() (*protobuf.ConnectionRequest, error)
 }
 
 type baseClient struct {
@@ -80,7 +80,10 @@ type baseClient struct {
 // Once the connection is established, this function invokes `free_connection_response` exposed by rust library to free the
 // connection_response to avoid any memory leaks.
 func createClient(config clientConfiguration) (*baseClient, error) {
-	request := config.toProtobuf()
+	request, err := config.toProtobuf()
+	if err != nil {
+		return nil, err
+	}
 	msg, err := proto.Marshal(request)
 	if err != nil {
 		return nil, err

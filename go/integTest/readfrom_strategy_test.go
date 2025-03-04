@@ -19,10 +19,7 @@ func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
 	const GET_CALLS = 3
 	getCmdStat := "cmdstat_get:calls=" + fmt.Sprint(GET_CALLS)
 
-	clientForConfigSet := suite.clusterClient(api.NewGlideClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
-		WithRequestTimeout(2000))
+	clientForConfigSet := suite.clusterClient(suite.defaultClusterClientConfig().WithRequestTimeout(2000))
 
 	// Reset the availability zone for all nodes
 	_, err := clientForConfigSet.CustomCommandWithRoute(
@@ -37,9 +34,7 @@ func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
 		[]string{"CONFIG", "SET", "availability-zone", az}, config.NewSlotIdRoute(config.SlotTypeReplica, 12182))
 	assert.NoError(suite.T(), err)
 
-	clientForTestingAz := suite.clusterClient(api.NewGlideClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
+	clientForTestingAz := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2000).
 		WithReadFrom(api.AzAffinity).
 		WithClientAZ(az))
@@ -83,10 +78,7 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 	suite.SkipIfServerVersionLowerThanBy("8.0.0")
 	az := "us-east-1a"
 
-	clientForConfigSet := suite.clusterClient(api.NewGlideClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
-		WithRequestTimeout(2000))
+	clientForConfigSet := suite.clusterClient(suite.defaultClusterClientConfig().WithRequestTimeout(2000))
 
 	// Reset the availability zone for all nodes
 	_, err := clientForConfigSet.CustomCommandWithRoute(
@@ -121,9 +113,7 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 	clientForConfigSet.Close()
 
 	// Creating Client with AZ configuration for testing
-	clientForTestingAz := suite.clusterClient(api.NewGlideClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
+	clientForTestingAz := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2000).
 		WithReadFrom(api.AzAffinity).
 		WithClientAZ(az))

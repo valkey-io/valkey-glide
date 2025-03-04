@@ -18,7 +18,10 @@ func TestDefaultStandaloneConfig(t *testing.T) {
 		ReadFrom:           protobuf.ReadFrom_Primary,
 	}
 
-	result := config.toProtobuf()
+	result, err := config.toProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
 
 	assert.Equal(t, expected, result)
 }
@@ -31,7 +34,10 @@ func TestDefaultClusterConfig(t *testing.T) {
 		ReadFrom:           protobuf.ReadFrom_Primary,
 	}
 
-	result := config.toProtobuf()
+	result, err := config.toProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
 
 	assert.Equal(t, expected, result)
 }
@@ -79,7 +85,10 @@ func TestConfig_allFieldsSet(t *testing.T) {
 		)
 	}
 
-	result := config.toProtobuf()
+	result, err := config.toProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
 
 	assert.Equal(t, expected, result)
 }
@@ -157,7 +166,10 @@ func TestConfig_AzAffinity(t *testing.T) {
 		)
 	}
 
-	result := config.toProtobuf()
+	result, err := config.toProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
 
 	assert.Equal(t, expected, result)
 }
