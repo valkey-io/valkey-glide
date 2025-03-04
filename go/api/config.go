@@ -176,6 +176,7 @@ type GlideClientConfiguration struct {
 	baseClientConfiguration
 	reconnectStrategy *BackoffStrategy
 	databaseId        int
+	AdvancedGlideClientConfiguration
 }
 
 // NewGlideClientConfiguration returns a [GlideClientConfiguration] with default configuration settings. For further
@@ -196,6 +197,10 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 
 	if config.databaseId != 0 {
 		request.DatabaseId = uint32(config.databaseId)
+	}
+
+	if config.AdvancedGlideClientConfiguration.connectionTimeout != 0 {
+		request.ConnectionTimeout = uint32(config.AdvancedGlideClientConfiguration.connectionTimeout)
 	}
 
 	return request, nil
@@ -274,18 +279,28 @@ func (config *GlideClientConfiguration) WithDatabaseId(id int) *GlideClientConfi
 	return config
 }
 
+// WithAdvancedConfiguration sets the advanced configuration settings for the client.
+func (config *GlideClientConfiguration) WithAdvancedConfiguration(
+	advancedConfig *AdvancedGlideClientConfiguration,
+) *GlideClientConfiguration {
+	config.AdvancedGlideClientConfiguration = *advancedConfig
+	return config
+}
+
 // GlideClusterClientConfiguration represents the configuration settings for a Cluster Glide client.
 // Note: Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff with fixed values is
 // used.
 type GlideClusterClientConfiguration struct {
 	baseClientConfiguration
+	AdvancedGlideClusterClientConfiguration
 }
 
 // NewGlideClusterClientConfiguration returns a [GlideClusterClientConfiguration] with default configuration settings. For
 // further configuration, use the [GlideClientConfiguration] With* methods.
 func NewGlideClusterClientConfiguration() *GlideClusterClientConfiguration {
 	return &GlideClusterClientConfiguration{
-		baseClientConfiguration: baseClientConfiguration{},
+		baseClientConfiguration:                 baseClientConfiguration{},
+		AdvancedGlideClusterClientConfiguration: AdvancedGlideClusterClientConfiguration{},
 	}
 }
 
@@ -295,6 +310,9 @@ func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.Connectio
 		return nil, err
 	}
 	request.ClusterModeEnabled = true
+	if (config.AdvancedGlideClusterClientConfiguration.connectionTimeout) != 0 {
+		request.ConnectionTimeout = uint32(config.AdvancedGlideClusterClientConfiguration.connectionTimeout)
+	}
 	return request, nil
 }
 
@@ -357,5 +375,60 @@ func (config *GlideClusterClientConfiguration) WithClientName(clientName string)
 // WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
 func (config *GlideClusterClientConfiguration) WithClientAZ(clientAZ string) *GlideClusterClientConfiguration {
 	config.clientAZ = clientAZ
+	return config
+}
+
+// WithAdvancedConfiguration sets the advanced configuration settings for the client.
+func (config *GlideClusterClientConfiguration) WithAdvancedConfiguration(
+	advancedConfig *AdvancedGlideClusterClientConfiguration,
+) *GlideClusterClientConfiguration {
+	config.AdvancedGlideClusterClientConfiguration = *advancedConfig
+	return config
+}
+
+// Advanced configuration settings class for creating a client. Shared settings for standalone and
+// cluster clients.
+type AdvancedBaseClientConfiguration struct {
+	connectionTimeout int
+}
+
+// Represents advanced configuration settings for a Standalone [GlideClient] used in [GlideClientConfiguration].
+type AdvancedGlideClientConfiguration struct {
+	AdvancedBaseClientConfiguration
+}
+
+// NewAdvancedGlideClientConfiguration returns a new [AdvancedGlideClientConfiguration] with default settings.
+func NewAdvancedGlideClientConfiguration() *AdvancedGlideClientConfiguration {
+	return &AdvancedGlideClientConfiguration{}
+}
+
+// WithConnectionTimeout sets the duration in milliseconds to wait for a TCP/TLS connection to complete.
+// The duration in milliseconds to wait for a TCP/TLS connection to complete. This applies both
+// during initial client creation and any reconnections that may occur during request processing.
+// Note: A high connection timeout may lead to prolonged blocking of the entire command
+// pipeline. If not explicitly set, a default value of 250 milliseconds will be used.
+func (config *AdvancedGlideClientConfiguration) WithConnectionTimeout(
+	connectionTimeout int,
+) *AdvancedGlideClientConfiguration {
+	config.connectionTimeout = connectionTimeout
+	return config
+}
+
+// Represents advanced configuration settings for a Standalone [GlideClusterClient] used in
+// [GlideClusterClientConfiguration].
+type AdvancedGlideClusterClientConfiguration struct {
+	AdvancedBaseClientConfiguration
+}
+
+// NewAdvancedGlideClusterClientConfiguration returns a new [AdvancedGlideClusterClientConfiguration] with default settings.
+func NewAdvancedGlideClusterClientConfiguration() *AdvancedGlideClusterClientConfiguration {
+	return &AdvancedGlideClusterClientConfiguration{}
+}
+
+// WithConnectionTimeout sets the duration in milliseconds to wait for a TCP/TLS connection to complete.
+func (config *AdvancedGlideClusterClientConfiguration) WithConnectionTimeout(
+	connectionTimeout int,
+) *AdvancedGlideClusterClientConfiguration {
+	config.connectionTimeout = connectionTimeout
 	return config
 }
