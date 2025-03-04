@@ -109,7 +109,7 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
 
             - name: Create temporary global.json
-              run: echo "{\"sdk\":{\"version\": \"${{ steps.dotnet.outputs.dotnet-version }}\"}}" > csharp/global.json
+              run: echo ${{ steps.dotnet.outputs.dotnet-version }}
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
