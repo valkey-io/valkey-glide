@@ -28,17 +28,17 @@ from glide.async_commands.server_modules.glide_json import (
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide.async_commands.transaction import TTransaction
+from glide.async_commands.batch import TBatch
 from glide.constants import TEncodable
 
 
 def set(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: TEncodable,
     value: TEncodable,
     set_condition: Optional[ConditionalChange] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Sets the JSON value at the specified `path` stored at `key`.
 
@@ -64,11 +64,11 @@ def set(
 
 
 def get(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     paths: Optional[Union[TEncodable, List[TEncodable]]] = None,
     options: Optional[JsonGetOptions] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves the JSON value at the specified `paths` stored at `key`.
 
@@ -110,10 +110,10 @@ def get(
 
 
 def mget(
-    transaction: TTransaction,
+    transaction: TBatch,
     keys: List[TEncodable],
     path: TEncodable,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves the JSON values at the specified `path` stored at multiple `keys`.
 
@@ -140,11 +140,11 @@ def mget(
 
 
 def arrappend(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: TEncodable,
     values: List[TEncodable],
-) -> TTransaction:
+) -> TBatch:
     """
     Appends one or more `values` to the JSON array at the specified `path` within the JSON document stored at `key`.
 
@@ -173,12 +173,12 @@ def arrappend(
 
 
 def arrindex(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: TEncodable,
     value: TEncodable,
     options: Optional[JsonArrIndexOptions] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Searches for the first occurrence of a scalar JSON value (i.e., a value that is neither an object nor an array) within
     arrays at the specified `path` in the JSON document stored at `key`.
@@ -226,12 +226,12 @@ def arrindex(
 
 
 def arrinsert(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: TEncodable,
     index: int,
     values: List[TEncodable],
-) -> TTransaction:
+) -> TBatch:
     """
     Inserts one or more values into the array at the specified `path` within the JSON document stored at `key`, before the
     given `index`.
@@ -262,10 +262,10 @@ def arrinsert(
 
 
 def arrlen(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves the length of the array at the specified `path` within the JSON document stored at `key`.
 
@@ -293,10 +293,10 @@ def arrlen(
 
 
 def arrpop(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     options: Optional[JsonArrPopOptions] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Pops an element from the array located at the specified path within the JSON document stored at `key`.
     If `options.index` is provided, it pops the element at that index instead of the last element.
@@ -329,12 +329,12 @@ def arrpop(
 
 
 def arrtrim(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: TEncodable,
     start: int,
     end: int,
-) -> TTransaction:
+) -> TBatch:
     """
     Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray
     [start, end], both inclusive.
@@ -368,10 +368,10 @@ def arrtrim(
 
 
 def clear(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: Optional[str] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Clears arrays or objects at the specified JSON path in the document stored at `key`.
     Numeric values are set to `0`, and boolean values are set to `False`, and string values are converted to empty strings.
@@ -396,10 +396,10 @@ def clear(
 
 
 def debug_fields(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Returns the number of fields of the JSON value at the specified `path` within the JSON document stored at `key`.
     - **Primitive Values**: Each non-container JSON value (e.g., strings, numbers, booleans, and null) counts as one field.
@@ -436,10 +436,10 @@ def debug_fields(
 
 
 def debug_memory(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Reports memory usage in bytes of a JSON value at the specified `path` within the JSON document stored at `key`.
 
@@ -468,10 +468,10 @@ def debug_memory(
 
 
 def delete(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
 
@@ -490,10 +490,10 @@ def delete(
 
 
 def forget(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
 
@@ -512,11 +512,11 @@ def forget(
 
 
 def numincrby(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: TEncodable,
     number: Union[int, float],
-) -> TTransaction:
+) -> TBatch:
     """
     Increments or decrements the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
@@ -546,11 +546,11 @@ def numincrby(
 
 
 def nummultby(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: TEncodable,
     number: Union[int, float],
-) -> TTransaction:
+) -> TBatch:
     """
     Multiplies the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
@@ -580,10 +580,10 @@ def nummultby(
 
 
 def objlen(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves the number of key-value pairs in the object stored at the specified `path` within the JSON document stored at
     `key`.
@@ -613,10 +613,10 @@ def objlen(
 
 
 def objkeys(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves key names in the object values at the specified `path` within the JSON document stored at `key`.
 
@@ -647,10 +647,10 @@ def objkeys(
 
 
 def resp(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieve the JSON value at the specified `path` within the JSON document stored at `key`.
     The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).\n
@@ -689,11 +689,11 @@ def resp(
 
 
 def strappend(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     value: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Appends the specified `value` to the string stored at the specified `path` within the JSON document stored at `key`.
 
@@ -724,10 +724,10 @@ def strappend(
 
 
 def strlen(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Returns the length of the JSON string value stored at the specified `path` within the JSON document stored at `key`.
 
@@ -754,10 +754,10 @@ def strlen(
 
 
 def toggle(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: TEncodable,
-) -> TTransaction:
+) -> TBatch:
     """
     Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
 
@@ -782,10 +782,10 @@ def toggle(
 
 
 def type(
-    transaction: TTransaction,
+    transaction: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves the type of the JSON value at the specified `path` within the JSON document stored at `key`.
 

@@ -383,10 +383,11 @@ class CoreCommands(Protocol):
         route: Optional[Route] = ...,
     ) -> TResult: ...
 
-    async def _execute_transaction(
+    async def _execute_batch(
         self,
         commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
         route: Optional[Route] = None,
+        is_atomic: bool = True,
     ) -> List[TResult]: ...
 
     async def _execute_script(

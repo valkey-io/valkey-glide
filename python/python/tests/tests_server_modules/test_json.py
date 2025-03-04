@@ -14,7 +14,7 @@ from glide.async_commands.server_modules.glide_json import (
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide.async_commands.transaction import ClusterTransaction
+from glide.async_commands.batch import ClusterBatch
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
@@ -2113,7 +2113,7 @@ class TestJson:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_batch_array(self, glide_client: GlideClusterClient):
-        transaction = ClusterTransaction()
+        transaction = ClusterBatch()
 
         key = get_random_string(5)
         json_value1 = {"a": 1.0, "b": 2}
@@ -2157,7 +2157,7 @@ class TestJson:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_batch(self, glide_client: GlideClusterClient):
-        transaction = ClusterTransaction()
+        transaction = ClusterBatch()
 
         key = f"{{key}}-1{get_random_string(5)}"
         key2 = f"{{key}}-2{get_random_string(5)}"

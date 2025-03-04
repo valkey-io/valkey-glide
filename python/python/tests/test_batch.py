@@ -47,15 +47,11 @@ from glide.async_commands.stream import (
     StreamReadGroupOptions,
     TrimByMinId,
 )
-from glide.async_commands.transaction import (
-    BaseTransaction,
-    ClusterTransaction,
-    Transaction,
-)
+from glide.async_commands.batch import BaseBatch, Batch, ClusterBatch
 from glide.config import ProtocolVersion
 from glide.constants import OK, TResult, TSingleNodeRoute
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from glide.routes import SlotIdRoute, SlotType
+from glide.routes import AllNodes, SlotIdRoute, SlotType
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
@@ -65,38 +61,47 @@ from tests.utils.utils import (
 )
 
 
-async def transaction_test(
-    transaction: Union[Transaction, ClusterTransaction],
-    keyslot: str,
-    glide_client: TGlideClient,
-) -> List[TResult]:
-    key = "{{{}}}:{}".format(keyslot, get_random_string(10))  # to get the same slot
-    key2 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # to get the same slot
-    key3 = "{{{}}}:{}".format(keyslot, get_random_string(10))
-    key4 = "{{{}}}:{}".format(keyslot, get_random_string(10))
-    key5 = "{{{}}}:{}".format(keyslot, get_random_string(10))
-    key6 = "{{{}}}:{}".format(keyslot, get_random_string(10))
-    key7 = "{{{}}}:{}".format(keyslot, get_random_string(10))
-    key8 = "{{{}}}:{}".format(keyslot, get_random_string(10))
-    key9 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # list
-    key10 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # hyper log log
-    key11 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # streams
-    key12 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # geo
-    key13 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sorted set
-    key14 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sorted set
-    key15 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sorted set
-    key16 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sorted set
-    key17 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sort
-    key18 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sort
-    key19 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # bitmap
-    key20 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # bitmap
-    key22 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # getex
-    key23 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # string
-    key24 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # string
-    key25 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # list
-    key26 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sort
-    key27 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sort
+def generate_key(keyslot: Optional[str]) -> str:
+    """Generate a key with the same slot if keyslot is provided; otherwise, generate a random key."""
+    if keyslot:
+        return f"{{{keyslot}}}:{get_random_string(10)}"
+    return get_random_string(
+        20
+    )
 
+
+async def batch_test(
+    batch: Union[Batch, ClusterBatch],
+    glide_client: TGlideClient,
+    keyslot: Optional[str] = None,
+) -> List[TResult]:
+    common_slot = keyslot or get_random_string(5)
+    key = generate_key(common_slot)
+    key2 = generate_key(common_slot)
+    key3 = generate_key(common_slot)
+    key4 = generate_key(common_slot)
+    key5 = generate_key(common_slot)
+    key6 = generate_key(common_slot)
+    key7 = generate_key(keyslot)
+    key8 = generate_key(common_slot)
+    key9 = generate_key(keyslot)  # list
+    key10 = generate_key(keyslot)  # hyper log log
+    key11 = generate_key(keyslot)  # streams
+    key12 = generate_key(keyslot)  # geo
+    key13 = generate_key(common_slot)  # sorted set
+    key14 = generate_key(common_slot)  # sorted set
+    key15 = generate_key(common_slot)  # sorted set
+    key16 = generate_key(keyslot)  # sorted set
+    key17 = generate_key(common_slot)  # sort
+    key18 = generate_key(common_slot)  # sort
+    key19 = generate_key(common_slot)  # bitmap
+    key20 = generate_key(common_slot)  # bitmap
+    key22 = generate_key(keyslot)  # getex
+    key23 = generate_key(common_slot)  # string
+    key24 = generate_key(common_slot)  # string
+    key25 = generate_key(keyslot)  # list
+    key26 = generate_key(common_slot)  # sort
+    key27 = generate_key(common_slot)  # sort
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value_bytes = value.encode()
     value2 = get_random_string(5)
@@ -109,76 +114,78 @@ async def transaction_test(
     args: List[TResult] = []
 
     if not await check_if_server_version_lt(glide_client, "7.0.0"):
-        transaction.function_load(code)
+        batch.function_load(code)
         args.append(lib_name.encode())
-        transaction.function_load(code, True)
+        batch.function_load(code, True)
         args.append(lib_name.encode())
-        transaction.function_list(lib_name)
-        args.append(
-            [
-                {
-                    b"library_name": lib_name.encode(),
-                    b"engine": b"LUA",
-                    b"functions": [
-                        {
-                            b"name": func_name.encode(),
-                            b"description": None,
-                            b"flags": {b"no-writes"},
-                        }
-                    ],
-                }
-            ]
-        )
-        transaction.function_list(lib_name, True)
-        args.append(
-            [
-                {
-                    b"library_name": lib_name.encode(),
-                    b"engine": b"LUA",
-                    b"functions": [
-                        {
-                            b"name": func_name.encode(),
-                            b"description": None,
-                            b"flags": {b"no-writes"},
-                        }
-                    ],
-                    b"library_code": code.encode(),
-                }
-            ]
-        )
-        transaction.fcall(func_name, [], arguments=["one", "two"])
-        args.append(b"one")
-        transaction.fcall(func_name, [key], arguments=["one", "two"])
-        args.append(b"one")
-        transaction.fcall_ro(func_name, [], arguments=["one", "two"])
-        args.append(b"one")
-        transaction.fcall_ro(func_name, [key], arguments=["one", "two"])
-        args.append(b"one")
-        transaction.function_delete(lib_name)
-        args.append(OK)
-        transaction.function_flush()
-        args.append(OK)
-        transaction.function_flush(FlushMode.ASYNC)
-        args.append(OK)
-        transaction.function_flush(FlushMode.SYNC)
-        args.append(OK)
-        transaction.function_stats()
-        args.append(
-            {
-                b"running_script": None,
-                b"engines": {
-                    b"LUA": {
-                        b"libraries_count": 0,
-                        b"functions_count": 0,
+        if batch.is_atomic:
+            batch.function_list(lib_name)
+            args.append(
+                [
+                    {
+                        b"library_name": lib_name.encode(),
+                        b"engine": b"LUA",
+                        b"functions": [
+                            {
+                                b"name": func_name.encode(),
+                                b"description": None,
+                                b"flags": {b"no-writes"},
+                            }
+                        ],
                     }
-                },
-            }
-        )
+                ]
+            )
+            batch.function_list(lib_name, True)
+            args.append(
+                [
+                    {
+                        b"library_name": lib_name.encode(),
+                        b"engine": b"LUA",
+                        b"functions": [
+                            {
+                                b"name": func_name.encode(),
+                                b"description": None,
+                                b"flags": {b"no-writes"},
+                            }
+                        ],
+                        b"library_code": code.encode(),
+                    }
+                ]
+            )
+        batch.fcall(func_name, [], arguments=["one", "two"])
+        args.append(b"one")
+        batch.fcall(func_name, [key], arguments=["one", "two"])
+        args.append(b"one")
+        batch.fcall_ro(func_name, [], arguments=["one", "two"])
+        args.append(b"one")
+        batch.fcall_ro(func_name, [key], arguments=["one", "two"])
+        args.append(b"one")
+        batch.function_delete(lib_name)
+        args.append(OK)
+        batch.function_flush()
+        args.append(OK)
+        batch.function_flush(FlushMode.ASYNC)
+        args.append(OK)
+        batch.function_flush(FlushMode.SYNC)
+        args.append(OK)
+        if batch.is_atomic:
+            batch.function_stats()
+            args.append(
+                {
+                    b"running_script": None,
+                    b"engines": {
+                        b"LUA": {
+                            b"libraries_count": 0,
+                            b"functions_count": 0,
+                        }
+                    },
+                }
+            )
 
     # To fix flake8's complexity analysis, we break down the argument appending into 6
     # helper functions.
     await helper1(
-        transaction,
+        batch,
         glide_client,
         key,
         key2,
@@ -190,7 +197,7 @@ async def transaction_test(
     )
 
     await helper2(
-        transaction,
+        batch,
         glide_client,
         key,
         key2,
@@ -204,7 +211,7 @@ async def transaction_test(
     )
 
     await helper3(
-        transaction,
+        batch,
         glide_client,
         key5,
         key6,
@@ -220,14 +227,14 @@ async def transaction_test(
     )
 
     await helper4(
-        transaction, glide_client, key8, key10, key13, key14, key15, key19, key20, args
+        batch, glide_client, key8, key10, key13, key14, key15, key19, key20, args
     )
 
-    await helper5(transaction, glide_client, key11, key12, key17, key18, key20, args)
+    await helper5(batch, glide_client, key11, key12, key17, key18, key20, args)
 
     await helper6(
-        transaction,
-        keyslot,
+        batch,
+        common_slot,
         glide_client,
         key,
         key7,
@@ -917,6 +924,8 @@ async def helper1(
     transaction.rename(key, key2)
     args.append(OK)
 
+    # when i comment both of them, it passes but when i comment only 1, it fails. good luck maty
+
     transaction.exists([key2])
     args.append(1)
     transaction.touch([key2])
@@ -953,19 +962,17 @@ class TestTransaction:
     async def exec_transaction(
         self,
         glide_client: TGlideClient,
-        transaction: BaseTransaction,
+        transaction: BaseBatch,
         route: Optional[TSingleNodeRoute] = None,
     ) -> Optional[List[TResult]]:
         """
         Exec a transaction on a client with proper typing. Casts are required to satisfy `mypy`.
         """
         if isinstance(glide_client, GlideClient):
-            return await cast(GlideClient, glide_client).exec(
-                cast(Transaction, transaction)
-            )
+            return await cast(GlideClient, glide_client).exec(cast(Batch, transaction))
         else:
             return await cast(GlideClusterClient, glide_client).exec(
-                cast(ClusterTransaction, transaction), route
+                cast(ClusterBatch, transaction), route
             )
 
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -973,7 +980,7 @@ class TestTransaction:
     async def test_transaction_with_different_slots(
         self, glide_client: GlideClusterClient
     ):
-        transaction = ClusterTransaction()
+        transaction = ClusterBatch(is_atomic=True)
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
         with pytest.raises(RequestError, match="CrossSlot"):
@@ -984,9 +991,9 @@ class TestTransaction:
     async def test_transaction_custom_command(self, glide_client: TGlideClient):
         key = get_random_string(10)
         transaction = (
-            Transaction()
+            Batch(is_atomic=True)
             if isinstance(glide_client, GlideClient)
-            else ClusterTransaction()
+            else ClusterBatch(is_atomic=True)
         )
         transaction.custom_command(["HSET", key, "foo", "bar"])
         transaction.custom_command(["HGET", key, "foo"])
@@ -1000,9 +1007,9 @@ class TestTransaction:
     ):
         key = get_random_string(10)
         transaction = (
-            Transaction()
+            Batch(is_atomic=True)
             if isinstance(glide_client, GlideClient)
-            else ClusterTransaction()
+            else ClusterBatch(is_atomic=True)
         )
         transaction.custom_command(["WATCH", key])
         with pytest.raises(RequestError) as e:
@@ -1014,11 +1021,16 @@ class TestTransaction:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_discard_command(self, glide_client: TGlideClient):
         key = get_random_string(10)
+        transaction = (
+            Batch(is_atomic=True)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
         await glide_client.set(key, "1")
         transaction = (
-            Transaction()
+            Batch(is_atomic=True)
             if isinstance(glide_client, GlideClient)
-            else ClusterTransaction()
+            else ClusterBatch(is_atomic=True)
         )
 
         transaction.custom_command(["INCR", key])
@@ -1033,7 +1045,7 @@ class TestTransaction:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_exec_abort(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        transaction = BaseTransaction()
+        transaction = BaseBatch(is_atomic=True)
         transaction.custom_command(["INCR", key, key, key])
         with pytest.raises(RequestError) as e:
             await self.exec_transaction(glide_client, transaction)
@@ -1046,13 +1058,13 @@ class TestTransaction:
     async def test_cluster_transaction(self, glide_client: GlideClusterClient):
         assert await glide_client.custom_command(["FLUSHALL"]) == OK
         keyslot = get_random_string(3)
-        transaction = ClusterTransaction()
+        transaction = ClusterBatch(is_atomic=True)
         transaction.info()
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             transaction.publish("test_message", keyslot, False)
         else:
             transaction.publish("test_message", keyslot, True)
-        expected = await transaction_test(transaction, keyslot, glide_client)
+        expected = await batch_test(transaction, glide_client, keyslot)
 
         if not await check_if_server_version_lt(glide_client, "7.0.0"):
             transaction.pubsub_shardchannels()
@@ -1081,7 +1093,9 @@ class TestTransaction:
             is_cluster,
         )
         keyslot = get_random_string(3)
-        transaction = ClusterTransaction() if is_cluster else Transaction()
+        transaction = (
+            ClusterBatch(is_atomic=True) if is_cluster else Batch(is_atomic=True)
+        )
         transaction.get(keyslot)
         result1 = await glide_client.watch([keyslot])
         assert result1 == OK
@@ -1103,7 +1117,7 @@ class TestTransaction:
         length = 2**25  # 33mb
         key = "0" * length
         value = "0" * length
-        transaction = Transaction()
+        transaction = Batch(is_atomic=True)
         transaction.set(key, value)
         transaction.get(key)
         result = await glide_client.exec(transaction)
@@ -1121,7 +1135,7 @@ class TestTransaction:
             keyslot, get_random_string(10)
         )  # to get the same slot
         value = get_random_string(5)
-        transaction = Transaction()
+        transaction = Batch(is_atomic=True)
         transaction.info()
         transaction.select(1)
         transaction.move(key, 0)
@@ -1148,7 +1162,7 @@ class TestTransaction:
         transaction.select(0)
         transaction.get(key)
         transaction.publish("test_message", "test_channel")
-        expected = await transaction_test(transaction, keyslot, glide_client)
+        expected = await batch_test(transaction, glide_client, keyslot)
         result = await glide_client.exec(transaction)
         assert isinstance(result, list)
         assert isinstance(result[0], bytes)
@@ -1160,7 +1174,7 @@ class TestTransaction:
         assert result[13:] == expected
 
     async def test_transaction_clear(self):
-        transaction = Transaction()
+        transaction = Batch(is_atomic=True)
         transaction.info()
         transaction.select(1)
         transaction.clear()
@@ -1179,7 +1193,7 @@ class TestTransaction:
             keyslot, get_random_string(10)
         )  # to get the same slot
         value = get_random_string(5)
-        transaction = Transaction()
+        transaction = Batch(is_atomic=True)
         transaction.select(1)
         transaction.set(key, value)
         transaction.copy(key, key1, 1, replace=True)
@@ -1195,7 +1209,11 @@ class TestTransaction:
         cluster_mode = isinstance(glide_client, GlideClusterClient)
         key = get_random_string(3)
 
-        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction = (
+            Batch(is_atomic=True)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
         transaction.set(key, "value").get(key).delete([key])
 
         result = await self.exec_transaction(glide_client, transaction)
@@ -1218,7 +1236,11 @@ class TestTransaction:
         maxmemory_policy = cast(str, config_decoded.get(maxmemory_policy_key))
 
         try:
-            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction = (
+                Batch(is_atomic=True)
+                if isinstance(glide_client, GlideClient)
+                else ClusterBatch(is_atomic=True)
+            )
             transaction.set(string_key, "foo")
             transaction.object_encoding(string_key)
             transaction.object_refcount(string_key)
@@ -1252,7 +1274,11 @@ class TestTransaction:
     ):
         key = get_random_string(10)
         stream_id1_0 = "1-0"
-        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction = (
+            Batch(is_atomic=True)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
         transaction.xadd(key, [("foo", "bar")], StreamAddOptions(stream_id1_0))
         transaction.xinfo_stream(key)
         transaction.xinfo_stream_full(key)
@@ -1281,7 +1307,11 @@ class TestTransaction:
     ):
         yesterday = date.today() - timedelta(1)
         yesterday_unix_time = time.mktime(yesterday.timetuple())
-        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction = (
+            Batch(is_atomic=True)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
         transaction.lastsave()
         response = await self.exec_transaction(glide_client, transaction)
         assert isinstance(response, list)
@@ -1292,7 +1322,11 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lolwut_transaction(self, glide_client: GlideClusterClient):
-        transaction = ClusterTransaction()
+        transaction = (
+            Batch(is_atomic=True)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
         transaction.lolwut().lolwut(5).lolwut(parameters=[1, 2]).lolwut(6, [42])
         results = await glide_client.exec(transaction)
         assert results is not None
@@ -1314,7 +1348,11 @@ class TestTransaction:
         key2 = "{{{}}}:{}".format(keyslot, get_random_string(10))
 
         # Verify Dump
-        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction = (
+            Batch(is_atomic=True)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
         transaction.set(key1, "value")
         transaction.dump(key1)
         result1 = await self.exec_transaction(glide_client, transaction)
@@ -1324,7 +1362,11 @@ class TestTransaction:
         assert isinstance(result1[1], bytes)
 
         # Verify Restore - use result1[1] from above
-        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction = (
+            Batch(is_atomic=True)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
         transaction.restore(key2, 0, result1[1])
         transaction.get(key2)
         result2 = await self.exec_transaction(glide_client, transaction)
@@ -1344,7 +1386,11 @@ class TestTransaction:
             lib_name = f"mylib_{get_random_string(10)}"
             func_name = f"myfun_{get_random_string(10)}"
             code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
-            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction = (
+                Batch(is_atomic=True)
+                if isinstance(glide_client, GlideClient)
+                else ClusterBatch(is_atomic=True)
+            )
             transaction.function_load(code, True)
 
             # Verify function_dump
@@ -1355,7 +1401,11 @@ class TestTransaction:
             assert isinstance(result1[1], bytes)
 
             # Verify function_restore - use result1[2] from above
-            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction = (
+                Batch(is_atomic=True)
+                if isinstance(glide_client, GlideClient)
+                else ClusterBatch(is_atomic=True)
+            )
             transaction.function_restore(result1[1], FunctionRestorePolicy.REPLACE)
             # For the cluster mode, PRIMARY SlotType is required to avoid the error:
             #  "RequestError: An error was signalled by the server -
@@ -1370,3 +1420,80 @@ class TestTransaction:
 
             # Test clean up
             await glide_client.function_flush()
+
+
+class TestPipeline:
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pipeline(self, glide_client: TGlideClient, cluster_mode):
+        pipeline = Batch(is_atomic=False)
+        pipeline.info()
+
+        expected = await batch_test(pipeline, glide_client)
+        result = await glide_client.exec(pipeline)
+        assert isinstance(result, list)
+        if cluster_mode:
+            assert isinstance(result[0], dict)
+            for _, value in result[0].items():
+                assert "# Memory" in value.decode()
+        else:
+            assert isinstance(result[0], bytes)
+            assert "# Memory" in result[0].decode()
+
+        assert result[1:] == expected
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ping_all_primaries(self, glide_client: GlideClusterClient):
+        pipeline = ClusterBatch(is_atomic=False)
+        pipeline.ping()
+
+        result = await glide_client.exec(pipeline)
+        assert isinstance(result, list)
+
+        assert all(response == b"PONG" for response in result)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pipeline_multislot(self, glide_client: GlideClusterClient):
+        num_keys = 10
+        keys = [get_random_string(10) for _ in range(num_keys)]
+        values = [get_random_string(5) for _ in range(num_keys)]
+
+        mapping = dict(zip(keys, values))
+        await glide_client.mset(mapping)
+
+        pipeline = ClusterBatch(is_atomic=False)
+        pipeline.mget(keys)
+
+        result = await glide_client.exec(pipeline)
+
+        expected = [v.encode() for v in values]
+
+        assert isinstance(result, list)
+        assert result[0] == expected
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pipeline_all_nodes(self, glide_client: GlideClusterClient):
+        config_key = "maxmemory"
+        config_value = "4321"
+
+        pipeline = ClusterBatch(is_atomic=False)
+        pipeline.config_set({config_key: config_value})
+
+        result = await glide_client.exec(pipeline)
+
+        assert result == ["OK"]
+
+        pipeline = ClusterBatch(is_atomic=False)
+        pipeline.info()
+        result = await glide_client.exec(pipeline)
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], dict)
+
+        for _, info in result[0].items():
+            assert config_key in info.decode()
+            assert config_value in info.decode()

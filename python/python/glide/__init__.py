@@ -106,11 +106,7 @@ from glide.async_commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide.async_commands.transaction import (
-    ClusterTransaction,
-    Transaction,
-    TTransaction,
-)
+from glide.async_commands.batch import Batch, ClusterBatch, TBatch
 from glide.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -174,10 +170,10 @@ __all__ = [
     # Client
     "GlideClient",
     "GlideClusterClient",
-    "Transaction",
-    "ClusterTransaction",
+    "Batch",
+    "ClusterBatch",
     "TGlideClient",
-    "TTransaction",
+    "TBatch",
     # Config
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",

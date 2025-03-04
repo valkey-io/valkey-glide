@@ -11,7 +11,7 @@ from glide.async_commands.core import (
     FunctionRestorePolicy,
     InfoSection,
 )
-from glide.async_commands.transaction import ClusterTransaction
+from glide.async_commands.batch import ClusterBatch
 from glide.constants import (
     TOK,
     TClusterResponse,
@@ -84,7 +84,7 @@ class ClusterCommands(CoreCommands):
 
     async def exec(
         self,
-        transaction: ClusterTransaction,
+        transaction: ClusterBatch,
         route: Optional[TSingleNodeRoute] = None,
     ) -> Optional[List[TResult]]:
         """
@@ -104,7 +104,7 @@ class ClusterCommands(CoreCommands):
                 If the transaction failed due to a WATCH command, `exec` will return `None`.
         """
         commands = transaction.commands[:]
-        return await self._execute_transaction(commands, route)
+        return await self._execute_batch(commands, route, transaction.is_atomic)
 
     async def config_resetstat(
         self,

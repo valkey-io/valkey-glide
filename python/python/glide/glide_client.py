@@ -272,10 +272,11 @@ class BaseClient(CoreCommands):
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
-    async def _execute_transaction(
+    async def _execute_batch(
         self,
         commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
         route: Optional[Route] = None,
+        is_atomic: bool = True,
     ) -> List[TResult]:
         if self._is_closed:
             raise ClosingError(
@@ -283,7 +284,7 @@ class BaseClient(CoreCommands):
             )
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
-        transaction_commands = []
+        batch_commands = []
         for requst_type, args in commands:
             command = Command()
             command.request_type = requst_type
@@ -294,9 +295,9 @@ class BaseClient(CoreCommands):
                 command.args_array.args[:] = encoded_args
             else:
                 command.args_vec_pointer = create_leaked_bytes_vec(encoded_args)
-            transaction_commands.append(command)
-        request.batch.commands.extend(transaction_commands)
-        request.batch.is_atomic = True
+            batch_commands.append(command)
+        request.batch.commands.extend(batch_commands)
+        request.batch.is_atomic = is_atomic
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
