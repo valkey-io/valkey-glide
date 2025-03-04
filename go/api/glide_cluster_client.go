@@ -6,7 +6,10 @@ package api
 import "C"
 
 import (
+	"unsafe"
+
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -310,4 +313,142 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 		return createEmptyClusterValue[string](), err
 	}
 	return createClusterSingleValue[string](data), nil
+}
+
+// Helper function to perform the cluster scan.
+func (client *GlideClusterClient) clusterScan(
+	cursor *options.ClusterScanCursor,
+	opts options.ClusterScanOptions,
+) (*C.struct_CommandResponse, error) {
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "Cluster Scan failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+
+	cStr := C.CString(cursor.GetCursor())
+	c_cursor := C.new_cluster_cursor(cStr)
+	defer C.free(unsafe.Pointer(cStr))
+
+	args, err := opts.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+
+	var cArgsPtr *C.uintptr_t = nil
+	var argLengthsPtr *C.ulong = nil
+	if len(args) > 0 {
+		cArgs, argLengths := toCStrings(args)
+		cArgsPtr = &cArgs[0]
+		argLengthsPtr = &argLengths[0]
+	}
+
+	C.request_cluster_scan(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		c_cursor,
+		C.size_t(len(args)),
+		cArgsPtr,
+		argLengthsPtr,
+	)
+	client.mu.Unlock()
+
+	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return nil, payload.error
+	}
+
+	return payload.value, nil
+}
+
+// Incrementally iterates over the keys in the cluster.
+// The method returns a list containing the next cursor and a list of keys.
+//
+// This command is similar to the SCAN command but is designed to work in a cluster environment.
+// For each iteration, a new cursor object should be used to continue the scan.
+// Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
+// For more information about the Cluster Scan implementation, see
+// https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan.
+//
+// Like the SCAN command, the method can be used to iterate over the keys in the database,
+// returning all keys the database has from when the scan started until the scan ends.
+// The same key can be returned in multiple scan iterations.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	cursor - The [ClusterScanCursor] object that wraps the scan state.
+//	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
+//
+// Returns:
+//
+//	The ID of the next cursor and a list of keys found for this cursor ID.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClusterClient) Scan(
+	cursor options.ClusterScanCursor,
+) (options.ClusterScanCursor, []string, error) {
+	response, err := client.clusterScan(&cursor, *options.NewClusterScanOptions())
+	if err != nil {
+		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
+	}
+
+	nextCursor, keys, err := handleScanResponse(response)
+	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
+}
+
+// Incrementally iterates over the keys in the cluster.
+// The method returns a list containing the next cursor and a list of keys.
+//
+// This command is similar to the SCAN command but is designed to work in a cluster environment.
+// For each iteration, a new cursor object should be used to continue the scan.
+// Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
+// For more information about the Cluster Scan implementation, see
+// https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan.
+//
+// Like the SCAN command, the method can be used to iterate over the keys in the database,
+// returning all keys the database has from when the scan started until the scan ends.
+// The same key can be returned in multiple scan iterations.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	cursor - The [ClusterScanCursor] object that wraps the scan state.
+//	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
+//	opts - The scan options. Can specify MATCH, COUNT, and TYPE configurations.
+//
+// Returns:
+//
+//	The ID of the next cursor and a list of keys found for this cursor ID.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClusterClient) ScanWithOptions(
+	cursor options.ClusterScanCursor,
+	opts options.ClusterScanOptions,
+) (options.ClusterScanCursor, []string, error) {
+	response, err := client.clusterScan(&cursor, opts)
+	if err != nil {
+		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
+	}
+
+	nextCursor, keys, err := handleScanResponse(response)
+	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }

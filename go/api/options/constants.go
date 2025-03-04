@@ -19,6 +19,7 @@ const (
 	ABSTTLKeyword     string = "ABSTTL"     // Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
 	StoreKeyword      string = "STORE"
 	DbKeyword         string = "DB"
+	TypeKeyword       string = "TYPE"
 	/// Valkey API keywords for stream commands
 	IdleKeyword         string = "IDLE"       // ValKey API string to designate IDLE time in milliseconds
 	TimeKeyword         string = "TIME"       // ValKey API string to designate TIME time in unix-milliseconds
@@ -175,4 +176,22 @@ const (
 	Default Section = "default"
 	// EVERYTHING: Includes all and modules
 	Everything Section = "everything"
+)
+
+// Identifies Scan Type of ClusterScan command
+type ObjectType string
+
+const (
+	// Represents a string data type
+	ObjectTypeString ObjectType = "string"
+	// Represents a list data type
+	ObjectTypeList ObjectType = "list"
+	// Represents a set data type
+	ObjectTypeSet ObjectType = "set"
+	// Represents a sorted set data type
+	ObjectTypeZSet ObjectType = "zset"
+	// Represents a hash data type
+	ObjectTypeHash ObjectType = "hash"
+	// Represents a stream data type
+	ObjectTypeStream ObjectType = "stream"
 )
