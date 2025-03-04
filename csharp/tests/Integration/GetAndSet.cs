@@ -4,11 +4,16 @@ using System.Runtime.InteropServices;
 
 using Glide;
 
+using static Glide.ConnectionConfiguration;
 using static Tests.Integration.IntegrationTestBase;
 
 namespace Tests.Integration;
 public class GetAndSet : IClassFixture<IntegrationTestBase>
 {
+    private StandaloneClientConfiguration DefaultClientConfig() => new StandaloneClientConfigurationBuilder()
+            .WithAddress("localhost", (ushort?)TestConfiguration.STANDALONE_PORTS[0])
+            .Build();
+
     private async Task GetAndSetValues(BaseClient client, string key, string value)
     {
         Assert.Equal("OK", await client.Set(key, value));
@@ -25,14 +30,14 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
     [Fact]
     public async Task GetReturnsLastSet()
     {
-        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        using BaseClient client = new GlideClient(DefaultClientConfig());
         await GetAndSetRandomValues(client);
     }
 
     [Fact]
     public async Task GetAndSetCanHandleNonASCIIUnicode()
     {
-        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        using BaseClient client = new GlideClient(DefaultClientConfig());
         string key = Guid.NewGuid().ToString();
         string value = "שלום hello 汉字";
         await GetAndSetValues(client, key, value);
@@ -41,14 +46,14 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
     [Fact]
     public async Task GetReturnsNull()
     {
-        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        using BaseClient client = new GlideClient(DefaultClientConfig());
         Assert.Null(await client.Get(Guid.NewGuid().ToString()));
     }
 
     [Fact]
     public async Task GetReturnsEmptyString()
     {
-        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        using BaseClient client = new GlideClient(DefaultClientConfig());
         string key = Guid.NewGuid().ToString();
         string value = string.Empty;
         await GetAndSetValues(client, key, value);
@@ -63,7 +68,7 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
             //"Flaky on MacOS"
             return;
         }
-        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        using BaseClient client = new GlideClient(DefaultClientConfig());
 
         string key = Guid.NewGuid().ToString();
         string value = Guid.NewGuid().ToString();
@@ -87,7 +92,7 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
             return;
         }
 
-        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        using BaseClient client = new GlideClient(DefaultClientConfig());
         List<Task> operations = [];
 
         for (int i = 0; i < 1000; ++i)

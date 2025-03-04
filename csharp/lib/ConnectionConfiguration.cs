@@ -461,11 +461,11 @@ public abstract class ConnectionConfiguration
         {
             Clean(); // memory leak protection on rebuilding a config from the builder
             Config.AddressCount = (uint)_addresses.Count;
-            int address_size = Marshal.SizeOf(typeof(NodeAddress));
-            Config.Addresses = Marshal.AllocHGlobal(address_size * _addresses.Count);
+            int addressSize = Marshal.SizeOf(typeof(NodeAddress));
+            Config.Addresses = Marshal.AllocHGlobal(addressSize * _addresses.Count);
             for (int i = 0; i < _addresses.Count; i++)
             {
-                Marshal.StructureToPtr(_addresses[i], Config.Addresses + (i * address_size), false);
+                Marshal.StructureToPtr(_addresses[i], Config.Addresses + (i * addressSize), false);
             }
             return Config;
         }
@@ -512,17 +512,17 @@ public abstract class ConnectionConfiguration
             }
         }
         /// <inheritdoc cref="ConnectionRetryStrategy"/>
-        public StandaloneClientConfigurationBuilder WithConnectionRetryStrategy(RetryStrategy connection_retry_strategy)
+        public StandaloneClientConfigurationBuilder WithConnectionRetryStrategy(RetryStrategy connectionRetryStrategy)
         {
-            ConnectionRetryStrategy = connection_retry_strategy;
+            ConnectionRetryStrategy = connectionRetryStrategy;
             return this;
         }
 
         /// <inheritdoc cref="ConnectionRetryStrategy"/>
-        /// <param name="number_of_retries"><inheritdoc cref="RetryStrategy.NumberOfRetries" path="/summary"/></param>
+        /// <param name="numberOfRetries"><inheritdoc cref="RetryStrategy.NumberOfRetries" path="/summary"/></param>
         /// <param name="factor"><inheritdoc cref="RetryStrategy.Factor" path="/summary"/></param>
-        /// <param name="exponent_base"><inheritdoc cref="RetryStrategy.ExponentBase" path="/summary"/></param>
-        public StandaloneClientConfigurationBuilder WithConnectionRetryStrategy(uint number_of_retries, uint factor, uint exponent_base) => WithConnectionRetryStrategy(new RetryStrategy(number_of_retries, factor, exponent_base));
+        /// <param name="exponentBase"><inheritdoc cref="RetryStrategy.ExponentBase" path="/summary"/></param>
+        public StandaloneClientConfigurationBuilder WithConnectionRetryStrategy(uint numberOfRetries, uint factor, uint exponentBase) => WithConnectionRetryStrategy(new RetryStrategy(numberOfRetries, factor, exponentBase));
         #endregion
     }
 
