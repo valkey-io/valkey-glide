@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using Glide;
+using Glide.Internals;
 
 /// Reusable source of ValueTask. This object can be allocated once and then reused
 /// to create multiple asynchronous operations, as long as each call to CreateTask
@@ -100,7 +100,9 @@ internal class Message<T>(int index, MessageContainer<T> container) : INotifyCom
     }
 
     // Holding the client prevents it from being CG'd until all operations complete.
+#pragma warning disable IDE0052 // Remove unread private members
     private object? _client;
+#pragma warning restore IDE0052 // Remove unread private members
 
 
     public void OnCompleted(Action continuation)
