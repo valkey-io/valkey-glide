@@ -10,7 +10,7 @@ public class SharedClientTests(TestConfiguration config)
 
     [Theory(DisableDiscoveryEnumeration = true, Skip = "Flaky on MacOS", SkipWhen = nameof(config.IsMacOs), SkipType = typeof(TestConfiguration))]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task HandleVeryLargeInput(AsyncClient client)
+    public async Task HandleVeryLargeInput(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
         string value = Guid.NewGuid().ToString();
@@ -28,7 +28,7 @@ public class SharedClientTests(TestConfiguration config)
     [Theory(DisableDiscoveryEnumeration = true, Skip = "Flaky on MacOS", SkipWhen = nameof(config.IsMacOs), SkipType = typeof(TestConfiguration))]
     [Trait("duration", "long")]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public void ConcurrentOperationsWork(AsyncClient client)
+    public void ConcurrentOperationsWork(BaseClient client)
     {
         List<Task> operations = [];
 
@@ -45,7 +45,7 @@ public class SharedClientTests(TestConfiguration config)
                     }
                     else
                     {
-                        Assert.Null(await client.GetAsync(Guid.NewGuid().ToString()));
+                        Assert.Null(await client.Get(Guid.NewGuid().ToString()));
                     }
                 }
             }));

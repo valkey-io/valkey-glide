@@ -15,11 +15,11 @@ public class TestConfiguration : IDisposable
     public static List<(string host, uint port)> CLUSTER_HOSTS { get; internal set; } = [];
     public static Version SERVER_VERSION { get; internal set; } = new();
 
-    public static AsyncClient DefaultStandaloneClient() => new(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port, false);
+    public static BaseClient DefaultStandaloneClient() => new GlideClient(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port, false);
 
-    private static TheoryData<AsyncClient> s_testClients = [];
+    private static TheoryData<BaseClient> s_testClients = [];
 
-    public static TheoryData<AsyncClient> TestClients
+    public static TheoryData<BaseClient> TestClients
     {
         get
         {
