@@ -11,7 +11,9 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -227,6 +229,16 @@ func (suite *GlideTestSuite) runWithDefaultClients(test func(client api.BaseClie
 	suite.runWithClients(clients, test)
 }
 
+func (suite *GlideTestSuite) runParallelizedWithDefaultClients(
+	parallelism int,
+	count int64,
+	timeout time.Duration,
+	test func(client api.BaseClient),
+) {
+	clients := suite.getDefaultClients()
+	suite.runParallelizedWithClients(clients, parallelism, count, timeout, test)
+}
+
 func (suite *GlideTestSuite) getDefaultClients() []api.BaseClient {
 	return []api.BaseClient{suite.defaultClient(), suite.defaultClusterClient()}
 }
@@ -249,11 +261,15 @@ func (suite *GlideTestSuite) client(config *api.GlideClientConfiguration) api.Gl
 	return client
 }
 
-func (suite *GlideTestSuite) defaultClusterClient() api.GlideClusterClientCommands {
-	config := api.NewGlideClusterClientConfiguration().
+func (suite *GlideTestSuite) defaultClusterClientConfig() *api.GlideClusterClientConfiguration {
+	return api.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5000)
+}
+
+func (suite *GlideTestSuite) defaultClusterClient() api.GlideClusterClientCommands {
+	config := suite.defaultClusterClientConfig()
 	return suite.clusterClient(config)
 }
 
@@ -271,6 +287,37 @@ func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(
 	for _, client := range clients {
 		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
 			test(client)
+		})
+	}
+}
+
+func (suite *GlideTestSuite) runParallelizedWithClients(
+	clients []api.BaseClient,
+	parallelism int,
+	count int64,
+	timeout time.Duration,
+	test func(client api.BaseClient),
+) {
+	for _, client := range clients {
+		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
+			done := make(chan struct{}, parallelism)
+			for i := 0; i < parallelism; i++ {
+				go func() {
+					defer func() { done <- struct{}{} }()
+					for !suite.T().Failed() && atomic.AddInt64(&count, -1) > 0 {
+						test(client)
+					}
+				}()
+			}
+			tm := time.NewTimer(timeout)
+			defer tm.Stop()
+			for i := 0; i < parallelism; i++ {
+				select {
+				case <-done:
+				case <-tm.C:
+					suite.T().Fatalf("parallelized test timeout in %s", timeout)
+				}
+			}
 		})
 	}
 }

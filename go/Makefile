@@ -12,23 +12,19 @@ install-dev-tools-go1.20:
 	go install github.com/segmentio/golines@v0.11.0
 	go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
 
-install-dev-tools-go1.20.0: install-dev-tools-go1.20
-
 install-dev-tools-go1.22:
 	go install github.com/vakenbolt/go-test-report@v0.9.3
 	go install mvdan.cc/gofumpt@v0.6.0
 	go install github.com/segmentio/golines@v0.12.2
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 
-install-dev-tools-go1.22.0: install-dev-tools-go1.22
+install-dev-tools: install-dev-tools-go1.22
 
-install-dev-tools: install-dev-tools-go1.22.0
+install-tools-go1.20: install-build-tools install-dev-tools-go1.20
 
-install-tools-go1.20.0: install-build-tools install-dev-tools-go1.20.0
+install-tools-go1.22: install-build-tools install-dev-tools-go1.22
 
-install-tools-go1.22.0: install-build-tools install-dev-tools-go1.22.0
-
-install-tools: install-tools-go1.22.0
+install-tools: install-tools-go1.22
 
 build: build-glide-client generate-protobuf
 	go build ./...
@@ -49,24 +45,30 @@ clean:
 build-glide-client:
 	cargo build --release
 	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h --lang c
-	@if [ "$$(uname)" = "Darwin" ] && [ "$$(arch)" = "arm64" ]; then \
-		echo "Platform: aarch64-apple-darwin"; \
+	@if [ "$$(uname)" = "Darwin" ]; then \
 		strip -x target/release/libglide_rs.a; \
-		mkdir -p rustbin/aarch64-apple-darwin; \
-		cp target/release/libglide_rs.a rustbin/aarch64-apple-darwin/; \
+		if [ "$$(uname -m)" = "arm64" ]; then \
+			echo "Platform: aarch64-apple-darwin"; \
+			mkdir -p rustbin/aarch64-apple-darwin; \
+			cp target/release/libglide_rs.a rustbin/aarch64-apple-darwin/; \
+		elif [ "$$(uname -m)" = "x86_64" ]; then \
+			echo "Platform: x86_64-apple-darwin"; \
+			mkdir -p rustbin/x86_64-apple-darwin; \
+			cp target/release/libglide_rs.a rustbin/x86_64-apple-darwin/; \
+		fi; \
 	elif [ "$$(uname)" = "Linux" ]; then \
 		strip --strip-unneeded target/release/libglide_rs.a; \
-		if [ "$$(arch)" = "arm64" ] || [ "$$(arch)" = "aarch64" ]; then \
+		if [ "$$(uname -m)" = "arm64" ] || [ "$$(uname -m)" = "aarch64" ]; then \
 			echo "Platform: aarch64-unknown-linux-gnu"; \
 			mkdir -p rustbin/aarch64-unknown-linux-gnu; \
 			cp target/release/libglide_rs.a rustbin/aarch64-unknown-linux-gnu/; \
-		elif [ "$$(arch)" = "x86_64" ]; then \
+		elif [ "$$(uname -m)" = "x86_64" ]; then \
 			echo "Platform: x86_64-unknown-linux-gnu"; \
 			mkdir -p rustbin/x86_64-unknown-linux-gnu; \
 			cp target/release/libglide_rs.a rustbin/x86_64-unknown-linux-gnu/; \
 		fi; \
 	else \
-		echo "Unsupported platform: $(shell uname), $(shell arch)"; \
+		echo "Unsupported platform: $(shell uname), $(shell uname -m)"; \
 		exit 1; \
 	fi
 

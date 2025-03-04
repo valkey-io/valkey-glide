@@ -1,5 +1,5 @@
 #### Changes
-
+* Go: Add JSON.SET and JSON.GET ([#3115](https://github.com/valkey-io/valkey-glide/pull/3115))
 * Csharp: updating xUnit, adding xUnit analyser rules and guidelines ([#3035](https://github.com/valkey-io/valkey-glide/pull/3035))
 * Go: Add ZRangeStore ([3105](https://github.com/valkey-io/valkey-glide/pull/3105))
 * Go: Add `ZUNION` ([#3119](https://github.com/valkey-io/valkey-glide/pull/3119))
@@ -8,6 +8,10 @@
 * Go: Add `XINFO GROUPS` ([#3106](https://github.com/valkey-io/valkey-glide/pull/3106))
 * Go: Add `ZInterCard` ([#3078](https://github.com/valkey-io/valkey-glide/issues/3078))
 * Go: Add `ZLEXCOUNT` ([#3140](https://github.com/valkey-io/valkey-glide/pull/3140))
+* Go: Updating examples for `ZInterCard` ([#3232](https://github.com/valkey-io/valkey-glide/pull/3232))
+* Go: Fix channel passing from Go to Rust by using `runtime.Pinner` or `cgo.Handle` ([#3208](https://github.com/valkey-io/valkey-glide/pull/3208))
+* Go: Fix data race on the coreClient with `sync.Mutex` and a channel map ([#3236](https://github.com/valkey-io/valkey-glide/pull/3236))
+* Go: Adding support for Az Affinity ([#3235](https://github.com/valkey-io/valkey-glide/pull/3235))
 
 #### Breaking Changes
 
