@@ -337,8 +337,8 @@ impl Client {
     fn get_transaction_values(
         pipeline: &redis::Pipeline,
         mut values: Vec<Value>,
-        command_count: usize,
         offset: usize,
+        raise_on_error: bool,
     ) -> RedisResult<Value> {
         assert_eq!(values.len(), 1);
         let value = values.pop();
@@ -367,26 +367,25 @@ impl Client {
                     .into());
             }
         };
-        Self::convert_pipeline_values_to_expected_types(pipeline, values, command_count)
+        Self::convert_pipeline_values_to_expected_types(pipeline, values, raise_on_error)
     }
 
     fn convert_pipeline_values_to_expected_types(
         pipeline: &redis::Pipeline,
         values: Vec<Value>,
-        command_count: usize,
+        raise_on_error: bool,
     ) -> RedisResult<Value> {
-        let values = values
+        let converted_values: RedisResult<Vec<Value>> = values
             .into_iter()
             .zip(pipeline.cmd_iter().map(expected_type_for_cmd))
-            .map(|(value, expected_type)| convert_to_expected_type(value, expected_type))
-            .try_fold(
-                Vec::with_capacity(command_count),
-                |mut acc, result| -> RedisResult<_> {
-                    acc.push(result?);
-                    Ok(acc)
-                },
-            )?;
-        Ok(Value::Array(values))
+            .map(|(value, expected_type)| match value {
+                Value::ServerError(error) if raise_on_error => Err(error.into()),
+                Value::ServerError(_) => Ok(value),
+                _ => convert_to_expected_type(value, expected_type),
+            })
+            .collect();
+
+        Ok(Value::Array(converted_values?)) // Propagate errors properly
     }
 
     /// Send a pipeline to the server.
@@ -396,6 +395,7 @@ impl Client {
         &'a mut self,
         pipeline: &'a redis::Pipeline,
         routing: Option<RoutingInfo>,
+        raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         let command_count = pipeline.cmd_iter().count();
         // The offset is set to command_count + 1 to account for:
@@ -418,7 +418,7 @@ impl Client {
                 },
             }?;
 
-            Self::get_transaction_values(pipeline, values, command_count, offset)
+            Self::get_transaction_values(pipeline, values, command_count, raise_on_error)
         })
         .boxed()
     }
@@ -429,6 +429,7 @@ impl Client {
     pub fn send_pipeline<'a>(
         &'a mut self,
         pipeline: &'a redis::Pipeline,
+        raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         let command_count = pipeline.cmd_iter().count();
 
@@ -443,7 +444,7 @@ impl Client {
                 }
             }?;
 
-            Self::convert_pipeline_values_to_expected_types(pipeline, values, command_count)
+            Self::convert_pipeline_values_to_expected_types(pipeline, values, raise_on_error)
         })
         .boxed()
     }

@@ -8,9 +8,11 @@ use std::io;
 use std::str::{from_utf8, Utf8Error};
 use std::string::FromUtf8Error;
 
+use crate::cluster_routing::Redirect;
 use num_bigint::BigInt;
 pub(crate) use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
+use strum_macros::Display;
 
 macro_rules! invalid_type_error {
     ($v:expr, $det:expr) => {{
@@ -79,7 +81,7 @@ pub enum NumericBehavior {
 }
 
 /// An enum of all error kinds.
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Display)]
 #[non_exhaustive]
 pub enum ErrorKind {
     /// The server generated an invalid response.
@@ -159,8 +161,8 @@ pub enum ErrorKind {
     UserOperationError,
 }
 
-#[derive(PartialEq, Debug)]
-pub(crate) enum ServerErrorKind {
+#[derive(PartialEq, Debug, Clone)]
+pub enum ServerErrorKind {
     ResponseError,
     ExecAbortError,
     BusyLoadingError,
@@ -175,8 +177,8 @@ pub(crate) enum ServerErrorKind {
     NotBusy,
 }
 
-#[derive(PartialEq, Debug)]
-pub(crate) enum ServerError {
+#[derive(PartialEq, Debug, Clone, Display)]
+pub enum ServerError {
     ExtensionError {
         code: String,
         detail: Option<String>,
@@ -185,6 +187,48 @@ pub(crate) enum ServerError {
         kind: ServerErrorKind,
         detail: Option<String>,
     },
+}
+
+impl ServerError {
+    /// Returns the kind of the error.
+    pub fn kind(&self) -> ErrorKind {
+        match self {
+            ServerError::ExtensionError { .. } => ErrorKind::ExtensionError,
+            ServerError::KnownError { kind, .. } => match kind {
+                ServerErrorKind::ResponseError => ErrorKind::ResponseError,
+                ServerErrorKind::ExecAbortError => ErrorKind::ExecAbortError,
+                ServerErrorKind::BusyLoadingError => ErrorKind::BusyLoadingError,
+                ServerErrorKind::NoScriptError => ErrorKind::NoScriptError,
+                ServerErrorKind::Moved => ErrorKind::Moved,
+                ServerErrorKind::Ask => ErrorKind::Ask,
+                ServerErrorKind::TryAgain => ErrorKind::TryAgain,
+                ServerErrorKind::ClusterDown => ErrorKind::ClusterDown,
+                ServerErrorKind::CrossSlot => ErrorKind::CrossSlot,
+                ServerErrorKind::MasterDown => ErrorKind::MasterDown,
+                ServerErrorKind::ReadOnly => ErrorKind::ReadOnly,
+                ServerErrorKind::NotBusy => ErrorKind::NotBusy,
+            },
+        }
+    }
+
+    /// Appends the string representation of `other` to the existing `detail`.
+    /// If no detail exists, it simply sets it to `other`’s string.
+    pub fn append_detail(&mut self, other: &ServerError) {
+        // Convert the other error to a string representation.
+        let other_str = format!("{}", other);
+        match self {
+            // This pattern matches both variants.
+            ServerError::ExtensionError { detail, .. } | ServerError::KnownError { detail, .. } => {
+                if let Some(existing) = detail {
+                    // Append with a separator.
+                    existing.push_str("; ");
+                    existing.push_str(&other_str);
+                } else {
+                    *detail = Some(other_str);
+                }
+            }
+        };
+    }
 }
 
 impl From<tokio::time::error::Elapsed> for RedisError {
@@ -223,102 +267,69 @@ impl From<ServerError> for RedisError {
     }
 }
 
-/// Internal low-level redis value enum.
-#[derive(PartialEq, Debug)]
-pub(crate) enum InternalValue {
-    /// A nil response from the server.
-    Nil,
-    /// An integer response.  Note that there are a few situations
-    /// in which redis actually returns a string for an integer which
-    /// is why this library generally treats integers and strings
-    /// the same for all numeric responses.
-    Int(i64),
-    /// An arbitrary binary data, usually represents a binary-safe string.
-    BulkString(Vec<u8>),
-    /// A response containing an array with more data. This is generally used by redis
-    /// to express nested structures.
-    Array(Vec<InternalValue>),
-    /// A simple string response, without line breaks and not binary safe.
-    SimpleString(String),
-    /// A status response which represents the string "OK".
-    Okay,
-    /// Unordered key,value list from the server. Use `as_map_iter` function.
-    Map(Vec<(InternalValue, InternalValue)>),
-    /// Attribute value from the server. Client will give data instead of whole Attribute type.
-    Attribute {
-        /// Data that attributes belong to.
-        data: Box<InternalValue>,
-        /// Key,Value list of attributes.
-        attributes: Vec<(InternalValue, InternalValue)>,
-    },
-    /// Unordered set value from the server.
-    Set(Vec<InternalValue>),
-    /// A floating number response from the server.
-    Double(f64),
-    /// A boolean response from the server.
-    Boolean(bool),
-    /// First String is format and other is the string
-    VerbatimString {
-        /// Text's format type
-        format: VerbatimFormat,
-        /// Remaining string check format before using!
-        text: String,
-    },
-    /// Very large number that out of the range of the signed 64 bit numbers
-    BigNumber(BigInt),
-    /// Push data from the server.
-    Push {
-        /// Push Kind
-        kind: PushKind,
-        /// Remaining data from push message
-        data: Vec<InternalValue>,
-    },
-    ServerError(ServerError),
-}
-
-impl InternalValue {
-    pub(crate) fn try_into(self) -> RedisResult<Value> {
-        match self {
-            InternalValue::Nil => Ok(Value::Nil),
-            InternalValue::Int(val) => Ok(Value::Int(val)),
-            InternalValue::BulkString(val) => Ok(Value::BulkString(val)),
-            InternalValue::Array(val) => Ok(Value::Array(Self::try_into_vec(val)?)),
-            InternalValue::SimpleString(val) => Ok(Value::SimpleString(val)),
-            InternalValue::Okay => Ok(Value::Okay),
-            InternalValue::Map(map) => Ok(Value::Map(Self::try_into_map(map)?)),
-            InternalValue::Attribute { data, attributes } => {
-                let data = Box::new((*data).try_into()?);
-                let attributes = Self::try_into_map(attributes)?;
-                Ok(Value::Attribute { data, attributes })
+impl From<RedisError> for ServerError {
+    fn from(redis_error: RedisError) -> Self {
+        // Helper closure to map an ErrorKind to a ServerErrorKind.
+        let map_error_kind = |kind: ErrorKind| -> Option<ServerErrorKind> {
+            match kind {
+                ErrorKind::ResponseError => Some(ServerErrorKind::ResponseError),
+                ErrorKind::ExecAbortError => Some(ServerErrorKind::ExecAbortError),
+                ErrorKind::BusyLoadingError => Some(ServerErrorKind::BusyLoadingError),
+                ErrorKind::NoScriptError => Some(ServerErrorKind::NoScriptError),
+                ErrorKind::Moved => Some(ServerErrorKind::Moved),
+                ErrorKind::Ask => Some(ServerErrorKind::Ask),
+                ErrorKind::TryAgain => Some(ServerErrorKind::TryAgain),
+                ErrorKind::ClusterDown => Some(ServerErrorKind::ClusterDown),
+                ErrorKind::CrossSlot => Some(ServerErrorKind::CrossSlot),
+                ErrorKind::MasterDown => Some(ServerErrorKind::MasterDown),
+                ErrorKind::ReadOnly => Some(ServerErrorKind::ReadOnly),
+                ErrorKind::NotBusy => Some(ServerErrorKind::NotBusy),
+                _ => None,
             }
-            InternalValue::Set(set) => Ok(Value::Set(Self::try_into_vec(set)?)),
-            InternalValue::Double(double) => Ok(Value::Double(double)),
-            InternalValue::Boolean(boolean) => Ok(Value::Boolean(boolean)),
-            InternalValue::VerbatimString { format, text } => {
-                Ok(Value::VerbatimString { format, text })
+        };
+
+        match redis_error.repr {
+            ErrorRepr::ExtensionError(code, detail) => ServerError::ExtensionError {
+                code,
+                detail: Some(detail),
+            },
+            ErrorRepr::WithDescription(kind, desc) => {
+                if let Some(mapped) = map_error_kind(kind) {
+                    ServerError::KnownError {
+                        kind: mapped,
+                        detail: Some(desc.to_string()),
+                    }
+                } else {
+                    ServerError::ExtensionError {
+                        code: kind.to_string(),
+                        detail: Some(format!(
+                            "Unhandled error kind: {:?} description {}",
+                            kind, desc
+                        )),
+                    }
+                }
             }
-            InternalValue::BigNumber(number) => Ok(Value::BigNumber(number)),
-            InternalValue::Push { kind, data } => Ok(Value::Push {
-                kind,
-                data: Self::try_into_vec(data)?,
-            }),
-
-            InternalValue::ServerError(err) => Err(err.into()),
+            ErrorRepr::WithDescriptionAndDetail(kind, desc, detail) => {
+                if let Some(mapped) = map_error_kind(kind) {
+                    ServerError::KnownError {
+                        kind: mapped,
+                        detail: Some(detail),
+                    }
+                } else {
+                    ServerError::ExtensionError {
+                        code: kind.to_string(),
+                        detail: Some(format!(
+                            "Unhandled error kind: {:?} with description {} and detail {}",
+                            kind, desc, detail
+                        )),
+                    }
+                }
+            }
+            ErrorRepr::IoError(io_err) => ServerError::ExtensionError {
+                code: "IOERROR".into(),
+                detail: Some(io_err.to_string()),
+            },
         }
-    }
-
-    fn try_into_vec(vec: Vec<InternalValue>) -> RedisResult<Vec<Value>> {
-        vec.into_iter()
-            .map(InternalValue::try_into)
-            .collect::<RedisResult<Vec<_>>>()
-    }
-
-    fn try_into_map(map: Vec<(InternalValue, InternalValue)>) -> RedisResult<Vec<(Value, Value)>> {
-        let mut vec = Vec::with_capacity(map.len());
-        for (key, value) in map.into_iter() {
-            vec.push((key.try_into()?, value.try_into()?));
-        }
-        Ok(vec)
     }
 }
 
@@ -372,6 +383,8 @@ pub enum Value {
         /// Remaining data from push message
         data: Vec<Value>,
     },
+    /// Error from the server.
+    ServerError(ServerError),
 }
 
 /// `VerbatimString`'s format types defined by spec
@@ -585,6 +598,69 @@ impl Value {
             _ => Err(self),
         }
     }
+
+    /// Extracts errors from the value recursively.
+    /// If the value contains a server error and its kind matches the provided `ignore` kind,
+    /// that error is ignored (i.e. the original value is returned as Ok).
+    /// Otherwise, errors are propagated as Err.
+    pub fn extract_error(self, ignore: Option<ErrorKind>, msg: Option<&str>) -> RedisResult<Self> {
+        match self {
+            Self::Array(val) => Ok(Self::Array(Self::extract_error_vec(val, ignore, msg)?)),
+            Self::Map(map) => Ok(Self::Map(Self::extract_error_map(map, ignore, msg)?)),
+            Self::Attribute { data, attributes } => {
+                let data = Box::new((*data).extract_error(ignore, msg)?);
+                let attributes = Self::extract_error_map(attributes, ignore, msg)?;
+                Ok(Value::Attribute { data, attributes })
+            }
+            Self::Set(set) => Ok(Self::Set(Self::extract_error_vec(set, ignore, msg)?)),
+            Self::Push { kind, data } => Ok(Self::Push {
+                kind,
+                data: Self::extract_error_vec(data, ignore, msg)?,
+            }),
+            Value::ServerError(err) => {
+                // If an ignore kind is provided and the error matches it,
+                // return Ok(self) so that the error is ignored.
+                if let Some(ignore_kind) = ignore {
+                    if let Some(mgs) = msg {
+                        if err.kind() == ignore_kind && err.to_string().contains(&mgs) {
+                            return Ok(Value::ServerError(err));
+                        }
+                    } else if err.kind() == ignore_kind {
+                        return Ok(Value::ServerError(err));
+                    }
+                }
+                Err(err.into())
+            }
+            _ => Ok(self),
+        }
+    }
+
+    /// Helper function to process a vector of values.
+    pub fn extract_error_vec(
+        vec: Vec<Self>,
+        ignore: Option<ErrorKind>,
+        msg: Option<&str>,
+    ) -> RedisResult<Vec<Self>> {
+        vec.into_iter()
+            .map(|v| v.extract_error(ignore, msg))
+            .collect()
+    }
+
+    /// Helper function to process a map of key/value pairs.
+    fn extract_error_map(
+        map: Vec<(Self, Self)>,
+        ignore: Option<ErrorKind>,
+        msg: Option<&str>,
+    ) -> RedisResult<Vec<(Self, Self)>> {
+        let mut out = Vec::with_capacity(map.len());
+        for (key, value) in map.into_iter() {
+            out.push((
+                key.extract_error(ignore, msg)?,
+                value.extract_error(ignore, msg)?,
+            ));
+        }
+        Ok(out)
+    }
 }
 
 impl fmt::Debug for Value {
@@ -615,6 +691,7 @@ impl fmt::Debug for Value {
                 write!(fmt, "verbatim-string({:?},{:?})", format, text)
             }
             Value::BigNumber(ref m) => write!(fmt, "big-number({:?})", m),
+            Value::ServerError(ref err) => write!(fmt, "server-error({:?})", err),
         }
     }
 }
@@ -815,6 +892,24 @@ impl fmt::Debug for RedisError {
     }
 }
 
+impl fmt::Debug for RetryMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RetryMethod::Reconnect => write!(f, "Reconnect"),
+            RetryMethod::ReconnectAndRetry => write!(f, "ReconnectAndRetry"),
+            RetryMethod::NoRetry => write!(f, "NoRetry"),
+            RetryMethod::RetryImmediately => write!(f, "RetryImmediately"),
+            RetryMethod::WaitAndRetry => write!(f, "WaitAndRetry"),
+            RetryMethod::AskRedirect => write!(f, "AskRedirect"),
+            RetryMethod::MovedRedirect => write!(f, "MovedRedirect"),
+            RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica => {
+                write!(f, "WaitAndRetryOnPrimaryRedirectOnReplica")
+            }
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Hash)]
 pub(crate) enum RetryMethod {
     Reconnect,
     ReconnectAndRetry,
@@ -1006,6 +1101,16 @@ impl RedisError {
         let slot_id: u16 = iter.next()?.parse().ok()?;
         let addr = iter.next()?;
         Some((addr, slot_id))
+    }
+
+    /// Returns the redirect method for this error.    
+    pub(crate) fn redirect(&self) -> Option<Redirect> {
+        let node = self.redirect_node()?;
+        match self.kind() {
+            ErrorKind::Ask => Some(Redirect::Ask(node.0.to_string())),
+            ErrorKind::Moved => Some(Redirect::Moved(node.0.to_string())),
+            _ => None,
+        }
     }
 
     /// Returns the extension error code.

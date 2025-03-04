@@ -250,6 +250,17 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                 dict.set_item("values", values)?;
                 Ok(dict.into_py(py))
             }
+            Value::ServerError(error) => {
+                let err_msg = format!("{:?}", error);
+                // Import the module containing your custom error.
+                let module = py.import_bound("glide.exceptions")?;
+                // Get the custom error type from the module.
+                let custom_error_type = module.getattr("RequestError")?;
+                // Create an instance of your custom error with the error message.
+                let instance = custom_error_type.call1((err_msg,))?;
+                // Return the instance as a PyObject.
+                Ok(instance.into_py(py))
+            }
         }
     }
 
