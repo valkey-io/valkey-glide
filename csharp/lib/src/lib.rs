@@ -35,7 +35,7 @@ unsafe fn create_client_internal(
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (),
 ) -> RedisResult<Client> {
-    let request = create_connection_request(config);
+    let request = unsafe { create_connection_request(config) };
     let runtime = Builder::new_multi_thread()
         .enable_all()
         .thread_name("GLIDE C# thread")
@@ -50,7 +50,9 @@ unsafe fn create_client_internal(
     })
 }
 
-/// Creates a new client with the given configuration. The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns. All callbacks should be offloaded to separate threads in order not to exhaust the client's thread pool.
+/// Creates a new client with the given configuration.
+/// The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns.
+/// All callbacks should be offloaded to separate threads in order not to exhaust the client's thread pool.
 ///
 /// # Safety
 ///

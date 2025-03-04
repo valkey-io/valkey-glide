@@ -73,7 +73,8 @@ pub struct ConnectionConfig {
 ///
 /// * `config` must not be `null`.
 /// * `config` must be a valid pointer to a [`ConnectionConfig`] struct.
-/// * Dereferenced [`ConnectionConfig`] struct and all nested structs must contain valid pointers. See the safety documentation of [`convert_node_addresses`] and [`ptr_to_str`].
+/// * Dereferenced [`ConnectionConfig`] struct and all nested structs must contain valid pointers.
+///   See the safety documentation of [`convert_node_addresses`], [`ptr_to_str`] and [`ptr_to_opt_str`].
 pub(crate) unsafe fn create_connection_request(
     config: *const ConnectionConfig,
 ) -> ConnectionRequest {
