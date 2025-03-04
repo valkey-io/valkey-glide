@@ -92,7 +92,7 @@ jobs:
               if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y npm
+                  sudo apt-get install -y npm nodejs
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
