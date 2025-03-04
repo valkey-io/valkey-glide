@@ -25,7 +25,9 @@ dependencies {
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
 }
 
-compileJava.dependsOn ':client:publishToMavenLocal'
+if (!System.getenv("GLIDE_RELEASE_VERSION")) {
+    compileJava.dependsOn ':client:publishToMavenLocal'
+}
 
 application {
     // Define the main class for the application.

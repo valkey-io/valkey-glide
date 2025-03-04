@@ -8,7 +8,7 @@ type HashScanOptions struct {
 	noValue bool
 }
 
-func NewHashScanOptionsBuilder() *HashScanOptions {
+func NewHashScanOptions() *HashScanOptions {
 	return &HashScanOptions{}
 }
 
@@ -37,7 +37,7 @@ func (options *HashScanOptions) ToArgs() ([]string, error) {
 	args = append(args, baseArgs...)
 
 	if options.noValue {
-		args = append(args, NoValue)
+		args = append(args, NoValueKeyword)
 	}
 	return args, err
 }

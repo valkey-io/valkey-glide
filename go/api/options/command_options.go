@@ -1,11 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package options
 
 import (
 	"strconv"
 
-	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/utils"
 )
@@ -30,7 +29,7 @@ type SetOptions struct {
 	Expiry *Expiry
 }
 
-func NewSetOptionsBuilder() *SetOptions {
+func NewSetOptions() *SetOptions {
 	return &SetOptions{}
 }
 
@@ -87,7 +86,7 @@ func (setOptions *SetOptions) SetExpiry(expiry *Expiry) *SetOptions {
 	return setOptions
 }
 
-func (opts *SetOptions) toArgs() ([]string, error) {
+func (opts *SetOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.ConditionalSet != "" {
@@ -126,7 +125,7 @@ type GetExOptions struct {
 	Expiry *Expiry
 }
 
-func NewGetExOptionsBuilder() *GetExOptions {
+func NewGetExOptions() *GetExOptions {
 	return &GetExOptions{}
 }
 
@@ -135,7 +134,7 @@ func (getExOptions *GetExOptions) SetExpiry(expiry *Expiry) *GetExOptions {
 	return getExOptions
 }
 
-func (opts *GetExOptions) toArgs() ([]string, error) {
+func (opts *GetExOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 
@@ -153,37 +152,7 @@ func (opts *GetExOptions) toArgs() ([]string, error) {
 	return args, err
 }
 
-const returnOldValue = "GET"
-
-// A ConditionalSet defines whether a new value should be set or not.
-type ConditionalSet string
-
-const (
-	// OnlyIfExists only sets the key if it already exists. Equivalent to "XX" in the valkey API.
-	OnlyIfExists ConditionalSet = "XX"
-	// OnlyIfDoesNotExist only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
-	OnlyIfDoesNotExist ConditionalSet = "NX"
-	// OnlyIfEquals only sets the key if it already exists and the value is equal to the given value. Equivalent to "IFEQ" in
-	// the valkey API.
-	//
-	// since Valkey 8.1 and above.
-	OnlyIfEquals ConditionalSet = "IFEQ"
-)
-
-type ExpireCondition string
-
-const (
-	// HasExistingExpiry only sets the key if it already exists. Equivalent to "XX" in the valkey API.
-	HasExistingExpiry ExpireCondition = "XX"
-	// HasNoExpiry only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
-	HasNoExpiry ExpireCondition = "NX"
-	// NewExpiryGreaterThanCurrent only sets the key if its greater than current. Equivalent to "GT" in the valkey API.
-	NewExpiryGreaterThanCurrent ExpireCondition = "GT"
-	// NewExpiryLessThanCurrent only sets the key if its lesser than current. Equivalent to "LT" in the valkey API.
-	NewExpiryLessThanCurrent ExpireCondition = "LT"
-)
-
-func (expireCondition ExpireCondition) toString() (string, error) {
+func (expireCondition ExpireCondition) ToString() (string, error) {
 	switch expireCondition {
 	case HasExistingExpiry:
 		return string(HasExistingExpiry), nil
@@ -204,7 +173,7 @@ type Expiry struct {
 	Count uint64
 }
 
-func NewExpiryBuilder() *Expiry {
+func NewExpiry() *Expiry {
 	return &Expiry{}
 }
 
@@ -217,18 +186,6 @@ func (ex *Expiry) SetCount(count uint64) *Expiry {
 	ex.Count = count
 	return ex
 }
-
-// An ExpiryType is used to configure the type of expiration for a value.
-type ExpiryType string
-
-const (
-	KeepExisting     ExpiryType = "KEEPTTL" // keep the existing expiration of the value
-	Seconds          ExpiryType = "EX"      // expire the value after [api.Expiry.Count] seconds
-	Milliseconds     ExpiryType = "PX"      // expire the value after [api.Expiry.Count] milliseconds
-	UnixSeconds      ExpiryType = "EXAT"    // expire the value after the Unix time specified by [api.Expiry.Count], in seconds
-	UnixMilliseconds ExpiryType = "PXAT"    // expire the value after the Unix time specified by [api.Expiry.Count], in milliseconds
-	Persist          ExpiryType = "PERSIST" // Remove the expiry associated with the key
-)
 
 // LPosOptions represents optional arguments for the [api.ListCommands.LPosWithOptions] and
 // [api.ListCommands.LPosCountWithOptions] commands.
@@ -247,7 +204,7 @@ type LPosOptions struct {
 	MaxLen int64
 }
 
-func NewLPosOptionsBuilder() *LPosOptions {
+func NewLPosOptions() *LPosOptions {
 	return &LPosOptions{}
 }
 
@@ -263,7 +220,7 @@ func (lposOptions *LPosOptions) SetMaxLen(maxLen int64) *LPosOptions {
 	return lposOptions
 }
 
-func (opts *LPosOptions) toArgs() []string {
+func (opts *LPosOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	if opts.IsRankSet {
 		args = append(args, RankKeyword, utils.IntToString(opts.Rank))
@@ -273,31 +230,10 @@ func (opts *LPosOptions) toArgs() []string {
 		args = append(args, MaxLenKeyword, utils.IntToString(opts.MaxLen))
 	}
 
-	return args
+	return args, nil
 }
 
-const (
-	CountKeyword  string = "COUNT"  // Valkey API keyword used to extract specific number of matching indices from a list.
-	RankKeyword   string = "RANK"   // Valkey API keyword use to determine the rank of the match to return.
-	MaxLenKeyword string = "MAXLEN" // Valkey API keyword used to determine the maximum number of list items to compare.
-	MatchKeyword  string = "MATCH"  // Valkey API keyword used to indicate the match filter.
-)
-
-// A InsertPosition defines where to insert new elements into a list.
-//
-// See [valkey.io]
-//
-// [valkey.io]: https://valkey.io/commands/linsert/
-type InsertPosition string
-
-const (
-	// Insert new element before the pivot.
-	Before InsertPosition = "BEFORE"
-	// Insert new element after the pivot.
-	After InsertPosition = "AFTER"
-)
-
-func (insertPosition InsertPosition) toString() (string, error) {
+func (insertPosition InsertPosition) ToString() (string, error) {
 	switch insertPosition {
 	case Before:
 		return string(Before), nil
@@ -308,17 +244,7 @@ func (insertPosition InsertPosition) toString() (string, error) {
 	}
 }
 
-// Enumeration representing element popping or adding direction for the [api.ListCommands].
-type ListDirection string
-
-const (
-	// Represents the option that elements should be popped from or added to the left side of a list.
-	Left ListDirection = "LEFT"
-	// Represents the option that elements should be popped from or added to the right side of a list.
-	Right ListDirection = "RIGHT"
-)
-
-func (listDirection ListDirection) toString() (string, error) {
+func (listDirection ListDirection) ToString() (string, error) {
 	switch listDirection {
 	case Left:
 		return string(Left), nil
@@ -329,18 +255,7 @@ func (listDirection ListDirection) toString() (string, error) {
 	}
 }
 
-// Mandatory option for [ZMPop] and for [BZMPop].
-// Defines which elements to pop from the sorted set.
-type ScoreFilter string
-
-const (
-	// Pop elements with the highest scores.
-	MAX ScoreFilter = "MAX"
-	// Pop elements with the lowest scores.
-	MIN ScoreFilter = "MIN"
-)
-
-func (scoreFilter ScoreFilter) toString() (string, error) {
+func (scoreFilter ScoreFilter) ToString() (string, error) {
 	switch scoreFilter {
 	case MAX:
 		return string(MAX), nil
@@ -351,7 +266,7 @@ func (scoreFilter ScoreFilter) toString() (string, error) {
 	}
 }
 
-// Optional arguments to Restore(key string, ttl int64, value string, option *RestoreOptions)
+// Optional arguments to Restore(key string, ttl int64, value string, option RestoreOptions)
 //
 // Note IDLETIME and FREQ modifiers cannot be set at the same time.
 //
@@ -365,27 +280,19 @@ type RestoreOptions struct {
 	eviction Eviction
 }
 
-func NewRestoreOptionsBuilder() *RestoreOptions {
+func NewRestoreOptions() *RestoreOptions {
 	return &RestoreOptions{}
 }
 
-const (
-	// Subcommand string to replace existing key.
-	Replace_keyword = "REPLACE"
-
-	// Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
-	ABSTTL_keyword string = "ABSTTL"
-)
-
 // Custom setter methods to replace existing key.
 func (restoreOption *RestoreOptions) SetReplace() *RestoreOptions {
-	restoreOption.replace = Replace_keyword
+	restoreOption.replace = ReplaceKeyword
 	return restoreOption
 }
 
 // Custom setter methods to represent absolute timestamp (in milliseconds) for TTL.
 func (restoreOption *RestoreOptions) SetABSTTL() *RestoreOptions {
-	restoreOption.absTTL = ABSTTL_keyword
+	restoreOption.absTTL = ABSTTLKeyword
 	return restoreOption
 }
 
@@ -397,15 +304,6 @@ type Eviction struct {
 	Count int64
 }
 
-type EvictionType string
-
-const (
-	// It represents the idletime of object
-	IDLETIME EvictionType = "IDLETIME"
-	// It represents the frequency of object
-	FREQ EvictionType = "FREQ"
-)
-
 // Custom setter methods set the idletime/frequency of object.
 func (restoreOption *RestoreOptions) SetEviction(evictionType EvictionType, count int64) *RestoreOptions {
 	restoreOption.eviction.Type = evictionType
@@ -413,7 +311,7 @@ func (restoreOption *RestoreOptions) SetEviction(evictionType EvictionType, coun
 	return restoreOption
 }
 
-func (opts *RestoreOptions) toArgs() ([]string, error) {
+func (opts *RestoreOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.replace != "" {
@@ -428,45 +326,6 @@ func (opts *RestoreOptions) toArgs() ([]string, error) {
 	return args, err
 }
 
-type Section string
-
-const (
-	// SERVER: General information about the server
-	Server Section = "server"
-	// CLIENTS: Client connections section
-	Clients Section = "clients"
-	// MEMORY: Memory consumption related information
-	Memory Section = "memory"
-	// PERSISTENCE: RDB and AOF related information
-	Persistence Section = "persistence"
-	// STATS: General statistics
-	Stats Section = "stats"
-	// REPLICATION: Master/replica replication information
-	Replication Section = "replication"
-	// CPU: CPU consumption statistics
-	Cpu Section = "cpu"
-	// COMMANDSTATS: Valkey command statistics
-	Commandstats Section = "commandstats"
-	// LATENCYSTATS: Valkey command latency percentile distribution statistics
-	Latencystats Section = "latencystats"
-	// SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
-	Sentinel Section = "sentinel"
-	// CLUSTER: Valkey Cluster section
-	Cluster Section = "cluster"
-	// MODULES: Modules section
-	Modules Section = "modules"
-	// KEYSPACE: Database related statistics
-	Keyspace Section = "keyspace"
-	// ERRORSTATS: Valkey error statistics
-	Errorstats Section = "errorstats"
-	// ALL: Return all sections (excluding module generated ones)
-	All Section = "all"
-	// DEFAULT: Return only the default set of sections
-	Default Section = "default"
-	// EVERYTHING: Includes all and modules
-	Everything Section = "everything"
-)
-
 // Optional arguments for `Info` for standalone client
 type InfoOptions struct {
 	// A list of [Section] values specifying which sections of information to retrieve.
@@ -478,24 +337,21 @@ type InfoOptions struct {
 // Optional arguments for `Info` for cluster client
 type ClusterInfoOptions struct {
 	*InfoOptions
-	// Specifies the routing configuration for the command.
-	// The client will route the command to the nodes defined by `Route`.
-	// The command will be routed to all primary nodes, unless `Route` is provided.
-	Route *config.Route
+	*RouteOption
 }
 
-func (opts *InfoOptions) toArgs() []string {
+func (opts *InfoOptions) ToArgs() ([]string, error) {
 	if opts == nil {
-		return []string{}
+		return []string{}, nil
 	}
 	args := make([]string, 0, len(opts.Sections))
 	for _, section := range opts.Sections {
 		args = append(args, string(section))
 	}
-	return args
+	return args, nil
 }
 
-// Optional arguments to Copy(source string, destination string, option *CopyOptions)
+// Optional arguments to Copy(source string, destination string, option CopyOptions)
 //
 // [valkey.io]: https://valkey.io/commands/Copy/
 type CopyOptions struct {
@@ -505,7 +361,7 @@ type CopyOptions struct {
 	dbDestination int64
 }
 
-func NewCopyOptionsBuilder() *CopyOptions {
+func NewCopyOptions() *CopyOptions {
 	return &CopyOptions{replace: false}
 }
 
@@ -521,14 +377,33 @@ func (copyOption *CopyOptions) SetDBDestination(destinationDB int64) *CopyOption
 	return copyOption
 }
 
-func (opts *CopyOptions) toArgs() ([]string, error) {
+func (opts *CopyOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.replace {
-		args = append(args, string("REPLACE"))
+		args = append(args, string(ReplaceKeyword))
 	}
 	if opts.dbDestination >= 0 {
 		args = append(args, "DB", utils.IntToString(opts.dbDestination))
 	}
 	return args, err
+}
+
+// Optional arguments for `ZPopMin` and `ZPopMax` commands.
+type ZPopOptions struct {
+	count int64
+}
+
+func NewZPopOptions() *ZPopOptions {
+	return &ZPopOptions{}
+}
+
+// The maximum number of popped elements. If not specified, pops one member.
+func (opts *ZPopOptions) SetCount(count int64) *ZPopOptions {
+	opts.count = count
+	return opts
+}
+
+func (opts *ZPopOptions) ToArgs() ([]string, error) {
+	return []string{utils.IntToString(opts.count)}, nil
 }

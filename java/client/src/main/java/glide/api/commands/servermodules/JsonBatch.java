@@ -18,14 +18,14 @@ import lombok.NonNull;
  * @example
  *     <pre>{@code
  * Transaction transaction = new Transaction();
- * MultiJson.set(transaction, "doc", ".", "{\"a\": 1.0, \"b\": 2}");
- * MultiJson.get(transaction, "doc");
+ * JsonBatch.set(transaction, "doc", ".", "{\"a\": 1.0, \"b\": 2}");
+ * JsonBatch.get(transaction, "doc");
  * Object[] result = client.exec(transaction).get();
- * assert result[0].equals("OK"); // result of MultiJson.set()
- * assert result[1].equals("{\"a\": 1.0, \"b\": 2}"); // result of MultiJson.get()
+ * assert result[0].equals("OK"); // result of JsonBatch.set()
+ * assert result[1].equals("{\"a\": 1.0, \"b\": 2}"); // result of JsonBatch.get()
  * }</pre>
  */
-public class MultiJson {
+public class JsonBatch {
 
     private static final String JSON_PREFIX = "JSON.";
     private static final String JSON_SET = JSON_PREFIX + "SET";
@@ -52,7 +52,7 @@ public class MultiJson {
     private static final String JSON_RESP = JSON_PREFIX + "RESP";
     private static final String JSON_TYPE = JSON_PREFIX + "TYPE";
 
-    private MultiJson() {}
+    private JsonBatch() {}
 
     /**
      * Sets the JSON value at the specified <code>path</code> stored at <code>key</code>.

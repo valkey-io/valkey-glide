@@ -49,7 +49,8 @@ class ReturnField:
         Initialize a new ReturnField instance.
 
         Args:
-            field_identifier (TEncodable): The identifier for the field of the key that has to returned as a result of FT.SEARCH command.
+            field_identifier (TEncodable): The identifier for the field of the key that has to returned as a result of
+                FT.SEARCH command.
             alias (Optional[TEncodable]): The alias to override the name of the field in the FT.SEARCH result.
         """
         self.field_identifier = field_identifier
@@ -87,11 +88,16 @@ class FtSearchOptions:
         Initialize the FT.SEARCH optional fields.
 
         Args:
-            return_fields (Optional[List[ReturnField]]): The fields of a key that are returned by FT.SEARCH command. See `ReturnField`.
-            timeout (Optional[int]): This value overrides the timeout parameter of the module. The unit for the timout is in milliseconds.
-            params (Optional[Mapping[TEncodable, TEncodable]]): Param key/value pairs that can be referenced from within the query expression.
-            limit (Optional[FtSearchLimit]): This option provides pagination capability. Only the keys that satisfy the offset and count values are returned. See `FtSearchLimit`.
-            count (Optional[bool]): This flag option suppresses returning the contents of keys. Only the number of keys is returned.
+            return_fields (Optional[List[ReturnField]]): The fields of a key that are returned by FT.SEARCH command.
+                See `ReturnField`.
+            timeout (Optional[int]): This value overrides the timeout parameter of the module.
+                The unit for the timout is in milliseconds.
+            params (Optional[Mapping[TEncodable, TEncodable]]): Param key/value pairs that can be referenced from within the
+                query expression.
+            limit (Optional[FtSearchLimit]): This option provides pagination capability. Only the keys that satisfy the offset
+                and count values are returned. See `FtSearchLimit`.
+            count (Optional[bool]): This flag option suppresses returning the contents of keys.
+                Only the number of keys is returned.
         """
         self.return_fields = return_fields
         self.timeout = timeout
