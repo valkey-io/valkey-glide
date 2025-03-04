@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"sync"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
@@ -72,7 +73,9 @@ type clientConfiguration interface {
 }
 
 type baseClient struct {
+	pending    map[unsafe.Pointer]struct{}
 	coreClient unsafe.Pointer
+	mu         sync.Mutex
 }
 
 // Creates a connection by invoking the `create_client` function from Rust library via FFI.
@@ -104,17 +107,28 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 		return nil, &errors.ConnectionError{Msg: message}
 	}
 
-	return &baseClient{cResponse.conn_ptr}, nil
+	return &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}, nil
 }
 
 // Close terminates the client by closing all associated resources.
 func (client *baseClient) Close() {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
 	if client.coreClient == nil {
 		return
 	}
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
+
+	// iterating the channel map while holding the lock guarantees those unsafe.Pointers is still valid
+	// because holding the lock guarantees the owner of the unsafe.Pointer hasn't exit.
+	for channelPtr := range client.pending {
+		resultChannel := *(*chan payload)(channelPtr)
+		resultChannel <- payload{value: nil, error: &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}}
+	}
+	client.pending = nil
 }
 
 func (client *baseClient) executeCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
@@ -200,9 +214,6 @@ func (client *baseClient) executeCommandWithRoute(
 	args []string,
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
-	if client.coreClient == nil {
-		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
-	}
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
@@ -227,13 +238,20 @@ func (client *baseClient) executeCommandWithRoute(
 		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
 	}
 
-	resultChannel := make(chan payload)
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
 
 	pinner := pinner{}
 	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
 	defer pinner.Unpin()
 
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
 	C.command(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
@@ -244,7 +262,16 @@ func (client *baseClient) executeCommandWithRoute(
 		routeBytesPtr,
 		routeBytesCount,
 	)
+	client.mu.Unlock()
+
 	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
 	if payload.error != nil {
 		return nil, payload.error
 	}
@@ -284,7 +311,7 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 func (client *baseClient) Set(key string, value string) (string, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -422,7 +449,7 @@ func (client *baseClient) GetExWithOptions(key string, options options.GetExOpti
 func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -677,7 +704,7 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
 	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -736,7 +763,7 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	result, err := client.executeCommand(C.LCS, []string{key1, key2})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -1107,7 +1134,7 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 func (client *baseClient) HScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.HScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1139,12 +1166,12 @@ func (client *baseClient) HScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.HScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1869,7 +1896,7 @@ func (client *baseClient) SUnion(keys []string) (map[string]struct{}, error) {
 func (client *baseClient) SScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.SScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1902,12 +1929,12 @@ func (client *baseClient) SScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.SScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -2020,7 +2047,7 @@ func (client *baseClient) LIndex(key string, index int64) (Result[string], error
 func (client *baseClient) LTrim(key string, start int64, end int64) (string, error) {
 	result, err := client.executeCommand(C.LTrim, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -2500,7 +2527,7 @@ func (client *baseClient) BLMPopCount(
 func (client *baseClient) LSet(key string, index int64, element string) (string, error) {
 	result, err := client.executeCommand(C.LSet, []string{key, utils.IntToString(index), element})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -3097,7 +3124,7 @@ func (client *baseClient) Unlink(keys []string) (int64, error) {
 func (client *baseClient) Type(key string) (string, error) {
 	result, err := client.executeCommand(C.Type, []string{key})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -3152,7 +3179,7 @@ func (client *baseClient) Touch(keys []string) (int64, error) {
 func (client *baseClient) Rename(key string, newKey string) (string, error) {
 	result, err := client.executeCommand(C.Rename, []string{key, newKey})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -3582,7 +3609,7 @@ func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 	return handleStringDoubleMapResponse(result)
 }
 
-// Removes and returns up to `count` members with the lowest scores from the sorted set
+// Removes and returns multiple members with the lowest scores from the sorted set
 // stored at the specified `key`.
 //
 // see [valkey.io] for details.
@@ -3590,7 +3617,7 @@ func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 // Parameters:
 //
 //	key - The key of the sorted set.
-//	count - The number of members to remove.
+//	options - Pop options, see [options.ZPopOptions].
 //
 // Return value:
 //
@@ -4439,7 +4466,7 @@ func (client *baseClient) ZScore(key string, member string) (Result[float64], er
 func (client *baseClient) ZScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.ZScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -4470,12 +4497,12 @@ func (client *baseClient) ZScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.ZScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -4592,7 +4619,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 	args := append([]string{key, group, id}, optionArgs...)
 	result, err := client.executeCommand(C.XGroupCreate, args)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -4778,7 +4805,7 @@ func (client *baseClient) XGroupSetIdWithOptions(
 	args := append([]string{key, group, id}, optionArgs...)
 	result, err := client.executeCommand(C.XGroupSetId, args)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
