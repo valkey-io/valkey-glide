@@ -101,6 +101,13 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            # Older dotnet fails if sees a references to a newer one
+            - name: Patch project files
+              run: |
+                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+                  find {benchmarks,csharp} -name '*.csproj' | xargs \
+                      sed -i $SED_FOR_MACOS "s|<TargetFrameworks>.*</TargetFrameworks>|<TargetFrameworks>net${{ matrix.dotnet }}</TargetFrameworks>|g"
+
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
               run: dotnet test --framework net${{ matrix.dotnet }} "-l:html;LogFileName=TestReport.html" --results-directory . -warnaserror
@@ -160,8 +167,6 @@ jobs:
                   echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
@@ -175,6 +180,13 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            # Older dotnet fails if sees a references to a newer one
+            - name: Patch project files
+              run: |
+                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+                  find {benchmarks,csharp} -name '*.csproj' | xargs \
+                      sed -i $SED_FOR_MACOS "s|<TargetFrameworks>.*</TargetFrameworks>|<TargetFrameworks>net${{ matrix.dotnet }}</TargetFrameworks>|g"
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
