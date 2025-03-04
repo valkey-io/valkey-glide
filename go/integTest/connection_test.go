@@ -93,7 +93,12 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 				}
 			}()
 			time.Sleep(1 * time.Second) // Wait to ensure the debug sleep command is running
-			_, err := suite.createConnectionTimeoutClient(clusterMode, 100, 250, backoffStrategy)
+			var err error
+			if clusterMode {
+				_, err = suite.createConnectionTimeoutClusterClient(100, 250)
+			} else {
+				_, err = suite.createConnectionTimeoutClient(100, 250, backoffStrategy)
+			}
 			assert.Error(suite.T(), err)
 			assert.True(suite.T(), strings.Contains(err.Error(), "timed out"))
 		}
@@ -106,7 +111,13 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 				}
 			}()
 			time.Sleep(1 * time.Second) // Wait to ensure the debug sleep command is running
-			timeoutClient, err := suite.createConnectionTimeoutClient(clusterMode, 10000, 250, backoffStrategy)
+			var timeoutClient api.BaseClient
+			var err error
+			if clusterMode {
+				timeoutClient, err = suite.createConnectionTimeoutClusterClient(10000, 250)
+			} else {
+				timeoutClient, err = suite.createConnectionTimeoutClient(10000, 250, backoffStrategy)
+			}
 			assert.NoError(suite.T(), err)
 			if timeoutClient != nil {
 				defer timeoutClient.Close()
