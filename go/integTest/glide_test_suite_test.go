@@ -261,11 +261,15 @@ func (suite *GlideTestSuite) client(config *api.GlideClientConfiguration) api.Gl
 	return client
 }
 
-func (suite *GlideTestSuite) defaultClusterClient() api.GlideClusterClientCommands {
-	config := api.NewGlideClusterClientConfiguration().
+func (suite *GlideTestSuite) defaultClusterClientConfig() *api.GlideClusterClientConfiguration {
+	return api.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5000)
+}
+
+func (suite *GlideTestSuite) defaultClusterClient() api.GlideClusterClientCommands {
+	config := suite.defaultClusterClientConfig()
 	return suite.clusterClient(config)
 }
 

@@ -18,7 +18,10 @@ func TestDefaultStandaloneConfig(t *testing.T) {
 		ReadFrom:           protobuf.ReadFrom_Primary,
 	}
 
-	result := config.toProtobuf()
+	result, err := config.toProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
 
 	assert.Equal(t, expected, result)
 }
@@ -31,7 +34,10 @@ func TestDefaultClusterConfig(t *testing.T) {
 		ReadFrom:           protobuf.ReadFrom_Primary,
 	}
 
-	result := config.toProtobuf()
+	result, err := config.toProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
 
 	assert.Equal(t, expected, result)
 }
@@ -79,7 +85,10 @@ func TestConfig_allFieldsSet(t *testing.T) {
 		)
 	}
 
-	result := config.toProtobuf()
+	result, err := config.toProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
 
 	assert.Equal(t, expected, result)
 }
@@ -126,4 +135,41 @@ func TestServerCredentials(t *testing.T) {
 			assert.Equal(t, parameter.expected, result)
 		})
 	}
+}
+
+func TestConfig_AzAffinity(t *testing.T) {
+	hosts := []string{"host1", "host2"}
+	ports := []int{1234, 5678}
+	clientName := "client name"
+	az := "us-east-1a"
+
+	config := NewGlideClientConfiguration().
+		WithUseTLS(true).
+		WithReadFrom(AzAffinity).
+		WithClientName(clientName).
+		WithClientAZ(az)
+
+	expected := &protobuf.ConnectionRequest{
+		TlsMode:            protobuf.TlsMode_SecureTls,
+		ReadFrom:           protobuf.ReadFrom_AZAffinity,
+		ClusterModeEnabled: false,
+		ClientName:         clientName,
+		ClientAz:           az,
+	}
+
+	assert.Equal(t, len(hosts), len(ports))
+	for i := 0; i < len(hosts); i++ {
+		config.WithAddress(&NodeAddress{hosts[i], ports[i]})
+		expected.Addresses = append(
+			expected.Addresses,
+			&protobuf.NodeAddress{Host: hosts[i], Port: uint32(ports[i])},
+		)
+	}
+
+	result, err := config.toProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
+
+	assert.Equal(t, expected, result)
 }
