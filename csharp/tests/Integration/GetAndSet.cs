@@ -9,13 +9,13 @@ using static Tests.Integration.IntegrationTestBase;
 namespace Tests.Integration;
 public class GetAndSet : IClassFixture<IntegrationTestBase>
 {
-    private async Task GetAndSetValues(AsyncClient client, string key, string value)
+    private async Task GetAndSetValues(BaseClient client, string key, string value)
     {
-        Assert.Equal("OK", await client.SetAsync(key, value));
-        Assert.Equal(value, await client.GetAsync(key));
+        Assert.Equal("OK", await client.Set(key, value));
+        Assert.Equal(value, await client.Get(key));
     }
 
-    private async Task GetAndSetRandomValues(AsyncClient client)
+    private async Task GetAndSetRandomValues(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
         string value = Guid.NewGuid().ToString();
@@ -25,14 +25,14 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
     [Fact]
     public async Task GetReturnsLastSet()
     {
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
         await GetAndSetRandomValues(client);
     }
 
     [Fact]
     public async Task GetAndSetCanHandleNonASCIIUnicode()
     {
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
         string key = Guid.NewGuid().ToString();
         string value = "שלום hello 汉字";
         await GetAndSetValues(client, key, value);
@@ -41,14 +41,14 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
     [Fact]
     public async Task GetReturnsNull()
     {
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
-        Assert.Null(await client.GetAsync(Guid.NewGuid().ToString()));
+        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        Assert.Null(await client.Get(Guid.NewGuid().ToString()));
     }
 
     [Fact]
     public async Task GetReturnsEmptyString()
     {
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
         string key = Guid.NewGuid().ToString();
         string value = string.Empty;
         await GetAndSetValues(client, key, value);
@@ -63,7 +63,7 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
             //"Flaky on MacOS"
             return;
         }
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
 
         string key = Guid.NewGuid().ToString();
         string value = Guid.NewGuid().ToString();
@@ -87,7 +87,7 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
             return;
         }
 
-        using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
+        using BaseClient client = new GlideClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
         List<Task> operations = [];
 
         for (int i = 0; i < 1000; ++i)
@@ -103,7 +103,7 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
                     }
                     else
                     {
-                        Assert.Null(await client.GetAsync(Guid.NewGuid().ToString()));
+                        Assert.Null(await client.Get(Guid.NewGuid().ToString()));
                     }
                 }
             }));
