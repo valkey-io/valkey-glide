@@ -90,9 +90,7 @@ jobs:
 
             - name: Install extra software on self-hosted runner
               if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
-              run: | 
-                  sudo apt-get update
-                  sudo apt-get install npm --no-install-recommends
+              uses: actions/setup-node@v4
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
