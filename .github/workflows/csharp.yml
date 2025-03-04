@@ -88,9 +88,11 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Setup self-hosted runner access
+            - name: Install extra software on self-hosted runner
               if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
-              run: sudo mkdir -p /usr/share/dotnet
+              run: | 
+                  sudo apt-get update
+                  sudo apt-get install npm --no-install-recommends
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
