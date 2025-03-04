@@ -65,20 +65,6 @@ func ExampleGlideClusterClient_EchoWithOptions() {
 	// Output: Hello World
 }
 
-func ExampleGlideClusterClient_ClientIdWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	// same sections with random route
-	route := config.Route(config.RandomRoute)
-	opts := options.RouteOption{Route: route}
-	response, err = client.ClientIdWithOptions(opts)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(response)
-
-	// Output: 1
-}
-
 func ExampleGlideClusterClient_ClientGetName() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	route := config.Route(config.RandomRoute)
