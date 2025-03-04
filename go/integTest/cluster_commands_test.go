@@ -319,7 +319,7 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 	var keys []string
 
 	for !cursor.HasFinished() {
-		cursor, keys, err = client.Scan(&cursor)
+		cursor, keys, err = client.Scan(cursor)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -348,7 +348,7 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 	allKeys = make([]string, 0, 100)
 
 	for !cursor.HasFinished() {
-		cursor, keys, err = client.Scan(&cursor)
+		cursor, keys, err = client.Scan(cursor)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -383,7 +383,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	var keys []string
 
 	for !cursor.HasFinished() {
-		cursor, keys, err = client.ScanWithOptions(&cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(cursor, *opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -409,7 +409,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	matchedKeys := []string{}
 
 	for !cursor.HasFinished() {
-		cursor, keys, err = client.ScanWithOptions(&cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(cursor, *opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -437,7 +437,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	matchedTypeKeys := []string{}
 
 	for !cursor.HasFinished() {
-		cursor, keys, err = client.ScanWithOptions(&cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(cursor, *opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -477,7 +477,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithNonUTF8Pattern() {
 
 	for !cursor.HasFinished() {
 		var keys []string
-		cursor, keys, err = client.ScanWithOptions(&cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(cursor, *opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -525,7 +525,7 @@ func (suite *GlideTestSuite) TestClusterScanWithObjectTypeAndPattern() {
 
 	for !cursor.HasFinished() {
 		var keys []string
-		cursor, keys, err = client.ScanWithOptions(&cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(cursor, *opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -568,7 +568,7 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 		keysOf100 := []string{}
 
 		var keys []string
-		cursor, keys, err = client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetCount(1))
+		cursor, keys, err = client.ScanWithOptions(cursor, *options.NewClusterScanOptions().SetCount(1))
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -580,7 +580,7 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 			break
 		}
 
-		cursor, keys, err = client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetCount(100))
+		cursor, keys, err = client.ScanWithOptions(cursor, *options.NewClusterScanOptions().SetCount(100))
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -627,7 +627,7 @@ func (suite *GlideTestSuite) TestClusterScanWithMatch() {
 
 	for !cursor.HasFinished() {
 		var keys []string
-		cursor, keys, err = client.ScanWithOptions(&cursor, *options.NewClusterScanOptions().SetMatch("key-*"))
+		cursor, keys, err = client.ScanWithOptions(cursor, *options.NewClusterScanOptions().SetMatch("key-*"))
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -701,7 +701,7 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 	for !cursor.HasFinished() {
 		var keys []string
 		cursor, keys, err = client.ScanWithOptions(
-			&cursor,
+			cursor,
 			*options.NewClusterScanOptions().SetType(options.ObjectTypeList),
 		)
 		if err != nil {

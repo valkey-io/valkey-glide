@@ -403,9 +403,9 @@ func (client *GlideClusterClient) clusterScan(
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClusterClient) Scan(
-	cursor *options.ClusterScanCursor,
+	cursor options.ClusterScanCursor,
 ) (options.ClusterScanCursor, []string, error) {
-	response, err := client.clusterScan(cursor, *options.NewClusterScanOptions())
+	response, err := client.clusterScan(&cursor, *options.NewClusterScanOptions())
 	if err != nil {
 		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
 	}
@@ -441,10 +441,10 @@ func (client *GlideClusterClient) Scan(
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClusterClient) ScanWithOptions(
-	cursor *options.ClusterScanCursor,
+	cursor options.ClusterScanCursor,
 	opts options.ClusterScanOptions,
 ) (options.ClusterScanCursor, []string, error) {
-	response, err := client.clusterScan(cursor, opts)
+	response, err := client.clusterScan(&cursor, opts)
 	if err != nil {
 		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
 	}
