@@ -185,7 +185,7 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 func (client *GlideClusterClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -212,19 +212,19 @@ func (client *GlideClusterClient) Ping() (string, error) {
 func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (string, error) {
 	args, err := pingOptions.ToArgs()
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	if pingOptions.RouteOption == nil || pingOptions.RouteOption.Route == nil {
 		response, err := client.executeCommand(C.Ping, args)
 		if err != nil {
-			return defaultStringResponse, err
+			return DefaultStringResponse, err
 		}
 		return handleStringResponse(response)
 	}
 
 	response, err := client.executeCommandWithRoute(C.Ping, args, pingOptions.Route)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(response)
@@ -323,18 +323,6 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 // Return value:
 //
 //	The id of the client.
-//
-// Example:
-//
-//	route := config.Route(config.RandomRoute)
-//	opts = options.RouteOption{Route: route}
-//	response, err = client.ClientIdWithOptions(opts)
-//	if err != nil {
-//	  // handle error
-//	}
-//	for node, data := range response {
-//		fmt.Printf("%s node returned %s\n", node, data)
-//	}
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
 func (client *GlideClusterClient) ClientIdWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
