@@ -94,7 +94,6 @@ jobs:
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
-              id: dotnet
               with:
                   dotnet-version: ${{ matrix.dotnet }}
               env:
