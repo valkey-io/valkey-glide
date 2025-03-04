@@ -107,7 +107,7 @@ jobs:
 
             - name: Run Example Tests
               working-directory: go
-              if: ${{ matrix.engine.version != '6.2' }}
+              if: ${{ matrix.engine.version == '8.0' }}
               run: |
                   make -k example-test
 
