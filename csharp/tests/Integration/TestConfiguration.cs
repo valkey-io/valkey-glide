@@ -3,8 +3,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-using Glide;
-
 [assembly: AssemblyFixture(typeof(Tests.Integration.TestConfiguration))]
 
 namespace Tests.Integration;
