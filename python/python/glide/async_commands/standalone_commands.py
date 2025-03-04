@@ -301,7 +301,8 @@ class StandaloneCommands(CoreCommands):
                         b"description": None,
                         b"flags": {b"no-writes"},
                     }],
-                    b"library_code": b"#!lua name=mylib \n sever.register_function('myfunc', function(keys, args) return args[1] end)"
+                    b"library_code": b"#!lua name=mylib \n sever.register_function('myfunc', function(keys, args) " \
+                                     b"return args[1] end)"
                 }]
 
         Since: Valkey 7.0.0.

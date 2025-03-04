@@ -110,9 +110,11 @@ class StreamAddOptions:
         Initialize stream add options.
 
         Args:
-            id (Optional[TEncodable]): ID for the new entry. If set, the new entry will be added with this ID. If not specified, '*' is used.
+            id (Optional[TEncodable]): ID for the new entry. If set, the new entry will be added with this ID. If not
+                specified, '*' is used.
             make_stream (bool, optional): If set to False, a new stream won't be created if no stream matches the given key.
-            trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream. See `StreamTrimOptions`.
+            trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream.
+                See `StreamTrimOptions`.
         """
         self.id = id
         self.make_stream = make_stream
