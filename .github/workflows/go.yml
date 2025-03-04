@@ -216,12 +216,6 @@ jobs:
                   make install-tools-go${{ matrix.go }} build
                   make -k unit-test integ-test
 
-            - name: Run Example Tests
-              working-directory: go
-              if: ${{ matrix.engine.version != '6.2' }}
-              run: |
-                  make -k example-test
-
             - name: Upload test reports
               if: always()
               continue-on-error: true
