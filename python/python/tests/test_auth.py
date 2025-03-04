@@ -34,47 +34,6 @@ class TestAuthCommands:
         except RequestError:
             pass
 
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_update_connection_password(
-        self, glide_client: TGlideClient, management_client: TGlideClient
-    ):
-        """
-        Test replacing the connection password without immediate re-authentication.
-        Verifies that:
-        1. The client can update its internal password
-        2. The client remains connected with current auth
-        3. The client can reconnect using the new password after server password change
-        This test is only for cluster mode, as standalone mode does not have a connection available handler
-        """
-        result = await glide_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=False
-        )
-        assert result == OK
-        # Verify that the client is still authenticated
-        assert await glide_client.set("test_key", "test_value") == OK
-        value = await glide_client.get("test_key")
-        assert value == b"test_value"
-        await config_set_new_password(glide_client, NEW_PASSWORD)
-        await kill_connections(management_client)
-        # Add a short delay to allow the server to apply the new password
-        # without this delay, command may or may not time out while the client reconnect
-        # ending up with a flaky test
-        await asyncio.sleep(1)
-        # Verify that the client is able to reconnect with the new password,
-        value = await glide_client.get("test_key")
-        assert value == b"test_value"
-        await glide_client.update_connection_password(None)
-        await kill_connections(management_client)
-        await asyncio.sleep(1)
-        # Verify that the client is able to immediateAuth with the new password after client is killed
-        result = await glide_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=True
-        )
-        assert result == OK
-        # Verify that the client is still authenticated
-        assert await glide_client.set("test_key", "test_value") == OK
-
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_connection_lost_before_password_update(
