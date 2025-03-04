@@ -88,10 +88,17 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Setup self-hosted runner access
+              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
+              run: sudo mkdir -p /usr/share/dotnet
+
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
+              id: dotnet
               with:
                   dotnet-version: ${{ matrix.dotnet }}
+              env:
+                  DOTNET_INSTALL_DIR: ~/.dotnet
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -101,12 +108,8 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            # Older dotnet fails if sees a references to a newer one
-            - name: Patch project files
-              run: |
-                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  find {benchmarks,csharp} -name '*.csproj' | xargs \
-                      sed -i $SED_FOR_MACOS "s|<TargetFrameworks>.*</TargetFrameworks>|<TargetFrameworks>net${{ matrix.dotnet }}</TargetFrameworks>|g"
+            - name: Create temporary global.json
+              run: echo '{"sdk":{"version": "${{ steps.dotnet.outputs.dotnet-version }}"}}' > csharp/global.json
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
@@ -181,12 +184,8 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            # Older dotnet fails if sees a references to a newer one
-            - name: Patch project files
-              run: |
-                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  find {benchmarks,csharp} -name '*.csproj' | xargs \
-                      sed -i $SED_FOR_MACOS "s|<TargetFrameworks>.*</TargetFrameworks>|<TargetFrameworks>net${{ matrix.dotnet }}</TargetFrameworks>|g"
+            - name: Create temporary global.json
+              run: echo '{"sdk":{"version": "${{ steps.dotnet.outputs.dotnet-version }}"}}' > csharp/global.json
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
