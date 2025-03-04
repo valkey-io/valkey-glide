@@ -162,6 +162,7 @@ jobs:
                   npm_scope: ${{ vars.NPM_SCOPE }}
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  os-version: ${{ matrix.build.OS_VERSION }}
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash
@@ -272,6 +273,7 @@ jobs:
                   os: ubuntu
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  os-version: "ubuntu-latest"
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash

@@ -102,6 +102,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+                  os-version: ${{ matrix.host.OS_VERSION }}
 
             - name: test
               run: npm test
@@ -220,6 +221,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
                   arch: ${{ matrix.host.ARCH }}
+                  os-version: ${{ matrix.host.OS_VERSION }}
 
             - name: test
               if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
@@ -268,6 +270,7 @@ jobs:
                   arch: arm64
                   target: aarch64-unknown-linux-gnu
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  os-version: "ubuntu-self-hosted"
 
             - name: test
               run: npm run test-modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true

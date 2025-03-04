@@ -100,6 +100,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+                  os-version: ${{ matrix.host.OS_VERSION }}
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
@@ -175,6 +176,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+                  os-version: ${{ matrix.host.OS_VERSION }}
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp

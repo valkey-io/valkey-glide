@@ -44,6 +44,7 @@ jobs:
                   target: "x86_64-unknown-linux-gnu"
                   engine-version: "7.2.5"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  os-version: "ubuntu-latest"
 
             - name: Cache dependencies
               uses: Swatinem/rust-cache@v2
