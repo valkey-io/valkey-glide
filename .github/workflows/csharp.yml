@@ -88,11 +88,17 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Install Node on self-hosted runner
+              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+
             - name: Install extra software on self-hosted runner
               if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y npm nodejs
+                  sudo apt-get install -y npm
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
