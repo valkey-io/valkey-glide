@@ -657,8 +657,8 @@ impl ClusterScanCursor {
     ///
     /// # Safety
     ///
-    /// Unsafe because we will be creating a cursor object that has a reference
-    /// to a C string allocated within the Go client.
+    /// Unsafe because we are dereferencing a reference to a
+    /// C string allocated within the Go client.
     #[no_mangle]
     pub unsafe extern "C" fn new_cluster_cursor(new_cursor: *const c_char) -> Self {
         if !new_cursor.is_null() {
