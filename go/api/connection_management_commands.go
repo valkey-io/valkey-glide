@@ -15,4 +15,6 @@ type ConnectionManagementCommands interface {
 	PingWithOptions(pingOptions options.PingOptions) (string, error)
 
 	Echo(message string) (Result[string], error)
+
+	ClientId() (int64, error)
 }
