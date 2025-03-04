@@ -500,6 +500,7 @@ message ScriptInvocation {
 message Batch {
     bool is_atomic = 1;
     repeated Command commands = 2;
+    bool raise_on_error = 3;
 }
 
 message ClusterScan {

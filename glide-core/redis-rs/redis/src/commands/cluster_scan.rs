@@ -644,7 +644,7 @@ where
     };
     // Send the SCAN command using the current scan state and scan arguments
     let ((new_cursor, new_keys), mut scan_state) =
-        try_scan(&scan_state, &cluster_scan_args, core.clone()).await?;
+        try_scan(&scan_state, &cluster_scan_args, core.clone()).await?; //probably here
 
     // Check if the cursor indicates the end of the current scan segment
     if new_cursor == 0 {
@@ -670,7 +670,10 @@ where
     );
 
     // Return the updated scan state and the newly found keys
-    Ok((ScanStateRC::from_scan_state(scan_state), new_keys))
+    Ok((
+        ScanStateRC::from_scan_state(scan_state),
+        Value::extract_error_vec(new_keys, None, None)?,
+    ))
 }
 
 /// Sends the `SCAN` command to the specified address.

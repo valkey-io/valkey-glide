@@ -935,13 +935,29 @@ export class BaseClient {
             }
 
             try {
-                resolve(
-                    valueFromSplitPointer(
-                        pointer.high!,
-                        pointer.low!,
-                        decoder === Decoder.String,
-                    ),
+                // TODO: improve this
+                const result = valueFromSplitPointer(
+                    pointer.high!,
+                    pointer.low!,
+                    decoder === Decoder.String,
                 );
+
+                // TODO: make sure ServerError is part of Array only and not Array of Arrays / Map
+                if (Array.isArray(result)) {
+                    for (let i = 0; i < result.length; i++) {
+                        if (
+                            Object.hasOwn(result[i], "name") &&
+                            (result[i] as { name: string }).name ==
+                                "RequestError"
+                        ) {
+                            result[i] = new RequestError(
+                                (result[i] as { message: string }).message,
+                            );
+                        }
+                    }
+                }
+
+                resolve(result);
             } catch (err: unknown) {
                 Logger.log("error", "Decoder", `Decoding error: '${err}'`);
                 reject(
@@ -1122,6 +1138,7 @@ export class BaseClient {
                   callbackIdx,
                   batch: command_request.Batch.create({
                       isAtomic: true,
+                      raiseOnError: true,
                       commands: command,
                   }),
                   route,

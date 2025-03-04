@@ -297,6 +297,7 @@ class BaseClient(CoreCommands):
             transaction_commands.append(command)
         request.batch.commands.extend(transaction_commands)
         request.batch.is_atomic = True
+        request.batch.raise_on_error = True
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 

@@ -3,7 +3,7 @@ mod support;
 
 mod test_pipeline {
 
-    use redis::{cluster_topology::get_slot, ErrorKind};
+    use redis::{cluster_async::ClusterConnection, cluster_topology::get_slot, ErrorKind};
     use std::collections::HashMap;
 
     use redis::{
@@ -48,6 +48,63 @@ mod test_pipeline {
             }
         }
         panic!("Failed to find a good key after 1000 attempts");
+    }
+
+    pub async fn assert_moved_err_received(
+        connection: &mut ClusterConnection,
+        expected_count: usize,
+    ) {
+        // Build the INFO errorstats command.
+        let mut info_errorstats_cmd = cmd("INFO");
+        info_errorstats_cmd.arg("errorstats");
+
+        // Execute the command on all nodes.
+        let res = connection
+            .route_command(
+                &info_errorstats_cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .expect("INFO errorstats command failed");
+
+        println!("INFO errorstats output: {:?}", res);
+
+        // Parse the output as a String.
+        // Parse the INFO output.
+        let info_result: HashMap<String, String> =
+            redis::from_owned_redis_value(res).expect("Failed to parse INFO command result");
+
+        // Search for the "errorstat_MOVED" line.
+        let mut moved_count: Option<usize> = None;
+        for info in info_result.values() {
+            for line in info.lines() {
+                if line.starts_with("errorstat_MOVED:") {
+                    if let Some(count_str) = line.strip_prefix("errorstat_MOVED:count=") {
+                        let count_val = count_str
+                            .split(',')
+                            .next()
+                            .unwrap_or("0")
+                            .parse::<usize>()
+                            .unwrap_or(0);
+                        println!("Found errorstat_MOVED count: {}", count_val);
+                        moved_count = Some(count_val + moved_count.unwrap_or(0));
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Assert that the found count matches the expected count.
+        match moved_count {
+            Some(count) => {
+                assert_eq!(
+                    count, expected_count,
+                    "Expected errorstat_MOVED count {} but found {}",
+                    expected_count, count
+                );
+            }
+            None => panic!("errorstat_MOVED not found in INFO errorstats output"),
+        }
     }
 
     #[tokio::test]
@@ -123,66 +180,19 @@ mod test_pipeline {
         let good_key = good_key_finder();
         let good_key2 = good_key_finder();
 
-        // Build two pipelines:
-        // 1. Pipeline for the bad key.
-        let mut pipeline_bad = Pipeline::new();
-        pipeline_bad.set(&bad_key, "value");
-        pipeline_bad.get(&bad_key);
-        pipeline_bad.get(generate_random_string(5));
+        let mut pipeline = Pipeline::new();
+        pipeline.set(&bad_key, "value");
+        pipeline.get(&bad_key);
+        pipeline.set(&good_key, "value");
+        pipeline.get(&good_key);
+        pipeline.set(&good_key2, "value2");
+        pipeline.get(&good_key2);
 
-        // 2. Pipeline for the good key.
-        let mut pipeline_good = Pipeline::new();
-        pipeline_good.set(&good_key, "value");
-        pipeline_good.get(&good_key);
-        pipeline_good.set(&good_key2, "value2");
-        pipeline_good.get(&good_key2);
-
-        // Execute the pipeline with the bad key.
-        let res_bad = connection
-            .route_pipeline(
-                &pipeline_bad,
-                0,
-                pipeline_bad.len(),
-                SingleNodeRoutingInfo::Random,
-            )
-            .await;
-
-        // Execute the pipeline with the good key.
-        let res_good = connection
-            .route_pipeline(
-                &pipeline_good,
-                0,
-                pipeline_good.len(),
-                SingleNodeRoutingInfo::Random,
-            )
+        // Execute the pipeline.
+        let res = connection
+            .route_pipeline(&pipeline, 0, pipeline.len(), SingleNodeRoutingInfo::Random)
             .await
-            .expect(&format!(
-                "Pipeline with good key failed. Good keys: '{}' '{}', new slot distribution: {:?}",
-                good_key, good_key2, new_slot_distribution
-            ));
-
-        // Assert that the pipeline with the bad key returns an error.
-        assert!(
-            res_bad.is_err(),
-            "Pipeline with bad key should fail due to killed node. \
-             Bad key: '{}' (slot {}), killed node routing: {:?}, \
-             initial slot distribution: {:?} \
-             final slot distribution: {:?} \
-             result: {:?}",
-            bad_key,
-            bad_slot,
-            killed_node_routing,
-            slot_distribution,
-            new_slot_distribution,
-            res_bad
-        );
-        let res_error = res_bad.unwrap_err();
-        assert_eq!(
-            res_error.kind(),
-            ErrorKind::IoError,
-            "Unexpected error kind for bad key pipeline. Error: {:?}",
-            res_error
-        );
+            .expect("Failed to execute pipeline");
 
         // Assert that the pipeline with the good key succeeds.
         let expected = vec![
@@ -192,37 +202,25 @@ mod test_pipeline {
             Value::BulkString(b"value2".to_vec()),
         ];
         assert_eq!(
-            res_good, expected,
-            "Pipeline with good key returned unexpected result. \
+            &res[2..],
+            expected,
+            "Pipeline returned unexpected result. \
             Good keys: '{}' '{}', result: {:?}",
-            good_key, good_key2, res_good
+            good_key,
+            good_key2,
+            &res[2..]
+        );
+
+        assert!(
+            matches!(res[0], Value::ServerError(_)) && matches!(res[1], Value::ServerError(_)),
+            "Expected server error responses for the bad key operations, but got: {:?}",
+            &res[0..2]
         );
     }
 
     #[tokio::test]
     #[serial_test::serial]
-    //TODO: change this test when MOVED error handling is implemented
-    /// This test simulates a MOVED error in a cluster pipeline.
-    ///
-    /// Currently, our client does not handle MOVED errors in a granular way.
-    /// If any command in a sub-pipeline returns a MOVED error, the entire sub-pipeline is re-sent.
-    ///
-    /// In this test:
-    /// - We build a pipeline with several commands:
-    ///   - INCR "key2" 5
-    ///   - SET "key" "value"
-    ///   - GET "key"
-    ///
-    /// - Both keys are being served by the same node, so they are in the same sub-pipeline..
-    /// - We then move the slot of `key` using `move_specific_slot`, which triggers a MOVED error when the
-    ///   sub-pipeline is processed.
-    /// - Due to the current error handling, the entire sub-pipeline is re-executed.
-    ///   As a result, the INCR command on `key2` is executed twice (incrementing from 0 to 5 and then 5 to 10).
-    ///
-    /// Expected outcome:
-    /// The pipeline returns an array of responses and the response for the INCR command is 10,
-    /// demonstrating that the sub-pipeline was executed twice.
-    async fn test_pipeline_with_moved_error_with_retries_causes_re_execution() {
+    async fn test_pipeline_with_moved_error_with_retries() {
         // Create a test cluster with 3 masters and no replicas.
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -244,10 +242,6 @@ mod test_pipeline {
         let (key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
         let key_slot = get_slot(key.as_str().as_bytes());
 
-        // Simulate a slot move by moving the slot of `key_slot` to a different node.
-        // We know that `key` hashes to slot `key_slot`, which will trigger a MOVED error.
-        // Both `key` and `key2` are served by the same node,
-        // so the entire sub-pipeline will be re-sent when the MOVED error occurs.
         cluster
             .move_specific_slot(key_slot, slot_distribution)
             .await;
@@ -257,17 +251,15 @@ mod test_pipeline {
         pipeline.incr(&key2, 5).set(&key, "value").get(&key);
 
         // Execute the pipeline.
-        // We're using an offset of 0 and expecting 3 commands' responses to be relevant for routing.
         let result = connection
             .route_pipeline(&pipeline, 0, 3, SingleNodeRoutingInfo::Random)
             .await
             .expect("Pipeline execution failed");
 
-        // The expected outcome is that the INCR on "ls" increments twice, from 0 to 10.
         let expected = vec![
-            Value::Int(10),                       // INCR `key2` executed twice (5 + 5)
-            Value::Okay,                          // SET `key`
-            Value::BulkString(b"value".to_vec()), // GET `key`
+            Value::Int(5),
+            Value::Okay,
+            Value::BulkString(b"value".to_vec()),
         ];
         assert_eq!(
             result, expected,
@@ -277,6 +269,8 @@ mod test_pipeline {
              Actual result: {:?}",
             key, key2, key_slot, result
         );
+
+        assert_moved_err_received(&mut connection, 2).await;
     }
 
     #[tokio::test]
@@ -311,32 +305,33 @@ mod test_pipeline {
         // Execute the pipeline.
         let result = connection
             .route_pipeline(&pipeline, 0, pipeline.len(), SingleNodeRoutingInfo::Random)
-            .await;
+            .await
+            .expect("Pipeline execution failed");
 
         assert!(
-            result.is_err(),
-            "Expected a MOVED error, but pipeline succeeded.\n\
-                 Key: '{}'\n\
-                 Key2: '{}'\n\
-                 Slot to move: {}\n\
-                 Pipeline result: {:?}",
-            key,
-            key2,
-            slot_to_move,
-            result
+            result[2] == Value::Okay,
+            "Expected the SET command to succeed, but got {:?}",
+            result[2]
         );
-        let err = result.unwrap_err();
-        assert_eq!(
-            err.kind(),
-            ErrorKind::Moved,
-            "Expected error kind MOVED, but got {:?}.\n\
-             Key: '{}'\n\
-             Key2: '{}'\n\
-             Slot to move: {}",
-            err,
-            key,
-            key2,
-            slot_to_move
+
+        assert!(
+            if let Value::ServerError(ref err) = result[0] {
+                err.kind() == ErrorKind::Moved
+            } else {
+                false
+            },
+            "Expected a server error response for the SET command, but got {:?}",
+            result[0]
+        );
+
+        assert!(
+            if let Value::ServerError(ref err) = result[1] {
+                err.kind() == ErrorKind::Moved
+            } else {
+                false
+            },
+            "Expected a server error response for the GET command, but got {:?}",
+            result[1]
         );
     }
 
