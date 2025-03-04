@@ -311,3 +311,24 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 	}
 	return createClusterSingleValue[string](data), nil
 }
+
+// Rewrites the configuration file with the current configuration.
+// The command will be routed a random node, unless `Route` in `routeOptions` is provided.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/config-rewrite/
+func (client *GlideClusterClient) ConfigRewriteWithOptions(opts options.RouteOption) (string, error) {
+	response, err := client.executeCommandWithRoute(C.ConfigRewrite, []string{}, opts.Route)
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}

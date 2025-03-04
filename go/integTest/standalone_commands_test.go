@@ -516,3 +516,8 @@ func (suite *GlideTestSuite) TestTime_Error() {
 	assert.Nil(suite.T(), results)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
+
+func (suite *GlideTestSuite) TestConfigRewrite() {
+	client := suite.defaultClient()
+	suite.verifyOK(client.ConfigRewrite())
+}
