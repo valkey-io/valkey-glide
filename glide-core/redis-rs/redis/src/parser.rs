@@ -500,7 +500,7 @@ mod tests {
         let result = codec.decode_eof(&mut bytes).unwrap().unwrap();
 
         assert_eq!(
-            result,
+            result.unwrap().extract_error(None, None),
             Err(RedisError::from((
                 ErrorKind::BusyLoadingError,
                 "An error was signalled by the server",
@@ -523,7 +523,7 @@ mod tests {
         let result = parse_redis_value(bytes);
 
         assert_eq!(
-            result,
+            result.unwrap().extract_error(None, None),
             Err(RedisError::from((
                 ErrorKind::BusyLoadingError,
                 "An error was signalled by the server",
@@ -601,11 +601,11 @@ mod tests {
     fn decode_resp3_blob_error() {
         let val = parse_redis_value(b"!21\r\nSYNTAX invalid syntax\r\n");
         assert_eq!(
-            val.err(),
-            Some(make_extension_error(
-                "SYNTAX".to_string(),
-                Some("invalid syntax".to_string())
-            ))
+            val.unwrap(),
+            Value::ServerError(ServerError::ExtensionError {
+                code: "SYNTAX".to_string(),
+                detail: Some("invalid syntax".to_string())
+            })
         )
     }
 
