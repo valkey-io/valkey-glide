@@ -208,6 +208,10 @@ name = "test_async_cluster_connections_logic"
 required-features = ["cluster-async"]
 
 [[test]]
+name = "test_pipeline"
+required-features = ["cluster-async"]
+
+[[test]]
 name = "test_bignum"
 
 [[bench]]

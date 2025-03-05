@@ -298,6 +298,7 @@ mod auth {
             Some(&standalone_context),
         )
         .await;
+
         assert!(connection_should_fail.is_err());
     }
 }

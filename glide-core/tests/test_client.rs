@@ -148,7 +148,7 @@ pub(crate) mod shared_client_tests {
             for _ in 0..4 {
                 let _ = test_basics
                     .client
-                    .send_transaction(&pipe, None)
+                    .send_transaction(&pipe, None, true)
                     .await
                     .unwrap();
             }
@@ -497,7 +497,10 @@ pub(crate) mod shared_client_tests {
             let mut pipeline = redis::pipe();
             pipeline.atomic();
             pipeline.cmd("GET").arg("foo");
-            let result = test_basics.client.send_transaction(&pipeline, None).await;
+            let result = test_basics
+                .client
+                .send_transaction(&pipeline, None, true)
+                .await;
             assert!(result.is_err(), "Received {:?}", result);
             let err = result.unwrap_err();
             assert!(err.is_timeout(), "{err}");
@@ -611,7 +614,7 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, true)
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -661,7 +664,7 @@ pub(crate) mod shared_client_tests {
             let mut pipeline = Pipeline::new();
             pipeline.set(&key, &value).get(&key).llen(&key).get(&key2);
 
-            let res = test_basics.client.send_pipeline(&pipeline).await;
+            let res = test_basics.client.send_pipeline(&pipeline, true).await;
             assert!(res.is_err(), "Pipeline should fail with wrong type error");
             let err = res.unwrap_err();
 
@@ -706,7 +709,7 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, true)
                 .await
                 .expect("Pipeline failed");
 
@@ -755,7 +758,7 @@ pub(crate) mod shared_client_tests {
                 .blpop(&key2, 2.0)
                 .get(&key2);
 
-            let res = test_basics.client.send_pipeline(&pipeline).await;
+            let res = test_basics.client.send_pipeline(&pipeline, true).await;
             assert!(
                 res.is_err(),
                 "Pipeline should fail with blocking command taking too long"
@@ -801,7 +804,7 @@ pub(crate) mod shared_client_tests {
 
             let res = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, true)
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -848,7 +851,7 @@ pub(crate) mod shared_client_tests {
 
             let res = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, true)
                 .await
                 .expect("Pipeline failed after killing all connections");
 
@@ -898,7 +901,7 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, true)
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -933,7 +936,7 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, true)
                 .await
                 .expect("Pipeline failed");
 
@@ -974,7 +977,7 @@ pub(crate) mod shared_client_tests {
             // Execute the pipeline.
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, true)
                 .await
                 .expect("Pipeline execution failed");
 
@@ -1107,7 +1110,10 @@ pub(crate) mod shared_client_tests {
             pipeline.cmd("INCRBYFLOAT").arg(&key).arg("0.5");
             pipeline.del(&key);
 
-            let result = test_basics.client.send_transaction(&pipeline, None).await;
+            let result = test_basics
+                .client
+                .send_transaction(&pipeline, None, true)
+                .await;
             assert_eq!(
                 result,
                 Ok(Value::Array(vec![

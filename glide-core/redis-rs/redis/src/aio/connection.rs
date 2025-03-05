@@ -212,10 +212,14 @@ where
 
             for _ in 0..offset {
                 let response = self.read_response().await;
-                if let Err(err) = response {
-                    if first_err.is_none() {
+                match response {
+                    Ok(Value::ServerError(err)) if first_err.is_none() && cmd.is_atomic() => {
+                        first_err = Some(err.into());
+                    }
+                    Err(err) if first_err.is_none() => {
                         first_err = Some(err);
                     }
+                    _ => {}
                 }
             }
 

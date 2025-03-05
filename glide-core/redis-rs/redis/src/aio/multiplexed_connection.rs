@@ -44,17 +44,19 @@ enum ResponseAggregate {
         current_response_count: usize,
         buffer: Vec<Value>,
         first_err: Option<RedisError>,
+        is_transaction: bool,
     },
 }
 
 impl ResponseAggregate {
-    fn new(pipeline_response_count: Option<usize>) -> Self {
+    fn new(pipeline_response_count: Option<usize>, is_transaction: bool) -> Self {
         match pipeline_response_count {
             Some(response_count) => ResponseAggregate::Pipeline {
                 expected_response_count: response_count,
                 current_response_count: 0,
                 buffer: Vec::new(),
                 first_err: None,
+                is_transaction,
             },
             None => ResponseAggregate::SingleCommand,
         }
@@ -72,6 +74,7 @@ struct PipelineMessage<S> {
     output: PipelineOutput,
     // If `None`, this is a single request, not a pipeline of multiple requests.
     pipeline_response_count: Option<usize>,
+    is_transaction: bool,
 }
 
 /// Wrapper around a `Stream + Sink` where each item sent through the `Sink` results in one or more
@@ -182,8 +185,19 @@ where
                 current_response_count,
                 buffer,
                 first_err,
+                is_transaction,
             } => {
+                println!("PipelineSink::send_result: expected_response_count: {}, current_response_count: {}", expected_response_count, current_response_count);
+                println!("result: {:?}", result);
                 match result {
+                    Ok(Value::ServerError(err))
+                        if *current_response_count < (*expected_response_count - 1)
+                            && *is_transaction =>
+                    {
+                        if first_err.is_none() {
+                            *first_err = Some(err.into());
+                        }
+                    }
                     Ok(item) => {
                         buffer.push(item);
                     }
@@ -241,6 +255,7 @@ where
             input,
             output,
             pipeline_response_count,
+            is_transaction,
         }: PipelineMessage<SinkItem>,
     ) -> Result<(), Self::Error> {
         // If there is nothing to receive our output we do not need to send the message as it is
@@ -259,7 +274,8 @@ where
 
         match self_.sink_stream.start_send(input) {
             Ok(()) => {
-                let response_aggregate = ResponseAggregate::new(pipeline_response_count);
+                let response_aggregate =
+                    ResponseAggregate::new(pipeline_response_count, is_transaction);
                 let entry = InFlight {
                     output,
                     response_aggregate,
@@ -352,7 +368,7 @@ where
         item: SinkItem,
         timeout: Duration,
     ) -> Result<Value, RedisError> {
-        self.send_recv(item, None, timeout).await
+        self.send_recv(item, None, timeout, false).await
     }
 
     async fn send_recv(
@@ -361,6 +377,7 @@ where
         // If `None`, this is a single request, not a pipeline of multiple requests.
         pipeline_response_count: Option<usize>,
         timeout: Duration,
+        is_atomic: bool,
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
@@ -369,6 +386,7 @@ where
                 input,
                 pipeline_response_count,
                 output: sender,
+                is_transaction: is_atomic,
             })
             .await
             .map_err(|err| {
@@ -551,6 +569,7 @@ impl MultiplexedConnection {
                 cmd.get_packed_pipeline(),
                 Some(offset + count),
                 self.response_timeout,
+                cmd.is_atomic(),
             )
             .await;
 
