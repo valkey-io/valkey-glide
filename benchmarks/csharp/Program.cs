@@ -11,6 +11,7 @@ using Glide;
 using LinqStatistics;
 
 using StackExchange.Redis;
+using static Glide.ConnectionConfiguration;
 
 public static class MainClass
 {
@@ -263,7 +264,9 @@ public static class MainClass
         {
             ClientWrapper[] clients = await CreateClients(clientCount, () =>
             {
-                BaseClient glide_client = new GlideClient(host, PORT, useTLS);
+                StandaloneClientConfiguration config = new StandaloneClientConfigurationBuilder()
+                    .WithAddress(host, PORT).WithTls(useTLS).Build();
+                BaseClient glide_client = new GlideClient(config);
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await glide_client.Get(key),
                      async (key, value) => await glide_client.Set(key, value),
