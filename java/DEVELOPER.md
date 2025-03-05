@@ -227,6 +227,12 @@ To run end-to-end tests, use the following command:
 ./gradlew :integTest:test
 ```
 
+To run integration tests for pubsub feature:
+
+```bash
+./gradlew :integTest:pubsubTest
+```
+
 IT suite start the server for testing - standalone and cluster installation using `cluster_manager` script.
 By default, it starts servers without TLS; to activate TLS add `-Dtls=true` to the command line:
 ```bash
