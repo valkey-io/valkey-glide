@@ -9,7 +9,7 @@ using Glide.Internals;
 /// Reusable source of ValueTask. This object can be allocated once and then reused
 /// to create multiple asynchronous operations, as long as each call to CreateTask
 /// is awaited to completion before the next call begins.
-internal class Message<T>(int index, MessageContainer<T> container) : INotifyCompletion
+internal class Message<T>(int index, MessageContainer container) : INotifyCompletion where T : class?
 {
     /// This is the index of the message in an external array, that allows the user to
     /// know how to find the message and set its result.
@@ -18,18 +18,18 @@ internal class Message<T>(int index, MessageContainer<T> container) : INotifyCom
     public IntPtr[]? Args { get; private set; }
     // We need to save the args count, because sometimes we get arrays that are larger than they need to be. We can't rely on `this.args.Length`, due to it coming from an array pool.
     private int _argsCount;
-    private MessageContainer<T> Container { get; } = container;
+    private MessageContainer Container { get; } = container;
     private Action? _continuation = () => { };
     private const int COMPLETION_STAGE_STARTED = 0;
     private const int COMPLETION_STAGE_NEXT_SHOULD_EXECUTE_CONTINUATION = 1;
     private const int COMPLETION_STAGE_CONTINUATION_EXECUTED = 2;
     private int _completionState;
-    private T? _result;
+    private T? _result = default;
     private Exception? _exception;
 
     /// Triggers a succesful completion of the task returned from the latest call
     /// to CreateTask.
-    public void SetResult(T? result)
+    public void SetResult(T result)
     {
         _result = result;
         FinishSet();
@@ -72,7 +72,7 @@ internal class Message<T>(int index, MessageContainer<T> container) : INotifyCom
     /// This returns a task that will complete once SetException / SetResult are called,
     /// and ensures that the internal state of the message is set-up before the task is created,
     /// and cleaned once it is complete.
-    public void SetupTask(IntPtr[] arguments, int argsCount, object client)
+    public void SetupTask(IntPtr[] arguments, object client)
     {
         _continuation = null;
         _completionState = COMPLETION_STAGE_STARTED;
@@ -80,7 +80,7 @@ internal class Message<T>(int index, MessageContainer<T> container) : INotifyCom
         _exception = null;
         _client = client;
         Args = arguments;
-        _argsCount = argsCount;
+        _argsCount = arguments.Length;
     }
 
     // This function isn't thread-safe. Access to it should be from a single thread, and only once per operation.
@@ -113,5 +113,23 @@ internal class Message<T>(int index, MessageContainer<T> container) : INotifyCom
 
     public bool IsCompleted => _completionState == COMPLETION_STAGE_CONTINUATION_EXECUTED;
 
-    public T? GetResult() => _exception is null ? _result : throw _exception;
+    public T GetResult()
+    {
+        if (_exception is not null)
+        {
+            throw _exception;
+        }
+        if (Nullable.GetUnderlyingType(typeof(T)) == null && _result == null)
+        {
+            // T is NOT nullable
+#if NET8_0_OR_GREATER
+            throw new UnreachableException();
+#else
+            throw new NullReferenceException("unreachable");
+#endif
+        }
+#pragma warning disable CS8603 // Possible null reference return.
+        return _result;
+#pragma warning restore CS8603 // Possible null reference return.
+    }
 }
