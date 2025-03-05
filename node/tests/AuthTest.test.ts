@@ -15,7 +15,7 @@ import {
     GlideClient,
     GlideClusterClient,
     ProtocolVersion,
-    RequestError
+    RequestError,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
@@ -26,8 +26,8 @@ import {
 
 type BaseClient = GlideClient | GlideClusterClient;
 
-const USERNAME = "username"
-const INITIAL_PASSWORD = "initial_password"
+const USERNAME = "username";
+const INITIAL_PASSWORD = "initial_password";
 const NEW_PASSWORD = "new_password";
 const WRONG_PASSWORD = "wrong_password";
 const TIMEOUT = 50000;
@@ -46,18 +46,18 @@ describe("Auth tests", () => {
         // Connect to cluster or create a new one based on the parsed addresses
         cmdCluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
-                false,
-                parseEndpoints(standaloneAddresses),
-                getServerVersion,
-            )
+                  false,
+                  parseEndpoints(standaloneAddresses),
+                  getServerVersion,
+              )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
 
         cmeCluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
-                true,
-                parseEndpoints(clusterAddresses),
-                getServerVersion,
-            )
+                  true,
+                  parseEndpoints(clusterAddresses),
+                  getServerVersion,
+              )
             : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
 
         // Create appropriate client based on mode
@@ -75,12 +75,27 @@ describe("Auth tests", () => {
     ): { host: string; port: number }[] =>
         addresses.map(([host, port]) => ({ host, port }));
 
-    async function setNewAclUsernameWithPassword(client: BaseClient, username: string, password: string) {
-        await client.customCommand(['ACL', 'SETUSER', username, 'on', `>${password}`, '~*', '+@all']);
+    async function setNewAclUsernameWithPassword(
+        client: BaseClient,
+        username: string,
+        password: string,
+    ) {
+        await client.customCommand([
+            "ACL",
+            "SETUSER",
+            username,
+            "on",
+            `>${password}`,
+            "~*",
+            "+@all",
+        ]);
     }
 
-    async function deleteAclUsernameAndPassword(client: BaseClient, username: string) {
-        return await client.customCommand(['ACL', 'DELUSER', username]);
+    async function deleteAclUsernameAndPassword(
+        client: BaseClient,
+        username: string,
+    ) {
+        return await client.customCommand(["ACL", "DELUSER", username]);
     }
 
     afterEach(async () => {
@@ -132,7 +147,11 @@ describe("Auth tests", () => {
             );
         }
 
-        await setNewAclUsernameWithPassword(managementClient, USERNAME, INITIAL_PASSWORD);
+        await setNewAclUsernameWithPassword(
+            managementClient,
+            USERNAME,
+            INITIAL_PASSWORD,
+        );
 
         const ClientClass = isStandaloneMode ? GlideClient : GlideClusterClient;
         const addresses = formatAddresses(activeCluster.getAddresses());
@@ -339,48 +358,61 @@ describe("Auth tests", () => {
                 }, protocol);
             });
             /*
-            * Test replacing the connection password without immediate re-authentication, when the client is pre-authenticated as an acl user.
-            * Verifies that:
-            * 1. The client can update its internal password
-            * 2. The client remains connected with current auth after non-immediate password update.
-            * 3. The client can reconnect using the new password after the user was deleted and reset with the new password on the server side (which causes the server to kill connections).
-            * Currently, this test is only supported for cluster mode,
-            * since standalone mode dont have multiple connections to manage,
-            * and the client will try to reconnect and will not listen to new tasks.
-            */
+             * Test replacing the connection password without immediate re-authentication, when the client is pre-authenticated as an acl user.
+             * Verifies that:
+             * 1. The client can update its internal password
+             * 2. The client remains connected with current auth after non-immediate password update.
+             * 3. The client can reconnect using the new password after the user was deleted and reset with the new password on the server side (which causes the server to kill connections).
+             * Currently, this test is only supported for cluster mode,
+             * since standalone mode dont have multiple connections to manage,
+             * and the client will try to reconnect and will not listen to new tasks.
+             */
             it(
                 "test_update_connection_password_with_acl_user",
                 async () => {
-                    await runTest(async (client: BaseClient,) => {
-                        if (client instanceof GlideClient) {
-                            return;
-                        }
-                        // Update password without re-authentication
-                        const result = await client.updateConnectionPassword(
-                            NEW_PASSWORD,
-                            false,
-                        );
-                        expect(result).toEqual("OK");
+                    await runTest(
+                        async (client: BaseClient) => {
+                            if (client instanceof GlideClient) {
+                                return;
+                            }
 
-                        // Verify client still works with old auth
-                        await client.set("test_key", "test_value");
-                        const value = await client.get("test_key");
-                        expect(value).toEqual("test_value");
+                            // Update password without re-authentication
+                            const result =
+                                await client.updateConnectionPassword(
+                                    NEW_PASSWORD,
+                                    false,
+                                );
+                            expect(result).toEqual("OK");
 
-                        // Update server password - this also kills the connection 
-                        await deleteAclUsernameAndPassword(managementClient, USERNAME);
-                        await setNewAclUsernameWithPassword(managementClient, USERNAME, NEW_PASSWORD);
+                            // Verify client still works with old auth
+                            await client.set("test_key", "test_value");
+                            const value = await client.get("test_key");
+                            expect(value).toEqual("test_value");
 
-                        // Verify client auto-reconnects with new password
-                        await client.set("test_key2", "test_value2");
-                        const value2 = await client.get("test_key2");
-                        expect(value2).toEqual("test_value2");
-                    }, protocol, {
-                        credentials: {
-                            username: USERNAME,
-                            password: INITIAL_PASSWORD
-                        }
-                    });
+                            // Update server password - this also kills the connection
+                            await deleteAclUsernameAndPassword(
+                                managementClient,
+                                USERNAME,
+                            );
+                            await setNewAclUsernameWithPassword(
+                                managementClient,
+                                USERNAME,
+                                NEW_PASSWORD,
+                            );
+
+                            // Verify client auto-reconnects with new password
+                            await client.set("test_key2", "test_value2");
+                            const value2 = await client.get("test_key2");
+                            expect(value2).toEqual("test_value2");
+                        },
+                        protocol,
+                        {
+                            credentials: {
+                                username: USERNAME,
+                                password: INITIAL_PASSWORD,
+                            },
+                        },
+                    );
                 },
                 TIMEOUT,
             );
@@ -389,105 +421,148 @@ describe("Auth tests", () => {
              * Verifies that immediate re-authentication fails when the password is not valid.
              */
             it("test_update_connection_password_auth_non_valid_pass_acl_user", async () => {
-                await runTest(async (client: BaseClient) => {
-                    await expect(
-                        client.updateConnectionPassword(null, true),
-                    ).rejects.toThrow(RequestError);
-                    await expect(
-                        client.updateConnectionPassword("", true),
-                    ).rejects.toThrow(RequestError);
-                }, protocol, {
-                    credentials: {
-                        username: USERNAME,
-                        password: INITIAL_PASSWORD
-                    }
-                });
+                await runTest(
+                    async (client: BaseClient) => {
+                        await expect(
+                            client.updateConnectionPassword(null, true),
+                        ).rejects.toThrow(RequestError);
+                        await expect(
+                            client.updateConnectionPassword("", true),
+                        ).rejects.toThrow(RequestError);
+                    },
+                    protocol,
+                    {
+                        credentials: {
+                            username: USERNAME,
+                            password: INITIAL_PASSWORD,
+                        },
+                    },
+                );
             });
             /**
              * Test that re-authentication fails when using wrong password with an acl user.
              */
             it("test_replace_password_immediateAuth_wrong_password_acl_user", async () => {
-                await runTest(async (client: BaseClient) => {
-                    await deleteAclUsernameAndPassword(managementClient, USERNAME);
-                    await setNewAclUsernameWithPassword(managementClient, USERNAME, NEW_PASSWORD);
+                await runTest(
+                    async (client: BaseClient) => {
+                        await deleteAclUsernameAndPassword(
+                            managementClient,
+                            USERNAME,
+                        );
+                        await setNewAclUsernameWithPassword(
+                            managementClient,
+                            USERNAME,
+                            NEW_PASSWORD,
+                        );
 
-                    await expect(
-                        client.updateConnectionPassword(WRONG_PASSWORD, true),
-                    ).rejects.toThrow(RequestError);
-                    await expect(
-                        client.updateConnectionPassword(NEW_PASSWORD, true),
-                    ).resolves.toBe("OK");
-                }, protocol, {
-                    credentials: {
-                        username: USERNAME,
-                        password: INITIAL_PASSWORD
-                    }
-                });
+                        await expect(
+                            client.updateConnectionPassword(
+                                WRONG_PASSWORD,
+                                true,
+                            ),
+                        ).rejects.toThrow(RequestError);
+                        await expect(
+                            client.updateConnectionPassword(NEW_PASSWORD, true),
+                        ).resolves.toBe("OK");
+                    },
+                    protocol,
+                    {
+                        credentials: {
+                            username: USERNAME,
+                            password: INITIAL_PASSWORD,
+                        },
+                    },
+                );
             });
             /**
-            * Test deleting the user and reseting it with new password, which kills the connections, then re-authenticating with immediate re-authentication.
-            */
+             * Test deleting the user and reseting it with new password, which kills the connections, then re-authenticating with immediate re-authentication.
+             */
             it(
                 "test_update_connection_password_with_immediateAuth_acl_user",
                 async () => {
-                    await runTest(async (client: BaseClient) => {
-                        // Delete user and reset it with new password
-                        await deleteAclUsernameAndPassword(managementClient, USERNAME);
-                        await setNewAclUsernameWithPassword(managementClient, USERNAME, NEW_PASSWORD);
-
-                        // Update client password with re-auth - make sure it reconnects successfuly with new password
-                        expect(
-                            await client.updateConnectionPassword(
+                    await runTest(
+                        async (client: BaseClient) => {
+                            // Delete user and reset it with new password
+                            await deleteAclUsernameAndPassword(
+                                managementClient,
+                                USERNAME,
+                            );
+                            await setNewAclUsernameWithPassword(
+                                managementClient,
+                                USERNAME,
                                 NEW_PASSWORD,
-                                true,
-                            ),
-                        ).toEqual("OK");
+                            );
 
-                        // Verify client works with new auth
-                        await client.set("test_key", "test_value");
-                        const value = await client.get("test_key");
-                        expect(value).toEqual("test_value");
-                    }, protocol, {
-                        credentials: {
-                            username: USERNAME,
-                            password: INITIAL_PASSWORD
-                        }
-                    });
+                            // Update client password with re-auth - make sure it reconnects successfuly with new password
+                            expect(
+                                await client.updateConnectionPassword(
+                                    NEW_PASSWORD,
+                                    true,
+                                ),
+                            ).toEqual("OK");
+
+                            // Verify client works with new auth
+                            await client.set("test_key", "test_value");
+                            const value = await client.get("test_key");
+                            expect(value).toEqual("test_value");
+                        },
+                        protocol,
+                        {
+                            credentials: {
+                                username: USERNAME,
+                                password: INITIAL_PASSWORD,
+                            },
+                        },
+                    );
                 },
                 TIMEOUT,
             );
             /**
-            * Test changing server password when connection is lost before password update.
-            * Verifies that the client will not be able to reach the connection under the abstraction and return an error.
-            *
-            * **Note: This test is only supported for standalone mode, bellow explanation why*
-            */
+             * Test changing server password when connection is lost before password update.
+             * Verifies that the client will not be able to reach the connection under the abstraction and return an error.
+             *
+             * **Note: This test is only supported for standalone mode, bellow explanation why*
+             */
             it("test_update_connection_password_connection_lost_before_password_update_acl_user", async () => {
-                await runTest(async (client: BaseClient) => {
-                    if (client instanceof GlideClusterClient) {
-                        return;
-                    }
+                await runTest(
+                    async (client: BaseClient) => {
+                        if (client instanceof GlideClusterClient) {
+                            return;
+                        }
 
-                    // Set a key to ensure connection is established
-                    await client.set("test_key", "test_value");
+                        // Set a key to ensure connection is established
+                        await client.set("test_key", "test_value");
 
-                    // Delete user and reset it with new password. This also kills the server conneciton. 
-                    await deleteAclUsernameAndPassword(managementClient, USERNAME);
-                    await setNewAclUsernameWithPassword(managementClient, USERNAME, NEW_PASSWORD);
+                        // Delete user and reset it with new password. This also kills the server conneciton.
+                        await deleteAclUsernameAndPassword(
+                            managementClient,
+                            USERNAME,
+                        );
+                        await setNewAclUsernameWithPassword(
+                            managementClient,
+                            USERNAME,
+                            NEW_PASSWORD,
+                        );
 
-                    // Try updating client password without immediate re-auth and with, both should fail
-                    await expect(
-                        client.updateConnectionPassword(NEW_PASSWORD, false),
-                    ).rejects.toThrow(RequestError);
-                    await expect(
-                        client.updateConnectionPassword(NEW_PASSWORD, true),
-                    ).rejects.toThrow(RequestError);
-                }, protocol, {
-                    credentials: {
-                        username: USERNAME,
-                        password: INITIAL_PASSWORD
-                    }
-                });
+                        // Try updating client password without immediate re-auth and with, both should fail
+                        await expect(
+                            client.updateConnectionPassword(
+                                NEW_PASSWORD,
+                                false,
+                            ),
+                        ).rejects.toThrow(RequestError);
+                        await expect(
+                            client.updateConnectionPassword(NEW_PASSWORD, true),
+                        ).rejects.toThrow(RequestError);
+                    },
+                    protocol,
+                    {
+                        credentials: {
+                            username: USERNAME,
+                            password: INITIAL_PASSWORD,
+                        },
+                    },
+                );
             });
         },
     );

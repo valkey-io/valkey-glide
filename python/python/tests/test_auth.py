@@ -8,14 +8,14 @@ from glide.constants import OK
 from glide.exceptions import RequestError
 from glide.glide_client import TGlideClient
 from tests.conftest import (
-    USERNAME,
     NEW_PASSWORD,
+    USERNAME,
     WRONG_PASSWORD,
     auth_client,
     config_set_new_password,
+    delete_acl_username_and_password,
     kill_connections,
     set_new_acl_username_with_password,
-    delete_acl_username_and_password
 )
 
 
@@ -35,12 +35,11 @@ class TestAuthCommands:
             await auth_client(management_client, NEW_PASSWORD)
             await config_set_new_password(management_client, "")
             await management_client.update_connection_password(None)
-            
+
             # delete USERNAME user
             await delete_acl_username_and_password(management_client, USERNAME)
         except RequestError:
             pass
-        
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -140,8 +139,7 @@ class TestAuthCommands:
             await glide_client.update_connection_password(None, immediate_auth=True)
         with pytest.raises(RequestError):
             await glide_client.update_connection_password("", immediate_auth=True)
-            
-            
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_with_acl_user(
@@ -153,22 +151,27 @@ class TestAuthCommands:
         Verifies that:
         1. The client can update its internal password for the ACL user
         2. The client remains connected with current auth
-        3. The client can reconnect using the new password after server password change (which is simulated by deleting and reseting the user with a new password, which kills the connection)
+        3. The client can reconnect using the new password after server password change (which is simulated by
+        deleting and reseting the user with a new password, which kills the connection).
         This test is only for cluster mode, as standalone mode does not have a connection available handler.
         """
-        
+
         # Create a new ACL user and authenticate the client as the new user
-        await acl_glide_client.update_connection_password(NEW_PASSWORD, immediate_auth= False)
+        await acl_glide_client.update_connection_password(
+            NEW_PASSWORD, immediate_auth=False
+        )
 
         # Verify that the client is authenticated
         assert await acl_glide_client.set("test_key", "test_value") == OK
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
 
-        # Delete the username and reset it with new password (The same effect as doing config_set_new_password in the non-acl tests)
+        # Delete the username and reset it with new password (equivalent to config_set new password)
         assert await delete_acl_username_and_password(management_client, USERNAME) == 1
-        await set_new_acl_username_with_password(management_client, USERNAME, NEW_PASSWORD)
-        
+        await set_new_acl_username_with_password(
+            management_client, USERNAME, NEW_PASSWORD
+        )
+
         # The client should now reconnect with the new password automatically
         # Verify that the client is still able to perform operations
         value = await acl_glide_client.get("test_key")
@@ -182,7 +185,6 @@ class TestAuthCommands:
         value = await acl_glide_client.get("new_key")
         assert value == b"new_value"
 
-
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_connection_lost_before_password_update_with_acl_user(
@@ -194,13 +196,15 @@ class TestAuthCommands:
         """
         await acl_glide_client.set("test_key", "test_value")
         assert await delete_acl_username_and_password(management_client, USERNAME) == 1
-        await set_new_acl_username_with_password(management_client, USERNAME, NEW_PASSWORD)
+        await set_new_acl_username_with_password(
+            management_client, USERNAME, NEW_PASSWORD
+        )
         await asyncio.sleep(1)
         with pytest.raises(RequestError):
             await acl_glide_client.update_connection_password(
                 NEW_PASSWORD, immediate_auth=False
             )
-            
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_with_immediate_auth_with_acl_user(
@@ -213,18 +217,20 @@ class TestAuthCommands:
         2. The client remains operational after re-authentication
         """
         assert await delete_acl_username_and_password(management_client, USERNAME) == 1
-        await set_new_acl_username_with_password(management_client, USERNAME, NEW_PASSWORD)
-        
+        await set_new_acl_username_with_password(
+            management_client, USERNAME, NEW_PASSWORD
+        )
+
         result = await acl_glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=True
         )
         assert result == OK
-        
+
         # Verify client is authenticated
         assert await acl_glide_client.set("test_key", "test_value") == OK
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
-        
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_auth_non_valid_pass_acl_user(
@@ -238,6 +244,3 @@ class TestAuthCommands:
             await acl_glide_client.update_connection_password(None, immediate_auth=True)
         with pytest.raises(RequestError):
             await acl_glide_client.update_connection_password("", immediate_auth=True)
-            
-            
-    
