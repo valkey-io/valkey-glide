@@ -54,6 +54,7 @@ public class TestConfiguration : IDisposable
         StopServer(false);
 
         // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
+        // Not using `Directory.Exists` before deleting, because another process may delete the dir while IT is running.
         string clusterLogsDir = Path.Combine(_scriptDir, "clusters");
         try
         {
