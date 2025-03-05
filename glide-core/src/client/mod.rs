@@ -458,8 +458,13 @@ impl Client {
     ) -> redis::RedisResult<Value> {
         let eval = eval_cmd(hash, keys, args);
         let result = self.send_command(&eval, routing.clone()).await;
-        let Err(err) = result else {
-            return result;
+
+        let err = match result {
+            Ok(value) => match value.extract_error(None, None) {
+                Ok(final_value) => return Ok(final_value),
+                Err(res_err) => res_err,
+            },
+            Err(err) => err,
         };
         if err.kind() == ErrorKind::NoScriptError {
             let Some(code) = get_script(hash) else {

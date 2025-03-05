@@ -294,12 +294,14 @@ mod socket_listener {
         callback_index: u32,
         commands_components: Vec<CommandComponents>,
         is_atomic: bool,
+        raise_on_error: bool,
     ) {
         let mut request = CommandRequest::new();
         request.callback_idx = callback_index;
         let mut batch = Batch::new();
         batch.commands.reserve(commands_components.len());
         batch.is_atomic = is_atomic;
+        batch.raise_on_error = raise_on_error;
 
         for components in commands_components {
             batch.commands.push(get_command(components));
@@ -1197,7 +1199,14 @@ mod socket_listener {
             },
         ];
         let mut buffer = Vec::with_capacity(200);
-        write_batch_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands, true);
+        write_batch_request(
+            &mut buffer,
+            &mut socket,
+            CALLBACK_INDEX,
+            commands,
+            true,
+            true,
+        );
 
         assert_value_response(
             &mut buffer,
@@ -1252,7 +1261,14 @@ mod socket_listener {
             },
         ];
         let mut buffer = Vec::with_capacity(200);
-        write_batch_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands, false);
+        write_batch_request(
+            &mut buffer,
+            &mut socket,
+            CALLBACK_INDEX,
+            commands,
+            false,
+            true,
+        );
 
         assert_value_response(
             &mut buffer,
@@ -1314,7 +1330,14 @@ mod socket_listener {
             },
         ];
         let mut buffer = Vec::with_capacity(200);
-        write_batch_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands, false);
+        write_batch_request(
+            &mut buffer,
+            &mut socket,
+            CALLBACK_INDEX,
+            commands,
+            false,
+            true,
+        );
 
         assert_error_response(
             &mut buffer,
