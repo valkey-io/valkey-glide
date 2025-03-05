@@ -478,14 +478,18 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                     }
                     command_request::Command::SingleCommand(command) => {
                         match get_redis_command(&command) {
-                            Ok(cmd) => match get_route(request.route.0, Some(&cmd)) {
-                                Ok(routes) => send_command(cmd, client, routes).await,
+                            Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
+                                Ok(routes) => {
+                                    cmd.with_span_by_ptr(request.span_command);
+                                    send_command(cmd, client, routes).await
+                                }
                                 Err(e) => Err(e),
                             },
                             Err(e) => Err(e),
                         }
                     }
                     command_request::Command::Transaction(transaction) => {
+                        //ToDo: handle Batch command
                         match get_route(request.route.0, None) {
                             Ok(routes) => send_transaction(transaction, &mut client, routes).await,
                             Err(e) => Err(e),
