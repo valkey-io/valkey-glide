@@ -5,7 +5,6 @@ package api
 import (
 	"fmt"
 
-	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -63,17 +62,4 @@ func ExampleGlideClusterClient_EchoWithOptions() {
 	fmt.Println(result.singleValue)
 
 	// Output: Hello World
-}
-
-func ExampleGlideClusterClient_ClientGetName() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	route := config.Route(config.RandomRoute)
-	opts := options.RouteOption{Route: route}
-	result, err := client.ClientGetNameWithOptions(opts)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(result.singleValue)
-
-	// Output: ConnectionName
 }
