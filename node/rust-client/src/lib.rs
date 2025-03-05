@@ -545,9 +545,3 @@ pub fn get_statistics(env: Env) -> Result<JsObject> {
 
     Ok(stats)
 }
-
-// #[napi]
-// pub fn new_span(name: String, request_id: u32) {
-//     let span = GlideOpenTelemetry::new_span(&name);
-//     GlideOpenTelemetry::set_span_by_id(span, request_id);
-// }

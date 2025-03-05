@@ -10,7 +10,7 @@ import {
     createLeakedOtelSpan,
     dropOtelSpan,
     getStatistics,
-    valueFromSplitPointer
+    valueFromSplitPointer,
 } from "glide-rs";
 import Long from "long";
 import * as net from "net";
@@ -261,6 +261,7 @@ import {
     connection_request,
     response,
 } from "./ProtobufMessage";
+const LongJS = require('long');
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
