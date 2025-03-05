@@ -2,7 +2,10 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/api/config"
+import (
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
 
 // GenericClusterCommands supports commands for the "Generic Commands" group for cluster client.
 //
@@ -13,4 +16,11 @@ type GenericClusterCommands interface {
 	CustomCommand(args []string) (ClusterValue[interface{}], error)
 
 	CustomCommandWithRoute(args []string, route config.Route) (ClusterValue[interface{}], error)
+
+	Scan(cursor options.ClusterScanCursor) (options.ClusterScanCursor, []string, error)
+
+	ScanWithOptions(
+		cursor options.ClusterScanCursor,
+		opts options.ClusterScanOptions,
+	) (options.ClusterScanCursor, []string, error)
 }
