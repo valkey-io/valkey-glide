@@ -42,17 +42,6 @@ func ExampleGlideClient_Echo() {
 	// Output: {Hello World false}
 }
 
-func ExampleGlideClient_ClientId() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.ClientId()
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(result)
-
-	// Output: 1
-}
-
 func ExampleGlideClient_ClientSetName() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	result, err := client.ClientSetName("ConnectionName")
