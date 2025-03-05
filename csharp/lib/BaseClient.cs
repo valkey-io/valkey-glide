@@ -3,12 +3,15 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
 
+using Glide.Commands;
+using Glide.Internals;
+
 namespace Glide;
 
-public class AsyncClient : IDisposable
+public abstract class BaseClient : IDisposable, IStringBaseCommands
 {
     #region public methods
-    public AsyncClient(string host, uint port, bool useTLS)
+    protected BaseClient(string host, uint port, bool useTLS)
     {
         _successCallbackDelegate = SuccessCallback;
         nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(_successCallbackDelegate);
@@ -21,7 +24,7 @@ public class AsyncClient : IDisposable
         }
     }
 
-    private async Task<string?> Command(IntPtr[] args, int argsCount, RequestType requestType)
+    protected async Task<string?> Command(IntPtr[] args, int argsCount, RequestType requestType)
     {
         // We need to pin the array in place, in order to ensure that the GC doesn't move it while the operation is running.
         GCHandle pinnedArray = GCHandle.Alloc(args, GCHandleType.Pinned);
@@ -33,7 +36,7 @@ public class AsyncClient : IDisposable
         return result;
     }
 
-    public async Task<string?> SetAsync(string key, string value)
+    public async Task<string?> Set(string key, string value)
     {
         IntPtr[] args = _arrayPool.Rent(2);
         args[0] = Marshal.StringToHGlobalAnsi(key);
@@ -43,7 +46,7 @@ public class AsyncClient : IDisposable
         return result;
     }
 
-    public async Task<string?> GetAsync(string key)
+    public async Task<string?> Get(string key)
     {
         IntPtr[] args = _arrayPool.Rent(1);
         args[0] = Marshal.StringToHGlobalAnsi(key);
@@ -86,7 +89,7 @@ public class AsyncClient : IDisposable
             message.SetException(new Exception("Operation failed"));
         });
 
-    ~AsyncClient() => Dispose();
+    ~BaseClient() => Dispose();
     #endregion private methods
 
     #region private fields
@@ -125,7 +128,7 @@ public class AsyncClient : IDisposable
     #region RequestType
 
     // TODO: generate this with a bindings generator
-    private enum RequestType
+    protected enum RequestType
     {
         InvalidRequest = 0,
         CustomCommand = 1,

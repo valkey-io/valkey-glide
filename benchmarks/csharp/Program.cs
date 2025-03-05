@@ -263,10 +263,10 @@ public static class MainClass
         {
             ClientWrapper[] clients = await CreateClients(clientCount, () =>
             {
-                AsyncClient glide_client = new(host, PORT, useTLS);
+                BaseClient glide_client = new GlideClient(host, PORT, useTLS);
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
-                    (async (key) => await glide_client.GetAsync(key),
-                     async (key, value) => await glide_client.SetAsync(key, value),
+                    (async (key) => await glide_client.Get(key),
+                     async (key, value) => await glide_client.Set(key, value),
                      () => glide_client.Dispose()));
             });
 

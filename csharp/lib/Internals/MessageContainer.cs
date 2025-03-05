@@ -2,14 +2,14 @@
 
 using System.Collections.Concurrent;
 
-namespace Glide;
+namespace Glide.Internals;
 
 
 internal class MessageContainer<T>
 {
     internal Message<T> GetMessage(int index) => _messages[index];
 
-    internal Message<T> GetMessageForCall(IntPtr[] args, int argsCount)
+    internal Message<T> GetMessageForCall(nint[] args, int argsCount)
     {
         Message<T> message = GetFreeMessage();
         message.SetupTask(args, argsCount, this);
