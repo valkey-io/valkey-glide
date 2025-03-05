@@ -431,7 +431,7 @@ public abstract class ConnectionConfiguration
         #endregion
         #region Client Name
         /// <summary>
-        /// Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
+        /// Client name to be used for the client. Will be used with <c>CLIENT SETNAME</c> command during connection establishment.
         /// </summary>
         public string? ClientName
         {
@@ -530,7 +530,7 @@ public abstract class ConnectionConfiguration
     /// Represents the configuration settings for a Cluster GLIDE client.<br />
     /// Notes: Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff with fixed values is used.
     /// </summary>
-    public class ClusterClientConfigurationBuilder : ClientConfigurationBuilder<StandaloneClientConfigurationBuilder>
+    public class ClusterClientConfigurationBuilder : ClientConfigurationBuilder<ClusterClientConfigurationBuilder>
     {
         public ClusterClientConfigurationBuilder() : base(true) { }
 
