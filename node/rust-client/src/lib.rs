@@ -1,7 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use glide_core::{GlideOpenTelemetry, GlideSpan, Telemetry};
-
 use redis::GlideConnectionOptions;
 
 #[cfg(not(target_env = "msvc"))]
@@ -28,7 +27,6 @@ use std::collections::HashMap;
 use std::ptr::from_mut;
 use std::str;
 use std::sync::Arc;
-use std::sync::Mutex;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
 pub enum Level {
@@ -419,17 +417,17 @@ pub fn create_leaked_double(float: f64) -> [u32; 2] {
 }
 
 /// Creates an open telemetry span with the given name and returns a pointer to the span
-#[napi]
-pub fn create_leaked_otel_span(name: String) -> BigInt {
+#[napi(ts_return_type = "[number, number]")]
+pub fn create_leaked_otel_span(name: String) -> [u32; 2] {
     let span = GlideOpenTelemetry::new_span(&name);
-    return BigInt::from(Arc::into_raw(Arc::new(span)) as u64);
+    split_pointer(from_mut(&mut Arc::into_raw(Arc::new(span))))
 }
 
 #[napi]
 pub fn drop_otel_span(span_ptr: BigInt) {
     let span_ptr = span_ptr.get_u64().1;
     if span_ptr != 0 {
-        unsafe { drop(Arc::from_raw(span_ptr as *const GlideSpan)) };
+        unsafe { Arc::from_raw(span_ptr as *const GlideSpan) };
     }
 }
 
@@ -534,9 +532,3 @@ pub fn get_statistics(env: Env) -> Result<JsObject> {
 
     Ok(stats)
 }
-
-// #[napi]
-// pub fn new_span(name: String, request_id: u32) {
-//     let span = GlideOpenTelemetry::new_span(&name);
-//     GlideOpenTelemetry::set_span_by_id(span, request_id);
-// }

@@ -8,8 +8,9 @@ import {
     Script,
     StartSocketConnection,
     createLeakedOtelSpan,
+    dropOtelSpan,
     getStatistics,
-    valueFromSplitPointer
+    valueFromSplitPointer,
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
@@ -253,6 +254,7 @@ import {
     connection_request,
     response,
 } from "./ProtobufMessage";
+const LongJS = require('long');
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -971,6 +973,7 @@ export class BaseClient {
         } else {
             resolve(null);
         }
+        dropOtelSpan(new LongJS(message.spanCommand));
     }
 
     processPush(response: response.Response) {
@@ -1070,13 +1073,14 @@ export class BaseClient {
             let commandObj = Array.isArray(command)? "Batch": (JSON.parse(JSON.stringify(command))).requestType;
             console.log("Request Type:", commandObj);
             //TODO: creates the span only if the otel config exits
-            let spanPtr = createLeakedOtelSpan(commandObj);
+            let pair = createLeakedOtelSpan(commandObj);
+            let spanPtr = new LongJS(pair[0], pair[1]);
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
                 options?.decoder,
             ];
-            this.writeOrBufferCommandRequest(callbackIndex, command, route);
+            this.writeOrBufferCommandRequest(callbackIndex, command, route, spanPtr);
         });
     }
 
@@ -1138,6 +1142,7 @@ export class BaseClient {
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
+        spanCommand?: number | typeof LongJS | null,
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
@@ -1148,11 +1153,13 @@ export class BaseClient {
                       // TODO: add support for timeout, raiseOnError and retryStrategy
                   }),
                   route,
+                  spanCommand,
               })
             : command_request.CommandRequest.create({
                   callbackIdx,
                   singleCommand: command,
                   route,
+                  spanCommand,
               });
 
         this.writeOrBufferRequest(
