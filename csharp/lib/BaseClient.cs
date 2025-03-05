@@ -34,12 +34,16 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         // We need to pin the array in place, in order to ensure that the GC doesn't move it while the operation is running.
         GCHandle pinnedArray = GCHandle.Alloc(args, GCHandleType.Pinned);
         IntPtr pointer = pinnedArray.AddrOfPinnedObject();
-        Message<T> message = _messageContainer.GetMessageForCall<T>(args);
+        Message message = _messageContainer.GetMessageForCall<T>(args);
         CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, pointer, (uint)arguments.Length);
-        T result = await message;
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+        T result = await message as T;
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
         pinnedArray.Free();
         _arrayPool.Return(args);
+#pragma warning disable CS8603 // Possible null reference return.
         return result;
+#pragma warning restore CS8603 // Possible null reference return.
     }
 
     public async Task<string> Set(string key, string value)
@@ -52,6 +56,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     public void Dispose()
     {
+        GC.SuppressFinalize(this);
         lock (_lock)
         {
             if (_clientPointer == IntPtr.Zero)
@@ -67,18 +72,15 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     #endregion public methods
 
     #region private methods
-
+    // TODO rework the callback to handle other response types
     private void SuccessCallback(ulong index, IntPtr str)
     {
         string? result = str == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(str);
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
         _ = Task.Run(() =>
         {
-            Message<dynamic> message = _messageContainer.GetMessage((int)index);
-            // TODO rework the callback to handle other response types and remove #pragma
-#pragma warning disable CS8604 // Possible null reference argument.
+            Message message = _messageContainer.GetMessage((int)index);
             message.SetResult(result);
-#pragma warning restore CS8604 // Possible null reference argument.
         });
     }
 
@@ -86,7 +88,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
         Task.Run(() =>
         {
-            Message<dynamic> message = _messageContainer.GetMessage((int)index);
+            Message message = _messageContainer.GetMessage((int)index);
             message.SetException(new Exception("Operation failed"));
         });
 

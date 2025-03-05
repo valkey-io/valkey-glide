@@ -9,7 +9,7 @@ using Glide.Internals;
 /// Reusable source of ValueTask. This object can be allocated once and then reused
 /// to create multiple asynchronous operations, as long as each call to CreateTask
 /// is awaited to completion before the next call begins.
-internal class Message<T>(int index, MessageContainer container) : INotifyCompletion where T : class?
+internal class Message(int index, MessageContainer container) : INotifyCompletion
 {
     /// This is the index of the message in an external array, that allows the user to
     /// know how to find the message and set its result.
@@ -24,12 +24,12 @@ internal class Message<T>(int index, MessageContainer container) : INotifyComple
     private const int COMPLETION_STAGE_NEXT_SHOULD_EXECUTE_CONTINUATION = 1;
     private const int COMPLETION_STAGE_CONTINUATION_EXECUTED = 2;
     private int _completionState;
-    private T? _result = default;
+    private object? _result = default;
     private Exception? _exception;
 
     /// Triggers a succesful completion of the task returned from the latest call
     /// to CreateTask.
-    public void SetResult(T result)
+    public void SetResult(object? result)
     {
         _result = result;
         FinishSet();
@@ -67,7 +67,7 @@ internal class Message<T>(int index, MessageContainer container) : INotifyComple
         }
     }
 
-    public Message<T> GetAwaiter() => this;
+    public Message GetAwaiter() => this;
 
     /// This returns a task that will complete once SetException / SetResult are called,
     /// and ensures that the internal state of the message is set-up before the task is created,
@@ -113,23 +113,5 @@ internal class Message<T>(int index, MessageContainer container) : INotifyComple
 
     public bool IsCompleted => _completionState == COMPLETION_STAGE_CONTINUATION_EXECUTED;
 
-    public T GetResult()
-    {
-        if (_exception is not null)
-        {
-            throw _exception;
-        }
-        if (Nullable.GetUnderlyingType(typeof(T)) == null && _result == null)
-        {
-            // T is NOT nullable
-#if NET8_0_OR_GREATER
-            throw new UnreachableException();
-#else
-            throw new NullReferenceException("unreachable");
-#endif
-        }
-#pragma warning disable CS8603 // Possible null reference return.
-        return _result;
-#pragma warning restore CS8603 // Possible null reference return.
-    }
+    public object? GetResult() => _exception is null ? _result : throw _exception;
 }
