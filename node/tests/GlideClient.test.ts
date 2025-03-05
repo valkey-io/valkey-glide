@@ -1069,6 +1069,44 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry config_%p",
+        async (protocol) => {
+            GlideClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+                advancedConfiguration: {
+                    openTelemetryConfig: {
+                        collectorEndPoint: "https://valid-endpoint",
+                        spanFlushIntervalMs: 400,
+                    },
+                },
+            });
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry config wrong parameter_%p",
+        async (protocol) => {
+            await expect(
+                GlideClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                    advancedConfiguration: {
+                        openTelemetryConfig: {
+                            collectorEndPoint: "wrong.endpoint",
+                            spanFlushIntervalMs: 400,
+                        },
+                    },
+                }),
+            ).rejects.toThrowError(/InvalidInput/i); // Ensure InvalidInput error
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function kill RW func %p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
