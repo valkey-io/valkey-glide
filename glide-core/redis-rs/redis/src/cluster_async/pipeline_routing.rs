@@ -449,6 +449,9 @@ pub fn add_pipeline_result(
     }
 }
 
+type RetryEntry = ((usize, Option<usize>), String, ServerError);
+type RetryMap = HashMap<RetryMethod, Vec<RetryEntry>>;
+
 /// Processes the responses of pipeline commands and updates the given `pipeline_responses`
 /// with the corresponding results.
 ///
@@ -474,13 +477,11 @@ pub async fn process_pipeline_responses(
     HashMap<RetryMethod, Vec<((usize, Option<usize>), String, ServerError)>>,
     (OperationTarget, RedisError),
 > {
-    let mut retry_map: HashMap<RetryMethod, Vec<((usize, Option<usize>), String, ServerError)>> =
-        HashMap::new();
+    let mut retry_map: RetryMap = HashMap::new();
     for ((address, command_indices), response_result) in
         addresses_and_indices.into_iter().zip(responses)
     {
-        let server_error: ServerError;
-        match response_result {
+        let server_error = match response_result {
             Ok(Ok(Response::Multiple(values))) => {
                 // Add each response to the pipeline_responses vector at the appropriate index
                 for ((index, inner_index), value) in command_indices.into_iter().zip(values) {
@@ -507,31 +508,22 @@ pub async fn process_pipeline_responses(
                 }
                 continue;
             }
-            Ok(Err(err)) => {
-                server_error = err.into();
-            }
-            Ok(Ok(Response::Single(_))) => {
-                server_error = ServerError::KnownError {
-                    kind: (ServerErrorKind::ResponseError),
-                    detail: (Some(
-                        "Received a single response for a pipeline with multiple commands."
-                            .to_string(),
-                    )),
-                };
-            }
-            Ok(Ok(Response::ClusterScanResult(_, _))) => {
-                server_error = ServerError::KnownError {
-                    kind: (ServerErrorKind::ResponseError),
-                    detail: (Some("Received a cluster scan result inside a pipeline.".to_string())),
-                };
-            }
-            Err(err) => {
-                server_error = ServerError::ExtensionError {
-                    code: ("FatalReceiveError".to_string()),
-                    detail: (Some(format!("RecvError occurred: {err}"))),
-                };
-            }
-        }
+            Ok(Err(err)) => err.into(),
+            Ok(Ok(Response::Single(_))) => ServerError::KnownError {
+                kind: (ServerErrorKind::ResponseError),
+                detail: (Some(
+                    "Received a single response for a pipeline with multiple commands.".to_string(),
+                )),
+            },
+            Ok(Ok(Response::ClusterScanResult(_, _))) => ServerError::KnownError {
+                kind: (ServerErrorKind::ResponseError),
+                detail: (Some("Received a cluster scan result inside a pipeline.".to_string())),
+            },
+            Err(err) => ServerError::ExtensionError {
+                code: ("FatalReceiveError".to_string()),
+                detail: (Some(format!("RecvError occurred: {err}"))),
+            },
+        };
         // Add the error to the matching indices in the pipeline_responses
         for (index, inner_index) in command_indices {
             add_pipeline_result(
@@ -625,7 +617,7 @@ where
 /// - A vector of results for each sub-pipeline execution.
 /// - A vector of (address, indices) pairs indicating where each response should be placed.
 pub async fn handle_retry_map<C>(
-    retry_map: HashMap<RetryMethod, Vec<((usize, Option<usize>), String, ServerError)>>,
+    retry_map: RetryMap,
     core: Core<C>,
     pipeline: &crate::Pipeline,
     retry: u32,
@@ -732,6 +724,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_retry_logic<C>(
     retry_method: RetryMethod,
     retry: u32,
@@ -743,7 +736,7 @@ pub async fn handle_retry_logic<C>(
     pipeline_map: &mut NodePipelineMap<C>,
 ) -> Result<(), (OperationTarget, RedisError)>
 where
-    C: Clone + ConnectionLike + Connect + Send + Sync + 'static,
+    C: Clone + Sync + ConnectionLike + Send + Connect + 'static,
 {
     match retry_method {
         RetryMethod::WaitAndRetry => {

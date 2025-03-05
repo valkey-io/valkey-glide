@@ -622,7 +622,7 @@ impl Value {
                 // return Ok(self) so that the error is ignored.
                 if let Some(ignore_kind) = ignore {
                     if let Some(mgs) = msg {
-                        if err.kind() == ignore_kind && err.to_string().contains(&mgs) {
+                        if err.kind() == ignore_kind && err.to_string().contains(mgs) {
                             return Ok(Value::ServerError(err));
                         }
                     } else if err.kind() == ignore_kind {
