@@ -101,18 +101,11 @@ jobs:
                   sudo apt-get install -y npm
 
             - name: Set up dotnet ${{ matrix.dotnet }} on self-hosted runner
-              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
               uses: actions/setup-dotnet@v4
               with:
                   dotnet-version: ${{ matrix.dotnet }}
               env:
                   DOTNET_INSTALL_DIR: ~/.dotnet
-
-            - name: Set up dotnet ${{ matrix.dotnet }}
-              if: ${{ !contains(matrix.host.RUNNER, 'self-hosted') }}
-              uses: actions/setup-dotnet@v4
-              with:
-                  dotnet-version: ${{ matrix.dotnet }}
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
