@@ -537,8 +537,8 @@ def create_cluster(
     if err or "[OK] All 16384 slots covered." not in output:
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
-    # wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
-    # wait_for_all_topology_views(servers, cluster_folder, use_tls)
+    wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
+    wait_for_all_topology_views(servers, cluster_folder, use_tls)
     print_servers_json(servers)
 
     logging.debug("The cluster was successfully created!")
@@ -583,11 +583,11 @@ def create_standalone_replication(
                 f"Failed to set up replication for server {server}: {err if err else output}"
             )
     servers_ports = [str(server.port) for server in servers]
-    # wait_for_a_message_in_logs(
-    #     cluster_folder,
-    #     "sync: Finished with success",
-    #     servers_ports[1:],
-    # )
+    wait_for_a_message_in_logs(
+        cluster_folder,
+        "sync: Finished with success",
+        servers_ports[1:],
+    )
     logging.debug(
         f"{len(servers) - 1} nodes successfully became replicas of the primary {primary_server}!"
     )
