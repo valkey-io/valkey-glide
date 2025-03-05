@@ -10,7 +10,7 @@ use crate::connection::{
 #[cfg(feature = "tokio-comp")]
 use crate::parser::ValueCodec;
 use crate::types::{ErrorKind, FromRedisValue, RedisError, RedisFuture, RedisResult, Value};
-use crate::{from_owned_redis_value, pipeline, ProtocolVersion, ToRedisArgs};
+use crate::{from_owned_redis_value, ProtocolVersion, ToRedisArgs};
 use ::tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 #[cfg(feature = "tokio-comp")]
 use ::tokio::net::lookup_host;
