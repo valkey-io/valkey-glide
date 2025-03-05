@@ -237,31 +237,36 @@ async def management_client(
     yield client
     await test_teardown(request, cluster_mode, protocol)
     await client.close()
-    
-@pytest.fixture(scope="function")    
+
+
+@pytest.fixture(scope="function")
 async def acl_glide_client(
     request,
     cluster_mode: bool,
     protocol: ProtocolVersion,
-    management_client: TGlideClient
+    management_client: TGlideClient,
 ) -> AsyncGenerator[TGlideClient, None]:
     """
-    Client fot tests that use a server pre-configured with an ACL user. 
-    This function first uses the management client to register the USERNAME with INITIAL_PASSWORD, so that the client would be ablt to connect.
+    Client fot tests that use a server pre-configured with an ACL user.
+    This function first uses the management client to register the USERNAME with INITIAL_PASSWORD,so that
+    the client would be ablt to connect.
     It then returns a client with this USERNAME and INITIAL_PASSWORD already set as its ServerCredentials.
     """
-    
-    await set_new_acl_username_with_password(management_client, USERNAME, INITIAL_PASSWORD)
-                                 
+
+    await set_new_acl_username_with_password(
+        management_client, USERNAME, INITIAL_PASSWORD
+    )
+
     client = await create_client(
         request,
         cluster_mode,
         protocol=protocol,
-        credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD)
+        credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
     )
-    yield client    
+    yield client
     await test_teardown(request, cluster_mode, protocol)
     await client.close()
+
 
 async def create_client(
     request,
@@ -328,20 +333,23 @@ async def create_client(
         )
         return await GlideClient.create(config)
 
+
 USERNAME = "username"
 INITIAL_PASSWORD = "initial_password"
 NEW_PASSWORD = "new_secure_password"
 WRONG_PASSWORD = "wrong_password"
 
 
-async def auth_client(client: TGlideClient, password, username = 'default'):
+async def auth_client(client: TGlideClient, password, username="default"):
     """
     Authenticates the given TGlideClient server connected. If no username is provided, uses the 'default' user.
     """
     if isinstance(client, GlideClient):
-        return await client.custom_command(["AUTH", username ,password])
+        return await client.custom_command(["AUTH", username, password])
     elif isinstance(client, GlideClusterClient):
-        return await client.custom_command(["AUTH", username, password], route=AllNodes())
+        return await client.custom_command(
+            ["AUTH", username, password], route=AllNodes()
+        )
 
 
 async def config_set_new_password(client: TGlideClient, password):
@@ -353,16 +361,23 @@ async def config_set_new_password(client: TGlideClient, password):
         await client.config_set({"requirepass": password})
     elif isinstance(client, GlideClusterClient):
         await client.config_set({"requirepass": password}, route=AllNodes())
-        
+
+
 async def set_new_acl_username_with_password(client: TGlideClient, username, password):
     """
     Sets a new password for the given TGlideClient server connected.
     This function updates the server to require a new password.
     """
     if isinstance(client, GlideClient):
-        await client.custom_command(["ACL", "SETUSER", username, "ON",  f">{password}", "~*", "&*", "+@all" ])
+        await client.custom_command(
+            ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"]
+        )
     elif isinstance(client, GlideClusterClient):
-        await client.custom_command(["ACL", "SETUSER", username, "ON",  f">{password}", "~*", "&*", "+@all" ], route=AllNodes())
+        await client.custom_command(
+            ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"],
+            route=AllNodes(),
+        )
+
 
 async def delete_acl_username_and_password(client: TGlideClient, username):
     """
@@ -371,8 +386,10 @@ async def delete_acl_username_and_password(client: TGlideClient, username):
     if isinstance(client, GlideClient):
         return await client.custom_command(["ACL", "DELUSER", username])
     elif isinstance(client, GlideClusterClient):
-        return await client.custom_command(["ACL", "DELUSER", username], route=AllNodes())
-    
+        return await client.custom_command(
+            ["ACL", "DELUSER", username], route=AllNodes()
+        )
+
 
 async def kill_connections(client: TGlideClient):
     """
