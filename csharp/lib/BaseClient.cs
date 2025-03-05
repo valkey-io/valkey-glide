@@ -55,15 +55,20 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         return result;
     }
 
+    private readonly object _lock = new();
+
     public void Dispose()
     {
-        if (_clientPointer == IntPtr.Zero)
+        lock (_lock)
         {
-            return;
+            if (_clientPointer == IntPtr.Zero)
+            {
+                return;
+            }
+            _messageContainer.DisposeWithError(null);
+            CloseClientFfi(_clientPointer);
+            _clientPointer = IntPtr.Zero;
         }
-        _messageContainer.DisposeWithError(null);
-        CloseClientFfi(_clientPointer);
-        _clientPointer = IntPtr.Zero;
     }
 
     #endregion public methods

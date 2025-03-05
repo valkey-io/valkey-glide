@@ -1,27 +1,42 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
-using Xunit.Runner.Common;
-using Xunit.Sdk;
+[assembly: AssemblyFixture(typeof(Tests.Integration.TestConfiguration))]
 
-// Note: All IT should be in the same namespace
 namespace Tests.Integration;
 
-public class IntegrationTestBase : IDisposable
+public class TestConfiguration : IDisposable
 {
-    internal class TestConfiguration
+    public static bool IsMacOs => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+    public static List<(string host, uint port)> STANDALONE_HOSTS { get; internal set; } = [];
+    public static List<(string host, uint port)> CLUSTER_HOSTS { get; internal set; } = [];
+    public static Version SERVER_VERSION { get; internal set; } = new();
+
+    public static BaseClient DefaultStandaloneClient() => new GlideClient(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port, false);
+
+    private static TheoryData<BaseClient> s_testClients = [];
+
+    public static TheoryData<BaseClient> TestClients
     {
-        public static List<uint> STANDALONE_PORTS { get; internal set; } = [];
-        public static List<uint> CLUSTER_PORTS { get; internal set; } = [];
-        public static Version SERVER_VERSION { get; internal set; } = new();
+        get
+        {
+            if (s_testClients.Count == 0)
+            {
+                s_testClients = [DefaultStandaloneClient()];
+            }
+            return s_testClients;
+        }
+
+        private set => s_testClients = value;
     }
 
-    private readonly IMessageSink _diagnosticMessageSink;
+    public static void ResetTestClients() => s_testClients = [];
 
-    public IntegrationTestBase(IMessageSink diagnosticMessageSink)
+    public TestConfiguration()
     {
-        _diagnosticMessageSink = diagnosticMessageSink;
         string? projectDir = Directory.GetCurrentDirectory();
         while (!(Path.GetFileName(projectDir) == "csharp" || projectDir == null))
         {
@@ -39,19 +54,27 @@ public class IntegrationTestBase : IDisposable
         StopServer(false);
 
         // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
-        Directory.Delete(Path.Combine(_scriptDir, "clusters"), true);
+        // Not using `Directory.Exists` before deleting, because another process may delete the dir while IT is running.
+        string clusterLogsDir = Path.Combine(_scriptDir, "clusters");
+        try
+        {
+            Directory.Delete(clusterLogsDir, true);
+        }
+        catch (DirectoryNotFoundException) { }
 
         // Start cluster
-        TestConfiguration.CLUSTER_PORTS = StartServer(true);
+        CLUSTER_HOSTS = StartServer(true);
         // Start standalone
-        TestConfiguration.STANDALONE_PORTS = StartServer(false);
+        STANDALONE_HOSTS = StartServer(false);
         // Get redis version
-        TestConfiguration.SERVER_VERSION = GetServerVersion();
+        SERVER_VERSION = GetServerVersion();
 
-        TestConsoleWriteLine($"Cluster ports = {string.Join(',', TestConfiguration.CLUSTER_PORTS)}");
-        TestConsoleWriteLine($"Standalone ports = {string.Join(',', TestConfiguration.STANDALONE_PORTS)}");
-        TestConsoleWriteLine($"Redis version = {TestConfiguration.SERVER_VERSION}");
+        TestConsoleWriteLine($"Cluster hosts = {string.Join(", ", CLUSTER_HOSTS)}");
+        TestConsoleWriteLine($"Standalone hosts = {string.Join(", ", STANDALONE_HOSTS)}");
+        TestConsoleWriteLine($"Server version = {SERVER_VERSION}");
     }
+
+    ~TestConfiguration() => Dispose();
 
     public void Dispose() =>
         // Stop all
@@ -60,12 +83,12 @@ public class IntegrationTestBase : IDisposable
     private readonly string _scriptDir;
 
     private void TestConsoleWriteLine(string message) =>
-        _ = _diagnosticMessageSink.OnMessage(new DiagnosticMessage(message));
+        TestContext.Current.SendDiagnosticMessage(message);
 
-    internal List<uint> StartServer(bool cluster, bool tls = false, string? name = null)
+    internal List<(string host, uint port)> StartServer(bool cluster, bool tls = false, string? name = null)
     {
-        string cmd = $"start {(cluster ? "--cluster-mode" : "-r 0")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
-        return ParsePortsFromOutput(RunClusterManager(cmd, false));
+        string cmd = $"start {(cluster ? "--cluster-mode" : "")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
+        return ParseHostsFromOutput(RunClusterManager(cmd, false));
     }
 
     /// <summary>
@@ -101,9 +124,9 @@ public class IntegrationTestBase : IDisposable
             : output ?? "";
     }
 
-    private static List<uint> ParsePortsFromOutput(string output)
+    private static List<(string host, uint port)> ParseHostsFromOutput(string output)
     {
-        List<uint> ports = [];
+        List<(string host, uint port)> hosts = [];
         foreach (string line in output.Split("\n"))
         {
             if (!line.StartsWith("CLUSTER_NODES="))
@@ -114,10 +137,11 @@ public class IntegrationTestBase : IDisposable
             string[] addresses = line.Split("=")[1].Split(",");
             foreach (string address in addresses)
             {
-                ports.Add(uint.Parse(address.Split(":")[1]));
+                string[] parts = address.Split(":");
+                hosts.Add((parts[0], uint.Parse(parts[1])));
             }
         }
-        return ports;
+        return hosts;
     }
 
     private static Version GetServerVersion()
