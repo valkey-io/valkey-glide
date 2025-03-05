@@ -734,7 +734,7 @@ func (suite *GlideTestSuite) TestClientGetNameCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 
-	// ClientId with option or with multiple options without route
+	// ClientGetName with option or with multiple options without route
 	opts := options.RouteOption{Route: nil}
 	response, err := client.ClientGetNameWithOptions(opts)
 	assert.NoError(t, err)
