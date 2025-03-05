@@ -516,3 +516,13 @@ func (suite *GlideTestSuite) TestTime_Error() {
 	assert.Nil(suite.T(), results)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
+
+func (suite *GlideTestSuite) TestClientGetSetName() {
+	client := suite.defaultClient()
+	t := suite.T()
+
+	suite.verifyOK(client.ClientSetName("ConnectionName"))
+	result, err := client.ClientGetName()
+	assert.Nil(t, err)
+	assert.Equal(t, result, "ConnectionName")
+}

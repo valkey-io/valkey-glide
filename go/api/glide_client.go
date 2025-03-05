@@ -238,3 +238,33 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	}
 	return handleStringResponse(result)
 }
+
+// Gets the name of the current connection.
+//
+// Return value:
+//
+//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//
+// [valkey.io]: https://valkey.io/commands/client-getname/
+func (client *GlideClient) ClientGetName() (string, error) {
+	result, err := client.executeCommand(C.ClientGetName, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Set the name of the current connection.
+//
+// Return value:
+//
+//	OK - when connection name is set
+//
+// [valkey.io]: https://valkey.io/commands/client-setname/
+func (client *GlideClient) ClientSetName(connectionName string) (string, error) {
+	result, err := client.executeCommand(C.ClientSetName, []string{connectionName})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
