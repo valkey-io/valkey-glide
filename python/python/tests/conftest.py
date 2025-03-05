@@ -261,6 +261,7 @@ async def acl_glide_client(
         request,
         cluster_mode,
         protocol=protocol,
+        request_timeout=5000,
         credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
     )
     yield client

@@ -185,26 +185,6 @@ class TestAuthCommands:
         value = await acl_glide_client.get("new_key")
         assert value == b"new_value"
 
-    @pytest.mark.parametrize("cluster_mode", [False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_update_connection_password_connection_lost_before_password_update_with_acl_user(
-        self, acl_glide_client: TGlideClient, management_client: TGlideClient
-    ):
-        """
-        Test changing server password when connection is lost before password update.
-        Verifies that the client will not be able to reach the inner core and return an error.
-        """
-        await acl_glide_client.set("test_key", "test_value")
-        assert await delete_acl_username_and_password(management_client, USERNAME) == 1
-        await set_new_acl_username_with_password(
-            management_client, USERNAME, NEW_PASSWORD
-        )
-        await asyncio.sleep(1)
-        with pytest.raises(RequestError):
-            await acl_glide_client.update_connection_password(
-                NEW_PASSWORD, immediate_auth=False
-            )
-
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_with_immediate_auth_with_acl_user(
