@@ -320,7 +320,7 @@ where
     pub async fn get_username(&mut self) -> RedisResult<Value> {
         self.route_operation_request(Operation::GetUsername).await
     }
-    
+
     /// Routes an operation request to the appropriate handler.
     async fn route_operation_request(
         &mut self,
@@ -625,7 +625,7 @@ enum CmdArg<C> {
 #[derive(Clone)]
 enum Operation {
     UpdateConnectionPassword(Option<String>),
-    GetUsername
+    GetUsername,
 }
 
 fn route_for_pipeline(pipeline: &crate::Pipeline) -> RedisResult<Option<Route>> {
@@ -2283,11 +2283,12 @@ where
                     Ok(Response::Single(Value::Okay))
                 }
                 Operation::GetUsername => {
-                    let username = core.get_cluster_param(|params| params.username.clone())
+                    let username = core
+                        .get_cluster_param(|params| params.username.clone())
                         .expect(MUTEX_WRITE_ERR);
                     Ok(Response::Single(match username {
                         Some(u) => Value::SimpleString(u),
-                        None => Value::Nil
+                        None => Value::Nil,
                     }))
                 }
             },
