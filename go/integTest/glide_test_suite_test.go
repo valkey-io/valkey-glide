@@ -229,6 +229,11 @@ func (suite *GlideTestSuite) runWithDefaultClients(test func(client api.BaseClie
 	suite.runWithClients(clients, test)
 }
 
+func (suite *GlideTestSuite) runWithTimeoutClients(test func(client api.BaseClient)) {
+	clients := suite.getTimeoutClients()
+	suite.runWithClients(clients, test)
+}
+
 func (suite *GlideTestSuite) runParallelizedWithDefaultClients(
 	parallelism int,
 	count int64,
@@ -243,11 +248,32 @@ func (suite *GlideTestSuite) getDefaultClients() []api.BaseClient {
 	return []api.BaseClient{suite.defaultClient(), suite.defaultClusterClient()}
 }
 
-func (suite *GlideTestSuite) defaultClient() api.GlideClientCommands {
-	config := api.NewGlideClientConfiguration().
+func (suite *GlideTestSuite) getTimeoutClients() []api.BaseClient {
+	clients := []api.BaseClient{}
+	clusterTimeoutClient, err := suite.createConnectionTimeoutClient(250, 20000, nil)
+	if err != nil {
+		suite.T().Fatalf("Failed to create cluster timeout client: %s", err.Error())
+	}
+	clients = append(clients, clusterTimeoutClient)
+
+	standaloneTimeoutClient, err := suite.createConnectionTimeoutClusterClient(250, 20000)
+	if err != nil {
+		suite.T().Fatalf("Failed to create standalone timeout client: %s", err.Error())
+	}
+	clients = append(clients, standaloneTimeoutClient)
+
+	return clients
+}
+
+func (suite *GlideTestSuite) defaultClientConfig() *api.GlideClientConfiguration {
+	return api.NewGlideClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5000)
+}
+
+func (suite *GlideTestSuite) defaultClient() api.GlideClientCommands {
+	config := suite.defaultClientConfig()
 	return suite.client(config)
 }
 
@@ -281,6 +307,28 @@ func (suite *GlideTestSuite) clusterClient(config *api.GlideClusterClientConfigu
 
 	suite.clusterClients = append(suite.clusterClients, client)
 	return client
+}
+
+func (suite *GlideTestSuite) createConnectionTimeoutClient(
+	connectTimeout, requestTimeout int,
+	backoffStrategy *api.BackoffStrategy,
+) (api.GlideClientCommands, error) {
+	clientConfig := suite.defaultClientConfig().
+		WithRequestTimeout(requestTimeout).
+		WithReconnectStrategy(backoffStrategy).
+		WithAdvancedConfiguration(
+			api.NewAdvancedGlideClientConfiguration().WithConnectionTimeout(connectTimeout))
+	return api.NewGlideClient(clientConfig)
+}
+
+func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
+	connectTimeout, requestTimeout int,
+) (api.GlideClusterClientCommands, error) {
+	clientConfig := suite.defaultClusterClientConfig().
+		WithAdvancedConfiguration(
+			api.NewAdvancedGlideClusterClientConfiguration().WithConnectionTimeout(connectTimeout)).
+		WithRequestTimeout(requestTimeout)
+	return api.NewGlideClusterClient(clientConfig)
 }
 
 func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(client api.BaseClient)) {
