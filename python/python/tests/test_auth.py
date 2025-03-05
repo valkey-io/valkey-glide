@@ -148,12 +148,12 @@ class TestAuthCommands:
         self, acl_glide_client: TGlideClient, management_client: TGlideClient
     ):
         """
-        Test replacing the connection password for an ACL user without immediate re-authentication. Similiar to the previous test, but with an ACL user
+        Test replacing the connection password for an ACL user without immediate re-authentication.
         and not the default one.
         Verifies that:
         1. The client can update its internal password for the ACL user
         2. The client remains connected with current auth
-        3. The client can reconnect using the new password after server password change
+        3. The client can reconnect using the new password after server password change (which is simulated by deleting and reseting the user with a new password, which kills the connection)
         This test is only for cluster mode, as standalone mode does not have a connection available handler.
         """
         
@@ -168,11 +168,7 @@ class TestAuthCommands:
         # Delete the username and reset it with new password (The same effect as doing config_set_new_password in the non-acl tests)
         assert await delete_acl_username_and_password(management_client, USERNAME) == 1
         await set_new_acl_username_with_password(management_client, USERNAME, NEW_PASSWORD)
-
-        # Kill all connections to force a reconnect
-        await kill_connections(management_client)
-        await asyncio.sleep(1)  
-
+        
         # The client should now reconnect with the new password automatically
         # Verify that the client is still able to perform operations
         value = await acl_glide_client.get("test_key")
@@ -199,7 +195,6 @@ class TestAuthCommands:
         await acl_glide_client.set("test_key", "test_value")
         assert await delete_acl_username_and_password(management_client, USERNAME) == 1
         await set_new_acl_username_with_password(management_client, USERNAME, NEW_PASSWORD)
-        await kill_connections(management_client)
         await asyncio.sleep(1)
         with pytest.raises(RequestError):
             await acl_glide_client.update_connection_password(
@@ -232,7 +227,7 @@ class TestAuthCommands:
         
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_update_connection_password_auth_non_valid_pass(
+    async def test_update_connection_password_auth_non_valid_pass_acl_user(
         self, acl_glide_client: TGlideClient, management_client: TGlideClient
     ):
         """
