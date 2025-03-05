@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <Target Name="Rust Build " BeforeTargets="Compile">
+        <!-- ToDo: Build for all platforms -->
+        <Exec Command="echo 'Configuration: $(Configuration)'"/>
+        <Exec Condition="'$(Configuration)' == 'Release'" Command="cargo build --release" WorkingDirectory="./../../rust"/>
+        <Exec Condition="'$(Configuration)' != 'Release'" Command="cargo build" WorkingDirectory="./../../rust"/>
+    </Target>
+
+    <ItemGroup>
+        <!-- ToDo: put at correct, prefix folder -->
+        <Content Include="../../rust/target/$(Configuration)/glide_rs.dll" Condition="'$(OS)' == 'Windows_NT'">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="../../rust/target/$(Configuration)/glide_rs.sh" Condition="'$(OS)' != 'Windows_NT'">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+</Project>
