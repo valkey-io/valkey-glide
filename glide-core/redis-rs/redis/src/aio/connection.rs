@@ -10,7 +10,7 @@ use crate::connection::{
 #[cfg(feature = "tokio-comp")]
 use crate::parser::ValueCodec;
 use crate::types::{ErrorKind, FromRedisValue, RedisError, RedisFuture, RedisResult, Value};
-use crate::{from_owned_redis_value, ProtocolVersion, ToRedisArgs};
+use crate::{from_owned_redis_value, pipeline, ProtocolVersion, ToRedisArgs};
 use ::tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 #[cfg(feature = "tokio-comp")]
 use ::tokio::net::lookup_host;
@@ -212,10 +212,14 @@ where
 
             for _ in 0..offset {
                 let response = self.read_response().await;
-                if let Err(err) = response {
-                    if first_err.is_none() {
+                match response {
+                    Ok(Value::ServerError(err)) if first_err.is_none() && cmd.is_atomic() => {
+                        first_err = Some(err.into());
+                    }
+                    Err(err) if first_err.is_none() => {
                         first_err = Some(err);
                     }
+                    _ => {}
                 }
             }
 

@@ -438,7 +438,7 @@ impl Cmd {
     #[inline]
     pub fn query<T: FromRedisValue>(&self, con: &mut dyn ConnectionLike) -> RedisResult<T> {
         match con.req_command(self) {
-            Ok(val) => from_owned_redis_value(val),
+            Ok(val) => from_owned_redis_value(val.extract_error(None, None)?),
             Err(e) => Err(e),
         }
     }
@@ -451,7 +451,7 @@ impl Cmd {
         C: crate::aio::ConnectionLike,
     {
         let val = con.req_packed_command(self).await?;
-        from_owned_redis_value(val)
+        from_owned_redis_value(val.extract_error(None, None)?)
     }
 
     /// Similar to `query()` but returns an iterator over the items of the

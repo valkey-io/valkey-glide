@@ -95,6 +95,7 @@ impl Pipeline {
             self.commands.len() + 1,
             1,
         )?;
+
         match resp.pop() {
             Some(Value::Nil) => Ok(Value::Nil),
             Some(Value::Array(items)) => Ok(self.make_pipeline_results(items)),
@@ -130,13 +131,19 @@ impl Pipeline {
                 "This connection does not support pipelining."
             ));
         }
-        from_owned_redis_value(if self.commands.is_empty() {
+        let mut value = if self.commands.is_empty() {
             Value::Array(vec![])
         } else if self.transaction_mode {
             self.execute_transaction(con)?
         } else {
             self.execute_pipelined(con)?
-        })
+        };
+        //if raise_on_error {
+        //    println!("value: {:?}", value);
+        value = value.extract_error(None, None)?;
+        // }
+
+        from_owned_redis_value(value)
     }
 
     #[cfg(feature = "aio")]
@@ -158,6 +165,8 @@ impl Pipeline {
         let mut resp = con
             .req_packed_commands(self, self.commands.len() + 1, 1)
             .await?;
+
+        println!("resp: {:?}", resp);
         match resp.pop() {
             Some(Value::Nil) => Ok(Value::Nil),
             Some(Value::Array(items)) => Ok(self.make_pipeline_results(items)),
@@ -183,7 +192,7 @@ impl Pipeline {
         } else {
             self.execute_pipelined_async(con).await?
         };
-        from_owned_redis_value(v)
+        from_owned_redis_value(v.extract_error(None, None)?)
     }
 
     /// This is a shortcut to `query()` that does not return a value and

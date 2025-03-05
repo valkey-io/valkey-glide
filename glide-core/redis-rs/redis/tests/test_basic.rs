@@ -445,7 +445,7 @@ mod basic {
 
         let res = redis::pipe()
             .set("x", "another-x-value")
-            .ignore()
+            //.ignore()
             .get("y")
             .query::<()>(&mut con);
         assert!(res.is_err() && res.unwrap_err().kind() == ErrorKind::ReadOnly);

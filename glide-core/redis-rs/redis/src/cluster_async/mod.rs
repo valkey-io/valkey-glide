@@ -3022,7 +3022,10 @@ where
     let topology_join_results =
         futures::future::join_all(requested_nodes.into_iter().map(|(addr, conn)| async move {
             let mut conn: C = conn.await;
-            let res = conn.req_packed_command(&slot_cmd()).await;
+            let res = conn
+                .req_packed_command(&slot_cmd())
+                .await
+                .and_then(|value| value.extract_error(None, None));
             (addr, res)
         }))
         .await;
