@@ -187,8 +187,8 @@ where
                 first_err,
                 is_transaction,
             } => {
-                println!("PipelineSink::send_result: expected_response_count: {}, current_response_count: {} is transaction {is_transaction}", expected_response_count, current_response_count);
-                println!("result: {:?}", result);
+                //println!("PipelineSink::send_result: expected_response_count: {}, current_response_count: {} is transaction {is_transaction}", expected_response_count, current_response_count);
+                //println!("result: {:?}", result);
                 match result {
                     Ok(Value::ServerError(err))
                         if *current_response_count < (*expected_response_count - 1)
@@ -369,7 +369,7 @@ where
         item: SinkItem,
         timeout: Duration,
     ) -> Result<Value, RedisError> {
-        println!("Pipeline::send_single:");
+        //println!("Pipeline::send_single:");
         self.send_recv(item, None, timeout, true).await
     }
 
@@ -580,10 +580,10 @@ impl MultiplexedConnection {
             )
             .await;
 
-        println!(
+        /*println!(
             "MultiplexedConnection::send_packed_commands: result: {:?}",
             result
-        );
+        );*/
 
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
