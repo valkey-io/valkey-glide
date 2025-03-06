@@ -14,8 +14,10 @@
     - Have every operator implemented
     - Stable and fully covered implementation
     - Have Hosting and DI capabilities ready
+    - Have telemetry data ready
+    - Support the latest protocol version
 2. Hit 2.0 Stable
-    - Deep native FFI integration with rust
+    - Deep native FFI integration with rust (will reduce memory allocations drastically)
     - Every command should be a callback in rust, letting rust do the string fiddling
     - Drop netstandard support
     - Focus on Performance

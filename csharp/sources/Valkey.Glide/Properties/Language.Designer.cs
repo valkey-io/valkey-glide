@@ -94,5 +94,23 @@ namespace Valkey.Glide.Properties {
                 return ResourceManager.GetString("BitCount_RangeStartMustNotBeFromEnd", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The set command failed to execute successful.
+        /// </summary>
+        internal static string Set_CommandExecutionWasNotSuccessfull {
+            get {
+                return ResourceManager.GetString("Set_CommandExecutionWasNotSuccessfull", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to While converting the value for the SET command to a string, using the default type converter, ConvertToInvariantString returned null. Please make sure that the type converter you are using can convert the value to a string. If that is not possible, please use this method with a string value instead, allowing you to handle the conversion yourself..
+        /// </summary>
+        internal static string Set_TypeConverterFailedToConvertValueToInvariantString {
+            get {
+                return ResourceManager.GetString("Set_TypeConverterFailedToConvertValueToInvariantString", resourceCulture);
+            }
+        }
     }
 }
