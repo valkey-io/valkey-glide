@@ -392,7 +392,7 @@ public abstract class BaseClient
      * @return Return a {@link Map} that contains the statistics collected internally by GLIDE core
      */
     public Map<String, String> getStatistics() {
-        return (LinkedHashMap<String, String>) StatisticsResolver.getStatistics();
+        return StatisticsResolver.getStatistics();
     }
 
     /**

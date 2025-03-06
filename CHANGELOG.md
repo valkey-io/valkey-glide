@@ -11,7 +11,6 @@
 * Go: Updating examples for `ZInterCard` ([#3232](https://github.com/valkey-io/valkey-glide/pull/3232))
 * Go: Fix channel passing from Go to Rust by using `runtime.Pinner` or `cgo.Handle` ([#3208](https://github.com/valkey-io/valkey-glide/pull/3208))
 * Go: Fix data race on the coreClient with `sync.Mutex` and a channel map ([#3236](https://github.com/valkey-io/valkey-glide/pull/3236))
-* Java: replacing map usage in response handling with LinkedHashMap ([#3324](https://github.com/valkey-io/valkey-glide/pull/3324))
 
 #### Breaking Changes
 
@@ -47,6 +46,7 @@
 * Java: Fix `lpopCount` null handling ([#3025](https://github.com/valkey-io/valkey-glide/pull/3025))
 * Core: Fix `opentelemetry` related dependency issue ([#3123](https://github.com/valkey-io/valkey-glide/pull/3123))
 * Node: Fix NPM CD tag ([#3155](https://github.com/valkey-io/valkey-glide/pull/3155))
+* Java: replacing map usage in response handling with LinkedHashMap ([#3324](https://github.com/valkey-io/valkey-glide/pull/3324))
 
 #### Operational Enhancements
 
