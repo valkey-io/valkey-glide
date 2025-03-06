@@ -405,5 +405,8 @@ func (opts *ZPopOptions) SetCount(count int64) *ZPopOptions {
 }
 
 func (opts *ZPopOptions) ToArgs() ([]string, error) {
-	return []string{utils.IntToString(opts.count)}, nil
+	if opts.count > 0 {
+		return []string{"COUNT", strconv.FormatInt(opts.count, 10)}, nil
+	}
+	return []string{}, nil
 }
