@@ -1,3 +1,33 @@
+<!-- TOC -->
+* [End-User info](#end-user-info)
+  * [Roadmap](#roadmap)
+  * [Concrete Net9 Client Command Support](#concrete-net9-client-command-support)
+* [Developer Info](#developer-info)
+  * [Dev-Machine Setup](#dev-machine-setup)
+<!-- TOC -->
+
+# End-User info
+
+## Roadmap
+
+1. Hit 1.0 Stable
+    - Have every operator implemented
+    - Stable and fully covered implementation
+    - Have Hosting and DI capabilities ready
+2. Hit 2.0 Stable
+    - Deep native FFI integration with rust
+    - Every command should be a callback in rust, letting rust do the string fiddling
+    - Drop netstandard support
+    - Focus on Performance
+    - Stronger focus on .net 9+ features (specifically: Span and co)
+
+## Concrete Net9 Client Command Support
+
+The following is a list of commands, implemented by the glide api itself.
+All commands are always available via the normal command api.
+The following, hence, is just the list of commands which have immediate, as in:
+no additional parsing needed, support.
+
 | Command                                                                                    | Status | Test Coverage |
 |--------------------------------------------------------------------------------------------|--------|---------------|
 | [ACL](https://valkey.io/commands/acl/)                                                     | ❌      | ❌             |
@@ -374,3 +404,14 @@
 | [ZSCORE](https://valkey.io/commands/zscore/)                                               | ❌      | ❌             |
 | [ZUNION](https://valkey.io/commands/zunion/)                                               | ❌      | ❌             |
 | [ZUNIONSTORE](https://valkey.io/commands/zunionstore/)                                     | ❌      | ❌             |
+
+# Developer Info
+
+## Dev-Machine Setup
+
+1. Install the latest dotnet version onto your system
+    - Make sure Aspire support is available
+2. Install either docker or podman
+3. Install rust
+    - cargo must be available
+4. Check everything is working by executing `dotnet test` or running the tests in your IDE
