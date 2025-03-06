@@ -30,7 +30,8 @@ autodoc_mock_imports = [
     "glide.glide",
     "glide.protobuf",
     "pytest",
-]  # Prevents issues when importing ClusterScanCursor
+    "google",
+]  # Prevents confusion in sphinx with imports
 
 autodoc_typehints = "description"
 
