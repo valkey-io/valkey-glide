@@ -277,6 +277,25 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             obj.set_named_property("values", js_array_view)?;
             Ok(obj.into_unknown())
         }
+        Value::ServerError(error) => {
+            let err_msg = format!("{:?}", error);
+
+            // Create a JavaScript Error with your custom message
+
+            let mut error_obj = js_env.create_object()?;
+
+            // Set the name property to "RequestError" to make it look like your custom error
+            let name_key = js_env.create_string("name")?;
+            let name_value = js_env.create_string("RequestError")?;
+            error_obj.set_property(name_key, name_value)?;
+
+            // Set the name property to "RequestError" to make it look like your custom error
+            let message_key = js_env.create_string("message")?;
+            let err_value = js_env.create_string(&err_msg)?;
+            error_obj.set_property(message_key, err_value)?;
+
+            Ok(error_obj.into_unknown())
+        }
     }
 }
 

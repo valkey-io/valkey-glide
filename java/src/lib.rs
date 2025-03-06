@@ -1,5 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use glide_core::errors::error_message;
 use glide_core::start_socket_listener as start_socket_listener_core;
 
 // Protocol constants to expose to Java.
@@ -106,10 +107,6 @@ fn resp_value_to_java<'local>(
             data: _,
             attributes: _,
         } => todo!(),
-        // Create a java `Map<String, Object>` with two keys:
-        //   - "kind" which corresponds to the push type, stored as a `String`
-        //   - "values" which corresponds to the array of values received, stored as `Object[]`
-        // Only string messages are supported now by Valkey and `redis-rs`.
         Value::Push { kind, data } => {
             let hash_map = env.new_object("java/util/HashMap", "()V", &[])?;
 
@@ -134,6 +131,15 @@ fn resp_value_to_java<'local>(
             )?;
 
             Ok(hash_map)
+        }
+        Value::ServerError(server_error) => {
+            let err_msg = error_message(&server_error.into());
+            let java_exception = env.new_object(
+                "glide/api/models/exceptions/RequestException",
+                "(Ljava/lang/String;)V",
+                &[(&env.new_string(err_msg)?).into()],
+            )?;
+            Ok(java_exception)
         }
     }
 }

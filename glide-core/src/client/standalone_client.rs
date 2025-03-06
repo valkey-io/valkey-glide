@@ -193,6 +193,7 @@ impl StandaloneClient {
         }
 
         let Some(primary_index) = primary_index else {
+            println!("primary index is none");
             if addresses_and_errors.is_empty() {
                 addresses_and_errors.insert(
                     0,
@@ -401,13 +402,30 @@ impl StandaloneClient {
     ) -> RedisResult<Value> {
         let mut connection = reconnecting_connection.get_connection().await?;
         let result = connection.send_packed_command(cmd).await;
+
+        fn handle_unrecoverable(
+            reconnecting_connection: &ReconnectingConnection,
+            err: &redis::RedisError,
+        ) {
+            log_warn("send request", format!("received disconnect error `{err}`"));
+            reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
+        }
+
         match result {
-            Err(err) if err.is_unrecoverable_error() => {
-                log_warn("send request", format!("received disconnect error `{err}`"));
-                reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
+            Ok(response) => match response.extract_error(None, None) {
+                Ok(val) => Ok(val),
+                Err(err) if err.is_unrecoverable_error() => {
+                    handle_unrecoverable(reconnecting_connection, &err);
+                    Err(err)
+                }
+                Err(err) => Err(err),
+            },
+            Err(err) => {
+                if err.is_unrecoverable_error() {
+                    handle_unrecoverable(reconnecting_connection, &err);
+                }
                 Err(err)
             }
-            _ => result,
         }
     }
 
@@ -610,12 +628,9 @@ impl StandaloneClient {
         &mut self,
         password: Option<String>,
     ) -> RedisResult<Value> {
-        self.get_connection(false)
-            .await
-            .get_connection()
-            .await?
-            .update_connection_password(password.clone())
-            .await
+        let res = self.get_connection(false).await.get_connection().await;
+        println!("before updated {res:?}");
+        res?.update_connection_password(password.clone()).await
     }
 }
 

@@ -1110,6 +1110,7 @@ pub trait ConnectionLike {
     fn req_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
         let pcmd = cmd.get_packed_command();
         self.req_packed_command(&pcmd)
+            .and_then(|value| value.extract_error(None, None))
     }
 
     /// Returns the database this connection is bound to.  Note that this
@@ -1406,8 +1407,15 @@ impl ConnectionLike for Connection {
             // We need to keep processing the rest of the responses in that case,
             // so bailing early with `?` would not be correct.
             // See: https://github.com/redis-rs/redis-rs/issues/436
-            let response = self.read_response();
+            let response: Result<Value, RedisError> = self.read_response();
+            println!("response: {:?} idx {idx} offset {offset}", response);
             match response {
+                Ok(Value::ServerError(err)) if idx < offset && offset > 0 => {
+                    //todo: check  or <=
+                    if first_err.is_none() {
+                        first_err = Some(err.into());
+                    }
+                }
                 Ok(item) => {
                     // RESP3 can insert push data between command replies
                     if let Value::Push {
@@ -1429,6 +1437,8 @@ impl ConnectionLike for Connection {
             }
             idx += 1;
         }
+
+        println!("rv: {:?}", rv);
 
         first_err.map_or(Ok(rv), Err)
     }
