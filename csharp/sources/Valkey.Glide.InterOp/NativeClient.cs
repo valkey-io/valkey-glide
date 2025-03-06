@@ -9,7 +9,7 @@ using Valkey.Glide.InterOp.Native;
 
 namespace Valkey.Glide.InterOp;
 
-public sealed class NativeClient : IDisposable
+public sealed class NativeClient : IDisposable, INativeClient
 {
     private static readonly SemaphoreSlim Semaphore = new(1, 1);
     private static          bool          _initialized;
