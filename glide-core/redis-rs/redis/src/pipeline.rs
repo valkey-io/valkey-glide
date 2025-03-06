@@ -341,7 +341,7 @@ macro_rules! implement_pipeline_commands {
             fn make_pipeline_results(&self, resp: Vec<Value>) -> RedisResult<Value> {
                 let mut rv = Vec::with_capacity(resp.len() - self.ignored_commands.len());
                 for (idx, result) in resp.into_iter().enumerate() {
-                    println!("make_pipeline_results {:?}", result);
+                    //println!("make_pipeline_results {:?}", result);
 
                     if let Value::ServerError(e) = result {
                         return Err(e.into());

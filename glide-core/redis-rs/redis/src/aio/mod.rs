@@ -153,7 +153,7 @@ async fn setup_connection<C>(
 where
     C: ConnectionLike,
 {
-    println!("setup_connection {connection_info:?}");
+    // println!("setup_connection {connection_info:?}");
     if connection_info.protocol != ProtocolVersion::RESP2 {
         let hello_cmd = resp3_hello(connection_info);
         let val: RedisResult<Value> = hello_cmd.query_async(con).await;

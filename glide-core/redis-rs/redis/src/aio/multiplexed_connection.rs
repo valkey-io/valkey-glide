@@ -566,10 +566,10 @@ impl MultiplexedConnection {
         offset: usize,
         count: usize,
     ) -> RedisResult<Vec<Value>> {
-        println!(
+        /*println!(
             "MultiplexedConnection::send_packed_commands: {:?}",
             cmd.cmd_iter().collect::<Vec<_>>()
-        );
+        );*/
         let result = self
             .pipeline
             .send_recv(
@@ -600,10 +600,10 @@ impl MultiplexedConnection {
         match value {
             Value::Array(mut values) => {
                 values.drain(..offset);
-                println!(
+                /*println!(
                     "MultiplexedConnection::send_packed_commands: values drain: {:?}",
                     values
-                );
+                );*/
                 Ok(values)
             }
             _ => Ok(vec![value]),
