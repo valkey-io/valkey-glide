@@ -91,8 +91,11 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
 }
 
 /// Expects that key and value will be kept valid until the callback is called.
+///
+/// # Safety
+/// TODO merge with [#3321](https://github.com/valkey-io/valkey-glide/pull/3321)
 #[no_mangle]
-pub extern "C" fn command(
+pub unsafe extern "C" fn command(
     client_ptr: *const c_void,
     callback_index: usize,
     request_type: RequestType,
@@ -103,26 +106,20 @@ pub extern "C" fn command(
 
     // The safety of these needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
     let ptr_address = client_ptr as usize;
-    let args_address = args as usize;
+    let Some(mut cmd) = request_type.get_command() else {
+        unsafe {
+            (client.failure_callback)(callback_index); // TODO - report errors
+            return;
+        }
+    };
+    let args_slice = unsafe { std::slice::from_raw_parts(args, arg_count as usize) };
+    for arg in args_slice {
+        let c_str = unsafe { CStr::from_ptr(*arg as *mut c_char) };
+        cmd.arg(c_str.to_bytes());
+    }
 
     let mut client_clone = client.client.clone();
     client.runtime.spawn(async move {
-        let Some(mut cmd) = request_type.get_command() else {
-            unsafe {
-                let client = Box::leak(Box::from_raw(ptr_address as *mut Client));
-                (client.failure_callback)(callback_index); // TODO - report errors
-                return;
-            }
-        };
-
-        let args_slice = unsafe {
-            std::slice::from_raw_parts(args_address as *const *mut c_char, arg_count as usize)
-        };
-        for arg in args_slice {
-            let c_str = unsafe { CStr::from_ptr(*arg as *mut c_char) };
-            cmd.arg(c_str.to_bytes());
-        }
-
         let result = client_clone
             .send_command(&cmd, None)
             .await
@@ -132,7 +129,10 @@ pub extern "C" fn command(
             match result {
                 Ok(None) => (client.success_callback)(callback_index, std::ptr::null()),
                 Ok(Some(c_str)) => (client.success_callback)(callback_index, c_str.as_ptr()),
-                Err(_) => (client.failure_callback)(callback_index), // TODO - report errors
+                Err(err) => {
+                    dbg!(err); // TODO - report errors
+                    (client.failure_callback)(callback_index)
+                }
             };
         }
     });

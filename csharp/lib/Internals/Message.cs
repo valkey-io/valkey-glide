@@ -2,7 +2,6 @@
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 using Glide.Internals;
 
@@ -16,8 +15,6 @@ internal class Message(int index, MessageContainer container) : INotifyCompletio
     public int Index { get; } = index;
     /// The array holding the pointers to the unmanaged memory that contains the operation's arguments.
     public IntPtr[]? Args { get; private set; }
-    // We need to save the args count, because sometimes we get arrays that are larger than they need to be. We can't rely on `this.args.Length`, due to it coming from an array pool.
-    private int _argsCount;
     private MessageContainer Container { get; } = container;
     private Action? _continuation = () => { };
     private const int COMPLETION_STAGE_STARTED = 0;
@@ -26,6 +23,10 @@ internal class Message(int index, MessageContainer container) : INotifyCompletio
     private int _completionState;
     private object? _result = default;
     private Exception? _exception;
+    // Holding the client prevents it from being GC'd until all operations complete.
+#pragma warning disable IDE0052 // Remove unread private members
+    private object? _client;
+#pragma warning restore IDE0052 // Remove unread private members
 
     /// Triggers a succesful completion of the task returned from the latest call
     /// to CreateTask.
@@ -45,7 +46,7 @@ internal class Message(int index, MessageContainer container) : INotifyCompletio
 
     private void FinishSet()
     {
-        FreePointers();
+        CleanUp();
 
         CheckRaceAndCallContinuation();
     }
@@ -72,7 +73,7 @@ internal class Message(int index, MessageContainer container) : INotifyCompletio
     /// This returns a task that will complete once SetException / SetResult are called,
     /// and ensures that the internal state of the message is set-up before the task is created,
     /// and cleaned once it is complete.
-    public void SetupTask(IntPtr[] arguments, int argsCount, object client)
+    public void SetupTask(IntPtr[] arguments, object client)
     {
         _continuation = null;
         _completionState = COMPLETION_STAGE_STARTED;
@@ -80,30 +81,16 @@ internal class Message(int index, MessageContainer container) : INotifyCompletio
         _exception = null;
         _client = client;
         Args = arguments;
-        _argsCount = argsCount;
     }
 
-    // This function isn't thread-safe. Access to it should be from a single thread, and only once per operation.
-    // For the sake of performance, this responsibility is on the caller, and the function doesn't contain any safety measures.
-    private void FreePointers()
+    private void CleanUp()
     {
         if (Args is { })
         {
-            for (int i = 0; i < _argsCount; i++)
-            {
-                Marshal.FreeHGlobal(Args[i]);
-            }
             Args = null;
-            _argsCount = 0;
         }
         _client = null;
     }
-
-    // Holding the client prevents it from being GC'd until all operations complete.
-#pragma warning disable IDE0052 // Remove unread private members
-    private object? _client;
-#pragma warning restore IDE0052 // Remove unread private members
-
 
     public void OnCompleted(Action continuation)
     {
