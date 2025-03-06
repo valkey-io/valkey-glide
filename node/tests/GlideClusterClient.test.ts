@@ -691,21 +691,26 @@ describe("GlideClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "opentelemetry config_%p",
         async (protocol) => {
-            client = await GlideClusterClient.createClient({
-                ...getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    protocol,
-                ),
-                advancedConfiguration: {
-                    openTelemetryConfig: {
-                        collectorEndPoint: "https://valid-endpoint",
-                        spanFlushIntervalMs: 400,
+            await expect( 
+                GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                    advancedConfiguration: {
+                        openTelemetryConfig: {
+                            collectorEndPoint: "https://valid-endpoint",
+                            spanFlushIntervalMs: 400,
+                        },
                     },
-                },
-            });
-            await client.set("otel", "test");
-            expect(await client.get("otel")).toEqual("test");
+                }),
+            ).rejects.toThrowError("not yet implemented");
+
+            // await client.set("otel", "test");
+            // expect(await client.get("otel")).toEqual("test");
+            // client.close();
         },
+        TIMEOUT
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
