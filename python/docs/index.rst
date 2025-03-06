@@ -18,4 +18,3 @@ documentation for details.
    glide
    glide.async_commands
    modules
-   tests

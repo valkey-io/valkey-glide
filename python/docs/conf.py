@@ -25,9 +25,11 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "tests"]  # Exclude tests
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "tests.*"]  # Exclude tests
 autodoc_mock_imports = [
-    "glide.glide"
+    "glide.glide",
+    "glide.protobuf",
+    "pytest",
 ]  # Prevents issues when importing ClusterScanCursor
 
 autodoc_typehints = "description"
