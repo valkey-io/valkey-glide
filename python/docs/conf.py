@@ -68,4 +68,4 @@ def setup(app):
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 
-html_theme = "sphinx_rtd_theme"  # Optional theme but looks better
+html_theme = "alabaster"

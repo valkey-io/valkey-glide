@@ -229,7 +229,7 @@ jobs:
               working-directory: ./python
               run: |
                   black --check --diff .
-    
+
     docs-test:
         runs-on: ubuntu-latest
         timeout-minutes: 15
@@ -240,7 +240,7 @@ jobs:
               if: always()
               uses: threeal/pipx-install-action@latest
               with:
-                  packages: sphinx sphinx-rtd-theme
+                  packages: sphinx
 
             - name: Build docs
               if: always()
