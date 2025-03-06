@@ -946,6 +946,7 @@ export class BaseClient {
                 if (Array.isArray(result)) {
                     for (let i = 0; i < result.length; i++) {
                         if (
+                            result[i] &&
                             Object.hasOwn(result[i], "name") &&
                             (result[i] as { name: string }).name ==
                                 "RequestError"
