@@ -9,7 +9,7 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -257,9 +257,9 @@ public class ArrayTransformUtils {
         }
         return mapOfArrays.entrySet().stream()
                 .collect(
-                        HashMap::new,
+                        LinkedHashMap::new,
                         (m, e) -> m.put(e.getKey(), castArrayofArrays(e.getValue(), clazz)),
-                        HashMap::putAll);
+                        LinkedHashMap::putAll);
     }
 
     /**
@@ -366,8 +366,8 @@ public class ArrayTransformUtils {
         }
         return inputMap.entrySet().stream()
                 .collect(
-                        HashMap::new,
+                        LinkedHashMap::new,
                         (m, e) -> m.put(GlideString.of(e.getKey()), GlideString.of(e.getValue())),
-                        HashMap::putAll);
+                        LinkedHashMap::putAll);
     }
 }
