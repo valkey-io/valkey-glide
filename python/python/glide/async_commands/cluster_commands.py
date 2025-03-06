@@ -39,6 +39,7 @@ class ClusterCommands(CoreCommands):
             @example - Return a list of all pub/sub clients from all nodes:
 
                 connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], AllNodes())
+
         Args:
             command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
@@ -209,15 +210,16 @@ class ClusterCommands(CoreCommands):
 
         Args:
             parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
-
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
             in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
             TClusterResponse[Dict[bytes, bytes]]: A dictionary of values corresponding to the
             configuration parameters.
-            When specifying a route other than a single node, response will be :
+            When specifying a route other than a single node, response will be::
+
                 {Address (bytes) : response (Dict[bytes, bytes]) , ... }
+
             with type of Dict[bytes, Dict[bytes, bytes]].
 
         Examples:
@@ -354,15 +356,15 @@ class ClusterCommands(CoreCommands):
         Args:
             library_code (TEncodable): The source code that implements the library.
             replace (bool): Whether the given library should overwrite a library with the same name if
-                it already exists.
+            it already exists.
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
-                in which case the client will route the command to the nodes defined by `route`.
+            in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
             bytes: The library name that was loaded.
 
         Examples:
-            >>> code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+            >>> code = "#!lua name=mylib \\n redis.register_function('myfunc', function(keys, args) return args[1] end)"
             >>> await client.function_load(code, True, RandomNode())
                 b"mylib"
 
@@ -392,7 +394,7 @@ class ClusterCommands(CoreCommands):
             library_name_pattern (Optional[TEncodable]):  A wildcard pattern for matching library names.
             with_code (bool): Specifies whether to request the library code from the server or not.
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
-                in which case the client will route the command to the nodes defined by `route`.
+            in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
             TClusterResponse[TFunctionListResponse]: Info
@@ -408,8 +410,9 @@ class ClusterCommands(CoreCommands):
                         b"description": None,
                         b"flags": {b"no-writes"},
                     }],
-                    b"library_code": b"#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) " \\
-                                     b"return args[1] end)"
+                    b"library_code":
+                        b"#!lua name=mylib \\n redis.register_function('myfunc', function(keys, args) " \\
+                        b"return args[1] end)"
                 }]
 
         Since: Valkey 7.0.0.
@@ -612,6 +615,7 @@ class ClusterCommands(CoreCommands):
             TClusterResponse[TFunctionStatsSingleNodeResponse]: A `Mapping` with two keys:
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
+
                 See example for more details.
 
         Examples:
@@ -1240,6 +1244,7 @@ class ClusterCommands(CoreCommands):
 
         Returns:
             TOK: A simple `OK` response.
+
             route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
                 which case the client will route the command to the nodes defined by `route`. Defaults to None.
 
@@ -1262,7 +1267,8 @@ class ClusterCommands(CoreCommands):
         If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
         After that, it will be invoked using the `EVALSHA` command.
 
-        When in cluster mode, `key`s must map to the same hash slot.
+        Note:
+            When in cluster mode, each `key` must map to the same hash slot.
 
         See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
 

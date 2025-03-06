@@ -202,7 +202,7 @@ Development on the Python wrapper may involve changes in either the Python or Ru
 -   clippy
 -   fmt
 
-## Running the linters
+# Running the linters
 
 Run from the main `/python` folder
 
@@ -230,6 +230,22 @@ Run from the main `/python` folder
     cargo clippy --all-features --all-targets -- -D warnings
     cargo fmt --manifest-path ./Cargo.toml --all
     ```
+
+# Documentation
+---
+
+We follow the [Google Style Python Docstrings format](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) in our documentation. For our documentation tool, we use `sphinx`. 
+
+To run this tool, execute the following:
+
+```bash
+cd python/docs
+make clean
+make html # or run make help to see list of available options
+```
+
+In `docs/_build` you will find the `index.html` page. Open this file in your browser and you should see all the documented functions.
+
 
 # Recommended extensions for VS Code
 ---

@@ -93,12 +93,14 @@ class OnlyIfEqual:
 
 class ExpiryType(Enum):
     """SET option: The type of the expiry.
+
     - SEC - Set the specified expire time, in seconds. Equivalent to `EX` in the Valkey API.
     - MILLSEC - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Valkey API.
     - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Valkey API.
     - UNIX_MILLSEC - Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the
-        Valkey API.
+      Valkey API.
     - KEEP_TTL - Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Valkey API.
+
     """
 
     SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Valkey API
@@ -110,12 +112,14 @@ class ExpiryType(Enum):
 
 class ExpiryTypeGetEx(Enum):
     """GetEx option: The type of the expiry.
+
     - EX - Set the specified expire time, in seconds. Equivalent to `EX` in the Valkey API.
     - PX - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Valkey API.
     - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Valkey API.
     - UNIX_MILLSEC - Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the
-        Valkey API.
+      Valkey API.
     - PERSIST - Remove the time to live associated with the key. Equivalent to `PERSIST` in the Valkey API.
+
     """
 
     SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Valkey API
@@ -477,7 +481,6 @@ class CoreCommands(Protocol):
         Example:
             >>> await client.set(b"key", b"value")
                 'OK'
-
                 # ONLY_IF_EXISTS -> Only set the key if it already exists
                 # expiry -> Set the amount of time until key expires
             >>> await client.set(
@@ -487,7 +490,6 @@ class CoreCommands(Protocol):
             ...     expiry=ExpirySet(ExpiryType.SEC, 5)
             ... )
                 'OK' # Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
-
                 # ONLY_IF_DOES_NOT_EXIST -> Only set key if it does not already exist
             >>> await client.set(
             ...     "key",
@@ -498,8 +500,6 @@ class CoreCommands(Protocol):
                 b'new_value' # Returns the old value of "key".
             >>> await client.get("key")
                 b'new_value' # Value wasn't modified back to being "value" because of "NX" flag.
-
-
                 # ONLY_IF_EQUAL -> Only set key if provided value is equal to current value of the key
             >>> await client.set("key", "value")
                 'OK' # Reset "key" to "value"
@@ -1153,6 +1153,7 @@ class CoreCommands(Protocol):
         Returns:
             Dict[bytes, bytes]: A dictionary of fields and their values stored in the hash. Every field name in the list is
                 followed by its value.
+
             If `key` does not exist, it returns an empty dictionary.
 
         Examples:
@@ -3014,7 +3015,9 @@ class CoreCommands(Protocol):
         Returns:
             Optional[Mapping[bytes, Mapping[bytes, List[List[bytes]]]]]: A mapping of stream keys, to a mapping of stream IDs,
                 to a list of pairings with format `[[field, entry], [field, entry], ...]`.
-                None will be returned under the following conditions:
+
+            None will be returned under the following conditions:
+
                 - All key-ID pairs in `keys_and_ids` have either a non-existing key or a non-existing ID, or there are no
                   entries after the given ID.
                 - The `BLOCK` option is specified and the timeout is hit.
@@ -3399,11 +3402,15 @@ class CoreCommands(Protocol):
             options (Optional[StreamClaimOptions]): Stream claim options.
 
         Returns:
-            Mapping[bytes, List[List[bytes]]]: A Mapping of message entries with the format
-                {"entryId": [["entry", "data"], ...], ...} that are claimed by the consumer.
+            Mapping[bytes, List[List[bytes]]]: A Mapping of message entries with the format::
+
+                {"entryId": [["entry", "data"], ...], ...}
+
+                that are claimed by the consumer.
 
         Examples:
-            # read messages from streamId for consumer1
+            read messages from streamId for consumer1:
+
             >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "consumer1")
                 {
                     b"mystream": {
@@ -3452,7 +3459,8 @@ class CoreCommands(Protocol):
             List[bytes]: A List of message ids claimed by the consumer.
 
         Examples:
-            # read messages from streamId for consumer1
+            read messages from streamId for consumer1:
+
             >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "consumer1")
                 {
                     b"mystream": {
@@ -3506,17 +3514,19 @@ class CoreCommands(Protocol):
 
         Returns:
             List[Union[bytes, Mapping[bytes, List[List[bytes]]], List[bytes]]]: A list containing the following elements:
+
                 - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is equivalent
-                to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
-                scanned.
+                  to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
+                  scanned.
                 - A mapping of the claimed entries, with the keys being the claimed entry IDs and the values being a
-                2D list of the field-value pairs in the format `[[field1, value1], [field2, value2], ...]`.
+                  2D list of the field-value pairs in the format `[[field1, value1], [field2, value2], ...]`.
                 - If you are using Valkey 7.0.0 or above, the response list will also include a list containing the
-                message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
-                deleted from the Pending Entries List.
+                  message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
+                  deleted from the Pending Entries List.
 
         Examples:
-            # Valkey version < 7.0.0:
+            Valkey version < 7.0.0:
+
             >>> await client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [
                     b"0-0",
@@ -3530,7 +3540,8 @@ class CoreCommands(Protocol):
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned.
 
-            # Valkey version 7.0.0 and above:
+            Valkey version 7.0.0 and above:
+
             >>> await client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [
                     b"0-0",
@@ -3590,22 +3601,25 @@ class CoreCommands(Protocol):
 
         Returns:
             List[Union[bytes, List[bytes]]]: A list containing the following elements:
+
                 - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is equivalent
-                to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
-                scanned.
+                  to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
+                  scanned.
                 - A list of the IDs for the claimed entries.
                 - If you are using Valkey 7.0.0 or above, the response list will also include a list containing the
-                message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
-                deleted from the Pending Entries List.
+                  message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
+                  deleted from the Pending Entries List.
 
         Examples:
-            # Valkey version < 7.0.0:
+            Valkey version < 7.0.0:
+
             >>> await client.xautoclaim_just_id("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [b"0-0", [b"1-1"]]
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned.
 
-            # Valkey version 7.0.0 and above:
+            Valkey version 7.0.0 and above:
+
             >>> await client.xautoclaim_just_id("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [b"0-0", [b"1-1"], [b"1-2"]]
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
@@ -3985,7 +3999,7 @@ class CoreCommands(Protocol):
         Returns:
             List[Optional[bytes]]: A list of GeoHash bytes strings representing the positions of the specified members stored
                 at `key`.
-            If a member does not exist in the sorted set, a None value is returned for that member.
+                If a member does not exist in the sorted set, a None value is returned for that member.
 
         Examples:
             >>> await client.geoadd(
@@ -4063,8 +4077,8 @@ class CoreCommands(Protocol):
                 For circular area search, see `GeoSearchByRadius`.
                 For rectangular area search, see `GeoSearchByBox`.
             order_by (Optional[OrderBy]): Specifies the order in which the results should be returned.
-                    - `ASC`: Sorts items from the nearest to the farthest, relative to the center point.
-                    - `DESC`: Sorts items from the farthest to the nearest, relative to the center point.
+                - `ASC`: Sorts items from the nearest to the farthest, relative to the center point.
+                - `DESC`: Sorts items from the farthest to the nearest, relative to the center point.
                 If not specified, the results would be unsorted.
             count (Optional[GeoSearchCount]): Specifies the maximum number of results to return. See `GeoSearchCount`.
                 If not specified, return all results.
@@ -4076,13 +4090,15 @@ class CoreCommands(Protocol):
         Returns:
             List[Union[bytes, List[Union[bytes, float, int, List[float]]]]]: By default, returns a list of members (locations)
                 names.
+
             If any of `with_coord`, `with_dist` or `with_hash` are True, returns an array of arrays, we're each sub array
             represents a single item in the following order:
-                (bytes): The member (location) name.
-                (float): The distance from the center as a floating point number, in the same unit specified in the radius, if
-                    `with_dist` is set to True.
-                (int): The Geohash integer, if `with_hash` is set to True.
-                List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
+
+                - (bytes): The member (location) name.
+                - (float): The distance from the center as a floating point number, in the same unit specified in the radius,
+                  if `with_dist` is set to True.
+                - (int): The Geohash integer, if `with_hash` is set to True.
+                - List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
 
         Examples:
             >>> await client.geoadd(
@@ -4168,21 +4184,22 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, both `source` and `destination` must map to the same hash slot.
 
-            Args:
-                destination (TEncodable): The key to store the search results.
-                source (TEncodable): The key of the sorted set representing geospatial data to search from.
-                search_from (Union[str, bytes, GeospatialData]): The location to search from. Can be specified either as a
-                    member from the sorted set or as a geospatial data (see `GeospatialData`).
-                search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
-                    For circular area search, see `GeoSearchByRadius`.
-                    For rectangular area search, see `GeoSearchByBox`.
-                count (Optional[GeoSearchCount]): Specifies the maximum number of results to store. See `GeoSearchCount`.
-                    If not specified, stores all results.
-                store_dist (bool): Determines what is stored as the sorted set score. Defaults to False.
-                    - If set to False, the geohash of the location will be stored as the sorted set score.
-                    - If set to True, the distance from the center of the shape (circle or box) will be stored as the sorted
-                      set score.
-                        The distance is represented as a floating-point number in the same unit specified for that shape.
+        Args:
+            destination (TEncodable): The key to store the search results.
+            source (TEncodable): The key of the sorted set representing geospatial data to search from.
+            search_from (Union[str, bytes, GeospatialData]): The location to search from. Can be specified either as a
+                member from the sorted set or as a geospatial data (see `GeospatialData`).
+            search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
+                For circular area search, see `GeoSearchByRadius`.
+                For rectangular area search, see `GeoSearchByBox`.
+            count (Optional[GeoSearchCount]): Specifies the maximum number of results to store. See `GeoSearchCount`.
+                If not specified, stores all results.
+            store_dist (bool): Determines what is stored as the sorted set score. Defaults to False.
+
+                - If set to False, the geohash of the location will be stored as the sorted set score.
+                - If set to True, the distance from the center of the shape (circle or box) will be stored as the sorted
+                  set score.
+                  The distance is represented as a floating-point number in the same unit specified for that shape.
 
         Returns:
             int: The number of elements in the resulting sorted set stored at `destination`.
@@ -4493,6 +4510,7 @@ class CoreCommands(Protocol):
         Returns:
             Mapping[bytes, float]: A map of the removed members and their scores, ordered from the one with the highest score
                 to the one with the lowest.
+
             If `key` doesn't exist, it will be treated as an empy sorted set and the command returns an empty map.
 
         Examples:
@@ -4565,6 +4583,7 @@ class CoreCommands(Protocol):
         Returns:
             Mapping[bytes, float]: A map of the removed members and their scores, ordered from the one with the lowest score
                 to the one with the highest.
+
             If `key` doesn't exist, it will be treated as an empy sorted set and the command returns an empty map.
 
         Examples:
@@ -4757,9 +4776,10 @@ class CoreCommands(Protocol):
 
         Returns:
             Optional[int]: The rank of `member` in the sorted set.
+
             If `key` doesn't exist, or if `member` is not present in the set, None will be returned.
 
-            Examples:
+        Examples:
             >>> await client.zrank("my_sorted_set", "member2")
                 1  # Indicates that "member2" has the second-lowest score in the sorted set "my_sorted_set".
             >>> await client.zrank("my_sorted_set", "non_existing_member")
@@ -5996,11 +6016,11 @@ class CoreCommands(Protocol):
         Args:
             key (TEncodable): The key of the string.
             subcommands (List[BitFieldSubCommands]): The subcommands to be performed on the binary value of the string
-                at `key`, which could be any of the following:
-                    - `BitFieldGet`
-                    - `BitFieldSet`
-                    - `BitFieldIncrBy`
-                    - `BitFieldOverflow`
+            at `key`, which could be any of the following:
+                - `BitFieldGet`
+                - `BitFieldSet`
+                - `BitFieldIncrBy`
+                - `BitFieldOverflow`
 
         Returns:
             List[Optional[int]]: An array of results from the executed subcommands:
@@ -6552,8 +6572,11 @@ class CoreCommands(Protocol):
     ) -> TResult:
         """
         Invokes a previously loaded function.
+
         See https://valkey.io/commands/fcall/ for more details.
+
         When in cluster mode, all keys in `keys` must map to the same hash slot.
+
         Args:
             function (TEncodable): The function name.
             keys (Optional[List[TEncodable]]): A list of keys accessed by the function. To ensure the correct
@@ -6561,9 +6584,11 @@ class CoreCommands(Protocol):
                 that a function accesses must be explicitly provided as `keys`.
             arguments (Optional[List[TEncodable]]): A list of `function` arguments. `Arguments`
                 should not represent names of keys.
+
         Returns:
             TResult:
                 The invoked function's return value.
+
         Example:
             >>> await client.fcall("Deep_Thought")
                 b'new_value' # Returns the function's return value.
@@ -6823,6 +6848,7 @@ class CoreCommands(Protocol):
             A Mapping containing the indices of the longest common subsequence between the
             2 strings and the length of the longest common subsequence. The resulting map contains two
             keys, "matches" and "len":
+
                 - "len" is mapped to the length of the longest common subsequence between the 2 strings.
                 - "matches" is mapped to a three dimensional int array that stores pairs of indices that
                   represent the location of the common subsequences in the strings held by key1 and key2,

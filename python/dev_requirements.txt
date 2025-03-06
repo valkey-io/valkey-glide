@@ -8,3 +8,5 @@ isort == 5.10
 mypy == 1.13.0
 mypy-protobuf == 3.5
 packaging >= 22.0
+sphinx >= 8.2.3
+sphinx-rtd-theme # optional but makes docs look a lot better

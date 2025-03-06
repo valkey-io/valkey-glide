@@ -34,6 +34,7 @@ class StandaloneCommands(CoreCommands):
             @example - Return a list of all pub/sub clients:
 
                 connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
+
         Args:
             command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
@@ -261,7 +262,7 @@ class StandaloneCommands(CoreCommands):
             bytes: The library name that was loaded.
 
         Examples:
-            >>> code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+            >>> code = "#!lua name=mylib \\n redis.register_function('myfunc', function(keys, args) return args[1] end)"
             >>> await client.function_load(code, True)
                 b"mylib"
 
@@ -301,7 +302,7 @@ class StandaloneCommands(CoreCommands):
                         b"description": None,
                         b"flags": {b"no-writes"},
                     }],
-                    b"library_code": b"#!lua name=mylib \n sever.register_function('myfunc', function(keys, args) " \
+                    b"library_code": b"#!lua name=mylib \\n sever.register_function('myfunc', function(keys, args) " \
                                      b"return args[1] end)"
                 }]
 
@@ -409,6 +410,7 @@ class StandaloneCommands(CoreCommands):
             TFunctionStatsFullResponse: A Map where the key is the node address and the value is a Map of two keys:
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
+
                 See example for more details.
 
         Examples:
@@ -799,11 +801,13 @@ class StandaloneCommands(CoreCommands):
 
         Args:
             cursor (TResult): The cursor used for iteration. For the first iteration, the cursor should be set to "0".
-              Using a non-zero cursor in the first iteration,
-              or an invalid cursor at any iteration, will lead to undefined results.
-              Using the same cursor in multiple iterations will, in case nothing changed between the iterations,
-                return the same elements multiple times.
-                If the the db has changed, it may result an undefined behavior.
+
+                - Using a non-zero cursor in the first iteration, or an invalid cursor at any iteration, will lead to
+                  undefined results.
+                - Using the same cursor in multiple iterations will, in case nothing changed between the iterations,
+                  return the same elements multiple times.
+                - If the the db has changed, it may result an undefined behavior.
+
             match (Optional[TResult]): A pattern to match keys against.
             count (Optional[int]): The number of keys to return per iteration.
                 The number of keys returned per iteration is not guaranteed to be the same as the count argument.
@@ -816,20 +820,18 @@ class StandaloneCommands(CoreCommands):
                 formatted as [cursor, [key1, key2, ...]]
 
         Examples:
-        >>> result = await client.scan(b'0')
-            print(result) #[b'17', [b'key1', b'key2', b'key3', b'key4', b'key5', b'set1', b'set2', b'set3']]
-            first_cursor_result = result[0]
-            result = await client.scan(first_cursor_result)
-            print(result) #[b'349', [b'key4', b'key5', b'set1', b'hash1', b'zset1', b'list1', b'list2',
-                                    b'list3', b'zset2', b'zset3', b'zset4', b'zset5', b'zset6']]
-            result = await client.scan(result[0])
-            print(result) #[b'0', [b'key6', b'key7']]
-
-        >>> result = await client.scan(first_cursor_result, match=b'key*', count=2)
-            print(result) #[b'6', [b'key4', b'key5']]
-
-        >>> result = await client.scan("0", type=ObjectType.Set)
-            print(result) #[b'362', [b'set1', b'set2', b'set3']]
+            >>> result = await client.scan(b'0')
+                print(result) #[b'17', [b'key1', b'key2', b'key3', b'key4', b'key5', b'set1', b'set2', b'set3']]
+                first_cursor_result = result[0]
+                result = await client.scan(first_cursor_result)
+                print(result) #[b'349', [b'key4', b'key5', b'set1', b'hash1', b'zset1', b'list1', b'list2',
+                                        b'list3', b'zset2', b'zset3', b'zset4', b'zset5', b'zset6']]
+                result = await client.scan(result[0])
+                print(result) #[b'0', [b'key6', b'key7']]
+            >>> result = await client.scan(first_cursor_result, match=b'key*', count=2)
+                print(result) #[b'6', [b'key4', b'key5']]
+            >>> result = await client.scan("0", type=ObjectType.Set)
+                print(result) #[b'362', [b'set1', b'set2', b'set3']]
         """
         args = [cursor]
         if match:
