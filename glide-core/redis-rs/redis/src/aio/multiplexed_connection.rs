@@ -187,7 +187,7 @@ where
                 first_err,
                 is_transaction,
             } => {
-                println!("PipelineSink::send_result: expected_response_count: {}, current_response_count: {}", expected_response_count, current_response_count);
+                println!("PipelineSink::send_result: expected_response_count: {}, current_response_count: {} is transaction {is_transaction}", expected_response_count, current_response_count);
                 println!("result: {:?}", result);
                 match result {
                     Ok(Value::ServerError(err))
@@ -195,6 +195,7 @@ where
                             && *is_transaction =>
                     {
                         if first_err.is_none() {
+                            println!("PipelineSink::send_result: ServerError: {:?}", err);
                             *first_err = Some(err.into());
                         }
                     }
@@ -368,7 +369,8 @@ where
         item: SinkItem,
         timeout: Duration,
     ) -> Result<Value, RedisError> {
-        self.send_recv(item, None, timeout, false).await
+        println!("Pipeline::send_single:");
+        self.send_recv(item, None, timeout, true).await
     }
 
     async fn send_recv(
@@ -539,7 +541,8 @@ impl MultiplexedConnection {
         let result = self
             .pipeline
             .send_single(cmd.get_packed_command(), self.response_timeout)
-            .await;
+            .await
+            .and_then(|value| value.extract_error(None, None));
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
                 if e.is_connection_dropped() {
@@ -563,6 +566,10 @@ impl MultiplexedConnection {
         offset: usize,
         count: usize,
     ) -> RedisResult<Vec<Value>> {
+        println!(
+            "MultiplexedConnection::send_packed_commands: {:?}",
+            cmd.cmd_iter().collect::<Vec<_>>()
+        );
         let result = self
             .pipeline
             .send_recv(
@@ -572,6 +579,11 @@ impl MultiplexedConnection {
                 cmd.is_atomic(),
             )
             .await;
+
+        println!(
+            "MultiplexedConnection::send_packed_commands: result: {:?}",
+            result
+        );
 
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
@@ -588,6 +600,10 @@ impl MultiplexedConnection {
         match value {
             Value::Array(mut values) => {
                 values.drain(..offset);
+                println!(
+                    "MultiplexedConnection::send_packed_commands: values drain: {:?}",
+                    values
+                );
                 Ok(values)
             }
             _ => Ok(vec![value]),

@@ -193,6 +193,7 @@ impl StandaloneClient {
         }
 
         let Some(primary_index) = primary_index else {
+            println!("primary index is none");
             if addresses_and_errors.is_empty() {
                 addresses_and_errors.insert(
                     0,
@@ -627,12 +628,9 @@ impl StandaloneClient {
         &mut self,
         password: Option<String>,
     ) -> RedisResult<Value> {
-        self.get_connection(false)
-            .await
-            .get_connection()
-            .await?
-            .update_connection_password(password.clone())
-            .await
+        let res = self.get_connection(false).await.get_connection().await;
+        println!("before updated {res:?}");
+        res?.update_connection_password(password.clone()).await
     }
 }
 

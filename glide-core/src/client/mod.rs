@@ -517,6 +517,7 @@ impl Client {
         password: Option<String>,
         immediate_auth: bool,
     ) -> RedisResult<Value> {
+        println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         let timeout = self.request_timeout;
         // The password update operation is wrapped in a timeout to prevent it from blocking indefinitely.
         // If the operation times out, an error is returned.
@@ -535,10 +536,11 @@ impl Client {
         .await
         {
             Ok(result) => {
+                println!("############: {:?}", result);
                 if immediate_auth {
                     self.send_immediate_auth(password).await
                 } else {
-                    result
+                    result.and_then(|value| value.extract_error(None, None))
                 }
             }
             Err(_elapsed) => Err(RedisError::from((
@@ -565,7 +567,9 @@ impl Client {
                 ));
                 let mut cmd = redis::cmd("AUTH");
                 cmd.arg(password);
-                self.send_command(&cmd, Some(routing)).await
+                self.send_command(&cmd, Some(routing))
+                    .await
+                    .and_then(|value| value.extract_error(None, None))
             }
         }
     }

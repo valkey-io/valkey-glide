@@ -451,6 +451,7 @@ impl Cmd {
         C: crate::aio::ConnectionLike,
     {
         let val = con.req_packed_command(self).await?;
+        println!("query_async val: {:?}", val);
         from_owned_redis_value(val.extract_error(None, None)?)
     }
 

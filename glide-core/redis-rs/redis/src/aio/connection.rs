@@ -65,7 +65,9 @@ where
             pubsub: false,
             protocol: connection_info.protocol,
         };
-        setup_connection(connection_info, &mut rv, false).await?;
+        let res = setup_connection(connection_info, &mut rv, false).await;
+        println!("lalala {:?}", res);
+        res?;
         Ok(rv)
     }
 

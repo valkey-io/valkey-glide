@@ -153,6 +153,7 @@ async fn setup_connection<C>(
 where
     C: ConnectionLike,
 {
+    println!("setup_connection {connection_info:?}");
     if connection_info.protocol != ProtocolVersion::RESP2 {
         let hello_cmd = resp3_hello(connection_info);
         let val: RedisResult<Value> = hello_cmd.query_async(con).await;
@@ -160,6 +161,7 @@ where
             return Err(get_resp3_hello_command_error(err));
         }
     } else if let Some(password) = &connection_info.password {
+        println!("password: {}", password);
         let mut command = cmd("AUTH");
         if let Some(username) = &connection_info.username {
             command.arg(username);
@@ -167,6 +169,7 @@ where
         match command.arg(password).query_async(con).await {
             Ok(Value::Okay) => (),
             Err(e) => {
+                println!("reci error: {:?}", e);
                 let err_msg = e.detail().ok_or((
                     ErrorKind::AuthenticationFailed,
                     "Password authentication failed",

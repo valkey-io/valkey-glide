@@ -539,6 +539,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                             update_connection_password_command.immediate_auth,
                         )
                         .await
+                        .and_then(|v| v.extract_error(None, None))
                         .map_err(|err| err.into()),
                 },
                 None => {
