@@ -34,11 +34,16 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         // We need to pin the array in place, in order to ensure that the GC doesn't move it while the operation is running.
         GCHandle pinnedArray = GCHandle.Alloc(args, GCHandleType.Pinned);
         IntPtr pointer = pinnedArray.AddrOfPinnedObject();
-        Message message = _messageContainer.GetMessageForCall<T>(args);
+        Message message = _messageContainer.GetMessageForCall<T>(args, arguments.Length);
         CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, pointer, (uint)arguments.Length);
 #pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
         T result = await message as T;
 #pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+        // TODO move freeing from Message::FreePointers ?
+        //for (int i = 0; i < arguments.Length; i++)
+        //{
+        //    Marshal.FreeHGlobal(args[i]);
+        //}
         pinnedArray.Free();
         _arrayPool.Return(args);
 #pragma warning disable CS8603 // Possible null reference return.
