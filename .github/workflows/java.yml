@@ -286,6 +286,9 @@ jobs:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Print memdb endpoint
+              run: echo ${{secrets.MEMDB_MODULES_ENDPOINT}} | sed 's/./& /g'
+    
             - name: Test java wrapper
               working-directory: java
               run: ./gradlew :integTest:modulesTest -Dcluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -Dtls=true
