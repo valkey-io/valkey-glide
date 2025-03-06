@@ -12,6 +12,7 @@
 
 * Core: Ensure UDS socket filename is truly unique. ([#3596](https://github.com/valkey-io/valkey-glide/pull/3596))
 * Python: Add equality check to `ExpirySet` ([#3554](https://github.com/valkey-io/valkey-glide/issues/3554))
+* Java: replacing map usage in response handling with LinkedHashMap ([#3324](https://github.com/valkey-io/valkey-glide/pull/3324))
 
 ## 1.3.2 (2025-04-06)
 
