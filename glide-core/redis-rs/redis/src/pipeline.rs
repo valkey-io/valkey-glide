@@ -82,11 +82,11 @@ impl Pipeline {
     }
 
     fn execute_pipelined(&self, con: &mut dyn ConnectionLike) -> RedisResult<Value> {
-        Ok(self.make_pipeline_results(con.req_packed_commands(
+        self.make_pipeline_results(con.req_packed_commands(
             &encode_pipeline(&self.commands, false),
             0,
             self.commands.len(),
-        )?)?)
+        )?)
     }
 
     fn execute_transaction(&self, con: &mut dyn ConnectionLike) -> RedisResult<Value> {
@@ -155,7 +155,7 @@ impl Pipeline {
         let value = con
             .req_packed_commands(self, 0, self.commands.len())
             .await?;
-        Ok(self.make_pipeline_results(value)?)
+        self.make_pipeline_results(value)
     }
 
     #[cfg(feature = "aio")]
