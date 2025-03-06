@@ -691,7 +691,7 @@ describe("GlideClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "opentelemetry config_%p",
         async (protocol) => {
-            GlideClusterClient.createClient({
+            client = await GlideClusterClient.createClient({
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
                     protocol,
@@ -699,9 +699,12 @@ describe("GlideClusterClient", () => {
                 advancedConfiguration: {
                     openTelemetryConfig: {
                         collectorEndPoint: "https://valid-endpoint",
+                        spanFlushIntervalMs: 400,
                     },
                 },
             });
+            await client.set("otel", "test");
+            expect(await client.get("otel")).toEqual("test");
         },
     );
 

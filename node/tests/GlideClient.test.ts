@@ -1071,7 +1071,7 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "opentelemetry config_%p",
         async (protocol) => {
-            GlideClient.createClient({
+            client = await GlideClient.createClient({
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
                     protocol,
@@ -1083,6 +1083,8 @@ describe("GlideClient", () => {
                     },
                 },
             });
+            await client.set("otel", "test");
+            expect(await client.get("otel")).toEqual("test");
         },
     );
 
