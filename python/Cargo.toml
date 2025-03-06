@@ -11,11 +11,7 @@ name = "glide"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "^0.22", features = [
-    "extension-module",
-    "num-bigint",
-    "gil-refs",
-] }
+pyo3 = { version = "^0.23", features = ["extension-module", "num-bigint"] }
 bytes = { version = "^1.8" }
 redis = { path = "../glide-core/redis-rs/redis", features = [
     "aio",
