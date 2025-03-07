@@ -850,3 +850,67 @@ pub unsafe extern "C" fn request_cluster_scan(
         }
     });
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn update_connection_password(
+    client_adapter_ptr: *const c_void,
+    channel: usize,
+    password: *const c_char,
+    immediate_auth: bool,
+) {
+    let client_adapter =
+        unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
+    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before
+    // all operations have completed.
+    let ptr_address = client_adapter_ptr as usize;
+
+    let mut client_clone = client_adapter.client.clone();
+    
+    // argument conversion to be used in the async block
+    let password = unsafe { CStr::from_ptr(password).to_str().unwrap() };
+    let password_option = if password.is_empty() {
+        None
+    } else {
+        Some(password.to_string())
+    };
+    let immediate_auth = immediate_auth;
+    
+    client_adapter.runtime.spawn(async move {
+        let result = client_clone
+            .update_connection_password(password_option, immediate_auth)
+            .await;
+        let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
+        let value = match result {
+            Ok(value) => value,
+            Err(err) => {
+                let message = errors::error_message(&err);
+                let error_type = errors::error_type(&err);
+
+                let c_err_str = CString::into_raw(
+                    CString::new(message).expect("Couldn't convert error message to CString"),
+                );
+                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
+                return;
+            }
+        };
+
+        let result: RedisResult<CommandResponse> = valkey_value_to_command_response(value);
+
+        unsafe {
+            match result {
+                Ok(message) => {
+                    (client_adapter.success_callback)(channel, Box::into_raw(Box::new(message)))
+                }
+                Err(err) => {
+                    let message = errors::error_message(&err);
+                    let error_type = errors::error_type(&err);
+
+                    let c_err_str = CString::into_raw(
+                        CString::new(message).expect("Couldn't convert error message to CString"),
+                    );
+                    (client_adapter.failure_callback)(channel, c_err_str, error_type);
+                }
+            };
+        }
+    });  
+}
