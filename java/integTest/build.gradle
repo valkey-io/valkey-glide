@@ -137,8 +137,10 @@ compileTestJava.dependsOn ':client:publishToMavenLocal'
 
 tasks.withType(Test) {
     useJUnitPlatform()
-    dependsOn 'beforeTests'
-    finalizedBy 'afterTests'
+    if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
+        dependsOn 'beforeTests'
+        finalizedBy 'afterTests'
+    }
 
     doFirst {
         systemProperty 'test.server.standalone', standaloneHosts
