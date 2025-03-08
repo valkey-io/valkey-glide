@@ -37,6 +37,7 @@ class OffsetOptions:
             using Valkey version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
             If no index type is provided, the indexes will be assumed to be byte indexes.
     """
+
     def __init__(
         self,
         start: int,
@@ -143,6 +144,7 @@ class BitOffset(BitFieldOffset):
     Attributes:
         offset (int): The bit index offset in the array of bits.
     """
+
     def __init__(self, offset: int):
         self._offset = str(offset)
 

@@ -176,6 +176,7 @@ class GeospatialData:
         longitude (float): The longitude coordinate.
         latitude (float): The latitude coordinate.
     """
+
     def __init__(self, longitude: float, latitude: float):
         self.longitude = longitude
         self.latitude = latitude

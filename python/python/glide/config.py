@@ -22,6 +22,7 @@ class NodeAddress:
         host (str, optional): The server host. Defaults to "localhost".
         port (int, optional): The server port. Defaults to 6379.
     """
+
     def __init__(self, host: str = "localhost", port: int = 6379):
         self.host = host
         self.port = port
@@ -84,6 +85,7 @@ class BackoffStrategy:
         factor (int): The multiplier that will be applied to the waiting time between each retry.
         exponent_base (int): The exponent base configured for the strategy.
     """
+
     def __init__(self, num_of_retries: int, factor: int, exponent_base: int):
         self.num_of_retries = num_of_retries
         self.factor = factor
@@ -99,6 +101,7 @@ class ServerCredentials:
         username (Optional[str]): The username that will be used for authenticating connections to the servers.
             If not supplied, "default" will be used.
     """
+
     def __init__(
         self,
         password: str,
@@ -115,6 +118,7 @@ class PeriodicChecksManualInterval:
     Attributes:
         duration_in_sec (int): The duration in seconds for the interval between periodic checks.
     """
+
     def __init__(self, duration_in_sec: int) -> None:
         self.duration_in_sec = duration_in_sec
 
@@ -145,6 +149,7 @@ class AdvancedBaseClientConfiguration:
             **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
             If not explicitly set, a default value of 250 milliseconds will be used.
     """
+
     def __init__(self, connection_timeout: Optional[int] = None):
         self.connection_timeout = connection_timeout
 
@@ -199,6 +204,7 @@ class BaseClientConfiguration:
             to nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
     """
+
     def __init__(
         self,
         addresses: List[NodeAddress],
@@ -284,6 +290,7 @@ class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
     """
     Represents the advanced configuration settings for a Standalone Glide client.
     """
+
     def __init__(self, connection_timeout: Optional[int] = None):
 
         super().__init__(connection_timeout)

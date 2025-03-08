@@ -75,6 +75,7 @@ class ByAddressRoute(Route):
         port (Optional[int]): The port to access on the node. If port is not provided, `host` is assumed to be in
             the format f"{address}:{port}".
     """
+
     def __init__(self, host: str, port: Optional[int] = None) -> None:
         super().__init__()
         if port is None:

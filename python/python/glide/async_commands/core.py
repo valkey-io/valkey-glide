@@ -103,7 +103,7 @@ class ExpiryType(Enum):
     """
     Set the specified expire time, in seconds. Equivalent to `EX` in the Valkey API.
     """
-    
+
     MILLSEC = 1, Union[int, timedelta]
     """
     Set the specified expire time, in milliseconds. Equivalent to `PX` in the Valkey API.
@@ -118,7 +118,7 @@ class ExpiryType(Enum):
     """
     Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Valkey API.
     """
-    
+
     KEEP_TTL = 4, Type[None]
     """
     Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Valkey API.
@@ -611,7 +611,7 @@ class CoreCommands(Protocol):
             key (TEncodable): The `key` to retrieve from the database.
 
         Returns:
-            Optional[bytes]: If `key` exists, returns the `value` of `key`. 
+            Optional[bytes]: If `key` exists, returns the `value` of `key`.
 
             Otherwise, returns `None`.
 
@@ -750,7 +750,7 @@ class CoreCommands(Protocol):
             new_key (TEncodable): The new key name.
 
         Returns:
-            bool: True if `key` was renamed to `new_key`, 
+            bool: True if `key` was renamed to `new_key`,
 
             False if `new_key` already exists.
 
@@ -816,8 +816,8 @@ class CoreCommands(Protocol):
     async def incrby(self, key: TEncodable, amount: int) -> int:
         """
         Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
-        the operation. 
-        
+        the operation.
+
         See https://valkey.io/commands/incrby/ for more details.
 
         Args:
@@ -1673,7 +1673,7 @@ class CoreCommands(Protocol):
                 element.
 
         Returns:
-            Optional[Mapping[bytes, List[bytes]]]: A `map` of `key` name mapped to an array of popped elements. 
+            Optional[Mapping[bytes, List[bytes]]]: A `map` of `key` name mapped to an array of popped elements.
 
             `None` if no elements could be popped and the timeout expired.
 
@@ -3074,7 +3074,7 @@ class CoreCommands(Protocol):
             key (TEncodable): The key of the stream.
 
         Returns:
-            int: The number of entries in the stream. 
+            int: The number of entries in the stream.
 
             If `key` does not exist, returns 0.
 

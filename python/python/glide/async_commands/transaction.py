@@ -1799,7 +1799,7 @@ class BaseTransaction:
         Commands response:
             bool: `True` if the timeout was set.
 
-            `False` if the timeout was not set (e.g., the key doesn't exist or the 
+            `False` if the timeout was not set (e.g., the key doesn't exist or the
             operation is skipped due to the provided arguments).
         """
         args: List[TEncodable] = (
@@ -1831,7 +1831,7 @@ class BaseTransaction:
         Commands response:
             bool: `True` if the timeout was set.
 
-            `False` if the timeout was not set (e.g., the key doesn't exist or the operation 
+            `False` if the timeout was not set (e.g., the key doesn't exist or the operation
             is skipped due to the provided arguments).
         """
         args = (

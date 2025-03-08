@@ -561,7 +561,7 @@ class ClusterCommands(CoreCommands):
                 case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
-            TClusterResponse[TResult]: If a single node route is requested, 
+            TClusterResponse[TResult]: If a single node route is requested,
             returns a Optional[TResult] representing the function's return value.
 
             Otherwise, returns a dict of [bytes , Optional[TResult]] where each key contains the address of
