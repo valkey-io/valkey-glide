@@ -15,7 +15,7 @@ public class TestConfiguration : IDisposable
     public static List<(string host, uint port)> CLUSTER_HOSTS { get; internal set; } = [];
     public static Version SERVER_VERSION { get; internal set; } = new();
 
-    public static BaseClient DefaultStandaloneClient() => new GlideClient(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port, false);
+    public static GlideClient DefaultStandaloneClient() => new(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port, false);
 
     private static TheoryData<BaseClient> s_testClients = [];
 
@@ -25,7 +25,7 @@ public class TestConfiguration : IDisposable
         {
             if (s_testClients.Count == 0)
             {
-                s_testClients = [DefaultStandaloneClient()];
+                s_testClients = [(BaseClient)DefaultStandaloneClient()];
             }
             return s_testClients;
         }

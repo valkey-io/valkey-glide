@@ -11,54 +11,16 @@ namespace Glide;
 public abstract class BaseClient : IDisposable, IStringBaseCommands
 {
     #region public methods
-    protected BaseClient(string host, uint port, bool useTLS)
-    {
-        _successCallbackDelegate = SuccessCallback;
-        nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(_successCallbackDelegate);
-        _failureCallbackDelegate = FailureCallback;
-        nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(_failureCallbackDelegate);
-        _clientPointer = CreateClientFfi(host, port, useTLS, successCallbackPointer, failureCallbackPointer);
-        if (_clientPointer == IntPtr.Zero)
-        {
-            throw new Exception("Failed creating a client");
-        }
-    }
 
-    protected async Task<string?> Command(IntPtr[] args, int argsCount, RequestType requestType)
-    {
-        // We need to pin the array in place, in order to ensure that the GC doesn't move it while the operation is running.
-        GCHandle pinnedArray = GCHandle.Alloc(args, GCHandleType.Pinned);
-        IntPtr pointer = pinnedArray.AddrOfPinnedObject();
-        Message<string> message = _messageContainer.GetMessageForCall(args, argsCount);
-        CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, pointer, (uint)argsCount);
-        string? result = await message;
-        pinnedArray.Free();
-        return result;
-    }
+    public async Task<string> Set(GlideString key, GlideString value)
+        => (await Command([key, value], RequestType.Set, HandleServerResponse<GlideString>)).GetString();
 
-    public async Task<string?> Set(string key, string value)
-    {
-        IntPtr[] args = _arrayPool.Rent(2);
-        args[0] = Marshal.StringToHGlobalAnsi(key);
-        args[1] = Marshal.StringToHGlobalAnsi(value);
-        string? result = await Command(args, 2, RequestType.Set);
-        _arrayPool.Return(args);
-        return result;
-    }
-
-    public async Task<string?> Get(string key)
-    {
-        IntPtr[] args = _arrayPool.Rent(1);
-        args[0] = Marshal.StringToHGlobalAnsi(key);
-        string? result = await Command(args, 1, RequestType.Get);
-        _arrayPool.Return(args);
-        return result;
-    }
-
-    private readonly object _lock = new();
+    public async Task<GlideString?> Get(GlideString key)
+        => await Command([key], RequestType.Get, HandleServerResponse<GlideString?>);
 
     public void Dispose()
     {
+        GC.SuppressFinalize(this);
         lock (_lock)
         {
             if (_clientPointer == IntPtr.Zero)
@@ -73,15 +35,114 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     #endregion public methods
 
-    #region private methods
-
-    private void SuccessCallback(ulong index, IntPtr str)
+    #region protected methods
+    protected BaseClient(string host, uint port, bool useTLS)
     {
-        string? result = str == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(str);
+        _successCallbackDelegate = SuccessCallback;
+        nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(_successCallbackDelegate);
+        _failureCallbackDelegate = FailureCallback;
+        nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(_failureCallbackDelegate);
+        _clientPointer = CreateClientFfi(host, port, useTLS, successCallbackPointer, failureCallbackPointer);
+        if (_clientPointer == IntPtr.Zero)
+        {
+            throw new Exception("Failed creating a client");
+        }
+    }
+
+    protected delegate T ResponseHandler<T>(object? response);
+
+    protected async Task<T> Command<T>(GlideString[] arguments, RequestType requestType, ResponseHandler<T> responseHandler) where T : class?
+    {
+        // 1. Allocate memory for arguments and marshal them
+        IntPtr[] args = _arrayPool.Rent(arguments.Length);
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            args[i] = Marshal.AllocHGlobal(arguments[i].Length);
+            Marshal.Copy(arguments[i].Bytes, 0, args[i], arguments[i].Length);
+        }
+
+        // 2. Pin it
+        // We need to pin the array in place, in order to ensure that the GC doesn't move it while the operation is running.
+        GCHandle pinnedArgs = GCHandle.Alloc(args, GCHandleType.Pinned);
+        IntPtr argsPointer = pinnedArgs.AddrOfPinnedObject();
+
+        // 3. Allocate memory for arguments' lenghts and pin it too
+        int[] lengths = ArrayPool<int>.Shared.Rent(arguments.Length);
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            lengths[i] = arguments[i].Length;
+        }
+        GCHandle pinnedLengths = GCHandle.Alloc(args, GCHandleType.Pinned);
+        IntPtr lengthsPointer = pinnedLengths.AddrOfPinnedObject();
+
+        // 5. Sumbit request to the rust part
+        Message message = _messageContainer.GetMessageForCall(args);
+        CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, argsPointer, (uint)arguments.Length, lengthsPointer);
+        // All data must be copied in sync manner, so we
+
+        // 6. Free memories allocated
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            Marshal.FreeHGlobal(args[i]);
+        }
+        pinnedArgs.Free();
+        _arrayPool.Return(args);
+        pinnedLengths.Free();
+        ArrayPool<int>.Shared.Return(lengths);
+
+        // 7. Get a response and Handle it
+        return responseHandler(await message);
+    }
+
+#pragma warning disable CS8603 // Possible null reference return.
+    protected static T HandleServerResponse<T>(object? response) where T : class?
+    {
+        // T is a Nullable<>
+        if (Nullable.GetUnderlyingType(typeof(T)) != null && response == null)
+        {
+            return null;
+        }
+        response = ConvertByteArrayToGlideString(response);
+#pragma warning disable IDE0046 // Convert to conditional expression
+        if (response is T)
+        {
+            return response as T;
+        }
+#pragma warning restore IDE0046 // Convert to conditional expression
+        throw new Exception($"Unexpected return type from Glide: got {response?.GetType().Name ?? "null"} expected {typeof(T).Name}");
+    }
+#pragma warning restore CS8603 // Possible null reference return.
+
+    protected static object? ConvertByteArrayToGlideString(object? response)
+    {
+        if (response is null)
+        {
+            return null;
+        }
+        if (response is byte[] bytes)
+        {
+            response = new GlideString(bytes);
+        }
+        // TODO handle other types
+        return response;
+    }
+    #endregion protected methods
+
+    #region private methods
+    // TODO rework the callback to handle other response types
+    private void SuccessCallback(ulong index, int strLen, IntPtr strPtr)
+    {
+        object? result = null;
+        if (strPtr != IntPtr.Zero)
+        {
+            byte[] bytes = new byte[strLen];
+            Marshal.Copy(strPtr, bytes, 0, strLen);
+            result = bytes;
+        }
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
         _ = Task.Run(() =>
         {
-            Message<string> message = _messageContainer.GetMessage((int)index);
+            Message message = _messageContainer.GetMessage((int)index);
             message.SetResult(result);
         });
     }
@@ -90,7 +151,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
         Task.Run(() =>
         {
-            Message<string> message = _messageContainer.GetMessage((int)index);
+            Message message = _messageContainer.GetMessage((int)index);
             message.SetException(new Exception("Operation failed"));
         });
 
@@ -109,17 +170,18 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     /// Raw pointer to the underlying native client.
     private IntPtr _clientPointer;
-    private readonly MessageContainer<string> _messageContainer = new();
+    private readonly MessageContainer _messageContainer = new();
     private readonly ArrayPool<IntPtr> _arrayPool = ArrayPool<IntPtr>.Shared;
+    private readonly object _lock = new();
 
     #endregion private fields
 
     #region FFI function declarations
 
-    private delegate void StringAction(ulong index, IntPtr str);
+    private delegate void StringAction(ulong index, int strLen, IntPtr strPtr);
     private delegate void FailureAction(ulong index);
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "command")]
-    private static extern void CommandFfi(IntPtr client, ulong index, int requestType, IntPtr args, uint argCount);
+    private static extern void CommandFfi(IntPtr client, ulong index, int requestType, IntPtr args, uint argCount, IntPtr argLengths);
 
     private delegate void IntAction(IntPtr arg);
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_client")]
