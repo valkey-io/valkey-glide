@@ -33,6 +33,7 @@ public class StandaloneClientTests
         Assert.Equal("OK".ToGlideString(), await client.CustomCommand(["RESTORE", key2, "0", dump!]));
         Assert.Equal(value, (await client.Get(key2))!);
 
+        // Set and get a binary value
         Assert.Equal("OK", await client.Set(key3, dump!));
         Assert.Equal(dump, await client.Get(key3));
     }
