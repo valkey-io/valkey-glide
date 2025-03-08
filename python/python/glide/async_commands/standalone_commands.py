@@ -28,12 +28,8 @@ class StandaloneCommands(CoreCommands):
     async def custom_command(self, command_args: List[TEncodable]) -> TResult:
         """
         Executes a single command, without checking inputs.
-        See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
+        See the `Valkey GLIDE Wiki <https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command>`_
         for details on the restrictions and limitations of the custom command API.
-
-            @example - Return a list of all pub/sub clients:
-
-                connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
 
         Args:
             command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
@@ -41,6 +37,10 @@ class StandaloneCommands(CoreCommands):
 
         Returns:
             TResult: The returning value depends on the executed command.
+
+        Example:
+            >>> connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
+
         """
         return await self._execute_command(RequestType.CustomCommand, command_args)
 
@@ -50,12 +50,12 @@ class StandaloneCommands(CoreCommands):
     ) -> bytes:
         """
         Get information and statistics about the server.
+
         See https://valkey.io/commands/info/ for details.
 
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
-            information to retrieve. When no parameter is provided, the default option is assumed.
-
+                information to retrieve. When no parameter is provided, the default option is assumed.
 
         Returns:
             bytes: Returns bytes containing the information for the sections requested.
@@ -71,6 +71,7 @@ class StandaloneCommands(CoreCommands):
     ) -> Optional[List[TResult]]:
         """
         Execute a transaction by processing the queued commands.
+
         See https://valkey.io/docs/topics/transactions/ for details on Transactions.
 
         Args:
@@ -78,9 +79,10 @@ class StandaloneCommands(CoreCommands):
 
         Returns:
             Optional[List[TResult]]: A list of results corresponding to the execution of each command
-                in the transaction. If a command returns a value, it will be included in the list. If a command
-                doesn't return a value, the list entry will be `None`.
-                If the transaction failed due to a WATCH command, `exec` will return `None`.
+            in the transaction. If a command returns a value, it will be included in the list.
+            If a command doesn't return a value, the list entry will be `None`.
+
+            If the transaction failed due to a WATCH command, `exec` will return `None`.
         """
         commands = transaction.commands[:]
         return await self._execute_transaction(commands)
@@ -88,6 +90,7 @@ class StandaloneCommands(CoreCommands):
     async def select(self, index: int) -> TOK:
         """
         Change the currently selected database.
+
         See https://valkey.io/commands/select/ for details.
 
         Args:
@@ -101,6 +104,7 @@ class StandaloneCommands(CoreCommands):
     async def config_resetstat(self) -> TOK:
         """
         Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
+
         See https://valkey.io/commands/config-resetstat/ for details.
 
         Returns:
@@ -111,10 +115,13 @@ class StandaloneCommands(CoreCommands):
     async def config_rewrite(self) -> TOK:
         """
         Rewrite the configuration file with the current configuration.
+
         See https://valkey.io/commands/config-rewrite/ for details.
 
         Returns:
-            OK: OK is returned when the configuration was rewritten properly. Otherwise, an error is raised.
+            OK: OK is returned when the configuration was rewritten properly.
+
+            Otherwise, an error is raised.
         """
         return cast(TOK, await self._execute_command(RequestType.ConfigRewrite, []))
 
@@ -123,6 +130,7 @@ class StandaloneCommands(CoreCommands):
     ) -> int:
         """
         Returns the current connection id.
+
         See https://valkey.io/commands/client-id/ for more information.
 
         Returns:
@@ -133,14 +141,17 @@ class StandaloneCommands(CoreCommands):
     async def ping(self, message: Optional[TEncodable] = None) -> bytes:
         """
         Ping the server.
+
         See https://valkey.io/commands/ping/ for more details.
 
         Args:
-           message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
-            the server will respond with b"PONG". If provided, the server will respond with a copy of the message.
+            message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
+                the server will respond with b"PONG". If provided, the server will respond with a copy of the message.
 
         Returns:
-           bytes: b"PONG" if `message` is not provided, otherwise return a copy of `message`.
+            bytes: b"PONG" if `message` is not provided.
+
+            Otherwise return a copy of `message`.
 
         Examples:
             >>> await client.ping()
@@ -154,7 +165,8 @@ class StandaloneCommands(CoreCommands):
     async def config_get(self, parameters: List[TEncodable]) -> Dict[bytes, bytes]:
         """
         Get the values of configuration parameters.
-        Starting from server version 7, command supports multiple parameters.
+        Starting from server version 7, command supports multiple parameters
+
         See https://valkey.io/commands/config-get/ for details.
 
         Args:
@@ -178,14 +190,17 @@ class StandaloneCommands(CoreCommands):
         """
         Set configuration parameters to the specified values.
         Starting from server version 7, command supports multiple parameters.
+
         See https://valkey.io/commands/config-set/ for details.
 
         Args:
             parameters_map (Mapping[TEncodable, TEncodable]): A map consisting of configuration
-            parameters and their respective values to set.
+                parameters and their respective values to set.
 
         Returns:
-            OK: Returns OK if all configurations have been successfully set. Otherwise, raises an error.
+            OK: Returns OK if all configurations have been successfully set.
+
+            Otherwise, raises an error.
 
         Examples:
             >>> config_set({"timeout": "1000", "maxmemory": "1GB"})
@@ -199,11 +214,13 @@ class StandaloneCommands(CoreCommands):
     async def client_getname(self) -> Optional[bytes]:
         """
         Get the name of the primary's connection.
+
         See https://valkey.io/commands/client-getname/ for more details.
 
         Returns:
-            Optional[bytes]: Returns the name of the client connection as a byte string if a name is set,
-            or None if no name is assigned.
+            Optional[bytes]: Returns the name of the client connection as a byte string if a name is set.
+
+            `None` if no name is assigned.
 
         Examples:
             >>> await client.client_getname()
@@ -216,6 +233,7 @@ class StandaloneCommands(CoreCommands):
     async def dbsize(self) -> int:
         """
         Returns the number of keys in the currently selected database.
+
         See https://valkey.io/commands/dbsize for more details.
 
         Returns:
@@ -290,7 +308,7 @@ class StandaloneCommands(CoreCommands):
 
         Returns:
             TFunctionListResponse: Info about all or
-                selected libraries and their functions.
+            selected libraries and their functions.
 
         Examples:
             >>> response = await client.function_list("myLib?_backup", True)
@@ -408,10 +426,11 @@ class StandaloneCommands(CoreCommands):
 
         Returns:
             TFunctionStatsFullResponse: A Map where the key is the node address and the value is a Map of two keys:
+
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
 
-                See example for more details.
+            See example for more details.
 
         Examples:
             >>> await client.function_stats()
@@ -546,8 +565,10 @@ class StandaloneCommands(CoreCommands):
             db_index (int): The index of the database to move `key` to.
 
         Returns:
-            bool: True if `key` was moved, or False if the `key` already exists in the destination database
-                or does not exist in the source database.
+            bool: `True` if `key` was moved.
+
+            `False` if the `key` already exists in the destination database
+            or does not exist in the source database.
 
         Example:
             >>> await client.move("some_key", 1)
@@ -561,6 +582,7 @@ class StandaloneCommands(CoreCommands):
     async def publish(self, message: TEncodable, channel: TEncodable) -> int:
         """
         Publish a message on pubsub channel.
+
         See https://valkey.io/commands/publish for more details.
 
         Args:
@@ -569,7 +591,8 @@ class StandaloneCommands(CoreCommands):
 
         Returns:
             int: Number of subscriptions in primary node that received the message.
-            Note that this value does not include subscriptions that configured on replicas.
+
+            **Note:** this value does not include subscriptions that configured on replicas.
 
         Examples:
             >>> await client.publish("Hi all!", "global-channel")
@@ -653,7 +676,9 @@ class StandaloneCommands(CoreCommands):
             replace (Optional[bool]): If the destination key should be removed before copying the value to it.
 
         Returns:
-            bool: True if the source was copied. Otherwise, return False.
+            bool: True if the source was copied.
+
+            Otherwise, return False.
 
         Examples:
             >>> await client.set("source", "sheep")
@@ -688,8 +713,9 @@ class StandaloneCommands(CoreCommands):
         Args:
             version (Optional[int]): Version of computer art to generate.
             parameters (Optional[List[int]]): Additional set of arguments in order to change the output:
-                For version `5`, those are length of the line, number of squares per row, and number of squares per column.
-                For version `6`, those are number of columns and number of lines.
+
+                - For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+                - For version `6`, those are number of columns and number of lines.
 
         Returns:
             bytes: A piece of generative computer art along with the current Valkey version.
@@ -751,7 +777,7 @@ class StandaloneCommands(CoreCommands):
         Examples:
             >>> await client.set("key", "value");
             >>> await client.wait(1, 1000);
-            // return 1 when a replica is reached or 0 if 1000ms is reached.
+            # return 1 when a replica is reached or 0 if 1000ms is reached.
         """
         args: List[TEncodable] = [str(numreplicas), str(timeout)]
         return cast(
@@ -810,14 +836,16 @@ class StandaloneCommands(CoreCommands):
 
             match (Optional[TResult]): A pattern to match keys against.
             count (Optional[int]): The number of keys to return per iteration.
-                The number of keys returned per iteration is not guaranteed to be the same as the count argument.
-                the argument is used as a hint for the server to know how many "steps" it can use to retrieve the keys.
-                The default value is 10.
+
+                - The number of keys returned per iteration is not guaranteed to be the same as the count argument.
+                - The argument is used as a hint for the server to know how many "steps" it can use to retrieve the keys.
+                - The default value is 10.
+
             type (ObjectType): The type of object to scan for.
 
         Returns:
             List[Union[bytes, List[bytes]]]: A List containing the next cursor value and a list of keys,
-                formatted as [cursor, [key1, key2, ...]]
+            formatted as [cursor, [key1, key2, ...]]
 
         Examples:
             >>> result = await client.scan(b'0')

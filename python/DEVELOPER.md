@@ -246,6 +246,18 @@ make html # or run make help to see list of available options
 
 In `docs/_build` you will find the `index.html` page. Open this file in your browser and you should see all the documented functions.
 
+However, some stylings may not be implemented by this Google format. In such cases, we revert back to the default style that `sphinx` uses: [reStructuredText](https://sphinx-rtd-tutorial.readthedocs.io/en/latest/docstrings.html). An example of this is shown for hyperlinks below.
+
+## Documentation Style
+
+### Links and Hyperlinks
+
+If we wanted to show a regular link, we can add it as is. If we wanted to show hyperlinks, follow this format:
+
+Format: `` `text <link>`_ ``
+
+Example: `` `SORT <https://valkey.io/commands/sort/>`_ ``
+
 
 # Recommended extensions for VS Code
 ---

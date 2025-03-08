@@ -241,6 +241,9 @@ jobs:
               uses: threeal/pipx-install-action@latest
               with:
                   packages: sphinx
+            
+            - name: Add sphinx-rtd-theme
+              run: pipx inject sphinx sphinx-rtd-theme
 
             - name: Build docs
               if: always()

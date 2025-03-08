@@ -23,26 +23,26 @@ class BitmapIndexType(Enum):
 
 
 class OffsetOptions:
+    """
+    Represents offsets specifying a string interval to analyze in the `BITCOUNT` command. The offsets are
+    zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
+    The offsets can also be negative numbers indicating offsets starting at the end of the string, with `-1` being
+    the last index of the string, `-2` being the penultimate, and so on.
+
+    Attributes:
+        start (int): The starting offset index.
+        end (Optional[int]): The ending offset index. Optional since Valkey version 8.0.0 and above for the BITCOUNT
+            command. If not provided, it will default to the end of the string.
+        index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
+            using Valkey version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
+            If no index type is provided, the indexes will be assumed to be byte indexes.
+    """
     def __init__(
         self,
         start: int,
         end: Optional[int] = None,
         index_type: Optional[BitmapIndexType] = None,
     ):
-        """
-        Represents offsets specifying a string interval to analyze in the `BITCOUNT` command. The offsets are
-        zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
-        The offsets can also be negative numbers indicating offsets starting at the end of the string, with `-1` being
-        the last index of the string, `-2` being the penultimate, and so on.
-
-        Args:
-            start (int): The starting offset index.
-            end (Optional[int]): The ending offset index. Optional since Valkey version 8.0.0 and above for the BITCOUNT
-            command. If not provided, it will default to the end of the string.
-            index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
-                using Valkey version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
-                If no index type is provided, the indexes will be assumed to be byte indexes.
-        """
         self.start = start
         self.end = end
         self.index_type = index_type
@@ -85,16 +85,17 @@ class BitEncoding(ABC):
 
 
 class SignedEncoding(BitEncoding):
-    # Prefix specifying that the encoding is signed.
+    """
+    Represents a signed argument encoding. Must be less than 65 bits long.
+
+    Attributes:
+        encoding_length (int): The bit size of the encoding.
+    """
+
+    #: Prefix specifying that the encoding is signed.
     SIGNED_ENCODING_PREFIX = "i"
 
     def __init__(self, encoding_length: int):
-        """
-        Represents a signed argument encoding. Must be less than 65 bits long.
-
-        Args:
-            encoding_length (int): The bit size of the encoding.
-        """
         self._encoding = f"{self.SIGNED_ENCODING_PREFIX}{str(encoding_length)}"
 
     def to_arg(self) -> str:
@@ -102,16 +103,17 @@ class SignedEncoding(BitEncoding):
 
 
 class UnsignedEncoding(BitEncoding):
-    # Prefix specifying that the encoding is unsigned.
+    """
+    Represents an unsigned argument encoding. Must be less than 64 bits long.
+
+    Attributes:
+        encoding_length (int): The bit size of the encoding.
+    """
+
+    #: Prefix specifying that the encoding is unsigned.
     UNSIGNED_ENCODING_PREFIX = "u"
 
     def __init__(self, encoding_length: int):
-        """
-        Represents an unsigned argument encoding. Must be less than 64 bits long.
-
-        Args:
-            encoding_length (int): The bit size of the encoding.
-        """
         self._encoding = f"{self.UNSIGNED_ENCODING_PREFIX}{str(encoding_length)}"
 
     def to_arg(self) -> str:
@@ -131,17 +133,17 @@ class BitFieldOffset(ABC):
 
 
 class BitOffset(BitFieldOffset):
+    """
+    Represents an offset in an array of bits for the `BITFIELD` or `BITFIELD_RO` commands. Must be greater than or
+    equal to 0.
+
+    For example, if we have the binary `01101001` with offset of 1 for an unsigned encoding of size 4, then the value
+    is 13 from `0(1101)001`.
+
+    Attributes:
+        offset (int): The bit index offset in the array of bits.
+    """
     def __init__(self, offset: int):
-        """
-        Represents an offset in an array of bits for the `BITFIELD` or `BITFIELD_RO` commands. Must be greater than or
-        equal to 0.
-
-        For example, if we have the binary `01101001` with offset of 1 for an unsigned encoding of size 4, then the value
-        is 13 from `0(1101)001`.
-
-        Args:
-            offset (int): The bit index offset in the array of bits.
-        """
         self._offset = str(offset)
 
     def to_arg(self) -> str:
@@ -149,22 +151,23 @@ class BitOffset(BitFieldOffset):
 
 
 class BitOffsetMultiplier(BitFieldOffset):
-    # Prefix specifying that the offset uses an encoding multiplier.
+    """
+    Represents an offset in an array of bits for the `BITFIELD` or `BITFIELD_RO` commands. The bit offset index is
+    calculated as the numerical value of the offset multiplied by the encoding value. Must be greater than or equal
+    to 0.
+
+    For example, if we have the binary 01101001 with offset multiplier of 1 for an unsigned encoding of size 4, then
+    the value is 9 from `0110(1001)`.
+
+    Attributes:
+        offset (int): The offset in the array of bits, which will be multiplied by the encoding value to get the
+            final bit index offset.
+    """
+
+    #: Prefix specifying that the offset uses an encoding multiplier.
     OFFSET_MULTIPLIER_PREFIX = "#"
 
     def __init__(self, offset: int):
-        """
-        Represents an offset in an array of bits for the `BITFIELD` or `BITFIELD_RO` commands. The bit offset index is
-        calculated as the numerical value of the offset multiplied by the encoding value. Must be greater than or equal
-        to 0.
-
-        For example, if we have the binary 01101001 with offset multiplier of 1 for an unsigned encoding of size 4, then
-        the value is 9 from `0110(1001)`.
-
-        Args:
-            offset (int): The offset in the array of bits, which will be multiplied by the encoding value to get the
-            final bit index offset.
-        """
         self._offset = f"{self.OFFSET_MULTIPLIER_PREFIX}{str(offset)}"
 
     def to_arg(self) -> str:
@@ -183,17 +186,18 @@ class BitFieldSubCommands(ABC):
 
 
 class BitFieldGet(BitFieldSubCommands):
-    # "GET" subcommand string for use in the `BITFIELD` or `BITFIELD_RO` commands.
+    """
+    Represents the "GET" subcommand for getting a value in the binary representation of the string stored in `key`.
+
+    Attributes:
+        encoding (BitEncoding): The bit encoding for the subcommand.
+        offset (BitFieldOffset): The offset in the array of bits from which to get the value.
+    """
+
+    #: "GET" subcommand string for use in the `BITFIELD` or `BITFIELD_RO` commands.
     GET_COMMAND_STRING = "GET"
 
     def __init__(self, encoding: BitEncoding, offset: BitFieldOffset):
-        """
-        Represents the "GET" subcommand for getting a value in the binary representation of the string stored in `key`.
-
-        Args:
-            encoding (BitEncoding): The bit encoding for the subcommand.
-            offset (BitFieldOffset): The offset in the array of bits from which to get the value.
-        """
         self._encoding = encoding
         self._offset = offset
 
@@ -202,18 +206,19 @@ class BitFieldGet(BitFieldSubCommands):
 
 
 class BitFieldSet(BitFieldSubCommands):
-    # "SET" subcommand string for use in the `BITFIELD` command.
+    """
+    Represents the "SET" subcommand for setting bits in the binary representation of the string stored in `key`.
+
+    Args:
+        encoding (BitEncoding): The bit encoding for the subcommand.
+        offset (BitOffset): The offset in the array of bits where the value will be set.
+        value (int): The value to set the bits in the binary value to.
+    """
+
+    #: "SET" subcommand string for use in the `BITFIELD` command.
     SET_COMMAND_STRING = "SET"
 
     def __init__(self, encoding: BitEncoding, offset: BitFieldOffset, value: int):
-        """
-        Represents the "SET" subcommand for setting bits in the binary representation of the string stored in `key`.
-
-        Args:
-            encoding (BitEncoding): The bit encoding for the subcommand.
-            offset (BitOffset): The offset in the array of bits where the value will be set.
-            value (int): The value to set the bits in the binary value to.
-        """
         self._encoding = encoding
         self._offset = offset
         self._value = value
@@ -228,19 +233,20 @@ class BitFieldSet(BitFieldSubCommands):
 
 
 class BitFieldIncrBy(BitFieldSubCommands):
-    # "INCRBY" subcommand string for use in the `BITFIELD` command.
+    """
+    Represents the "INCRBY" subcommand for increasing or decreasing bits in the binary representation of the
+    string stored in `key`.
+
+    Attributes:
+        encoding (BitEncoding): The bit encoding for the subcommand.
+        offset (BitOffset): The offset in the array of bits where the value will be incremented.
+        increment (int): The value to increment the bits in the binary value by.
+    """
+
+    #: "INCRBY" subcommand string for use in the `BITFIELD` command.
     INCRBY_COMMAND_STRING = "INCRBY"
 
     def __init__(self, encoding: BitEncoding, offset: BitFieldOffset, increment: int):
-        """
-        Represents the "INCRBY" subcommand for increasing or decreasing bits in the binary representation of the
-        string stored in `key`.
-
-        Args:
-            encoding (BitEncoding): The bit encoding for the subcommand.
-            offset (BitOffset): The offset in the array of bits where the value will be incremented.
-            increment (int): The value to increment the bits in the binary value by.
-        """
         self._encoding = encoding
         self._offset = offset
         self._increment = increment
@@ -276,17 +282,18 @@ class BitOverflowControl(Enum):
 
 
 class BitFieldOverflow(BitFieldSubCommands):
-    # "OVERFLOW" subcommand string for use in the `BITFIELD` command.
+    """
+    Represents the "OVERFLOW" subcommand that determines the result of the "SET" or "INCRBY" `BITFIELD` subcommands
+    when an underflow or overflow occurs.
+
+    Attributes:
+        overflow_control (BitOverflowControl): The desired overflow behavior.
+    """
+
+    #: "OVERFLOW" subcommand string for use in the `BITFIELD` command.
     OVERFLOW_COMMAND_STRING = "OVERFLOW"
 
     def __init__(self, overflow_control: BitOverflowControl):
-        """
-        Represents the "OVERFLOW" subcommand that determines the result of the "SET" or "INCRBY" `BITFIELD` subcommands
-        when an underflow or overflow occurs.
-
-        Args:
-            overflow_control (BitOverflowControl): The desired overflow behavior.
-        """
         self._overflow_control = overflow_control
 
     def to_args(self) -> List[str]:

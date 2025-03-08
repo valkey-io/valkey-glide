@@ -15,14 +15,14 @@ from glide.protobuf.connection_request_pb2 import TlsMode
 
 
 class NodeAddress:
-    def __init__(self, host: str = "localhost", port: int = 6379):
-        """
-        Represents the address and port of a node in the cluster.
+    """
+    Represents the address and port of a node in the cluster.
 
-        Args:
-            host (str, optional): The server host. Defaults to "localhost".
-            port (int, optional): The server port. Defaults to 6379.
-        """
+    Attributes:
+        host (str, optional): The server host. Defaults to "localhost".
+        port (int, optional): The server port. Defaults to 6379.
+    """
+    def __init__(self, host: str = "localhost", port: int = 6379):
         self.host = host
         self.port = port
 
@@ -69,53 +69,53 @@ class ProtocolVersion(Enum):
 
 
 class BackoffStrategy:
-    def __init__(self, num_of_retries: int, factor: int, exponent_base: int):
-        """
-        Represents the strategy used to determine how and when to reconnect, in case of connection failures.
-        The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N
-        is the number of failed attempts.
-        Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is
-        successful.
-        The client will attempt to reconnect indefinitely.
+    """
+    Represents the strategy used to determine how and when to reconnect, in case of connection failures.
+    The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N
+    is the number of failed attempts.
+    Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is
+    successful.
+    The client will attempt to reconnect indefinitely.
 
-        Args:
-            num_of_retries (int): Number of retry attempts that the client should perform when disconnected from the server,
-                where the time between retries increases. Once the retries have reached the maximum value, the time between
-                retries will remain constant until a reconnect attempt is succesful.
-            factor (int): The multiplier that will be applied to the waiting time between each retry.
-            exponent_base (int): The exponent base configured for the strategy.
-        """
+    Attributes:
+        num_of_retries (int): Number of retry attempts that the client should perform when disconnected from the server,
+            where the time between retries increases. Once the retries have reached the maximum value, the time between
+            retries will remain constant until a reconnect attempt is succesful.
+        factor (int): The multiplier that will be applied to the waiting time between each retry.
+        exponent_base (int): The exponent base configured for the strategy.
+    """
+    def __init__(self, num_of_retries: int, factor: int, exponent_base: int):
         self.num_of_retries = num_of_retries
         self.factor = factor
         self.exponent_base = exponent_base
 
 
 class ServerCredentials:
+    """
+    Represents the credentials for connecting to a server.
+
+    Attributes:
+        password (str): The password that will be used for authenticating connections to the servers.
+        username (Optional[str]): The username that will be used for authenticating connections to the servers.
+            If not supplied, "default" will be used.
+    """
     def __init__(
         self,
         password: str,
         username: Optional[str] = None,
     ):
-        """
-        Represents the credentials for connecting to a server.
-
-        Args:
-            password (str): The password that will be used for authenticating connections to the servers.
-            username (Optional[str]): The username that will be used for authenticating connections to the servers.
-                If not supplied, "default" will be used.
-        """
         self.password = password
         self.username = username
 
 
 class PeriodicChecksManualInterval:
-    def __init__(self, duration_in_sec: int) -> None:
-        """
-        Represents a manually configured interval for periodic checks.
+    """
+    Represents a manually configured interval for periodic checks.
 
-        Args:
-            duration_in_sec (int): The duration in seconds for the interval between periodic checks.
-        """
+    Attributes:
+        duration_in_sec (int): The duration in seconds for the interval between periodic checks.
+    """
+    def __init__(self, duration_in_sec: int) -> None:
         self.duration_in_sec = duration_in_sec
 
 
@@ -139,13 +139,12 @@ class AdvancedBaseClientConfiguration:
     """
     Represents the advanced configuration settings for a base Glide client.
 
-    Args:
+    Attributes:
         connection_timeout (Optional[int]): The duration in milliseconds to wait for a TCP/TLS connection to complete.
             This applies both during initial client creation and any reconnections that may occur during request processing.
             **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
             If not explicitly set, a default value of 250 milliseconds will be used.
     """
-
     def __init__(self, connection_timeout: Optional[int] = None):
         self.connection_timeout = connection_timeout
 
@@ -158,6 +157,48 @@ class AdvancedBaseClientConfiguration:
 
 
 class BaseClientConfiguration:
+    """
+    Represents the configuration settings for a Glide client.
+
+    Attributes:
+        addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
+            If the server is in cluster mode the list can be partial, as the client will attempt to map out
+            the cluster and find all nodes.
+            If the server is in standalone mode, only nodes whose addresses were provided will be used by the
+            client.
+            For example::
+
+                [
+                    {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
+                    {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
+                ].
+
+        use_tls (bool): True if communication with the cluster should use Transport Level Security.
+            Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail
+        credentials (ServerCredentials): Credentials for authentication process.
+            If none are set, the client will not authenticate itself with the server.
+        read_from (ReadFrom): If not set, `PRIMARY` will be used.
+        request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to
+            complete.
+            This duration encompasses sending the request, awaiting for a response from the server, and any required
+            reconnections or retries.
+            If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not
+            explicitly set, a default value of 250 milliseconds will be used.
+        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command
+            during connection establishment.
+        protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
+        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
+            (sent but not yet completed).
+            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
+            stuck in case of a queue backlog.
+            If not set, a default value will be used.
+        client_az (Optional[str]): Availability Zone of the client.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas
+            within the specified AZ if exits.
+            If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed
+            to nodes (first replicas then primary) within the specified AZ if they exist.
+        advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
+    """
     def __init__(
         self,
         addresses: List[NodeAddress],
@@ -171,46 +212,6 @@ class BaseClientConfiguration:
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedBaseClientConfiguration] = None,
     ):
-        """
-        Represents the configuration settings for a Glide client.
-
-        Args:
-            addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
-                    If the server is in cluster mode the list can be partial, as the client will attempt to map out
-                    the cluster and find all nodes.
-                    If the server is in standalone mode, only nodes whose addresses were provided will be used by the
-                    client.
-                    For example:
-                    [
-                        {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
-                        {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
-                    ].
-            use_tls (bool): True if communication with the cluster should use Transport Level Security.
-                Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail
-            credentials (ServerCredentials): Credentials for authentication process.
-                    If none are set, the client will not authenticate itself with the server.
-            read_from (ReadFrom): If not set, `PRIMARY` will be used.
-            request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to
-                complete.
-                This duration encompasses sending the request, awaiting for a response from the server, and any required
-                reconnections or retries.
-                If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not
-                explicitly set, a default value of 250 milliseconds will be used.
-            client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command
-                during connection establishment.
-            protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
-            inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
-                (sent but not yet completed).
-                This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
-                stuck in case of a queue backlog.
-                If not set, a default value will be used.
-            client_az (Optional[str]): Availability Zone of the client.
-                If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas
-                within the specified AZ if exits.
-                If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed
-                to nodes (first replicas then primary) within the specified AZ if they exist.
-            advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
-        """
         self.addresses = addresses
         self.use_tls = use_tls
         self.credentials = credentials
@@ -283,7 +284,6 @@ class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
     """
     Represents the advanced configuration settings for a Standalone Glide client.
     """
-
     def __init__(self, connection_timeout: Optional[int] = None):
 
         super().__init__(connection_timeout)
@@ -293,7 +293,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
     """
     Represents the configuration settings for a Standalone Glide client.
 
-    Args:
+    Attributes:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
         Only nodes whose addresses were provided will be used by the client.
             For example::
@@ -462,7 +462,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
     """
     Represents the configuration settings for a Cluster Glide client.
 
-    Args:
+    Attributes:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
             The list can be partial, as the client will attempt to map out the cluster and find all nodes.
             For example::
@@ -504,7 +504,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             see `AdvancedGlideClusterClientConfiguration`.
 
 
-    Notes:
+    Note:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
         with fixed values is used.
     """
