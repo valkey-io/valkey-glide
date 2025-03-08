@@ -239,6 +239,9 @@ We follow the [Google Style Python Docstrings format](https://sphinxcontrib-napo
 To run this tool, execute the following:
 
 ```bash
+cd $HOME/src/valkey-glide/python
+source .env/bin/activate
+pip install -r dev_requirements.txt
 cd python/docs
 make clean
 make html # or run make help to see list of available options
@@ -249,6 +252,47 @@ In `docs/_build` you will find the `index.html` page. Open this file in your bro
 However, some stylings may not be implemented by this Google format. In such cases, we revert back to the default style that `sphinx` uses: [reStructuredText](https://sphinx-rtd-tutorial.readthedocs.io/en/latest/docstrings.html). An example of this is shown for hyperlinks below.
 
 ## Documentation Style
+
+### Example of a Properly formatted Docstring
+
+```python
+"""
+Reads entries from the given streams.
+
+See https://valkey.io/commands/xread for more details.
+
+Note:
+    When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
+
+Args:
+    keys_and_ids (Mapping[TEncodable, TEncodable]): A mapping of keys and entry
+        IDs to read from.
+    options (Optional[StreamReadOptions]): Options detailing how to read the stream.
+
+Returns:
+    Optional[Mapping[bytes, Mapping[bytes, List[List[bytes]]]]]: A mapping of stream keys, to a mapping of stream IDs,
+    to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+
+    None will be returned under the following conditions:
+
+        - All key-ID pairs in `keys_and_ids` have either a non-existing key or a non-existing ID, or there are no
+            entries after the given ID.
+        - The `BLOCK` option is specified and the timeout is hit.
+
+Examples:
+    >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
+    >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
+    >>> await client.xread({"mystream": "0-0"}, StreamReadOptions(block_ms=1000))
+        {
+            b"mystream": {
+                b"0-1": [[b"field1", b"value1"]],
+                b"0-2": [[b"field2", b"value2"], [b"field2", b"value3"]],
+            }
+        }
+        # Indicates the stream entries for "my_stream" with IDs greater than "0-0". The operation blocks up to
+        # 1000ms if there is no stream data.
+"""
+```
 
 ### Links and Hyperlinks
 
