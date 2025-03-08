@@ -230,6 +230,28 @@ jobs:
               run: |
                   black --check --diff .
 
+    docs-test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install dependencies
+              if: always()
+              uses: threeal/pipx-install-action@latest
+              with:
+                  packages: sphinx
+
+            - name: Add sphinx-rtd-theme
+              run: pipx inject sphinx sphinx-rtd-theme
+
+            - name: Build docs
+              if: always()
+              working-directory: ./python/docs
+              run: |
+                  make clean
+                  make html SPHINXOPTS="-W --keep-going"
+
     get-containers:
         runs-on: ubuntu-latest
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
