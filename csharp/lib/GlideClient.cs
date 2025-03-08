@@ -6,6 +6,6 @@ namespace Glide;
 
 public class GlideClient(string host, uint port, bool useTLS) : BaseClient(host, port, useTLS), IConnectionManagementCommands, IGenericCommands
 {
-    public async Task<object?> CustomCommand(string[] args)
+    public async Task<object?> CustomCommand(GlideString[] args)
         => await Command<object?>(args, RequestType.CustomCommand);
 }
