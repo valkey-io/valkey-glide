@@ -24,6 +24,7 @@ use num_traits::sign::Signed;
 use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
 #[cfg(feature = "testing_utilities")]
 use std::collections::HashMap;
+use std::f32::consts::E;
 use std::ptr::from_mut;
 use std::str;
 use tokio::runtime::{Builder, Runtime};
@@ -277,6 +278,11 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             obj.set_named_property("values", js_array_view)?;
             Ok(obj.into_unknown())
         }
+        Value::ServerError(_) => Err(Error::new(
+            // TODO: implement with napi 3
+            Status::GenericFailure,
+            "ServerError is not supported",
+        )),
     }
 }
 

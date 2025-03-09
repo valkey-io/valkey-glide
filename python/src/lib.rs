@@ -2,6 +2,7 @@
 
 use bytes::Bytes;
 use glide_core::client::FINISHED_SCAN_CURSOR;
+use glide_core::errors::error_message;
 use glide_core::start_socket_listener;
 use glide_core::Telemetry;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
@@ -9,6 +10,7 @@ use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyString};
 use pyo3::Python;
+use redis::RedisError;
 use redis::Value;
 use std::collections::HashMap;
 use std::ptr::from_mut;
@@ -309,6 +311,17 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                     .expect("Push: expected a proper conversion into a Python dict.")
                     .into_any()
                     .unbind())
+            }
+            Value::ServerError(error) => {
+                let err_msg = error_message(&server_error.into());
+                // Import the module containing your custom error.
+                let module = py.import_bound("glide.exceptions")?;
+                // Get the custom error type from the module.
+                let custom_error_type = module.getattr("RequestError")?;
+                // Create an instance of your custom error with the error message.
+                let instance = custom_error_type.call1((err_msg,))?;
+                // Return the instance as a PyObject.
+                Ok(instance.into_py(py))
             }
         }
     }
