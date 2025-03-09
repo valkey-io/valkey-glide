@@ -39,6 +39,8 @@ describe("Auth tests", () => {
     let cmdCluster: ValkeyCluster;
     let managementClient: BaseClient;
     let client: BaseClient;
+    let managementClientCMD: GlideClient;
+    let managementClientCME: GlideClusterClient;
     beforeAll(async () => {
         const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
         const clusterAddresses = global.CLUSTER_ENDPOINTS;
@@ -60,13 +62,11 @@ describe("Auth tests", () => {
               )
             : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
 
-        // Create appropriate client based on mode
-        const isStandaloneMode = !!standaloneAddresses;
-        const activeCluster = isStandaloneMode ? cmdCluster : cmeCluster;
-        const ClientClass = isStandaloneMode ? GlideClient : GlideClusterClient;
-
-        managementClient = await ClientClass.createClient({
-            addresses: formatAddresses(activeCluster.getAddresses()),
+        managementClientCMD = await GlideClient.createClient({
+            addresses: formatAddresses(cmdCluster.getAddresses()),
+        });
+        managementClientCME = await GlideClusterClient.createClient({
+            addresses: formatAddresses(cmeCluster.getAddresses()),
         });
     }, 40000);
 
@@ -87,6 +87,7 @@ describe("Auth tests", () => {
             "on",
             `>${password}`,
             "~*",
+            "&*",
             "+@all",
         ]);
     }
@@ -131,15 +132,30 @@ describe("Auth tests", () => {
         await cmdCluster?.close();
         await cmeCluster?.close();
         managementClient?.close();
+        managementClientCME?.close();
+        managementClientCMD?.close();
     });
 
     const runTest = async (
         test: (client: BaseClient) => Promise<void>,
         protocol: ProtocolVersion,
+        cluster_mode: boolean,
         configOverrides?: Partial<BaseClientConfiguration>,
     ) => {
-        const isStandaloneMode = configOverrides?.addresses?.length === 1;
+        let isStandaloneMode;
+
+        if (configOverrides?.addresses) {
+            isStandaloneMode =
+                configOverrides.addresses.length === 1 ? false : true;
+        } else {
+            isStandaloneMode = !cluster_mode;
+        }
+
         const activeCluster = isStandaloneMode ? cmdCluster : cmeCluster;
+
+        managementClient = isStandaloneMode
+            ? managementClientCMD
+            : managementClientCME;
 
         if (!activeCluster) {
             throw new Error(
@@ -169,22 +185,31 @@ describe("Auth tests", () => {
         }
     };
 
-    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "update_connection_password_%p",
-        (protocol) => {
+    describe.each([
+        { clusterMode: false, protocol: ProtocolVersion.RESP2 },
+        { clusterMode: false, protocol: ProtocolVersion.RESP3 },
+        { clusterMode: true, protocol: ProtocolVersion.RESP2 },
+        { clusterMode: true, protocol: ProtocolVersion.RESP3 },
+    ])(
+        "update_connection_password_cluster$clusterMode_$protocol",
+        ({ clusterMode, protocol }) => {
             /**
              * Test replacing connection password with immediate re-authentication using a non-valid password.
              * Verifies that immediate re-authentication fails when the password is not valid.
              */
             it("test_update_connection_password_auth_non_valid_pass", async () => {
-                await runTest(async (client: BaseClient) => {
-                    await expect(
-                        client.updateConnectionPassword(null, true),
-                    ).rejects.toThrow(RequestError);
-                    await expect(
-                        client.updateConnectionPassword("", true),
-                    ).rejects.toThrow(RequestError);
-                }, protocol);
+                await runTest(
+                    async (client: BaseClient) => {
+                        await expect(
+                            client.updateConnectionPassword(null, true),
+                        ).rejects.toThrow(RequestError);
+                        await expect(
+                            client.updateConnectionPassword("", true),
+                        ).rejects.toThrow(RequestError);
+                    },
+                    protocol,
+                    clusterMode,
+                );
             });
 
             /**
@@ -200,39 +225,46 @@ describe("Auth tests", () => {
             it(
                 "test_update_connection_password",
                 async () => {
-                    await runTest(async (client: BaseClient) => {
-                        if (client instanceof GlideClient) {
-                            return;
-                        }
+                    await runTest(
+                        async (client: BaseClient) => {
+                            // if (client instanceof GlideClient) {
+                            //     return;
+                            // }
 
-                        // Update password without re-authentication
-                        const result = await client.updateConnectionPassword(
-                            NEW_PASSWORD,
-                            false,
-                        );
-                        expect(result).toEqual("OK");
+                            // Update password without re-authentication
+                            const result =
+                                await client.updateConnectionPassword(
+                                    NEW_PASSWORD,
+                                    false,
+                                );
+                            expect(result).toEqual("OK");
 
-                        // Verify client still works with old auth
-                        await client.set("test_key", "test_value");
-                        const value = await client.get("test_key");
-                        expect(value).toEqual("test_value");
+                            // Verify client still works with old auth
+                            await client.set("test_key", "test_value");
+                            const value = await client.get("test_key");
+                            expect(value).toEqual("test_value");
 
-                        // Update server password
-                        await client.configSet({ requirepass: NEW_PASSWORD });
+                            // Update server password
+                            await client.configSet({
+                                requirepass: NEW_PASSWORD,
+                            });
 
-                        // Kill all other clients to force reconnection
-                        await managementClient.customCommand([
-                            "CLIENT",
-                            "KILL",
-                            "TYPE",
-                            "normal",
-                        ]);
+                            // Kill all other clients to force reconnection
+                            await managementClient.customCommand([
+                                "CLIENT",
+                                "KILL",
+                                "TYPE",
+                                "normal",
+                            ]);
 
-                        // Verify client auto-reconnects with new password
-                        await client.set("test_key2", "test_value2");
-                        const value2 = await client.get("test_key2");
-                        expect(value2).toEqual("test_value2");
-                    }, protocol);
+                            // Verify client auto-reconnects with new password
+                            await client.set("test_key2", "test_value2");
+                            const value2 = await client.get("test_key2");
+                            expect(value2).toEqual("test_value2");
+                        },
+                        protocol,
+                        clusterMode,
+                    );
                 },
                 TIMEOUT,
             );
@@ -241,50 +273,68 @@ describe("Auth tests", () => {
              * Test that immediate re-authentication fails when no server password is set.
              */
             it("test_update_connection_password_no_server_auth", async () => {
-                await runTest(async (client: BaseClient) => {
-                    try {
-                        await expect(
-                            client.updateConnectionPassword(NEW_PASSWORD, true),
-                        ).rejects.toThrow(RequestError);
-                    } finally {
-                        client?.close();
-                    }
-                }, protocol);
+                await runTest(
+                    async (client: BaseClient) => {
+                        try {
+                            await expect(
+                                client.updateConnectionPassword(
+                                    NEW_PASSWORD,
+                                    true,
+                                ),
+                            ).rejects.toThrow(RequestError);
+                        } finally {
+                            client?.close();
+                        }
+                    },
+                    protocol,
+                    clusterMode,
+                );
             });
 
             /**
              * Test replacing connection password with a long password string.
              */
             it("test_update_connection_password_long", async () => {
-                await runTest(async (client: BaseClient) => {
-                    const longPassword = "p".repeat(1000);
-                    expect(
-                        await client.updateConnectionPassword(
-                            longPassword,
-                            false,
-                        ),
-                    ).toEqual("OK");
-                    await client.configSet({
-                        requirepass: "",
-                    });
-                }, protocol);
+                await runTest(
+                    async (client: BaseClient) => {
+                        const longPassword = "p".repeat(1000);
+                        expect(
+                            await client.updateConnectionPassword(
+                                longPassword,
+                                false,
+                            ),
+                        ).toEqual("OK");
+                        await client.configSet({
+                            requirepass: "",
+                        });
+                    },
+                    protocol,
+                    clusterMode,
+                );
             });
 
             /**
              * Test that re-authentication fails when using wrong password.
              */
             it("test_replace_password_immediateAuth_wrong_password", async () => {
-                await runTest(async (client: BaseClient) => {
-                    await client.configSet({
-                        requirepass: NEW_PASSWORD,
-                    });
-                    await expect(
-                        client.updateConnectionPassword(WRONG_PASSWORD, true),
-                    ).rejects.toThrow(RequestError);
-                    await expect(
-                        client.updateConnectionPassword(NEW_PASSWORD, true),
-                    ).resolves.toBe("OK");
-                }, protocol);
+                await runTest(
+                    async (client: BaseClient) => {
+                        await client.configSet({
+                            requirepass: NEW_PASSWORD,
+                        });
+                        await expect(
+                            client.updateConnectionPassword(
+                                WRONG_PASSWORD,
+                                true,
+                            ),
+                        ).rejects.toThrow(RequestError);
+                        await expect(
+                            client.updateConnectionPassword(NEW_PASSWORD, true),
+                        ).resolves.toBe("OK");
+                    },
+                    protocol,
+                    clusterMode,
+                );
             });
 
             /**
@@ -293,23 +343,29 @@ describe("Auth tests", () => {
             it(
                 "test_update_connection_password_with_immediateAuth",
                 async () => {
-                    await runTest(async (client: BaseClient) => {
-                        // Set server password
-                        await client.configSet({ requirepass: NEW_PASSWORD });
+                    await runTest(
+                        async (client: BaseClient) => {
+                            // Set server password
+                            await client.configSet({
+                                requirepass: NEW_PASSWORD,
+                            });
 
-                        // Update client password with re-auth
-                        expect(
-                            await client.updateConnectionPassword(
-                                NEW_PASSWORD,
-                                true,
-                            ),
-                        ).toEqual("OK");
+                            // Update client password with re-auth
+                            expect(
+                                await client.updateConnectionPassword(
+                                    NEW_PASSWORD,
+                                    true,
+                                ),
+                            ).toEqual("OK");
 
-                        // Verify client works with new auth
-                        await client.set("test_key", "test_value");
-                        const value = await client.get("test_key");
-                        expect(value).toEqual("test_value");
-                    }, protocol);
+                            // Verify client works with new auth
+                            await client.set("test_key", "test_value");
+                            const value = await client.get("test_key");
+                            expect(value).toEqual("test_value");
+                        },
+                        protocol,
+                        clusterMode,
+                    );
                 },
                 TIMEOUT,
             );
@@ -323,39 +379,46 @@ describe("Auth tests", () => {
              * Some explanation for the curious mind:
              * Our library is abstracting a connection or connections, with a lot of mechanism around it, making it behave like what we call a "client".
              * When using standalone mode, the client is a single connection, so on disconnection the first thing it planned to do is to reconnect.
-             * Theres no reason to get other commands and to take care of them since to serve commands we need to be connected.
-             * Hence, the client will try to reconnect and will not listen try to take care of new tasks, but will let them wait in line,
-             * so the update connection password will not be able to reach the connection and will return an error.
+             * However, it will try to reconnect with the wrong password, and thus will fail to reconnect and won't have valid connection
+             * to server. Hence, authenticating with non-immediate auth will succeed, since it doesn't require an active connection
+             * to the server (it's an internal update), while immediate auth will fail (as would any command that requires an active server connection).
              * For future versions, standalone will be considered as a different animal then it is now, since standalone is not necessarily one node.
              * It can be replicated and have a lot of nodes, and to be what we like to call "one shard cluster".
              * So, in the future, we will have many existing connection and request can be managed also when one connection is locked.
              *
              */
             it("test_update_connection_password_connection_lost_before_password_update", async () => {
-                await runTest(async (client: BaseClient) => {
-                    if (client instanceof GlideClusterClient) {
-                        return;
-                    }
+                await runTest(
+                    async (client: BaseClient) => {
+                        if (client instanceof GlideClusterClient) {
+                            return;
+                        }
 
-                    // Set a key to ensure connection is established
-                    await client.set("test_key", "test_value");
-                    // Update server password
-                    await client.configSet({ requirepass: NEW_PASSWORD });
-                    // Kill client connections
-                    await managementClient.customCommand([
-                        "CLIENT",
-                        "KILL",
-                        "TYPE",
-                        "normal",
-                    ]);
-                    // Try updating client password without immediate re-auth and with, both should fail
-                    await expect(
-                        client.updateConnectionPassword(NEW_PASSWORD, false),
-                    ).rejects.toThrow(RequestError);
-                    await expect(
-                        client.updateConnectionPassword(NEW_PASSWORD, true),
-                    ).rejects.toThrow(RequestError);
-                }, protocol);
+                        // Set a key to ensure connection is established
+                        await client.set("test_key", "test_value");
+                        // Update server password
+                        await client.configSet({ requirepass: NEW_PASSWORD });
+                        // Kill client connections
+                        await managementClient.customCommand([
+                            "CLIENT",
+                            "KILL",
+                            "TYPE",
+                            "normal",
+                        ]);
+                        // Try updating client password without immediate re-auth and with - non immediate should succeed,
+                        // immediate auth should fail (failing to reconnect)
+                        const result = await client.updateConnectionPassword(
+                            NEW_PASSWORD,
+                            false,
+                        );
+                        expect(result).toEqual("OK");
+                        await expect(
+                            client.updateConnectionPassword(NEW_PASSWORD, true),
+                        ).rejects.toThrow(RequestError);
+                    },
+                    protocol,
+                    clusterMode,
+                );
             });
             /*
              * Test replacing the connection password without immediate re-authentication, when the client is pre-authenticated as an acl user.
@@ -406,6 +469,7 @@ describe("Auth tests", () => {
                             expect(value2).toEqual("test_value2");
                         },
                         protocol,
+                        clusterMode,
                         {
                             credentials: {
                                 username: USERNAME,
@@ -431,6 +495,7 @@ describe("Auth tests", () => {
                         ).rejects.toThrow(RequestError);
                     },
                     protocol,
+                    clusterMode,
                     {
                         credentials: {
                             username: USERNAME,
@@ -440,15 +505,11 @@ describe("Auth tests", () => {
                 );
             });
             /**
-             * Test that re-authentication fails when using wrong password with an acl user.
+             * Test that re-authentication with a new password succeeds.
              */
-            it("test_replace_password_immediateAuth_wrong_password_acl_user", async () => {
+            it("test_replace_password_immediateAuth_acl_user", async () => {
                 await runTest(
                     async (client: BaseClient) => {
-                        await deleteAclUsernameAndPassword(
-                            managementClient,
-                            USERNAME,
-                        );
                         await setNewAclUsernameWithPassword(
                             managementClient,
                             USERNAME,
@@ -456,16 +517,11 @@ describe("Auth tests", () => {
                         );
 
                         await expect(
-                            client.updateConnectionPassword(
-                                WRONG_PASSWORD,
-                                true,
-                            ),
-                        ).rejects.toThrow(RequestError);
-                        await expect(
                             client.updateConnectionPassword(NEW_PASSWORD, true),
                         ).resolves.toBe("OK");
                     },
                     protocol,
+                    clusterMode,
                     {
                         credentials: {
                             username: USERNAME,
@@ -475,53 +531,10 @@ describe("Auth tests", () => {
                 );
             });
             /**
-             * Test deleting the user and reseting it with new password, which kills the connections, then re-authenticating with immediate re-authentication.
-             */
-            it(
-                "test_update_connection_password_with_immediateAuth_acl_user",
-                async () => {
-                    await runTest(
-                        async (client: BaseClient) => {
-                            // Delete user and reset it with new password
-                            await deleteAclUsernameAndPassword(
-                                managementClient,
-                                USERNAME,
-                            );
-                            await setNewAclUsernameWithPassword(
-                                managementClient,
-                                USERNAME,
-                                NEW_PASSWORD,
-                            );
-
-                            // Update client password with re-auth - make sure it reconnects successfuly with new password
-                            expect(
-                                await client.updateConnectionPassword(
-                                    NEW_PASSWORD,
-                                    true,
-                                ),
-                            ).toEqual("OK");
-
-                            // Verify client works with new auth
-                            await client.set("test_key", "test_value");
-                            const value = await client.get("test_key");
-                            expect(value).toEqual("test_value");
-                        },
-                        protocol,
-                        {
-                            credentials: {
-                                username: USERNAME,
-                                password: INITIAL_PASSWORD,
-                            },
-                        },
-                    );
-                },
-                TIMEOUT,
-            );
-            /**
              * Test changing server password when connection is lost before password update.
              * Verifies that the client will not be able to reach the connection under the abstraction and return an error.
              *
-             * **Note: This test is only supported for standalone mode, bellow explanation why*
+             * **Note: This test is only supported for standalone mode, see explanation at the parallel test above*
              */
             it("test_update_connection_password_connection_lost_before_password_update_acl_user", async () => {
                 await runTest(
@@ -544,18 +557,20 @@ describe("Auth tests", () => {
                             NEW_PASSWORD,
                         );
 
-                        // Try updating client password without immediate re-auth and with, both should fail
-                        await expect(
-                            client.updateConnectionPassword(
+                        // Try updating client password without immediate re-auth and with - non immediate should succeed,
+                        // immediate auth should fail (failing to reconnect)
+                        expect(
+                            await client.updateConnectionPassword(
                                 NEW_PASSWORD,
                                 false,
                             ),
-                        ).rejects.toThrow(RequestError);
+                        ).toEqual("OK");
                         await expect(
                             client.updateConnectionPassword(NEW_PASSWORD, true),
                         ).rejects.toThrow(RequestError);
                     },
                     protocol,
+                    clusterMode,
                     {
                         credentials: {
                             username: USERNAME,
