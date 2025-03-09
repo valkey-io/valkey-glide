@@ -7,5 +7,5 @@ namespace Valkey.Glide.InterOp;
 public interface INativeClient
 {
     [EditorBrowsable(EditorBrowsableState.Advanced)]
-    Task<string?> SendCommandAsync(ERequestType requestType, params string[] args);
+    Task<Value> SendCommandAsync(ERequestType requestType, params string[] args);
 }

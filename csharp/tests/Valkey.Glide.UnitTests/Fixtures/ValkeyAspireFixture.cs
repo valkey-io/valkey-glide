@@ -29,7 +29,6 @@ public sealed class ValkeyAspireFixture : IAsyncLifetime
             Port     = (ushort) uri.Port;
             Host     = uri.Host;
             IsSecure = uri.Scheme == "https";
-            NativeClient.Initialize(ELoggerLevel.Trace);
         }
         catch
         {
@@ -38,6 +37,7 @@ public sealed class ValkeyAspireFixture : IAsyncLifetime
             _distributedApplication = null;
             throw;
         }
+        NativeClient.Initialize(ELoggerLevel.Trace);
     }
 
     public InterOp.Node Node => new(Host, Port);

@@ -51,7 +51,7 @@ no additional parsing needed, support.
 | [AUTH](https://valkey.io/commands/auth/)                                                   | ❌      | ❌             |
 | [BGREWRITEAOF](https://valkey.io/commands/bgrewriteaof/)                                   | ❌      | ❌             |
 | [BGSAVE](https://valkey.io/commands/bgsave/)                                               | ❌      | ❌             |
-| [BITCOUNT](https://valkey.io/commands/bitcount/)                                           | ✅      | ❌             |
+| [BITCOUNT](https://valkey.io/commands/bitcount/)                                           | ❌      | ❌             |
 | [BITFIELD](https://valkey.io/commands/bitfield/)                                           | ❌      | ❌             |
 | [BITFIELD_RO](https://valkey.io/commands/bitfield_ro/)                                     | ❌      | ❌             |
 | [BITOP](https://valkey.io/commands/bitop/)                                                 | ❌      | ❌             |

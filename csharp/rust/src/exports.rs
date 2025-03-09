@@ -46,19 +46,30 @@ mod calls {
     use glide_core::client;
     use glide_core::client::ConnectionError;
     use glide_core::request_type::RequestType;
-    use redis::FromRedisValue;
-    use std::ffi::{c_int, c_void, CString};
+    use redis::VerbatimFormat;
+    use std::ffi::{c_double, c_int, c_long, c_void, CString, NulError};
+    use std::fmt::{Formatter};
+    use std::mem::forget;
     use std::os::raw::c_char;
+    use std::panic::catch_unwind;
     use std::ptr::null;
     use std::str::{FromStr, Utf8Error};
     use tokio::runtime::Builder;
 
     /// # Summary
+    /// Special method to free the returned values.
+    /// MUST be used!
+    #[no_mangle]
+    pub unsafe extern "C-unwind" fn csharp_free_value(mut input: Value) {
+        logger_core::log_debug("csharp_ffi", "Entered csharp_free_value");
+        input.free_data();
+    }
+    /// # Summary
     /// Special method to free the returned strings.
     /// MUST be used instead of calling c-free!
     #[no_mangle]
-    pub unsafe extern "C" fn csharp_free_string(input: *const c_char) {
-        logger_core::log_info("csharp_ffi", "Entered csharp_free_string");
+    pub unsafe extern "C-unwind" fn csharp_free_string(input: *const c_char) {
+        logger_core::log_debug("csharp_ffi", "Entered csharp_free_string");
         let str = CString::from_raw(input as *mut c_char);
         drop(str);
     }
@@ -70,6 +81,7 @@ mod calls {
     }
 
     #[repr(C)]
+    #[allow(dead_code)]
     pub enum ELoggerLevel {
         None = 0,
         Error = 1,
@@ -103,11 +115,11 @@ mod calls {
     /// To free data returned by the API, use the corresponding `free_...` methods of the API.
     /// It is **not optional** to call them to free data allocated by the API!
     #[no_mangle]
-    pub extern "C" fn csharp_system_init(
+    pub extern "C-unwind" fn csharp_system_init(
         in_minimal_level: ELoggerLevel,
         in_file_name: *const c_char,
     ) -> InitResult {
-        logger_core::log_info("csharp_ffi", "Entered csharp_system_init");
+        logger_core::log_debug("csharp_ffi", "Entered csharp_system_init");
         // ToDo: Rebuild into having a log-callback so that we can manage logging at the dotnet side
         let file_name = match helpers::grab_str(in_file_name) {
             Ok(d) => d,
@@ -206,7 +218,7 @@ mod calls {
     /// To free data returned by the API, use the corresponding `free_...` methods of the API.
     /// It is **not optional** to call them to free data allocated by the API!
     #[no_mangle]
-    pub extern "C" fn csharp_create_client_handle(
+    pub extern "C-unwind" fn csharp_create_client_handle(
         in_host: *const NodeAddress,
         in_host_count: u16,
         in_use_tls: c_int,
@@ -281,7 +293,7 @@ mod calls {
         let handle: Handle;
         {
             let _runtime_handle = runtime.enter();
-             handle = match runtime.block_on(Handle::create(request)) {
+            handle = match runtime.block_on(Handle::create(request)) {
                 Ok(d) => d,
                 Err(e) => {
                     let str = e.to_string();
@@ -297,7 +309,9 @@ mod calls {
                             ConnectionError::Timeout => {
                                 ECreateClientHandleCode::ConnectionTimedOutError
                             }
-                            ConnectionError::IoError(_) => ECreateClientHandleCode::ConnectionIoError,
+                            ConnectionError::IoError(_) => {
+                                ECreateClientHandleCode::ConnectionIoError
+                            }
                         },
                         client_handle: null(),
                         error_string: match CString::from_str(str.as_str()) {
@@ -333,8 +347,8 @@ mod calls {
     /// To free data returned by the API, use the corresponding `free_...` methods of the API.
     /// It is **not optional** to call them to free data allocated by the API!
     #[no_mangle]
-    pub extern "C" fn csharp_free_client_handle(in_client_ptr: *const c_void) {
-        logger_core::log_info("csharp_ffi", "Entered csharp_free_client_handle");
+    pub extern "C-unwind" fn csharp_free_client_handle(in_client_ptr: *const c_void) {
+        logger_core::log_debug("csharp_ffi", "Entered csharp_free_client_handle");
         let client_ptr = unsafe { Box::from_raw(in_client_ptr as *mut FFIHandle) };
         let _runtime_handle = client_ptr.runtime.enter();
         drop(client_ptr);
@@ -346,11 +360,375 @@ mod calls {
         error_string: *const c_char,
     }
 
-    pub(crate) type CommandCallback = unsafe extern "C" fn(
-        in_data: *const c_void,
-        out_success: c_int,
-        ref_output: *const c_char,
-    );
+    pub(crate) type CommandCallback =
+        unsafe extern "C-unwind" fn(data: *mut c_void, success: c_int, output: Value);
+
+    #[repr(C)]
+    pub union ValueUnion {
+        i: c_long,
+        f: c_double,
+        ptr: *const c_void,
+    }
+    #[repr(C)]
+    #[allow(dead_code)]
+    pub enum ValueKind {
+        /// # Summary
+        /// A nil response from the server.
+        ///
+        /// # Implications for union
+        /// Union value must be ignored.
+        Nil,
+        /// # Summary
+        /// An integer response.  Note that there are a few situations
+        /// in which redis actually returns a string for an integer which
+        /// is why this library generally treats integers and strings
+        /// the same for all numeric responses.
+        ///
+        /// # Implications for union
+        /// Union value will be set as c_long.
+        /// It can be safely consumed without freeing.
+        Int,
+        /// # Summary
+        /// An arbitrary binary data, usually represents a binary-safe string.
+        ///
+        /// # Implications for union
+        /// Union will, in ptr, contain an array of c_char (bytes).
+        /// See CommandResult.length for the number of elements.
+        /// ValueUnion.ptr MUST be freed.
+        BulkString,
+        /// # Summary
+        /// A response containing an array with more data.
+        /// This is generally used by redis to express nested structures.
+        ///
+        /// # Implications for union
+        /// Union will, in ptr, contain an array of CommandResult's.
+        /// See CommandResult.length for the number of elements.
+        /// ValueUnion.ptr MUST be freed.
+        Array,
+        /// # Summary
+        /// A simple string response, without line breaks and not binary safe.
+        ///
+        /// # Implications for union
+        /// Union will, in ptr, contain a c_str.
+        /// See CommandResult.length for the length of the string, excluding the zero byte.
+        /// ValueUnion.ptr MUST be freed.
+        SimpleString,
+        /// # Summary
+        /// A status response which represents the string "OK".
+        ///
+        /// # Implications for union
+        /// Union value must be ignored.
+        Okay,
+        /// # Summary
+        /// Unordered key,value list from the server. Use `as_map_iter` function.
+        ///
+        /// # Implications for union
+        /// Union will, in ptr, contain an array of CommandResult's which are supposed to be interpreted as key-value pairs.
+        /// See CommandResult.length for the number of pairs (aka: elements * 2).
+        /// ValueUnion.ptr MUST be freed.
+        Map,
+        /// Placeholder
+        /// ToDo: Figure out a way to map this to C-Memory
+        Attribute,
+        /// # Summary
+        /// Unordered set value from the server.
+        ///
+        /// # Implications for union
+        /// Union will, in ptr, contain an array of CommandResult's.
+        /// See CommandResult.length for the number of elements.
+        /// ValueUnion.ptr MUST be freed.
+        Set,
+        /// # Summary
+        /// A floating number response from the server.
+        ///
+        /// # Implications for union
+        /// Union value will be set as c_double.
+        /// It can be safely consumed without freeing.
+        Double,
+        /// # Summary
+        /// A boolean response from the server.
+        ///
+        /// # Implications for union
+        /// Union value will be set as c_long.
+        /// It can be safely consumed without freeing.
+        Boolean,
+        /// # Summary
+        /// First String is format and other is the string
+        ///
+        /// # Implications for union
+        /// Union will, in ptr, contain an array of CommandResult's.
+        /// See CommandResult.length for the number of elements.
+        /// ValueUnion.ptr MUST be freed.
+        ///
+        /// ## Remarks
+        /// First result will be verbatim-kind
+        /// Second will be string
+        VerbatimString,
+        /// # Summary
+        /// Very large number that out of the range of the signed 64 bit numbers
+        ///
+        /// # Implications for union
+        /// Union will, in ptr, contain a StringPair
+        /// ValueUnion.ptr MUST be freed.
+        BigNumber,
+        /// # Summary
+        /// Push data from the server.
+        ///
+        /// # Implications for union
+        /// Union will, in ptr, contain an array of CommandResult's.
+        /// See CommandResult.length for the number of elements.
+        /// ValueUnion.ptr MUST be freed.
+        ///
+        /// ## Remarks
+        /// First result will be push-kind
+        /// Second will be array of results
+        Push,
+    }
+    #[repr(C)]
+    pub struct Value {
+        pub kind: ValueKind,
+        pub data: ValueUnion,
+        pub length: c_long,
+    }
+
+    #[repr(C)]
+    pub struct StringPair {
+        pub a_start: *mut c_char,
+        pub a_end: *mut c_char,
+        pub b_start: *mut c_char,
+        pub b_end: *mut c_char,
+    }
+
+    #[derive(Clone, PartialEq, Eq, Debug)]
+    pub enum ValueError {
+        NulError(NulError),
+    }
+    impl std::fmt::Display for ValueError {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            match self {
+                ValueError::NulError(e) => e.fmt(f),
+            }
+        }
+    }
+
+    impl Value {
+        // ToDo: Create a new "blob" creating method that first counts the bytes needed,
+        //       allocates one big blob and secondly fills in the bytes in that blob, returning
+        //       just that as ValueBlob to allow better large-scale result operations.
+        unsafe fn from(value: &redis::Value) -> Result<Self, ValueError> {
+            Ok(match value {
+                redis::Value::Nil => Self {
+                    data: ValueUnion { ptr: null() },
+                    length: 0,
+                    kind: ValueKind::Nil,
+                },
+                redis::Value::Int(i) => Self {
+                    data: ValueUnion { i: *i as c_long },
+                    length: 0,
+                    kind: ValueKind::Int,
+                },
+                redis::Value::BulkString(d) => {
+                    let mut d = d.clone();
+                    d.shrink_to_fit();
+                    assert_eq!(d.len(), d.capacity());
+                    Self {
+                        data: ValueUnion {
+                            ptr: d.as_mut_ptr() as *mut c_void,
+                        },
+                        length: d.len() as c_long,
+                        kind: ValueKind::SimpleString,
+                    }
+                }
+                redis::Value::Array(values) => {
+                    let mut values = values
+                        .iter()
+                        .map(|d| Value::from(d))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    values.shrink_to_fit();
+                    assert_eq!(values.len(), values.capacity());
+                    let result = Self {
+                        data: ValueUnion {
+                            ptr: values.as_mut_ptr() as *mut c_void,
+                        },
+                        length: values.len() as c_long,
+                        kind: ValueKind::Set,
+                    };
+                    forget(values);
+                    result
+                }
+                redis::Value::SimpleString(s) => Self {
+                    data: ValueUnion {
+                        ptr: match CString::from_str(s.as_str()) {
+                            Ok(d) => d.into_raw() as *mut c_void,
+                            Err(e) => return Err(ValueError::NulError(e)),}
+                    },
+                    length: s.len() as c_long,
+                    kind: ValueKind::SimpleString,
+                },
+                redis::Value::Okay => Self {
+                    data: ValueUnion { ptr: null() },
+                    length: 0,
+                    kind: ValueKind::Okay,
+                },
+                redis::Value::Map(tuples) => {
+                    let mut out_tuples = Vec::with_capacity(tuples.len() * 2);
+                    for (k, v) in tuples {
+                        out_tuples.push(Value::from(k));
+                        out_tuples.push(Value::from(v));
+                    }
+                    out_tuples.shrink_to_fit();
+                    Self {
+                        data: ValueUnion {
+                            ptr: out_tuples.as_mut_ptr() as *mut c_void,
+                        },
+                        length: tuples.len() as c_long,
+                        kind: ValueKind::Map,
+                    }
+                }
+                redis::Value::Attribute { .. } => {
+                    todo!("Implement")
+                }
+                redis::Value::Set(values) => {
+                    let mut values = values
+                        .iter()
+                        .map(|d| Value::from(d))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    values.shrink_to_fit();
+                    assert_eq!(values.len(), values.capacity());
+                    let result = Self {
+                        data: ValueUnion {
+                            ptr: values.as_mut_ptr() as *mut c_void,
+                        },
+                        length: values.len() as c_long,
+                        kind: ValueKind::Set,
+                    };
+                    forget(values);
+                    result
+                }
+                redis::Value::Double(d) => Self {
+                    data: ValueUnion { f: *d },
+                    length: 0,
+                    kind: ValueKind::Double,
+                },
+                redis::Value::Boolean(b) => Self {
+                    data: ValueUnion { i: *b as c_long },
+                    length: 0,
+                    kind: ValueKind::Boolean,
+                },
+                redis::Value::VerbatimString { format, text } => {
+                    let format_length = match format {
+                        VerbatimFormat::Unknown(unknown) => unknown.len(),
+                        VerbatimFormat::Markdown => "markdown".len(),
+                        VerbatimFormat::Text => "text".len(),
+                    };
+                    let format = match format {
+                        VerbatimFormat::Unknown(unknown) => unknown,
+                        VerbatimFormat::Markdown => &"markdown".to_string(),
+                        VerbatimFormat::Text => &"text".to_string(),
+                    };
+                    let mut vec = Vec::<u8>::with_capacity(
+                        size_of::<StringPair>() + format_length + text.len(),
+                    );
+                    let out_vec = vec.as_mut_ptr(); // we leak here
+                    let output = StringPair {
+                        a_start: out_vec.add(size_of::<StringPair>()) as *mut c_char,
+                        a_end: out_vec.add(size_of::<StringPair>() + format_length) as *mut c_char,
+                        b_start: out_vec.add(size_of::<StringPair>() + format_length)
+                            as *mut c_char,
+                        b_end: out_vec.add(size_of::<StringPair>() + format_length + text.len())
+                            as *mut c_char,
+                    };
+                    for i in 0..format_length {
+                        *output.a_start.wrapping_add(i) = format.as_ptr().wrapping_add(i) as c_char
+                    }
+                    for i in 0..text.len() {
+                        *output.b_start.wrapping_add(i) = text.as_ptr().wrapping_add(i) as c_char
+                    }
+                    Self {
+                        length: vec.len() as c_long,
+                        kind: ValueKind::VerbatimString,
+                        data: ValueUnion {
+                            ptr: out_vec as *mut c_void,
+                        },
+                    }
+                }
+                redis::Value::BigNumber(_) => {
+                    todo!("Implement")
+                }
+                redis::Value::Push { .. } => {
+                    todo!("Implement")
+                }
+            })
+        }
+    }
+
+    impl Value {
+        unsafe fn free_data(&mut self) {
+            match self.kind {
+                ValueKind::Nil => { /* empty */ }
+                ValueKind::Int => { /* empty */ }
+                ValueKind::BulkString => drop(Vec::from_raw_parts(
+                    self.data.ptr as *mut u8,
+                    self.length as usize,
+                    self.length as usize,
+                )),
+                ValueKind::Array => {
+                    let mut values = Vec::from_raw_parts(
+                        self.data.ptr as *mut Value,
+                        self.length as usize,
+                        self.length as usize,
+                    );
+                    for value in values.iter_mut() {
+                        value.free_data()
+                    }
+                    drop(values);
+                }
+                ValueKind::SimpleString => drop(CString::from_raw(self.data.ptr as *mut c_char)),
+                ValueKind::Okay => { /* empty */ }
+                ValueKind::Map => {
+                    let mut values = Vec::from_raw_parts(
+                        self.data.ptr as *mut Value,
+                        self.length as usize * 2,
+                        self.length as usize * 2,
+                    );
+                    for value in values.iter_mut() {
+                        value.free_data()
+                    }
+                    drop(values);
+                }
+                ValueKind::Attribute => {
+                    todo!("Implement")
+                }
+                ValueKind::Set => {
+                    let mut values = Vec::from_raw_parts(
+                        self.data.ptr as *mut Value,
+                        self.length as usize,
+                        self.length as usize,
+                    );
+                    for value in values.iter_mut() {
+                        value.free_data()
+                    }
+                    drop(values);
+                }
+                ValueKind::Double => { /* empty */ }
+                ValueKind::Boolean => { /* empty */ }
+                ValueKind::VerbatimString => {
+                    let vec = Vec::from_raw_parts(
+                        self.data.ptr as *mut u8,
+                        self.length as usize,
+                        self.length as usize,
+                    );
+                    drop(vec);
+                }
+                ValueKind::BigNumber => {
+                    todo!("Implement")
+                }
+                ValueKind::Push => {
+                    todo!("Implement")
+                }
+            }
+        }
+    }
 
     /// # Summary
     /// Method to invoke a command.
@@ -358,11 +736,10 @@ mod calls {
     /// # Params
     /// ***in_client_ptr*** An active client handle
     /// ***in_callback*** A callback method with the signature:
-    ///                   `void Callback(void * in_data, int out_success, const char * ref_output)`.
+    ///                   `void Callback(void * in_data, int out_success, const Value value)`.
     ///                   The first arg contains the data of the parameter *in_callback_data*;
     ///                   the second arg indicates whether the third parameter contains the error or result;
-    ///                   the third arg contains either the result, the error or null and is freed by the API,
-    ///                   not the calling code.
+    ///                   the third arg contains either the result and MUST be freed by the callback.
     /// ***in_callback_data*** The data to be passed in to *in_callback*
     /// ***in_request_type*** The type of command to issue
     /// ***in_args*** A C-String array of arguments to be passed, with the size of `in_args_count` and zero terminated.
@@ -383,15 +760,15 @@ mod calls {
     /// To free data returned by the API, use the corresponding `free_...` methods of the API.
     /// It is **not optional** to call them to free data allocated by the API!
     #[no_mangle]
-    pub extern "C" fn csharp_command(
+    pub extern "C-unwind" fn csharp_command(
         in_client_ptr: *const c_void,
         in_callback: CommandCallback,
-        in_callback_data: *const c_void,
+        in_callback_data: *mut c_void,
         in_request_type: RequestType,
         in_args: *const *const c_char,
         in_args_count: c_int,
     ) -> CommandResult {
-        logger_core::log_info("csharp_ffi", "Entered csharp_command");
+        logger_core::log_debug("csharp_ffi", "Entered csharp_command");
         if in_client_ptr.is_null() {
             return CommandResult {
                 success: false as c_int,
@@ -454,7 +831,7 @@ mod calls {
         let ffi_handle = unsafe { Box::leak(Box::from_raw(in_client_ptr as *mut FFIHandle)) };
         let handle = ffi_handle.handle.clone();
         ffi_handle.runtime.spawn(async move {
-            logger_core::log_info("csharp_ffi", "Entered command task");
+            logger_core::log_debug("csharp_ffi", "Entered command task");
             let data = match handle.command(cmd, args).await {
                 Ok(d) => d,
                 Err(e) => {
@@ -462,38 +839,72 @@ mod calls {
                         Ok(d) => d.into_raw() as *const c_char,
                         Err(_) => null(),
                     };
-                    logger_core::log_info("csharp_ffi", "Error in command task");
-                    unsafe { callback(callback_data as *const c_void, false as c_int, message) };
+                    logger_core::log_debug("csharp_ffi", "Error in command task");
+                    match catch_unwind(|| unsafe {
+                        callback(
+                            callback_data as *mut c_void,
+                            false as c_int,
+                            Value {
+                                data: ValueUnion {
+                                    ptr: message as *mut c_void,
+                                },
+                                kind: ValueKind::SimpleString,
+                                length: 0,
+                            },
+                        )
+                    }) {
+                        Err(e) => logger_core::log_error(
+                            "csharp_ffi",
+                            format!("Exception in C# callback: {:?}", e),
+                        ),
+                        _ => {}
+                    };
                     return;
                 }
             };
-            let data = Option::<CString>::from_owned_redis_value(data);
-            match data {
-                Ok(None) => {
-                    logger_core::log_info("csharp_ffi", "No data returned from command task");
-                    unsafe {
-                        callback(callback_data as *const c_void, true as c_int, null())
+            unsafe {
+                match Value::from(&data) {
+                    Ok(data) => {
+                        match catch_unwind(|| {
+                            callback(callback_data as *mut c_void, true as c_int, data)
+                        }) {
+                            Err(e) => logger_core::log_error(
+                                "csharp_ffi",
+                                format!("Exception in C# callback: {:?}", e),
+                            ),
+                            _ => {}
+                        }
                     }
-                },
-                Ok(Some(data)) => {
-                    logger_core::log_info("csharp_ffi", "Data returned from command task");
-                    unsafe {
-                        callback(
-                            callback_data as *const c_void,
-                            true as c_int,
-                            data.into_raw() as *const c_char,
-                        )
+                    Err(e) => {
+                        let message = match CString::from_str(e.to_string().as_str()) {
+                            Ok(d) => d.into_raw() as *const c_char,
+                            Err(_) => null(),
+                        };
+                        logger_core::log_debug("csharp_ffi", "Error in command task");
+                        match catch_unwind(|| {
+                            callback(
+                                callback_data as *mut c_void,
+                                false as c_int,
+                                Value {
+                                    data: ValueUnion {
+                                        ptr: message as *mut c_void,
+                                    },
+                                    kind: ValueKind::SimpleString,
+                                    length: 0,
+                                },
+                            )
+                        }) {
+                            Err(e) => logger_core::log_error(
+                                "csharp_ffi",
+                                format!("Exception in C# callback: {:?}", e),
+                            ),
+                            _ => {}
+                        };
                     }
-                },
-                Err(e) => {
-                    let message = match CString::from_str(e.to_string().as_str()) {
-                        Ok(d) => d.into_raw() as *const c_char,
-                        Err(_) => null(),
-                    };
-                    logger_core::log_info("csharp_ffi", "Error in command task");
-                    unsafe { callback(callback_data as *const c_void, false as c_int, message) };
                 }
-            };
+            }
+
+            logger_core::log_debug("csharp_ffi", "Exiting tokio spawn from csharp_command");
         });
 
         CommandResult {
@@ -506,10 +917,9 @@ mod calls {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exports::calls::{ELoggerLevel, NodeAddress};
+    use crate::exports::calls::{ELoggerLevel, NodeAddress, Value};
     use glide_core::request_type::RequestType;
     use std::ffi::{c_int, c_void, CString};
-    use std::os::raw::c_char;
     use std::ptr::null;
     use std::rc::Rc;
     use std::str::FromStr;
@@ -521,21 +931,23 @@ mod tests {
 
     #[test]
     fn test_system_init() {
-        assert_ne!(0, calls::csharp_system_init(ELoggerLevel::None, null()).success);
+        assert_ne!(
+            0,
+            calls::csharp_system_init(ELoggerLevel::None, null()).success
+        );
     }
     #[test]
     fn test_create_client_handle() {
-        assert_ne!(0, calls::csharp_system_init(ELoggerLevel::None, null()).success);
+        assert_ne!(
+            0,
+            calls::csharp_system_init(ELoggerLevel::None, null()).success
+        );
         let address = CString::from_str(HOST).unwrap();
         let addresses = vec![NodeAddress {
             host: address.as_ptr(),
             port: PORT,
         }];
-        let client_result = calls::csharp_create_client_handle(
-            addresses.as_ptr(),
-            1,
-            0,
-        );
+        let client_result = calls::csharp_create_client_handle(addresses.as_ptr(), 1, 0);
         assert_eq!(
             calls::ECreateClientHandleCode::Success,
             client_result.result
@@ -545,17 +957,16 @@ mod tests {
     }
     #[test]
     fn test_call_command() {
-        assert_ne!(0, calls::csharp_system_init(ELoggerLevel::None, null()).success);
+        assert_ne!(
+            0,
+            calls::csharp_system_init(ELoggerLevel::None, null()).success
+        );
         let address = CString::from_str(HOST).unwrap();
         let addresses = vec![NodeAddress {
             host: address.as_ptr(),
             port: PORT,
         }];
-        let client_result = calls::csharp_create_client_handle(
-            addresses.as_ptr(),
-            1,
-            0,
-        );
+        let client_result = calls::csharp_create_client_handle(addresses.as_ptr(), 1, 0);
         assert_eq!(
             calls::ECreateClientHandleCode::Success,
             client_result.result
@@ -566,10 +977,10 @@ mod tests {
         let ptr = str.as_ptr();
         let d = &[ptr];
         let flag = Rc::new(false);
-        unsafe extern "C" fn test(
-            in_data: *const c_void,
+        unsafe extern "C-unwind" fn test(
+            in_data: *mut c_void,
             _out_success: c_int,
-            _ref_output: *const c_char,
+            _ref_output: Value,
         ) {
             let mut flag = Rc::from_raw(in_data as *mut bool);
             *flag = true;
@@ -577,13 +988,15 @@ mod tests {
         let command_result = calls::csharp_command(
             client_result.client_handle,
             test as calls::CommandCallback,
-            Rc::into_raw(flag.clone()) as *const c_void,
+            Rc::into_raw(flag.clone()) as *mut c_void,
             RequestType::Get,
             d.as_ptr(),
             1,
         );
 
-        for _ in 0..200 /* 20s */ {
+        for _ in 0..200
+        /* 20s */
+        {
             if *flag {
                 break;
             }

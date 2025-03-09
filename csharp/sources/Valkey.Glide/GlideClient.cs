@@ -31,7 +31,7 @@ public sealed class GlideClient : IDisposable, IGlideClient
     }
 
     [EditorBrowsable(EditorBrowsableState.Advanced)]
-    public async Task<string?> CommandAsync(ERequestType requestType, params string[] args)
+    public async Task<InterOp.Value> CommandAsync(ERequestType requestType, params string[] args)
     {
         return await _nativeClient.SendCommandAsync(requestType, args);
     }

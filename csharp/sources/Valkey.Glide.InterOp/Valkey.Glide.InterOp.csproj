@@ -19,6 +19,9 @@
         <Content Include="../../rust/target/$(Configuration)/glide_rs.dll" Condition="'$(OS)' == 'Windows_NT'">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
+        <Content Include="../../rust/target/$(Configuration)/glide_rs.pdb" Condition="'$(OS)' == 'Windows_NT'">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
         <Content Include="../../rust/target/$(Configuration)/glide_rs.sh" Condition="'$(OS)' != 'Windows_NT'">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>

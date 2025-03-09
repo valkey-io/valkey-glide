@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -11,9 +12,10 @@ namespace Valkey.Glide.InterOp;
 
 public sealed class NativeClient : IDisposable, INativeClient
 {
-    private static readonly SemaphoreSlim Semaphore = new(1, 1);
-    private static          bool          _initialized;
-    private                 nint?         _handle;
+    private static readonly unsafe delegate*<nint, int, Native.Value, void> CommandCallbackFptr = &CommandCallback;
+    private static readonly        SemaphoreSlim                            Semaphore           = new(1, 1);
+    private static                 bool                                     _initialized;
+    private                        nint?                                    _handle;
 
 
     public unsafe NativeClient(IReadOnlyCollection<Node> hosts, bool useTls)
@@ -176,18 +178,19 @@ public sealed class NativeClient : IDisposable, INativeClient
         }
     }
 
-    private static unsafe string? HandleString(byte* resultErrorString)
+    private static unsafe string? HandleString(byte* resultErrorString, int? length = null, bool free = true)
     {
         if (resultErrorString is null)
             return null;
         try
         {
-            var len = Strlen(resultErrorString);
+            var len = length ?? Strlen(resultErrorString);
             return Encoding.UTF8.GetString(resultErrorString, len);
         }
         finally
         {
-            Imports.free_string(resultErrorString);
+            if (free)
+                Imports.free_string(resultErrorString);
         }
     }
 
@@ -199,22 +202,32 @@ public sealed class NativeClient : IDisposable, INativeClient
         return i;
     }
 
-    private static unsafe void CommandCallback(nint data, int success, byte* payload)
+    private static void CommandCallback([In]nint data, [In] int success, [In] Native.Value payload)
     {
-        var dataHandle = GCHandle.FromIntPtr(data);
-        TaskCompletionSource<string?>? commandCallbackData;
         try
         {
-            commandCallbackData = (TaskCompletionSource<string?>) dataHandle.Target;
+            var dataHandle = GCHandle.FromIntPtr(data);
+            TaskCompletionSource<Value>? commandCallbackData;
+            try
+            {
+                commandCallbackData = (TaskCompletionSource<Value>) dataHandle.Target;
+            }
+            finally
+            {
+                dataHandle.Free();
+            }
+            if (success != 0 /* is true */)
+                commandCallbackData.SetResult(FromNativeValue(payload));
+            else
+                commandCallbackData.SetException(new Exception(FromNativeValue(payload).Data ?? "Unknown error"));
         }
-        finally
+        catch (Exception)
         {
-            dataHandle.Free();
+            #if DEBUG
+            Debugger.Break();
+            #endif
+            // empty
         }
-        if (success != 0 /* is true */)
-            commandCallbackData.SetResult(HandleString(payload));
-        else
-            commandCallbackData.SetException(new Exception(HandleString(payload)));
     }
 
     private void ReleaseUnmanagedResources()
@@ -235,11 +248,11 @@ public sealed class NativeClient : IDisposable, INativeClient
         ReleaseUnmanagedResources();
     }
 
-    public unsafe Task<string?> SendCommandAsync(ERequestType requestType, params string[] args)
+    public unsafe Task<Value> SendCommandAsync(ERequestType requestType, params string[] args)
     {
         if (_handle is null)
             throw new ObjectDisposedException(nameof(NativeClient), "ClientHandle is null");
-        var tcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<Value>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var dataHandle = GCHandle.Alloc(tcs, GCHandleType.Normal);
         try
@@ -271,7 +284,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                 fixed (byte** argsArrPtr = argsArr)
                     result = Imports.command(
                         _handle.Value,
-                        &CommandCallback,
+                        CommandCallbackFptr,
                         GCHandle.ToIntPtr(dataHandle),
                         requestType,
                         argsArrPtr,
@@ -295,6 +308,86 @@ public sealed class NativeClient : IDisposable, INativeClient
         {
             dataHandle.Free();
             throw;
+        }
+    }
+
+    private static unsafe Value FromNativeValue(Native.Value input, bool free = true)
+    {
+        try
+        {
+            switch (input.kind)
+            {
+                case Native.EValueKind.Nil:
+                    return new Value();
+                case Native.EValueKind.Int:
+                    return new Value(input.data.i);
+                case Native.EValueKind.BulkString:
+                    return new Value(HandleString(input.data.ptr, (int) input.length, false));
+                case Native.EValueKind.Array:
+                {
+                    var array = new Value[input.length];
+                    var ptr = (Native.Value*) input.data.ptr;
+                    for (var i = 0; i < input.length; i++)
+                    {
+                        array[i] = FromNativeValue(ptr[i], false);
+                    }
+
+                    return new Value(array);
+                }
+                case Native.EValueKind.SimpleString:
+                    return new Value(HandleString(input.data.ptr, (int) input.length, false));
+                case Native.EValueKind.Okay:
+                    return new Value();
+                case Native.EValueKind.Map:
+                {
+                    var array = new KeyValuePair<Value, Value>[input.length];
+                    var ptr = (Native.Value*) input.data.ptr;
+                    for (int i = 0, j = 0; i < input.length; i++, j += 2)
+                    {
+                        var key = FromNativeValue(ptr[j], false);
+                        var value = FromNativeValue(ptr[j + 1], false);
+                        array[i] = new KeyValuePair<Value, Value>(key, value);
+                    }
+
+                    return new Value(array);
+                }
+                case Native.EValueKind.Attribute:
+                    throw new NotImplementedException();
+                case Native.EValueKind.Set:
+                {
+                    var array = new Value[input.length];
+                    var ptr = (Native.Value*) input.data.ptr;
+                    for (var i = 0; i < input.length; i++)
+                    {
+                        array[i] = FromNativeValue(ptr[i], false);
+                    }
+
+                    return new Value(array);
+                }
+                case Native.EValueKind.Double:
+                    return new Value(input.data.f);
+                case Native.EValueKind.Boolean:
+                    return new Value(input.data.i != 0);
+                case Native.EValueKind.VerbatimString:
+                {
+                    var ptr = (StringPair*) input.data.ptr;
+                    var key = HandleString(ptr->a_start, (int)(ptr->a_end - ptr->a_start), false);
+                    var value = HandleString(ptr->a_start, (int)(ptr->a_end - ptr->a_start), false);
+
+                    return new Value(key, value);
+                }
+                case Native.EValueKind.BigNumber:
+                    throw new NotImplementedException();
+                case Native.EValueKind.Push:
+                    throw new NotImplementedException();
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
+        finally
+        {
+            if (free)
+                Imports.free_value(input);
         }
     }
 }
