@@ -10,7 +10,6 @@ use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyString};
 use pyo3::Python;
-use redis::RedisError;
 use redis::Value;
 use std::collections::HashMap;
 use std::ptr::from_mut;
@@ -313,7 +312,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                     .unbind())
             }
             Value::ServerError(error) => {
-                let err_msg = error_message(&server_error.into());
+                let err_msg = error_message(&error.into());
                 // Import the module containing your custom error.
                 let module = py.import_bound("glide.exceptions")?;
                 // Get the custom error type from the module.
