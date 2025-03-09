@@ -15,6 +15,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".files", ".files", "{4580A3
 		.editorconfig = .editorconfig
 		.gitignore = .gitignore
 		ReadMe.MD = ReadMe.MD
+		..\.github\workflows\csharp.yml = ..\.github\workflows\csharp.yml
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide.AppHost", "sources\Valkey.Glide.AppHost\Valkey.Glide.AppHost.csproj", "{C3817C29-23FC-451B-BF9C-A9453078DD1F}"
