@@ -351,6 +351,7 @@ impl aio::ConnectionLike for MockConnection {
     fn req_packed_command<'a>(&'a mut self, cmd: &'a redis::Cmd) -> RedisFuture<'a, Value> {
         Box::pin(future::ready(
             (self.handler)(&cmd.get_packed_command(), self.port)
+                .map_err(|err| err.and_then(|v| v.extract_error()))
                 .expect_err("Handler did not specify a response"),
         ))
     }
@@ -375,7 +376,9 @@ impl aio::ConnectionLike for MockConnection {
 
 impl redis::ConnectionLike for MockConnection {
     fn req_packed_command(&mut self, cmd: &[u8]) -> RedisResult<Value> {
-        (self.handler)(cmd, self.port).expect_err("Handler did not specify a response")
+        (self.handler)(cmd, self.port)
+            .map_err(|err| err.and_then(|v| v.extract_error()))
+            .expect_err("Handler did not specify a response")
     }
 
     fn req_packed_commands(
