@@ -11,6 +11,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::{RwLock, RwLockReadGuard};
 use std::time::Duration;
 use telemetrylib::Telemetry;
 use tokio::sync::{mpsc, Notify};
@@ -34,7 +35,7 @@ struct ConnectionBackend {
     /// This signal is reset when a connection disconnects, and set when a new `ConnectionState` has been set with a `Connected` state.
     connection_available_signal: ManualResetEvent,
     /// Information needed in order to create a new connection.
-    connection_info: redis::Client,
+    connection_info: RwLock<redis::Client>,
     /// Once this flag is set, the internal connection needs no longer try to reconnect to the server, because all the outer clients were dropped.
     client_dropped_flagged: AtomicBool,
 }
@@ -119,7 +120,7 @@ async fn create_connection(
     discover_az: bool,
     connection_timeout: Duration,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
-    let client = &connection_backend.connection_info;
+    let client = connection_backend.connection_info.read().unwrap();
     let connection_options = GlideConnectionOptions {
         push_sender,
         disconnect_notifier: Some::<Box<dyn DisconnectNotifier>>(Box::new(
@@ -129,7 +130,7 @@ async fn create_connection(
         connection_timeout: Some(connection_timeout),
     };
     let action = || async {
-        get_multiplexed_connection(client, &connection_options)
+        get_multiplexed_connection(&client, &connection_options)
             .await
             .map_err(RetryError::transient)
     };
@@ -141,7 +142,7 @@ async fn create_connection(
                 format!(
                     "Connection to {} created",
                     connection_backend
-                        .connection_info
+                        .get_backend_client()
                         .get_connection_info()
                         .addr
                 ),
@@ -150,7 +151,7 @@ async fn create_connection(
             Ok(ReconnectingConnection {
                 inner: Arc::new(InnerReconnectingConnection {
                     state: Mutex::new(ConnectionState::Connected(connection)),
-                    backend: connection_backend,
+                    backend: connection_backend.clone(),
                 }),
                 connection_options,
             })
@@ -161,7 +162,7 @@ async fn create_connection(
                 format!(
                     "Failed connecting to {}, due to {err}",
                     connection_backend
-                        .connection_info
+                        .get_backend_client()
                         .get_connection_info()
                         .addr
                 ),
@@ -169,7 +170,7 @@ async fn create_connection(
             let connection = ReconnectingConnection {
                 inner: Arc::new(InnerReconnectingConnection {
                     state: Mutex::new(ConnectionState::InitializedDisconnected),
-                    backend: connection_backend,
+                    backend: connection_backend.clone(),
                 }),
                 connection_options,
             };
@@ -204,6 +205,25 @@ fn internal_retry_iterator() -> impl Iterator<Item = Duration> {
     .chain(std::iter::repeat(MAX_DURATION))
 }
 
+impl ConnectionBackend {
+    fn clone(&self) -> Self {
+        ConnectionBackend {
+            connection_available_signal: ManualResetEvent::new(
+                self.connection_available_signal.is_set(),
+            ),
+            connection_info: RwLock::new(self.connection_info.read().unwrap().clone()),
+            client_dropped_flagged: AtomicBool::new(
+                self.client_dropped_flagged
+                    .load(std::sync::atomic::Ordering::Relaxed),
+            ),
+        }
+    }
+    /// Retrieves the connection information from the client in a thread-safe manner.
+    fn get_backend_client(&self) -> RwLockReadGuard<'_, redis::Client> {
+        self.connection_info.read().unwrap()
+    }
+}
+
 impl ReconnectingConnection {
     pub(super) async fn new(
         address: &NodeAddress,
@@ -221,7 +241,7 @@ impl ReconnectingConnection {
 
         let connection_info = get_client(address, tls_mode, redis_connection_info);
         let backend = ConnectionBackend {
-            connection_info,
+            connection_info: RwLock::new(connection_info),
             connection_available_signal: ManualResetEvent::new(true),
             client_dropped_flagged: AtomicBool::new(false),
         };
@@ -238,7 +258,7 @@ impl ReconnectingConnection {
     pub(crate) fn node_address(&self) -> String {
         self.inner
             .backend
-            .connection_info
+            .get_backend_client()
             .get_connection_info()
             .addr
             .to_string()
@@ -306,7 +326,10 @@ impl ReconnectingConnection {
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
-            let client = &connection_clone.inner.backend.connection_info;
+            let client = {
+                let guard = connection_clone.inner.backend.get_backend_client();
+                guard.clone()
+            };
             for sleep_duration in internal_retry_iterator() {
                 if connection_clone.is_dropped() {
                     log_debug(
@@ -316,7 +339,8 @@ impl ReconnectingConnection {
                     // Client was dropped, reconnection attempts can stop
                     return;
                 }
-                match get_multiplexed_connection(client, &connection_clone.connection_options).await
+                match get_multiplexed_connection(&client, &connection_clone.connection_options)
+                    .await
                 {
                     Ok(mut connection) => {
                         if connection
@@ -362,5 +386,15 @@ impl ReconnectingConnection {
         } else {
             log_error("disconnect notifier", "BUG! Disconnect notifier is not set");
         }
+    }
+
+    pub fn update_connection_password(&self, new_password: Option<String>) {
+        let mut client = self.inner.backend.connection_info.write().unwrap();
+        client.update_password(new_password);
+    }
+
+    pub fn get_username(&self) -> Option<String> {
+        let client = self.inner.backend.connection_info.read().unwrap();
+        client.get_connection_info().redis.username.clone()
     }
 }
