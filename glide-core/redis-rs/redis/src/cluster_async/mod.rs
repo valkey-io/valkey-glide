@@ -2204,6 +2204,8 @@ where
         let (address, mut conn) = conn.await.map_err(|err| (OperationTarget::NotFound, err))?;
         conn.req_packed_commands(&pipeline, offset, count)
             .await
+            // TODO: remove this when raise_on_error flag will be added
+            .and_then(|v| Value::extract_error_vec(v))
             .map(Response::Multiple)
             .map_err(|err| (OperationTarget::Node { address }, err))
     }

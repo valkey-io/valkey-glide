@@ -86,7 +86,7 @@ impl Pipeline {
             &encode_pipeline(&self.commands, false),
             0,
             self.commands.len(),
-        )?))
+        )?)?)
     }
 
     fn execute_transaction(&self, con: &mut dyn ConnectionLike) -> RedisResult<Value> {
@@ -97,7 +97,7 @@ impl Pipeline {
         )?;
         match resp.pop() {
             Some(Value::Nil) => Ok(Value::Nil),
-            Some(Value::Array(items)) => Ok(self.make_pipeline_results(items)),
+            Some(Value::Array(items)) => Ok(self.make_pipeline_results(items)?),
             _ => fail!((
                 ErrorKind::ResponseError,
                 "Invalid response when parsing multi response"
@@ -147,7 +147,7 @@ impl Pipeline {
         let value = con
             .req_packed_commands(self, 0, self.commands.len())
             .await?;
-        Ok(self.make_pipeline_results(value))
+        Ok(self.make_pipeline_results(value)?)
     }
 
     #[cfg(feature = "aio")]
@@ -160,7 +160,7 @@ impl Pipeline {
             .await?;
         match resp.pop() {
             Some(Value::Nil) => Ok(Value::Nil),
-            Some(Value::Array(items)) => Ok(self.make_pipeline_results(items)),
+            Some(Value::Array(items)) => Ok(self.make_pipeline_results(items)?),
             _ => Err((
                 ErrorKind::ResponseError,
                 "Invalid response when parsing multi response",
@@ -326,14 +326,17 @@ macro_rules! implement_pipeline_commands {
                 &mut self.commands[idx]
             }
 
-            fn make_pipeline_results(&self, resp: Vec<Value>) -> Value {
+            fn make_pipeline_results(&self, resp: Vec<Value>) -> RedisResult<Value> {
                 let mut rv = Vec::with_capacity(resp.len() - self.ignored_commands.len());
                 for (idx, result) in resp.into_iter().enumerate() {
+                    if let Value::ServerError(e) = result {
+                        return Err(e.into());
+                    }
                     if !self.ignored_commands.contains(&idx) {
                         rv.push(result);
                     }
                 }
-                Value::Array(rv)
+                Ok(Value::Array(rv))
             }
         }
 

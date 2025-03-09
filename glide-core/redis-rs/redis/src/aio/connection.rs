@@ -15,6 +15,7 @@ use ::tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 #[cfg(feature = "tokio-comp")]
 use ::tokio::net::lookup_host;
 use combine::{parser::combinator::AnySendSyncPartialState, stream::PointerOffset};
+use futures::TryFutureExt;
 use futures_util::future::select_ok;
 use futures_util::{
     future::FutureExt,
@@ -184,7 +185,7 @@ where
                 return Ok(Value::Nil);
             }
             loop {
-                match self.read_response().await? {
+                match self.read_response().await.and_then(|v| v.extract_error())? {
                     Value::Push { .. } => continue,
                     val => return Ok(val),
                 }
@@ -212,10 +213,15 @@ where
 
             for _ in 0..offset {
                 let response = self.read_response().await;
-                if let Err(err) = response {
-                    if first_err.is_none() {
+                match response {
+                    Ok(Value::ServerError(err)) if first_err.is_none() && cmd.is_atomic() => {
+                        // If we got an error here, it means that the error is before `EXEC` was sent, so all this transaction will be discarded
+                        first_err = Some(err.into());
+                    }
+                    Err(err) if first_err.is_none() => {
                         first_err = Some(err);
                     }
+                    _ => {}
                 }
             }
 
