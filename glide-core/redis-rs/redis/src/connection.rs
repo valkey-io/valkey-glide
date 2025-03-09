@@ -1366,7 +1366,7 @@ impl ConnectionLike for Connection {
                     kind: _kind,
                     data: _data,
                 } => continue,
-                val => return Ok(val),
+                val => return val.extract_error(),
             }
         }
     }

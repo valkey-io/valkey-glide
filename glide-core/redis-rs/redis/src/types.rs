@@ -539,7 +539,8 @@ impl Value {
         }
     }
 
-    pub(crate) fn extract_error_vec(vec: Vec<Self>) -> RedisResult<Vec<Self>> {
+    /// Extract an error from vec of Values
+    pub fn extract_error_vec(vec: Vec<Self>) -> RedisResult<Vec<Self>> {
         vec.into_iter()
             .map(Self::extract_error)
             .collect::<RedisResult<Vec<_>>>()
