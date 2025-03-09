@@ -1382,7 +1382,7 @@ impl ConnectionLike for Connection {
                     kind: _kind,
                     data: _data,
                 } => continue,
-                val => return Ok(val.extract_error()?),
+                val => return val.extract_error(),
             }
         }
     }

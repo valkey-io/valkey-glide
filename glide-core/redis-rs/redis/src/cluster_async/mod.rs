@@ -2205,7 +2205,7 @@ where
         conn.req_packed_commands(&pipeline, offset, count)
             .await
             // TODO: remove this when raise_on_error flag will be added
-            .and_then(|v| Value::extract_error_vec(v))
+            .and_then(Value::extract_error_vec)
             .map(Response::Multiple)
             .map_err(|err| (OperationTarget::Node { address }, err))
     }

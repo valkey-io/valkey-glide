@@ -15,7 +15,6 @@ use ::tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 #[cfg(feature = "tokio-comp")]
 use ::tokio::net::lookup_host;
 use combine::{parser::combinator::AnySendSyncPartialState, stream::PointerOffset};
-use futures::TryFutureExt;
 use futures_util::future::select_ok;
 use futures_util::{
     future::FutureExt,
