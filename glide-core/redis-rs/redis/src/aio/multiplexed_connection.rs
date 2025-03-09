@@ -580,7 +580,7 @@ impl MultiplexedConnection {
                 }
             }
         }
-        let value = result?;
+        let value = result.and_then(|v| v.extract_error())?;
         match value {
             Value::Array(mut values) => {
                 values.drain(..offset);
