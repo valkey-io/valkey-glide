@@ -2338,7 +2338,7 @@ For more information, please refer to <http://unlicense.org/>
 
 ----
 
-Package: bytes:1.10.0
+Package: bytes:1.10.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -5415,7 +5415,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: either:1.14.0
+Package: either:1.15.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19529,7 +19529,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyo3:0.22.6
+Package: pyo3:0.23.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19758,7 +19758,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyo3-build-config:0.22.6
+Package: pyo3-build-config:0.23.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19987,7 +19987,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyo3-ffi:0.22.6
+Package: pyo3-ffi:0.23.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20216,7 +20216,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyo3-macros:0.22.6
+Package: pyo3-macros:0.23.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20445,7 +20445,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyo3-macros-backend:0.22.6
+Package: pyo3-macros-backend:0.23.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22358,7 +22358,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ring:0.17.11
+Package: ring:0.17.13
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27869,7 +27869,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time:0.3.37
+Package: time:0.3.39
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -28098,7 +28098,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time-core:0.1.2
+Package: time-core:0.1.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -28327,7 +28327,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time-macros:0.2.19
+Package: time-macros:0.2.20
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -28594,7 +28594,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: tokio:1.43.0
+Package: tokio:1.44.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -39157,7 +39157,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy:0.8.21
+Package: zerocopy:0.8.23
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -39661,7 +39661,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.8.21
+Package: zerocopy-derive:0.8.23
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -40502,7 +40502,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: protobuf:5.29.3
+Package: protobuf:6.30.0
 
 The following copyrights and licenses were found in the source code of this package:
 
