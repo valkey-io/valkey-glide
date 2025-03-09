@@ -10,7 +10,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide.InterOp", "sou
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide.UnitTests", "tests\Valkey.Glide.UnitTests\Valkey.Glide.UnitTests.csproj", "{0431B877-FD4C-4AD0-B97E-4EB6E56E5BEE}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "files", "files", "{4580A394-956C-4F09-A846-36E7669E1A51}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".files", ".files", "{4580A394-956C-4F09-A846-36E7669E1A51}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
 		.gitignore = .gitignore
@@ -18,6 +18,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "files", "files", "{4580A394
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide.AppHost", "sources\Valkey.Glide.AppHost\Valkey.Glide.AppHost.csproj", "{C3817C29-23FC-451B-BF9C-A9453078DD1F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "benchmarks", "benchmarks", "{91D2A259-AC07-400F-A1CC-7E8EFD87DD60}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide.Benchmark", "benchmarks\Valkey.Glide.Benchmark\Valkey.Glide.Benchmark.csproj", "{66EB921A-782D-4D40-B0FB-5F02497ED467}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -29,6 +33,7 @@ Global
 		{A2C5476B-3C3E-4220-917D-CC14036C676F} = {02857780-E906-4687-80FB-07D28C9857C2}
 		{0431B877-FD4C-4AD0-B97E-4EB6E56E5BEE} = {2BBD3AEC-8CF9-4B96-B6DF-8AB46A8DE8DA}
 		{C3817C29-23FC-451B-BF9C-A9453078DD1F} = {02857780-E906-4687-80FB-07D28C9857C2}
+		{66EB921A-782D-4D40-B0FB-5F02497ED467} = {91D2A259-AC07-400F-A1CC-7E8EFD87DD60}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{13C75535-9649-49AB-837F-7A5910309DA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -47,5 +52,9 @@ Global
 		{C3817C29-23FC-451B-BF9C-A9453078DD1F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C3817C29-23FC-451B-BF9C-A9453078DD1F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C3817C29-23FC-451B-BF9C-A9453078DD1F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{66EB921A-782D-4D40-B0FB-5F02497ED467}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{66EB921A-782D-4D40-B0FB-5F02497ED467}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{66EB921A-782D-4D40-B0FB-5F02497ED467}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{66EB921A-782D-4D40-B0FB-5F02497ED467}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
