@@ -12,7 +12,7 @@ namespace Valkey.Glide.InterOp;
 
 public sealed class NativeClient : IDisposable, INativeClient
 {
-    private static readonly unsafe delegate*<nint, int, Native.Value, void> CommandCallbackFptr = &CommandCallback;
+    private static readonly nint CommandCallbackFptr = Marshal.GetFunctionPointerForDelegate<CommandCallbackDelegate>(CommandCallback);
     private static readonly        SemaphoreSlim                            Semaphore           = new(1, 1);
     private static                 bool                                     _initialized;
     private                        nint?                                    _handle;
@@ -212,6 +212,7 @@ public sealed class NativeClient : IDisposable, INativeClient
         return i;
     }
 
+    private delegate void CommandCallbackDelegate([In] nint data, [In] int success, [In] Native.Value payload);
     private static void CommandCallback([In] nint data, [In] int success, [In] Native.Value payload)
     {
         try

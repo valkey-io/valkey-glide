@@ -203,7 +203,7 @@ public static class Imports
     )]
     public static extern unsafe CommandResult command(
         [In] nint in_client_ptr,
-        [In] delegate*<nint, int, Value, void> in_callback,
+        [In] nint in_callback,
         [In] nint in_callback_data,
         [In] ERequestType in_request_type,
         [In] byte** in_args,
