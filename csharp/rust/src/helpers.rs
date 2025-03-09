@@ -1,5 +1,6 @@
 ﻿use std::ffi::c_char;
 use std::str::Utf8Error;
+use crate::data::Utf8OrEmptyError;
 
 pub fn grab_str(input: *const c_char) -> Result<Option<String>, Utf8Error> {
     if input.is_null() {
@@ -11,6 +12,15 @@ pub fn grab_str(input: *const c_char) -> Result<Option<String>, Utf8Error> {
             Ok(d) => Ok(Some(d.to_string())),
             Err(e) => Err(e),
         }
+    }
+}
+pub fn grab_str_not_null(input: *const c_char) -> Result<String, Utf8OrEmptyError> {
+    match grab_str(input) {
+        Ok(d) => match d {
+            None => Err(Utf8OrEmptyError::Empty),
+            Some(s) => Ok(s),
+        }
+        Err(e) => Err(Utf8OrEmptyError::Utf8Error(e)),
     }
 }
 

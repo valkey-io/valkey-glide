@@ -12,42 +12,114 @@ namespace Valkey.Glide.InterOp;
 
 public sealed class NativeClient : IDisposable, INativeClient
 {
-    private static readonly nint CommandCallbackFptr = Marshal.GetFunctionPointerForDelegate<CommandCallbackDelegate>(CommandCallback);
-    private static readonly        SemaphoreSlim                            Semaphore           = new(1, 1);
-    private static                 bool                                     _initialized;
-    private                        nint?                                    _handle;
+    private static readonly nint CommandCallbackFptr =
+        Marshal.GetFunctionPointerForDelegate<CommandCallbackDelegate>(CommandCallback);
+
+    private static readonly SemaphoreSlim Semaphore = new(1, 1);
+    private static          bool          _initialized;
+    private                 nint?         _handle;
 
 
-    public unsafe NativeClient(IReadOnlyCollection<Node> hosts, bool useTls)
+    public unsafe NativeClient(ConnectionRequest request)
     {
         if (!_initialized)
             throw new InvalidOperationException("API is not initialized");
-        if (hosts.Count > ushort.MaxValue)
-            throw new ArgumentOutOfRangeException(nameof(hosts), hosts.Count, "Too many hosts");
-        if (hosts.Count == ushort.MaxValue)
-            throw new ArgumentOutOfRangeException(nameof(hosts), hosts.Count, "At least one host is required");
-        if (hosts.Count < 0)
-            throw new InvalidOperationException("Hosts is negative");
-        var hostsArray = new NodeAddress[hosts.Count];
-        var index = 0;
+        request.Validate();
 
+        var strings = new List<nint>();
+        var addresses = new Native.NodeAddress[request.Addresses.Length];
         try
         {
-            foreach (var host in hosts)
+            fixed (NodeAddress* addressesPtr = addresses)
             {
-                var ptr = MarshalUtf8String(host.Address);
-                hostsArray[index] = new NodeAddress
+                var nativeRequest = new Native.ConnectionRequest
                 {
-                    host = ptr,
-                    port = host.Port,
+                    client_name          = MarshalCollectingString(request.ClientName),
+                    cluster_mode_enabled = request.ClusterModeEnabled ? 1 : 0,
+                    connection_retry_strategy = new Native.ConnectionRetryStrategy
+                    {
+                        ignore            = !request.ConnectionRetryStrategy.HasValue ? 1 : default,
+                        number_of_retries = request.ConnectionRetryStrategy?.NumberOfRetries ?? default,
+                        exponent_base     = request.ConnectionRetryStrategy?.ExponentialBase ?? default,
+                        factor            = request.ConnectionRetryStrategy?.Factor ?? default,
+                    },
+                    connection_timeout = new OptionalU32
+                    {
+                        ignore = !request.ConnectionTimeout.HasValue ? 1 : 0,
+                        value  = request.ConnectionTimeout ?? default
+                    },
+                    otel_span_flush_interval_ms = new OptionalU64
+                    {
+                        ignore = !request.OtelSpanFlushIntervalMs.HasValue ? 1 : 0,
+                        value  = request.OtelSpanFlushIntervalMs ?? default
+                    },
+                    request_timeout = new OptionalU32
+                    {
+                        ignore = !request.RequestTimeout.HasValue ? 1 : 0, value = request.RequestTimeout ?? default
+                    },
+                    inflight_requests_limit = new OptionalU32
+                    {
+                        ignore = !request.InflightRequestsLimit.HasValue ? 1 : 0,
+                        value  = request.InflightRequestsLimit ?? default
+                    },
+                    periodic_checks = new Native.PeriodicCheck
+                    {
+                        kind = request.PeriodicChecks?.Kind switch
+                        {
+                            EPeriodicCheckKind.Enabled        => Native.EPeriodicCheckKind.Enabled,
+                            EPeriodicCheckKind.Disabled       => Native.EPeriodicCheckKind.Disabled,
+                            EPeriodicCheckKind.ManualInterval => Native.EPeriodicCheckKind.ManualInterval,
+                            null                              => Native.EPeriodicCheckKind.None,
+                            _                                 => throw new ArgumentOutOfRangeException(),
+                        }
+                    },
+                    protocol = request.Protocol switch
+                    {
+                        EProtocolVersion.Resp2 => Native.EProtocolVersion.RESP2,
+                        EProtocolVersion.Resp3 => Native.EProtocolVersion.RESP3,
+                        null                   => Native.EProtocolVersion.None,
+                        _                      => throw new ArgumentOutOfRangeException()
+                    },
+                    tls_mode = request.TlsMode switch
+                    {
+                        ETlsMode.NoTls       => Native.ETlsMode.None,
+                        ETlsMode.InsecureTls => Native.ETlsMode.InsecureTls,
+                        ETlsMode.SecureTls   => Native.ETlsMode.SecureTls,
+                        null                 => Native.ETlsMode.None,
+                        _                    => throw new ArgumentOutOfRangeException()
+                    },
+                    auth_password = MarshalCollectingString(request.AuthPassword),
+                    auth_username = MarshalCollectingString(request.AuthUsername),
+                    otel_endpoint = MarshalCollectingString(request.OtelEndpoint),
+                    read_from = new Native.ReadFrom
+                    {
+                        kind = request.ReadFrom?.Kind switch
+                        {
+                            EReadFromKind.Primary       => Native.EReadFromKind.Primary,
+                            EReadFromKind.PreferReplica => Native.EReadFromKind.PreferReplica,
+                            EReadFromKind.AzAffinity    => Native.EReadFromKind.AZAffinity,
+                            EReadFromKind.AzAffinityReplicasAndPrimary => Native.EReadFromKind
+                                .AZAffinityReplicasAndPrimary,
+                            null => Native.EReadFromKind.None,
+                            _    => throw new ArgumentOutOfRangeException()
+                        },
+                        value = MarshalCollectingString(request.ReadFrom?.Value),
+                    },
+                    database_id      = request.DatabaseId,
+                    addresses_length = (uint) request.Addresses.LongLength,
+                    addresses        = addressesPtr,
                 };
-                index++;
-            }
+                for (var i = 0; i < request.Addresses.Length; i++)
+                {
+                    var host = request.Addresses[i];
+                    addresses[i] = new NodeAddress
+                    {
+                        host = MarshalCollectingString(host.Address),
+                        port = host.Port,
+                    };
+                }
 
-
-            fixed (NodeAddress* hostsArrayPtr = hostsArray)
-            {
-                var result = Imports.create_client_handle(hostsArrayPtr, (ushort) hosts.Count, useTls);
+                var result = Imports.create_client_handle(nativeRequest);
                 switch (result.result)
                 {
                     case ECreateClientHandleCode.Success:
@@ -98,11 +170,19 @@ public sealed class NativeClient : IDisposable, INativeClient
         }
         finally
         {
-            for (var i = 0; i < hostsArray.Length; i++)
+            foreach (byte* ptr in strings)
             {
-                var ptr = hostsArray[i].host;
                 MarshalFreeUtf8String(ptr);
             }
+        }
+
+        byte* MarshalCollectingString(string? input)
+        {
+            if (input is null)
+                return null;
+            var ptr = MarshalUtf8String(input);
+            strings.Add((nint) ptr);
+            return ptr;
         }
     }
 
@@ -213,6 +293,7 @@ public sealed class NativeClient : IDisposable, INativeClient
     }
 
     private delegate void CommandCallbackDelegate([In] nint data, [In] int success, [In] Native.Value payload);
+
     private static void CommandCallback([In] nint data, [In] int success, [In] Native.Value payload)
     {
         try
@@ -357,12 +438,7 @@ public sealed class NativeClient : IDisposable, INativeClient
 
         BlockingCommandResult result;
         fixed (byte** argsArrPtr = argsArr)
-            result = Imports.command_blocking(
-                _handle.Value,
-                requestType,
-                argsArrPtr,
-                argsArr.Length
-            );
+            result = Imports.command_blocking(_handle.Value, requestType, argsArrPtr, argsArr.Length);
         foreach (var arg in argsArr)
         {
             MarshalFreeUtf8String(arg);

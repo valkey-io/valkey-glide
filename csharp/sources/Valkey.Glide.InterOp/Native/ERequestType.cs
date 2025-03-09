@@ -1,5 +1,8 @@
-﻿namespace Valkey.Glide.InterOp.Native;
+﻿using System.ComponentModel;
 
+namespace Valkey.Glide.InterOp.Native;
+
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public enum ERequestType
 {
     /// Invalid request type

@@ -46,6 +46,12 @@ public sealed class ValkeyAspireFixture : IAsyncLifetime
     public ushort Port { get; private set; }
     public string Host { get; private set; } = string.Empty;
 
+    public InterOp.ConnectionRequest ConnectionRequest
+        => new InterOp.ConnectionRequest([Node])
+        {
+            TlsMode = IsSecure ? InterOp.ETlsMode.SecureTls : null,
+        };
+
     public async Task DisposeAsync()
     {
         if (_distributedApplication is not null)

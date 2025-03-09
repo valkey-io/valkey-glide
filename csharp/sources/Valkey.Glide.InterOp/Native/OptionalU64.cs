@@ -7,8 +7,8 @@ namespace Valkey.Glide.InterOp.Native;
 [EditorBrowsable(EditorBrowsableState.Advanced)]
 [SuppressMessage("ReSharper", "InconsistentNaming")]
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-public struct InitResult
+public struct OptionalU64
 {
-    public int          success;
-    public ELoggerLevel logger_level;
+    public int   ignore;
+    public ulong value;
 }

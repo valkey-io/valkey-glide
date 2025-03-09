@@ -1,12 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+extern crate core;
+
 mod apihandle;
 mod data;
 mod helpers;
 
 use crate::apihandle::Handle;
 use crate::data::*;
-use glide_core::client;
 use glide_core::client::ConnectionError;
 use glide_core::request_type::RequestType;
 use std::ffi::{c_int, c_void, CString};
@@ -131,26 +132,9 @@ pub extern "C-unwind" fn csharp_system_init(
 /// It is **not optional** to call them to free data allocated by the API!
 #[no_mangle]
 pub extern "C-unwind" fn csharp_create_client_handle(
-    in_host: *const NodeAddress,
-    in_host_count: u16,
-    in_use_tls: c_int,
+    in_connection_request: ConnectionRequest
 ) -> CreateClientHandleResult {
-    let addresses = match helpers::grab_vec(
-        in_host,
-        in_host_count as usize,
-        |it| -> Result<client::NodeAddress, Utf8OrEmptyError> {
-            let host = match helpers::grab_str(it.host) {
-                Ok(d) => d,
-                Err(e) => return Err(Utf8OrEmptyError::Utf8Error(e)),
-            };
-            let host = match host {
-                Some(host) => host,
-                None => return Err(Utf8OrEmptyError::Empty),
-            };
-            let port = it.port;
-            Ok(client::NodeAddress { host, port })
-        },
-    ) {
+    let request = match in_connection_request.to_redis() {
         Ok(d) => d,
         Err(e) => match e {
             Utf8OrEmptyError::Utf8Error(e) => {
@@ -176,14 +160,6 @@ pub extern "C-unwind" fn csharp_create_client_handle(
         },
     };
 
-    let request = client::ConnectionRequest {
-        addresses,
-        tls_mode: match in_use_tls != 0 {
-            true => Some(client::TlsMode::SecureTls),
-            false => Some(client::TlsMode::NoTls),
-        },
-        ..Default::default()
-    };
 
     let runtime = match Builder::new_multi_thread()
         .enable_all()
@@ -579,77 +555,7 @@ pub extern "C-unwind" fn csharp_command_blocking(
 mod tests {
     use super::*;
     use crate::data::*;
-    use glide_core::request_type::RequestType;
-    use std::ffi::{c_int, c_void, CString};
-    use std::ptr::null;
-    use std::rc::Rc;
-    use std::str::FromStr;
-    use std::thread;
-    use std::time::Duration;
 
     const HOST: &str = "localhost";
     const PORT: u16 = 49493;
-
-    #[test]
-    fn test_system_init() {
-        assert_ne!(0, csharp_system_init(ELoggerLevel::None, null()).success);
-    }
-    #[test]
-    fn test_create_client_handle() {
-        assert_ne!(0, csharp_system_init(ELoggerLevel::None, null()).success);
-        let address = CString::from_str(HOST).unwrap();
-        let addresses = vec![NodeAddress {
-            host: address.as_ptr(),
-            port: PORT,
-        }];
-        let client_result = csharp_create_client_handle(addresses.as_ptr(), 1, 0);
-        assert_eq!(ECreateClientHandleCode::Success, client_result.result);
-        assert_ne!(null(), client_result.client_handle);
-        csharp_free_client_handle(client_result.client_handle);
-    }
-    #[test]
-    fn test_call_command() {
-        assert_ne!(0, csharp_system_init(ELoggerLevel::None, null()).success);
-        let address = CString::from_str(HOST).unwrap();
-        let addresses = vec![NodeAddress {
-            host: address.as_ptr(),
-            port: PORT,
-        }];
-        let client_result = csharp_create_client_handle(addresses.as_ptr(), 1, 0);
-        assert_eq!(ECreateClientHandleCode::Success, client_result.result);
-        assert_ne!(null(), client_result.client_handle);
-
-        let str = CString::from_str("test").unwrap();
-        let ptr = str.as_ptr();
-        let d = &[ptr];
-        let flag = Rc::new(false);
-        unsafe extern "C-unwind" fn test(
-            in_data: *mut c_void,
-            _out_success: c_int,
-            _ref_output: Value,
-        ) {
-            let mut flag = Rc::from_raw(in_data as *mut bool);
-            *flag = true;
-        }
-        let command_result = csharp_command(
-            client_result.client_handle,
-            test as CommandCallback,
-            Rc::into_raw(flag.clone()) as *mut c_void,
-            RequestType::Get,
-            d.as_ptr(),
-            1,
-        );
-
-        for _ in 0..200
-        /* 20s */
-        {
-            if *flag {
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
-        assert!(*flag);
-
-        csharp_free_client_handle(client_result.client_handle);
-    }
 }

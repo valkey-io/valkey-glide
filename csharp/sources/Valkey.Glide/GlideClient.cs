@@ -18,9 +18,9 @@ public sealed class GlideClient : IDisposable, IGlideClient
 
     public GlideClient(
         IReadOnlyCollection<Node> nodes,
-        bool useTls)
+        InterOp.ETlsMode useTls)
     {
-        _nativeClient     = new NativeClient(nodes, useTls);
+        _nativeClient     = new NativeClient(new InterOp.ConnectionRequest(nodes));
         _ownsNativeClient = true;
     }
 

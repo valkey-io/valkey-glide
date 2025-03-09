@@ -1,8 +1,10 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Valkey.Glide.InterOp.Native;
 
 [SuppressMessage("ReSharper", "InconsistentNaming")]
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public enum ELoggerLevel
 {
     None  = 0,

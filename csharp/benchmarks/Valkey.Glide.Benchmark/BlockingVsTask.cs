@@ -25,7 +25,7 @@ public class BlockingVsTask
     {
         _fixture = new ValkeyAspireFixture();
         await _fixture.InitializeAsync();
-        _nativeClient = new NativeClient([_fixture.Node], _fixture.IsSecure);
+        _nativeClient = new NativeClient(_fixture.ConnectionRequest);
     }
 
     [GlobalCleanup]

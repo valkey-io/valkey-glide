@@ -1,14 +1,16 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices;
 
 namespace Valkey.Glide.InterOp.Native;
 
 [EditorBrowsable(EditorBrowsableState.Advanced)]
 [SuppressMessage("ReSharper", "InconsistentNaming")]
-[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-public struct InitResult
+public enum EPeriodicCheckKind
 {
-    public int          success;
-    public ELoggerLevel logger_level;
+    None     = 0,
+    Enabled  = 1,
+    Disabled = 2,
+
+    /// secs and nanos on PeriodicCheck must be set
+    ManualInterval = 3,
 }

@@ -4,11 +4,13 @@ using System.Runtime.InteropServices;
 
 namespace Valkey.Glide.InterOp.Native;
 
-[EditorBrowsable(EditorBrowsableState.Advanced)]
 [SuppressMessage("ReSharper", "InconsistentNaming")]
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-public struct InitResult
+[EditorBrowsable(EditorBrowsableState.Advanced)]
+public struct ConnectionRetryStrategy
 {
-    public int          success;
-    public ELoggerLevel logger_level;
+    public int  ignore;
+    public uint exponent_base;
+    public uint factor;
+    public uint number_of_retries;
 }

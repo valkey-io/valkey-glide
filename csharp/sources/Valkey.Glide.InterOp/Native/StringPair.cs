@@ -7,8 +7,10 @@ namespace Valkey.Glide.InterOp.Native;
 [EditorBrowsable(EditorBrowsableState.Advanced)]
 [SuppressMessage("ReSharper", "InconsistentNaming")]
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-public struct InitResult
+public unsafe struct StringPair
 {
-    public int          success;
-    public ELoggerLevel logger_level;
+    public byte* a_start;
+    public byte* a_end;
+    public byte* b_start;
+    public byte* b_end;
 }

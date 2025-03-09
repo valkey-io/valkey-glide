@@ -6,9 +6,15 @@ namespace Valkey.Glide.InterOp.Native;
 
 [EditorBrowsable(EditorBrowsableState.Advanced)]
 [SuppressMessage("ReSharper", "InconsistentNaming")]
-[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-public struct InitResult
+[StructLayout(LayoutKind.Explicit, CharSet = CharSet.Unicode)]
+public struct ValueUnion
 {
-    public int          success;
-    public ELoggerLevel logger_level;
+    [FieldOffset(0)]
+    public long i;
+
+    [FieldOffset(0)]
+    public bool f;
+
+    [FieldOffset(0)]
+    public unsafe byte* ptr;
 }
