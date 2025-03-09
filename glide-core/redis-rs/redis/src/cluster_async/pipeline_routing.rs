@@ -2,6 +2,7 @@ use crate::aio::ConnectionLike;
 use crate::cluster_async::ClusterConnInner;
 use crate::cluster_async::Connect;
 use crate::cluster_routing::RoutingInfo;
+use crate::cluster_routing::SlotAddr;
 use cluster_routing::RoutingInfo::{MultiNode, SingleNode};
 
 use crate::cluster_routing::{
@@ -537,11 +538,9 @@ pub fn route_for_pipeline(pipeline: &crate::Pipeline) -> RedisResult<Option<Rout
                     (_, None) => Ok(chosen_route),
                     (Some(chosen_route), Some(next_cmd_route)) => {
                         if chosen_route.slot() != next_cmd_route.slot() {
-                            Err((
-                                ErrorKind::CrossSlot,
-                                "Received crossed slots in transaction",
-                            )
-                                .into())
+                            Err((ErrorKind::CrossSlot, "Received crossed slots in pipeline").into())
+                        } else if chosen_route.slot_addr() == SlotAddr::ReplicaOptional {
+                            Ok(Some(next_cmd_route))
                         } else {
                             Ok(Some(chosen_route))
                         }
