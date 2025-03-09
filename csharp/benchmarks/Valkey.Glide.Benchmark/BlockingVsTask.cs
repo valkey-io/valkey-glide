@@ -37,11 +37,11 @@ public class BlockingVsTask
 
     #endregion
 
-    // [Benchmark]
-    // public async Task AsyncGetNonExistingKey()
-    // {
-    //     _ = await _nativeClient.SendCommandAsync(ERequestType.Get, "non-existing-key");
-    // }
+    [Benchmark]
+    public async Task AsyncGetNonExistingKey()
+    {
+        _ = await _nativeClient.SendCommandAsync(ERequestType.Get, "non-existing-key");
+    }
 
     [Benchmark]
     public void BlockingGetNonExistingKey()
