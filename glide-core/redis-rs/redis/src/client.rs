@@ -570,6 +570,7 @@ use crate::aio::Runtime;
 
 impl ConnectionLike for Client {
     fn req_packed_command(&mut self, cmd: &[u8]) -> RedisResult<Value> {
+        // no need
         self.get_connection(None)?.req_packed_command(cmd)
     }
 

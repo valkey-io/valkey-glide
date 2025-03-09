@@ -91,7 +91,7 @@ impl<'a> Input<'a> {
         match self {
             Input::Slice { cmd, routable: _ } => connection
                 .req_packed_command(cmd)
-                .and_then(|value| value.extract_error(None, None))
+                //.and_then(|value| value.extract_error(None, None))
                 .map(Output::Single),
             Input::Cmd(cmd) => connection.req_command(cmd).map(Output::Single),
             Input::Commands {
@@ -501,12 +501,10 @@ where
             .map(|addr| {
                 let connection = self.get_connection_by_addr(connections, &addr)?;
                 match input {
-                    Input::Slice { cmd, routable: _ } => connection
-                        .req_packed_command(cmd)
-                        .and_then(|value| value.extract_error(None, None)),
-                    Input::Cmd(cmd) => connection
-                        .req_command(cmd)
-                        .and_then(|value| value.extract_error(None, None)),
+                    Input::Slice { cmd, routable: _ } => connection.req_packed_command(cmd),
+                    // .and_then(|value| value.extract_error(None, None)),
+                    Input::Cmd(cmd) => connection.req_command(cmd),
+                    //.and_then(|value| value.extract_error(None, None)),
                     Input::Commands {
                         cmd: _,
                         route: _,
@@ -724,8 +722,8 @@ where
                         // if we are in asking mode we want to feed a single
                         // ASKING command into the connection before what we
                         // actually want to execute.
-                        conn.req_packed_command(&b"*1\r\n$6\r\nASKING\r\n"[..])
-                            .and_then(|value| value.extract_error(None, None))?;
+                        conn.req_packed_command(&b"*1\r\n$6\r\nASKING\r\n"[..])?;
+                        //.and_then(|value| value.extract_error(None, None))?;
                     }
                     (addr.to_string(), conn)
                 } else {
@@ -876,12 +874,13 @@ impl<C: Connect + ConnectionLike> ConnectionLike for ClusterConnection<C> {
     }
 
     fn req_packed_command(&mut self, cmd: &[u8]) -> RedisResult<Value> {
+        // check if we can raise an error here, since its transaction?
         let actual_cmd = if cmd.starts_with(MULTI) {
             &cmd[MULTI.len()..]
         } else {
             cmd
         };
-        let value = parse_redis_value(actual_cmd)?;
+        let value = parse_redis_value(actual_cmd).and_then(|val| val.extract_error(None, None))?;
         self.request(Input::Slice {
             cmd,
             routable: value,

@@ -1110,7 +1110,7 @@ pub trait ConnectionLike {
     fn req_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
         let pcmd = cmd.get_packed_command();
         self.req_packed_command(&pcmd)
-            .and_then(|value| value.extract_error(None, None))
+        //.and_then(|value| value.extract_error(None, None))
     }
 
     /// Returns the database this connection is bound to.  Note that this
@@ -1378,7 +1378,10 @@ impl ConnectionLike for Connection {
 
         self.send_bytes(cmd)?;
         loop {
-            match self.read_response()? {
+            match self
+                .read_response()
+                .and_then(|value| value.extract_error(None, None))?
+            {
                 Value::Push {
                     kind: _kind,
                     data: _data,
@@ -1462,6 +1465,7 @@ where
     T: DerefMut<Target = C>,
 {
     fn req_packed_command(&mut self, cmd: &[u8]) -> RedisResult<Value> {
+        // no need?
         self.deref_mut().req_packed_command(cmd)
     }
 

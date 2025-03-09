@@ -2192,7 +2192,7 @@ where
             .map_err(|err| (OperationTarget::NotFound, err))?;
         conn.req_packed_command(&cmd)
             .await
-            .and_then(|value| value.extract_error(None, None))
+            //.and_then(|value| value.extract_error(None, None))
             .map(Response::Single)
             .map_err(|err| (address.into(), err))
     }
@@ -3022,10 +3022,8 @@ where
     let topology_join_results =
         futures::future::join_all(requested_nodes.into_iter().map(|(addr, conn)| async move {
             let mut conn: C = conn.await;
-            let res = conn
-                .req_packed_command(&slot_cmd())
-                .await
-                .and_then(|value| value.extract_error(None, None));
+            let res = conn.req_packed_command(&slot_cmd()).await;
+            //.and_then(|value| value.extract_error(None, None));
             (addr, res)
         }))
         .await;
