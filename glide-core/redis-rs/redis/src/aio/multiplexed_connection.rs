@@ -364,13 +364,11 @@ where
     }
 
     // `None` means that the stream was out of items causing that poll loop to shut down.
-    async fn send_single(
-        &mut self,
-        item: SinkItem,
-        timeout: Duration,
-    ) -> Result<Value, RedisError> {
+    async fn send_single(&mut self, item: SinkItem, timeout: Duration) -> RedisResult<Value> {
         //println!("Pipeline::send_single:");
-        self.send_recv(item, None, timeout, true).await
+        self.send_recv(item, None, timeout, true)
+            .await
+            .and_then(|v| v.extract_error(None, None))
     }
 
     async fn send_recv(
@@ -541,8 +539,8 @@ impl MultiplexedConnection {
         let result = self
             .pipeline
             .send_single(cmd.get_packed_command(), self.response_timeout)
-            .await
-            .and_then(|value| value.extract_error(None, None));
+            .await;
+        //.and_then(|value| value.extract_error(None, None));
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
                 if e.is_connection_dropped() {

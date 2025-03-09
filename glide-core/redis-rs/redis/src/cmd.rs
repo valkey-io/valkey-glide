@@ -438,7 +438,7 @@ impl Cmd {
     #[inline]
     pub fn query<T: FromRedisValue>(&self, con: &mut dyn ConnectionLike) -> RedisResult<T> {
         match con.req_command(self) {
-            Ok(val) => from_owned_redis_value(val.extract_error(None, None)?),
+            Ok(val) => from_owned_redis_value(val.extract_error(None, None)?), // not needed
             Err(e) => Err(e),
         }
     }
