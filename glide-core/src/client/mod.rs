@@ -531,8 +531,10 @@ impl Client {
                             cmd.arg(username);
                         }
                     }
-                    ClientWrapper::Standalone(_) => {
-                        //TODO: get username and add it as arg in standalone
+                    ClientWrapper::Standalone(ref client) => {
+                        if let Some(username) = client.get_username().await {
+                            cmd.arg(username);
+                        }
                     }
                 }
                 cmd.arg(password);

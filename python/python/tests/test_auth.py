@@ -48,15 +48,20 @@ class TestAuthCommands:
     ):
         """
         Test changing server password when connection is lost before password update.
-        Verifies that the client will not be able to reach the inner core and return an error.
+        Verifies that the client will not be able to reach the inner core and return an error
+        on immediate re-authentication, but will succeed with non-immediate re-auth
         """
         await glide_client.set("test_key", "test_value")
         await config_set_new_password(glide_client, NEW_PASSWORD)
         await kill_connections(management_client)
         await asyncio.sleep(1)
+        result = await glide_client.update_connection_password(
+            NEW_PASSWORD, immediate_auth=False
+        )
+        assert result == OK
         with pytest.raises(RequestError):
             await glide_client.update_connection_password(
-                NEW_PASSWORD, immediate_auth=False
+                NEW_PASSWORD, immediate_auth=True
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -140,7 +145,7 @@ class TestAuthCommands:
         with pytest.raises(RequestError):
             await glide_client.update_connection_password("", immediate_auth=True)
 
-    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_with_acl_user(
         self, acl_glide_client: TGlideClient, management_client: TGlideClient
@@ -153,7 +158,6 @@ class TestAuthCommands:
         2. The client remains connected with current auth
         3. The client can reconnect using the new password after server password change (which is simulated by
         deleting and reseting the user with a new password, which kills the connection).
-        This test is only for cluster mode, as standalone mode does not have a connection available handler.
         """
 
         # Create a new ACL user and authenticate the client as the new user
@@ -187,14 +191,17 @@ class TestAuthCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_update_connection_password_with_immediate_auth_with_acl_user(
+    async def test_update_connection_password_reconnection_with_immediate_auth_with_acl_user(
         self, acl_glide_client: TGlideClient, management_client: TGlideClient
     ):
         """
         Test replacing connection password with immediate re-authentication.
         Verifies that:
-        1. The client can update its password and re-authenticate immediately
+        1. Upon disconnection (which is caused by the user deletion), the client succeeds in re-authentication
+            with the correct password.
         2. The client remains operational after re-authentication
+        This test is relevant only for cluster mode - in standalone, reconnection will fail and new requests for
+        the server won't be served.
         """
         assert await delete_acl_username_and_password(management_client, USERNAME) == 1
         await set_new_acl_username_with_password(
@@ -211,7 +218,55 @@ class TestAuthCommands:
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
 
-    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_update_connection_password_connection_lost_before_password_update_acl_user(
+        self, acl_glide_client: TGlideClient, management_client: TGlideClient
+    ):
+        """
+        Test replacing connection password with immediate re-authentication.
+        Verifies that:
+        1. Upon disconnection (which is caused by the user deletion), the client succeeds in updating the password
+        with non-immediate auth (this is an internal operation not requiring a server connection).
+        2.
+        This test is relevant only for standalone - in standalone, reconnection will fail and new requests for
+        the server won't be served.
+        """
+        assert await delete_acl_username_and_password(management_client, USERNAME) == 1
+        await set_new_acl_username_with_password(
+            management_client, USERNAME, NEW_PASSWORD
+        )
+
+        result = await acl_glide_client.update_connection_password(
+            NEW_PASSWORD, immediate_auth=False
+        )
+
+        assert result == OK
+
+        with pytest.raises(RequestError):
+            await acl_glide_client.update_connection_password(
+                WRONG_PASSWORD, immediate_auth=True
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_update_connection_password_replace_password_immediateAuth_acl_user(
+        self, acl_glide_client: TGlideClient, management_client: TGlideClient
+    ):
+        """
+        Tests adding a new password to the user, verifies that the client succeeds in immediate authentication with it.
+        """
+        await set_new_acl_username_with_password(
+            management_client, USERNAME, NEW_PASSWORD
+        )
+
+        result = await acl_glide_client.update_connection_password(
+            NEW_PASSWORD, immediate_auth=True
+        )
+
+        assert result == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_auth_non_valid_pass_acl_user(
         self, acl_glide_client: TGlideClient, management_client: TGlideClient
