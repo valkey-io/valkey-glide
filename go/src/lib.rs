@@ -540,9 +540,12 @@ pub unsafe extern "C" fn command(
         cmd.arg(command_arg);
     }
 
-    let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
-
-    let route = Routes::parse_from_bytes(r_bytes).unwrap();
+    let route = if !route_bytes.is_null() {
+        let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
+        Routes::parse_from_bytes(r_bytes).unwrap()
+    } else {
+        Routes::default()
+    };
 
     client_adapter.runtime.spawn(async move {
         let result = client_clone
