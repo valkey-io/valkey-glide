@@ -58,23 +58,33 @@ public sealed class NativeClient : IDisposable, INativeClient
                     case ECreateClientHandleCode.ParameterError:
                         if (result.error_string is null)
                             throw new ParameterException("Unknown parameter exception");
-                        throw new ParameterException(HandleString(result.error_string) ?? "Unknown parameter exception");
+                        throw new ParameterException(
+                            HandleString(result.error_string) ?? "Unknown parameter exception"
+                        );
                     case ECreateClientHandleCode.ThreadCreationError:
                         if (result.error_string is null)
                             throw new ThreadCreationException("Unknown thread creation exception");
-                        throw new ThreadCreationException(HandleString(result.error_string) ?? "Unknown thread creation exception");
+                        throw new ThreadCreationException(
+                            HandleString(result.error_string) ?? "Unknown thread creation exception"
+                        );
                     case ECreateClientHandleCode.ConnectionTimedOutError:
                         if (result.error_string is null)
                             throw new ConnectionToTimeOutException("Unknown connection timeout exception");
-                        throw new ConnectionToTimeOutException(HandleString(result.error_string) ?? "Unknown connection timeout exception");
+                        throw new ConnectionToTimeOutException(
+                            HandleString(result.error_string) ?? "Unknown connection timeout exception"
+                        );
                     case ECreateClientHandleCode.ConnectionToFailedError:
                         if (result.error_string is null)
                             throw new ConnectionToFailedException("Unknown connection to failed exception");
-                        throw new ConnectionToFailedException(HandleString(result.error_string) ?? "Unknown connection to failed exception");
+                        throw new ConnectionToFailedException(
+                            HandleString(result.error_string) ?? "Unknown connection to failed exception"
+                        );
                     case ECreateClientHandleCode.ConnectionToClusterFailed:
                         if (result.error_string is null)
                             throw new ConnectionToClusterException("Unknown connection to cluster exception");
-                        throw new ConnectionToClusterException(HandleString(result.error_string) ?? "Unknown connection to cluster exception");
+                        throw new ConnectionToClusterException(
+                            HandleString(result.error_string) ?? "Unknown connection to cluster exception"
+                        );
                     case ECreateClientHandleCode.ConnectionIoError:
                         if (result.error_string is null)
                             throw new ConnectionIoException("Unknown io exception");
@@ -202,7 +212,7 @@ public sealed class NativeClient : IDisposable, INativeClient
         return i;
     }
 
-    private static void CommandCallback([In]nint data, [In] int success, [In] Native.Value payload)
+    private static void CommandCallback([In] nint data, [In] int success, [In] Native.Value payload)
     {
         try
         {
@@ -216,10 +226,17 @@ public sealed class NativeClient : IDisposable, INativeClient
             {
                 dataHandle.Free();
             }
+
             if (success != 0 /* is true */)
                 commandCallbackData.SetResult(FromNativeValue(payload));
             else
-                commandCallbackData.SetException(new Exception(FromNativeValue(payload).Data ?? "Unknown error"));
+                commandCallbackData.SetException(
+                    new Exception(
+                        FromNativeValue(payload)
+                            .Data
+                        ?? "Unknown error"
+                    )
+                );
         }
         catch (Exception)
         {
@@ -311,6 +328,51 @@ public sealed class NativeClient : IDisposable, INativeClient
         }
     }
 
+    public unsafe Value SendCommand(ERequestType requestType, params string[] args)
+    {
+        if (_handle is null)
+            throw new ObjectDisposedException(nameof(NativeClient), "ClientHandle is null");
+
+        var argsArr = new byte*[args.Length];
+        if (args.Length <= 20)
+        {
+            for (var i = 0; i < args.Length; i++)
+            {
+                // ReSharper disable once StackAllocInsideLoop
+                // We do this intentionally here in a "low allocation" (max: 20 * 100 bytes) environment
+                var buffer = stackalloc byte[100];
+                var ptr = MarshalUtf8String(args[i], buffer, 100);
+                argsArr[i] = ptr;
+            }
+        }
+        else
+        {
+            for (var i = 0; i < args.Length; i++)
+            {
+                var ptr = MarshalUtf8String(args[i]);
+                argsArr[i] = ptr;
+            }
+        }
+
+        BlockingCommandResult result;
+        fixed (byte** argsArrPtr = argsArr)
+            result = Imports.command_blocking(
+                _handle.Value,
+                requestType,
+                argsArrPtr,
+                argsArr.Length
+            );
+        foreach (var arg in argsArr)
+        {
+            MarshalFreeUtf8String(arg);
+        }
+
+        if (result.success != 0 /* is true */)
+            return FromNativeValue(result.value);
+        else
+            throw new Exception(HandleString(result.error_string));
+    }
+
     private static unsafe Value FromNativeValue(Native.Value input, bool free = true)
     {
         try
@@ -371,8 +433,8 @@ public sealed class NativeClient : IDisposable, INativeClient
                 case Native.EValueKind.VerbatimString:
                 {
                     var ptr = (StringPair*) input.data.ptr;
-                    var key = HandleString(ptr->a_start, (int)(ptr->a_end - ptr->a_start), false);
-                    var value = HandleString(ptr->a_start, (int)(ptr->a_end - ptr->a_start), false);
+                    var key = HandleString(ptr->a_start, (int) (ptr->a_end - ptr->a_start), false);
+                    var value = HandleString(ptr->a_start, (int) (ptr->a_end - ptr->a_start), false);
 
                     return new Value(key, value);
                 }

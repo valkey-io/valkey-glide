@@ -48,7 +48,7 @@ mod calls {
     use glide_core::request_type::RequestType;
     use redis::VerbatimFormat;
     use std::ffi::{c_double, c_int, c_long, c_void, CString, NulError};
-    use std::fmt::{Formatter};
+    use std::fmt::Formatter;
     use std::mem::forget;
     use std::os::raw::c_char;
     use std::panic::catch_unwind;
@@ -359,6 +359,12 @@ mod calls {
         success: c_int,
         error_string: *const c_char,
     }
+    #[repr(C)]
+    pub struct BlockingCommandResult {
+        success: c_int,
+        error_string: *const c_char,
+        value: Value,
+    }
 
     pub(crate) type CommandCallback =
         unsafe extern "C-unwind" fn(data: *mut c_void, success: c_int, output: Value);
@@ -491,6 +497,16 @@ mod calls {
         pub length: c_long,
     }
 
+    impl Value {
+        fn nil() -> Self {
+            Self {
+                data: ValueUnion { i: 0 },
+                length: 0,
+                kind: ValueKind::Nil,
+            }
+        }
+    }
+
     #[repr(C)]
     pub struct StringPair {
         pub a_start: *mut c_char,
@@ -560,7 +576,8 @@ mod calls {
                     data: ValueUnion {
                         ptr: match CString::from_str(s.as_str()) {
                             Ok(d) => d.into_raw() as *mut c_void,
-                            Err(e) => return Err(ValueError::NulError(e)),}
+                            Err(e) => return Err(ValueError::NulError(e)),
+                        },
                     },
                     length: s.len() as c_long,
                     kind: ValueKind::SimpleString,
@@ -911,6 +928,136 @@ mod calls {
             success: true as c_int,
             error_string: null(),
         }
+    }
+    #[no_mangle]
+    pub extern "C-unwind" fn csharp_command_blocking(
+        in_client_ptr: *const c_void,
+        in_request_type: RequestType,
+        in_args: *const *const c_char,
+        in_args_count: c_int,
+    ) -> BlockingCommandResult {
+        logger_core::log_debug("csharp_ffi", "Entered csharp_command_blocking");
+        if in_client_ptr.is_null() {
+            return BlockingCommandResult {
+                success: false as c_int,
+                error_string: match CString::from_str("Null handle passed") {
+                    Ok(d) => d.into_raw(),
+                    Err(_) => null(),
+                },
+                value: Value::nil(),
+            };
+        }
+        let args = match helpers::grab_vec(
+            in_args,
+            in_args_count as usize,
+            |it| -> Result<String, Utf8OrEmptyError> {
+                match helpers::grab_str(*it) {
+                    Ok(d) => match d {
+                        None => Err(Utf8OrEmptyError::Empty),
+                        Some(d) => Ok(d),
+                    },
+                    Err(e) => Err(Utf8OrEmptyError::Utf8Error(e)),
+                }
+            },
+        ) {
+            Ok(d) => d,
+            Err(e) => match e {
+                Utf8OrEmptyError::Utf8Error(e) => {
+                    return BlockingCommandResult {
+                        success: false as c_int,
+                        error_string: match CString::from_str(e.to_string().as_str()) {
+                            Ok(d) => d.into_raw(),
+                            Err(_) => null(),
+                        },
+                        value: Value::nil(),
+                    }
+                }
+                Utf8OrEmptyError::Empty => {
+                    return BlockingCommandResult {
+                        success: false as c_int,
+                        error_string: match CString::from_str("Null value passed for host") {
+                            Ok(d) => d.into_raw(),
+                            Err(_) => null(),
+                        },
+                        value: Value::nil(),
+                    }
+                }
+            },
+        };
+        let cmd = match in_request_type.get_command() {
+            None => {
+                return BlockingCommandResult {
+                    success: false as c_int,
+                    error_string: match CString::from_str("Unknown request type") {
+                        Ok(d) => d.into_raw(),
+                        Err(_) => null(),
+                    },
+                    value: Value::nil(),
+                }
+            }
+            Some(d) => d,
+        };
+
+        let ffi_handle = unsafe { Box::leak(Box::from_raw(in_client_ptr as *mut FFIHandle)) };
+        let result: BlockingCommandResult;
+        {
+            let _runtime_handle = ffi_handle.runtime.enter();
+            let handle = ffi_handle.handle.clone();
+            result = ffi_handle.runtime.block_on(async move {
+                logger_core::log_debug("csharp_ffi", "Entered command task");
+                let data = match handle.command(cmd, args).await {
+                    Ok(d) => d,
+                    Err(e) => {
+                        let message = match CString::from_str(e.to_string().as_str()) {
+                            Ok(d) => d.into_raw() as *const c_char,
+                            Err(_) => null(),
+                        };
+                        logger_core::log_debug("csharp_ffi", "Error in command task");
+                        return BlockingCommandResult {
+                            success: 1,
+                            value: Value {
+                                data: ValueUnion {
+                                    ptr: message as *mut c_void,
+                                },
+                                kind: ValueKind::SimpleString,
+                                length: 0,
+                            },
+                            error_string: null(),
+                        };
+                    }
+                };
+                unsafe {
+                    return match Value::from(&data) {
+                        Ok(data) => BlockingCommandResult {
+                            success: 1,
+                            value: data,
+                            error_string: null(),
+                        },
+                        Err(e) => {
+                            let message = match CString::from_str(e.to_string().as_str()) {
+                                Ok(d) => d.into_raw() as *const c_char,
+                                Err(_) => null(),
+                            };
+                            logger_core::log_debug("csharp_ffi", "Error in command task");
+                            BlockingCommandResult {
+                                success: 1,
+                                value: Value {
+                                    data: ValueUnion {
+                                        ptr: message as *mut c_void,
+                                    },
+                                    kind: ValueKind::SimpleString,
+                                    length: 0,
+                                },
+                                error_string: null(),
+                            }
+                        }
+                    };
+                }
+            });
+        }
+        logger_core::log_debug("csharp_ffi", "Exiting csharp_command_blocking");
+
+        return result;
     }
 }
 

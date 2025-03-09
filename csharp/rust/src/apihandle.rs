@@ -15,7 +15,7 @@ impl Handle {
         })
     }
 
-    pub async fn command(self, mut cmd: Cmd, args: Vec<String>) -> Result<Value, RedisError> {
+    pub async fn command(&self, mut cmd: Cmd, args: Vec<String>) -> Result<Value, RedisError> {
         let mut clone = self.client.clone();
         for arg in args {
             cmd.arg(arg.into_bytes());
