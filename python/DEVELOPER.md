@@ -243,6 +243,7 @@ cd $HOME/src/valkey-glide/python
 source .env/bin/activate
 pip install -r dev_requirements.txt
 cd python/docs
+sphinx-apidoc -o . ../python/glide
 make clean
 make html # or run make help to see list of available options
 ```
@@ -422,7 +423,7 @@ We provide a general description at the top, and follow each enum value with a d
 
 ### Links and Hyperlinks
 
-If we wanted to show a regular link, we can add it as is. If we wanted to show hyperlinks, follow this format:
+If we wanted to show a regular link, we can add it as is. If we wanted to show hyperlinks, follow the reStructuredText (rst) link format:
 
 Format: `` `text <link>`_ ``
 
