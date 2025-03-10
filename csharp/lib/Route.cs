@@ -31,10 +31,6 @@ public abstract class Route
     /// </summary>
     public sealed class RandomRoute : Route, ISingleNodeRoute, ISimpleRoute
     {
-        //internal override RouteInfo ToFfi() => new()
-        //{
-        //    Type = RouteType.Random
-        //};
         internal override RouteInfo ToFfi() => ToFfi(RouteType.Random);
     }
 
@@ -45,10 +41,6 @@ public abstract class Route
     public sealed class AllNodesRoute : Route, IMultiNodeRoute, ISimpleRoute
     {
         internal override RouteInfo ToFfi() => ToFfi(RouteType.AllNodes);
-        //new ()
-        //{
-        //    Type = RouteType.AllNodes
-        //};
     }
 
     /// <summary>
@@ -57,10 +49,6 @@ public abstract class Route
     public sealed class AllPrimariesRoute : Route, IMultiNodeRoute, ISimpleRoute
     {
         internal override RouteInfo ToFfi() => ToFfi(RouteType.AllPrimaries);
-        //new ()
-        //{
-        //    Type = RouteType.AllPrimaries
-        //};
     }
 
     /// <inheritdoc cref="RandomRoute"/>
@@ -98,12 +86,6 @@ public abstract class Route
         internal new readonly SlotType SlotType = slotType;
 
         internal override RouteInfo ToFfi() => ToFfi(RouteType.SlotId, slotIdInfo: (SlotId, SlotType));
-        //new ()
-        //{
-        //    Type = RouteType.SlotId,
-        //    SlotId = SlotId,
-        //    SlotType = SlotType,
-        //};
     }
 
     /// <summary>
@@ -118,12 +100,6 @@ public abstract class Route
         internal new readonly SlotType SlotType = slotType;
 
         internal override RouteInfo ToFfi() => ToFfi(RouteType.SlotId, slotKeyInfo: (SlotKey, SlotType));
-        //new ()
-        //{
-        //    Type = RouteType.SlotId,
-        //    SlotKey = SlotKey,
-        //    SlotType = SlotType,
-        //};
     }
 
     /// <summary>
@@ -164,12 +140,6 @@ public abstract class Route
         }
 
         internal override RouteInfo ToFfi() => ToFfi(RouteType.SlotId, address: (Host, Port));
-        //new ()
-        //{
-        //    Type = RouteType.SlotId,
-        //    Host = Host,
-        //    Port = Port,
-        //};
     }
 
     internal Route() { }
