@@ -237,12 +237,10 @@ jobs:
             - uses: actions/checkout@v4
 
             - name: Install dependencies
-              uses: threeal/pipx-install-action@latest
-              with:
-                  packages: sphinx
-
-            - name: Add sphinx-rtd-theme
-              run: pipx inject sphinx sphinx-rtd-theme
+              working-directory: ./python
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install sphinx sphinx-rtd-theme
 
             - name: Build docs
               if: always()
