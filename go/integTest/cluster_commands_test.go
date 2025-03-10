@@ -973,7 +973,7 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_AsyncMode() {
 	assert.Empty(suite.T(), val.Value())
 }
 
-func (suite *GlideTestSuite) TestUpdateConnectionPassword() {
+func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster() {
 	// Create admin client
 	adminClient := suite.defaultClusterClient()
 	defer adminClient.Close()
@@ -1008,35 +1008,34 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword() {
 	_, err = testClient.Info()
 	assert.NoError(suite.T(), err)
 
-	// Cleanup: Reset password
+	// test reset connection password
+	_, err = testClient.ResetConnectionPassword()
+	assert.NoError(suite.T(), err)
+
+	// Cleanup: config set reset password
 	_, err = adminClient.CustomCommand([]string{"CONFIG", "SET", "requirepass", ""})
 	assert.NoError(suite.T(), err)
 }
 
-func (suite *GlideTestSuite) TestUpdateConnectionPassword_InvalidParameters() {
+func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_InvalidParameters() {
 	// Create test client
-	testClient := suite.defaultClient()
+	testClient := suite.defaultClusterClient()
 	defer testClient.Close()
 
 	// Test empty password
 	_, err := testClient.UpdateConnectionPassword("", true)
 	assert.NotNil(suite.T(), err)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
-
-	// Test no password (assuming the method exists with this signature)
-	_, err = testClient.UpdateConnectionPassword("", true)
-	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
-func (suite *GlideTestSuite) TestUpdateConnectionPassword_NoServerAuth() {
+func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_NoServerAuth() {
 	// Create test client
-	testClient := suite.defaultClient()
+	testClient := suite.defaultClusterClient()
 	defer testClient.Close()
 
 	// Validate that we can use the client
 	_, err := testClient.Info()
-	assert.Nil(suite.T(), err)
+	assert.NoError(suite.T(), err)
 
 	// Test immediate re-authentication fails when no server password is set
 	pwd := uuid.NewString()
@@ -1045,9 +1044,9 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_NoServerAuth() {
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
-func (suite *GlideTestSuite) TestUpdateConnectionPassword_LongPassword() {
+func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_LongPassword() {
 	// Create test client
-	testClient := suite.defaultClient()
+	testClient := suite.defaultClusterClient()
 	defer testClient.Close()
 
 	// Generate long random password (1000 chars)
@@ -1059,20 +1058,20 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_LongPassword() {
 
 	// Validate that we can use the client
 	_, err := testClient.Info()
-	assert.Nil(suite.T(), err)
+	assert.NoError(suite.T(), err)
 
 	// Test replacing connection password with a long password string
 	_, err = testClient.UpdateConnectionPassword(string(pwd), false)
-	assert.Nil(suite.T(), err)
+	assert.NoError(suite.T(), err)
 }
 
-func (suite *GlideTestSuite) TestUpdateConnectionPassword_ImmediateAuthWrongPassword() {
+func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_ImmediateAuthWrongPassword() {
 	// Create admin client
-	adminClient := suite.defaultClient()
+	adminClient := suite.defaultClusterClient()
 	defer adminClient.Close()
 
 	// Create test client
-	testClient := suite.defaultClient()
+	testClient := suite.defaultClusterClient()
 	defer testClient.Close()
 
 	pwd := uuid.NewString()
@@ -1080,11 +1079,11 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_ImmediateAuthWrongPass
 
 	// Validate that we can use the client
 	_, err := testClient.Info()
-	assert.Nil(suite.T(), err)
+	assert.NoError(suite.T(), err)
 
 	// Set the password to something else
 	_, err = adminClient.CustomCommand([]string{"CONFIG", "SET", "requirepass", notThePwd})
-	assert.Nil(suite.T(), err)
+	assert.NoError(suite.T(), err)
 
 	// Test that re-authentication fails when using wrong password
 	_, err = testClient.UpdateConnectionPassword(pwd, true)
@@ -1093,9 +1092,9 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_ImmediateAuthWrongPass
 
 	// But using correct password returns OK
 	_, err = testClient.UpdateConnectionPassword(notThePwd, true)
-	assert.Nil(suite.T(), err)
+	assert.NoError(suite.T(), err)
 
 	// Cleanup: Reset password
 	_, err = adminClient.CustomCommand([]string{"CONFIG", "SET", "requirepass", ""})
-	assert.Nil(suite.T(), err)
+	assert.NoError(suite.T(), err)
 }
