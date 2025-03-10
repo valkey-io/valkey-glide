@@ -2,6 +2,8 @@
 * [End-User info](#end-user-info)
   * [Roadmap](#roadmap)
   * [Concrete Net9 Client Command Support](#concrete-net9-client-command-support)
+  * [Valkey.Glide.Hosting](#valkeyglidehosting)
+    * [Connection String](#connection-string)
 * [Developer Info](#developer-info)
   * [Dev-Machine Setup](#dev-machine-setup)
 <!-- TOC -->
@@ -406,6 +408,26 @@ no additional parsing needed, support.
 | [ZSCORE](https://valkey.io/commands/zscore/)                                               | ❌      | ❌             |
 | [ZUNION](https://valkey.io/commands/zunion/)                                               | ❌      | ❌             |
 | [ZUNIONSTORE](https://valkey.io/commands/zunionstore/)                                     | ❌      | ❌             |
+
+## Valkey.Glide.Hosting
+
+### Connection String
+
+The Hosting library supports connection-string based building.
+The format is as follows:
+`KEY1=VALUE;KEY2=VALUE;KEYn=VALUE`
+
+The following configuration options are available for ConnectionStrings:
+
+| Key          | Allowed Values                                                                                                                      |
+|--------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| `host`       | `host1:port,host2:port,horstN:port`                                                                                                 |
+| `clustered`  | - `yes` or `true`: Sets clustered to true<br/> - `no` or `false`: Sets clustered to false                                           |
+| `clientname` | any text                                                                                                                            |
+| `protocol`   | `resp2` or `resp3`                                                                                                                  |
+| `tls`        | - `yes` or `true` or `secure`: Sets TLS to Secure<br/> -`no` or `false`: Sets TLS to No TLS<br/> - `insecure`: Sets TLS to Insecure |
+
+Additionally, the connection string may also just be host:port (eg. `localhost:1234`).
 
 # Developer Info
 

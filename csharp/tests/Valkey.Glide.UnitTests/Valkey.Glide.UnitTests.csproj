@@ -33,6 +33,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\sources\Valkey.Glide.AppHost\Valkey.Glide.AppHost.csproj" />
+      <ProjectReference Include="..\..\sources\Valkey.Glide.Hosting\Valkey.Glide.Hosting.csproj" />
       <ProjectReference Include="..\..\sources\Valkey.Glide.InterOp\Valkey.Glide.InterOp.csproj" />
       <ProjectReference Include="..\..\sources\Valkey.Glide\Valkey.Glide.csproj" />
     </ItemGroup>

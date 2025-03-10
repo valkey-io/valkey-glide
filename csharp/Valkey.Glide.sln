@@ -24,6 +24,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "benchmarks", "benchmarks", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide.Benchmark", "benchmarks\Valkey.Glide.Benchmark\Valkey.Glide.Benchmark.csproj", "{66EB921A-782D-4D40-B0FB-5F02497ED467}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide.Hosting", "sources\Valkey.Glide.Hosting\Valkey.Glide.Hosting.csproj", "{903950B2-B9DD-45E2-AED1-654960666AB3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -35,6 +37,7 @@ Global
 		{0431B877-FD4C-4AD0-B97E-4EB6E56E5BEE} = {2BBD3AEC-8CF9-4B96-B6DF-8AB46A8DE8DA}
 		{C3817C29-23FC-451B-BF9C-A9453078DD1F} = {02857780-E906-4687-80FB-07D28C9857C2}
 		{66EB921A-782D-4D40-B0FB-5F02497ED467} = {91D2A259-AC07-400F-A1CC-7E8EFD87DD60}
+		{903950B2-B9DD-45E2-AED1-654960666AB3} = {02857780-E906-4687-80FB-07D28C9857C2}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{13C75535-9649-49AB-837F-7A5910309DA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -57,5 +60,9 @@ Global
 		{66EB921A-782D-4D40-B0FB-5F02497ED467}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{66EB921A-782D-4D40-B0FB-5F02497ED467}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{66EB921A-782D-4D40-B0FB-5F02497ED467}.Release|Any CPU.Build.0 = Release|Any CPU
+		{903950B2-B9DD-45E2-AED1-654960666AB3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{903950B2-B9DD-45E2-AED1-654960666AB3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{903950B2-B9DD-45E2-AED1-654960666AB3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{903950B2-B9DD-45E2-AED1-654960666AB3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
