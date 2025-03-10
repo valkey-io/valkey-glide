@@ -5,6 +5,8 @@
         <LangVersion>latest</LangVersion>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <Nullable>enable</Nullable>
+        <GenerateDocumentationFile>True</GenerateDocumentationFile>
+        <IsPackable>True</IsPackable>
     </PropertyGroup>
 
     <Target Name="Rust Build " BeforeTargets="Compile">
