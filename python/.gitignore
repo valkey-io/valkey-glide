@@ -70,7 +70,10 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+docs/_build
+docs/glide.async_commands.rst
+docs/glide.rst
+docs/modules.rst
 
 # PyBuilder
 .pybuilder/
