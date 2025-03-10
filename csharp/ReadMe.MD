@@ -174,7 +174,7 @@ no additional parsing needed, support.
 | [GEORADIUS_RO](https://valkey.io/commands/georadius_ro/)                                   | ❌      | ❌             |
 | [GEOSEARCH](https://valkey.io/commands/geosearch/)                                         | ❌      | ❌             |
 | [GEOSEARCHSTORE](https://valkey.io/commands/geosearchstore/)                               | ❌      | ❌             |
-| [GET](https://valkey.io/commands/get/)                                                     | ❌      | ❌             |
+| [GET](https://valkey.io/commands/get/)                                                     | ✅      | ✅             |
 | [GETBIT](https://valkey.io/commands/getbit/)                                               | ❌      | ❌             |
 | [GETDEL](https://valkey.io/commands/getdel/)                                               | ❌      | ❌             |
 | [GETEX](https://valkey.io/commands/getex/)                                                 | ❌      | ❌             |
@@ -306,7 +306,7 @@ no additional parsing needed, support.
 | [SDIFF](https://valkey.io/commands/sdiff/)                                                 | ❌      | ❌             |
 | [SDIFFSTORE](https://valkey.io/commands/sdiffstore/)                                       | ❌      | ❌             |
 | [SELECT](https://valkey.io/commands/select/)                                               | ❌      | ❌             |
-| [SET](https://valkey.io/commands/set/)                                                     | ❌      | ❌             |
+| [SET](https://valkey.io/commands/set/)                                                     | 🔁      | 🔁             |
 | [SETBIT](https://valkey.io/commands/setbit/)                                               | ❌      | ❌             |
 | [SETEX](https://valkey.io/commands/setex/)                                                 | ❌      | ❌             |
 | [SETNX](https://valkey.io/commands/setnx/)                                                 | ❌      | ❌             |

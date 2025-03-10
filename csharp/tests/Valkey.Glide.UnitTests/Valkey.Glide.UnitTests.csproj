@@ -38,8 +38,4 @@
       <ProjectReference Include="..\..\sources\Valkey.Glide\Valkey.Glide.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="Commands\" />
-    </ItemGroup>
-
 </Project>
