@@ -380,16 +380,13 @@ func (client *baseClient) UpdateConnectionPassword(password string, immediateAut
 //
 // Parameters:
 //
-//	immediateAuth - immediateAuth A boolean flag. If true, the client will
-//	    authenticate immediately with the new password against all connections, Using AUTH
-//	    command. If password supplied is an empty string, the client will not perform auth and a warning
-//	    will be returned. The default is `false`.
+//	None
 //
 // Return value:
 //
 //	`"OK"` response on success.
-func (client *baseClient) ResetConnectionPassword(immediateAuth bool) (Result[string], error) {
-	return client.submitConnectionPasswordUpdate("", immediateAuth)
+func (client *baseClient) ResetConnectionPassword() (Result[string], error) {
+	return client.submitConnectionPasswordUpdate("", false)
 }
 
 // Set the given key with the given value. The return value is a response from Valkey containing the string "OK".

@@ -84,5 +84,5 @@ type GenericBaseCommands interface {
 
 	UpdateConnectionPassword(password string, immediateAuth bool) (Result[string], error)
 
-	ResetConnectionPassword(immediateAuth bool) (Result[string], error)
+	ResetConnectionPassword() (Result[string], error)
 }
