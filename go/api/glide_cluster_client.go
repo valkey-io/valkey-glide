@@ -459,5 +459,5 @@ func (client *GlideClusterClient) RandomKeyWithRoute(route config.Route) (string
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringtResponse(result)
+	return handleStringResponse(result)
 }
