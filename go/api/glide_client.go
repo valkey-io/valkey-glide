@@ -238,3 +238,11 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	}
 	return handleStringResponse(result)
 }
+
+func (client *GlideClient) RandomKey() (string, error) {
+	result, err := client.executeCommand(C.RandomKey, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}

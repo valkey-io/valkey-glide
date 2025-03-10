@@ -452,3 +452,12 @@ func (client *GlideClusterClient) ScanWithOptions(
 	nextCursor, keys, err := handleScanResponse(response)
 	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
+
+func (client *GlideClusterClient) RandomKeyWithRoute(route config.Route) (string, error) {
+	opts := options.RouteOption{Route: nil}
+	result, err := client.executeCommandWithRoute(C.DBSize, []string{}, opts.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringtResponse(result)
+}
