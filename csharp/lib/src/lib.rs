@@ -92,14 +92,16 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
     drop(client_ptr);
 }
 
-// TODO safety
 /// Converts a double pointer to a vec.
 ///
 /// # Safety
 ///
-/// `convert_double_pointer_to_vec` returns a `Vec` of u8 slice which holds pointers of `go`
-/// strings. The returned `Vec<&'a [u8]>` is meant to be copied into Rust code. Storing them
-/// for later use will cause the program to crash as the pointers will be freed by go's gc
+/// * `data` and `data_len` must not be `null`.
+/// * `data` must point to `len` consecutive string pointers.
+/// * `data_len` must point to `len` consecutive string lengths.
+/// * `data`, `data_len` and also each pointer stored in `data` must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`].
+///   See the safety documentation of [`from_raw_parts`].
+/// * The caller is responsible of freeing the allocated memory.
 unsafe fn convert_double_pointer_to_vec<'a>(
     data: *const *const c_void,
     len: u32,

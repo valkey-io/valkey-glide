@@ -58,8 +58,9 @@ public static class GlideStringExtensions
 /// <summary>
 /// Represents a Valkey string type. Since Valkey stores strings as <see langword="byte[]" />,
 /// such strings can contain non-UTF8 compatible symbols or even arbitrary binary data BLOBs.<br />
-/// This class stores data <see langword="byte[]" /> too, but provides API to represent data
-/// as a <see langword="string" /> if conversion is possible.
+/// This class stores data as <see langword="byte[]" /> too, but provides API to represent data
+/// as a <see langword="string" /> if conversion is possible.<br />
+/// A <see cref="GlideString" /> could be implicitly instatiated from a <see langword="string" />.
 /// <example>
 /// <code>
 /// GlideString gs1 = "123";
