@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 mod ffi;
-use ffi::{create_connection_request, ConnectionConfig};
+use ffi::{create_connection_request, create_route, ConnectionConfig, RouteInfo};
 use glide_core::{client::Client as GlideClient, request_type::RequestType};
 use redis::{FromRedisValue, RedisResult};
 use std::{
@@ -93,6 +93,8 @@ pub unsafe extern "C" fn close_client(client_ptr: *const c_void) {
 /// * `key` and `value` must not be `null`.
 /// * `key` and `value` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
 /// * `key` and `value` must be kept valid until the callback is called.
+/// * `route_info` could be `null`, but if it is not `null`, it must be a valid [`RouteInfo`] pointer. See the safety documentation of [`create_route`].
+#[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_ptr: *const c_void,
@@ -100,6 +102,7 @@ pub unsafe extern "C" fn command(
     request_type: RequestType,
     args: *const *mut c_char,
     arg_count: u32,
+    route_info: *const RouteInfo,
 ) {
     let client = unsafe { Box::leak(Box::from_raw(client_ptr as *mut Client)) };
 
@@ -107,26 +110,28 @@ pub unsafe extern "C" fn command(
     let ptr_address = client_ptr as usize;
     let args_address = args as usize;
 
+    let Some(mut cmd) = request_type.get_command() else {
+        unsafe {
+            let client = Box::leak(Box::from_raw(ptr_address as *mut Client));
+            (client.failure_callback)(callback_index); // TODO - report errors
+            return;
+        }
+    };
+
+    let args_slice = unsafe {
+        std::slice::from_raw_parts(args_address as *const *mut c_char, arg_count as usize)
+    };
+    for arg in args_slice {
+        let c_str = unsafe { CStr::from_ptr(*arg as *mut c_char) };
+        cmd.arg(c_str.to_bytes());
+    }
+
+    let route = create_route(route_info, &cmd);
+
     let mut client_clone = client.client.clone();
     client.runtime.spawn(async move {
-        let Some(mut cmd) = request_type.get_command() else {
-            unsafe {
-                let client = Box::leak(Box::from_raw(ptr_address as *mut Client));
-                (client.failure_callback)(callback_index); // TODO - report errors
-                return;
-            }
-        };
-
-        let args_slice = unsafe {
-            std::slice::from_raw_parts(args_address as *const *mut c_char, arg_count as usize)
-        };
-        for arg in args_slice {
-            let c_str = unsafe { CStr::from_ptr(*arg as *mut c_char) };
-            cmd.arg(c_str.to_bytes());
-        }
-
         let result = client_clone
-            .send_command(&cmd, None)
+            .send_command(&cmd, route)
             .await
             .and_then(Option::<CString>::from_owned_redis_value);
         unsafe {
@@ -134,7 +139,10 @@ pub unsafe extern "C" fn command(
             match result {
                 Ok(None) => (client.success_callback)(callback_index, std::ptr::null()),
                 Ok(Some(c_str)) => (client.success_callback)(callback_index, c_str.as_ptr()),
-                Err(_) => (client.failure_callback)(callback_index), // TODO - report errors
+                Err(err) => {
+                    dbg!(err); // TODO - report errors
+                    (client.failure_callback)(callback_index);
+                }
             };
         }
     });

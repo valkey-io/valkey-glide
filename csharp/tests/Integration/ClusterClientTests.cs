@@ -1,0 +1,72 @@
+﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
+using static Glide.Route;
+
+namespace Tests.Integration;
+
+public class ClusterClientTests
+{
+    [Fact]
+    public async Task CustomCommandWithRandomRoute()
+    {
+        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+        // if a command isn't routed in 100 tries to different nodes, you are a lucker or have a bug
+        SortedSet<string> ports = [];
+        foreach (int i in Enumerable.Range(0, 100))
+        {
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+            string res = await client.CustomCommand(["info", "server"], Route.Random) as string;
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+            foreach (string line in res!.Split("\r\n"))
+            {
+                if (line.Contains("tcp_port"))
+                {
+                    _ = ports.Add(line);
+                    if (ports.Count > 1)
+                    {
+                        return;
+                    }
+                    break;
+                }
+            }
+        }
+        Assert.Fail("All 100 commands were sent to: " + ports.First());
+    }
+
+    [Fact]
+    public async Task CustomCommandWithSingleNodeRoute()
+    {
+        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+        string res = await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Primary)) as string;
+        Assert.Contains("role:master", res!);
+
+        res = await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Replica)) as string;
+        Assert.Contains("role:slave", res!);
+
+        res = await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Primary)) as string;
+        Assert.Contains("role:master", res!);
+
+        res = await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Replica)) as string;
+        Assert.Contains("role:slave", res!);
+
+        res = await client.CustomCommand(["info", "replication"], new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port)) as string;
+        Assert.Contains("# Replication", res!);
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+    }
+
+    [Fact(Skip = "non-string return types are not supported yet")]
+    public async Task CustomCommandWithMultiNodeRoute()
+    {
+        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+        _ = await client.Set("abc", "abc");
+        _ = await client.Set("klm", "klm");
+        _ = await client.Set("xyz", "xyz");
+
+#pragma warning disable CS8629 // Nullable value type may be null.
+        int res = (int)(await client.CustomCommand(["dbsize"]) as int?);
+#pragma warning restore CS8629 // Nullable value type may be null.
+        TestContext.Current.TestOutputHelper?.WriteLine(res.ToString());
+    }
+}
