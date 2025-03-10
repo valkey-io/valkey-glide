@@ -612,8 +612,8 @@ where
             Ok(())
         }
         Value::ServerError(ref err) => match err.details() {
-            Some(details) => write!(writer, "-{} {details}\r\n", err.code()),
-            None => write!(writer, "-{}\r\n", err.code()),
+            Some(details) => write!(writer, "-{} {details}\r\n", err.err_code()),
+            None => write!(writer, "-{}\r\n", err.err_code()),
         },
     }
 }
