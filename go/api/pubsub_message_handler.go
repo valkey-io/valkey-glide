@@ -3,43 +3,37 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sync"
 )
 
-type PushKind int
-
-const (
-	Disconnection PushKind = iota
-	Other
-	Invalidate
-	Message
-	PMessage
-	SMessage
-	Unsubscribe
-	PUnsubscribe
-	SUnsubscribe
-	Subscribe
-	PSubscribe
-	SSubscribe
+var (
+	ErrPubSubPushInvalid       = errors.New("received invalid push: empty or in incorrect format")
+	ErrPubSubPushMissingKind   = errors.New("received invalid push: missing kind field")
+	ErrPubSubPushMissingValues = errors.New("received invalid push: missing values field")
 )
 
-func (kind *PushKind) String() string {
-	return [...]string{
-		"Disconnection",
-		"Other",
-		"Invalidate",
-		"Message",
-		"PMessage",
-		"SMessage",
-		"Unsubscribe",
-		"PUnsubscribe",
-		"SUnsubscribe",
-		"Subscribe",
-		"PSubscribe",
-		"SSubscribe",
-	}[*kind]
+type PushKind string
+
+const (
+	Disconnection PushKind = "Disconnection"
+	Other         PushKind = "Other"
+	Invalidate    PushKind = "Invalidate"
+	Message       PushKind = "Message"
+	PMessage      PushKind = "PMessage"
+	SMessage      PushKind = "SMessage"
+	Unsubscribe   PushKind = "Unsubscribe"
+	PUnsubscribe  PushKind = "PUnsubscribe"
+	SUnsubscribe  PushKind = "SUnsubscribe"
+	Subscribe     PushKind = "Subscribe"
+	PSubscribe    PushKind = "PSubscribe"
+	SSubscribe    PushKind = "SSubscribe"
+)
+
+func (kind PushKind) String() string {
+	return string(kind)
 }
 
 type MessageCallbackError struct {
@@ -82,24 +76,21 @@ func (handler *MessageHandler) Handle(response any) error {
 
 	push, ok := data.(map[string]any)
 	if !ok {
-		err := fmt.Errorf("received invalid push: empty or in incorrect format")
-		log.Println("invalid push", err.Error())
-		return err
+		log.Println("invalid push", ErrPubSubPushInvalid.Error())
+		return ErrPubSubPushInvalid
 	}
 
 	kindStr, ok := push["kind"].(string)
 	if !ok {
-		err := fmt.Errorf("received push without kind field")
-		log.Println("invalid push", err.Error())
-		return err
+		log.Println("invalid push", ErrPubSubPushMissingKind.Error())
+		return ErrPubSubPushMissingKind
 	}
 
 	kind := PushKind(kindStr)
 	values, ok := push["values"].([]any)
 	if !ok {
-		err := fmt.Errorf("received push without values field")
-		log.Println("invalid push", err.Error())
-		return err
+		log.Println("invalid push", ErrPubSubPushMissingValues.Error())
+		return ErrPubSubPushMissingValues
 	}
 
 	switch kind {
@@ -110,23 +101,23 @@ func (handler *MessageHandler) Handle(response any) error {
 		if len(values) < 3 {
 			return fmt.Errorf("invalid PMessage: expected 3 values, got %d", len(values))
 		}
-		pattern := NewGlideStringFromBytes(values[0].([]byte)) // Result[string]
-		channel := NewGlideStringFromBytes(values[1].([]byte)) // string
-		message := NewGlideStringFromBytes(values[2].([]byte)) // string
-		return handler.handleMessage(NewPubSubMessageWithPattern(message, channel, pattern))
+		pattern := CreateStringResult(string(values[0].([]byte))) // Result[string]
+		channel := string(values[1].([]byte))                     // string
+		message := string(values[2].([]byte))                     // string
+		return handler.handleMessage(NewPubSubMessageWithPattern(message, channel, pattern.Value()))
 
 	case Message, SMessage:
 		if len(values) < 2 {
 			return fmt.Errorf("invalid Message/SMessage: expected 2 values, got %d", len(values))
 		}
-		channel := NewGlideStringFromBytes(values[0].([]byte)) // string
-		message := NewGlideStringFromBytes(values[1].([]byte)) // string
+		channel := string(values[0].([]byte)) // string
+		message := string(values[1].([]byte)) // string
 		return handler.handleMessage(NewPubSubMessage(message, channel))
 
 	case Subscribe, PSubscribe, SSubscribe, Unsubscribe, PUnsubscribe, SUnsubscribe:
 		valuesStr := make([]string, len(values))
 		for i, v := range values {
-			valuesStr[i] = NewGlideStringFromBytes(v.([]byte)).String()
+			valuesStr[i] = string(v.([]byte))
 		}
 		log.Println("subscribe/unsubscribe notification",
 			fmt.Sprintf("Received push notification of type '%s': %v", kind, valuesStr))

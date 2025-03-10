@@ -90,13 +90,14 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 }
 
 type baseClientConfiguration struct {
-	addresses      []NodeAddress
-	useTLS         bool
-	credentials    *ServerCredentials
-	readFrom       ReadFrom
-	requestTimeout int
-	clientName     string
-	clientAZ       string
+	addresses          []NodeAddress
+	useTLS             bool
+	credentials        *ServerCredentials
+	readFrom           ReadFrom
+	requestTimeout     int
+	clientName         string
+	clientAZ           string
+	subscriptionConfig *BaseSubscriptionConfig
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -133,6 +134,15 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 		if config.clientAZ == "" {
 			return nil, errors.New("client AZ must be set when using AZ affinity or AZ affinity with replicas and primary")
 		}
+	}
+
+	if config.subscriptionConfig != nil {
+		if err := config.subscriptionConfig.Validate(); err != nil {
+			return nil, err
+		}
+		// Add subscription configuration to the protobuf request
+		// Note: The actual protobuf field names and types will depend on your protobuf definition
+		request.PubsubSubscriptions = append(request.PubsubSubscriptions, config.subscriptionConfig.toProtobuf())
 	}
 
 	return &request, nil
@@ -287,6 +297,12 @@ func (config *GlideClientConfiguration) WithAdvancedConfiguration(
 	return config
 }
 
+// WithSubscriptionConfig sets the subscription configuration for the client.
+func (config *GlideClientConfiguration) WithSubscriptionConfig(subscriptionConfig *StandaloneSubscriptionConfig) *GlideClientConfiguration {
+	config.subscriptionConfig = subscriptionConfig.BaseSubscriptionConfig
+	return config
+}
+
 // GlideClusterClientConfiguration represents the configuration settings for a Cluster Glide client.
 // Note: Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff with fixed values is
 // used.
@@ -383,6 +399,12 @@ func (config *GlideClusterClientConfiguration) WithAdvancedConfiguration(
 	advancedConfig *AdvancedGlideClusterClientConfiguration,
 ) *GlideClusterClientConfiguration {
 	config.AdvancedGlideClusterClientConfiguration = *advancedConfig
+	return config
+}
+
+// WithSubscriptionConfig sets the subscription configuration for the client.
+func (config *GlideClusterClientConfiguration) WithSubscriptionConfig(subscriptionConfig *ClusterSubscriptionConfig) *GlideClusterClientConfiguration {
+	config.subscriptionConfig = subscriptionConfig.BaseSubscriptionConfig
 	return config
 }
 
