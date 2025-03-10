@@ -120,7 +120,11 @@ async fn create_connection(
     discover_az: bool,
     connection_timeout: Duration,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
-    let client = connection_backend.connection_info.read().unwrap();
+    let client = {
+        let guard = connection_backend.connection_info.read().unwrap();
+        guard.clone()
+    };
+
     let connection_options = GlideConnectionOptions {
         push_sender,
         disconnect_notifier: Some::<Box<dyn DisconnectNotifier>>(Box::new(
@@ -129,6 +133,7 @@ async fn create_connection(
         discover_az,
         connection_timeout: Some(connection_timeout),
     };
+
     let action = || async {
         get_multiplexed_connection(&client, &connection_options)
             .await
