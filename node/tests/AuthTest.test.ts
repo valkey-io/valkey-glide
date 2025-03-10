@@ -80,7 +80,7 @@ describe("Auth tests", () => {
         username: string,
         password: string,
     ) {
-        await client.customCommand([
+        const result = await client.customCommand([
             "ACL",
             "SETUSER",
             username,
@@ -90,13 +90,15 @@ describe("Auth tests", () => {
             "&*",
             "+@all",
         ]);
+        expect(result).toEqual("OK");
     }
 
     async function deleteAclUsernameAndPassword(
         client: BaseClient,
         username: string,
     ) {
-        return await client.customCommand(["ACL", "DELUSER", username]);
+        const result = await client.customCommand(["ACL", "DELUSER", username]);
+        expect(result).toEqual(1);
     }
 
     afterEach(async () => {
@@ -227,10 +229,6 @@ describe("Auth tests", () => {
                 async () => {
                     await runTest(
                         async (client: BaseClient) => {
-                            // if (client instanceof GlideClient) {
-                            //     return;
-                            // }
-
                             // Update password without re-authentication
                             const result =
                                 await client.updateConnectionPassword(
@@ -256,6 +254,11 @@ describe("Auth tests", () => {
                                 "TYPE",
                                 "normal",
                             ]);
+
+                            // Sleep to ensure disconnection
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 1000),
+                            );
 
                             // Verify client auto-reconnects with new password
                             await client.set("test_key2", "test_value2");
@@ -405,8 +408,14 @@ describe("Auth tests", () => {
                             "TYPE",
                             "normal",
                         ]);
+                        // Sleep to ensure disconnection
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 1000),
+                        );
+
                         // Try updating client password without immediate re-auth and with - non immediate should succeed,
                         // immediate auth should fail (failing to reconnect)
+
                         const result = await client.updateConnectionPassword(
                             NEW_PASSWORD,
                             false,
@@ -461,6 +470,11 @@ describe("Auth tests", () => {
                                 managementClient,
                                 USERNAME,
                                 NEW_PASSWORD,
+                            );
+
+                            // Sleep to ensure disconnection
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 1000),
                             );
 
                             // Verify client auto-reconnects with new password
@@ -555,6 +569,11 @@ describe("Auth tests", () => {
                             managementClient,
                             USERNAME,
                             NEW_PASSWORD,
+                        );
+
+                        // Sleep to ensure disconnection
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 1000),
                         );
 
                         // Try updating client password without immediate re-auth and with - non immediate should succeed,

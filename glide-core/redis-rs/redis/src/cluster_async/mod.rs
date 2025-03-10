@@ -2283,13 +2283,14 @@ where
                     Ok(Response::Single(Value::Okay))
                 }
                 Operation::GetUsername => {
-                    let username = core
+                    let username = match core
                         .get_cluster_param(|params| params.username.clone())
-                        .expect(MUTEX_WRITE_ERR);
-                    Ok(Response::Single(match username {
-                        Some(u) => Value::SimpleString(u),
+                        .expect(MUTEX_READ_ERR)
+                    {
+                        Some(username) => Value::SimpleString(username),
                         None => Value::Nil,
-                    }))
+                    };
+                    Ok(Response::Single(username))
                 }
             },
         }

@@ -525,22 +525,27 @@ impl Client {
                     Some(ResponsePolicy::AllSucceeded),
                 ));
                 let mut cmd = redis::cmd("AUTH");
-                match self.internal_client {
-                    ClientWrapper::Cluster { ref mut client } => {
-                        if let Ok(Value::SimpleString(username)) = client.get_username().await {
-                            cmd.arg(username);
-                        }
-                    }
-                    ClientWrapper::Standalone(ref client) => {
-                        if let Some(username) = client.get_username().await {
-                            cmd.arg(username);
-                        }
-                    }
+                if let Some(username) = self.get_username().await {
+                    cmd.arg(username);
                 }
                 cmd.arg(password);
                 self.send_command(&cmd, Some(routing)).await
             }
         }
+    }
+
+    async fn get_username(&mut self) -> Option<String> {
+        match &mut self.internal_client {
+            ClientWrapper::Cluster { client } => {
+                if let Ok(Value::SimpleString(username)) = client.get_username().await {
+                    return Some(username);
+                }
+            }
+            ClientWrapper::Standalone(client) => {
+                return client.get_username().await;
+            }
+        }
+        None
     }
 }
 
