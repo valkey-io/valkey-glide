@@ -237,7 +237,6 @@ jobs:
             - uses: actions/checkout@v4
 
             - name: Install dependencies
-              if: always()
               uses: threeal/pipx-install-action@latest
               with:
                   packages: sphinx
@@ -246,6 +245,7 @@ jobs:
               run: pipx inject sphinx sphinx-rtd-theme
 
             - name: Build docs
+              if: always()
               working-directory: ./python/docs
               run: |
                   sphinx-apidoc -o . ../python/glide
