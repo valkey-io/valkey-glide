@@ -455,7 +455,7 @@ func (client *GlideClusterClient) ScanWithOptions(
 
 func (client *GlideClusterClient) RandomKeyWithRoute(route config.Route) (string, error) {
 	opts := options.RouteOption{Route: nil}
-	result, err := client.executeCommandWithRoute(C.DBSize, []string{}, opts.Route)
+	result, err := client.executeCommandWithRoute(C.RandomKey, []string{}, opts.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
