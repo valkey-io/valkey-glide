@@ -10,10 +10,19 @@ using Valkey.Glide.InterOp.Native;
 
 namespace Valkey.Glide.InterOp;
 
+/// <summary>
+/// Represents a client for interacting with native APIs, encapsulating operations on unmanaged resources
+/// and providing functionality for sending commands and requests.
+/// </summary>
+/// <remarks>
+/// This class ensures the proper management of unmanaged resources and provides both synchronous and asynchronous
+/// methods for interacting with the native system. It should be disposed of correctly to release resources.
+/// </remarks>
 public sealed class NativeClient : IDisposable, INativeClient
 {
-    private static readonly nint CommandCallbackFptr =
-        Marshal.GetFunctionPointerForDelegate<CommandCallbackDelegate>(CommandCallback);
+    // Do not modify! We need to keep this reference at a root to prevent GC!
+    private static readonly CommandCallbackDelegate CommandCallbackDel = CommandCallback;
+    private static readonly nint CommandCallbackFptr = Marshal.GetFunctionPointerForDelegate(CommandCallbackDel);
 
     private static readonly SemaphoreSlim Semaphore = new(1, 1);
     private static          bool          _initialized;
@@ -27,7 +36,7 @@ public sealed class NativeClient : IDisposable, INativeClient
         request.Validate();
 
         var strings = new List<nint>();
-        var addresses = new Native.NodeAddress[request.Addresses.Length];
+        var addresses = new NodeAddress[request.Addresses.Length];
         try
         {
             fixed (NodeAddress* addressesPtr = addresses)
@@ -35,7 +44,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                 var nativeRequest = new Native.ConnectionRequest
                 {
                     client_name          = MarshalCollectingString(request.ClientName),
-                    cluster_mode_enabled = request.ClusterModeEnabled ? 1 : 0,
+                    cluster_mode_enabled = request.ClusterMode ? 1 : 0,
                     connection_retry_strategy = new Native.ConnectionRetryStrategy
                     {
                         ignore            = !request.ConnectionRetryStrategy.HasValue ? 1 : default,
@@ -46,16 +55,17 @@ public sealed class NativeClient : IDisposable, INativeClient
                     connection_timeout = new OptionalU32
                     {
                         ignore = !request.ConnectionTimeout.HasValue ? 1 : 0,
-                        value  = request.ConnectionTimeout ?? default
+                        value  = (uint?)request.ConnectionTimeout?.TotalMilliseconds ?? default
                     },
                     otel_span_flush_interval_ms = new OptionalU64
                     {
-                        ignore = !request.OtelSpanFlushIntervalMs.HasValue ? 1 : 0,
-                        value  = request.OtelSpanFlushIntervalMs ?? default
+                        ignore = !request.OpenTelemetrySpanFlushInterval.HasValue ? 1 : 0,
+                        value  = (ulong?)request.OpenTelemetrySpanFlushInterval?.TotalMilliseconds ?? default
                     },
                     request_timeout = new OptionalU32
                     {
-                        ignore = !request.RequestTimeout.HasValue ? 1 : 0, value = request.RequestTimeout ?? default
+                        ignore = !request.RequestTimeout.HasValue ? 1 : 0,
+                        value  = (uint?) request.RequestTimeout?.TotalMilliseconds ?? default
                     },
                     inflight_requests_limit = new OptionalU32
                     {
@@ -90,10 +100,10 @@ public sealed class NativeClient : IDisposable, INativeClient
                     },
                     auth_password = MarshalCollectingString(request.AuthPassword),
                     auth_username = MarshalCollectingString(request.AuthUsername),
-                    otel_endpoint = MarshalCollectingString(request.OtelEndpoint),
+                    otel_endpoint = MarshalCollectingString(request.OpenTelemetryEndpoint),
                     read_from = new Native.ReadFrom
                     {
-                        kind = request.ReadFrom?.Kind switch
+                        kind = request.ReplicationStrategy?.Kind switch
                         {
                             EReadFromKind.Primary       => Native.EReadFromKind.Primary,
                             EReadFromKind.PreferReplica => Native.EReadFromKind.PreferReplica,
@@ -103,7 +113,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                             null => Native.EReadFromKind.None,
                             _    => throw new ArgumentOutOfRangeException()
                         },
-                        value = MarshalCollectingString(request.ReadFrom?.Value),
+                        value = MarshalCollectingString(request.ReplicationStrategy?.AvailabilityZone),
                     },
                     database_id      = request.DatabaseId,
                     addresses_length = (uint) request.Addresses.LongLength,
@@ -457,11 +467,11 @@ public sealed class NativeClient : IDisposable, INativeClient
             switch (input.kind)
             {
                 case Native.EValueKind.Nil:
-                    return new Value();
+                    return Value.CreateNone();
                 case Native.EValueKind.Int:
-                    return new Value(input.data.i);
+                    return Value.CreateInteger(input.data.i);
                 case Native.EValueKind.BulkString:
-                    return new Value(HandleString(input.data.ptr, (int) input.length, false));
+                    return Value.CreateString(HandleString(input.data.ptr, (int) input.length, false));
                 case Native.EValueKind.Array:
                 {
                     var array = new Value[input.length];
@@ -471,12 +481,12 @@ public sealed class NativeClient : IDisposable, INativeClient
                         array[i] = FromNativeValue(ptr[i], false);
                     }
 
-                    return new Value(array);
+                    return Value.CreateArray(array);
                 }
                 case Native.EValueKind.SimpleString:
-                    return new Value(HandleString(input.data.ptr, (int) input.length, false));
+                    return InterOp.Value.CreateString(HandleString(input.data.ptr, (int) input.length, false));
                 case Native.EValueKind.Okay:
-                    return new Value();
+                    return Value.CreateOkay();
                 case Native.EValueKind.Map:
                 {
                     var array = new KeyValuePair<Value, Value>[input.length];
@@ -488,7 +498,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                         array[i] = new KeyValuePair<Value, Value>(key, value);
                     }
 
-                    return new Value(array);
+                    return Value.CreatePairs(array);
                 }
                 case Native.EValueKind.Attribute:
                     throw new NotImplementedException();
@@ -501,19 +511,19 @@ public sealed class NativeClient : IDisposable, INativeClient
                         array[i] = FromNativeValue(ptr[i], false);
                     }
 
-                    return new Value(array);
+                    return Value.CreateArray(array);
                 }
                 case Native.EValueKind.Double:
-                    return new Value(input.data.f);
+                    return Value.CreateFloatingPoint(input.data.f);
                 case Native.EValueKind.Boolean:
-                    return new Value(input.data.i != 0);
+                    return Value.CreateBoolean(input.data.i != 0);
                 case Native.EValueKind.VerbatimString:
                 {
                     var ptr = (StringPair*) input.data.ptr;
                     var key = HandleString(ptr->a_start, (int) (ptr->a_end - ptr->a_start), false);
                     var value = HandleString(ptr->a_start, (int) (ptr->a_end - ptr->a_start), false);
 
-                    return new Value(key, value);
+                    return Value.CreateFormatString(key, value);
                 }
                 case Native.EValueKind.BigNumber:
                     throw new NotImplementedException();

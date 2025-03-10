@@ -275,6 +275,8 @@ pub extern "C-unwind" fn csharp_command(
     in_callback: CommandCallback,
     in_callback_data: *mut c_void,
     in_request_type: RequestType,
+    // ToDo: Rework into parameter struct (understand how Command.arg(...) works first)
+    //       handling the different input types.
     in_args: *const *const c_char,
     in_args_count: c_int,
 ) -> CommandResult {
@@ -288,7 +290,7 @@ pub extern "C-unwind" fn csharp_command(
             },
         };
     }
-    let args = match helpers::grab_vec(
+    let args = match helpers::grab_vec::<*const c_char, String, Utf8OrEmptyError>(
         in_args,
         in_args_count as usize,
         |it| -> Result<String, Utf8OrEmptyError> {

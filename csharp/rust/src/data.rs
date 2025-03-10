@@ -4,7 +4,7 @@ use crate::helpers;
 use crate::helpers::grab_str;
 use glide_core::client;
 use glide_core::client::AuthenticationInfo;
-use redis::VerbatimFormat;
+use redis::{RedisWrite, VerbatimFormat};
 use std::ffi::{
     c_double, c_int, c_long, c_longlong, c_uint, c_ulonglong, c_void, CString,
     NulError,
@@ -466,7 +466,6 @@ impl Value {
         }
     }
 }
-
 
 
 #[repr(C)]

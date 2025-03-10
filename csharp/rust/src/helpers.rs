@@ -32,7 +32,7 @@ pub fn grab_vec<TIn, TOut, TErr>(
     let mut result = Vec::with_capacity(len);
     unsafe {
         for i in 0..len {
-            let it: *const TIn = input.offset((size_of::<TIn>() * i) as isize);
+            let it: *const TIn = input.offset(i as isize);
             result.push(f(&*it)?);
         }
         Ok(result)

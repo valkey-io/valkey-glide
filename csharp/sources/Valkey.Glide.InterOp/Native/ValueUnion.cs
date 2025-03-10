@@ -13,7 +13,7 @@ public struct ValueUnion
     public long i;
 
     [FieldOffset(0)]
-    public bool f;
+    public double f;
 
     [FieldOffset(0)]
     public unsafe byte* ptr;
