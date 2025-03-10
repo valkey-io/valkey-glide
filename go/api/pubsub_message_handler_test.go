@@ -14,3 +14,8 @@ func TestPushKind(t *testing.T) {
 
 	assert.Equal(t, "Message", kind.String())
 }
+
+func TestCreatePubSubSubscription(t *testing.T) {
+	subConfig := NewStandaloneSubscriptionConfig().WithSubscription(ExactChannelMode, "testChannel")
+	sub := NewGlideClientConfiguration().WithSubscriptionConfig(subConfig)
+}
