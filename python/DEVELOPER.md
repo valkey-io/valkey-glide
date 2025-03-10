@@ -247,7 +247,7 @@ pip install -r dev_requirements.txt
 cd python/docs
 sphinx-apidoc -o . ../python/glide
 make clean
-make html # or run make help to see list of available options
+make html # or run make help to see a list of available options
 ```
 
 In `docs/_build` you will find the `index.html` page. Open this file in your browser and you should see all the documented functions.
