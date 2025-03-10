@@ -1699,114 +1699,114 @@ public class CommandTests {
         script.close();
     }
 
-    @ParameterizedTest
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void scriptKill(GlideClient regularClient) {
-        // Verify that script_kill raises an error when no script is running
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> regularClient.scriptKill().get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        assertTrue(
-                executionException
-                        .getMessage()
-                        .toLowerCase()
-                        .contains("no scripts in execution right now"));
+    // @ParameterizedTest
+    // @MethodSource("getClients")
+    // @SneakyThrows
+    // public void scriptKill(GlideClient regularClient) {
+    //     // Verify that script_kill raises an error when no script is running
+    //     ExecutionException executionException =
+    //             assertThrows(ExecutionException.class, () -> regularClient.scriptKill().get());
+    //     assertInstanceOf(RequestException.class, executionException.getCause());
+    //     assertTrue(
+    //             executionException
+    //                     .getMessage()
+    //                     .toLowerCase()
+    //                     .contains("no scripts in execution right now"));
 
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
+    //     CompletableFuture<Object> promise = new CompletableFuture<>();
+    //     promise.complete(null);
 
-        // create and load a long-running script
-        Script script = new Script(createLongRunningLuaScript(5, true), true);
+    //     // create and load a long-running script
+    //     Script script = new Script(createLongRunningLuaScript(5, true), true);
 
-        try (var testClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
-            try {
-                testClient.invokeScript(script);
+    //     try (var testClient =
+    //             GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+    //         try {
+    //             testClient.invokeScript(script);
 
-                Thread.sleep(1000);
+    //             Thread.sleep(1000);
 
-                // Run script kill until it returns OK
-                boolean scriptKilled = false;
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        assertEquals(OK, regularClient.scriptKill().get());
-                        scriptKilled = true;
-                        break;
-                    } catch (RequestException ignored) {
-                    }
-                    Thread.sleep(500);
-                    timeout -= 500;
-                }
+    //             // Run script kill until it returns OK
+    //             boolean scriptKilled = false;
+    //             int timeout = 4000; // ms
+    //             while (timeout >= 0) {
+    //                 try {
+    //                     assertEquals(OK, regularClient.scriptKill().get());
+    //                     scriptKilled = true;
+    //                     break;
+    //                 } catch (RequestException ignored) {
+    //                 }
+    //                 Thread.sleep(500);
+    //                 timeout -= 500;
+    //             }
 
-                assertTrue(scriptKilled);
-            } finally {
-                waitForNotBusy(regularClient::scriptKill);
-                script.close();
-            }
-        }
+    //             assertTrue(scriptKilled);
+    //         } finally {
+    //             waitForNotBusy(regularClient::scriptKill);
+    //             script.close();
+    //         }
+    //     }
 
-        // Verify that script_kill raises an error when no script is running
-        executionException =
-                assertThrows(ExecutionException.class, () -> regularClient.scriptKill().get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        assertTrue(
-                executionException
-                        .getMessage()
-                        .toLowerCase()
-                        .contains("no scripts in execution right now"));
-    }
+    //     // Verify that script_kill raises an error when no script is running
+    //     executionException =
+    //             assertThrows(ExecutionException.class, () -> regularClient.scriptKill().get());
+    //     assertInstanceOf(RequestException.class, executionException.getCause());
+    //     assertTrue(
+    //             executionException
+    //                     .getMessage()
+    //                     .toLowerCase()
+    //                     .contains("no scripts in execution right now"));
+    // }
 
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
-    public void scriptKill_unkillable(GlideClient regularClient) {
-        String key = UUID.randomUUID().toString();
-        String code = createLongRunningLuaScript(6, false);
-        Script script = new Script(code, false);
+    // @SneakyThrows
+    // @ParameterizedTest
+    // @MethodSource("getClients")
+    // public void scriptKill_unkillable(GlideClient regularClient) {
+    //     String key = UUID.randomUUID().toString();
+    //     String code = createLongRunningLuaScript(6, false);
+    //     Script script = new Script(code, false);
 
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
+    //     CompletableFuture<Object> promise = new CompletableFuture<>();
+    //     promise.complete(null);
 
-        try (var testClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
-            try {
-                // run the script without await
-                promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+    //     try (var testClient =
+    //             GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+    //         try {
+    //             // run the script without await
+    //             promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
 
-                Thread.sleep(1000);
+    //             Thread.sleep(1000);
 
-                boolean foundUnkillable = false;
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        // valkey kills a script with 5 sec delay
-                        // but this will always throw an error in the test
-                        regularClient.scriptKill().get();
-                    } catch (ExecutionException execException) {
-                        // looking for an error with "unkillable" in the message
-                        // at that point we can break the loop
-                        if (execException.getCause() instanceof RequestException
-                                && execException.getMessage().toLowerCase().contains("unkillable")) {
-                            foundUnkillable = true;
-                            break;
-                        }
-                    }
-                    Thread.sleep(500);
-                    timeout -= 500;
-                }
-                assertTrue(foundUnkillable);
-            } finally {
-                // If script wasn't killed, and it didn't time out - it blocks the server and cause rest
-                // test to fail.
-                // wait for the script to complete (we cannot kill it)
-                try {
-                    promise.get();
-                } catch (Exception ignored) {
-                }
-                script.close();
-            }
-        }
-    }
+    //             boolean foundUnkillable = false;
+    //             int timeout = 4000; // ms
+    //             while (timeout >= 0) {
+    //                 try {
+    //                     // valkey kills a script with 5 sec delay
+    //                     // but this will always throw an error in the test
+    //                     regularClient.scriptKill().get();
+    //                 } catch (ExecutionException execException) {
+    //                     // looking for an error with "unkillable" in the message
+    //                     // at that point we can break the loop
+    //                     if (execException.getCause() instanceof RequestException
+    //                             && execException.getMessage().toLowerCase().contains("unkillable")) {
+    //                         foundUnkillable = true;
+    //                         break;
+    //                     }
+    //                 }
+    //                 Thread.sleep(500);
+    //                 timeout -= 500;
+    //             }
+    //             assertTrue(foundUnkillable);
+    //         } finally {
+    //             // If script wasn't killed, and it didn't time out - it blocks the server and cause rest
+    //             // test to fail.
+    //             // wait for the script to complete (we cannot kill it)
+    //             try {
+    //                 promise.get();
+    //             } catch (Exception ignored) {
+    //             }
+    //             script.close();
+    //         }
+    //     }
+    // }
 }

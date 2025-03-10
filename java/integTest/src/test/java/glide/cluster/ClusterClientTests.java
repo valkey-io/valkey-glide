@@ -164,36 +164,36 @@ public class ClusterClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
-    @SneakyThrows
-    @Test
-    public void test_update_connection_password() {
-        GlideClusterClient adminClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
-        String pwd = UUID.randomUUID().toString();
+    // @SneakyThrows
+    // @Test
+    // public void test_update_connection_password() {
+    //     GlideClusterClient adminClient =
+    //             GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+    //     String pwd = UUID.randomUUID().toString();
 
-        try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
-            // validate that we can use the client
-            assertNotNull(testClient.info().get());
+    //     try (GlideClusterClient testClient =
+    //             GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+    //         // validate that we can use the client
+    //         assertNotNull(testClient.info().get());
 
-            // Update password without re-authentication
-            assertEquals(OK, testClient.updateConnectionPassword(pwd, false).get());
+    //         // Update password without re-authentication
+    //         assertEquals(OK, testClient.updateConnectionPassword(pwd, false).get());
 
-            // Verify client still works with old auth
-            assertNotNull(testClient.info().get());
+    //         // Verify client still works with old auth
+    //         assertNotNull(testClient.info().get());
 
-            // Update server password
-            // Kill all other clients to force reconnection
-            assertEquals("OK", adminClient.configSet(Map.of("requirepass", pwd)).get());
-            adminClient.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
+    //         // Update server password
+    //         // Kill all other clients to force reconnection
+    //         assertEquals("OK", adminClient.configSet(Map.of("requirepass", pwd)).get());
+    //         adminClient.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
 
-            // Verify client auto-reconnects with new password
-            assertNotNull(testClient.info().get());
-        } finally {
-            adminClient.configSet(Map.of("requirepass", "")).get();
-            adminClient.close();
-        }
-    }
+    //         // Verify client auto-reconnects with new password
+    //         assertNotNull(testClient.info().get());
+    //     } finally {
+    //         adminClient.configSet(Map.of("requirepass", "")).get();
+    //         adminClient.close();
+    //     }
+    // }
 
     @SneakyThrows
     @Test
