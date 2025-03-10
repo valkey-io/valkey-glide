@@ -236,6 +236,8 @@ Run from the main `/python` folder
 
 We follow the [Google Style Python Docstrings format](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) in our documentation. For our documentation tool, we use `sphinx`. 
 
+**Note:** `docs/index.rst` has manual modifications to it and should NOT be deleted. Modify this file with caution.
+
 To run this tool, execute the following:
 
 ```bash
