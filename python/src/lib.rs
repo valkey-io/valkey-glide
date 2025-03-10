@@ -313,13 +313,13 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
             }
             Value::ServerError(error) => {
                 let err_msg = error_message(&error.into());
-                // Import the module containing your custom error.
+                // Load the module that defines the request error.
                 let module = py.import_bound("glide.exceptions")?;
-                // Get the custom error type from the module.
-                let custom_error_type = module.getattr("RequestError")?;
-                // Create an instance of your custom error with the error message.
-                let instance = custom_error_type.call1((err_msg,))?;
-                // Return the instance as a PyObject.
+                // Retrieve the request error type.
+                let request_error_type = module.getattr("RequestError")?;
+                // Create an instance of the request error with the error message.
+                let instance = request_error_type.call1((err_msg,))?;
+                // Return the error instance as a PyObject.
                 Ok(instance.into_py(py))
             }
         }

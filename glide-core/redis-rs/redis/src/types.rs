@@ -189,7 +189,7 @@ pub enum ServerError {
 }
 
 impl ServerError {
-    pub fn code(&self) -> &str {
+    pub fn err_code(&self) -> &str {
         match self {
             ServerError::ExtensionError { code, .. } => code,
             ServerError::KnownError { kind, .. } => match kind {
@@ -519,7 +519,14 @@ impl Value {
         }
     }
 
-    /// If value contains a server error, return it as an Err. Otherwise wrap the value in Ok.
+    /// Extracts a server error from the value, if present.
+    ///
+    /// If the value contains a `ServerError`, this function returns it as an `Err(RedisError)`.  
+    /// Otherwise, it wraps the value in `Ok`.  
+    ///
+    /// If there are multiple errors (e.g., within an array or map), only the first encountered error is returned.
+    ///
+    /// This function is useful for extracting errors from values that may contain errors.
     pub fn extract_error(self) -> RedisResult<Self> {
         match self {
             Self::Array(val) => Ok(Self::Array(Self::extract_error_vec(val)?)),
@@ -535,7 +542,15 @@ impl Value {
                 data: Self::extract_error_vec(data)?,
             }),
             Value::ServerError(err) => Err(err.into()),
-            _ => Ok(self),
+            Value::BigNumber(_)
+            | Value::Boolean(_)
+            | Value::BulkString(_)
+            | Value::Double(_)
+            | Value::Int(_)
+            | Value::Nil
+            | Value::Okay
+            | Value::SimpleString(_)
+            | Value::VerbatimString { .. } => Ok(self),
         }
     }
 

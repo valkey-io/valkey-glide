@@ -191,13 +191,11 @@ where
                 is_transaction,
             } => {
                 match result {
-                    Ok(Value::ServerError(err))
-                        if *current_response_count < (*expected_response_count - 1)
-                            && *is_transaction =>
-                    {
+                    Ok(Value::ServerError(err)) if *is_transaction => {
                         // In transactions, `count` is always 1 because the final result is a single array (`offset + count = expected_response_count`).
-                        // If `current_response_count < (expected_response_count - 1)`, it means an error occurred before `EXEC` was sent.
-                        // Therefore, if an error is encountered at this stage, it must have occurred before `EXEC`, and the entire transaction will be discarded.
+                        // If we receive a `ServerError` here, it means the error occurred between `MULTI` and `EXEC`.
+                        // After `EXEC`, the response is always a single array of results, so any error at this stage must have happened before `EXEC` was sent.
+                        // As a result, the entire transaction will be discarded (and can be retried).
                         if first_err.is_none() {
                             *first_err = Some(err.into());
                         }

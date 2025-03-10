@@ -214,7 +214,8 @@ where
                 let response = self.read_response().await;
                 match response {
                     Ok(Value::ServerError(err)) if first_err.is_none() && cmd.is_atomic() => {
-                        // If we got an error here, it means that the error is before `EXEC` was sent, so all this transaction will be discarded
+                        // If we receive a `ServerError` here, it means the error occurred between `MULTI` and `EXEC`.
+                        // As a result, the entire transaction will be discarded.
                         first_err = Some(err.into());
                     }
                     Err(err) if first_err.is_none() => {

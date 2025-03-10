@@ -278,7 +278,7 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             Ok(obj.into_unknown())
         }
         Value::ServerError(_) => Err(Error::new(
-            // TODO: implement with napi 3
+            // TODO: add ServerError support
             Status::GenericFailure,
             "ServerError is not supported",
         )),
