@@ -253,7 +253,7 @@ However, some stylings may not be implemented by this Google format. In such cas
 
 ## Documentation Style
 
-### Example of a Properly formatted Docstring
+### Example of a Properly Formatted Docstring in Functions
 
 ```python
 """
@@ -263,6 +263,9 @@ See https://valkey.io/commands/xread for more details.
 
 Note:
     When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
+
+Warning:
+    If we wanted to provide a warning message, we would format it like this.
 
 Args:
     keys_and_ids (Mapping[TEncodable, TEncodable]): A mapping of keys and entry
@@ -293,6 +296,129 @@ Examples:
         # 1000ms if there is no stream data.
 """
 ```
+
+### Example of Properly Formatted Documentation for a Class 
+
+```python
+class BitOffsetMultiplier(BitFieldOffset):
+    """
+    Represents an offset in an array of bits for the `BITFIELD` or `BITFIELD_RO` commands. The bit offset index is
+    calculated as the numerical value of the offset multiplied by the encoding value. Must be greater than or equal
+    to 0.
+
+    For example, if we have the binary 01101001 with offset multiplier of 1 for an unsigned encoding of size 4, then
+    the value is 9 from `0110(1001)`.
+
+    Attributes:
+        offset (int): The offset in the array of bits, which will be multiplied by the encoding value to get the
+            final bit index offset.
+    """
+
+    #: Prefix specifying that the offset uses an encoding multiplier.
+    OFFSET_MULTIPLIER_PREFIX = "#"
+
+    def __init__(self, offset: int):
+        self._offset = f"{self.OFFSET_MULTIPLIER_PREFIX}{str(offset)}"
+
+    def to_arg(self) -> str:
+        return self._offset
+```
+
+### Example of Properly Formatted Documentation for Enums
+
+```python
+class ConditionalChange(Enum):
+    """
+    A condition to the `SET`, `ZADD` and `GEOADD` commands.
+    """
+
+    ONLY_IF_EXISTS = "XX"
+    """ Only update key / elements that already exist. Equivalent to `XX` in the Valkey API. """
+
+    ONLY_IF_DOES_NOT_EXIST = "NX"
+    """ Only set key / add elements that does not already exist. Equivalent to `NX` in the Valkey API. """
+```
+
+### Indentation and Spaces
+
+#### Args or Attributes
+
+To provide documentation for arguments or attributes, we can have each argument or attribute next to each other with descriptions that exceed the max line length indented on the next line:
+
+```python
+Args:
+    some_num (int): If this line ever gets too long, what we could do is break this line
+        to the next line here, and indent it so that sphinx can see the line as part of
+        the same argument.
+    options (Optional[StreamReadOptions]): For other arguments, we start by having the indent
+        match up with the indent of the first line of the previous argument, and then follow
+        the same rule.
+    some_bool (bool): And then one-line descriptions are as usual.
+
+
+Attributes:
+    some_num (int): If this line ever gets too long, what we could do is break this line
+        to the next line here, and indent it so that sphinx can see the line as part of
+        the same argument.
+    options (Optional[StreamReadOptions]): For other arguments, we start by having the indent
+        match up with the indent of the first line of the previous argument, and then follow
+        the same rule.
+    some_bool (bool): And then one-line descriptions are as usual.
+```
+
+#### Return value(s)
+
+Return values are a little special for sphinx. If we wanted to provide more context or multiple possible return values, the convention we will go for is that we should add a space between every different return value. 
+
+We start by adding the return type on the first line, followed by a description of the return value.
+
+**Note**: for each return value, we **should not** indent the docs like args to show that it is part of the same return value. For example:
+
+```python
+Returns:
+    List[int]: Some description here regarding the purpose of the list of ints being
+    returned. Notice how this new line is not indented but it is still apart of the same 
+    description.
+
+    If we ever want to provide more context or another description of another return value 
+    (ex. None, -1, True/False, etc.) we add a space between this description and the
+    previous description.
+```
+
+#### Lists
+
+We have to add a space between the previous line and a line after the list ends and also indent the list by one indent level:
+
+```python
+Args:
+    key (TEncodable): The key of the stream.
+    start (StreamRangeBound): The starting stream ID bound for the range.
+
+        - Use `IdBound` to specify a stream ID.
+        - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+        - Use `MinId` to start with the minimum available ID.
+
+    end (StreamRangeBound): The ending stream ID bound for the range.
+
+        - Use `IdBound` to specify a stream ID.
+        - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+        - Use `MaxId` to end with the maximum available ID.
+
+    count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
+```
+
+### Constants
+
+We want to use `#:` to add documentation for constants:
+
+```python
+#: "GET" subcommand string for use in the `BITFIELD` or `BITFIELD_RO` commands.
+GET_COMMAND_STRING = "GET"
+```
+
+### Enums
+
+We provide a general description at the top, and follow each enum value with a description beneath. Refer to [the example](#example-of-properly-formatted-documentation-for-enums).
 
 ### Links and Hyperlinks
 
