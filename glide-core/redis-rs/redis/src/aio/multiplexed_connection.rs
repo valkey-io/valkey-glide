@@ -40,7 +40,7 @@ type PipelineOutput = oneshot::Sender<RedisResult<Value>>;
 enum ResponseAggregate {
     SingleCommand,
     Pipeline {
-        expected_response_count: usize,
+        expected_response_count: usize, // = offset + count, pipelines offset is 0
         current_response_count: usize,
         buffer: Vec<Value>,
         first_err: Option<RedisError>,
@@ -178,7 +178,10 @@ where
 
         match &mut entry.response_aggregate {
             ResponseAggregate::SingleCommand => {
-                entry.output.send(result).ok();
+                entry
+                    .output
+                    .send(result.and_then(|v| v.extract_error()))
+                    .ok();
             }
             ResponseAggregate::Pipeline {
                 expected_response_count,
@@ -192,6 +195,9 @@ where
                         if *current_response_count < (*expected_response_count - 1)
                             && *is_transaction =>
                     {
+                        // In transactions, `count` is always 1 because the final result is a single array (`offset + count = expected_response_count`).
+                        // If `current_response_count < (expected_response_count - 1)`, it means an error occurred before `EXEC` was sent.
+                        // Therefore, if an error is encountered at this stage, it must have occurred before `EXEC`, and the entire transaction will be discarded.
                         if first_err.is_none() {
                             *first_err = Some(err.into());
                         }
@@ -362,9 +368,7 @@ where
 
     // `None` means that the stream was out of items causing that poll loop to shut down.
     async fn send_single(&mut self, item: SinkItem, timeout: Duration) -> RedisResult<Value> {
-        self.send_recv(item, None, timeout, true)
-            .await
-            .and_then(|v| v.extract_error())
+        self.send_recv(item, None, timeout, true).await
     }
 
     async fn send_recv(
@@ -580,6 +584,7 @@ impl MultiplexedConnection {
                 }
             }
         }
+        // TODO: remove this when `raise_on_error` flag will be added
         let value = result.and_then(|v| v.extract_error())?;
         match value {
             Value::Array(mut values) => {

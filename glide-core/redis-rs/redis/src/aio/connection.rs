@@ -184,9 +184,9 @@ where
                 return Ok(Value::Nil);
             }
             loop {
-                match self.read_response().await.and_then(|v| v.extract_error())? {
+                match self.read_response().await? {
                     Value::Push { .. } => continue,
-                    val => return Ok(val),
+                    val => return val.extract_error(),
                 }
             }
         })

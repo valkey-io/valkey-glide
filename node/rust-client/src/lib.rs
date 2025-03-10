@@ -24,7 +24,6 @@ use num_traits::sign::Signed;
 use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
 #[cfg(feature = "testing_utilities")]
 use std::collections::HashMap;
-use std::f32::consts::E;
 use std::ptr::from_mut;
 use std::str;
 use tokio::runtime::{Builder, Runtime};
