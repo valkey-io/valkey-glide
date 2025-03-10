@@ -851,7 +851,7 @@ pub unsafe extern "C" fn update_connection_password(
     let ptr_address = client_adapter_ptr as usize;
 
     let mut client_clone = client_adapter.client.clone();
-    
+
     // argument conversion to be used in the async block
     let password = unsafe { CStr::from_ptr(password).to_str().unwrap() };
     let password_option = if password.is_empty() {
@@ -860,7 +860,7 @@ pub unsafe extern "C" fn update_connection_password(
         Some(password.to_string())
     };
     let immediate_auth = immediate_auth;
-    
+
     client_adapter.runtime.spawn(async move {
         let result = client_clone
             .update_connection_password(password_option, immediate_auth)
@@ -898,5 +898,5 @@ pub unsafe extern "C" fn update_connection_password(
                 }
             };
         }
-    });  
+    });
 }
