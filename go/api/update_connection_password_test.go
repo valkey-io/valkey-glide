@@ -30,7 +30,7 @@ func ExampleGlideClient_ResetConnectionPassword() {
 
 func ExampleGlideClusterClient_UpdateConnectionPassword() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	response, err := client.UpdateConnectionPassword("", true)
+	response, err := client.UpdateConnectionPassword("", false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
