@@ -516,3 +516,63 @@ func (suite *GlideTestSuite) TestTime_Error() {
 	assert.Nil(suite.T(), results)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_DefaultVersion() {
+	client := suite.defaultClient()
+	
+	res, err := client.Lolwut()
+	 assert.Nil(suite.T(), err)
+	 assert.Contains(suite.T(), res, "6")
+
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_NilOptions() {
+	client := suite.defaultClient()
+	
+	res, err := client.LolwutWithOptions(nil)
+	 assert.Nil(suite.T(), err)
+	 assert.NotEmpty(suite.T(), res)
+
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersion() {
+	client := suite.defaultClient()
+	options := options.NewLolwutOptions(8)
+	res, err := client.LolwutWithOptions(options)
+	 assert.Nil(suite.T(), err)
+	 assert.Contains(suite.T(), res, "8")
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
+	client := suite.defaultClient()
+	opts := options.NewLolwutOptions(8).SetArgs([]int{10,20})
+	res, err := client.LolwutWithOptions(opts)
+	 assert.Nil(suite.T(), err)
+	 assert.Contains(suite.T(), res, "8")
+
+}
+   
+func (suite *GlideTestSuite) TestLolwutWithOptions_InvalidArgs() {
+	client := suite.defaultClient()
+	opts := options.NewLolwutOptions(5).SetArgs([]int{-1})
+	res, err := client.LolwutWithOptions(opts)
+	 assert.NotNil(suite.T(), err)
+	 assert.Equal(suite.T(), "", res)
+}
+   
+   
+func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
+	 client := suite.defaultClient()
+	 opts := options.NewLolwutOptions(6).SetArgs([]int{})
+	 res, err := client.LolwutWithOptions(opts)
+	 assert.Nil(suite.T(), err)
+	 assert.Contains(suite.T(), "8", res)	
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_ErrorHandling() {
+	client := suite.defaultClient()
+	 opts := options.NewLolwutOptions(6).SetArgs([]int{-9999})
+	 res, err := client.LolwutWithOptions(opts)
+	 assert.NotNil(suite.T(), err)
+	 assert.Contains(suite.T(), "", res)
+}
