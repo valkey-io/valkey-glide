@@ -510,9 +510,9 @@ describe("OpenTelemetry GlideClient", () => {
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 20000);
 
-    afterEach(async () => {
-        await flushAndCloseClient(false, cluster.getAddresses(), client);
-    });
+    // afterEach(async () => {
+    //     await flushAndCloseClient(false, cluster.getAddresses(), client);
+    // });
 
     afterAll(async () => {
         if (testsFailed === 0) {

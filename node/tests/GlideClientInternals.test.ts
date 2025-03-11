@@ -83,6 +83,9 @@ function createLeakedValue(value: GlideReturnType): Long {
         pair = createLeakedDouble(value);
     }
 
+    console.log("pair check $$$$$$  : ", pair);
+    console.log("Long check $$$$$$  : ", new Long(pair[0], pair[1]).toString());
+
     return new Long(pair[0], pair[1]);
 }
 

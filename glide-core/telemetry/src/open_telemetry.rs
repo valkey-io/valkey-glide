@@ -293,6 +293,11 @@ impl GlideSpan {
         }
     }
 
+    pub fn print_span(&self) {
+        println!("--##---- The span name: ----##-- ");
+        self.inner.print_span_name();
+    }
+
     /// Attach event with name to this span.
     pub fn add_event(&self, name: &str) {
         self.inner.add_event(name, None)
