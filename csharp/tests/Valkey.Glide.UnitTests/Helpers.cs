@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using Xunit.Sdk;
 
 namespace Valkey.Glide.UnitTests;
 
@@ -45,5 +46,21 @@ public static class Helpers
         }
 
         return results;
+    }
+
+    public static async Task IgnoreExceptionAsync(Func<Task> func)
+    {
+        try
+        {
+            await func();
+        }
+        catch (XunitException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Ignore
+        }
     }
 }
