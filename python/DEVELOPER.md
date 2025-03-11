@@ -202,7 +202,7 @@ Development on the Python wrapper may involve changes in either the Python or Ru
 -   clippy
 -   fmt
 
-# Running the linters
+## Running the linters
 
 Run from the main `/python` folder
 
@@ -408,6 +408,47 @@ Args:
         - Use `MaxId` to end with the maximum available ID.
 
     count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
+```
+
+#### Examples or Code Blocks
+
+For examples, we can use the `Example:` or `Examples:` keyword and indent the following code block:
+
+```python
+Examples:
+    >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
+    >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
+    >>> await client.xread({"mystream": "0-0"}, StreamReadOptions(block_ms=1000))
+        {
+            b"mystream": {
+                b"0-1": [[b"field1", b"value1"]],
+                b"0-2": [[b"field2", b"value2"], [b"field2", b"value3"]],
+            }
+        }
+        # Indicates the stream entries for "my_stream" with IDs greater than "0-0". The operation blocks up to
+        # 1000ms if there is no stream data.
+    
+    ... # More examples here
+```
+
+If we wanted to add a code block in a place other than the `Examples` block, we have to use a double colon syntax and indent the code block.
+
+```python
+Attributes:
+    addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
+        If the server is in cluster mode the list can be partial, as the client will attempt to map out
+        the cluster and find all nodes.
+        If the server is in standalone mode, only nodes whose addresses were provided will be used by the
+        client.
+        For example::
+
+            [
+                {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
+                {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
+            ]
+
+    use_tls (bool): True if communication with the cluster should use Transport Level Security.
+        Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail
 ```
 
 ### Constants

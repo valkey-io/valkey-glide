@@ -243,7 +243,6 @@ jobs:
                   pip install sphinx sphinx-rtd-theme
 
             - name: Build docs
-              if: always()
               working-directory: ./python/docs
               run: |
                   sphinx-apidoc -o . ../python/glide

@@ -387,8 +387,7 @@ async def skip_if_version_below(request):
     """
     Skip test(s) if server version is below than given parameter. Can skip a complete test suite.
 
-    Example::
-
+    Example:
         @pytest.mark.skip_if_version_below('7.0.0')
         async def test_meow_meow(...):
             ...
