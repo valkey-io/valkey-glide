@@ -1,6 +1,9 @@
 name: Go - Continuous Deployment
 
 on:
+    push:
+        tags:
+            - "v*.*"
     workflow_dispatch:
         inputs:
             version:
@@ -21,6 +24,7 @@ permissions:
 
 jobs:
     load-platform-matrix:
+        if: github.repository_owner == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         outputs:
@@ -46,39 +50,45 @@ jobs:
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     validate-release-version:
-        if: ${{ github.event.inputs.pkg_go_dev_publish }}
+        if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish }}
         runs-on: ubuntu-latest
         outputs:
             RELEASE_VERSION: ${{ steps.release-tag.outputs.RELEASE_VERSION }}
         env:
             INPUT_VERSION: ${{ github.event.inputs.version }}
+            TAG_VERSION: ${{ github.ref_name }}
         steps:
-            - name: Validate Version Against RegEx
-              run: |
-                  echo "input version is: ${{ env.INPUT_VERSION }}"
-                  if ! echo "${{ env.INPUT_VERSION }}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
-                      echo "Version is not valid, must be v*.*.* or v*.*.*-rc*"
-                      exit 1
-                  fi
-
             - name: Checkout for tag check
+              if: ${{ github.event_name == 'workflow_dispatch' }}
               uses: actions/checkout@v4
 
             - name: Validate version agaisnt tags
+              if: ${{ github.event_name == 'workflow_dispatch' }}
               run: |
                   git fetch --tags
                   if git tag | grep -q "^go/${{ env.INPUT_VERSION }}$"; then
                       echo "Version ${{ env.INPUT_VERSION }} already exists."
                       exit 1
                   fi
-            - name: Output release tag
+
+            - name: Validate Version Against RegEx and output
               id: release-tag
               run: |
-                  echo "RELEASE_VERSION=${{ env.INPUT_VERSION }}" >> $GITHUB_OUTPUT
+                  if ${{ github.event_name == 'workflow_dispatch' }}; then
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION="${{ env.TAG_VERSION }}"
+                  fi
+                  echo "Releassing version is: ${R_VERSION}"
+                  if ! echo "${R_VERSION}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
+                      echo "Version is not valid, must be v*.*.* or v*.*.*-rc*"
+                      exit 1
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_OUTPUT
 
     create-binaries:
         needs: [load-platform-matrix]
-        if: success() && github.repository_owner == 'valkey-io'
+        if: success()
         strategy:
             fail-fast: false
             matrix:
@@ -123,7 +133,7 @@ jobs:
                       go/protobuf/
 
     commit-auto-gen-files-with-tag:
-        if: ${{ github.event.inputs.pkg_go_dev_publish }}
+        if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish }}
         needs: [validate-release-version, create-binaries]
         runs-on: ubuntu-latest
         permissions:
