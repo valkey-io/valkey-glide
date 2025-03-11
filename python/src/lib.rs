@@ -320,7 +320,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                 // Create an instance of the request error with the error message.
                 let instance = request_error_type.call1((err_msg,))?;
                 // Return the error instance as a PyObject.
-                Ok(instance.into_py(py))
+                Ok(instance.into_pyobject(py))
             }
         }
     }
