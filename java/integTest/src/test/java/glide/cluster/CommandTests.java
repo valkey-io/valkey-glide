@@ -1722,6 +1722,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
+    // TODO: enable again once flakiness is solved
     // @SneakyThrows
     // @ParameterizedTest
     // @MethodSource("getClients")

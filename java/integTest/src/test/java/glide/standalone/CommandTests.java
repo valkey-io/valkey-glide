@@ -1699,6 +1699,7 @@ public class CommandTests {
         script.close();
     }
 
+    // TODO: enable again once flakiness is solved
     // @ParameterizedTest
     // @MethodSource("getClients")
     // @SneakyThrows
@@ -1758,6 +1759,7 @@ public class CommandTests {
     //                     .contains("no scripts in execution right now"));
     // }
 
+    // TODO: enable again once flakiness is solved
     // @SneakyThrows
     // @ParameterizedTest
     // @MethodSource("getClients")

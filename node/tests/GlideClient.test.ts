@@ -269,6 +269,7 @@ describe("GlideClient", () => {
         },
     );
 
+    // TODO: enable again once flakiness is solved
     // describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
     //     "Protocol is RESP2 = %s",
     //     (protocol) => {
@@ -1492,6 +1493,7 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
+    // TODO: enable once flakiness is solved
     // it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
     //     "script kill unkillable test_%p",
     //     async (protocol) => {

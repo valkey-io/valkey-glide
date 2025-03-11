@@ -164,6 +164,7 @@ public class ClusterClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
+    // TODO: enable once flakiness is solved, or remove based on PR #3311
     // @SneakyThrows
     // @Test
     // public void test_update_connection_password() {
