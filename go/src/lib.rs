@@ -837,6 +837,21 @@ pub unsafe extern "C" fn request_cluster_scan(
     });
 }
 
+/// CGO method which allows the Go client to request an update to the connection password.
+///
+/// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
+/// `channel` is a pointer to a valid payload buffer which is created in the Go client.
+/// `password` is a pointer to C string representation of the password passed in Go.
+/// `immediate_auth` is a boolean flag to indicate if the password should be updated immediately.
+/// `success_callback` is the callback that will be called when a command succeeds.
+/// `failure_callback` is the callback that will be called when a command fails.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be valid until `close_client` is called.
+/// * `channel` must be valid until it is passed in a call to [`free_command_response`].
+/// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 #[no_mangle]
 pub unsafe extern "C" fn update_connection_password(
     client_adapter_ptr: *const c_void,
@@ -859,7 +874,6 @@ pub unsafe extern "C" fn update_connection_password(
     } else {
         Some(password.to_string())
     };
-    let immediate_auth = immediate_auth;
 
     client_adapter.runtime.spawn(async move {
         let result = client_clone
