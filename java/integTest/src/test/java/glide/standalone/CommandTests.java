@@ -8,7 +8,6 @@ import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClientConfig;
-import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
@@ -1721,7 +1720,8 @@ public class CommandTests {
     //     Script script = new Script(createLongRunningLuaScript(5, true), true);
 
     //     try (var testClient =
-    //             GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+    //             GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get())
+    // {
     //         try {
     //             testClient.invokeScript(script);
 
@@ -1772,10 +1772,12 @@ public class CommandTests {
     //     promise.complete(null);
 
     //     try (var testClient =
-    //             GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+    //             GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get())
+    // {
     //         try {
     //             // run the script without await
-    //             promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+    //             promise = testClient.invokeScript(script,
+    // ScriptOptions.builder().key(key).build());
 
     //             Thread.sleep(1000);
 
@@ -1790,7 +1792,8 @@ public class CommandTests {
     //                     // looking for an error with "unkillable" in the message
     //                     // at that point we can break the loop
     //                     if (execException.getCause() instanceof RequestException
-    //                             && execException.getMessage().toLowerCase().contains("unkillable")) {
+    //                             && execException.getMessage().toLowerCase().contains("unkillable"))
+    // {
     //                         foundUnkillable = true;
     //                         break;
     //                     }
@@ -1800,7 +1803,8 @@ public class CommandTests {
     //             }
     //             assertTrue(foundUnkillable);
     //         } finally {
-    //             // If script wasn't killed, and it didn't time out - it blocks the server and cause rest
+    //             // If script wasn't killed, and it didn't time out - it blocks the server and cause
+    // rest
     //             // test to fail.
     //             // wait for the script to complete (we cannot kill it)
     //             try {

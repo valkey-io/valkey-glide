@@ -22,9 +22,8 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
-    Script,
     Transaction,
-    convertGlideRecordToRecord,
+    convertGlideRecordToRecord
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
@@ -33,7 +32,6 @@ import {
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
-    createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
     encodableTransactionTest,
     flushAndCloseClient,
@@ -41,9 +39,8 @@ import {
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
-    transactionTest,
     validateTransactionResponse,
-    waitForNotBusy,
+    waitForNotBusy
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;

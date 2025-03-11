@@ -1727,7 +1727,8 @@ public class CommandTests {
     // @ParameterizedTest
     // @MethodSource("getClients")
     // public void fcall_readonly_function(GlideClusterClient clusterClient) {
-    //     assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+    //     assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version
+    // 7");
 
     //     String libName = "fcall_readonly_function";
     //     // intentionally using a REPLICA route
@@ -1745,10 +1746,12 @@ public class CommandTests {
     //     // fcall on a replica node should fail, because a function isn't guaranteed to be RO
     //     var executionException =
     //             assertThrows(
-    //                     ExecutionException.class, () -> clusterClient.fcall(funcName, replicaRoute).get());
+    //                     ExecutionException.class, () -> clusterClient.fcall(funcName,
+    // replicaRoute).get());
     //     assertInstanceOf(RequestException.class, executionException.getCause());
     //     assertTrue(
-    //             executionException.getMessage().contains("You can't write against a read only replica."));
+    //             executionException.getMessage().contains("You can't write against a read only
+    // replica."));
 
     //     // fcall_ro also fails
     //     executionException =
@@ -1757,7 +1760,8 @@ public class CommandTests {
     //                     () -> clusterClient.fcallReadOnly(funcName, replicaRoute).get());
     //     assertInstanceOf(RequestException.class, executionException.getCause());
     //     assertTrue(
-    //             executionException.getMessage().contains("You can't write against a read only replica."));
+    //             executionException.getMessage().contains("You can't write against a read only
+    // replica."));
 
     //     // fcall_ro also fails to run it even on primary - another error
     //     executionException =
