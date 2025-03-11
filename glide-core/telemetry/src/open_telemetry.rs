@@ -9,11 +9,28 @@ use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+use thiserror::Error;
 use url::Url;
 
-const SPAN_WRITE_LOCK_ERR: &str = "Failed to get span write lock";
-const SPAN_READ_LOCK_ERR: &str = "Failed to get span read lock";
+const SPAN_WRITE_LOCK_ERR: &str = "Failed to acquire span write lock";
+const SPAN_READ_LOCK_ERR: &str = "Failed to acquire span read lock";
 const TRACE_SCOPE: &str = "valkey_glide";
+
+/// Custom error type for OpenTelemetry errors in Glide
+#[derive(Debug, Error)]
+pub enum GlideOTELError {
+    #[error("Glide OpenTelemetry trace error: {0}")]
+    OpenTelemetry(#[from] TraceError),
+
+    #[error("Failed to acquire span read lock")]
+    SpanReadLockError,
+
+    #[error("Failed to acquire span write lock")]
+    SpanWriteLockError,
+
+    #[error("Other error: {0}")]
+    Other(String),
+}
 
 /// Default interval in milliseconds for flushing open telemetry data to the collector.
 pub const DEFAULT_FLUSH_SPAN_INTERVAL_MS: u64 = 5000;
@@ -287,7 +304,7 @@ impl GlideOpenTelemetry {
     /// Initialise the open telemetry library with a file system exporter
     ///
     /// This method should be called once for the given **process**
-    pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), TraceError> {
+    pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
         let batch_config = opentelemetry_sdk::trace::BatchConfigBuilder::default()
             .with_scheduled_delay(config.span_flush_interval)
             .build();

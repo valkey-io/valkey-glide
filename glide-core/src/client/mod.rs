@@ -5,7 +5,7 @@ mod types;
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_info, log_warn};
+use logger_core::{log_error, log_info, log_warn};
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
@@ -823,7 +823,12 @@ impl Client {
                 .with_trace_exporter(trace_exporter)
                 .build();
 
-            let _ = GlideOpenTelemetry::initialise(config);
+            let _ = GlideOpenTelemetry::initialise(config).map_err(|e| {
+                log_error(
+                    "OpenTelemetry initialization",
+                    format!("OpenTelemetry initialization failed: {:?}", e.to_string()),
+                )
+            });
         };
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
