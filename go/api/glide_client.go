@@ -238,3 +238,33 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	}
 	return handleStringResponse(result)
 }
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version
+//
+// For example:
+//
+//  result, err := client.LolwutWithOptions(opts)
+//  if err != nil {
+//  // handle error
+//  }
+//  fmt.Println(result.Value()) // Output: displays the generative computer art of that specific valkey version along with the Valkey version
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *baseClient) LolwutWithOptions(opts *options.LolwutOptions) (string, error) {
+	if opts == nil {
+		opts = options.NewLolwutOptions(8)
+	}
+	commandArgs, err := opts.ToArgs()
+	if err != nil {
+	 return DefaultStringResponse, err
+	}
+	result, err := client.executeCommand(C.Lolwut, commandArgs)
+	if err != nil {
+	 return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
