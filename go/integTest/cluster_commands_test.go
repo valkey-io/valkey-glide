@@ -729,3 +729,21 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 		assert.NotContains(t, allKeys, elem)
 	}
 }
+
+func (suite *GlideTestSuite) TestClientGetNameCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// ClientGetName with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	response, err := client.ClientGetNameWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	response, err = client.ClientGetNameWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
