@@ -83,7 +83,6 @@ public abstract class ConnectionConfiguration
     internal enum TlsMode : uint
     {
         NoTls = 0,
-        //InsecureTls = 1,
         SecureTls = 2,
     }
 
