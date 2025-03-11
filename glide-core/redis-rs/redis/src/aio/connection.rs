@@ -186,7 +186,7 @@ where
             loop {
                 match self.read_response().await? {
                     Value::Push { .. } => continue,
-                    val => return val.extract_error(),
+                    val => return Ok(val),
                 }
             }
         })
@@ -212,16 +212,10 @@ where
 
             for _ in 0..offset {
                 let response = self.read_response().await;
-                match response {
-                    Ok(Value::ServerError(err)) if first_err.is_none() && cmd.is_atomic() => {
-                        // If we receive a `ServerError` here, it means the error occurred between `MULTI` and `EXEC`.
-                        // As a result, the entire transaction will be discarded.
-                        first_err = Some(err.into());
-                    }
-                    Err(err) if first_err.is_none() => {
+                if let Err(err) = response {
+                    if first_err.is_none() {
                         first_err = Some(err);
                     }
-                    _ => {}
                 }
             }
 

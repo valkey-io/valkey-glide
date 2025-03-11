@@ -331,7 +331,6 @@ where
             }
             Ok(())
         }
-        Value::ServerError(ref err) => write!(writer, "server-error({err})\r\n"),
     }
 }
 

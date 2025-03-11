@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::types::{
-    ErrorKind, PushKind, RedisError, RedisResult, ServerError, ServerErrorKind, Value,
-    VerbatimFormat,
+    ErrorKind, InternalValue, PushKind, RedisError, RedisResult, ServerError, ServerErrorKind,
+    Value, VerbatimFormat,
 };
 
 use combine::{
@@ -68,7 +68,7 @@ pub fn get_push_kind(kind: String) -> PushKind {
 
 fn value<'a, I>(
     count: Option<usize>,
-) -> impl combine::Parser<I, Output = Value, PartialState = AnySendSyncPartialState>
+) -> impl combine::Parser<I, Output = InternalValue, PartialState = AnySendSyncPartialState>
 where
     I: RangeStream<Token = u8, Range = &'a [u8]>,
     I::Error: combine::ParseError<u8, &'a [u8], I::Position>,
@@ -97,9 +97,9 @@ where
                 let simple_string = || {
                     line().map(|line| {
                         if line == "OK" {
-                            Value::Okay
+                            InternalValue::Okay
                         } else {
-                            Value::SimpleString(line.into())
+                            InternalValue::SimpleString(line.into())
                         }
                     })
                 };
@@ -117,10 +117,10 @@ where
                 let bulk_string = || {
                     int().then_partial(move |size| {
                         if *size < 0 {
-                            combine::produce(|| Value::Nil).left()
+                            combine::produce(|| InternalValue::Nil).left()
                         } else {
                             take(*size as usize)
-                                .map(|bs: &[u8]| Value::BulkString(bs.to_vec()))
+                                .map(|bs: &[u8]| InternalValue::BulkString(bs.to_vec()))
                                 .skip(crlf())
                                 .right()
                         }
@@ -137,11 +137,11 @@ where
                 let array = || {
                     int().then_partial(move |&mut length| {
                         if length < 0 {
-                            combine::produce(|| Value::Nil).left()
+                            combine::produce(|| InternalValue::Nil).left()
                         } else {
                             let length = length as usize;
                             combine::count_min_max(length, length, value(Some(count + 1)))
-                                .map(Value::Array)
+                                .map(InternalValue::Array)
                                 .right()
                         }
                     })
@@ -152,7 +152,7 @@ where
                     int().then_partial(move |&mut kv_length| {
                         let length = kv_length as usize * 2;
                         combine::count_min_max(length, length, value(Some(count + 1))).map(
-                            move |result: Vec<Value>| {
+                            move |result: Vec<InternalValue>| {
                                 let mut it = result.into_iter();
                                 let mut x = vec![];
                                 for _ in 0..kv_length {
@@ -160,7 +160,7 @@ where
                                         x.push((k, v))
                                     }
                                 }
-                                Value::Map(x)
+                                InternalValue::Map(x)
                             },
                         )
                     })
@@ -170,7 +170,7 @@ where
                         // + 1 is for data!
                         let length = kv_length as usize * 2 + 1;
                         combine::count_min_max(length, length, value(Some(count + 1))).map(
-                            move |result: Vec<Value>| {
+                            move |result: Vec<InternalValue>| {
                                 let mut it = result.into_iter();
                                 let mut attributes = vec![];
                                 for _ in 0..kv_length {
@@ -178,7 +178,7 @@ where
                                         attributes.push((k, v))
                                     }
                                 }
-                                Value::Attribute {
+                                InternalValue::Attribute {
                                     data: Box::new(it.next().unwrap()),
                                     attributes,
                                 }
@@ -189,11 +189,11 @@ where
                 let set = || {
                     int().then_partial(move |&mut length| {
                         if length < 0 {
-                            combine::produce(|| Value::Nil).left()
+                            combine::produce(|| InternalValue::Nil).left()
                         } else {
                             let length = length as usize;
                             combine::count_min_max(length, length, value(Some(count + 1)))
-                                .map(Value::Set)
+                                .map(InternalValue::Set)
                                 .right()
                         }
                     })
@@ -201,7 +201,7 @@ where
                 let push = || {
                     int().then_partial(move |&mut length| {
                         if length <= 0 {
-                            combine::produce(|| Value::Push {
+                            combine::produce(|| InternalValue::Push {
                                 kind: PushKind::Other("".to_string()),
                                 data: vec![],
                             })
@@ -209,18 +209,18 @@ where
                         } else {
                             let length = length as usize;
                             combine::count_min_max(length, length, value(Some(count + 1)))
-                                .and_then(|result: Vec<Value>| {
+                                .and_then(|result: Vec<InternalValue>| {
                                     let mut it = result.into_iter();
-                                    let first = it.next().unwrap_or(Value::Nil);
-                                    if let Value::BulkString(kind) = first {
+                                    let first = it.next().unwrap_or(InternalValue::Nil);
+                                    if let InternalValue::BulkString(kind) = first {
                                         let push_kind = String::from_utf8(kind)
                                             .map_err(StreamErrorFor::<I>::other)?;
-                                        Ok(Value::Push {
+                                        Ok(InternalValue::Push {
                                             kind: get_push_kind(push_kind),
                                             data: it.collect(),
                                         })
-                                    } else if let Value::SimpleString(kind) = first {
-                                        Ok(Value::Push {
+                                    } else if let InternalValue::SimpleString(kind) = first {
+                                        Ok(InternalValue::Push {
                                             kind: get_push_kind(kind),
                                             data: it.collect(),
                                         })
@@ -234,7 +234,7 @@ where
                         }
                     })
                 };
-                let null = || line().map(|_| Value::Nil);
+                let null = || line().map(|_| InternalValue::Nil);
                 let double = || {
                     line().and_then(|line| {
                         line.trim()
@@ -260,7 +260,7 @@ where
                                 "mkd" => VerbatimFormat::Markdown,
                                 x => VerbatimFormat::Unknown(x.to_string()),
                             };
-                            Ok(Value::VerbatimString {
+                            Ok(InternalValue::VerbatimString {
                                 format,
                                 text: text.to_string(),
                             })
@@ -282,19 +282,19 @@ where
                 };
                 combine::dispatch!(b;
                     b'+' => simple_string(),
-                    b':' => int().map(Value::Int),
+                    b':' => int().map(InternalValue::Int),
                     b'$' => bulk_string(),
                     b'*' => array(),
                     b'%' => map(),
                     b'|' => attribute(),
                     b'~' => set(),
-                    b'-' => error().map(Value::ServerError),
+                    b'-' => error().map(InternalValue::ServerError),
                     b'_' => null(),
-                    b',' => double().map(Value::Double),
-                    b'#' => boolean().map(Value::Boolean),
-                    b'!' => blob_error().map(Value::ServerError),
+                    b',' => double().map(InternalValue::Double),
+                    b'#' => boolean().map(InternalValue::Boolean),
+                    b'!' => blob_error().map(InternalValue::ServerError),
                     b'=' => verbatim(),
-                    b'(' => big_number().map(Value::BigNumber),
+                    b'(' => big_number().map(InternalValue::BigNumber),
                     b'>' => push(),
                     b => combine::unexpected_any(combine::error::Token(b))
                 )
@@ -343,7 +343,7 @@ mod aio_support {
 
             bytes.advance(removed_len);
             match opt {
-                Some(result) => Ok(Some(Ok(result))),
+                Some(result) => Ok(Some(result.try_into())),
                 None => Ok(None),
             }
         }
@@ -396,7 +396,7 @@ mod aio_support {
                     }
                 }
             }),
-            Ok(result) => Ok(result),
+            Ok(result) => result.try_into(),
         }
     }
 }
@@ -454,7 +454,7 @@ impl Parser {
                     }
                 }
             }),
-            Ok(result) => Ok(result),
+            Ok(result) => result.try_into(),
         }
     }
 }
@@ -500,7 +500,7 @@ mod tests {
         let result = codec.decode_eof(&mut bytes).unwrap().unwrap();
 
         assert_eq!(
-            result.unwrap().extract_error(),
+            result,
             Err(RedisError::from((
                 ErrorKind::BusyLoadingError,
                 "An error was signalled by the server",
@@ -523,7 +523,7 @@ mod tests {
         let result = parse_redis_value(bytes);
 
         assert_eq!(
-            result.unwrap().extract_error(),
+            result,
             Err(RedisError::from((
                 ErrorKind::BusyLoadingError,
                 "An error was signalled by the server",
@@ -601,7 +601,7 @@ mod tests {
     fn decode_resp3_blob_error() {
         let val = parse_redis_value(b"!21\r\nSYNTAX invalid syntax\r\n");
         assert_eq!(
-            val.unwrap().extract_error().err(),
+            val.err(),
             Some(make_extension_error(
                 "SYNTAX".to_string(),
                 Some("invalid syntax".to_string())

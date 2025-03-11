@@ -201,7 +201,6 @@ impl ConnectionLike for MockRedisConnection {
 
         next_cmd
             .responses
-            .and_then(Value::extract_error_vec)
             .and_then(|values| match values.as_slice() {
                 [value] => Ok(value.clone()),
                 [] => Err(RedisError::from((

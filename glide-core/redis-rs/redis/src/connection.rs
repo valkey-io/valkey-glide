@@ -1366,7 +1366,7 @@ impl ConnectionLike for Connection {
                     kind: _kind,
                     data: _data,
                 } => continue,
-                val => return val.extract_error(),
+                val => return Ok(val),
             }
         }
     }
@@ -1382,7 +1382,7 @@ impl ConnectionLike for Connection {
                     kind: _kind,
                     data: _data,
                 } => continue,
-                val => return val.extract_error(),
+                val => return Ok(val),
             }
         }
     }
@@ -1408,11 +1408,6 @@ impl ConnectionLike for Connection {
             // See: https://github.com/redis-rs/redis-rs/issues/436
             let response = self.read_response();
             match response {
-                Ok(Value::ServerError(err)) if idx < offset && offset > 0 => {
-                    if first_err.is_none() {
-                        first_err = Some(err.into());
-                    }
-                }
                 Ok(item) => {
                     // RESP3 can insert push data between command replies
                     if let Value::Push {

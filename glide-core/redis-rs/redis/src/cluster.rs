@@ -874,7 +874,7 @@ impl<C: Connect + ConnectionLike> ConnectionLike for ClusterConnection<C> {
         } else {
             cmd
         };
-        let value = parse_redis_value(actual_cmd).and_then(|v| v.extract_error())?;
+        let value = parse_redis_value(actual_cmd)?;
         self.request(Input::Slice {
             cmd,
             routable: value,

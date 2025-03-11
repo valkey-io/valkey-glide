@@ -40,23 +40,21 @@ type PipelineOutput = oneshot::Sender<RedisResult<Value>>;
 enum ResponseAggregate {
     SingleCommand,
     Pipeline {
-        expected_response_count: usize, // = offset + count, pipelines offset is 0
+        expected_response_count: usize,
         current_response_count: usize,
         buffer: Vec<Value>,
         first_err: Option<RedisError>,
-        is_transaction: bool,
     },
 }
 
 impl ResponseAggregate {
-    fn new(pipeline_response_count: Option<usize>, is_transaction: bool) -> Self {
+    fn new(pipeline_response_count: Option<usize>) -> Self {
         match pipeline_response_count {
             Some(response_count) => ResponseAggregate::Pipeline {
                 expected_response_count: response_count,
                 current_response_count: 0,
                 buffer: Vec::new(),
                 first_err: None,
-                is_transaction,
             },
             None => ResponseAggregate::SingleCommand,
         }
@@ -74,7 +72,6 @@ struct PipelineMessage<S> {
     output: PipelineOutput,
     // If `None`, this is a single request, not a pipeline of multiple requests.
     pipeline_response_count: Option<usize>,
-    is_transaction: bool,
 }
 
 /// Wrapper around a `Stream + Sink` where each item sent through the `Sink` results in one or more
@@ -178,28 +175,15 @@ where
 
         match &mut entry.response_aggregate {
             ResponseAggregate::SingleCommand => {
-                entry
-                    .output
-                    .send(result.and_then(|v| v.extract_error()))
-                    .ok();
+                entry.output.send(result).ok();
             }
             ResponseAggregate::Pipeline {
                 expected_response_count,
                 current_response_count,
                 buffer,
                 first_err,
-                is_transaction,
             } => {
                 match result {
-                    Ok(Value::ServerError(err)) if *is_transaction => {
-                        // In transactions, `count` is always 1 because the final result is a single array (`offset + count = expected_response_count`).
-                        // If we receive a `ServerError` here, it means the error occurred between `MULTI` and `EXEC`.
-                        // After `EXEC`, the response is always a single array of results, so any error at this stage must have happened before `EXEC` was sent.
-                        // As a result, the entire transaction will be discarded (and can be retried).
-                        if first_err.is_none() {
-                            *first_err = Some(err.into());
-                        }
-                    }
                     Ok(item) => {
                         buffer.push(item);
                     }
@@ -257,7 +241,6 @@ where
             input,
             output,
             pipeline_response_count,
-            is_transaction,
         }: PipelineMessage<SinkItem>,
     ) -> Result<(), Self::Error> {
         // If there is nothing to receive our output we do not need to send the message as it is
@@ -276,8 +259,7 @@ where
 
         match self_.sink_stream.start_send(input) {
             Ok(()) => {
-                let response_aggregate =
-                    ResponseAggregate::new(pipeline_response_count, is_transaction);
+                let response_aggregate = ResponseAggregate::new(pipeline_response_count);
                 let entry = InFlight {
                     output,
                     response_aggregate,
@@ -365,8 +347,12 @@ where
     }
 
     // `None` means that the stream was out of items causing that poll loop to shut down.
-    async fn send_single(&mut self, item: SinkItem, timeout: Duration) -> RedisResult<Value> {
-        self.send_recv(item, None, timeout, true).await
+    async fn send_single(
+        &mut self,
+        item: SinkItem,
+        timeout: Duration,
+    ) -> Result<Value, RedisError> {
+        self.send_recv(item, None, timeout).await
     }
 
     async fn send_recv(
@@ -375,7 +361,6 @@ where
         // If `None`, this is a single request, not a pipeline of multiple requests.
         pipeline_response_count: Option<usize>,
         timeout: Duration,
-        is_atomic: bool,
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
@@ -384,7 +369,6 @@ where
                 input,
                 pipeline_response_count,
                 output: sender,
-                is_transaction: is_atomic,
             })
             .await
             .map_err(|err| {
@@ -567,7 +551,6 @@ impl MultiplexedConnection {
                 cmd.get_packed_pipeline(),
                 Some(offset + count),
                 self.response_timeout,
-                cmd.is_atomic(),
             )
             .await;
 
@@ -582,8 +565,7 @@ impl MultiplexedConnection {
                 }
             }
         }
-        // TODO: remove this when `raise_on_error` flag will be added
-        let value = result.and_then(|v| v.extract_error())?;
+        let value = result?;
         match value {
             Value::Array(mut values) => {
                 values.drain(..offset);
