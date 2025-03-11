@@ -2,6 +2,8 @@
 
 use glide_core::{GlideOpenTelemetry, GlideSpan, Telemetry};
 use redis::GlideConnectionOptions;
+use std::io;
+use std::io::Write;
 
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
@@ -311,6 +313,7 @@ pub fn value_from_split_pointer(
 // The pointer is split into 2 `number`s, and then combined back in `value_from_split_pointer`.
 fn split_pointer<T>(pointer: *mut T) -> [u32; 2] {
     let pointer = pointer as usize;
+    println!("the pointer before the split is : {:?}", pointer);
     let bytes = usize::to_le_bytes(pointer);
     let [lower, higher] = unsafe { std::mem::transmute::<[u8; 8], [u32; 2]>(bytes) };
     [lower, higher]
@@ -420,15 +423,22 @@ pub fn create_leaked_double(float: f64) -> [u32; 2] {
 #[napi(ts_return_type = "[number, number]")]
 pub fn create_leaked_otel_span(name: String) -> [u32; 2] {
     let span = GlideOpenTelemetry::new_span(&name);
-    split_pointer(from_mut(&mut Arc::into_raw(Arc::new(span))))
+    println!("rust: print span after the creation in the leaked func: ");
+    span.print_span();
+    let s = from_mut(Box::leak(Box::new(span)));
+    // let s = from_mut(&mut Arc::into_raw(Arc::new(span)));
+    split_pointer(s.clone())
 }
 
 #[napi]
 pub fn drop_otel_span(span_ptr: BigInt) {
+    println!("adarrr rust ptr in drop span bigint: {:?}", span_ptr);
     let span_ptr = span_ptr.get_u64().1;
+    println!("adarrr rust ptr in drop span: {:?}", span_ptr);
     if span_ptr != 0 {
         unsafe { Arc::from_raw(span_ptr as *const GlideSpan) };
     }
+    println!("rust im hereeeee");
 }
 
 #[napi]

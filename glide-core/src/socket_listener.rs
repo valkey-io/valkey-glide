@@ -183,10 +183,12 @@ async fn write_result(
     resp_result: ClientUsageResult<Value>,
     callback_index: u32,
     writer: &Rc<Writer>,
+    span_command_ptr: Option<u64>,
 ) -> Result<(), io::Error> {
     let mut response = Response::new();
     response.callback_idx = callback_index;
     response.is_push = false;
+    response.span_command = span_command_ptr;
     response.value = match resp_result {
         Ok(Value::Okay) => Some(response::response::Value::ConstantResponse(
             response::ConstantResponse::OK.into(),
@@ -306,13 +308,23 @@ async fn send_command(
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
+    println!("rust::  sending the command to server !!!!!!!!");
     let child_span = cmd.span().map(|span| span.add_span("send_command"));
     let res = client
         .send_command(&cmd, routing)
         .await
         .map_err(|err| err.into());
-    if let Some(child_span) = child_span {
-        child_span.end();
+    match child_span {
+        Some(Ok(child_span)) => {
+            child_span.end();
+            println!("the child span succeeded #@$$%^%&^^^&^&$^#%^ ");
+        }
+        Some(Err(_)) => {
+            println!("the child span send command was failed -------------------------------------- {:?}", cmd);
+        }
+        None => {
+            println!("No child span was created.");
+        }
     }
     res
 }
@@ -488,7 +500,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
     task::spawn_local(async move {
         let mut updated_inflight_counter = true;
         let client_clone = client.clone();
-
+        eprintln!("rust::r adarovvvv command {:?}", request.command);
         let result = match client.reserve_inflight_request() {
             false => {
                 updated_inflight_counter = false;
@@ -499,13 +511,21 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
             true => match request.command {
                 Some(action) => match action {
                     command_request::Command::ClusterScan(cluster_scan_command) => {
+                        //ToDo: handle scan command
                         cluster_scan(cluster_scan_command, client).await
                     }
                     command_request::Command::SingleCommand(command) => {
+                        eprintln!(
+                            "rust::request span {:?}",
+                            request.span_command.unwrap().to_string()
+                        );
                         match get_redis_command(&command) {
                             Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
                                 Ok(routes) => {
-                                    cmd.with_span_by_ptr(request.span_command);
+                                    eprintln!("rust::request span {:?}", request.span_command);
+                                    if let Some(span_command) = request.span_command {
+                                        cmd.with_span_by_ptr(span_command);
+                                    }
                                     send_command(cmd, client, routes).await
                                 }
                                 Err(e) => Err(e),
@@ -581,7 +601,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
             client_clone.release_inflight_request();
         }
 
-        let _res = write_result(result, request.callback_idx, &writer).await;
+        let _res = write_result(result, request.callback_idx, &writer, request.span_command).await;
     });
 }
 
@@ -611,7 +631,7 @@ async fn create_client(
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };
-    write_result(Ok(Value::Okay), 0, writer).await?;
+    write_result(Ok(Value::Okay), 0, writer, None).await?;
     Ok(client)
 }
 
