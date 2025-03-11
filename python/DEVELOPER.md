@@ -244,7 +244,7 @@ To run this tool, execute the following:
 cd $HOME/src/valkey-glide/python
 source .env/bin/activate
 pip install -r dev_requirements.txt
-cd python/docs
+cd docs
 sphinx-apidoc -o . ../python/glide
 make clean
 make html # or run make help to see a list of available options
