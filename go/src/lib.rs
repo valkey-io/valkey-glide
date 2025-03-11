@@ -189,8 +189,8 @@ fn create_client_internal(
 ///
 /// * `connection_request_bytes` must point to `connection_request_len` consecutive properly initialized bytes. It must be a well-formed Protobuf `ConnectionRequest` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `connection_request_len` must not be greater than the length of the connection request bytes array. It must also not be greater than the max value of a signed pointer-sized integer.
-/// * The `conn_ptr` pointer in the returned `ConnectionResponse` must live while the client is open/active and must be explicitly freed by calling [close_client].
-/// * The `connection_error_message` pointer in the returned `ConnectionResponse` must live until the returned `ConnectionResponse` pointer is passed to [free_connection_response].
+/// * The `conn_ptr` pointer in the returned `ConnectionResponse` must live while the client is open/active and must be explicitly freed by calling [`close_client``].
+/// * The `connection_error_message` pointer in the returned `ConnectionResponse` must live until the returned `ConnectionResponse` pointer is passed to [`free_connection_response``].
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 // TODO: Consider making this async
 #[no_mangle]
@@ -229,9 +229,8 @@ pub unsafe extern "C" fn create_client(
 ///
 /// * `close_client` can only be called once per client. Calling it twice is undefined behavior, since the address will be freed twice.
 /// * `close_client` must be called after `free_connection_response` has been called to avoid creating a dangling pointer in the `ConnectionResponse`.
-/// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [create_client].
+/// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be valid until `close_client` is called.
-// TODO: Ensure safety when command has not completed yet
 #[no_mangle]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
@@ -512,7 +511,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
 ///
 /// # Safety
 ///
-/// This function should only be called should with a pointer created by [create_client], before [close_client] was called with the pointer.
+/// This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_adapter_ptr: *const c_void,
