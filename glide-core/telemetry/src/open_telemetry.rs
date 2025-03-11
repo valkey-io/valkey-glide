@@ -90,6 +90,7 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
 #[derive(Clone, Debug)]
 struct GlideSpanInner {
     span: Arc<RwLock<opentelemetry::global::BoxedSpan>>,
+    span_name: String,
 }
 
 impl GlideSpanInner {
@@ -102,15 +103,24 @@ impl GlideSpanInner {
                 .with_kind(SpanKind::Client)
                 .start(&tracer),
         ));
-        GlideSpanInner { span }
+
+        GlideSpanInner {
+            span,
+            span_name: name.to_string(),
+        }
     }
 
-    /// Create new span as a child of `parent`.
-    pub fn new_with_parent(name: &str, parent: &GlideSpanInner) -> Self {
+    /// Print span name by retrieving the attribute
+    pub fn print_span_name(&self) {
+        println!("^^^^^^^^^^^ The span name : {}", self.span_name);
+    }
+
+    /// Create new span as a child of `parent`, returning an error if the parent span lock is poisoned.
+    pub fn new_with_parent(name: &str, parent: &GlideSpanInner) -> Result<Self, TraceError> {
         let parent_span_ctx = parent
             .span
             .read()
-            .expect(SPAN_READ_LOCK_ERR)
+            .map_err(|_| TraceError::from(SPAN_READ_LOCK_ERR))?
             .span_context()
             .clone();
 
@@ -124,7 +134,10 @@ impl GlideSpanInner {
                 .with_kind(SpanKind::Client)
                 .start_with_context(&tracer, &parent_context),
         ));
-        GlideSpanInner { span }
+        Ok(GlideSpanInner {
+            span,
+            span_name: name.to_string(),
+        })
     }
 
     /// Attach event with name and list of attributes to this span.
@@ -164,17 +177,21 @@ impl GlideSpanInner {
         }
     }
 
-    /// Create new span, add it as a child to this span and return it
-    pub fn add_span(&self, name: &str) -> GlideSpanInner {
-        let child = GlideSpanInner::new_with_parent(name, self);
+    /// Create new span, add it as a child to this span and return it.
+    /// Returns an error if the child span creation fails.
+    pub fn add_span(&self, name: &str) -> Result<GlideSpanInner, TraceError> {
+        let child = GlideSpanInner::new_with_parent(name, self)?;
         {
-            let child_span = child.span.read().expect(SPAN_WRITE_LOCK_ERR);
+            let child_span = child
+                .span
+                .read()
+                .map_err(|_| TraceError::from(SPAN_READ_LOCK_ERR))?;
             self.span
                 .write()
                 .expect(SPAN_WRITE_LOCK_ERR)
                 .add_link(child_span.span_context().clone(), Vec::default());
         }
-        child
+        Ok(child)
     }
 
     /// Return the span ID
@@ -193,6 +210,13 @@ impl GlideSpanInner {
     }
 }
 
+impl Drop for GlideSpanInner {
+    fn drop(&mut self) {
+        println!("im droping the span ****** ");
+        self.print_span_name();
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GlideSpan {
     inner: GlideSpanInner,
@@ -203,6 +227,11 @@ impl GlideSpan {
         GlideSpan {
             inner: GlideSpanInner::new(name),
         }
+    }
+
+    pub fn print_span(&self) {
+        println!("--##---- The span name: ----##-- ");
+        self.inner.print_span_name();
     }
 
     /// Attach event with name to this span.
@@ -220,10 +249,12 @@ impl GlideSpan {
     }
 
     /// Add child span to this span and return it
-    pub fn add_span(&self, name: &str) -> GlideSpan {
-        GlideSpan {
-            inner: self.inner.add_span(name),
-        }
+    pub fn add_span(&self, name: &str) -> Result<GlideSpan, TraceError> {
+        let inner_span = self.inner.add_span(name).map_err(|err| {
+            TraceError::from(format!("Failed to create child span '{}': {}", name, err))
+        })?;
+
+        Ok(GlideSpan { inner: inner_span })
     }
 
     pub fn id(&self) -> String {

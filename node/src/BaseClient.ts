@@ -10,7 +10,7 @@ import {
     createLeakedOtelSpan,
     dropOtelSpan,
     getStatistics,
-    valueFromSplitPointer,
+    valueFromSplitPointer
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
@@ -973,7 +973,10 @@ export class BaseClient {
         } else {
             resolve(null);
         }
-        dropOtelSpan(new LongJS(message.spanCommand));
+        console.log(`6666666666 adarrrrrrr :span ptr:  '${message.spanCommand}'`);
+        if(message.spanCommand != null && message.spanCommand != 0 && message.spanCommand instanceof LongJS) {
+            dropOtelSpan(BigInt(message.spanCommand.toString()));
+        }
     }
 
     processPush(response: response.Response) {
@@ -1071,10 +1074,12 @@ export class BaseClient {
             
             //TODO: check the request type.
             let commandObj = Array.isArray(command)? "Batch": (JSON.parse(JSON.stringify(command))).requestType;
-            console.log("Request Type:", commandObj);
+            console.log("Node: Request Type:", commandObj);
             //TODO: creates the span only if the otel config exits
             let pair = createLeakedOtelSpan(commandObj);
+            console.log("Node: span created the pair which created is :", pair);
             let spanPtr = new LongJS(pair[0], pair[1]);
+            console.log("Node: the combained Longggg span created: ", spanPtr, spanPtr.toString());
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
