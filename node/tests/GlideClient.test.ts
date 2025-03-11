@@ -22,6 +22,7 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
+    Script,
     Transaction,
     convertGlideRecordToRecord,
 } from "..";
@@ -32,6 +33,7 @@ import {
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
+    createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
     encodableTransactionTest,
     flushAndCloseClient,
@@ -39,6 +41,7 @@ import {
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
+    transactionTest,
     validateTransactionResponse,
     waitForNotBusy,
 } from "./TestUtilities";
@@ -267,42 +270,42 @@ describe("GlideClient", () => {
     );
 
     // TODO: enable again once flakiness is solved
-    // describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-    //     "Protocol is RESP2 = %s",
-    //     (protocol) => {
-    //         describe.each([Decoder.String, Decoder.Bytes])(
-    //             "Decoder String = %s",
-    //             (decoder) => {
-    //                 it(
-    //                     "can send transactions",
-    //                     async () => {
-    //                         client = await GlideClient.createClient(
-    //                             getClientConfigurationOption(
-    //                                 cluster.getAddresses(),
-    //                                 protocol,
-    //                             ),
-    //                         );
-    //                         const transaction = new Transaction();
-    //                         const expectedRes = await transactionTest(
-    //                             transaction,
-    //                             cluster,
-    //                             decoder,
-    //                         );
-    //                         transaction.select(0);
-    //                         const result = await client.exec(transaction, {
-    //                             decoder: Decoder.String,
-    //                         });
-    //                         expectedRes.push(["select(0)", "OK"]);
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Protocol is RESP2 = %s",
+        (protocol) => {
+            describe.each([Decoder.String, Decoder.Bytes])(
+                "Decoder String = %s",
+                (decoder) => {
+                    it(
+                        "can send transactions",
+                        async () => {
+                            client = await GlideClient.createClient(
+                                getClientConfigurationOption(
+                                    cluster.getAddresses(),
+                                    protocol,
+                                ),
+                            );
+                            const transaction = new Transaction();
+                            const expectedRes = await transactionTest(
+                                transaction,
+                                cluster,
+                                decoder,
+                            );
+                            transaction.select(0);
+                            const result = await client.exec(transaction, {
+                                decoder: Decoder.String,
+                            });
+                            expectedRes.push(["select(0)", "OK"]);
 
-    //                         validateTransactionResponse(result, expectedRes);
-    //                         client.close();
-    //                     },
-    //                     TIMEOUT,
-    //                 );
-    //             },
-    //         );
-    //     },
-    // );
+                            validateTransactionResponse(result, expectedRes);
+                            client.close();
+                        },
+                        TIMEOUT,
+                    );
+                },
+            );
+        },
+    );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `dump and restore transactions_%p`,
@@ -1491,68 +1494,68 @@ describe("GlideClient", () => {
     );
 
     // TODO: enable once flakiness is solved
-    // it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-    //     "script kill unkillable test_%p",
-    //     async (protocol) => {
-    //         const config = getClientConfigurationOption(
-    //             cluster.getAddresses(),
-    //             protocol,
-    //             { requestTimeout: 10000 },
-    //         );
-    //         const client1 = await GlideClient.createClient(config);
-    //         const client2 = await GlideClient.createClient(config);
+    it.skip.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script kill unkillable test_%p",
+        async (protocol) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 10000 },
+            );
+            const client1 = await GlideClient.createClient(config);
+            const client2 = await GlideClient.createClient(config);
 
-    //         // Verify that script kill raises an error when no script is running
-    //         await expect(client1.scriptKill()).rejects.toThrow(
-    //             "No scripts in execution right now",
-    //         );
+            // Verify that script kill raises an error when no script is running
+            await expect(client1.scriptKill()).rejects.toThrow(
+                "No scripts in execution right now",
+            );
 
-    //         // Create a long-running script
-    //         const longScript = new Script(createLongRunningLuaScript(5, true));
-    //         let promise = null;
+            // Create a long-running script
+            const longScript = new Script(createLongRunningLuaScript(5, true));
+            let promise = null;
 
-    //         try {
-    //             // call the script without await
-    //             promise = client2.invokeScript(longScript, {
-    //                 keys: ["{key}-" + uuidv4()],
-    //             });
+            try {
+                // call the script without await
+                promise = client2.invokeScript(longScript, {
+                    keys: ["{key}-" + uuidv4()],
+                });
 
-    //             let foundUnkillable = false;
-    //             let timeout = 4000;
-    //             await new Promise((resolve) => setTimeout(resolve, 1000));
+                let foundUnkillable = false;
+                let timeout = 4000;
+                await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    //             while (timeout >= 0) {
-    //                 try {
-    //                     // keep trying to kill until we get an "OK"
-    //                     await client1.scriptKill();
-    //                 } catch (err) {
-    //                     // a RequestError may occur if the script is not yet running
-    //                     // sleep and try again
-    //                     if (
-    //                         (err as Error).message
-    //                             .toLowerCase()
-    //                             .includes("unkillable")
-    //                     ) {
-    //                         foundUnkillable = true;
-    //                         break;
-    //                     }
-    //                 }
+                while (timeout >= 0) {
+                    try {
+                        // keep trying to kill until we get an "OK"
+                        await client1.scriptKill();
+                    } catch (err) {
+                        // a RequestError may occur if the script is not yet running
+                        // sleep and try again
+                        if (
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("unkillable")
+                        ) {
+                            foundUnkillable = true;
+                            break;
+                        }
+                    }
 
-    //                 await new Promise((resolve) => setTimeout(resolve, 500));
-    //                 timeout -= 500;
-    //             }
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    timeout -= 500;
+                }
 
-    //             expect(foundUnkillable).toBeTruthy();
-    //         } finally {
-    //             // If script wasn't killed, and it didn't time out - it blocks the server and cause the
-    //             // test to fail. Wait for the script to complete (we cannot kill it)
-    //             expect(await promise).toContain("Timed out");
-    //             client1.close();
-    //             client2.close();
-    //         }
-    //     },
-    //     TIMEOUT,
-    // );
+                expect(foundUnkillable).toBeTruthy();
+            } finally {
+                // If script wasn't killed, and it didn't time out - it blocks the server and cause the
+                // test to fail. Wait for the script to complete (we cannot kill it)
+                expect(await promise).toContain("Timed out");
+                client1.close();
+                client2.close();
+            }
+        },
+        TIMEOUT,
+    );
 
     it.each([
         [ProtocolVersion.RESP2, 5],

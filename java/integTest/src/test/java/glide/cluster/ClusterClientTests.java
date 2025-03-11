@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -164,37 +165,37 @@ public class ClusterClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
-    // TODO: enable once flakiness is solved, or remove based on PR #3311
-    // @SneakyThrows
-    // @Test
-    // public void test_update_connection_password() {
-    //     GlideClusterClient adminClient =
-    //             GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
-    //     String pwd = UUID.randomUUID().toString();
+    @Disabled("flaky test: re-enable once fixed, or remove based on PR #3311")
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password() {
+        GlideClusterClient adminClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+        String pwd = UUID.randomUUID().toString();
 
-    //     try (GlideClusterClient testClient =
-    //             GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
-    //         // validate that we can use the client
-    //         assertNotNull(testClient.info().get());
+        try (GlideClusterClient testClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+            // validate that we can use the client
+            assertNotNull(testClient.info().get());
 
-    //         // Update password without re-authentication
-    //         assertEquals(OK, testClient.updateConnectionPassword(pwd, false).get());
+            // Update password without re-authentication
+            assertEquals(OK, testClient.updateConnectionPassword(pwd, false).get());
 
-    //         // Verify client still works with old auth
-    //         assertNotNull(testClient.info().get());
+            // Verify client still works with old auth
+            assertNotNull(testClient.info().get());
 
-    //         // Update server password
-    //         // Kill all other clients to force reconnection
-    //         assertEquals("OK", adminClient.configSet(Map.of("requirepass", pwd)).get());
-    //         adminClient.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
+            // Update server password
+            // Kill all other clients to force reconnection
+            assertEquals("OK", adminClient.configSet(Map.of("requirepass", pwd)).get());
+            adminClient.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
 
-    //         // Verify client auto-reconnects with new password
-    //         assertNotNull(testClient.info().get());
-    //     } finally {
-    //         adminClient.configSet(Map.of("requirepass", "")).get();
-    //         adminClient.close();
-    //     }
-    // }
+            // Verify client auto-reconnects with new password
+            assertNotNull(testClient.info().get());
+        } finally {
+            adminClient.configSet(Map.of("requirepass", "")).get();
+            adminClient.close();
+        }
+    }
 
     @SneakyThrows
     @Test
