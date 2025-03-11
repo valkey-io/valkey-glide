@@ -269,7 +269,7 @@ describe("GlideClient", () => {
         },
     );
 
-    // TODO: enable again once flakiness is solved
+    // TODO: currently disabled xpendingWithOptions. Need to fix flakiness.
     describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "Protocol is RESP2 = %s",
         (protocol) => {
