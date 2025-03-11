@@ -314,7 +314,6 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
             Value::ServerError(error) => {
                 let err_msg = error_message(&error.into());
                 // Load the module that defines the request error.
-
                 let module = py.import("glide.exceptions")?;
                 // Retrieve the request error type.
                 let request_error_type = module.getattr("RequestError")?;
