@@ -23,7 +23,7 @@ import {
     ProtocolVersion,
     RequestError,
     Transaction,
-    convertGlideRecordToRecord
+    convertGlideRecordToRecord,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
@@ -40,7 +40,7 @@ import {
     getServerVersion,
     parseEndpoints,
     validateTransactionResponse,
-    waitForNotBusy
+    waitForNotBusy,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
