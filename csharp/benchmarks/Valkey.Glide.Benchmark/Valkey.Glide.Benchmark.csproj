@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <GenerateDocumentationFile>False</GenerateDocumentationFile>
+        <IsPackable>False</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Aspire.Hosting.Testing" Version="9.1.0" />
+      <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\sources\Valkey.Glide.AppHost\Valkey.Glide.AppHost.csproj" />
+      <ProjectReference Include="..\..\sources\Valkey.Glide.InterOp\Valkey.Glide.InterOp.csproj" />
+    </ItemGroup>
+
+</Project>

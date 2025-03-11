@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+
+<root>
+    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xsd:element name="root" msdata:IsDataSet="true">
+            
+        </xsd:element>
+    </xsd:schema>
+    <resheader name="resmimetype">
+        <value>text/microsoft-resx</value>
+    </resheader>
+    <resheader name="version">
+        <value>1.3</value>
+    </resheader>
+    <resheader name="reader">
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <resheader name="writer">
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <data name="BitCount_RangeRequiredIfBitCountTypeSpecified" xml:space="preserve">
+        <value>Range must be specified when bitCountType is specified</value>
+    </data>
+    <data name="BitCount_RangeStartMustNotBeFromEnd" xml:space="preserve">
+        <value>Range start must not be from end</value>
+    </data>
+    <data name="BitCount_RangeEndMustNotBeFromEnd" xml:space="preserve">
+        <value>Range end must not be from end</value>
+    </data>
+    <data name="BitCount_RangeEndMustBeSpecifiedIfUsingBitCountType" xml:space="preserve">
+        <value>Range end must be specified if using BitCountType</value>
+    </data>
+    <data name="Set_TypeConverterFailedToConvertValueToInvariantString" xml:space="preserve">
+        <value>While converting the value for the SET command to a string, using the default type converter, ConvertToInvariantString returned null. Please make sure that the type converter you are using can convert the value to a string. If that is not possible, please use this method with a string value instead, allowing you to handle the conversion yourself.</value>
+    </data>
+    <data name="Set_CommandExecutionWasNotSuccessfull" xml:space="preserve">
+        <value>The set command failed to execute successful</value>
+    </data>
+</root>

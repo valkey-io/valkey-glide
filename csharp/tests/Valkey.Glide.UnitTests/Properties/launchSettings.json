@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Valkey.Glide.UnitTests": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}
