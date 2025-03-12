@@ -72,7 +72,7 @@ func ExampleGlideClusterClient_ClientIdWithOptions() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	assert := result.IsSingleValue()
-	fmt.Println(result)
+	fmt.Println(assert)
 
 	// Output: true
 }
