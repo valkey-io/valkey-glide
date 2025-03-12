@@ -339,6 +339,7 @@ impl Client {
         mut values: Vec<Value>,
         command_count: usize,
         offset: usize,
+        raise_on_error: bool,
     ) -> RedisResult<Value> {
         assert_eq!(values.len(), 1);
         let value = values.pop();
@@ -367,17 +368,29 @@ impl Client {
                     .into());
             }
         };
-        Self::convert_pipeline_values_to_expected_types(pipeline, values, command_count)
+        Self::convert_pipeline_values_to_expected_types(
+            pipeline,
+            values,
+            command_count,
+            raise_on_error,
+        )
     }
 
     fn convert_pipeline_values_to_expected_types(
         pipeline: &redis::Pipeline,
         values: Vec<Value>,
         command_count: usize,
+        raise_on_error: bool,
     ) -> RedisResult<Value> {
         let values = values
             .into_iter()
-            .map(Value::extract_error)
+            .map(|value| {
+                if raise_on_error {
+                    value.extract_error()
+                } else {
+                    Ok(value)
+                }
+            })
             .zip(
                 pipeline
                     .cmd_iter()
@@ -401,6 +414,7 @@ impl Client {
         &'a mut self,
         pipeline: &'a redis::Pipeline,
         routing: Option<RoutingInfo>,
+        raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         let command_count = pipeline.cmd_iter().count();
         // The offset is set to command_count + 1 to account for:
@@ -423,7 +437,7 @@ impl Client {
                 },
             }?;
 
-            Self::get_transaction_values(pipeline, values, command_count, offset)
+            Self::get_transaction_values(pipeline, values, command_count, offset, raise_on_error)
         })
         .boxed()
     }
@@ -434,6 +448,7 @@ impl Client {
     pub fn send_pipeline<'a>(
         &'a mut self,
         pipeline: &'a redis::Pipeline,
+        raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         let command_count = pipeline.cmd_iter().count();
 
@@ -448,7 +463,12 @@ impl Client {
                 }
             }?;
 
-            Self::convert_pipeline_values_to_expected_types(pipeline, values, command_count)
+            Self::convert_pipeline_values_to_expected_types(
+                pipeline,
+                values,
+                command_count,
+                raise_on_error,
+            )
         })
         .boxed()
     }
