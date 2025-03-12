@@ -23,7 +23,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import java.security.SecureRandom;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -87,7 +87,7 @@ public class TestUtilities {
                                 parts -> parts[0],
                                 parts -> parts[1],
                                 (existingValue, newValue) -> newValue,
-                                HashMap::new));
+                                LinkedHashMap::new));
     }
 
     public static GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?>

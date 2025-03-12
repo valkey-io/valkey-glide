@@ -11,12 +11,15 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 type GlideTestSuite struct {
@@ -150,7 +153,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 		client, err := api.NewGlideClient(clientConfig)
 		if err == nil && client != nil {
 			defer client.Close()
-			info, _ := client.InfoWithOptions(api.InfoOptions{Sections: []api.Section{api.Server}})
+			info, _ := client.InfoWithOptions(options.InfoOptions{Sections: []options.Section{options.Server}})
 			return extractServerVersion(suite, info)
 		}
 	}
@@ -171,9 +174,9 @@ func getServerVersion(suite *GlideTestSuite) string {
 		defer client.Close()
 
 		info, _ := client.InfoWithOptions(
-			api.ClusterInfoOptions{
-				InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}},
-				Route:       config.RandomRoute.ToPtr(),
+			options.ClusterInfoOptions{
+				InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+				RouteOption: &options.RouteOption{Route: config.RandomRoute},
 			},
 		)
 		return extractServerVersion(suite, info.SingleValue())
@@ -226,15 +229,51 @@ func (suite *GlideTestSuite) runWithDefaultClients(test func(client api.BaseClie
 	suite.runWithClients(clients, test)
 }
 
+func (suite *GlideTestSuite) runWithTimeoutClients(test func(client api.BaseClient)) {
+	clients := suite.getTimeoutClients()
+	suite.runWithClients(clients, test)
+}
+
+func (suite *GlideTestSuite) runParallelizedWithDefaultClients(
+	parallelism int,
+	count int64,
+	timeout time.Duration,
+	test func(client api.BaseClient),
+) {
+	clients := suite.getDefaultClients()
+	suite.runParallelizedWithClients(clients, parallelism, count, timeout, test)
+}
+
 func (suite *GlideTestSuite) getDefaultClients() []api.BaseClient {
 	return []api.BaseClient{suite.defaultClient(), suite.defaultClusterClient()}
 }
 
-func (suite *GlideTestSuite) defaultClient() api.GlideClientCommands {
-	config := api.NewGlideClientConfiguration().
+func (suite *GlideTestSuite) getTimeoutClients() []api.BaseClient {
+	clients := []api.BaseClient{}
+	clusterTimeoutClient, err := suite.createConnectionTimeoutClient(250, 20000, nil)
+	if err != nil {
+		suite.T().Fatalf("Failed to create cluster timeout client: %s", err.Error())
+	}
+	clients = append(clients, clusterTimeoutClient)
+
+	standaloneTimeoutClient, err := suite.createConnectionTimeoutClusterClient(250, 20000)
+	if err != nil {
+		suite.T().Fatalf("Failed to create standalone timeout client: %s", err.Error())
+	}
+	clients = append(clients, standaloneTimeoutClient)
+
+	return clients
+}
+
+func (suite *GlideTestSuite) defaultClientConfig() *api.GlideClientConfiguration {
+	return api.NewGlideClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5000)
+}
+
+func (suite *GlideTestSuite) defaultClient() api.GlideClientCommands {
+	config := suite.defaultClientConfig()
 	return suite.client(config)
 }
 
@@ -248,11 +287,15 @@ func (suite *GlideTestSuite) client(config *api.GlideClientConfiguration) api.Gl
 	return client
 }
 
-func (suite *GlideTestSuite) defaultClusterClient() api.GlideClusterClientCommands {
-	config := api.NewGlideClusterClientConfiguration().
+func (suite *GlideTestSuite) defaultClusterClientConfig() *api.GlideClusterClientConfiguration {
+	return api.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5000)
+}
+
+func (suite *GlideTestSuite) defaultClusterClient() api.GlideClusterClientCommands {
+	config := suite.defaultClusterClientConfig()
 	return suite.clusterClient(config)
 }
 
@@ -266,10 +309,63 @@ func (suite *GlideTestSuite) clusterClient(config *api.GlideClusterClientConfigu
 	return client
 }
 
+func (suite *GlideTestSuite) createConnectionTimeoutClient(
+	connectTimeout, requestTimeout int,
+	backoffStrategy *api.BackoffStrategy,
+) (api.GlideClientCommands, error) {
+	clientConfig := suite.defaultClientConfig().
+		WithRequestTimeout(requestTimeout).
+		WithReconnectStrategy(backoffStrategy).
+		WithAdvancedConfiguration(
+			api.NewAdvancedGlideClientConfiguration().WithConnectionTimeout(connectTimeout))
+	return api.NewGlideClient(clientConfig)
+}
+
+func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
+	connectTimeout, requestTimeout int,
+) (api.GlideClusterClientCommands, error) {
+	clientConfig := suite.defaultClusterClientConfig().
+		WithAdvancedConfiguration(
+			api.NewAdvancedGlideClusterClientConfiguration().WithConnectionTimeout(connectTimeout)).
+		WithRequestTimeout(requestTimeout)
+	return api.NewGlideClusterClient(clientConfig)
+}
+
 func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(client api.BaseClient)) {
 	for _, client := range clients {
 		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
 			test(client)
+		})
+	}
+}
+
+func (suite *GlideTestSuite) runParallelizedWithClients(
+	clients []api.BaseClient,
+	parallelism int,
+	count int64,
+	timeout time.Duration,
+	test func(client api.BaseClient),
+) {
+	for _, client := range clients {
+		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
+			done := make(chan struct{}, parallelism)
+			for i := 0; i < parallelism; i++ {
+				go func() {
+					defer func() { done <- struct{}{} }()
+					for !suite.T().Failed() && atomic.AddInt64(&count, -1) > 0 {
+						test(client)
+					}
+				}()
+			}
+			tm := time.NewTimer(timeout)
+			defer tm.Stop()
+			for i := 0; i < parallelism; i++ {
+				select {
+				case <-done:
+				case <-tm.C:
+					suite.T().Fatalf("parallelized test timeout in %s", timeout)
+				}
+			}
 		})
 	}
 }

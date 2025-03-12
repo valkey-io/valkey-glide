@@ -14,15 +14,15 @@ const (
 )
 
 // converts the Aggregate to its Valkey API representation
-func (a Aggregate) ToArgs() []string {
-	return []string{AggregateKeyWord, string(a)}
+func (a Aggregate) ToArgs() ([]string, error) {
+	return []string{AggregateKeyWord, string(a)}, nil
 }
 
 // This is a basic interface. Please use one of the following implementations:
 // - KeyArray
 // - WeightedKeys
 type KeysOrWeightedKeys interface {
-	ToArgs() []string
+	ToArgs() ([]string, error)
 }
 
 // represents a list of keys of the sorted sets involved in the aggregation operation
@@ -31,10 +31,10 @@ type KeyArray struct {
 }
 
 // converts the KeyArray to its Valkey API representation
-func (k KeyArray) ToArgs() []string {
+func (k KeyArray) ToArgs() ([]string, error) {
 	args := []string{utils.IntToString(int64(len(k.Keys)))}
 	args = append(args, k.Keys...)
-	return args
+	return args, nil
 }
 
 type KeyWeightPair struct {
@@ -48,7 +48,7 @@ type WeightedKeys struct {
 }
 
 // converts the WeightedKeys to its Valkey API representation
-func (w WeightedKeys) ToArgs() []string {
+func (w WeightedKeys) ToArgs() ([]string, error) {
 	keys := make([]string, 0, len(w.KeyWeightPairs))
 	weights := make([]string, 0, len(w.KeyWeightPairs))
 	args := make([]string, 0)
@@ -60,5 +60,5 @@ func (w WeightedKeys) ToArgs() []string {
 	args = append(args, keys...)
 	args = append(args, WeightsKeyword)
 	args = append(args, weights...)
-	return args
+	return args, nil
 }

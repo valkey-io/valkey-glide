@@ -11,5 +11,5 @@ benchmarks/results/**
 benchmarks/gobenchmarks.json
 benchmarks/benchmarks
 
-# compiled static library file
-*.a
+# directory where compiled static library files are copied to
+rustbin/

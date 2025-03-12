@@ -1,3 +1,5 @@
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 SHELL:=/bin/bash
 
 install-build-tools:
@@ -10,23 +12,19 @@ install-dev-tools-go1.20:
 	go install github.com/segmentio/golines@v0.11.0
 	go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
 
-install-dev-tools-go1.20.0: install-dev-tools-go1.20
-
 install-dev-tools-go1.22:
 	go install github.com/vakenbolt/go-test-report@v0.9.3
 	go install mvdan.cc/gofumpt@v0.6.0
 	go install github.com/segmentio/golines@v0.12.2
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 
-install-dev-tools-go1.22.0: install-dev-tools-go1.22
+install-dev-tools: install-dev-tools-go1.22
 
-install-dev-tools: install-dev-tools-go1.22.0
+install-tools-go1.20: install-build-tools install-dev-tools-go1.20
 
-install-tools-go1.20.0: install-build-tools install-dev-tools-go1.20.0
+install-tools-go1.22: install-build-tools install-dev-tools-go1.22
 
-install-tools-go1.22.0: install-build-tools install-dev-tools-go1.22.0
-
-install-tools: install-tools-go1.22.0
+install-tools: install-tools-go1.22
 
 build: build-glide-client generate-protobuf
 	go build ./...
@@ -47,10 +45,31 @@ clean:
 build-glide-client:
 	cargo build --release
 	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h --lang c
-	if [ "$$(uname)" = "Darwin" ]; then \
+	@if [ "$$(uname)" = "Darwin" ]; then \
 		strip -x target/release/libglide_rs.a; \
-	else \
+		if [ "$$(uname -m)" = "arm64" ]; then \
+			echo "Platform: aarch64-apple-darwin"; \
+			mkdir -p rustbin/aarch64-apple-darwin; \
+			cp target/release/libglide_rs.a rustbin/aarch64-apple-darwin/; \
+		elif [ "$$(uname -m)" = "x86_64" ]; then \
+			echo "Platform: x86_64-apple-darwin"; \
+			mkdir -p rustbin/x86_64-apple-darwin; \
+			cp target/release/libglide_rs.a rustbin/x86_64-apple-darwin/; \
+		fi; \
+	elif [ "$$(uname)" = "Linux" ]; then \
 		strip --strip-unneeded target/release/libglide_rs.a; \
+		if [ "$$(uname -m)" = "arm64" ] || [ "$$(uname -m)" = "aarch64" ]; then \
+			echo "Platform: aarch64-unknown-linux-gnu"; \
+			mkdir -p rustbin/aarch64-unknown-linux-gnu; \
+			cp target/release/libglide_rs.a rustbin/aarch64-unknown-linux-gnu/; \
+		elif [ "$$(uname -m)" = "x86_64" ]; then \
+			echo "Platform: x86_64-unknown-linux-gnu"; \
+			mkdir -p rustbin/x86_64-unknown-linux-gnu; \
+			cp target/release/libglide_rs.a rustbin/x86_64-unknown-linux-gnu/; \
+		fi; \
+	else \
+		echo "Unsupported platform: $(shell uname), $(shell uname -m)"; \
+		exit 1; \
 	fi
 
 
@@ -74,10 +93,19 @@ lint:
 	staticcheck ./...
 	gofumpt -d .
 	golines --dry-run --shorten-comments -m 127 .
+	declare -i MISSING_HEADERS=0; \
+	for file in `find . -type f -name '*.go' | grep -v protobuf`; do \
+		head -1 $$file | grep '// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0' > /dev/null ; \
+		if [[ $$? > 0 ]]; then \
+			echo Missing licence header in $$file ; \
+			((++MISSING_HEADERS)) ; \
+		fi; \
+	done; \
+	exit $$MISSING_HEADERS
 
 lint-ci: lint
 	if [ "$$(gofumpt -l . | wc -l)" -gt 0 ]; then exit 1; fi
-	if [ "$$(golines -l --shorten-comments -m 127 . | wc -l)" -gt 0 ]; then exit 1; fi
+	if [ "$$(golines -l --shorten-comments -m 127 . | wc -l)" -gt 0]; then exit 1; fi
 
 format:
 	gofumpt -w .
@@ -89,21 +117,24 @@ unit-test:
 	mkdir -p reports
 	set -o pipefail; \
 	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
-	go test -v -race ./... -skip 'Example|TestGlideTestSuite' -run Test $(if $(test-filter), -run $(test-filter)) \
+	go test -v ./... -skip 'Example|TestGlideTestSuite' -run Test $(if $(test-filter), -run $(test-filter)) \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
 
 # example tests - skip complete IT suite (including MT)
 example-test:
 	mkdir -p reports
 	set -o pipefail; \
-	../utils/cluster_manager.py start -p 6379 -r 0
-	../utils/cluster_manager.py start --cluster-mode -p 7001 7002 7003 7004 7005 7006
+    trap '../utils/cluster_manager.py stop --prefix cluster' EXIT; \
+	NODE_OUTPUT=$$(python3 ../utils/cluster_manager.py start); \
+	GLIDE_NODE=$$(echo "$$NODE_OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
+	echo "GLIDE_NODE=$$GLIDE_NODE"; \
+	CLUSTER_OUTPUT=$$(python3 ../utils/cluster_manager.py start --cluster-mode); \
+	GLIDE_CLUSTER_NODES=$$(echo "$$CLUSTER_OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
+	echo "GLIDE_CLUSTER_NODES=$$GLIDE_CLUSTER_NODES"; \
 	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
-    go test -v -race ./... -skip Test $(if $(test-filter), -run $(test-filter)) \
+	go test -v ./api -skip Test $(if $(test-filter), -run $(test-filter)) -clusternodes $$GLIDE_CLUSTER_NODES -standalonenode $$GLIDE_NODE \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/api \
-    | go-test-report -o reports/example-tests.html -t example-test > /dev/null)
-
-	../utils/cluster_manager.py stop --prefix cluster
+	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
 
 # integration tests - run subtask with skipping modules tests
 integ-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule $(if $(test-filter), -testify.m $(test-filter))
@@ -117,7 +148,7 @@ __it:
 	mkdir -p reports
 	set -o pipefail; \
 	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
-	go test -v -race ./integTest/... \
+	go test -v ./integTest/... \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \

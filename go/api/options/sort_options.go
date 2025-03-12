@@ -100,7 +100,7 @@ func (opts *SortOptions) AddGetPattern(getPattern string) *SortOptions {
 }
 
 // ToArgs creates the arguments to be used in SORT and SORT_RO commands.
-func (opts *SortOptions) ToArgs() []string {
+func (opts *SortOptions) ToArgs() ([]string, error) {
 	var args []string
 
 	if opts.SortLimit != nil {
@@ -127,5 +127,5 @@ func (opts *SortOptions) ToArgs() []string {
 	for _, getPattern := range opts.GetPatterns {
 		args = append(args, GET_COMMAND_STRING, getPattern)
 	}
-	return args
+	return args, nil
 }
