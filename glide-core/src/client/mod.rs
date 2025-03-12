@@ -826,7 +826,7 @@ impl Client {
             let _ = GlideOpenTelemetry::initialise(config).map_err(|e| {
                 log_error(
                     "OpenTelemetry initialization",
-                    format!("OpenTelemetry initialization failed: {:?}", e.to_string()),
+                    format!("OpenTelemetry initialization failed: {}", e),
                 )
             });
         };
