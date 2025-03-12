@@ -510,8 +510,8 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
 ///
 /// # Safety
 ///
-/// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
-/// * `client_adapter_ptr` must be valid until `close_client` is called.
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`]. See the safety documentation of [`std::sync::Arc::from_raw`].
 /// * `channel` must be Go channel pointer and must be valid until either `success_callback` or `failure_callback` is finished.
 /// * `args` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `args_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
@@ -521,7 +521,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
 /// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
 /// * `route_bytes_len` must be 0 if `route_bytes` is null.
-/// This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
+/// * This function should only be called should with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_adapter_ptr: *const c_void,
