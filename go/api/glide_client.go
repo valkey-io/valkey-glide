@@ -249,7 +249,7 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 func (client *GlideClient) LastSave() (int64, error) {
 	response, err := client.executeCommand(C.LastSave, []string{})
 	if err != nil {
-		return DefaultIntResponse, err
+		return defaultIntResponse, err
 	}
 	return handleIntResponse(response)
 }
