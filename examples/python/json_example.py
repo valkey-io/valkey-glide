@@ -1,12 +1,9 @@
 import asyncio
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
-from glide.async_commands.server_modules import glide_json as json
-
+from glide import AllNodes, ClosingError
+from glide import ConnectionError as GlideConnectionError
 from glide import (
-    AllNodes,
-    ClosingError,
-    ConnectionError as GlideConnectionError,
     GlideClusterClient,
     GlideClusterClientConfiguration,
     InfoSection,
@@ -14,8 +11,9 @@ from glide import (
     LogLevel,
     NodeAddress,
     RequestError,
-    TimeoutError as GlideTimeoutError,
 )
+from glide import TimeoutError as GlideTimeoutError
+from glide.async_commands.server_modules import glide_json as json
 
 
 async def create_client(
@@ -47,6 +45,7 @@ async def create_client(
     )
     return await GlideClusterClient.create(config)
 
+
 async def app_logic(client: GlideClusterClient):
     """
     Executes the main logic of the application, performing basic operations
@@ -63,7 +62,10 @@ async def app_logic(client: GlideClusterClient):
     Logger.log(LogLevel.INFO, "app", f"Set response is = {set_response!r}")  # 'OK'
 
     get_response = await json.get(client, "key", "$")
-    Logger.log(LogLevel.INFO, "app", f"Get response is = {get_response.decode()!r}") # "[{\"a\":1.0,\"b\":2}]"
+    Logger.log(
+        LogLevel.INFO, "app", f"Get response is = {get_response.decode()!r}"
+    )  # "[{\"a\":1.0,\"b\":2}]"
+
 
 async def exec_app_logic():
     """
