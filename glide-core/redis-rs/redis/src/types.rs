@@ -8,6 +8,7 @@ use std::io;
 use std::str::{from_utf8, Utf8Error};
 use std::string::FromUtf8Error;
 
+use crate::cluster_routing::Redirect;
 use num_bigint::BigInt;
 pub(crate) use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
@@ -80,7 +81,7 @@ pub enum NumericBehavior {
 }
 
 /// An enum of all error kinds.
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Display)]
 #[non_exhaustive]
 pub enum ErrorKind {
     /// The server generated an invalid response.
@@ -215,6 +216,112 @@ impl ServerError {
             ServerError::KnownError { detail, .. } => detail.as_ref().map(|str| str.as_str()),
         }
     }
+
+    /// Returns the error kind of the error.
+    pub fn kind(&self) -> ErrorKind {
+        match self {
+            ServerError::ExtensionError { .. } => ErrorKind::ExtensionError,
+            ServerError::KnownError { kind, .. } => match kind {
+                ServerErrorKind::ResponseError => ErrorKind::ResponseError,
+                ServerErrorKind::ExecAbortError => ErrorKind::ExecAbortError,
+                ServerErrorKind::BusyLoadingError => ErrorKind::BusyLoadingError,
+                ServerErrorKind::NoScriptError => ErrorKind::NoScriptError,
+                ServerErrorKind::Moved => ErrorKind::Moved,
+                ServerErrorKind::Ask => ErrorKind::Ask,
+                ServerErrorKind::TryAgain => ErrorKind::TryAgain,
+                ServerErrorKind::ClusterDown => ErrorKind::ClusterDown,
+                ServerErrorKind::CrossSlot => ErrorKind::CrossSlot,
+                ServerErrorKind::MasterDown => ErrorKind::MasterDown,
+                ServerErrorKind::ReadOnly => ErrorKind::ReadOnly,
+                ServerErrorKind::NotBusy => ErrorKind::NotBusy,
+            },
+        }
+    }
+
+    /// Appends the string representation of `other` to the existing `detail`.
+    /// If no detail exists, it simply sets it to `other`’s string.
+    pub fn append_detail(&mut self, other: &ServerError) {
+        // Convert the other error to a string representation.
+        let other_str = format!("{}", other);
+        match self {
+            // This pattern matches both variants.
+            ServerError::ExtensionError { detail, .. } | ServerError::KnownError { detail, .. } => {
+                if let Some(existing) = detail {
+                    // Append with a separator.
+                    existing.push_str("; ");
+                    existing.push_str(&other_str);
+                } else {
+                    *detail = Some(other_str);
+                }
+            }
+        };
+    }
+}
+
+impl From<RedisError> for ServerError {
+    fn from(redis_error: RedisError) -> Self {
+        // Helper closure to map an ErrorKind to a ServerErrorKind.
+        let map_error_kind = |kind: ErrorKind| -> Option<ServerErrorKind> {
+            match kind {
+                ErrorKind::ResponseError => Some(ServerErrorKind::ResponseError),
+                ErrorKind::ExecAbortError => Some(ServerErrorKind::ExecAbortError),
+                ErrorKind::BusyLoadingError => Some(ServerErrorKind::BusyLoadingError),
+                ErrorKind::NoScriptError => Some(ServerErrorKind::NoScriptError),
+                ErrorKind::Moved => Some(ServerErrorKind::Moved),
+                ErrorKind::Ask => Some(ServerErrorKind::Ask),
+                ErrorKind::TryAgain => Some(ServerErrorKind::TryAgain),
+                ErrorKind::ClusterDown => Some(ServerErrorKind::ClusterDown),
+                ErrorKind::CrossSlot => Some(ServerErrorKind::CrossSlot),
+                ErrorKind::MasterDown => Some(ServerErrorKind::MasterDown),
+                ErrorKind::ReadOnly => Some(ServerErrorKind::ReadOnly),
+                ErrorKind::NotBusy => Some(ServerErrorKind::NotBusy),
+                _ => None,
+            }
+        };
+
+        match redis_error.repr {
+            ErrorRepr::ExtensionError(code, detail) => ServerError::ExtensionError {
+                code,
+                detail: Some(detail),
+            },
+            ErrorRepr::WithDescription(kind, desc) => {
+                if let Some(mapped) = map_error_kind(kind) {
+                    ServerError::KnownError {
+                        kind: mapped,
+                        detail: Some(desc.to_string()),
+                    }
+                } else {
+                    ServerError::ExtensionError {
+                        code: kind.to_string(),
+                        detail: Some(format!(
+                            "Unhandled error kind: {:?} description {}",
+                            kind, desc
+                        )),
+                    }
+                }
+            }
+            ErrorRepr::WithDescriptionAndDetail(kind, desc, detail) => {
+                if let Some(mapped) = map_error_kind(kind) {
+                    ServerError::KnownError {
+                        kind: mapped,
+                        detail: Some(format!("{} {}", desc, detail)),
+                    }
+                } else {
+                    ServerError::ExtensionError {
+                        code: kind.to_string(),
+                        detail: Some(format!(
+                            "Unhandled error kind: {:?} with description {} and detail {}",
+                            kind, desc, detail
+                        )),
+                    }
+                }
+            }
+            ErrorRepr::IoError(io_err) => ServerError::ExtensionError {
+                code: "IOERROR".into(),
+                detail: Some(io_err.to_string()),
+            },
+        }
+    }
 }
 
 impl From<tokio::time::error::Elapsed> for RedisError {
@@ -229,7 +336,7 @@ impl From<ServerError> for RedisError {
         match value {
             ServerError::ExtensionError { code, detail } => make_extension_error(code, detail),
             ServerError::KnownError { kind, detail } => {
-                let desc = "An error was signalled by the server";
+                let desc = "An error was signalled by the server:";
                 let kind = match kind {
                     ServerErrorKind::ResponseError => ErrorKind::ResponseError,
                     ServerErrorKind::ExecAbortError => ErrorKind::ExecAbortError,
@@ -799,6 +906,7 @@ impl fmt::Debug for RedisError {
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
 pub(crate) enum RetryMethod {
     Reconnect,
     ReconnectAndRetry,
@@ -990,6 +1098,16 @@ impl RedisError {
         let slot_id: u16 = iter.next()?.parse().ok()?;
         let addr = iter.next()?;
         Some((addr, slot_id))
+    }
+
+    /// Returns the redirect method for this error.    
+    pub(crate) fn redirect(&self) -> Option<Redirect> {
+        let node = self.redirect_node()?;
+        match self.kind() {
+            ErrorKind::Ask => Some(Redirect::Ask(node.0.to_string())),
+            ErrorKind::Moved => Some(Redirect::Moved(node.0.to_string())),
+            _ => None,
+        }
     }
 
     /// Returns the extension error code.

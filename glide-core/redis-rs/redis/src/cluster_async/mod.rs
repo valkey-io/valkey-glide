@@ -44,7 +44,7 @@ use crate::{
 use connections_container::{RefreshTaskNotifier, RefreshTaskState, RefreshTaskStatus};
 use dashmap::DashMap;
 use pipeline_routing::{
-    collect_and_send_pending_requests, map_pipeline_to_nodes, process_pipeline_responses,
+    collect_and_send_pending_requests, map_pipeline_to_nodes, process_and_retry_pipeline_responses,
     route_for_pipeline, PipelineResponses,
 };
 use std::{
@@ -292,6 +292,7 @@ where
                     count,
                     route: route.into(),
                     sub_pipeline: false,
+                    retry: 0,
                 },
                 sender,
             })
@@ -619,6 +620,7 @@ enum CmdArg<C> {
         count: usize,
         route: InternalSingleNodeRouting<C>,
         sub_pipeline: bool,
+        retry: u32,
     },
     ClusterScan {
         // struct containing the arguments for the cluster scan command - scan state cursor, match pattern, count and object type.
@@ -1505,14 +1507,14 @@ where
         response_policy: Option<ResponsePolicy>,
     ) -> RedisResult<Value> {
         let extract_result = |response| match response {
-            Response::Single(value) => value,
+            Response::Single(value) => value.extract_error(),
             Response::Multiple(_) => unreachable!(),
             Response::ClusterScanResult(_, _) => unreachable!(),
         };
 
         let convert_result = |res: Result<RedisResult<Response>, _>| {
             res.map_err(|_| RedisError::from((ErrorKind::ResponseError, "request wasn't handled due to internal failure"))) // this happens only if the result sender is dropped before usage.
-            .and_then(|res| res.map(extract_result))
+            .and_then(|res| res.and_then(extract_result))
         };
 
         let get_receiver = |(_, receiver): (_, oneshot::Receiver<RedisResult<Response>>)| async {
@@ -2223,6 +2225,7 @@ where
                 count,
                 route,
                 sub_pipeline,
+                retry,
             } => {
                 if pipeline.is_atomic() || sub_pipeline {
                     // If the pipeline is atomic (i.e., a transaction) or if the pipeline is already splitted into sub-pipelines (i.e., the pipeline is already routed to a specific node), we can send it as is, with no need to split it into sub-pipelines.
@@ -2235,7 +2238,7 @@ where
                     .await
                 } else {
                     // The pipeline is not atomic and not already splitted, we need to split it into sub-pipelines and send them separately.
-                    Self::handle_non_atomic_pipeline_request(pipeline, core).await
+                    Self::handle_non_atomic_pipeline_request(pipeline, core, retry).await
                 }
             }
             CmdArg::ClusterScan {
@@ -2279,15 +2282,15 @@ where
     async fn handle_non_atomic_pipeline_request(
         pipeline: Arc<crate::Pipeline>,
         core: Core<C>,
+        retry: u32,
     ) -> OperationResult {
         // Distribute pipeline commands across cluster nodes based on routing information.
         // Returns:
         // - pipelines_by_node: Map of node addresses to their pipeline contexts
-        // - response_policies: List of response aggregation policies for multi-node commands
-        let (pipelines_by_node, response_policies) =
+        // - response_policies: List of routing info and response aggregation policies for multi-node commands.
+        let (pipelines_by_node, mut response_policies) =
             map_pipeline_to_nodes(&pipeline, core.clone()).await?;
 
-        //TODO: move teh creation of `pipeline_responses` to pipeline_routing.rs
         // Initialize `PipelineResponses` to store responses for each pipeline command.
         // This will be used to store the responses from the different sub-pipelines to the pipeline commands.
         // A command can have one or more responses (e.g MultiNode commands).
@@ -2300,10 +2303,19 @@ where
         // - A vector of results for each sub-pipeline execution.
         // - A vector of (address, indices) pairs indicating where each response should be placed.
         let (responses, addresses_and_indices) =
-            collect_and_send_pending_requests(pipelines_by_node, core.clone()).await;
+            collect_and_send_pending_requests(pipelines_by_node, core.clone(), retry).await;
 
-        // Process the responses and update the pipeline_responses
-        process_pipeline_responses(&mut pipeline_responses, responses, addresses_and_indices)?;
+        // Process the responses and update the pipeline_responses, retrying the commands if needed.
+        process_and_retry_pipeline_responses(
+            &mut pipeline_responses,
+            responses,
+            addresses_and_indices,
+            &pipeline,
+            core,
+            retry,
+            &mut response_policies,
+        )
+        .await?;
 
         // Process response policies after all tasks are complete and aggregate the relevant commands.
         Self::aggregate_pipeline_multi_node_commands(&mut pipeline_responses, response_policies)
@@ -2414,9 +2426,10 @@ where
 
             let aggregated_response =
                 // TODO: Change aggregate_results function to accept vec of (result, address) instead of receivers
-                Self::aggregate_results(response_receivers, &routing_info, response_policy)
-                    .await
-                    .map_err(|err| (OperationTarget::FanOut, err))?;
+                match Self::aggregate_results(response_receivers, &routing_info, response_policy).await {
+                    Ok(value) => value,
+                    Err(err) => Value::ServerError(err.into())
+                };
 
             // Safe to use [index] as the index is guaranteed to be valid
             pipeline_responses[index] = vec![(aggregated_response, "".to_string())];
@@ -2675,13 +2688,23 @@ where
         }
     }
 
-    async fn handle_loading_error(
+    async fn handle_loading_error_and_retry(
         core: Core<C>,
         info: RequestInfo<C>,
         address: String,
         retry: u32,
         retry_params: RetryParams,
     ) -> OperationResult {
+        Self::handle_loading_error(core.clone(), address, retry, retry_params).await;
+        Self::try_request(info, core).await
+    }
+
+    async fn handle_loading_error(
+        core: Core<C>,
+        address: String,
+        retry: u32,
+        retry_params: RetryParams,
+    ) {
         let is_primary = core
             .conn_lock
             .read()
@@ -2700,8 +2723,6 @@ where
             let sleep_duration = retry_params.wait_time_for_retry(retry);
             boxed_sleep(sleep_duration).await;
         }
-
-        Self::try_request(info, core).await
     }
 
     fn poll_complete(&mut self, cx: &mut task::Context<'_>) -> Poll<PollFlushAction> {
@@ -2752,7 +2773,7 @@ where
                 }
                 Next::RetryBusyLoadingError { request, address } => {
                     // TODO - do we also want to try and reconnect to replica if it is loading?
-                    let future = Self::handle_loading_error(
+                    let future = Self::handle_loading_error_and_retry(
                         self.inner.clone(),
                         request.info.clone(),
                         address,

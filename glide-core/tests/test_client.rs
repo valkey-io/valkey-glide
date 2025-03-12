@@ -639,8 +639,6 @@ pub(crate) mod shared_client_tests {
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_pipeline_return_error(#[values(false, true)] use_cluster: bool) {
-        use redis::ErrorKind;
-
         block_on_all(async move {
             let mut test_basics = setup_test_basics(
                 use_cluster,
@@ -661,16 +659,25 @@ pub(crate) mod shared_client_tests {
             let mut pipeline = Pipeline::new();
             pipeline.set(&key, &value).get(&key).llen(&key).get(&key2);
 
-            let res = test_basics.client.send_pipeline(&pipeline).await;
-            assert!(res.is_err(), "Pipeline should fail with wrong type error");
-            let err = res.unwrap_err();
-
+            let res = test_basics
+                .client
+                .send_pipeline(&pipeline)
+                .await
+                .expect("Pipeline execution failed");
+            let res = match res {
+                Value::Array(arr) => arr,
+                _ => panic!("Expected an array response, got: {:?}", res),
+            };
             assert_eq!(
-                err.kind(),
-                ErrorKind::ExtensionError,
-                "Pipeline should fail with response error"
+                &res[..2],
+                &[Value::Okay, Value::BulkString(value.as_bytes().to_vec()),],
+                "Pipeline result: {:?}",
+                res
             );
-            assert!(err.to_string().contains("WRONGTYPE"), "{err:?}");
+
+            assert!(
+                matches!(res[2], Value::ServerError(ref err) if err.err_code().contains("WRONGTYPE"))
+            );
         });
     }
 
