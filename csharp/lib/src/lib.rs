@@ -7,6 +7,7 @@ use redis::{FromRedisValue, RedisResult};
 use std::{
     ffi::{c_void, CStr, CString},
     os::raw::c_char,
+    sync::Arc,
 };
 use tokio::runtime::{Builder, Runtime};
 
@@ -21,10 +22,14 @@ pub enum Level {
 }
 
 pub struct Client {
+    runtime: Runtime,
+    core: Arc<CommandExecutionCore>,
+}
+
+struct CommandExecutionCore {
     client: GlideClient,
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (), // TODO - add specific error codes
-    runtime: Runtime,
 }
 
 /// # Safety
@@ -42,12 +47,12 @@ unsafe fn create_client_internal(
         .build()?;
     let _runtime_handle = runtime.enter();
     let client = runtime.block_on(GlideClient::new(request, None)).unwrap(); // TODO - handle errors.
-    Ok(Client {
-        client,
+    let core = Arc::new(CommandExecutionCore {
         success_callback,
         failure_callback,
-        runtime,
-    })
+        client,
+    });
+    Ok(Client { runtime, core })
 }
 
 /// Creates a new client with the given configuration.
@@ -66,21 +71,23 @@ pub unsafe extern "C" fn create_client(
 ) -> *const c_void {
     match unsafe { create_client_internal(config, success_callback, failure_callback) } {
         Err(_) => std::ptr::null(), // TODO - log errors
-        Ok(client) => Box::into_raw(Box::new(client)) as *const c_void,
+        Ok(client) => Arc::into_raw(Arc::new(client)) as *const c_void,
     }
 }
 
 /// Closes the given client, deallocating it from the heap.
+/// This function should only be called once per pointer created by [`create_client`].
+/// After calling this function the `client_ptr` is not in a valid state.
 ///
 /// # Safety
 ///
 /// * `client_ptr` must not be `null`.
 /// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`std::boxed::Box::from_raw`].
 #[no_mangle]
-pub unsafe extern "C" fn close_client(client_ptr: *const c_void) {
-    let client_ptr = unsafe { Box::from_raw(client_ptr as *mut Client) };
-    let _runtime_handle = client_ptr.runtime.enter();
-    drop(client_ptr);
+pub extern "C" fn close_client(client_ptr: *const c_void) {
+    assert!(!client_ptr.is_null());
+    // This will bring the strong count down to 0 once all client requests are done.
+    unsafe { Arc::decrement_strong_count(client_ptr as *const Client) };
 }
 
 /// Execute a command.
@@ -90,6 +97,7 @@ pub unsafe extern "C" fn close_client(client_ptr: *const c_void) {
 ///
 /// * `client_ptr` must not be `null`.
 /// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`std::boxed::Box::from_raw`].
+/// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
 /// * `key` and `value` must not be `null`.
 /// * `key` and `value` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
 /// * `key` and `value` must be kept valid until the callback is called.
@@ -104,16 +112,19 @@ pub unsafe extern "C" fn command(
     arg_count: u32,
     route_info: *const RouteInfo,
 ) {
-    let client = unsafe { Box::leak(Box::from_raw(client_ptr as *mut Client)) };
+    let client = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_ptr);
+        Arc::from_raw(client_ptr as *mut Client)
+    };
+    let core = client.core.clone();
 
     // The safety of these needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
-    let ptr_address = client_ptr as usize;
     let args_address = args as usize;
 
     let Some(mut cmd) = request_type.get_command() else {
         unsafe {
-            let client = Box::leak(Box::from_raw(ptr_address as *mut Client));
-            (client.failure_callback)(callback_index); // TODO - report errors
+            (core.failure_callback)(callback_index); // TODO - report errors
             return;
         }
     };
@@ -128,20 +139,20 @@ pub unsafe extern "C" fn command(
 
     let route = create_route(route_info, &cmd);
 
-    let mut client_clone = client.client.clone();
     client.runtime.spawn(async move {
-        let result = client_clone
+        let result = core
+            .client
+            .clone()
             .send_command(&cmd, route)
             .await
             .and_then(Option::<CString>::from_owned_redis_value);
         unsafe {
-            let client = Box::leak(Box::from_raw(ptr_address as *mut Client));
             match result {
-                Ok(None) => (client.success_callback)(callback_index, std::ptr::null()),
-                Ok(Some(c_str)) => (client.success_callback)(callback_index, c_str.as_ptr()),
+                Ok(None) => (core.success_callback)(callback_index, std::ptr::null()),
+                Ok(Some(c_str)) => (core.success_callback)(callback_index, c_str.as_ptr()),
                 Err(err) => {
                     dbg!(err); // TODO - report errors
-                    (client.failure_callback)(callback_index);
+                    (core.failure_callback)(callback_index);
                 }
             };
         }

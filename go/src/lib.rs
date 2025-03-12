@@ -22,6 +22,7 @@ use redis::{Cmd, RedisResult, Value};
 use std::ffi::CStr;
 use std::slice::from_raw_parts;
 use std::str;
+use std::sync::Arc;
 use std::{
     ffi::{c_void, CString},
     mem,
@@ -40,7 +41,7 @@ use tokio::runtime::Runtime;
 #[derive(Debug)]
 pub struct CommandResponse {
     response_type: ResponseType,
-    int_value: c_long,
+    int_value: i64,
     float_value: c_double,
     bool_value: bool,
 
@@ -136,13 +137,15 @@ pub struct ConnectionResponse {
 }
 
 /// A `GlideClient` adapter.
-// TODO: Remove allow(dead_code) once connection logic is implemented
-#[allow(dead_code)]
 pub struct ClientAdapter {
-    client: GlideClient,
+    runtime: Runtime,
+    core: Arc<CommandExecutionCore>,
+}
+
+struct CommandExecutionCore {
     success_callback: SuccessCallback,
     failure_callback: FailureCallback,
-    runtime: Runtime,
+    client: GlideClient,
 }
 
 fn create_client_internal(
@@ -165,12 +168,12 @@ fn create_client_internal(
     let client = runtime
         .block_on(GlideClient::new(ConnectionRequest::from(request), None))
         .map_err(|err| err.to_string())?;
-    Ok(ClientAdapter {
-        client,
+    let core = Arc::new(CommandExecutionCore {
         success_callback,
         failure_callback,
-        runtime,
-    })
+        client,
+    });
+    Ok(ClientAdapter { runtime, core })
 }
 
 /// Creates a new `ClientAdapter` with a new `GlideClient` configured using a Protobuf `ConnectionRequest`.
@@ -186,8 +189,8 @@ fn create_client_internal(
 ///
 /// * `connection_request_bytes` must point to `connection_request_len` consecutive properly initialized bytes. It must be a well-formed Protobuf `ConnectionRequest` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `connection_request_len` must not be greater than the length of the connection request bytes array. It must also not be greater than the max value of a signed pointer-sized integer.
-/// * The `conn_ptr` pointer in the returned `ConnectionResponse` must live while the client is open/active and must be explicitly freed by calling [`close_client`].
-/// * The `connection_error_message` pointer in the returned `ConnectionResponse` must live until the returned `ConnectionResponse` pointer is passed to [`free_connection_response`].
+/// * The `conn_ptr` pointer in the returned `ConnectionResponse` must live while the client is open/active and must be explicitly freed by calling [`close_client``].
+/// * The `connection_error_message` pointer in the returned `ConnectionResponse` must live until the returned `ConnectionResponse` pointer is passed to [`free_connection_response``].
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 // TODO: Consider making this async
 #[no_mangle]
@@ -207,7 +210,7 @@ pub unsafe extern "C" fn create_client(
             ),
         },
         Ok(client) => ConnectionResponse {
-            conn_ptr: Box::into_raw(Box::new(client)) as *const c_void,
+            conn_ptr: Arc::into_raw(Arc::new(client)) as *const c_void,
             connection_error_message: std::ptr::null(),
         },
     };
@@ -228,11 +231,11 @@ pub unsafe extern "C" fn create_client(
 /// * `close_client` must be called after `free_connection_response` has been called to avoid creating a dangling pointer in the `ConnectionResponse`.
 /// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be valid until `close_client` is called.
-// TODO: Ensure safety when command has not completed yet
 #[no_mangle]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
-    drop(unsafe { Box::from_raw(client_adapter_ptr as *mut ClientAdapter) });
+    // This will bring the strong count down to 0 once all client requests are done.
+    unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const ClientAdapter) };
 }
 
 /// Deallocates a `ConnectionResponse`.
@@ -508,7 +511,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
 ///
 /// # Safety
 ///
-/// * TODO: finish safety section.
+/// This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_adapter_ptr: *const c_void,
@@ -520,16 +523,16 @@ pub unsafe extern "C" fn command(
     route_bytes: *const u8,
     route_bytes_len: usize,
 ) {
-    let client_adapter =
-        unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before
-    // all operations have completed.
-    let ptr_address = client_adapter_ptr as usize;
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    let core = client_adapter.core.clone();
 
     let arg_vec =
         unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) };
-
-    let mut client_clone = client_adapter.client.clone();
 
     // Create the command outside of the task to ensure that the command arguments passed
     // from "go" are still valid
@@ -545,10 +548,11 @@ pub unsafe extern "C" fn command(
     let route = Routes::parse_from_bytes(r_bytes).unwrap();
 
     client_adapter.runtime.spawn(async move {
-        let result = client_clone
+        let result = core
+            .client
+            .clone()
             .send_command(&cmd, get_route(route, Some(&cmd)))
             .await;
-        let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
         let value = match result {
             Ok(value) => value,
             Err(err) => {
@@ -558,7 +562,7 @@ pub unsafe extern "C" fn command(
                 let c_err_str = CString::into_raw(
                     CString::new(message).expect("Couldn't convert error message to CString"),
                 );
-                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
+                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
                 return;
             }
         };
@@ -567,9 +571,7 @@ pub unsafe extern "C" fn command(
 
         unsafe {
             match result {
-                Ok(message) => {
-                    (client_adapter.success_callback)(channel, Box::into_raw(Box::new(message)))
-                }
+                Ok(message) => (core.success_callback)(channel, Box::into_raw(Box::new(message))),
                 Err(err) => {
                     let message = errors::error_message(&err);
                     let error_type = errors::error_type(&err);
@@ -577,7 +579,7 @@ pub unsafe extern "C" fn command(
                     let c_err_str = CString::into_raw(
                         CString::new(message).expect("Couldn't convert error message to CString"),
                     );
-                    (client_adapter.failure_callback)(channel, c_err_str, error_type);
+                    (core.failure_callback)(channel, c_err_str, error_type);
                 }
             };
         }
@@ -712,11 +714,7 @@ pub unsafe extern "C" fn request_cluster_scan(
 ) {
     let client_adapter =
         unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before
-    // all operations have completed.
-    let ptr_address = client_adapter_ptr as usize;
-
-    let mut client_clone = client_adapter.client.clone();
+    let core = client_adapter.core.clone();
 
     let c_str = unsafe { CStr::from_ptr(cursor.get_cursor()) };
     let temp_str = c_str.to_str().expect("Must be UTF-8");
@@ -757,7 +755,7 @@ pub unsafe extern "C" fn request_cluster_scan(
                 let c_err_str = CString::into_raw(
                     CString::new(message).expect("Couldn't convert error message to CString"),
                 );
-                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
+                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
                 return;
             }
         };
@@ -772,7 +770,7 @@ pub unsafe extern "C" fn request_cluster_scan(
                 let c_err_str = CString::into_raw(
                     CString::new(message).expect("Couldn't convert error message to CString"),
                 );
-                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
+                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
                 return;
             }
         };
@@ -796,12 +794,14 @@ pub unsafe extern "C" fn request_cluster_scan(
         Ok(existing_cursor) => existing_cursor,
         Err(_error) => ScanStateRC::new(),
     };
+    let core = client_adapter.core.clone();
 
     client_adapter.runtime.spawn(async move {
-        let result = client_clone
+        let result = core
+            .client
+            .clone()
             .cluster_scan(&scan_state_cursor, cluster_scan_args)
             .await;
-        let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
         let value = match result {
             Ok(value) => value,
             Err(err) => {
@@ -811,7 +811,7 @@ pub unsafe extern "C" fn request_cluster_scan(
                 let c_err_str = CString::into_raw(
                     CString::new(message).expect("Couldn't convert error message to CString"),
                 );
-                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
+                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
                 return;
             }
         };
@@ -820,9 +820,7 @@ pub unsafe extern "C" fn request_cluster_scan(
 
         unsafe {
             match result {
-                Ok(message) => {
-                    (client_adapter.success_callback)(channel, Box::into_raw(Box::new(message)))
-                }
+                Ok(message) => (core.success_callback)(channel, Box::into_raw(Box::new(message))),
                 Err(err) => {
                     let message = errors::error_message(&err);
                     let error_type = errors::error_type(&err);
@@ -830,7 +828,7 @@ pub unsafe extern "C" fn request_cluster_scan(
                     let c_err_str = CString::into_raw(
                         CString::new(message).expect("Couldn't convert error message to CString"),
                     );
-                    (client_adapter.failure_callback)(channel, c_err_str, error_type);
+                    (core.failure_callback)(channel, c_err_str, error_type);
                 }
             };
         }
