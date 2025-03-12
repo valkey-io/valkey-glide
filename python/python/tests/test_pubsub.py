@@ -911,7 +911,7 @@ class TestPubSub:
         - Subscribing to multiple channels with exact names and verifying message reception.
         - Subscribing to channels using a pattern and verifying message reception.
         - Ensuring that messages are correctly published and received using different retrieval methods
-          (async, sync, callback).
+        (async, sync, callback).
         """
         listening_client, publishing_client = None, None
         try:
@@ -1024,7 +1024,7 @@ class TestPubSub:
         - Subscribing to multiple channels with exact names and verifying message reception.
         - Subscribing to channels using a pattern and verifying message reception.
         - Ensuring that messages are correctly published and received using different retrieval methods
-          (async, sync, callback).
+        (async, sync, callback).
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
@@ -1187,7 +1187,7 @@ class TestPubSub:
         - Subscribing to channels using a pattern and verifying message reception.
         - Subscribing to channels using a with sharded subscription and verifying message reception.
         - Ensuring that messages are correctly published and received using different retrieval methods
-          (async, sync, callback).
+        (async, sync, callback).
         """
         listening_client, publishing_client = None, None
         try:
@@ -1321,7 +1321,7 @@ class TestPubSub:
         - Subscribing to channels using a pattern and verifying message reception.
         - Subscribing to channels using a sharded subscription and verifying message reception.
         - Ensuring that messages are correctly published and received using different retrieval methods
-          (async, sync, callback).
+        (async, sync, callback).
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
@@ -1547,7 +1547,7 @@ class TestPubSub:
         - Subscribing to a pattern channel and verifying message reception.
         - Subscribing to a sharded channel and verifying message reception.
         - Ensuring that messages are correctly published and received using different retrieval methods
-          (async, sync, callback).
+        (async, sync, callback).
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
@@ -1712,7 +1712,7 @@ class TestPubSub:
         - Subscribing to an exact channel and verifying message reception.
         - Subscribing to a pattern channel and verifying message reception.
         - Ensuring that messages are correctly published and received using different retrieval methods
-          (async, sync, callback).
+        (async, sync, callback).
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
@@ -1813,7 +1813,7 @@ class TestPubSub:
         - Subscribing to a pattern channel and verifying message reception.
         - Subscribing to a sharded channel and verifying message reception.
         - Ensuring that messages are correctly published and received using different retrieval methods
-          (async, sync, callback).
+        (async, sync, callback).
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
