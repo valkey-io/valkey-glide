@@ -8,7 +8,7 @@ type ZScanOptions struct {
 	noScores bool
 }
 
-func NewZScanOptionsBuilder() *ZScanOptions {
+func NewZScanOptions() *ZScanOptions {
 	return &ZScanOptions{}
 }
 
@@ -38,7 +38,7 @@ func (options *ZScanOptions) ToArgs() ([]string, error) {
 	args = append(args, baseArgs...)
 
 	if options.noScores {
-		args = append(args, NoScores)
+		args = append(args, NoScoresKeyword)
 	}
 	return args, err
 }
