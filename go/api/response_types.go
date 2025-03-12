@@ -7,7 +7,7 @@ var (
 	defaultFloatResponse  float64
 	defaultBoolResponse   bool
 	defaultIntResponse    int64
-	defaultStringResponse string
+	DefaultStringResponse string
 )
 
 type Result[T any] struct {
@@ -172,6 +172,8 @@ func createClusterValue[T any](data any) ClusterValue[T] {
 	switch any(data).(type) {
 	case map[string]interface{}:
 		return createClusterMultiValue(data.(map[string]T))
+	case nil:
+		return createEmptyClusterValue[T]()
 	default:
 		return createClusterSingleValue(data.(T))
 	}
@@ -242,4 +244,39 @@ type XPendingDetail struct {
 
 func CreateNilXPendingSummary() XPendingSummary {
 	return XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), make([]ConsumerPendingMessage, 0)}
+}
+
+// XInfoConsumerInfo represents a group information returned by `XInfoConsumers` command.
+type XInfoConsumerInfo struct {
+	// The consumer's name.
+	Name string
+	// The number of entries in the PEL: pending messages for the consumer, which are messages that were delivered but are yet
+	// to be acknowledged.
+	Pending int64
+	// The number of milliseconds that have passed since the consumer's last attempted interaction (Examples: XREADGROUP,
+	// XCLAIM, XAUTOCLAIM).
+	Idle int64
+	// The number of milliseconds that have passed since the consumer's last successful interaction (Examples: XREADGROUP that
+	// actually read some entries into the PEL, XCLAIM/XAUTOCLAIM that actually claimed some entries).
+	Inactive Result[int64]
+}
+
+// XInfoGroupInfo represents a group information returned by `XInfoGroups` command.
+type XInfoGroupInfo struct {
+	// The consumer group's name.
+	Name string
+	// The number of consumers in the group.
+	Consumers int64
+	// The length of the group's Pending Entries List (PEL), which are messages that were delivered but are yet to be
+	// acknowledged.
+	Pending int64
+	// The ID of the last entry delivered to the group's consumers.
+	LastDeliveredId string
+	// The logical "read counter" of the last entry delivered to the group's consumers.
+	// Included in the response only on valkey 7.0.0 and above.
+	EntriesRead Result[int64]
+	// The number of entries in the stream that are still waiting to be delivered to the group's consumers, or a `nil` when
+	// that number can't be determined.
+	// Included in the response only on valkey 7.0.0 and above.
+	Lag Result[int64]
 }

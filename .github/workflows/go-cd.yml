@@ -1,6 +1,9 @@
 name: Go - Continuous Deployment
 
 on:
+    push:
+        tags:
+            - "v*.*"
     workflow_dispatch:
         inputs:
             version:
@@ -21,6 +24,7 @@ permissions:
 
 jobs:
     load-platform-matrix:
+        if: github.repository_owner == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         outputs:
@@ -33,52 +37,58 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with pkg_go_dev in PACKAGE_MANAGERS and remove "ephemeral" from RUNNER
+                  # Filter entries with pkg_go_dev in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(jq 'map(
-                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pkg_go_dev"]))) 
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pkg_go_dev"])))
                       | .RUNNER = (
                           if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(select(. != "ephemeral"))) 
-                          else .RUNNER 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
                           end
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     validate-release-version:
-        if: ${{ github.event.inputs.pkg_go_dev_publish }}
+        if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish }}
         runs-on: ubuntu-latest
         outputs:
             RELEASE_VERSION: ${{ steps.release-tag.outputs.RELEASE_VERSION }}
         env:
             INPUT_VERSION: ${{ github.event.inputs.version }}
+            TAG_VERSION: ${{ github.ref_name }}
         steps:
-            - name: Validate Version Against RegEx
-              run: |
-                  echo "input version is: ${{ env.INPUT_VERSION }}"
-                  if ! echo "${{ env.INPUT_VERSION }}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
-                      echo "Version is not valid, must be v*.*.* or v*.*.*-rc*"
-                      exit 1
-                  fi
-
             - name: Checkout for tag check
+              if: ${{ github.event_name == 'workflow_dispatch' }}
               uses: actions/checkout@v4
 
             - name: Validate version agaisnt tags
+              if: ${{ github.event_name == 'workflow_dispatch' }}
               run: |
                   git fetch --tags
                   if git tag | grep -q "^go/${{ env.INPUT_VERSION }}$"; then
                       echo "Version ${{ env.INPUT_VERSION }} already exists."
                       exit 1
                   fi
-            - name: Output release tag
+
+            - name: Validate Version Against RegEx and output
               id: release-tag
               run: |
-                  echo "RELEASE_VERSION=${{ env.INPUT_VERSION }}" >> $GITHUB_OUTPUT
+                  if ${{ github.event_name == 'workflow_dispatch' }}; then
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION="${{ env.TAG_VERSION }}"
+                  fi
+                  echo "Releassing version is: ${R_VERSION}"
+                  if ! echo "${R_VERSION}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
+                      echo "Version is not valid, must be v*.*.* or v*.*.*-rc*"
+                      exit 1
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_OUTPUT
 
     create-binaries:
         needs: [load-platform-matrix]
-        if: success() && github.repository_owner == 'valkey-io'
+        if: success()
         strategy:
             fail-fast: false
             matrix:
@@ -98,7 +108,7 @@ jobs:
             - uses: actions/checkout@v4
             - uses: actions/setup-go@v5
               with:
-                  go-version: "^1.22.0"
+                  go-version: "1.22"
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
@@ -123,7 +133,7 @@ jobs:
                       go/protobuf/
 
     commit-auto-gen-files-with-tag:
-        if: ${{ github.event.inputs.pkg_go_dev_publish }}
+        if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish }}
         needs: [validate-release-version, create-binaries]
         runs-on: ubuntu-latest
         permissions:
@@ -148,13 +158,14 @@ jobs:
                   cp protobuf/* $GITHUB_WORKSPACE/go/protobuf/
             - name: Commit and push tag
               run: |
+                  RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   git config user.name github-actions
                   git config user.email github-actions@github.com
                   git add -f .
                   git commit -m "Automated commit from GitHub Actions"
-                  git tag go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
-                  git push origin go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
-                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go@${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
+                  git tag go/$RELEASE_VERSION
+                  git push origin go/$RELEASE_VERSION
+                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go@$RELEASE_VERSION
 
     extra-post-commit-test:
         needs:
@@ -184,7 +195,7 @@ jobs:
                   ref: "go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}"
             - uses: actions/setup-go@v5
               with:
-                  go-version: "^1.22.0"
+                  go-version: "1.22"
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
@@ -204,13 +215,13 @@ jobs:
               working-directory: go/benchmarks
               run: |
                   # change go/benchmarks/go.mod on the fly
-                  export ESCAPED_VERSION=$(echo "${{ needs.validate-release-version.outputs.RELEASE_VERSION }}" | sed 's/\./\\./g')
+                  RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   if [[ "${{ matrix.host.OS }}" == "macos" ]]; then
-                      sed -i '' '/replace github\.com\/valkey-io\/valkey-glide\/go/d' go.mod
-                      sed -i '' "s/github\.com\/valkey-io\/valkey-glide\/go v0\.0\.0/github.com\/valkey-io\/valkey-glide\/go $ESCAPED_VERSION/g" go.mod
+                      sed -i '' '\|replace github\.com/valkey-io/valkey-glide/go|d' go.mod
+                      sed -i '' "s|github\.com/valkey-io/valkey-glide/go v.*|github.com/valkey-io/valkey-glide/go $RELEASE_VERSION|g" go.mod
                   else
-                      sed -i '/replace github\.com\/valkey-io\/valkey-glide\/go/d' go.mod
-                      sed -i "s/github\.com\/valkey-io\/valkey-glide\/go v0\.0\.0/github.com\/valkey-io\/valkey-glide\/go $ESCAPED_VERSION/g" go.mod
+                      sed -i '\|replace github\.com/valkey-io/valkey-glide/go|d' go.mod
+                      sed -i "s|github\.com/valkey-io/valkey-glide/go v.*|github.com/valkey-io/valkey-glide/go $RELEASE_VERSION|g" go.mod
                   fi
                   go mod tidy
                   go run . -minimal -clients glide -concurrentTasks 10 -port ${{ env.PORT }}

@@ -57,7 +57,8 @@ async def is_cluster_ready(client: GlideClusterClient, count: int) -> bool:
 # The slots not covered testing is messing with the cluster by removing a node, and then scanning the cluster
 # When a node is forgot its getting into a banned state for one minutes, so in order to bring back the cluster to normal state
 # we need to wait for the node to be unbanned, and then we can continue with the tests
-# In order to avoid the time wasting and the chance that the restoration will not happen, we will run the test on separate cluster
+# In order to avoid the time wasting and the chance that the restoration will not happen, we will run the test on separate
+# cluster
 @pytest.fixture(scope="function")
 async def function_scoped_cluster():
     """
@@ -98,7 +99,7 @@ class TestScan:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_scan_simple(self, glide_client: GlideClusterClient):
         key = get_random_string(10)
-        expected_keys = [f"{key}:{i}" for i in range(100)]
+        expected_keys = [f"{key}{i}" for i in range(100)]
         await glide_client.mset({k: "value" for k in expected_keys})
         expected_keys_encoded = map(lambda k: k.encode(), expected_keys)
         cursor = ClusterScanCursor()
@@ -117,10 +118,10 @@ class TestScan:
         self, glide_client: GlideClusterClient
     ):
         key = get_random_string(10)
-        expected_keys = [f"key:{key}:{i}" for i in range(100)]
+        expected_keys = [f"key-{key}-{i}" for i in range(100)]
         await glide_client.mset({k: "value" for k in expected_keys})
         encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
-        unexpected_type_keys = [f"{key}:{i}" for i in range(100, 200)]
+        unexpected_type_keys = [f"{key}-{i}" for i in range(100, 200)]
         for key in unexpected_type_keys:
             await glide_client.sadd(key, ["value"])
         encoded_unexpected_type_keys = map(lambda k: k.encode(), unexpected_type_keys)
@@ -133,7 +134,7 @@ class TestScan:
         cursor = ClusterScanCursor()
         while not cursor.is_finished():
             result = await glide_client.scan(
-                cursor, match=b"key:*", type=ObjectType.STRING
+                cursor, match=b"key-*", type=ObjectType.STRING
             )
             cursor = cast(ClusterScanCursor, result[0])
             result_keys = cast(List[str], result[1])
@@ -147,7 +148,7 @@ class TestScan:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_scan_with_count(self, glide_client: GlideClusterClient):
         key = get_random_string(10)
-        expected_keys = [f"{key}:{i}" for i in range(100)]
+        expected_keys = [f"{key}{i}" for i in range(100)]
         await glide_client.mset({k: "value" for k in expected_keys})
         encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         cursor = ClusterScanCursor()
@@ -177,13 +178,13 @@ class TestScan:
         await glide_client.mset({k: "value" for k in unexpected_keys})
         encoded_unexpected_keys = map(lambda k: k.encode(), unexpected_keys)
         key = get_random_string(10)
-        expected_keys = [f"key:{key}:{i}" for i in range(100)]
+        expected_keys = [f"key-{key}-{i}" for i in range(100)]
         await glide_client.mset({k: "value" for k in expected_keys})
         encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         cursor = ClusterScanCursor()
         keys: List[str] = []
         while not cursor.is_finished():
-            result = await glide_client.scan(cursor, match="key:*")
+            result = await glide_client.scan(cursor, match="key-*")
             cursor = cast(ClusterScanCursor, result[0])
             result_keys = cast(List[str], result[1])
             keys.extend(result_keys)
@@ -195,9 +196,7 @@ class TestScan:
     # We test whether the cursor is cleaned up after it is deleted, which we expect to happen when th GC is called
     async def test_cluster_scan_cleaning_cursor(self, glide_client: GlideClusterClient):
         key = get_random_string(10)
-        await glide_client.mset(
-            {k: "value" for k in [f"{key}:{i}" for i in range(100)]}
-        )
+        await glide_client.mset({k: "value" for k in [f"{key}{i}" for i in range(100)]})
         cursor = cast(
             ClusterScanCursor, (await glide_client.scan(ClusterScanCursor()))[0]
         )
@@ -213,36 +212,36 @@ class TestScan:
     async def test_cluster_scan_all_types(self, glide_client: GlideClusterClient):
         # We test that the scan command work for all types of keys
         key = get_random_string(10)
-        string_keys = [f"{key}:{i}" for i in range(100)]
+        string_keys = [f"{key}{i}" for i in range(100)]
         await glide_client.mset({k: "value" for k in string_keys})
         encoded_string_keys = list(map(lambda k: k.encode(), string_keys))
 
         set_key = get_random_string(10)
-        set_keys = [f"{set_key}:{i}" for i in range(100, 200)]
+        set_keys = [f"{set_key}{i}" for i in range(100, 200)]
         for key in set_keys:
             await glide_client.sadd(key, ["value"])
         encoded_set_keys = list(map(lambda k: k.encode(), set_keys))
 
         hash_key = get_random_string(10)
-        hash_keys = [f"{hash_key}:{i}" for i in range(200, 300)]
+        hash_keys = [f"{hash_key}{i}" for i in range(200, 300)]
         for key in hash_keys:
             await glide_client.hset(key, {"field": "value"})
         encoded_hash_keys = list(map(lambda k: k.encode(), hash_keys))
 
         list_key = get_random_string(10)
-        list_keys = [f"{list_key}:{i}" for i in range(300, 400)]
+        list_keys = [f"{list_key}{i}" for i in range(300, 400)]
         for key in list_keys:
             await glide_client.lpush(key, ["value"])
         encoded_list_keys = list(map(lambda k: k.encode(), list_keys))
 
         zset_key = get_random_string(10)
-        zset_keys = [f"{zset_key}:{i}" for i in range(400, 500)]
+        zset_keys = [f"{zset_key}{i}" for i in range(400, 500)]
         for key in zset_keys:
             await glide_client.zadd(key, {"value": 1})
         encoded_zset_keys = list(map(lambda k: k.encode(), zset_keys))
 
         stream_key = get_random_string(10)
-        stream_keys = [f"{stream_key}:{i}" for i in range(500, 600)]
+        stream_keys = [f"{stream_key}{i}" for i in range(500, 600)]
         for key in stream_keys:
             await glide_client.xadd(key, [("field", "value")])
         encoded_stream_keys = list(map(lambda k: k.encode(), stream_keys))
@@ -340,7 +339,7 @@ class TestScan:
     ):
         key = get_random_string(10)
         for i in range(1000):
-            await glide_client_scoped.set(f"{key}:{i}", "value")
+            await glide_client_scoped.set(f"{key}{i}", "value")
         cursor = ClusterScanCursor()
         result = await glide_client_scoped.scan(cursor)
         cursor = cast(ClusterScanCursor, result[0])
@@ -405,7 +404,7 @@ class TestScan:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_standalone_scan_simple(self, glide_client: GlideClient):
         key = get_random_string(10)
-        expected_keys = [f"{key}:{i}" for i in range(100)]
+        expected_keys = [f"{key}{i}" for i in range(100)]
         await glide_client.mset({k: "value" for k in expected_keys})
         encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         keys: List[str] = []
@@ -426,9 +425,9 @@ class TestScan:
         self, glide_client: GlideClient
     ):
         key = get_random_string(10)
-        expected_keys = [f"key:{key}:{i}" for i in range(100)]
+        expected_keys = [f"key-{key}-{i}" for i in range(100)]
         await glide_client.mset({k: "value" for k in expected_keys})
-        unexpected_type_keys = [f"key:{i}" for i in range(100, 200)]
+        unexpected_type_keys = [f"key-{i}" for i in range(100, 200)]
         for key in unexpected_type_keys:
             await glide_client.sadd(key, ["value"])
         unexpected_pattern_keys = [f"{i}" for i in range(200, 300)]
@@ -438,7 +437,7 @@ class TestScan:
         cursor = b"0"
         while True:
             result = await glide_client.scan(
-                cursor, match=b"key:*", type=ObjectType.STRING
+                cursor, match=b"key-*", type=ObjectType.STRING
             )
             cursor = cast(bytes, result[0])
             keys.extend(list(map(lambda k: k.decode(), cast(List[bytes], result[1]))))
@@ -452,7 +451,7 @@ class TestScan:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_standalone_scan_with_count(self, glide_client: GlideClient):
         key = get_random_string(10)
-        expected_keys = [f"{key}:{i}" for i in range(100)]
+        expected_keys = [f"{key}{i}" for i in range(100)]
         await glide_client.mset({k: "value" for k in expected_keys})
         encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         cursor = "0"
@@ -480,7 +479,7 @@ class TestScan:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_standalone_scan_with_match(self, glide_client: GlideClient):
         key = get_random_string(10)
-        expected_keys = [f"key:{key}:{i}" for i in range(100)]
+        expected_keys = [f"key-{key}-{i}" for i in range(100)]
         await glide_client.mset({k: "value" for k in expected_keys})
         encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         unexpected_keys = [f"{i}" for i in range(100)]
@@ -489,7 +488,7 @@ class TestScan:
         cursor = "0"
         keys: List[str] = []
         while True:
-            result = await glide_client.scan(cursor, match="key:*")
+            result = await glide_client.scan(cursor, match="key-*")
             cursor_bytes = cast(bytes, result[0])
             cursor = cursor_bytes.decode()
             new_keys = cast(List[str], result[1])
@@ -503,118 +502,106 @@ class TestScan:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_standalone_scan_all_types(self, glide_client: GlideClient):
         # We test that the scan command work for all types of keys
-        key = get_random_string(10)
-        string_keys = [f"{key}:{i}" for i in range(100)]
-        await glide_client.mset({k: "value" for k in string_keys})
-        encoded_string_keys = list(map(lambda k: k.encode(), string_keys))
-
-        set_keys = [f"{key}:{i}" for i in range(100, 200)]
-        for key in set_keys:
-            await glide_client.sadd(key, ["value"])
-        encoded_set_keys = list(map(lambda k: k.encode(), set_keys))
-
-        hash_keys = [f"{key}:{i}" for i in range(200, 300)]
-        for key in hash_keys:
-            await glide_client.hset(key, {"field": "value"})
-        encoded_hash_keys = list(map(lambda k: k.encode(), hash_keys))
-
-        list_keys = [f"{key}:{i}" for i in range(300, 400)]
-        for key in list_keys:
-            await glide_client.lpush(key, ["value"])
-        encoded_list_keys = list(map(lambda k: k.encode(), list_keys))
-
-        zset_keys = [f"{key}:{i}" for i in range(400, 500)]
-        for key in zset_keys:
-            await glide_client.zadd(key, {"value": 1})
-        encoded_zset_keys = list(map(lambda k: k.encode(), zset_keys))
-
-        stream_keys = [f"{key}:{i}" for i in range(500, 600)]
-        for key in stream_keys:
-            await glide_client.xadd(key, [("field", "value")])
-        encoded_stream_keys = list(map(lambda k: k.encode(), stream_keys))
+        (
+            encoded_string_keys,
+            encoded_set_keys,
+            encoded_hash_keys,
+            encoded_list_keys,
+            encoded_zset_keys,
+            encoded_stream_keys,
+        ) = await self.create_keys(glide_client)
 
         cursor = "0"
         keys: List[bytes] = []
-        while True:
-            result = await glide_client.scan(cursor, type=ObjectType.STRING)
-            cursor_bytes = cast(bytes, result[0])
-            cursor = cursor_bytes.decode()
-            new_keys = result[1]
-            keys.extend(cast(List[bytes], new_keys))
-            if cursor == "0":
-                break
-        assert set(encoded_string_keys) == set(keys)
-        assert not set(encoded_set_keys).intersection(set(keys))
-        assert not set(encoded_hash_keys).intersection(set(keys))
-        assert not set(encoded_list_keys).intersection(set(keys))
-        assert not set(encoded_zset_keys).intersection(set(keys))
-        assert not set(encoded_stream_keys).intersection(set(keys))
+        cursor = await self.scan_string(
+            glide_client,
+            encoded_string_keys,
+            encoded_set_keys,
+            encoded_hash_keys,
+            encoded_list_keys,
+            encoded_zset_keys,
+            encoded_stream_keys,
+            cursor,
+            keys,
+        )
 
         keys.clear()
-        while True:
-            result = await glide_client.scan(cursor, type=ObjectType.SET)
-            cursor_bytes = cast(bytes, result[0])
-            cursor = cursor_bytes.decode()
-            new_keys = result[1]
-            keys.extend(cast(List[bytes], new_keys))
-            if cursor == "0":
-                break
-        assert set(encoded_set_keys) == set(keys)
-        assert not set(encoded_string_keys).intersection(set(keys))
-        assert not set(encoded_hash_keys).intersection(set(keys))
-        assert not set(encoded_list_keys).intersection(set(keys))
-        assert not set(encoded_zset_keys).intersection(set(keys))
-        assert not set(encoded_stream_keys).intersection(set(keys))
+        cursor = await self.scan_set(
+            glide_client,
+            encoded_string_keys,
+            encoded_set_keys,
+            encoded_hash_keys,
+            encoded_list_keys,
+            encoded_zset_keys,
+            encoded_stream_keys,
+            cursor,
+            keys,
+        )
 
         keys.clear()
-        while True:
-            result = await glide_client.scan(cursor, type=ObjectType.HASH)
-            cursor_bytes = cast(bytes, result[0])
-            cursor = cursor_bytes.decode()
-            new_keys = result[1]
-            keys.extend(cast(List[bytes], new_keys))
-            if cursor == "0":
-                break
-        assert set(encoded_hash_keys) == set(keys)
-        assert not set(encoded_string_keys).intersection(set(keys))
-        assert not set(encoded_set_keys).intersection(set(keys))
-        assert not set(encoded_list_keys).intersection(set(keys))
-        assert not set(encoded_zset_keys).intersection(set(keys))
-        assert not set(encoded_stream_keys).intersection(set(keys))
+        cursor = await self.scan_hash(
+            glide_client,
+            encoded_string_keys,
+            encoded_set_keys,
+            encoded_hash_keys,
+            encoded_list_keys,
+            encoded_zset_keys,
+            encoded_stream_keys,
+            cursor,
+            keys,
+        )
 
         keys.clear()
-        while True:
-            result = await glide_client.scan(cursor, type=ObjectType.LIST)
-            cursor_bytes = cast(bytes, result[0])
-            cursor = cursor_bytes.decode()
-            new_keys = result[1]
-            keys.extend(cast(List[bytes], new_keys))
-            if cursor == "0":
-                break
-        assert set(encoded_list_keys) == set(keys)
-        assert not set(encoded_string_keys).intersection(set(keys))
-        assert not set(encoded_set_keys).intersection(set(keys))
-        assert not set(encoded_hash_keys).intersection(set(keys))
-        assert not set(encoded_zset_keys).intersection(set(keys))
-        assert not set(encoded_stream_keys).intersection(set(keys))
+        cursor = await self.scan_list(
+            glide_client,
+            encoded_string_keys,
+            encoded_set_keys,
+            encoded_hash_keys,
+            encoded_list_keys,
+            encoded_zset_keys,
+            encoded_stream_keys,
+            cursor,
+            keys,
+        )
 
         keys.clear()
-        while True:
-            result = await glide_client.scan(cursor, type=ObjectType.ZSET)
-            cursor_bytes = cast(bytes, result[0])
-            cursor = cursor_bytes.decode()
-            new_keys = result[1]
-            keys.extend(cast(List[bytes], new_keys))
-            if cursor == "0":
-                break
-        assert set(encoded_zset_keys) == set(keys)
-        assert not set(encoded_string_keys).intersection(set(keys))
-        assert not set(encoded_set_keys).intersection(set(keys))
-        assert not set(encoded_hash_keys).intersection(set(keys))
-        assert not set(encoded_list_keys).intersection(set(keys))
-        assert not set(encoded_stream_keys).intersection(set(keys))
+        cursor = await self.scan_zset(
+            glide_client,
+            encoded_string_keys,
+            encoded_set_keys,
+            encoded_hash_keys,
+            encoded_list_keys,
+            encoded_zset_keys,
+            encoded_stream_keys,
+            cursor,
+            keys,
+        )
 
         keys.clear()
+        await self.scan_stream(
+            glide_client,
+            encoded_string_keys,
+            encoded_set_keys,
+            encoded_hash_keys,
+            encoded_list_keys,
+            encoded_zset_keys,
+            encoded_stream_keys,
+            cursor,
+            keys,
+        )
+
+    async def scan_stream(
+        self,
+        glide_client,
+        encoded_string_keys,
+        encoded_set_keys,
+        encoded_hash_keys,
+        encoded_list_keys,
+        encoded_zset_keys,
+        encoded_stream_keys,
+        cursor,
+        keys,
+    ):
         while True:
             result = await glide_client.scan(cursor, type=ObjectType.STREAM)
             cursor_bytes = cast(bytes, result[0])
@@ -629,3 +616,183 @@ class TestScan:
         assert not set(encoded_hash_keys).intersection(set(keys))
         assert not set(encoded_list_keys).intersection(set(keys))
         assert not set(encoded_zset_keys).intersection(set(keys))
+
+    async def scan_zset(
+        self,
+        glide_client,
+        encoded_string_keys,
+        encoded_set_keys,
+        encoded_hash_keys,
+        encoded_list_keys,
+        encoded_zset_keys,
+        encoded_stream_keys,
+        cursor,
+        keys,
+    ):
+        while True:
+            result = await glide_client.scan(cursor, type=ObjectType.ZSET)
+            cursor_bytes = cast(bytes, result[0])
+            cursor = cursor_bytes.decode()
+            new_keys = result[1]
+            keys.extend(cast(List[bytes], new_keys))
+            if cursor == "0":
+                break
+        assert set(encoded_zset_keys) == set(keys)
+        assert not set(encoded_string_keys).intersection(set(keys))
+        assert not set(encoded_set_keys).intersection(set(keys))
+        assert not set(encoded_hash_keys).intersection(set(keys))
+        assert not set(encoded_list_keys).intersection(set(keys))
+        assert not set(encoded_stream_keys).intersection(set(keys))
+        return cursor
+
+    async def scan_list(
+        self,
+        glide_client,
+        encoded_string_keys,
+        encoded_set_keys,
+        encoded_hash_keys,
+        encoded_list_keys,
+        encoded_zset_keys,
+        encoded_stream_keys,
+        cursor,
+        keys,
+    ):
+        while True:
+            result = await glide_client.scan(cursor, type=ObjectType.LIST)
+            cursor_bytes = cast(bytes, result[0])
+            cursor = cursor_bytes.decode()
+            new_keys = result[1]
+            keys.extend(cast(List[bytes], new_keys))
+            if cursor == "0":
+                break
+        assert set(encoded_list_keys) == set(keys)
+        assert not set(encoded_string_keys).intersection(set(keys))
+        assert not set(encoded_set_keys).intersection(set(keys))
+        assert not set(encoded_hash_keys).intersection(set(keys))
+        assert not set(encoded_zset_keys).intersection(set(keys))
+        assert not set(encoded_stream_keys).intersection(set(keys))
+        return cursor
+
+    async def scan_hash(
+        self,
+        glide_client,
+        encoded_string_keys,
+        encoded_set_keys,
+        encoded_hash_keys,
+        encoded_list_keys,
+        encoded_zset_keys,
+        encoded_stream_keys,
+        cursor,
+        keys,
+    ):
+        while True:
+            result = await glide_client.scan(cursor, type=ObjectType.HASH)
+            cursor_bytes = cast(bytes, result[0])
+            cursor = cursor_bytes.decode()
+            new_keys = result[1]
+            keys.extend(cast(List[bytes], new_keys))
+            if cursor == "0":
+                break
+        assert set(encoded_hash_keys) == set(keys)
+        assert not set(encoded_string_keys).intersection(set(keys))
+        assert not set(encoded_set_keys).intersection(set(keys))
+        assert not set(encoded_list_keys).intersection(set(keys))
+        assert not set(encoded_zset_keys).intersection(set(keys))
+        assert not set(encoded_stream_keys).intersection(set(keys))
+        return cursor
+
+    async def scan_set(
+        self,
+        glide_client,
+        encoded_string_keys,
+        encoded_set_keys,
+        encoded_hash_keys,
+        encoded_list_keys,
+        encoded_zset_keys,
+        encoded_stream_keys,
+        cursor,
+        keys,
+    ):
+        while True:
+            result = await glide_client.scan(cursor, type=ObjectType.SET)
+            cursor_bytes = cast(bytes, result[0])
+            cursor = cursor_bytes.decode()
+            new_keys = result[1]
+            keys.extend(cast(List[bytes], new_keys))
+            if cursor == "0":
+                break
+        assert set(encoded_set_keys) == set(keys)
+        assert not set(encoded_string_keys).intersection(set(keys))
+        assert not set(encoded_hash_keys).intersection(set(keys))
+        assert not set(encoded_list_keys).intersection(set(keys))
+        assert not set(encoded_zset_keys).intersection(set(keys))
+        assert not set(encoded_stream_keys).intersection(set(keys))
+        return cursor
+
+    async def scan_string(
+        self,
+        glide_client,
+        encoded_string_keys,
+        encoded_set_keys,
+        encoded_hash_keys,
+        encoded_list_keys,
+        encoded_zset_keys,
+        encoded_stream_keys,
+        cursor,
+        keys,
+    ):
+        while True:
+            result = await glide_client.scan(cursor, type=ObjectType.STRING)
+            cursor_bytes = cast(bytes, result[0])
+            cursor = cursor_bytes.decode()
+            new_keys = result[1]
+            keys.extend(cast(List[bytes], new_keys))
+            if cursor == "0":
+                break
+        assert set(encoded_string_keys) == set(keys)
+        assert not set(encoded_set_keys).intersection(set(keys))
+        assert not set(encoded_hash_keys).intersection(set(keys))
+        assert not set(encoded_list_keys).intersection(set(keys))
+        assert not set(encoded_zset_keys).intersection(set(keys))
+        assert not set(encoded_stream_keys).intersection(set(keys))
+        return cursor
+
+    async def create_keys(self, glide_client):
+        key = get_random_string(10)
+        string_keys = [f"{key}{i}" for i in range(100)]
+        await glide_client.mset({k: "value" for k in string_keys})
+        encoded_string_keys = list(map(lambda k: k.encode(), string_keys))
+
+        set_keys = [f"{key}{i}" for i in range(100, 200)]
+        for key in set_keys:
+            await glide_client.sadd(key, ["value"])
+        encoded_set_keys = list(map(lambda k: k.encode(), set_keys))
+
+        hash_keys = [f"{key}{i}" for i in range(200, 300)]
+        for key in hash_keys:
+            await glide_client.hset(key, {"field": "value"})
+        encoded_hash_keys = list(map(lambda k: k.encode(), hash_keys))
+
+        list_keys = [f"{key}{i}" for i in range(300, 400)]
+        for key in list_keys:
+            await glide_client.lpush(key, ["value"])
+        encoded_list_keys = list(map(lambda k: k.encode(), list_keys))
+
+        zset_keys = [f"{key}{i}" for i in range(400, 500)]
+        for key in zset_keys:
+            await glide_client.zadd(key, {"value": 1})
+        encoded_zset_keys = list(map(lambda k: k.encode(), zset_keys))
+
+        stream_keys = [f"{key}{i}" for i in range(500, 600)]
+        for key in stream_keys:
+            await glide_client.xadd(key, [("field", "value")])
+        encoded_stream_keys = list(map(lambda k: k.encode(), stream_keys))
+
+        return (
+            encoded_string_keys,
+            encoded_set_keys,
+            encoded_hash_keys,
+            encoded_list_keys,
+            encoded_zset_keys,
+            encoded_stream_keys,
+        )

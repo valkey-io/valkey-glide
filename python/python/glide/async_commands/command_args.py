@@ -1,7 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from enum import Enum
-from typing import List, Optional, Union
 
 
 class Limit:
@@ -12,7 +11,7 @@ class Limit:
     similar to the `LIMIT` clause in SQL (e.g., `SELECT LIMIT offset, count`).
 
     This class can be utilized in multiple commands that support limit options,
-    such as [ZRANGE](https://valkey.io/commands/zrange), [SORT](https://valkey.io/commands/sort/), and others.
+    such as `ZRANGE <https://valkey.io/commands/zrange>`_, `SORT <https://valkey.io/commands/sort/>`_, and others.
 
     Args:
         offset (int): The starting position of the range, zero based.
@@ -34,9 +33,11 @@ class OrderBy(Enum):
     Enumeration representing sorting order options.
 
     This enum is used for the following commands:
-    - `SORT`: General sorting in ascending or descending order.
-    - `GEOSEARCH`: Sorting items based on their proximity to a center point.
-    - `FT.AGGREGATE`: Used in the SortBy clause of the FT.AGGREGATE command.
+
+        - `SORT`: General sorting in ascending or descending order.
+        - `GEOSEARCH`: Sorting items based on their proximity to a center point.
+        - `FT.AGGREGATE`: Used in the SortBy clause of the FT.AGGREGATE command.
+
     """
 
     ASC = "ASC"
@@ -93,7 +94,7 @@ class ObjectType(Enum):
 
     HASH = "Hash"
     """
-    Represents a hash data type.    
+    Represents a hash data type.
     """
 
     STREAM = "Stream"

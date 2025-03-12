@@ -3,7 +3,7 @@
 import os
 import subprocess
 import sys
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from glide.config import NodeAddress
 
@@ -47,7 +47,9 @@ class ValkeyCluster:
             )
             output, err = p.communicate(timeout=80)
             if p.returncode != 0:
-                raise Exception(f"Failed to create a cluster. Executed: {p}:\n{err}")
+                raise Exception(
+                    f"Failed to create a cluster. Executed: {p}" + ":" + f"\n{err}"
+                )
             self.parse_cluster_script_start_output(output)
 
     def parse_cluster_script_start_output(self, output: str):
@@ -90,5 +92,7 @@ class ValkeyCluster:
             output, err = p.communicate(timeout=20)
             if p.returncode != 0:
                 raise Exception(
-                    f"Failed to stop a cluster {self.cluster_folder}. Executed: {p}:\n{err}"
+                    f"Failed to stop a cluster {self.cluster_folder}. Executed: {p}"
+                    + ":"
+                    + f"\n{err}"
                 )

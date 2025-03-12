@@ -20,7 +20,7 @@ type BitCountOptions struct {
 	bitMapIndexType BitmapIndexType
 }
 
-func NewBitCountOptionsBuilder() *BitCountOptions {
+func NewBitCountOptions() *BitCountOptions {
 	return &BitCountOptions{}
 }
 
