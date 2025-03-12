@@ -82,8 +82,8 @@ public abstract class Route
     /// <param name="slotType">Defines type of the node being addressed.</param>
     public class SlotIdRoute(int slotId, SlotType slotType) : Route, ISingleNodeRoute
     {
-        internal readonly int SlotId = slotId;
-        internal new readonly SlotType SlotType = slotType;
+        public readonly int SlotId = slotId;
+        public new readonly SlotType SlotType = slotType;
 
         internal override RouteInfo ToFfi() => ToFfi(RouteType.SlotId, slotIdInfo: (SlotId, SlotType));
     }
@@ -96,8 +96,8 @@ public abstract class Route
     /// <param name="slotType">Defines type of the node being addressed.</param>
     public class SlotKeyRoute(string slotKey, SlotType slotType) : Route, ISingleNodeRoute
     {
-        internal readonly string SlotKey = slotKey;
-        internal new readonly SlotType SlotType = slotType;
+        public readonly string SlotKey = slotKey;
+        public new readonly SlotType SlotType = slotType;
 
         internal override RouteInfo ToFfi() => ToFfi(RouteType.SlotId, slotKeyInfo: (SlotKey, SlotType));
     }
@@ -107,8 +107,8 @@ public abstract class Route
     /// </summary>
     public class ByAddressRoute : Route, ISingleNodeRoute
     {
-        internal readonly string Host;
-        internal readonly int Port;
+        public readonly string Host;
+        public readonly int Port;
 
         /// <summary>
         /// Create a route using hostname/address and port.<br />

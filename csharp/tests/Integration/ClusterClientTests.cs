@@ -30,7 +30,7 @@ public class ClusterClientTests
                 }
             }
         }
-        Assert.Fail("All 100 commands were sent to: " + ports.First());
+        Assert.Fail($"All 100 commands were sent to: {ports.First()}");
     }
 
     [Fact]
