@@ -7,6 +7,7 @@ use redis::{RedisResult, Value};
 use std::{
     ffi::{c_char, c_void, CStr},
     slice::from_raw_parts,
+    sync::Arc,
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
@@ -23,10 +24,14 @@ pub enum Level {
 // TODO define `SuccessCallback` and `FailureCallback` types
 
 pub struct Client {
+    runtime: Runtime,
+    core: Arc<CommandExecutionCore>,
+}
+
+struct CommandExecutionCore {
     client: GlideClient,
     success_callback: unsafe extern "C" fn(usize, i32, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (), // TODO - add specific error codes
-    runtime: Runtime,
 }
 
 fn create_connection_request(host: String, port: u32, use_tls: bool) -> client::ConnectionRequest {
@@ -62,15 +67,16 @@ fn create_client_internal(
         .build()?;
     let _runtime_handle = runtime.enter();
     let client = runtime.block_on(GlideClient::new(request, None)).unwrap(); // TODO - handle errors.
-    Ok(Client {
-        client,
+    let core = Arc::new(CommandExecutionCore {
         success_callback,
         failure_callback,
-        runtime,
-    })
+        client,
+    });
+    Ok(Client { runtime, core })
 }
 
-/// Creates a new client to the given address. The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns. All callbacks should be offloaded to separate threads in order not to exhaust the client's thread pool.
+/// Creates a new client to the given address. The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns.
+/// All callbacks should be offloaded to separate threads in order not to exhaust the client's thread pool.
 #[no_mangle]
 pub extern "C" fn create_client(
     host: *const c_char,
@@ -81,15 +87,19 @@ pub extern "C" fn create_client(
 ) -> *const c_void {
     match create_client_internal(host, port, use_tls, success_callback, failure_callback) {
         Err(_) => std::ptr::null(), // TODO - log errors
-        Ok(client) => Box::into_raw(Box::new(client)) as *const c_void,
+        Ok(client) => Arc::into_raw(Arc::new(client)) as *const c_void,
     }
 }
 
+/// # Safety
+///
+/// This function should only be called once per pointer created by [create_client]. After calling this function
+/// the `client_ptr` is not in a valid state.
 #[no_mangle]
-pub extern "C" fn close_client(client_ptr: *const c_void) {
-    let client_ptr = unsafe { Box::from_raw(client_ptr as *mut Client) };
-    let _runtime_handle = client_ptr.runtime.enter();
-    drop(client_ptr);
+pub extern "C" fn close_client(client_adapter_ptr: *const c_void) {
+    assert!(!client_adapter_ptr.is_null());
+    // This will bring the strong count down to 0 once all client requests are done.
+    unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const Client) };
 }
 
 /// Converts a double pointer to a vec.
@@ -130,6 +140,8 @@ fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*const T, usize) {
 ///
 /// # Safety
 /// TODO merge with [#3321](https://github.com/valkey-io/valkey-glide/pull/3321)
+///
+/// This function should only be called should with a pointer created by [create_client], before [close_client] was called with the pointer.
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_ptr: *const c_void,
@@ -139,12 +151,13 @@ pub unsafe extern "C" fn command(
     arg_count: u32,
     args_len: *const u32,
 ) {
-    let client = unsafe { Box::leak(Box::from_raw(client_ptr as *mut Client)) };
+    let client = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_ptr);
+        Arc::from_raw(client_ptr as *mut Client)
+    };
 
-    // The safety of these needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
-    let ptr_address = client_ptr as usize;
-
-    let mut client_clone = client.client.clone();
+    let core = client.core.clone();
 
     let arg_vec =
         unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) };
@@ -152,7 +165,7 @@ pub unsafe extern "C" fn command(
     // Create the command outside of the task to ensure that the command arguments passed are still valid
     let Some(mut cmd) = request_type.get_command() else {
         unsafe {
-            (client.failure_callback)(callback_index); // TODO - report errors
+            (core.failure_callback)(callback_index); // TODO - report errors
             return;
         }
     };
@@ -161,34 +174,33 @@ pub unsafe extern "C" fn command(
     }
 
     client.runtime.spawn(async move {
-        let result = client_clone.send_command(&cmd, None).await;
+        let result = core.client.clone().send_command(&cmd, None).await;
         unsafe {
-            let client = Box::leak(Box::from_raw(ptr_address as *mut Client));
             match result {
                 Ok(Value::SimpleString(text)) => {
                     let (vec_ptr, len) = convert_vec_to_pointer(text.into_bytes());
-                    (client.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
+                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
                 }
                 Ok(Value::BulkString(text)) => {
                     let (vec_ptr, len) = convert_vec_to_pointer(text);
-                    (client.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
+                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
                 }
                 Ok(Value::VerbatimString { format: _, text }) => {
                     let (vec_ptr, len) = convert_vec_to_pointer(text.into_bytes());
-                    (client.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
+                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
                 }
                 Ok(Value::Okay) => {
                     let (vec_ptr, len) = convert_vec_to_pointer(String::from("OK").into_bytes());
-                    (client.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
+                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
                 }
-                Ok(Value::Nil) => (client.success_callback)(callback_index, 0, std::ptr::null()),
+                Ok(Value::Nil) => (core.success_callback)(callback_index, 0, std::ptr::null()),
                 Err(err) => {
                     dbg!(err); // TODO - report errors
-                    (client.failure_callback)(callback_index)
+                    (core.failure_callback)(callback_index)
                 }
                 Ok(value) => {
                     dbg!(value); // TODO - handle other response types
-                    (client.failure_callback)(callback_index)
+                    (core.failure_callback)(callback_index)
                 }
             };
         };
