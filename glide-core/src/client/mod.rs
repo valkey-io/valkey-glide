@@ -377,12 +377,13 @@ impl Client {
     ) -> RedisResult<Value> {
         let values = values
             .into_iter()
+            .map(Value::extract_error)
             .zip(
                 pipeline
                     .cmd_iter()
                     .map(|cmd| expected_type_for_cmd(cmd.as_ref())),
             )
-            .map(|(value, expected_type)| convert_to_expected_type(value, expected_type))
+            .map(|(value, expected_type)| convert_to_expected_type(value?, expected_type))
             .try_fold(
                 Vec::with_capacity(command_count),
                 |mut acc, result| -> RedisResult<_> {

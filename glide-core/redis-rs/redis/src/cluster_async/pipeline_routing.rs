@@ -3,6 +3,7 @@ use crate::cluster_async::ClusterConnInner;
 use crate::cluster_async::Connect;
 use crate::cluster_routing::RoutingInfo;
 use crate::cluster_routing::SlotAddr;
+use crate::types::{RetryMethod, ServerError, ServerErrorKind};
 use cluster_routing::RoutingInfo::{MultiNode, SingleNode};
 
 use crate::cluster_routing::{
@@ -11,6 +12,7 @@ use crate::cluster_routing::{
 use crate::{cluster_routing, RedisResult, Value};
 use crate::{cluster_routing::Route, Cmd, ErrorKind, RedisError};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::cluster_async::MUTEX_READ_ERR;
@@ -20,8 +22,11 @@ use rand::prelude::IteratorRandom;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 
+use super::boxed_sleep;
+use super::testing::RefreshConnectionType;
 use super::CmdArg;
 use super::PendingRequest;
+use super::RedirectNode;
 use super::RequestInfo;
 use super::{Core, InternalSingleNodeRouting, OperationTarget, Response};
 
@@ -294,6 +299,7 @@ where
 ///
 /// * `pipeline_map` - A map of node pipelines where the commands are grouped by their corresponding nodes.
 /// * `core` - The core object that provides access to connection locks and other resources.
+/// * `retry` - The retry counter.
 ///
 /// # Returns
 ///
@@ -303,6 +309,7 @@ where
 pub async fn collect_and_send_pending_requests<C>(
     pipeline_map: NodePipelineMap<C>,
     core: Core<C>,
+    retry: u32,
 ) -> (
     Vec<Result<RedisResult<Response>, RecvError>>,
     Vec<(String, Vec<(usize, Option<usize>)>)>,
@@ -313,7 +320,7 @@ where
     // Processes the sub-pipelines to generate pending requests for execution on specific nodes.
     // Each pending request encapsulates all the necessary details for executing commands on a node.
     let (receivers, pending_requests, addresses_and_indices) =
-        collect_pipeline_requests(pipeline_map);
+        collect_pipeline_requests(pipeline_map, retry);
 
     // Add the pending requests to the pending_requests queue
     core.pending_requests
@@ -344,6 +351,7 @@ where
 #[allow(clippy::type_complexity)]
 pub fn collect_pipeline_requests<C>(
     pipelines_by_connection: NodePipelineMap<C>,
+    retry: u32,
 ) -> (
     Vec<oneshot::Receiver<RedisResult<Response>>>,
     Vec<PendingRequest<C>>,
@@ -362,7 +370,7 @@ where
         // Add the receiver to the list of receivers
         receivers.push(receiver);
         pending_requests.push(PendingRequest {
-            retry: 0,
+            retry,
             sender,
             info: RequestInfo {
                 cmd: CmdArg::Pipeline {
@@ -375,6 +383,7 @@ where
                     },
                     // mark it as a sub-pipeline mode
                     sub_pipeline: true,
+                    retry,
                 },
             },
         });
@@ -430,35 +439,74 @@ pub fn add_pipeline_result(
     }
 }
 
-/// Processes the responses of pipeline commands and updates the given `pipeline_responses`
-/// with the corresponding results.
+/// A retry entry representing a failed command in the pipeline.
 ///
-/// The function iterates over the responses along with the `addresses_and_indices` list,
-/// ensuring that each response is added to its appropriate position in `pipeline_responses` along with the associated address.
-/// If any response indicates an error, the function terminates early and returns the first encountered error.
+/// This tuple contains:
+/// - **Command Indices**: A tuple `(usize, Option<usize>)` where the first element is the index
+///   of the command in the pipeline and the optional second element represents a nested or sub-index.
+/// - **Node Address**: A `String` indicating the address of the node that originally handled the command.
+/// - **Server Error**: A `ServerError` describing the error encountered.
+type RetryEntry = ((usize, Option<usize>), String, ServerError);
+
+/// A mapping from a retry method to the corresponding list of retry entries.
+///
+/// Each key is a `RetryMethod` that categorizes the type of redirection or error,
+/// and each value is a vector of `RetryEntry` items that failed with that retry method.
+type RetryMap = HashMap<RetryMethod, Vec<RetryEntry>>;
+
+/// Processes pipeline responses and updates the provided `pipeline_responses` with the corresponding results.
+///
+/// This function iterates over the pipeline responses paired with their original command addresses and indices.
+/// For each response, it:
+/// - Adds each sub-response into the `pipeline_responses` at the appropriate index.
+/// - If a sub-response is a `ServerError`, it converts the error to determine the applicable retry method,
+///   and then records the failed command in a retry map for later reprocessing.
+/// - Generates a suitable `ServerError` if the response format is not as expected (for example, receiving a single response
+///   for a pipeline containing multiple commands or a cluster scan result).
 ///
 /// # Parameters
 ///
-/// - `pipeline_responses`: A vec that holds the original pipeline commands responses.
-/// - `responses`: A list of responses corresponding to each sub-pipeline.
-/// - `addresses_and_indices`: A list of (address, indices) pairs indicating where each response should be placed.
+/// - `pipeline_responses`: A mutable collection that holds the responses corresponding to each command in the pipeline.
+/// - `responses`: A vector of results from sub-pipelines, where each item is a `Result` containing either a successful
+///   `RedisResult<Response>` or a `RecvError`.
+/// - `addresses_and_indices`: A collection of pairs where each pair associates a node address with the indices
+///   of commands in the pipeline that were sent to that node.
 ///
 /// # Returns
 ///
-/// - `Ok(())` if all responses are processed successfully.
-/// - `Err((OperationTarget, RedisError))` if a node-level or reception error occurs.
+/// - **Ok**: A `HashMap<RetryMethod, Vec<RetryEntry>>` mapping each retry method to the list of commands that failed and
+///   should be retried.
+/// - **Err**: A tuple `(OperationTarget, RedisError)` if a node-level or reception error occurs while processing responses.
+#[allow(clippy::type_complexity)]
 pub fn process_pipeline_responses(
     pipeline_responses: &mut PipelineResponses,
     responses: Vec<Result<RedisResult<Response>, RecvError>>,
     addresses_and_indices: AddressAndIndices,
-) -> Result<(), (OperationTarget, RedisError)> {
+) -> Result<
+    HashMap<RetryMethod, Vec<((usize, Option<usize>), String, ServerError)>>,
+    (OperationTarget, RedisError),
+> {
+    let mut retry_map: RetryMap = HashMap::new();
     for ((address, command_indices), response_result) in
         addresses_and_indices.into_iter().zip(responses)
     {
-        match response_result {
+        let server_error = match response_result {
             Ok(Ok(Response::Multiple(values))) => {
                 // Add each response to the pipeline_responses vector at the appropriate index
                 for ((index, inner_index), value) in command_indices.into_iter().zip(values) {
+                    if let Value::ServerError(error) = &value {
+                        // Convert error and determine retry method
+                        let retry_method = RedisError::from(error.clone()).retry_method();
+
+                        // Update retry map
+                        retry_map.entry(retry_method).or_default().push((
+                            (index, inner_index),
+                            address.clone(),
+                            error.clone(),
+                        ));
+                    }
+
+                    // Add to pipeline responses
                     add_pipeline_result(
                         pipeline_responses,
                         index,
@@ -467,41 +515,550 @@ pub fn process_pipeline_responses(
                         address.clone(),
                     )?;
                 }
+                continue;
             }
-            Ok(Err(err)) => {
-                return Err((OperationTarget::Node { address }, err));
+            Ok(Err(err)) => err.into(),
+            Ok(Ok(Response::Single(_))) => ServerError::KnownError {
+                kind: (ServerErrorKind::ResponseError),
+                detail: (Some(
+                    "Received a single response for a pipeline with multiple commands.".to_string(),
+                )),
+            },
+            Ok(Ok(Response::ClusterScanResult(_, _))) => ServerError::KnownError {
+                kind: (ServerErrorKind::ResponseError),
+                detail: (Some("Received a cluster scan result inside a pipeline.".to_string())),
+            },
+            Err(err) => ServerError::ExtensionError {
+                code: ("FatalReceiveError".to_string()),
+                detail: (Some(format!("RecvError occurred: {err}"))),
+            },
+        };
+
+        // Add the error to the matching indices in the pipeline_responses
+        for (index, inner_index) in command_indices {
+            add_pipeline_result(
+                pipeline_responses,
+                index,
+                inner_index,
+                Value::ServerError(server_error.clone()),
+                address.clone(),
+            )?;
+        }
+    }
+
+    Ok(retry_map)
+}
+
+/// Processes the pipeline responses and handles errors by retrying the commands.
+///
+/// This function serves as a loop that processes the pipeline responses and handles any errors
+/// by retrying the commands that encountered the error, based on their retry method.
+/// If there are no commands to retry, or we've reached the maximum number of retries, the loop exits.
+///
+/// # Arguments
+///
+/// * `pipeline_responses` - A mutable reference to the collection of pipeline responses.
+/// * `responses` - A list of responses corresponding to each sub-pipeline.
+/// * `addresses_and_indices` - A list of (address, indices) pairs indicating where each response should be placed.
+/// * `pipeline` - A reference to the original pipeline containing the commands.
+/// * `core` - The core object that provides access to connection locks and other resources.
+/// * `retry` - The retry counter.
+/// * `response_policies` - A list of routing info and response policies to the pipeline commands.
+pub async fn process_and_retry_pipeline_responses<C>(
+    pipeline_responses: &mut PipelineResponses,
+    mut responses: Vec<Result<RedisResult<Response>, RecvError>>,
+    mut addresses_and_indices: AddressAndIndices,
+    pipeline: &crate::Pipeline,
+    core: Core<C>,
+    mut retry: u32,
+    response_policies: &mut Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>,
+) -> Result<(), (OperationTarget, RedisError)>
+where
+    C: Clone + ConnectionLike + Connect + Send + Sync + 'static,
+{
+    let retry_params = core
+        .get_cluster_param(|params| params.retry_params.clone())
+        .expect(MUTEX_READ_ERR);
+
+    loop {
+        match process_pipeline_responses(pipeline_responses, responses, addresses_and_indices) {
+            Ok(retry_map) => {
+                // If there are no retirable errors, or we have reached the maximum number of retries, we're done
+                if retry_map.is_empty() || retry >= retry_params.number_of_retries {
+                    break Ok(());
+                }
+
+                retry = retry.saturating_add(1);
+                match handle_retry_map(
+                    retry_map,
+                    core.clone(),
+                    pipeline,
+                    retry,
+                    pipeline_responses,
+                    response_policies,
+                )
+                .await
+                {
+                    Ok((new_responses, new_addresses_and_indices)) => {
+                        // Update responses for the retried commands
+                        responses = new_responses;
+                        addresses_and_indices = new_addresses_and_indices;
+                    }
+                    Err(e) => {
+                        break Err(e); // If we get into here, it's because `add_pipeline_result` failed to find the matching index
+                    }
+                }
             }
-            Ok(Ok(Response::Single(_))) => {
-                return Err((
-                    OperationTarget::Node { address },
-                    RedisError::from((
-                        ErrorKind::ClientError,
-                        "Received a single response for a pipeline with multiple commands.",
-                    )),
-                ));
+
+            // If we get into here, it's because `add_pipeline_result` failed to find the matching index
+            Err(e) => break Err(e),
+        }
+    }
+}
+
+/// Handles the retry logic for a given retry map.
+///
+/// This function processes the retry map, which contains commands that need to be retried based on their retry method.
+/// It handles the different retry methods such as reconnecting, waiting and retrying, or redirecting commands to the appropriate nodes.
+///
+/// # Arguments
+///
+/// * `retry_map` - A map where the key is the `RetryMethod` and the value is a vector of tuples containing:
+///   - The index and optional inner index of the command in the pipeline.
+///   - The address of the node where the command was originally sent.
+///   - The `ServerError` that occurred.
+/// * `core` - The core object that provides access to connection locks and other resources.
+/// * `pipeline` - A reference to the original pipeline containing the commands.
+/// * `retry` - The retry counter.
+/// * `pipeline_responses` - A mutable reference to the collection of pipeline responses.
+/// * `response_policies` - A list of routing info and response policies to the pipeline commands.
+///
+/// # Returns
+///
+/// A `Result` containing a tuple:
+/// - A vector of results for each sub-pipeline execution.
+/// - A vector of (address, indices) pairs indicating where each response should be placed.
+pub async fn handle_retry_map<C>(
+    retry_map: RetryMap,
+    core: Core<C>,
+    pipeline: &crate::Pipeline,
+    retry: u32,
+    pipeline_responses: &mut PipelineResponses,
+    response_policies: &mut Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>,
+) -> Result<
+    (
+        Vec<Result<RedisResult<Response>, RecvError>>,
+        Vec<(String, Vec<(usize, Option<usize>)>)>,
+    ),
+    (OperationTarget, RedisError),
+>
+where
+    C: Clone + ConnectionLike + Connect + Send + Sync + 'static,
+{
+    // Create a new pipeline map to map the retried commands to their corresponding node.
+    let mut pipeline_map = NodePipelineMap::new();
+    for (retry_method, indices_addresses_and_error) in retry_map {
+        match retry_method {
+            RetryMethod::NoRetry => {
+                // The server error was already added to the pipeline responses, so we can just continue.
             }
-            Ok(Ok(Response::ClusterScanResult(_, _))) => {
-                return Err((
-                    OperationTarget::Node { address },
-                    RedisError::from((
-                        ErrorKind::ClientError,
-                        "Received a cluster scan result inside a pipeline.",
-                    )),
-                ));
+            RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
+                handle_reconnect_logic(
+                    indices_addresses_and_error,
+                    core.clone(),
+                    pipeline,
+                    pipeline_responses,
+                    matches!(retry_method, RetryMethod::ReconnectAndRetry),
+                    &mut pipeline_map,
+                    response_policies,
+                )
+                .await?;
             }
-            Err(err) => {
-                return Err((
-                    OperationTarget::Node { address },
-                    RedisError::from((
-                        ErrorKind::FatalReceiveError,
-                        "RecvError occurred",
-                        err.to_string(),
-                    )),
-                ));
+            RetryMethod::RetryImmediately
+            | RetryMethod::WaitAndRetry
+            | RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica => {
+                handle_retry_logic(
+                    retry_method,
+                    retry,
+                    core.clone(),
+                    indices_addresses_and_error,
+                    pipeline,
+                    pipeline_responses,
+                    &mut pipeline_map,
+                    response_policies,
+                )
+                .await?;
+            }
+            RetryMethod::MovedRedirect | RetryMethod::AskRedirect => {
+                handle_redirect_logic(
+                    retry_method,
+                    core.clone(),
+                    pipeline,
+                    indices_addresses_and_error,
+                    pipeline_responses,
+                    &mut pipeline_map,
+                    response_policies,
+                )
+                .await?;
             }
         }
     }
+
+    Ok(collect_and_send_pending_requests(pipeline_map, core, retry).await)
+}
+
+/// Handles the reconnection logic for pipeline commands that encountered errors requiring a reconnect.
+///
+/// This function refreshes the connections for the nodes corresponding to the failure errors,
+/// and if configured to retry, it will invoke the retry mechanism for the affected commands.
+pub async fn handle_reconnect_logic<C>(
+    indices_addresses_and_error: Vec<((usize, Option<usize>), String, ServerError)>,
+    core: Core<C>,
+    pipeline: &Pipeline,
+    pipeline_responses: &mut PipelineResponses,
+    should_retry: bool,
+    pipeline_map: &mut NodePipelineMap<C>,
+    response_policies: &mut Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>,
+) -> Result<(), (OperationTarget, RedisError)>
+where
+    C: Clone + ConnectionLike + Connect + Send + Sync + 'static,
+{
+    // Extract unique addresses from the provided error entries.
+    let addresses: HashSet<String> = indices_addresses_and_error
+        .iter()
+        .map(|(_, address, _)| address.clone())
+        .collect();
+
+    // Refresh the connections for the affected addresses.
+    ClusterConnInner::refresh_and_update_connections(
+        core.clone(),
+        addresses,
+        RefreshConnectionType::OnlyUserConnection,
+        true,
+    )
+    .await;
+
+    // If we're supposed to retry, invoke the retry logic.
+    if should_retry {
+        retry_commands(
+            pipeline_map,
+            pipeline,
+            core.clone(),
+            indices_addresses_and_error,
+            pipeline_responses,
+            response_policies,
+        )
+        .await?;
+    }
     Ok(())
+}
+
+/// Handles retry logic for commands within a pipeline that encountered errors requiring a retry.
+///
+/// This function applies a retry strategy to the failed commands in the pipeline.
+/// Depending on the specified retry method, it may wait, process primary redirects, or perform no pre-retry work.
+/// After handling these conditions, the function reassigns the failed commands to their appropriate node pipelines
+/// using `retry_commands`, and schedules them for re-execution.
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_retry_logic<C>(
+    retry_method: RetryMethod,
+    retry: u32,
+    core: Core<C>,
+    indices_addresses_and_error: Vec<((usize, Option<usize>), String, ServerError)>,
+    pipeline: &Pipeline,
+    pipeline_responses: &mut PipelineResponses,
+    pipeline_map: &mut NodePipelineMap<C>,
+    response_policies: &mut Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>,
+) -> Result<(), (OperationTarget, RedisError)>
+where
+    C: Clone + Sync + ConnectionLike + Send + Connect + 'static,
+{
+    let retry_params = core
+        .get_cluster_param(|params| params.retry_params.clone())
+        .expect(MUTEX_READ_ERR);
+
+    match retry_method {
+        RetryMethod::WaitAndRetry => {
+            let sleep_duration = retry_params.wait_time_for_retry(retry);
+            boxed_sleep(sleep_duration).await;
+        }
+        RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica => {
+            let unique_addresses: HashSet<String> = indices_addresses_and_error
+                .iter()
+                .map(|(_, address, _)| address.clone())
+                .collect();
+
+            let futures = unique_addresses.into_iter().map(|address| {
+                ClusterConnInner::handle_loading_error(
+                    core.clone(),
+                    address,
+                    retry,
+                    retry_params.clone(),
+                )
+            });
+
+            futures::future::join_all(futures).await;
+        }
+        _ => {}
+    }
+
+    // Retry commands after handling retry conditions
+    retry_commands(
+        pipeline_map,
+        pipeline,
+        core,
+        indices_addresses_and_error,
+        pipeline_responses,
+        response_policies,
+    )
+    .await?;
+
+    Ok(())
+}
+
+/// Handles the redirection logic for commands that need to be retried due to redirection errors.
+///
+/// This function processes the retry map entries that indicate a redirection error (e.g., MOVED or ASK).
+/// It attempts to obtain a new connection based on the redirection information and reassigns the command
+/// to the appropriate node pipeline for execution.
+pub async fn handle_redirect_logic<C>(
+    retry_method: RetryMethod,
+    core: Core<C>,
+    pipeline: &Pipeline,
+    indices_addresses_and_error: Vec<((usize, Option<usize>), String, ServerError)>,
+    pipeline_responses: &mut PipelineResponses,
+    pipeline_map: &mut NodePipelineMap<C>,
+    response_policies: &mut Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>,
+) -> Result<(), (OperationTarget, RedisError)>
+where
+    C: Clone + ConnectionLike + Connect + Send + Sync + 'static,
+{
+    for (indices, address, mut error) in indices_addresses_and_error {
+        // Convert the ServerError to a RedisError and try to extract redirect info.
+        let redis_error: RedisError = error.clone().into();
+        let redirect_info = redis_error
+            .redirect()
+            .ok_or_else(|| (OperationTarget::FanOut, error.clone().into()))?;
+
+        // Create routing for redirection.
+        let routing = InternalSingleNodeRouting::Redirect {
+            redirect: redirect_info,
+            previous_routing: Box::new(InternalSingleNodeRouting::Random::<C>),
+        };
+
+        let (index, inner_index) = indices;
+
+        if matches!(retry_method, RetryMethod::MovedRedirect) {
+            if let Some(redirect_node) =
+                RedirectNode::from_option_tuple(redis_error.redirect_node())
+            {
+                if let Err(update_err) = ClusterConnInner::update_upon_moved_error(
+                    core.clone(),
+                    redirect_node.slot,
+                    redirect_node.address.clone().into(),
+                )
+                .await
+                {
+                    // Failed to update the cluster state. Append this error and continue.
+                    error.append_detail(&update_err.into());
+                    add_pipeline_result(
+                        pipeline_responses,
+                        index,
+                        inner_index,
+                        Value::ServerError(error),
+                        address.clone(),
+                    )?;
+                    continue;
+                }
+            } else {
+                // Failed to parse MOVED error. Append this error and continue.
+                let server_error = ServerError::KnownError {
+                    kind: ServerErrorKind::Moved,
+                    detail: Some("Failed to parse MOVED error".to_string()),
+                };
+                error.append_detail(&server_error);
+                add_pipeline_result(
+                    pipeline_responses,
+                    index,
+                    inner_index,
+                    Value::ServerError(error),
+                    address.clone(),
+                )?;
+                continue;
+            }
+        }
+
+        // Retrieve the original command and attempt to get a new connection.
+        match get_original_cmd(pipeline, index, inner_index, Some(response_policies)) {
+            Ok(cmd) => match ClusterConnInner::get_connection(routing, core.clone(), None).await {
+                Ok((address, conn)) => {
+                    // Add the command to the node pipeline map to retry.
+                    add_command_to_node_pipeline_map(
+                        pipeline_map,
+                        address,
+                        conn,
+                        cmd,
+                        index,
+                        inner_index,
+                    );
+                    continue;
+                }
+                Err(err) => error.append_detail(&err.into()), // Failed to get a connection.
+            },
+            Err(cmd_err) => error.append_detail(&cmd_err), // Failed to get the original command.
+        }
+
+        // Append the error if a failure occurred.
+        add_pipeline_result(
+            pipeline_responses,
+            index,
+            inner_index,
+            Value::ServerError(error),
+            address.clone(),
+        )?;
+    }
+    Ok(())
+}
+
+/// Retries the commands that encountered errors during pipeline execution.
+///
+/// This function processes the commands that need to be retried based on the provided indices,
+/// addresses, and errors. It attempts to retrieve the original commands from the pipeline and
+/// reassigns them to the appropriate node pipelines for execution.
+///
+/// # Arguments
+///
+/// * `pipeline_map` - A mutable reference to the map of node pipelines where the commands will be added.
+/// * `pipeline` - A reference to the original pipeline containing the commands.
+/// * `core` - The core object that provides access to connection locks and other resources.
+/// * `indices_addresses_and_errors` - A vector of tuples containing:
+///   - The index and optional inner index of the command in the pipeline.
+///   - The address of the node where the command was originally sent.
+///   - The `ServerError` that occurred.
+/// * `pipeline_responses` - A mutable reference to the collection of pipeline responses.
+async fn retry_commands<C>(
+    pipeline_map: &mut NodePipelineMap<C>,
+    pipeline: &crate::Pipeline,
+    core: Core<C>,
+    indices_addresses_and_errors: Vec<((usize, Option<usize>), String, ServerError)>,
+    pipeline_responses: &mut PipelineResponses,
+    response_policies: &mut Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>,
+) -> Result<(), (OperationTarget, RedisError)>
+where
+    C: Clone + ConnectionLike + Connect + Send + Sync + 'static,
+{
+    for ((index, inner_index), address, mut error) in indices_addresses_and_errors {
+        // Retrieve the original command for retry.
+        let cmd = match get_original_cmd(pipeline, index, inner_index, Some(response_policies)) {
+            Ok(cmd) => cmd,
+            Err(server_error) => {
+                // Failed to retrieve the original command. Append this error and continue.
+                add_pipeline_result(
+                    pipeline_responses,
+                    index,
+                    inner_index,
+                    Value::ServerError(server_error),
+                    address.clone(),
+                )?;
+                continue;
+            }
+        };
+
+        // Attempt to retrieve a connection for the given address.
+        let connection = {
+            let lock = core.conn_lock.read().expect(MUTEX_READ_ERR);
+            if let Some(conn) = lock.connection_for_address(&address) {
+                Ok(conn)
+            } else {
+                let lookup_error = ServerError::ExtensionError {
+                    code: "ConnectionNotFoundForRoute".to_string(),
+                    detail: Some(format!("No available connections for address {address}")),
+                };
+                error.append_detail(&lookup_error);
+                Err(error)
+            }
+        };
+
+        // Add the command to the node pipeline map for retry. Otherwise, append the error.
+        match connection {
+            Ok((addr, conn)) => {
+                add_command_to_node_pipeline_map(
+                    pipeline_map,
+                    addr,
+                    conn.await,
+                    cmd.clone(),
+                    index,
+                    inner_index,
+                );
+            }
+            Err(server_error) => {
+                add_pipeline_result(
+                    pipeline_responses,
+                    index,
+                    inner_index,
+                    Value::ServerError(server_error),
+                    address.clone(),
+                )?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Retrieves the original command from the pipeline based on the provided index and inner index.
+/// If the command requires multi-slot handling, the function extracts the indices for the sub-commands.
+fn get_original_cmd(
+    pipeline: &crate::Pipeline,
+    index: usize,
+    inner_index: Option<usize>,
+    response_policies: Option<&Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>>,
+) -> Result<Arc<Cmd>, ServerError> {
+    // Retrieve the command from the pipeline by index.
+    let cmd = pipeline
+        .get_command(index)
+        .ok_or_else(|| ServerError::ExtensionError {
+            code: "IndexNotFoundInPipelineResponses".to_string(),
+            detail: Some(format!("Index {} was not found in pipeline", index)),
+        })?;
+
+    // Search for the response policy based on the index.
+    let routing_info = if inner_index.is_some() {
+        response_policies.and_then(|vec| {
+            vec.binary_search_by_key(&index, |(index, _, _)| *index)
+                .ok()
+                .map(|i| &vec[i].1)
+        })
+    } else {
+        None
+    };
+
+    // Check if the response policy requires multi-slot handling
+    if let Some(MultipleNodeRoutingInfo::MultiSlot((slots, _))) = routing_info {
+        let inner_index = inner_index.ok_or_else(|| ServerError::ExtensionError {
+            code: "IndexNotFoundInPipelineResponses".to_string(),
+            detail: Some(format!(
+                "Inner index is required for a multi-slot command: {:?}",
+                cmd
+            )),
+        })?;
+
+        let indices = slots
+            .get(inner_index)
+            .ok_or_else(|| ServerError::ExtensionError {
+                code: "IndexNotFoundInPipelineResponses".to_string(),
+                detail: Some(format!(
+                "Inner index {} for multi-slot command {:?} was not found in command slots {:?}",
+                inner_index, cmd, slots
+            )),
+            })?;
+
+        // Return the transformed command using the extracted indices.
+        Ok(command_for_multi_slot_indices(cmd.as_ref(), indices.1.iter()).into())
+    } else {
+        // For non-multi-slot commands, simply return a clone.
+        Ok(cmd)
+    }
 }
 
 /// This function returns the route for a given pipeline.
