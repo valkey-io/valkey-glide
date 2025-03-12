@@ -20,7 +20,6 @@ func ExampleGlideClient_CustomCommand() {
 func ExampleGlideClient_RandomKey() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	result, err := client.RandomKey()
-
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
