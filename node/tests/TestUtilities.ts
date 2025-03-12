@@ -572,6 +572,51 @@ export function checkFunctionStatsResponse(
 }
 
 /**
+ * Specially test flaky cases. Returns false when the test is not a known flaky test or when errors arise.
+ *
+ * @param testName - The name of the test.
+ * @param response - One of the transaction results received from `exec` call.
+ * @param expectedResponse - One of the expected result data from {@link transactionTest}.
+ */
+export function testFlakyCases(
+    testName: string,
+    response: GlideReturnType | undefined,
+    expectedResponse: GlideReturnType,
+): boolean {
+    switch (testName) {
+        case "xpendingWithOptions(key9, groupName1, -, +, 10)": {
+            // Response Type: [ [id: string, consumerName: string, idleTime: number, deliveryCount: number ] ]
+            if (!Array.isArray(expectedResponse) || !Array.isArray(response)) {
+                return false;
+            }
+
+            const [responseArray] = response as any[];
+            const [expectedResponseArray] = expectedResponse as any[];
+
+            for (let i = 0; i < responseArray.length; i++) {
+                if (i == 2) {
+                    // Since idleTime will vary, check that it does not exceed a threshold instead
+                    expect(
+                        Math.abs(expectedResponseArray[i] - responseArray[i]),
+                    ).toBeLessThan(2);
+                } else {
+                    expect(responseArray[i]).toEqual(expectedResponseArray[i]);
+                }
+            }
+
+            break;
+        }
+
+        default: {
+            // All other tests
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
  * Check transaction response.
  * @param response - Transaction result received from `exec` call.
  * @param expectedResponseData - Expected result data from {@link transactionTest}.
@@ -586,7 +631,9 @@ export function validateTransactionResponse(
         const [testName, expectedResponse] = expectedResponseData[i];
 
         try {
-            expect(response?.[i]).toEqual(expectedResponse);
+            if (!testFlakyCases(testName, response?.[i], expectedResponse)) {
+                expect(response?.[i]).toEqual(expectedResponse);
+            }
         } catch {
             const expected =
                 expectedResponse instanceof Map
