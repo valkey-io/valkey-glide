@@ -5,7 +5,7 @@ mod types;
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_info, log_warn};
+use logger_core::{log_error, log_info, log_warn};
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
@@ -581,6 +581,9 @@ async fn create_cluster_client(
     let read_from_strategy = request.read_from.unwrap_or_default();
     builder = builder.read_from(match read_from_strategy {
         ReadFrom::AZAffinity(az) => ReadFromReplicaStrategy::AZAffinity(az),
+        ReadFrom::AZAffinityReplicasAndPrimary(az) => {
+            ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(az)
+        }
         ReadFrom::PreferReplica => ReadFromReplicaStrategy::RoundRobin,
         ReadFrom::Primary => ReadFromReplicaStrategy::AlwaysFromPrimary,
     });
@@ -604,7 +607,7 @@ async fn create_cluster_client(
     }
 
     // Always use with Glide
-    builder = builder.periodic_connections_checks(CONNECTION_CHECKS_INTERVAL);
+    builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
     let mut con = client.get_async_connection(push_sender).await?;
@@ -738,6 +741,8 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
                     ReadFrom::Primary => "Only primary",
                     ReadFrom::PreferReplica => "Prefer replica",
                     ReadFrom::AZAffinity(_) => "Prefer replica in user's availability zone",
+                    ReadFrom::AZAffinityReplicasAndPrimary(_) =>
+                        "Prefer replica and primary in user's availability zone",
                 }
             )
         })
@@ -818,7 +823,12 @@ impl Client {
                 .with_trace_exporter(trace_exporter)
                 .build();
 
-            GlideOpenTelemetry::initialise(config);
+            let _ = GlideOpenTelemetry::initialise(config).map_err(|e| {
+                log_error(
+                    "OpenTelemetry initialization",
+                    format!("OpenTelemetry initialization failed: {}", e),
+                )
+            });
         };
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
