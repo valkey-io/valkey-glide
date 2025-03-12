@@ -453,9 +453,22 @@ func (client *GlideClusterClient) ScanWithOptions(
 	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
 
+// Returns a random key.
+//
+// Parameters:
+//
+// route - specifies the routing configuration for the command.
+//
+//	The client will route the command to the nodes defined by route,
+//	and will return the first successful result.
+//
+// Return value:
+//
+//	A random key from the database.
+//
+// [valkey.io]: https://valkey.io/commands/randomkey/
 func (client *GlideClusterClient) RandomKeyWithRoute(route config.Route) (string, error) {
-	opts := options.RouteOption{Route: nil}
-	result, err := client.executeCommandWithRoute(C.RandomKey, []string{}, opts.Route)
+	result, err := client.executeCommandWithRoute(C.RandomKey, []string{}, route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}

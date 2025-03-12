@@ -16,3 +16,15 @@ func ExampleGlideClient_CustomCommand() {
 
 	// Output: PONG
 }
+
+func ExampleGlideClient_RandomKey() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	result, err := client.RandomKey()
+
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: Random_key
+}

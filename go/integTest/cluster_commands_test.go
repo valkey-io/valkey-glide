@@ -729,3 +729,14 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 		assert.NotContains(t, allKeys, elem)
 	}
 }
+
+func (suite *GlideTestSuite) TestRandomKeyWithRoute() {
+	client := suite.defaultClusterClient()
+	// Test 1: Check if Echo command return the message
+	t := suite.T()
+	route := config.Route(config.RandomRoute)
+	options := options.RouteOption{Route: route}
+	result, err := client.RandomKeyWithRoute(options.Route)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
