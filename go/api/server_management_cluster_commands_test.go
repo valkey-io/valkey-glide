@@ -82,3 +82,15 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 
 	// Output: 0
 }
+
+func ExampleGlideClusterClient_ConfigResetStatWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	opts := options.RouteOption{Route: nil}
+	result, err := client.ConfigResetStatWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
