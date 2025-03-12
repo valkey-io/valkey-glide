@@ -503,12 +503,22 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
     result
 }
 
-// TODO: Finish documentation
 /// Executes a command.
 ///
 /// # Safety
 ///
-/// * TODO: finish safety section.
+/// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be valid until `close_client` is called.
+/// * `channel` must be Go channel pointer and must be valid until either `success_callback` or `failure_callback` is finished.
+/// * `args` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `args_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `arg_count` the number of elements in `args` and `args_len`. It must also not be greater than the max value of a signed pointer-sized integer.
+/// * `arg_count` must be 0 if `args` and `args_len` are null.
+/// * `args` and `args_len` must either be both null or be both not null.
+/// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
+/// * `route_bytes_len` must be 0 if `route_bytes` is null.
+
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_adapter_ptr: *const c_void,
@@ -526,8 +536,11 @@ pub unsafe extern "C" fn command(
     // all operations have completed.
     let ptr_address = client_adapter_ptr as usize;
 
-    let arg_vec =
-        unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) };
+    let arg_vec: Vec<&[u8]> = if !args.is_null() && !args_len.is_null() {
+        unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) }
+    } else {
+        Vec::new()
+    };
 
     let mut client_clone = client_adapter.client.clone();
 
