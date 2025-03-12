@@ -24,7 +24,7 @@ class Logger:
     The logger can be set up in 2 ways -
     1. By calling Logger.init, which configures the logger only if it wasn't previously configured.
     2. By calling Logger.set_logger_config, which replaces the existing configuration, and means that new logs will not be
-        saved with the logs that were sent before the call.
+    saved with the logs that were sent before the call.
     If set_logger_config wasn't called, the first log attempt will initialize a new logger with default configuration decided
     by the Rust core.
     """

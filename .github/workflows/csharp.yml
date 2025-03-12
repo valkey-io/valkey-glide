@@ -103,7 +103,7 @@ jobs:
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
-              run: dotnet test --framework net${{ matrix.dotnet }} "-l:html;LogFileName=TestReport.html" --results-directory . -warnaserror
+              run: dotnet test --configuration Debug --framework net${{ matrix.dotnet }} --logger "html;LogFileName=TestReport.html" --logger "console;verbosity=detailed" --results-directory .
 
             - uses: ./.github/workflows/test-benchmark
               with:
@@ -205,4 +205,6 @@ jobs:
 
             - name: Format
               working-directory: csharp
-              run: dotnet format --verify-no-changes --verbosity diagnostic
+              run: |
+                  dotnet format --verify-no-changes --verbosity diagnostic
+                  dotnet build --configuration Lint
