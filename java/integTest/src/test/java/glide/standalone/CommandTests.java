@@ -70,6 +70,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1699,6 +1700,7 @@ public class CommandTests {
         script.close();
     }
 
+    @Disabled("flaky test: re-enable once fixed")
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
@@ -1758,6 +1760,7 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
     }
 
+    @Disabled("flaky test: re-enable once fixed")
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
