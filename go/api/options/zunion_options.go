@@ -17,11 +17,9 @@ func (options *ZUnionOptions) SetAggregate(aggregate Aggregate) *ZUnionOptions {
 }
 
 func (options *ZUnionOptions) ToArgs() ([]string, error) {
-	args := []string{}
-
 	if options.aggregate != "" {
-		args = append(args, options.aggregate.ToArgs()...)
+		return options.aggregate.ToArgs()
 	}
 
-	return args, nil
+	return []string{}, nil
 }
