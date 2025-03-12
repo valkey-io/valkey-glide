@@ -23,7 +23,8 @@ public class TestConfiguration : IDisposable
 
     public static ClusterClientConfigurationBuilder DefaultClusterClientConfig() =>
         new ClusterClientConfigurationBuilder()
-            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port);
+            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
+            .WithRequestTimeout(5000);
 
     public static GlideClient DefaultStandaloneClient() => new(DefaultClientConfig().Build());
     public static GlideClusterClient DefaultClusterClient() => new(DefaultClusterClientConfig().Build());
