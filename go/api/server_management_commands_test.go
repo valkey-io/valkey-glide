@@ -113,3 +113,14 @@ func ExampleGlideClient_InfoWithOptions() {
 
 	// Output: response is of type string
 }
+
+func ExampleGlideClient_LastSave() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	response, err := client.LastSave()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Printf(responsec)
+
+	// Output: 123456
+}

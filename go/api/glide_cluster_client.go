@@ -465,16 +465,6 @@ func (client *GlideClusterClient) ScanWithOptions(
 //
 //	UNIX TIME of the last DB save executed with success.
 //
-// Example:
-//
-//	route := api.SimpleNodeRoute(api.RandomRoute)
-//	options := options.NewDBOptionsBuilder().SetRoute(route)
-//	result, err := client.LastSaveWithOptions(route)
-//	if err != nil {
-//	  // handle error
-//	}
-//	fmt.Println(result) // Output: 1123456
-//
 // [valkey.io]: https://valkey.io/commands/lastsave/
 func (client *GlideClusterClient) LastSaveWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
 	response, err := client.executeCommandWithRoute(C.LastSave, []string{}, opts.Route)
