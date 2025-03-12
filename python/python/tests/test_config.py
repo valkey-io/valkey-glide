@@ -9,14 +9,11 @@ from glide.config import (
     NodeAddress,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
-    ProtocolVersion,
     ReadFrom,
 )
-from glide.glide_client import GlideClient, GlideClusterClient
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide.protobuf.connection_request_pb2 import TlsMode
-from tests.conftest import create_client
 
 
 def test_default_client_config():
@@ -72,6 +69,21 @@ def test_convert_config_with_azaffinity_to_protobuf():
     assert isinstance(request, ConnectionRequest)
     assert request.tls_mode is TlsMode.SecureTls
     assert request.read_from == ProtobufReadFrom.AZAffinity
+    assert request.client_az == az
+
+
+def test_convert_config_with_azaffinity_replicas_and_primary_to_protobuf():
+    az = "us-east-1a"
+    config = BaseClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        use_tls=True,
+        read_from=ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY,
+        client_az=az,
+    )
+    request = config._create_a_protobuf_conn_request()
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode is TlsMode.SecureTls
+    assert request.read_from == ProtobufReadFrom.AZAffinityReplicasAndPrimary
     assert request.client_az == az
 
 

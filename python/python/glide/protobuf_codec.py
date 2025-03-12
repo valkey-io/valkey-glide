@@ -5,13 +5,13 @@ from typing import List, Tuple, Type
 
 from google.protobuf import message
 
-"""
-Codec for protobuf messages.
-All of the Varint functions were copied from https://github.com/protocolbuffers/protobuf
-"""
-
 
 class ProtobufCodec:
+    """
+    Codec for protobuf messages.
+    All of the Varint functions were copied from https://github.com/protocolbuffers/protobuf
+    """
+
     @classmethod
     def _decode_varint_32(cls, buffer, pos):
         decoder_func = cls._varint_decoder((1 << 32) - 1, int)
@@ -91,7 +91,8 @@ class ProtobufCodec:
             # Recieved only partial response
             raise PartialMessageException("Recieved only a partial response")
         offset = new_pos
-        msg_buf = read_bytes_view[offset : offset + msg_len]
+        end = offset + msg_len
+        msg_buf = read_bytes_view[offset:end]
         offset += msg_len
         message = message_class()
         message.ParseFromString(msg_buf)
