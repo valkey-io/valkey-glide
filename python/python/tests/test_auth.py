@@ -13,8 +13,10 @@ from tests.conftest import (
     WRONG_PASSWORD,
     auth_client,
     config_set_new_password,
-    delete_acl_username_and_password,
     kill_connections,
+)
+from tests.utils.utils import (
+    delete_acl_username_and_password,
     set_new_acl_username_with_password,
 )
 
@@ -274,7 +276,7 @@ class TestAuthCommands:
         Verifies that:
         1. Upon disconnection (which is caused by the user deletion), the client succeeds in updating the password
         with non-immediate auth (this is an internal operation not requiring a server connection).
-        2.
+        2. Trying to connect with immediate authentication fails due to reconnection attempts with the previous password.
         This test is relevant only for standalone - in standalone, reconnection will fail and new requests for
         the server won't be served.
         """
@@ -291,7 +293,7 @@ class TestAuthCommands:
 
         with pytest.raises(RequestError):
             await acl_glide_client.update_connection_password(
-                WRONG_PASSWORD, immediate_auth=True
+                NEW_PASSWORD, immediate_auth=True
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
