@@ -9072,6 +9072,6 @@ func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
 		suite.verifyOK(client.Set(key, value))
 		result, err := client.Get(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), initialValue, result.Value())
+		assert.Equal(suite.T(), value, result.Value())
 	})
 }
