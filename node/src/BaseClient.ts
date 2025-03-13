@@ -349,6 +349,11 @@ export type HashDataType = {
 export type StreamEntryDataType = Record<string, [GlideString, GlideString][]>;
 
 /**
+ * Union type that can store either a number or positive/negative infinity.
+ */
+export type InfScore = number | "+inf" | "-inf";
+
+/**
  * @internal
  * Convert `GlideRecord<number>` recevied after resolving the value pointer into `SortedSetDataType`.
  */
@@ -4020,13 +4025,13 @@ export class BaseClient {
      */
     public async zadd(
         key: GlideString,
-        membersAndScores: SortedSetDataType | Record<string, number>,
+        membersAndScores: SortedSetDataType | Record<string, number> | Record<string, InfScore>,
         options?: ZAddOptions,
     ): Promise<number> {
         return this.createWritePromise(
             createZAdd(
                 key,
-                convertElementsAndScores(membersAndScores),
+                membersAndScores,
                 options,
             ),
         );
