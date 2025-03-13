@@ -419,9 +419,17 @@ pub fn add_pipeline_result(
             Some(inner_index) => {
                 // Ensure the vector at the given index is large enough to hold the value and address at the specified position
                 if responses.len() <= inner_index {
-                    // TODO - change to Value::ServerError
                     // TODO - change the pipeline_responses to hold in [index] a vector already sized with the expected responses length
-                    responses.resize(inner_index + 1, (Value::Nil, "".to_string()));
+                    responses.resize(
+                        inner_index + 1,
+                        (
+                            Value::ServerError(ServerError::ExtensionError {
+                                code: "NoResponse".to_string(),
+                                detail: (Some("awaiting response from node".to_string())),
+                            }),
+                            "".to_string(),
+                        ),
+                    );
                 }
                 responses[inner_index] = (value, address);
             }

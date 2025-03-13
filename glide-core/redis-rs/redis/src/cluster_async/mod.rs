@@ -39,6 +39,7 @@ use crate::{
     },
     cmd,
     commands::cluster_scan::{cluster_scan, ClusterScanArgs, ScanStateRC},
+    types::ServerError,
     FromRedisValue, InfoDict,
 };
 use connections_container::{RefreshTaskNotifier, RefreshTaskState, RefreshTaskStatus};
@@ -2302,123 +2303,110 @@ where
         .await?;
 
         // Process response policies after all tasks are complete and aggregate the relevant commands.
-        Self::aggregate_pipeline_multi_node_commands(&mut pipeline_responses, response_policies)
-            .await?;
-
-        // Collect final responses, ensuring no missing or invalid responses.
-        let final_responses: Result<Vec<Value>, (OperationTarget, RedisError)> = pipeline_responses
-            .into_iter()
-            .enumerate()
-            .map(|(index, mut value)| {
-                value.pop().map(|(response, _)| response).ok_or_else(|| {
-                    (
-                        OperationTarget::FanOut,
-                        RedisError::from((
-                            ErrorKind::ResponseError,
-                            "No response found for command: ",
-                            pipeline
-                                .get_command(index)
-                                .map_or("no command available".to_string(), |cmd| {
-                                    format!("{:?}", cmd)
-                                }),
-                        )),
-                    )
-                })
-            })
-            .collect();
-
-        Ok(Response::Multiple(final_responses?))
+        Ok(Response::Multiple(
+            Self::aggregate_pipeline_multi_node_commands(pipeline_responses, response_policies)
+                .await,
+        ))
     }
 
-    /// Aggregates pipeline responses for multi-node commands and updates the `pipeline_responses` vector.
+    /// Aggregates pipeline responses for multi-node commands and produces a final vector of responses.
     ///
     /// Pipeline commands with multi-node routing info, will be splitted into multiple pipelines, therefore, after executing each pipeline and storing the results in `pipeline_responses`,
     /// the multi-node commands will contain more than one response (one for each sub-pipeline that contained the command). This responses must be aggregated into a single response, based on the proper response policy.
     ///
-    /// This function processes the provided `response_policies`, which contain information about how responses from multiple nodes should be aggregated.
-    /// For each policy:
-    /// - It collects the multiple responses and their source node addresses from the corresponding entry in `pipeline_responses`.
-    /// - Uses the routing information and optional response policy to aggregate the responses into a single result.
+    /// This function processes the provided `response_policies`, which  is a sorted (by command index) vector containing, for each multi-node command:
+    /// - The index of the command in the pipeline.
+    /// - The routing information (`MultipleNodeRoutingInfo`) for that command.
+    /// - An optional `ResponsePolicy` specifying how to aggregate the responses (e.g., sum, all succeeded).
     ///
-    /// The aggregated result replaces the existing entries in `pipeline_responses` for the given command index, changing the multiple responses to the command into a single aggregated response.
+    /// For each command:
+    /// - If a response policy exists for that command, the function aggregates the multiple responses
+    ///   (collected from the sub-pipelines) into a single response using the provided routing info and response policy.
+    /// - If no response policy is provided, the function simply takes the last response (which is a single response, removing its node address).
     ///
-    /// After the execution of this function, all entries in `pipeline_responses` will contain a single response for each command.
+    /// The aggregated result replaces the multiple responses for each command, ensuring that every entry in
+    /// the final output vector corresponds to a single, aggregated response for the original pipeline command.
     ///
     /// # Arguments
-    /// * `pipeline_responses` - A mutable reference to a vector of vectors, where each inner vector contains tuples of responses and their corresponding node addresses.
-    /// * `response_policies` - A vector of tuples, each containing:
-    ///     - The index of the command in the pipeline that has a multi-node routing info.
-    ///     - The routing information for the command.
-    ///     - An optional response policy that dictates how the responses should be aggregated.
+    ///
+    /// * `pipeline_responses` - A vector of vectors, where each inner vector holds tuples of
+    ///   `(Value, String)`, representing the responses from the sub-pipelines along with their node addresses.
+    /// * `response_policies` - A sorted vector of tuples containing:
+    ///     - The index of the command in the pipeline with multi-node routing information.
+    ///     - The routing information (`MultipleNodeRoutingInfo`) for the command.
+    ///     - An optional `ResponsePolicy` that dictates how the responses should be aggregated.
+    ///
+    /// # Returns
+    ///
+    /// * `Vec<Value>` - A vector of aggregated responses, one for each command in the original pipeline.
     ///
     /// # Example
-    /// Suppose we have a pipeline with multiple commands that were split and executed on different nodes.
-    /// This function will aggregate the responses for commands that were split across multiple nodes.
-    ///
     /// ```rust,compile_fail
-    /// // Example pipeline with commands that might be split across nodes
-    ///
+    /// // Example pipeline responses for multi-node commands:
     /// let mut pipeline_responses = vec![
-    ///     vec![(Value::Int(1), "node1".to_string()), (Value::Int(2), "node2".to_string()), (Value::Int(3), "node3".to_string())], // represents `DBSIZE`
+    ///     vec![(Value::Int(1), "node1".to_string()), (Value::Int(2), "node2".to_string()), (Value::Int(3), "node3".to_string())], // represents `DBSIZE command split across nodes
     ///     vec![(Value::Int(3), "node3".to_string())],
-    ///     vec![(Value::SimpleString("PONG".to_string()), "node1".to_string()), (Value::SimpleString("PONG".to_string()), "node2".to_string()), (Value::SimpleString("PONG".to_string()), "node3".to_string())], // represents `PING`
+    ///     vec![(Value::SimpleString("PONG".to_string()), "node1".to_string()), (Value::SimpleString("PONG".to_string()), "node2".to_string()), (Value::SimpleString("PONG".to_string()), "node3".to_string())], // represents `PING` command split across nodes
     /// ];
+    ///
     /// let response_policies = vec![
     ///     (0, MultipleNodeRoutingInfo::AllNodes, Some(ResponsePolicy::Aggregate(AggregateOp::Sum))),
     ///     (2, MultipleNodeRoutingInfo::AllNodes, Some(ResponsePolicy::AllSucceeded)),
     /// ];
     ///
-    /// // Aggregating the responses
-    /// aggregate_pipeline_multi_node_commands(&mut pipeline_responses, response_policies).await.unwrap();
+    /// // Aggregation of responses
+    /// let final_responses = aggregate_pipeline_multi_node_commands(pipeline_responses, response_policies).await.unwrap();
     ///
-    /// // After aggregation, pipeline_responses will be updated with aggregated results
-    /// assert_eq!(pipeline_responses[0], vec![(Value::Int(6), "".to_string())]);
-    /// assert_eq!(pipeline_responses[1], vec![(Value::Int(3), "node3".to_string())]);
-    /// assert_eq!(pipeline_responses[2], vec![(Value::SimpleString("PONG".to_string()), "".to_string())]);
+    /// // After aggregation, each command has a single aggregated response:
+    /// assert_eq!(final_responses[0], Value::Int(6)); // Sum of 1+2+3
+    /// assert_eq!(final_responses[1], Value::Int(3));
+    /// assert_eq!(final_responses[2], Value::SimpleString("PONG".to_string()));
     /// ```
-    ///
-    /// This function is essential for handling multi-node commands in a Redis cluster, ensuring that responses from different nodes are correctly aggregated and processed.
     async fn aggregate_pipeline_multi_node_commands(
-        pipeline_responses: &mut PipelineResponses,
-        response_policies: Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>,
-    ) -> Result<(), (OperationTarget, RedisError)> {
-        // TODO: Try to have a single step of iterating through the PipelineResponses once.
-        // Responses without response policy would simply be inserted into a new results vector (removing their node address),
-        // and multi-node responses will be aggregated and then their address can be removed instead of storing "".to_string.
+        pipeline_responses: PipelineResponses,
+        mut response_policies: Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>,
+    ) -> Vec<Value> {
+        let mut final_responses = Vec::with_capacity(pipeline_responses.len());
 
-        // Go over the multi-node commands
-        for (index, routing_info, response_policy) in response_policies {
-            let response_receivers = pipeline_responses
-                .get(index)
-                .ok_or_else(|| {
-                    (
-                        OperationTarget::FanOut,
-                        RedisError::from((
-                            ErrorKind::ResponseError,
-                            "No response found for command at index: ",
-                            index.to_string(),
-                        )),
-                    )
-                })?
-                .iter()
-                .map(|(value, address)| {
-                    let (sender, receiver) = oneshot::channel();
-                    let _ = sender.send(Ok(Response::Single(value.clone())));
-                    (Some(address.clone()), receiver)
-                })
-                .collect();
-
-            let aggregated_response =
+        for (index, responses) in pipeline_responses.into_iter().enumerate() {
+            // If the first policy in the sorted vector matches the current command index, use it.
+            if let Some(&(policy_index, _, _)) = response_policies.first() {
+                if policy_index == index {
+                    // Remove the policy from the front since it has been used.
+                    let (_, routing_info, response_policy) = response_policies.remove(0);
+                    // Use routing_info and response_policy for aggregation.
+                    let receivers = responses
+                        .into_iter()
+                        .map(|(value, address)| {
+                            let (sender, receiver) = oneshot::channel();
+                            let _ = sender.send(Ok(Response::Single(value)));
+                            (Some(address), receiver)
+                        })
+                        .collect::<Vec<_>>();
+                    let aggregated_response =
                 // TODO: Change aggregate_results function to accept vec of (result, address) instead of receivers
-                match Self::aggregate_results(response_receivers, &routing_info, response_policy).await {
+                match Self::aggregate_results(receivers, &routing_info, response_policy).await {
                     Ok(value) => value,
                     Err(err) => Value::ServerError(err.into())
                 };
-
-            // Safe to use [index] as the index is guaranteed to be valid
-            pipeline_responses[index] = vec![(aggregated_response, "".to_string())];
+                    final_responses.push(aggregated_response);
+                    continue;
+                }
+            }
+            // If there's no policy for this index, simply take the last response.
+            let (value, _addr) = responses.into_iter().last().unwrap_or_else(|| {
+                (
+                    Value::ServerError(ServerError::ExtensionError {
+                        code: "NoResponse".to_string(),
+                        detail: Some(format!("No response found for command {}", index)),
+                    }),
+                    "".to_string(),
+                )
+            });
+            final_responses.push(value);
         }
-        Ok(())
+
+        final_responses
     }
 
     async fn get_connection(
@@ -3148,7 +3136,9 @@ mod pipeline_routing_tests {
             AggregateOp, MultiSlotArgPattern, MultipleNodeRoutingInfo, ResponsePolicy, Route,
             SlotAddr,
         },
-        cmd, Value,
+        cmd,
+        types::{ServerError, ServerErrorKind},
+        Value,
     };
 
     #[test]
@@ -3169,7 +3159,7 @@ mod pipeline_routing_tests {
 
     #[test]
     fn test_numerical_response_aggregation_logic() {
-        let mut pipeline_responses: PipelineResponses = vec![
+        let pipeline_responses: PipelineResponses = vec![
             vec![
                 (Value::Int(3), "node1".to_string()),
                 (Value::Int(7), "node2".to_string()),
@@ -3196,39 +3186,29 @@ mod pipeline_routing_tests {
                 Some(ResponsePolicy::Aggregate(AggregateOp::Min)),
             ),
         ];
-        block_on(
+        let responses = block_on(
             ClusterConnInner::<MultiplexedConnection>::aggregate_pipeline_multi_node_commands(
-                &mut pipeline_responses,
+                pipeline_responses,
                 response_policies,
             ),
-        )
-        .expect("Aggregation failed");
+        );
 
         // Command 0 should be aggregated to 3 + 7 + 0 = 10.
         // Command 1 should remain unchanged.
         assert_eq!(
-            pipeline_responses[0],
-            vec![(Value::Int(10), "".to_string())],
-            "Expected command 0 aggregation to yield 10"
-        );
-        assert_eq!(
-            pipeline_responses[1],
-            vec![(
+            responses,
+            vec![
+                Value::Int(10),
                 Value::BulkString(b"unchanged".to_vec()),
-                "node3".to_string()
-            )],
-            "Expected command 1 to remain unchanged"
-        );
-        assert_eq!(
-            pipeline_responses[2],
-            vec![(Value::Int(5), "".to_string())],
-            "Expected command 2 aggregation to yield 5 as the minimum value"
+                Value::Int(5)
+            ],
+            "{responses:?}"
         );
     }
 
     #[test]
     fn test_combine_arrays_response_aggregation_logic() {
-        let mut pipeline_responses: PipelineResponses = vec![
+        let pipeline_responses: PipelineResponses = vec![
             vec![
                 (Value::Array(vec![Value::Int(1)]), "node1".to_string()),
                 (Value::Array(vec![Value::Int(2)]), "node2".to_string()),
@@ -3269,18 +3249,16 @@ mod pipeline_routing_tests {
             ),
         ];
 
-        block_on(
+        let responses = block_on(
             ClusterConnInner::<MultiplexedConnection>::aggregate_pipeline_multi_node_commands(
-                &mut pipeline_responses,
+                pipeline_responses,
                 response_policies,
             ),
-        )
-        .expect("CombineArrays aggregation should succeed");
+        );
 
         let mut expected = Value::Array(vec![Value::Int(1), Value::Int(2)]);
         assert_eq!(
-            pipeline_responses[0],
-            vec![(expected, "".to_string())],
+            responses[0], expected,
             "Expected combined array to include all elements"
         );
         expected = Value::Array(vec![
@@ -3290,9 +3268,77 @@ mod pipeline_routing_tests {
             Value::BulkString("key4".into()),
         ]);
         assert_eq!(
-            pipeline_responses[1],
-            vec![(expected, "".to_string())],
+            responses[1], expected,
             "Expected combined array to include all elements"
+        );
+    }
+
+    #[test]
+    fn test_aggregate_pipeline_multi_node_commands_with_error_response() {
+        let pipeline_responses: PipelineResponses = vec![
+            vec![
+                (Value::Int(3), "node1".to_string()),
+                (Value::Int(7), "node2".to_string()),
+                (
+                    Value::ServerError(ServerError::KnownError {
+                        kind: ServerErrorKind::Moved,
+                        detail: Some("127.0.0.1".to_string()),
+                    }),
+                    "node3".to_string(),
+                ),
+            ],
+            vec![(
+                Value::BulkString(b"unchanged".to_vec()),
+                "node3".to_string(),
+            )],
+        ];
+        let response_policies = vec![(
+            0,
+            MultipleNodeRoutingInfo::AllNodes,
+            Some(ResponsePolicy::CombineArrays),
+        )];
+
+        let responses = block_on(
+            ClusterConnInner::<MultiplexedConnection>::aggregate_pipeline_multi_node_commands(
+                pipeline_responses,
+                response_policies,
+            ),
+        );
+
+        assert_eq!(
+            responses,
+            vec![
+                Value::ServerError(ServerError::KnownError {
+                    kind: ServerErrorKind::Moved,
+                    detail: Some("An error was signalled by the server: 127.0.0.1".to_string()),
+                }),
+                Value::BulkString(b"unchanged".to_vec()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_aggregate_pipeline_multi_node_commands_with_no_response() {
+        let pipeline_responses: PipelineResponses =
+            vec![vec![(Value::Int(1), "node1".to_string())], vec![]];
+        let response_policies = vec![];
+
+        let responses = block_on(
+            ClusterConnInner::<MultiplexedConnection>::aggregate_pipeline_multi_node_commands(
+                pipeline_responses,
+                response_policies,
+            ),
+        );
+
+        assert_eq!(
+            responses,
+            vec![
+                Value::Int(1),
+                Value::ServerError(ServerError::ExtensionError {
+                    code: "NoResponse".to_string(),
+                    detail: Some("No response found for command 1".to_string())
+                })
+            ]
         );
     }
 
