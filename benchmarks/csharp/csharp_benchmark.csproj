@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\csharp\lib\glide.csproj" />
+    <ProjectReference Include="..\..\csharp\sources\Valkey.Glide\Valkey.Glide.csproj" />
   </ItemGroup>
 
   <ItemGroup>

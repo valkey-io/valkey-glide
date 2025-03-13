@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
-    <RootNamespace>Glide</RootNamespace>
+    <RootNamespace>Valkey.Glide</RootNamespace>
+    <AssemblyName>Valkey.Glide</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>12.0</LangVersion>
@@ -33,26 +34,31 @@
   </PropertyGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Condition="'$(Configuration)' == 'Debug'" Command="cargo build" EnvironmentVariables="CARGO_TERM_COLOR=always" ConsoleToMSBuild="true">
-      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
+    <Exec Condition="'$(Configuration)' == 'Debug'"
+          Command="cargo build"
+          EnvironmentVariables="CARGO_TERM_COLOR=always"
+          ConsoleToMSBuild="true"
+          WorkingDirectory="$(SolutionDir)/rust">
+      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec"/>
     </Exec>
-    <Exec Condition="'$(Configuration)' == 'Release'" Command="cargo build --release" EnvironmentVariables="CARGO_TERM_COLOR=always" ConsoleToMSBuild="true">
-      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
+    <Exec Condition="'$(Configuration)' == 'Release'"
+          Command="cargo build --release"
+          EnvironmentVariables="CARGO_TERM_COLOR=always"
+          ConsoleToMSBuild="true"
+          WorkingDirectory="$(SolutionDir)/rust">
+      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec"/>
     </Exec>
   </Target>
 
   <ItemGroup Condition="'$(Configuration)' != 'Lint'">
-    <Content Include="$(MSBuildThisFileDirectory)target/$(Configuration.ToLower())/glide_rs.dll" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <Content Include="$(SolutionDir)/rust/target/$(Configuration)/glide_rs.dll" Condition="'$(OS)' == 'Windows_NT'">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>lib%(FileName)%(Extension)</Link>
     </Content>
-    <Content Include="$(MSBuildThisFileDirectory)target/$(Configuration.ToLower())/libglide_rs.so" Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <Content Include="$(SolutionDir)/rust/target/$(Configuration)/glide_rs.pdb" Condition="'$(OS)' == 'Windows_NT'">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>%(FileName)%(Extension)</Link>
     </Content>
-    <Content Include="$(MSBuildThisFileDirectory)target/$(Configuration.ToLower())/libglide_rs.dylib" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Content Include="$(SolutionDir)/rust/target/$(Configuration)/glide_rs.sh" Condition="'$(OS)' != 'Windows_NT'">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>%(FileName)%(Extension)</Link>
     </Content>
   </ItemGroup>
 

@@ -3,14 +3,12 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
-
 using CommandLine;
-
-using Glide;
-
 using LinqStatistics;
-
 using StackExchange.Redis;
+using Valkey.Glide;
+
+namespace csharp_benchmark;
 
 public static class MainClass
 {
@@ -164,12 +162,12 @@ public static class MainClass
         ConcurrentBag<double> latencies
     ) => new()
     {
-            {prefix + "_p50_latency", CalculateLatency(latencies, 0.5)},
-            {prefix + "_p90_latency", CalculateLatency(latencies, 0.9)},
-            {prefix + "_p99_latency", CalculateLatency(latencies, 0.99)},
-            {prefix + "_average_latency", Math.Round(latencies.Average(), 3)},
-            {prefix + "_std_dev", latencies.StandardDeviation()},
-        };
+        {prefix + "_p50_latency", CalculateLatency(latencies, 0.5)},
+        {prefix + "_p90_latency", CalculateLatency(latencies, 0.9)},
+        {prefix + "_p99_latency", CalculateLatency(latencies, 0.99)},
+        {prefix + "_average_latency", Math.Round(latencies.Average(), 3)},
+        {prefix + "_std_dev", latencies.StandardDeviation()},
+    };
 
     private static async Task RunClients(
         ClientWrapper[] clients,
@@ -240,8 +238,8 @@ public static class MainClass
 
     private static async Task<ClientWrapper[]> CreateClients(int clientCount,
         Func<Task<(Func<string, Task<string?>>,
-                   Func<string, string, Task>,
-                   Action)>> clientCreation)
+            Func<string, string, Task>,
+            Action)>> clientCreation)
     {
         IEnumerable<Task<ClientWrapper>> tasks = Enumerable.Range(0, clientCount).Select(async (_) =>
         {
@@ -266,8 +264,8 @@ public static class MainClass
                 BaseClient glide_client = new GlideClient(host, PORT, useTLS);
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await glide_client.Get(key),
-                     async (key, value) => await glide_client.Set(key, value),
-                     () => glide_client.Dispose()));
+                        async (key, value) => await glide_client.Set(key, value),
+                        () => glide_client.Dispose()));
             });
 
             await RunClients(
@@ -282,14 +280,14 @@ public static class MainClass
         if (clientsToRun == "all")
         {
             ClientWrapper[] clients = await CreateClients(clientCount, () =>
-                {
-                    ConnectionMultiplexer connection = ConnectionMultiplexer.Connect(GetAddressForStackExchangeRedis(host, useTLS));
-                    IDatabase db = connection.GetDatabase();
-                    return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
-                        (async (key) => await db.StringGetAsync(key),
-                         async (key, value) => await db.StringSetAsync(key, value),
-                         () => connection.Dispose()));
-                });
+            {
+                ConnectionMultiplexer connection = ConnectionMultiplexer.Connect(GetAddressForStackExchangeRedis(host, useTLS));
+                IDatabase db = connection.GetDatabase();
+                return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
+                    (async (key) => await db.StringGetAsync(key),
+                        async (key, value) => await db.StringSetAsync(key, value),
+                        () => connection.Dispose()));
+            });
             await RunClients(
                 clients,
                 "StackExchange.Redis",

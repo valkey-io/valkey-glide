@@ -3,9 +3,11 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-[assembly: AssemblyFixture(typeof(Tests.Integration.TestConfiguration))]
+using Valkey.Glide.UnitTests.Integration;
 
-namespace Tests.Integration;
+[assembly: AssemblyFixture(typeof(TestConfiguration))]
+
+namespace Valkey.Glide.UnitTests.Integration;
 
 public class TestConfiguration : IDisposable
 {

@@ -3,10 +3,10 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
 
-using Glide.Commands;
-using Glide.Internals;
+using Valkey.Glide.Commands;
+using Valkey.Glide.Internals;
 
-namespace Glide;
+namespace Valkey.Glide;
 
 public abstract class BaseClient : IDisposable, IStringBaseCommands
 {

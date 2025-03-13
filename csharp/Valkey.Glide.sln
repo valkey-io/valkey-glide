@@ -1,0 +1,61 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30114.105
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "csharp_benchmark", "..\benchmarks\csharp\csharp_benchmark.csproj", "{C62D5809-3059-4633-A267-31B402FCBFDA}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".files", ".files", "{32B7AC89-C6AD-4BFF-9079-37F2F9C35ED8}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		.gitignore = .gitignore
+		ReadMe.md = ReadMe.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "benchmarks", "benchmarks", "{E4674D00-0C50-4C27-A16C-080AA8ED4AED}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{DA0C6818-69FD-41B4-9907-AAC9B0C46511}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sources", "sources", "{A615F0CF-BB06-401E-BB29-1B096F144683}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{63B5D5AB-DFAD-4150-BCA1-8A02D17B4B9D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide", "sources\Valkey.Glide\Valkey.Glide.csproj", "{EC866C03-DDA9-412B-91AB-FDFDCE1177FD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide.UnitTests", "tests\Valkey.Glide.UnitTests\Valkey.Glide.UnitTests.csproj", "{6EAB912B-AF22-4CAC-9686-4B3D0F86980D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Lint|Any CPU = Lint|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C62D5809-3059-4633-A267-31B402FCBFDA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C62D5809-3059-4633-A267-31B402FCBFDA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C62D5809-3059-4633-A267-31B402FCBFDA}.Lint|Any CPU.ActiveCfg = Lint|Any CPU
+		{C62D5809-3059-4633-A267-31B402FCBFDA}.Lint|Any CPU.Build.0 = Lint|Any CPU
+		{C62D5809-3059-4633-A267-31B402FCBFDA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C62D5809-3059-4633-A267-31B402FCBFDA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EC866C03-DDA9-412B-91AB-FDFDCE1177FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC866C03-DDA9-412B-91AB-FDFDCE1177FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC866C03-DDA9-412B-91AB-FDFDCE1177FD}.Lint|Any CPU.ActiveCfg = Lint|Any CPU
+		{EC866C03-DDA9-412B-91AB-FDFDCE1177FD}.Lint|Any CPU.Build.0 = Lint|Any CPU
+		{EC866C03-DDA9-412B-91AB-FDFDCE1177FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC866C03-DDA9-412B-91AB-FDFDCE1177FD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6EAB912B-AF22-4CAC-9686-4B3D0F86980D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6EAB912B-AF22-4CAC-9686-4B3D0F86980D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6EAB912B-AF22-4CAC-9686-4B3D0F86980D}.Lint|Any CPU.ActiveCfg = Lint|Any CPU
+		{6EAB912B-AF22-4CAC-9686-4B3D0F86980D}.Lint|Any CPU.Build.0 = Lint|Any CPU
+		{6EAB912B-AF22-4CAC-9686-4B3D0F86980D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6EAB912B-AF22-4CAC-9686-4B3D0F86980D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C62D5809-3059-4633-A267-31B402FCBFDA} = {E4674D00-0C50-4C27-A16C-080AA8ED4AED}
+		{EC866C03-DDA9-412B-91AB-FDFDCE1177FD} = {A615F0CF-BB06-401E-BB29-1B096F144683}
+		{6EAB912B-AF22-4CAC-9686-4B3D0F86980D} = {63B5D5AB-DFAD-4150-BCA1-8A02D17B4B9D}
+	EndGlobalSection
+EndGlobal

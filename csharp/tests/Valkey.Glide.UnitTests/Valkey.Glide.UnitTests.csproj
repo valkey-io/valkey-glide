@@ -49,7 +49,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\lib\glide.csproj" />
+    <ProjectReference Include="..\..\sources\Valkey.Glide\Valkey.Glide.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -58,7 +58,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <Using Include="Glide" />
+    <Using Include="Valkey.Glide" />
   </ItemGroup>
 
 </Project>

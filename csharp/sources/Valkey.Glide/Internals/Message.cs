@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using Glide.Internals;
+namespace Valkey.Glide.Internals;
 
 /// Reusable source of ValueTask. This object can be allocated once and then reused
 /// to create multiple asynchronous operations, as long as each call to CreateTask

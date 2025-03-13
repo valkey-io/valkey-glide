@@ -2,7 +2,7 @@
 
 using System.Collections.Concurrent;
 
-namespace Glide.Internals;
+namespace Valkey.Glide.Internals;
 
 
 internal class MessageContainer<T>
