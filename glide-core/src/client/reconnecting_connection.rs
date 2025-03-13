@@ -121,7 +121,10 @@ async fn create_connection(
     connection_timeout: Duration,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = {
-        let guard = connection_backend.connection_info.read().unwrap();
+        let guard = connection_backend
+            .connection_info
+            .read()
+            .expect("READ_LOCK_ERR");
         guard.clone()
     };
 
@@ -156,7 +159,7 @@ async fn create_connection(
             Ok(ReconnectingConnection {
                 inner: Arc::new(InnerReconnectingConnection {
                     state: Mutex::new(ConnectionState::Connected(connection)),
-                    backend: connection_backend.clone(),
+                    backend: connection_backend,
                 }),
                 connection_options,
             })
@@ -175,7 +178,7 @@ async fn create_connection(
             let connection = ReconnectingConnection {
                 inner: Arc::new(InnerReconnectingConnection {
                     state: Mutex::new(ConnectionState::InitializedDisconnected),
-                    backend: connection_backend.clone(),
+                    backend: connection_backend,
                 }),
                 connection_options,
             };
@@ -211,21 +214,9 @@ fn internal_retry_iterator() -> impl Iterator<Item = Duration> {
 }
 
 impl ConnectionBackend {
-    fn clone(&self) -> Self {
-        ConnectionBackend {
-            connection_available_signal: ManualResetEvent::new(
-                self.connection_available_signal.is_set(),
-            ),
-            connection_info: RwLock::new(self.connection_info.read().unwrap().clone()),
-            client_dropped_flagged: AtomicBool::new(
-                self.client_dropped_flagged
-                    .load(std::sync::atomic::Ordering::Relaxed),
-            ),
-        }
-    }
-    /// Retrieves the connection information from the client in a thread-safe manner.
+    /// Returns a read-only reference to the client's connection information
     fn get_backend_client(&self) -> RwLockReadGuard<'_, redis::Client> {
-        self.connection_info.read().unwrap()
+        self.connection_info.read().expect("READ_LOCK_ERR")
     }
 }
 
@@ -393,13 +384,25 @@ impl ReconnectingConnection {
         }
     }
 
-    pub fn update_connection_password(&self, new_password: Option<String>) {
-        let mut client = self.inner.backend.connection_info.write().unwrap();
+    /// Updates the password that's saved inside connection_info, that will be used in case of disconnection from the server.
+    pub(crate) fn update_connection_password(&self, new_password: Option<String>) {
+        let mut client = self
+            .inner
+            .backend
+            .connection_info
+            .write()
+            .expect("WRITE_LOCK_ERR");
         client.update_password(new_password);
     }
 
-    pub fn get_username(&self) -> Option<String> {
-        let client = self.inner.backend.connection_info.read().unwrap();
+    /// Returns the username if one was configured during client creation. Otherwise, returns None.
+    pub(crate) fn get_username(&self) -> Option<String> {
+        let client = self
+            .inner
+            .backend
+            .connection_info
+            .read()
+            .expect("READ_LOCK_ERR");
         client.get_connection_info().redis.username.clone()
     }
 }
