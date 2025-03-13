@@ -1,11 +1,11 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
     <RootNamespace>Glide</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <LangVersion>preview</LangVersion>
+    <LangVersion>12.0</LangVersion>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
@@ -23,7 +23,7 @@
   <ItemGroup>
     <Content Include="$(MSBuildThisFileDirectory)target/$(Configuration.ToLower())/glide_rs.dll" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>%(FileName)%(Extension)</Link>
+      <Link>lib%(FileName)%(Extension)</Link>
     </Content>
     <Content Include="$(MSBuildThisFileDirectory)target/$(Configuration.ToLower())/libglide_rs.so" Condition="$([MSBuild]::IsOSPlatform('Linux'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

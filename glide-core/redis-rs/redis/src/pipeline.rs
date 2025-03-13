@@ -5,12 +5,12 @@ use crate::connection::ConnectionLike;
 use crate::types::{
     from_owned_redis_value, ErrorKind, FromRedisValue, HashSet, RedisResult, ToRedisArgs, Value,
 };
+use std::sync::Arc;
 
 /// Represents a redis command pipeline.
 #[derive(Clone)]
 pub struct Pipeline {
-    // TODO - make this Arc
-    commands: Vec<Cmd>,
+    commands: Vec<Arc<Cmd>>,
     transaction_mode: bool,
     ignored_commands: HashSet<usize>,
 }
@@ -82,11 +82,11 @@ impl Pipeline {
     }
 
     fn execute_pipelined(&self, con: &mut dyn ConnectionLike) -> RedisResult<Value> {
-        Ok(self.make_pipeline_results(con.req_packed_commands(
+        self.make_pipeline_results(con.req_packed_commands(
             &encode_pipeline(&self.commands, false),
             0,
             self.commands.len(),
-        )?))
+        )?)
     }
 
     fn execute_transaction(&self, con: &mut dyn ConnectionLike) -> RedisResult<Value> {
@@ -97,7 +97,7 @@ impl Pipeline {
         )?;
         match resp.pop() {
             Some(Value::Nil) => Ok(Value::Nil),
-            Some(Value::Array(items)) => Ok(self.make_pipeline_results(items)),
+            Some(Value::Array(items)) => Ok(self.make_pipeline_results(items)?),
             _ => fail!((
                 ErrorKind::ResponseError,
                 "Invalid response when parsing multi response"
@@ -147,7 +147,7 @@ impl Pipeline {
         let value = con
             .req_packed_commands(self, 0, self.commands.len())
             .await?;
-        Ok(self.make_pipeline_results(value))
+        self.make_pipeline_results(value)
     }
 
     #[cfg(feature = "aio")]
@@ -160,7 +160,7 @@ impl Pipeline {
             .await?;
         match resp.pop() {
             Some(Value::Nil) => Ok(Value::Nil),
-            Some(Value::Array(items)) => Ok(self.make_pipeline_results(items)),
+            Some(Value::Array(items)) => Ok(self.make_pipeline_results(items)?),
             _ => Err((
                 ErrorKind::ResponseError,
                 "Invalid response when parsing multi response",
@@ -224,18 +224,18 @@ impl Pipeline {
     }
 
     /// Returns the command at the given index, or `None` if the index is out of bounds.
-    pub fn get_command(&self, index: usize) -> Option<&Cmd> {
-        self.commands.get(index)
+    pub(crate) fn get_command(&self, index: usize) -> Option<Arc<Cmd>> {
+        self.commands.get(index).cloned()
     }
 }
 
-fn encode_pipeline(cmds: &[Cmd], atomic: bool) -> Vec<u8> {
+fn encode_pipeline(cmds: &[Arc<Cmd>], atomic: bool) -> Vec<u8> {
     let mut rv = vec![];
     write_pipeline(&mut rv, cmds, atomic);
     rv
 }
 
-fn write_pipeline(rv: &mut Vec<u8>, cmds: &[Cmd], atomic: bool) {
+fn write_pipeline(rv: &mut Vec<u8>, cmds: &[Arc<Cmd>], atomic: bool) {
     let cmds_len = cmds.iter().map(cmd_len).sum();
 
     if atomic {
@@ -264,6 +264,15 @@ macro_rules! implement_pipeline_commands {
             /// Adds a command to the cluster pipeline.
             #[inline]
             pub fn add_command(&mut self, cmd: Cmd) -> &mut Self {
+                self.add_command_with_arc(cmd.into())
+            }
+
+            /// The provided command **must** be uniquely owned (i.e. not cloned or shared)
+            /// at the time it is added, as the pipeline's internal API assumes unique ownership
+            /// for later mutation via `get_last_command()`. If this invariant is violated,
+            /// `get_last_command()` will panic.
+            #[inline]
+            pub(crate) fn add_command_with_arc(&mut self, cmd: Arc<Cmd>) -> &mut Self {
                 self.commands.push(cmd);
                 self
             }
@@ -275,8 +284,8 @@ macro_rules! implement_pipeline_commands {
                 self.add_command(cmd(name))
             }
 
-            /// Returns an iterator over all the commands currently in this pipeline
-            pub fn cmd_iter(&self) -> impl Iterator<Item = &Cmd> {
+            /// Returns an iterator over all the commands currently in the pipeline.
+            pub fn cmd_iter(&self) -> impl Iterator<Item = &Arc<Cmd>> {
                 self.commands.iter()
             }
 
@@ -323,17 +332,20 @@ macro_rules! implement_pipeline_commands {
                     0 => panic!("No command on stack"),
                     x => x - 1,
                 };
-                &mut self.commands[idx]
+                Arc::get_mut(&mut self.commands[idx]).expect("Cannot modify the last command: multiple active references exist. Ensure the command is uniquely owned before mutating.")
             }
 
-            fn make_pipeline_results(&self, resp: Vec<Value>) -> Value {
+            fn make_pipeline_results(&self, resp: Vec<Value>) -> RedisResult<Value> {
                 let mut rv = Vec::with_capacity(resp.len() - self.ignored_commands.len());
                 for (idx, result) in resp.into_iter().enumerate() {
+                    if let Value::ServerError(e) = result {
+                        return Err(e.into());
+                    }
                     if !self.ignored_commands.contains(&idx) {
                         rv.push(result);
                     }
                 }
-                Value::Array(rv)
+                Ok(Value::Array(rv))
             }
         }
 

@@ -1,10 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <LangVersion>preview</LangVersion>
+    <LangVersion>12.0</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
@@ -33,6 +33,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\lib\glide.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="Glide" />
   </ItemGroup>
 
 </Project>
