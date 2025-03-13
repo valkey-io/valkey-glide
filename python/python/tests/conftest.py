@@ -65,7 +65,7 @@ def pytest_addoption(parser):
         help="""Load additional Valkey modules (provide full path for the module's shared library).
             Use multiple times for multiple modules.
             Example:
-            pytest --load-module=/path/to/module1.so --load-module=/path/to/module2.so""",
+            pytest -v --load-module=/path/to/module1.so --load-module=/path/to/module2.so""",
         default=[],
     )
 
@@ -75,8 +75,8 @@ def pytest_addoption(parser):
         help="""Comma-separated list of cluster endpoints for standalone cluster in the format host1:port1,host2:port2,...
             Note: The cluster will be flashed between tests.
             Example:
-                pytest --asyncio-mode=auto --cluster-endpoints=127.0.0.1:6379
-                pytest --asyncio-mode=auto --cluster-endpoints=127.0.0.1:6379,127.0.0.1:6380
+                pytest -v --asyncio-mode=auto --cluster-endpoints=127.0.0.1:6379
+                pytest -v --asyncio-mode=auto --cluster-endpoints=127.0.0.1:6379,127.0.0.1:6380
             """,
         default=None,
     )
@@ -87,8 +87,8 @@ def pytest_addoption(parser):
         help="""Comma-separated list of cluster endpoints for cluster mode cluster in the format host1:port1,host2:port2,...
             Note: The cluster will be flashed between tests.
             Example:
-                pytest --asyncio-mode=auto --standalone-endpoints=127.0.0.1:6379
-                pytest --asyncio-mode=auto --standalone-endpoints=127.0.0.1:6379,127.0.0.1:6380
+                pytest -v --asyncio-mode=auto --standalone-endpoints=127.0.0.1:6379
+                pytest -v --asyncio-mode=auto --standalone-endpoints=127.0.0.1:6379,127.0.0.1:6380
             """,
         default=None,
     )
@@ -218,7 +218,9 @@ async def glide_client(
     protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
     "Get async socket client for tests"
-    client = await create_client(request, cluster_mode, protocol=protocol)
+    client = await create_client(
+        request, cluster_mode, protocol=protocol, request_timeout=5000
+    )
     yield client
     await test_teardown(request, cluster_mode, protocol)
     await client.close()
@@ -386,10 +388,9 @@ async def skip_if_version_below(request):
     Skip test(s) if server version is below than given parameter. Can skip a complete test suite.
 
     Example:
-
-      @pytest.mark.skip_if_version_below('7.0.0')
-      async def test_meow_meow(...):
-          ...
+        @pytest.mark.skip_if_version_below('7.0.0')
+        async def test_meow_meow(...):
+            ...
     """
     if request.node.get_closest_marker("skip_if_version_below"):
         min_version = request.node.get_closest_marker("skip_if_version_below").args[0]

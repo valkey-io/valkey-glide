@@ -2,13 +2,6 @@
 
 package api
 
-// #cgo LDFLAGS: -lglide_rs
-// #cgo !windows LDFLAGS: -lm
-// #cgo darwin LDFLAGS: -framework Security
-// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
-// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
-// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
-// #cgo LDFLAGS: -L../target/release
 // #include "../lib.h"
 import "C"
 
@@ -63,11 +56,6 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 //
 //	The returned value for the custom command.
 //
-// For example:
-//
-//	result, err := client.CustomCommand([]string{"ping"})
-//	result.(string): "PONG"
-//
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
@@ -91,16 +79,11 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 //
 //	`"OK"` if all configurations have been successfully set. Otherwise, raises an error.
 //
-// For example:
-//
-//	result, err := client.ConfigSet(map[string]string{"timeout": "1000", "maxmemory": "1GB"})
-//	result: "OK"
-//
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *GlideClient) ConfigSet(parameters map[string]string) (string, error) {
 	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -118,12 +101,6 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 // Return value:
 //
 //	A map of api.Result[string] corresponding to the configuration parameters.
-//
-// For example:
-//
-//	result, err := client.ConfigGet([]string{"timeout" , "maxmemory"})
-//	// result["timeout"] = "1000"
-//	// result["maxmemory"] = "1GB"
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
@@ -144,16 +121,11 @@ func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 //
 //	A simple `"OK"` response.
 //
-// Example:
-//
-//	result, err := client.Select(2)
-//	result: "OK"
-//
 // [valkey.io]: https://valkey.io/commands/select/
 func (client *GlideClient) Select(index int64) (string, error) {
 	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -167,17 +139,9 @@ func (client *GlideClient) Select(index int64) (string, error) {
 //
 //	A string with the information for the default sections.
 //
-// Example:
-//
-//	response, err := standaloneClient.Info(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	fmt.Println(response)
-//
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) Info() (string, error) {
-	return client.InfoWithOptions(InfoOptions{[]Section{}})
+	return client.InfoWithOptions(options.InfoOptions{Sections: []options.Section{}})
 }
 
 // Gets information and statistics about the server.
@@ -192,20 +156,15 @@ func (client *GlideClient) Info() (string, error) {
 //
 //	A string containing the information for the sections requested.
 //
-// Example:
-//
-//	opts := api.InfoOptions{Sections: []api.Section{api.Server}}
-//	response, err := standaloneClient.InfoWithOptions(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	fmt.Println(response)
-//
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *GlideClient) InfoWithOptions(options InfoOptions) (string, error) {
-	result, err := client.executeCommand(C.Info, options.toArgs())
+func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string, error) {
+	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
+	}
+	result, err := client.executeCommand(C.Info, optionArgs)
+	if err != nil {
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -216,14 +175,6 @@ func (client *GlideClient) InfoWithOptions(options InfoOptions) (string, error) 
 // Return value:
 //
 //	The number of keys in the currently selected database.
-//
-// Example:
-//
-//	result, err := client.DBSize()
-//	if err != nil {
-//		// handle error
-//	}
-//	fmt.Println(result) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
 func (client *GlideClient) DBSize() (int64, error) {
@@ -245,14 +196,6 @@ func (client *GlideClient) DBSize() (int64, error) {
 //
 //	The provided message
 //
-// For example:
-//
-//	 result, err := client.Echo("Hello World")
-//	 if err != nil {
-//		// handle error
-//	 }
-//	 fmt.Println(result.Value()) // Output: Hello World
-//
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClient) Echo(message string) (Result[string], error) {
 	result, err := client.executeCommand(C.Echo, []string{message})
@@ -267,11 +210,6 @@ func (client *GlideClient) Echo(message string) (Result[string], error) {
 // Return value:
 //
 //	Returns "PONG".
-//
-// For example:
-//
-//	result, err := client.Ping()
-//	fmt.Println(result) // Output: PONG
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClient) Ping() (string, error) {
@@ -288,17 +226,15 @@ func (client *GlideClient) Ping() (string, error) {
 //
 //	Returns the copy of message.
 //
-// For example:
-//
-//	options := options.NewPingOptionsBuilder().SetMessage("hello")
-//	result, err := client.PingWithOptions(options)
-//	result: "hello"
-//
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
-	result, err := client.executeCommand(C.Ping, pingOptions.ToArgs())
+	optionArgs, err := pingOptions.ToArgs()
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
+	}
+	result, err := client.executeCommand(C.Ping, optionArgs)
+	if err != nil {
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }

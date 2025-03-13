@@ -7,6 +7,7 @@ This document describes how to set up your development environment to build and 
 We're excited to share that the GLIDE Go client is currently in development! However, it's important to note that this client is a work in progress and is not yet complete or fully tested. Your contributions and feedback are highly encouraged as we work towards refining and improving this implementation. Thank you for your interest and understanding as we continue to develop this Go wrapper.
 
 The Valkey GLIDE Go wrapper consists of both Go and Rust code. The Go and Rust components communicate in two ways:
+
 1. Using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 2. Using shared C objects. [cgo](https://pkg.go.dev/cmd/cgo) is used to interact with the C objects from Go code.
 
@@ -16,19 +17,19 @@ The Valkey GLIDE Go wrapper consists of both Go and Rust code. The Go and Rust c
 
 Software Dependencies
 
--   Go
--   GNU Make
--   git
--   GCC
--   pkg-config
--   protoc (protobuf compiler) >= v3.20.0
--   openssl
--   openssl-dev
--   rustup
+- Go
+- GNU Make
+- git
+- GCC
+- pkg-config
+- protoc (protobuf compiler) >= v3.20.0
+- openssl
+- openssl-dev
+- rustup
 
 **Valkey installation**
 
-To install valkey-server and valkey-cli on your host, follow the [Valkey Installation Guide](https://github.com/valkey-io/valkey).
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 
 **Dependencies installation for Ubuntu**
 
@@ -100,33 +101,44 @@ protoc --version
 Before starting this step, make sure you've installed all software requirements.
 
 1. Clone the repository:
+
     ```bash
     VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
     git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
     cd valkey-glide
     ```
+
 2. Install build dependencies:
+
     ```bash
     cd go
     make install-build-tools
     ```
+
 3. If on CentOS or Ubuntu, add the glide-rs library to LD_LIBRARY_PATH:
+
     ```bash
     # Replace "<path to valkey-glide>" with the path to the valkey-glide root, eg "$HOME/Projects/valkey-glide"
     GLIDE_ROOT_FOLDER_PATH=<path to valkey-glide>
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GLIDE_ROOT_FOLDER_PATH/go/target/release/deps/
     ```
+
 4. Build the Go wrapper:
+
     ```bash
     make build
     ```
+
 5. Run tests:
-    1. Ensure that you have installed valkey-server and valkey-cli on your host. You can find the Valkey installation guide at the following link: [Valkey Installation Guide](https://github.com/valkey-io/valkey).
+    1. Ensure that you have installed valkey-server and valkey-cli on your host. You can find the Valkey installation guide at the following link: [Valkey Installation Guide](https://valkey.io/topics/installation/).
     2. Execute the following command from the go folder:
+
         ```bash
         go test -race ./...
         ```
+
 6. Install Go development tools with:
+
     ```bash
     # For go1.22:
     make install-dev-tools
@@ -177,7 +189,6 @@ During the initial build, Go protobuf files were created in `go/protobuf`. If mo
 make generate-protobuf
 ```
 
-
 ### Linters
 
 Development on the Go wrapper may involve changes in either the Go or Rust code. Each language has distinct linter tests that must be passed before committing changes.
@@ -186,21 +197,22 @@ Development on the Go wrapper may involve changes in either the Go or Rust code.
 
 **Go:**
 
--   go vet
--   gofumpt
--   staticcheck
--   golines
+- go vet
+- gofumpt
+- staticcheck
+- golines
 
 **Rust:**
 
--   clippy
--   fmt
+- clippy
+- fmt
 
 #### Running the linters
 
 Run from the main `/go` folder
 
 1. Go
+
     ```bash
     # For go1.22:
     make install-dev-tools
@@ -209,7 +221,9 @@ Run from the main `/go` folder
 
     make lint
     ```
+
 2. Rust
+
     ```bash
     rustup component add clippy rustfmt
     cargo clippy --all-features --all-targets -- -D warnings
@@ -238,7 +252,185 @@ go run . -help
 go run . -resultsFile gobenchmarks.json -dataSize "100 1000" -concurrentTasks "10 100" -clients all -host localhost -port 6379 -clientCount "1 5" -tls
 ```
 
+### Naming Conventions
+
+#### Function names
+
+For every command that you implement, please use PascalCase.
+
+Examples of good command function names:
+
+- `BZPopMin`
+- `ZRem`
+- `PExpireWithOptions`
+- `SetWithOptions`
+- `Decr`
+
+Examples of bad command function names:
+
+- `zRange`
+- `hincrbyfloat`
+- `Sdiffstore`
+
+### Documentation
+
+#### Adding links
+
+When adding links, surround the piece of text using square brackets and then put the link reference at the bottom of the comment block.
+
+When creating links to other types, surround `<Package>.<Type>` with square brackets.
+
+For example, this links `valkey.io` and the `XPendingOptions` type with the proper reference:
+
+```go
+// Returns stream message summary information for pending messages matching a given range of IDs.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+// key - The key of the stream.
+// group - The consumer group name.
+// opts - The options for the command. See [options.XPendingOptions] for details.
+//
+// Return value:
+//
+//  A slice of XPendingDetail structs, where each detail struct includes the following fields:
+//
+//  Id - The ID of the pending message.
+//  ConsumerName - The name of the consumer that fetched the message and has still to acknowledge it.
+//  IdleTime - The time in milliseconds since the last time the message was delivered to the consumer.
+//  DeliveryCount - The number of times this message was delivered.
+//
+// [valkey.io]: https://valkey.io/commands/xpending/
+```
+
+#### Examples
+
+In the Go client, we have runnable examples in the `api/*_test.go` files to supplement the documentation.
+
+Use the following command to run all examples:
+
+```bash
+make example-test
+```
+
+Examples in Go are treated as tests by the framework. They must compile and execute without error and should return an `OK` response when run with the `make example-test` or `go test` commands.
+
+#### Writing examples
+
+To write an example for the command, find its respective group of commands and add the example to that `*_test.go` file. For example, `ZAdd` is a command that belongs to `sorted_set_commands` so we would add the example to `sorted_set_commands_test.go`.
+
+According to which client you are working with, you can use `getExampleGlideClient()` or `getExampleGlideClusterClient()` for your examples.
+
+Your example should look something like this:
+
+```go
+// string_commands_test.go:
+
+
+// Template
+func ExampleGlideClient_Get() {
+    var client *GlideClient = getExampleGlideClient() // example helper function
+
+    // General set up and code execution
+
+    fmt.Println(result)
+
+    // Output: [expected result]
+}
+```
+
+There can only be a single `Output:` directive in an example and it should be the last item in the example `func`. For examples with a single print statement, you should put the expected result on the same line as the `Output:` directive. For examples with multiple print statements, include the expected output from each print statments on separate comment lines after the `Output:` directive. For example:
+
+```go
+// Single-line example
+func ExampleGlideClient_Set() {
+    var client *GlideClient = getExampleGlideClient() // example helper function
+
+    result, err := client.Set("my_key", "my_value")
+ if err != nil {
+  fmt.Println("Glide example failed with an error: ", err)
+ }
+ fmt.Println(result)
+
+ // Output: OK
+}
+
+// Multi-line example
+func ExampleGlideClient_Sort() {
+ var client *GlideClient = getExampleGlideClient() // example helper function
+ result, err := client.LPush("key1", []string{"1", "3", "2", "4"})
+ result1, err := client.Sort("key1")
+ if err != nil {
+  fmt.Println("Glide example failed with an error: ", err)
+ }
+ fmt.Println(result)
+ fmt.Println(result1)
+
+ // Output:
+ // 4
+ // [{1 false} {2 false} {3 false} {4 false}]
+}
+```
+
+For complex return types, it may be difficult to understand a response with multiple nested maps and arrays. Consider outputing the response as formatted JSON or use multiple print statements to break down and test key parts of the response. For example:
+
+```go
+func ExampleGlideClient_XPending() {
+ var client *GlideClient = getExampleGlideClient() // example helper function
+
+    // Setup here...
+
+ summary, err := client.XPending(key, group)
+ if err != nil {
+  fmt.Println("Glide example failed with an error: ", err)
+ }
+ jsonSummary, _ := json.Marshal(summary)
+ fmt.Println(string(jsonSummary))
+
+ // Output: {"NumOfMessages":1,"StartId":{},"EndId":{},"ConsumerMessages":[{"ConsumerName":"c12345","MessageCount":1}]}
+}
+```
+
+#### Function names for examples
+
+`pkgsite` is a program which generates documentation for Go projects.  To install and run it, execute the following:
+
+```bash
+# In the valkey-glide directory
+cd go
+go install golang.org/x/pkgsite/cmd/pkgsite@latest
+pkgsite -open .
+```
+
+In order for `pkgsite` to work properly, examples for API must be written in a very specific format. They should be located in one of the `*_test.go` files in `./api/` and follow this pattern: `Example<ClientType>_<FunctionName>()`. If we wanted to create an example for the `Get` command in `GlideClient`, we would name define our function as follows:
+
+```go
+func ExampleGlideClient_Get() {
+    // Example code here
+}
+```
+
+In cases where we want to show more than one example, we can add extra endings to the function names. **Endings must begin with a lowercase letter:**
+
+```go
+// Bad: extension begins with upper case
+func ExampleGlideClient_Get_KeyExists() { ... }
+
+// Bad: extension begins with number
+func ExampleGlideClient_Get_1() { ... }
+
+// Good: extension begins with lower case letter
+func ExampleGlideClient_Get_one() { ... }
+
+// Better: extension begins with lower case letter and is descriptive
+func ExampleGlideClient_Get_keyIsNil { ... }
+```
+
+**Note: `ClientType` and `FunctionName` are CASE-SENSITIVE.**
+
 ### Recommended extensions for VS Code
 
--   [Go](https://marketplace.visualstudio.com/items?itemName=golang.Go)
--   [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- [Go](https://marketplace.visualstudio.com/items?itemName=golang.Go)
+- [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)

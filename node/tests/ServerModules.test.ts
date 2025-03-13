@@ -33,12 +33,12 @@ import {
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
+    CreateJsonBatchCommands,
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
+    JsonBatchForArrCommands,
     parseEndpoints,
-    transactionMultiJson,
-    transactionMultiJsonForArrCommands,
     validateTransactionResponse,
 } from "./TestUtilities";
 
@@ -2313,7 +2313,7 @@ describe("Server Module Tests", () => {
                 ).toBeNull();
             });
 
-            it("can send GlideMultiJson transactions for ARR commands", async () => {
+            it("can send JsonBatch transactions for ARR commands", async () => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(
                         cluster.getAddresses(),
@@ -2322,16 +2322,14 @@ describe("Server Module Tests", () => {
                 );
                 const clusterTransaction = new ClusterTransaction();
                 const expectedRes =
-                    await transactionMultiJsonForArrCommands(
-                        clusterTransaction,
-                    );
+                    await JsonBatchForArrCommands(clusterTransaction);
                 const result = await client.exec(clusterTransaction);
 
                 validateTransactionResponse(result, expectedRes);
                 client.close();
             });
 
-            it("can send GlideMultiJson transactions general commands", async () => {
+            it("can send JsonBatch transactions general commands", async () => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(
                         cluster.getAddresses(),
@@ -2340,7 +2338,7 @@ describe("Server Module Tests", () => {
                 );
                 const clusterTransaction = new ClusterTransaction();
                 const expectedRes =
-                    await transactionMultiJson(clusterTransaction);
+                    await CreateJsonBatchCommands(clusterTransaction);
                 const result = await client.exec(clusterTransaction);
 
                 validateTransactionResponse(result, expectedRes);

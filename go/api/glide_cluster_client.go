@@ -2,18 +2,14 @@
 
 package api
 
-// #cgo LDFLAGS: -lglide_rs
-// #cgo !windows LDFLAGS: -lm
-// #cgo darwin LDFLAGS: -framework Security
-// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
-// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
-// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
-// #cgo LDFLAGS: -L../target/release
 // #include "../lib.h"
 import "C"
 
 import (
+	"unsafe"
+
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -65,11 +61,6 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 //
 //	The returned value for the custom command.
 //
-// For example:
-//
-//	result, err := client.CustomCommand([]string{"ping"})
-//	result.Value().(string): "PONG"
-//
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[interface{}], error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
@@ -92,16 +83,6 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 // Return value:
 //
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
-//
-// Example:
-//
-//	response, err := clusterClient.Info(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	for node, data := range response {
-//		fmt.Printf("%s node returned %s\n", node, data)
-//	}
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClusterClient) Info() (map[string]string, error) {
@@ -129,23 +110,14 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //	it returns a map where each address is the key and its corresponding node response is the value.
 //	When a single node route is given, command returns a string containing the information for the sections requested.
 //
-// Example:
-//
-//	opts := api.ClusterInfoOptions{
-//		InfoOptions: &api.InfoOptions{Sections: []api.Section{api.Server}},
-//		Route: api.RandomRoute.ToPtr(),
-//	}
-//	response, err := clusterClient.InfoWithOptions(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	// Command sent to a single random node via RANDOM route, expecting SingleValue result as a `string`.
-//	fmt.Println(response.SingleValue())
-//
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (ClusterValue[string], error) {
-	if options.Route == nil {
-		response, err := client.executeCommand(C.Info, options.toArgs())
+func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOptions) (ClusterValue[string], error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if options.RouteOption == nil || options.RouteOption.Route == nil {
+		response, err := client.executeCommand(C.Info, optionArgs)
 		if err != nil {
 			return createEmptyClusterValue[string](), err
 		}
@@ -155,11 +127,11 @@ func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (C
 		}
 		return createClusterMultiValue[string](data), nil
 	}
-	response, err := client.executeCommandWithRoute(C.Info, options.toArgs(), *options.Route)
+	response, err := client.executeCommandWithRoute(C.Info, optionArgs, options.Route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
-	if (*options.Route).IsMultiNode() {
+	if options.Route.IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
 			return createEmptyClusterValue[string](), err
@@ -189,12 +161,6 @@ func (client *GlideClusterClient) InfoWithOptions(options ClusterInfoOptions) (C
 //
 //	The returning value depends on the executed command and route.
 //
-// For example:
-//
-//	route := config.SimpleNodeRoute(config.RandomRoute)
-//	result, err := client.CustomCommandWithRoute([]string{"ping"}, route)
-//	result.SingleValue().(string): "PONG"
-//
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClusterClient) CustomCommandWithRoute(
 	args []string,
@@ -216,18 +182,13 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 //
 // Return value:
 //
-// Returns "PONG".
-//
-// For example:
-//
-//	result, err := clusterClient.Ping()
-//	fmt.Println(result) // Output: PONG
+//	Returns "PONG".
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -237,7 +198,7 @@ func (client *GlideClusterClient) Ping() (string, error) {
 //
 // Parameters:
 //
-//	pingOptions - The PingOptions type.
+//	pingOptions - The [ClusterPingOptions] type.
 //
 // Return value:
 //
@@ -245,29 +206,28 @@ func (client *GlideClusterClient) Ping() (string, error) {
 //
 // For example:
 //
-//	route := config.Route(config.RandomRoute)
-//	opts  := options.ClusterPingOptions{
-//			 PingOptions: &options.PingOptions{
-//			   Message: "Hello",
-//			 },
-//			 Route: &route,
-//		 }
+//	route := options.RouteOption{config.RandomRoute}
+//	opts  := options.ClusterPingOptions{ &options.PingOptions{ "Hello" }, &route }
 //	result, err := clusterClient.PingWithOptions(opts)
 //	fmt.Println(result) // Output: Hello
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (string, error) {
-	if pingOptions.Route == nil {
-		response, err := client.executeCommand(C.Ping, pingOptions.ToArgs())
+	args, err := pingOptions.ToArgs()
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	if pingOptions.RouteOption == nil || pingOptions.RouteOption.Route == nil {
+		response, err := client.executeCommand(C.Ping, args)
 		if err != nil {
-			return defaultStringResponse, err
+			return DefaultStringResponse, err
 		}
 		return handleStringResponse(response)
 	}
 
-	response, err := client.executeCommandWithRoute(C.Ping, pingOptions.ToArgs(), *pingOptions.Route)
+	response, err := client.executeCommandWithRoute(C.Ping, args, pingOptions.Route)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(response)
@@ -280,22 +240,13 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 //
 // Parameters:
 //
-//	options - The TimeOptions type.
+//	options - The [RouteOption] type.
 //
 // Return value:
 //
 // The current server time as a String array with two elements: A UNIX TIME and the amount
 // of microseconds already elapsed in the current second.
 // The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
-//
-// Example:
-//
-//	route := config.Route(config.RandomRoute)
-//	opts  := options.ClusterTimeOptions{
-//		  Route: &route,
-//	}
-//	fmt.Println(clusterResponse.SingleValue()) // Output: [1737994354 547816]
-//
 // [valkey.io]: https://valkey.io/commands/time/
 func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (ClusterValue[[]string], error) {
 	result, err := client.executeCommandWithRoute(C.Time, []string{}, opts.Route)
@@ -307,19 +258,13 @@ func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (Clu
 
 // Returns the number of keys in the database.
 //
+// Parameters:
+//
+//	options - The [RouteOption] type.
+//
 // Return value:
 //
 //	The number of keys in the database.
-//
-// Example:
-//
-//	route := api.SimpleNodeRoute(api.RandomRoute)
-//	options := options.NewDBOptionsBuilder().SetRoute(route)
-//	result, err := client.DBSizeWithOption(route)
-//	if err != nil {
-//	  // handle error
-//	}
-//	fmt.Println(result) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
 func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (int64, error) {
@@ -391,30 +336,27 @@ func (client *GlideClusterClient) FlushDBWithOptions(mode options.FlushMode, opt
 //
 // Parameters:
 //
-//	message - The provided message.
+//	echoOptions - The [ClusterEchoOptions] type.
 //
 // Return value:
 //
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
 //
-// Example:
-//
-//	response, err := clusterClient.EchoWithOptions(opts)
-//	if err != nil {
-//		// handle error
-//	}
-//	for node, data := range response {
-//		fmt.Printf("%s node returned %s\n", node, data)
-//	}
-//
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
-	response, err := client.executeCommandWithRoute(C.Echo, echoOptions.ToArgs(),
-		echoOptions.RouteOption.Route)
+	args, err := echoOptions.ToArgs()
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
-	if echoOptions.RouteOption.Route != nil &&
+	var route config.Route
+	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil {
+		route = echoOptions.RouteOption.Route
+	}
+	response, err := client.executeCommandWithRoute(C.Echo, args, route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil &&
 		(echoOptions.RouteOption.Route).IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
@@ -427,4 +369,142 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 		return createEmptyClusterValue[string](), err
 	}
 	return createClusterSingleValue[string](data), nil
+}
+
+// Helper function to perform the cluster scan.
+func (client *GlideClusterClient) clusterScan(
+	cursor *options.ClusterScanCursor,
+	opts options.ClusterScanOptions,
+) (*C.struct_CommandResponse, error) {
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "Cluster Scan failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+
+	cStr := C.CString(cursor.GetCursor())
+	c_cursor := C.new_cluster_cursor(cStr)
+	defer C.free(unsafe.Pointer(cStr))
+
+	args, err := opts.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+
+	var cArgsPtr *C.uintptr_t = nil
+	var argLengthsPtr *C.ulong = nil
+	if len(args) > 0 {
+		cArgs, argLengths := toCStrings(args)
+		cArgsPtr = &cArgs[0]
+		argLengthsPtr = &argLengths[0]
+	}
+
+	C.request_cluster_scan(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		c_cursor,
+		C.size_t(len(args)),
+		cArgsPtr,
+		argLengthsPtr,
+	)
+	client.mu.Unlock()
+
+	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return nil, payload.error
+	}
+
+	return payload.value, nil
+}
+
+// Incrementally iterates over the keys in the cluster.
+// The method returns a list containing the next cursor and a list of keys.
+//
+// This command is similar to the SCAN command but is designed to work in a cluster environment.
+// For each iteration, a new cursor object should be used to continue the scan.
+// Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
+// For more information about the Cluster Scan implementation, see
+// https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan.
+//
+// Like the SCAN command, the method can be used to iterate over the keys in the database,
+// returning all keys the database has from when the scan started until the scan ends.
+// The same key can be returned in multiple scan iterations.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	cursor - The [ClusterScanCursor] object that wraps the scan state.
+//	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
+//
+// Returns:
+//
+//	The ID of the next cursor and a list of keys found for this cursor ID.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClusterClient) Scan(
+	cursor options.ClusterScanCursor,
+) (options.ClusterScanCursor, []string, error) {
+	response, err := client.clusterScan(&cursor, *options.NewClusterScanOptions())
+	if err != nil {
+		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
+	}
+
+	nextCursor, keys, err := handleScanResponse(response)
+	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
+}
+
+// Incrementally iterates over the keys in the cluster.
+// The method returns a list containing the next cursor and a list of keys.
+//
+// This command is similar to the SCAN command but is designed to work in a cluster environment.
+// For each iteration, a new cursor object should be used to continue the scan.
+// Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
+// For more information about the Cluster Scan implementation, see
+// https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan.
+//
+// Like the SCAN command, the method can be used to iterate over the keys in the database,
+// returning all keys the database has from when the scan started until the scan ends.
+// The same key can be returned in multiple scan iterations.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	cursor - The [ClusterScanCursor] object that wraps the scan state.
+//	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
+//	opts - The scan options. Can specify MATCH, COUNT, and TYPE configurations.
+//
+// Returns:
+//
+//	The ID of the next cursor and a list of keys found for this cursor ID.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClusterClient) ScanWithOptions(
+	cursor options.ClusterScanCursor,
+	opts options.ClusterScanOptions,
+) (options.ClusterScanCursor, []string, error) {
+	response, err := client.clusterScan(&cursor, opts)
+	if err != nil {
+		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
+	}
+
+	nextCursor, keys, err := handleScanResponse(response)
+	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
