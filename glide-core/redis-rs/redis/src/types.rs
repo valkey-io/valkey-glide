@@ -161,7 +161,7 @@ pub enum ErrorKind {
     UserOperationError,
 }
 
-#[derive(PartialEq, Debug, Clone, Display)]
+#[derive(PartialEq, Debug, Clone, Display, Copy)]
 pub enum ServerErrorKind {
     ResponseError,
     ExecAbortError,
@@ -221,20 +221,7 @@ impl ServerError {
     pub fn kind(&self) -> ErrorKind {
         match self {
             ServerError::ExtensionError { .. } => ErrorKind::ExtensionError,
-            ServerError::KnownError { kind, .. } => match kind {
-                ServerErrorKind::ResponseError => ErrorKind::ResponseError,
-                ServerErrorKind::ExecAbortError => ErrorKind::ExecAbortError,
-                ServerErrorKind::BusyLoadingError => ErrorKind::BusyLoadingError,
-                ServerErrorKind::NoScriptError => ErrorKind::NoScriptError,
-                ServerErrorKind::Moved => ErrorKind::Moved,
-                ServerErrorKind::Ask => ErrorKind::Ask,
-                ServerErrorKind::TryAgain => ErrorKind::TryAgain,
-                ServerErrorKind::ClusterDown => ErrorKind::ClusterDown,
-                ServerErrorKind::CrossSlot => ErrorKind::CrossSlot,
-                ServerErrorKind::MasterDown => ErrorKind::MasterDown,
-                ServerErrorKind::ReadOnly => ErrorKind::ReadOnly,
-                ServerErrorKind::NotBusy => ErrorKind::NotBusy,
-            },
+            ServerError::KnownError { kind, .. } => (*kind).into(),
         }
     }
 
@@ -244,7 +231,6 @@ impl ServerError {
         // Convert the other error to a string representation.
         let other_str = format!("{}", other);
         match self {
-            // This pattern matches both variants.
             ServerError::ExtensionError { detail, .. } | ServerError::KnownError { detail, .. } => {
                 if let Some(existing) = detail {
                     // Append with a separator.
@@ -258,34 +244,52 @@ impl ServerError {
     }
 }
 
+macro_rules! map_error_kinds {
+    ($($variant:ident),*) => {
+        impl From<ServerErrorKind> for ErrorKind {
+            fn from(kind: ServerErrorKind) -> Self {
+                match kind {
+                    $(ServerErrorKind::$variant => ErrorKind::$variant,)*
+                }
+            }
+        }
+
+        impl From<ErrorKind> for Option<ServerErrorKind> {
+            fn from(kind: ErrorKind) -> Self {
+                match kind {
+                    $(ErrorKind::$variant => Some(ServerErrorKind::$variant),)*
+                    _ => None,
+                }
+            }
+        }
+    };
+}
+
+// Define mappings using the macro
+map_error_kinds!(
+    ResponseError,
+    ExecAbortError,
+    BusyLoadingError,
+    NoScriptError,
+    Moved,
+    Ask,
+    TryAgain,
+    ClusterDown,
+    CrossSlot,
+    MasterDown,
+    ReadOnly,
+    NotBusy
+);
+
 impl From<RedisError> for ServerError {
     fn from(redis_error: RedisError) -> Self {
-        // Helper closure to map an ErrorKind to a ServerErrorKind.
-        let map_error_kind = |kind: ErrorKind| -> Option<ServerErrorKind> {
-            match kind {
-                ErrorKind::ResponseError => Some(ServerErrorKind::ResponseError),
-                ErrorKind::ExecAbortError => Some(ServerErrorKind::ExecAbortError),
-                ErrorKind::BusyLoadingError => Some(ServerErrorKind::BusyLoadingError),
-                ErrorKind::NoScriptError => Some(ServerErrorKind::NoScriptError),
-                ErrorKind::Moved => Some(ServerErrorKind::Moved),
-                ErrorKind::Ask => Some(ServerErrorKind::Ask),
-                ErrorKind::TryAgain => Some(ServerErrorKind::TryAgain),
-                ErrorKind::ClusterDown => Some(ServerErrorKind::ClusterDown),
-                ErrorKind::CrossSlot => Some(ServerErrorKind::CrossSlot),
-                ErrorKind::MasterDown => Some(ServerErrorKind::MasterDown),
-                ErrorKind::ReadOnly => Some(ServerErrorKind::ReadOnly),
-                ErrorKind::NotBusy => Some(ServerErrorKind::NotBusy),
-                _ => None,
-            }
-        };
-
         match redis_error.repr {
             ErrorRepr::ExtensionError(code, detail) => ServerError::ExtensionError {
                 code,
                 detail: Some(detail),
             },
             ErrorRepr::WithDescription(kind, desc) => {
-                if let Some(mapped) = map_error_kind(kind) {
+                if let Some(mapped) = kind.into() {
                     ServerError::KnownError {
                         kind: mapped,
                         detail: Some(desc.to_string()),
@@ -301,7 +305,7 @@ impl From<RedisError> for ServerError {
                 }
             }
             ErrorRepr::WithDescriptionAndDetail(kind, desc, detail) => {
-                if let Some(mapped) = map_error_kind(kind) {
+                if let Some(mapped) = kind.into() {
                     ServerError::KnownError {
                         kind: mapped,
                         detail: Some(format!("{} {}", desc, detail)),
@@ -337,20 +341,7 @@ impl From<ServerError> for RedisError {
             ServerError::ExtensionError { code, detail } => make_extension_error(code, detail),
             ServerError::KnownError { kind, detail } => {
                 let desc = "An error was signalled by the server:";
-                let kind = match kind {
-                    ServerErrorKind::ResponseError => ErrorKind::ResponseError,
-                    ServerErrorKind::ExecAbortError => ErrorKind::ExecAbortError,
-                    ServerErrorKind::BusyLoadingError => ErrorKind::BusyLoadingError,
-                    ServerErrorKind::NoScriptError => ErrorKind::NoScriptError,
-                    ServerErrorKind::Moved => ErrorKind::Moved,
-                    ServerErrorKind::Ask => ErrorKind::Ask,
-                    ServerErrorKind::TryAgain => ErrorKind::TryAgain,
-                    ServerErrorKind::ClusterDown => ErrorKind::ClusterDown,
-                    ServerErrorKind::CrossSlot => ErrorKind::CrossSlot,
-                    ServerErrorKind::MasterDown => ErrorKind::MasterDown,
-                    ServerErrorKind::ReadOnly => ErrorKind::ReadOnly,
-                    ServerErrorKind::NotBusy => ErrorKind::NotBusy,
-                };
+                let kind: ErrorKind = kind.into();
                 match detail {
                     Some(detail) => RedisError::from((kind, desc, detail)),
                     None => RedisError::from((kind, desc)),
