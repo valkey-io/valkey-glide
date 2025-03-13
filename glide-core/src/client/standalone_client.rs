@@ -604,7 +604,7 @@ impl StandaloneClient {
         });
     }
 
-    /// Update the password used to authenticate with the servers.
+    /// Update the password used to authenticate with the server.
     /// If the password is `None`, the password will be removed.
     pub async fn update_connection_password(
         &self,
@@ -617,7 +617,9 @@ impl StandaloneClient {
         Ok(Value::Okay)
     }
 
-    pub async fn get_username(&self) -> Option<String> {
+    /// Retrieve the username used to authenticate with the server.
+    pub fn get_username(&self) -> Option<String> {
+        // All nodes in the client should have the same username configured, thus any connection would work here.
         self.get_primary_connection().get_username()
     }
 }

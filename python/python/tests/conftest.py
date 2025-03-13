@@ -21,7 +21,10 @@ from glide.logger import Level as logLevel
 from glide.logger import Logger
 from glide.routes import AllNodes
 from tests.utils.cluster import ValkeyCluster
-from tests.utils.utils import check_if_server_version_lt
+from tests.utils.utils import (
+    check_if_server_version_lt,
+    set_new_acl_username_with_password,
+)
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 6379
@@ -261,7 +264,6 @@ async def acl_glide_client(
         request,
         cluster_mode,
         protocol=protocol,
-        request_timeout=5000,
         credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
     )
     yield client
@@ -341,7 +343,7 @@ NEW_PASSWORD = "new_secure_password"
 WRONG_PASSWORD = "wrong_password"
 
 
-async def auth_client(client: TGlideClient, password, username="default"):
+async def auth_client(client: TGlideClient, password: str, username: str = "default"):
     """
     Authenticates the given TGlideClient server connected. If no username is provided, uses the 'default' user.
     """
@@ -353,7 +355,7 @@ async def auth_client(client: TGlideClient, password, username="default"):
         )
 
 
-async def config_set_new_password(client: TGlideClient, password):
+async def config_set_new_password(client: TGlideClient, password: str):
     """
     Sets a new password for the given TGlideClient server connected.
     This function updates the server to require a new password.
@@ -362,37 +364,6 @@ async def config_set_new_password(client: TGlideClient, password):
         await client.config_set({"requirepass": password})
     elif isinstance(client, GlideClusterClient):
         await client.config_set({"requirepass": password}, route=AllNodes())
-
-
-async def set_new_acl_username_with_password(client: TGlideClient, username, password):
-    """
-    Sets a new ACL user with the provided password
-    """
-    try:
-        if isinstance(client, GlideClient):
-            await client.custom_command(
-                ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"]
-            )
-        elif isinstance(client, GlideClusterClient):
-            await client.custom_command(
-                ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"],
-                route=AllNodes(),
-            )
-    except Exception as e:
-        raise RuntimeError(f"Failed to set ACL user: {e}")
-
-
-async def delete_acl_username_and_password(client: TGlideClient, username):
-    """
-    Deletes the username and its password from the ACL list
-    """
-    if isinstance(client, GlideClient):
-        return await client.custom_command(["ACL", "DELUSER", username])
-
-    elif isinstance(client, GlideClusterClient):
-        return await client.custom_command(
-            ["ACL", "DELUSER", username], route=AllNodes()
-        )
 
 
 async def kill_connections(client: TGlideClient):

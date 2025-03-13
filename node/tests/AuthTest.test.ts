@@ -141,27 +141,18 @@ describe("Auth tests", () => {
     const runTest = async (
         test: (client: BaseClient) => Promise<void>,
         protocol: ProtocolVersion,
-        cluster_mode: boolean,
+        clusterMode: boolean,
         configOverrides?: Partial<BaseClientConfiguration>,
     ) => {
-        let isStandaloneMode;
+        const activeCluster = clusterMode ? cmeCluster : cmdCluster;
 
-        if (configOverrides?.addresses) {
-            isStandaloneMode =
-                configOverrides.addresses.length === 1 ? false : true;
-        } else {
-            isStandaloneMode = !cluster_mode;
-        }
-
-        const activeCluster = isStandaloneMode ? cmdCluster : cmeCluster;
-
-        managementClient = isStandaloneMode
-            ? managementClientCMD
-            : managementClientCME;
+        managementClient = clusterMode
+            ? managementClientCME
+            : managementClientCMD;
 
         if (!activeCluster) {
             throw new Error(
-                `${isStandaloneMode ? "Standalone" : "Cluster"} mode not configured`,
+                `${clusterMode ? "Cluster" : "Standalone"} mode not configured`,
             );
         }
 
@@ -171,7 +162,7 @@ describe("Auth tests", () => {
             INITIAL_PASSWORD,
         );
 
-        const ClientClass = isStandaloneMode ? GlideClient : GlideClusterClient;
+        const ClientClass = clusterMode ? GlideClusterClient : GlideClient;
         const addresses = formatAddresses(activeCluster.getAddresses());
 
         client = await ClientClass.createClient({
@@ -429,6 +420,7 @@ describe("Auth tests", () => {
                     clusterMode,
                 );
             });
+
             /*
              * Test replacing the connection password without immediate re-authentication, when the client is pre-authenticated as an acl user.
              * Verifies that:
@@ -494,6 +486,7 @@ describe("Auth tests", () => {
                 },
                 TIMEOUT,
             );
+
             /**
              * Test replacing connection password with immediate re-authentication using a non-valid password, with an acl user.
              * Verifies that immediate re-authentication fails when the password is not valid.
@@ -518,6 +511,7 @@ describe("Auth tests", () => {
                     },
                 );
             });
+
             /**
              * Test that re-authentication with a new password succeeds.
              */
@@ -550,6 +544,7 @@ describe("Auth tests", () => {
              *
              * **Note: This test is only supported for standalone mode, see explanation at the parallel test above*
              */
+
             it("test_update_connection_password_connection_lost_before_password_update_acl_user", async () => {
                 await runTest(
                     async (client: BaseClient) => {

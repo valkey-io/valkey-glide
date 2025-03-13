@@ -534,18 +534,17 @@ impl Client {
         }
     }
 
+    /// Returns the username if one was configured during client creation. Otherwise, returns None.
     async fn get_username(&mut self) -> Option<String> {
         match &mut self.internal_client {
-            ClientWrapper::Cluster { client } => {
-                if let Ok(Value::SimpleString(username)) = client.get_username().await {
-                    return Some(username);
-                }
-            }
-            ClientWrapper::Standalone(client) => {
-                return client.get_username().await;
-            }
+            ClientWrapper::Cluster { client } => match client.get_username().await {
+                Ok(Value::SimpleString(username)) => Some(username),
+                Ok(Value::Nil) => None,
+                Ok(other) => panic!("Expected SimpleString, got: {:?}", other),
+                Err(e) => panic!("Got error trying to get username: {:?}", e),
+            },
+            ClientWrapper::Standalone(client) => client.get_username(),
         }
-        None
     }
 }
 
