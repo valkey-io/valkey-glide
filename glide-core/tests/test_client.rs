@@ -148,7 +148,7 @@ pub(crate) mod shared_client_tests {
             for _ in 0..4 {
                 let _ = test_basics
                     .client
-                    .send_transaction(&pipe, None)
+                    .send_transaction(&pipe, None, false)
                     .await
                     .unwrap();
             }
@@ -497,7 +497,10 @@ pub(crate) mod shared_client_tests {
             let mut pipeline = redis::pipe();
             pipeline.atomic();
             pipeline.cmd("GET").arg("foo");
-            let result = test_basics.client.send_transaction(&pipeline, None).await;
+            let result = test_basics
+                .client
+                .send_transaction(&pipeline, None, false)
+                .await;
             assert!(result.is_err(), "Received {:?}", result);
             let err = result.unwrap_err();
             assert!(err.is_timeout(), "{err}");
@@ -611,7 +614,7 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, false)
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -638,7 +641,10 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_pipeline_return_error(#[values(false, true)] use_cluster: bool) {
+    fn test_pipeline_return_error(
+        #[values(false, true)] use_cluster: bool,
+        #[values(false, true)] raise_error: bool,
+    ) {
         use redis::ErrorKind;
 
         block_on_all(async move {
@@ -661,16 +667,39 @@ pub(crate) mod shared_client_tests {
             let mut pipeline = Pipeline::new();
             pipeline.set(&key, &value).get(&key).llen(&key).get(&key2);
 
-            let res = test_basics.client.send_pipeline(&pipeline).await;
-            assert!(res.is_err(), "Pipeline should fail with wrong type error");
-            let err = res.unwrap_err();
+            let res = test_basics
+                .client
+                .send_pipeline(&pipeline, raise_error)
+                .await;
 
-            assert_eq!(
-                err.kind(),
-                ErrorKind::ExtensionError,
-                "Pipeline should fail with response error"
-            );
-            assert!(err.to_string().contains("WRONGTYPE"), "{err:?}");
+            match raise_error {
+                false => {
+                    let res = match res {
+                        Ok(Value::Array(arr)) => arr,
+                        _ => panic!("Expected an array response, got: {:?}", res),
+                    };
+                    assert_eq!(
+                        &res[..2],
+                        &[Value::Okay, Value::BulkString(value.as_bytes().to_vec()),],
+                        "Pipeline result: {:?}",
+                        res
+                    );
+
+                    assert!(
+                        matches!(res[2], Value::ServerError(ref err) if err.err_code().contains("WRONGTYPE"))
+                    );
+                }
+                true => {
+                    assert!(res.is_err(), "Pipeline should fail with wrong type error");
+                    let err = res.unwrap_err();
+                    assert_eq!(
+                        err.kind(),
+                        ErrorKind::ExtensionError,
+                        "Pipeline should fail with response error"
+                    );
+                    assert!(err.to_string().contains("WRONGTYPE"), "{err:?}");
+                }
+            }
         });
     }
 
@@ -706,7 +735,7 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, false)
                 .await
                 .expect("Pipeline failed");
 
@@ -716,15 +745,15 @@ pub(crate) mod shared_client_tests {
             // - BLPOP returns null (because of timeout)
             // - GET returns null (key2 was never set)
             assert_eq!(
-            result,
-            Value::Array(vec![
-                Value::Okay,
-                Value::BulkString(b"value1".to_vec()),
-                Value::Nil,
-                Value::Nil,
-            ]),
-            "Pipeline with blocking command should return null for BLPOP and GET on a non-existent key {result:?}"
-        );
+                result,
+                Value::Array(vec![
+                    Value::Okay,
+                    Value::BulkString(b"value1".to_vec()),
+                    Value::Nil,
+                    Value::Nil,
+                ]),
+                "Pipeline with blocking command should return null for BLPOP and GET on a non-existent key {result:?}"
+            );
         });
     }
 
@@ -755,7 +784,7 @@ pub(crate) mod shared_client_tests {
                 .blpop(&key2, 2.0)
                 .get(&key2);
 
-            let res = test_basics.client.send_pipeline(&pipeline).await;
+            let res = test_basics.client.send_pipeline(&pipeline, false).await;
             assert!(
                 res.is_err(),
                 "Pipeline should fail with blocking command taking too long"
@@ -801,7 +830,7 @@ pub(crate) mod shared_client_tests {
 
             let res = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, false)
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -848,7 +877,7 @@ pub(crate) mod shared_client_tests {
 
             let res = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, false)
                 .await
                 .expect("Pipeline failed after killing all connections");
 
@@ -898,7 +927,7 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, false)
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -933,7 +962,7 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, false)
                 .await
                 .expect("Pipeline failed");
 
@@ -974,7 +1003,7 @@ pub(crate) mod shared_client_tests {
             // Execute the pipeline.
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(&pipeline, false)
                 .await
                 .expect("Pipeline execution failed");
 
@@ -1107,7 +1136,10 @@ pub(crate) mod shared_client_tests {
             pipeline.cmd("INCRBYFLOAT").arg(&key).arg("0.5");
             pipeline.del(&key);
 
-            let result = test_basics.client.send_transaction(&pipeline, None).await;
+            let result = test_basics
+                .client
+                .send_transaction(&pipeline, None, false)
+                .await;
             assert_eq!(
                 result,
                 Ok(Value::Array(vec![

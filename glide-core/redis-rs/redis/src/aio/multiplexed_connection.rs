@@ -582,8 +582,7 @@ impl MultiplexedConnection {
                 }
             }
         }
-        // TODO: remove this when `raise_on_error` flag will be added
-        let value = result.and_then(|v| v.extract_error())?;
+        let value = result?;
         match value {
             Value::Array(mut values) => {
                 values.drain(..offset);
