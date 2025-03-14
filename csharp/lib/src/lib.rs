@@ -115,26 +115,20 @@ pub unsafe extern "C" fn command(
         Arc::from_raw(client_ptr as *mut Client)
     };
 
-    // The safety of these needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
-    let args_address = args as usize;
+    let Some(mut cmd) = request_type.get_command() else {
+        unsafe {
+            (client.core.failure_callback)(callback_index); // TODO - report errors
+            return;
+        }
+    };
+    let args_slice = unsafe { std::slice::from_raw_parts(args, arg_count as usize) };
+    for arg in args_slice {
+        let c_str = unsafe { CStr::from_ptr(*arg as *mut c_char) };
+        cmd.arg(c_str.to_bytes());
+    }
 
     let core = client.core.clone();
     client.runtime.spawn(async move {
-        let Some(mut cmd) = request_type.get_command() else {
-            unsafe {
-                (core.failure_callback)(callback_index); // TODO - report errors
-                return;
-            }
-        };
-
-        let args_slice = unsafe {
-            std::slice::from_raw_parts(args_address as *const *mut c_char, arg_count as usize)
-        };
-        for arg in args_slice {
-            let c_str = unsafe { CStr::from_ptr(*arg as *mut c_char) };
-            cmd.arg(c_str.to_bytes());
-        }
-
         let result = core
             .client
             .clone()
@@ -145,7 +139,10 @@ pub unsafe extern "C" fn command(
             match result {
                 Ok(None) => (core.success_callback)(callback_index, std::ptr::null()),
                 Ok(Some(c_str)) => (core.success_callback)(callback_index, c_str.as_ptr()),
-                Err(_) => (core.failure_callback)(callback_index), // TODO - report errors
+                Err(err) => {
+                    dbg!(err); // TODO - report errors
+                    (core.failure_callback)(callback_index)
+                }
             };
         }
     });
