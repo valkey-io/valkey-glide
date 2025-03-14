@@ -1443,7 +1443,10 @@ export function convertElementsAndScores(
  */
 export function createZAdd(
     key: GlideString,
-    membersAndScores: SortedSetDataType | Record<string, number> | Record<string, InfScore>,
+    membersAndScores:
+        | SortedSetDataType
+        | Record<string, number>
+        | Record<string, InfScore>,
     options?: ZAddOptions,
     incr = false,
 ): command_request.Command {
@@ -1476,15 +1479,17 @@ export function createZAdd(
     if (incr) {
         args.push("INCR");
     }
-    
+
     if (Array.isArray(membersAndScores)) {
-        membersAndScores.forEach((p) => args.push(p.score.toString(), p.element));
-    }
-    else {
-        Object.entries(membersAndScores).forEach(([member, score]) => args.push(score.toString(), member));
+        membersAndScores.forEach((p) =>
+            args.push(p.score.toString(), p.element),
+        );
+    } else {
+        Object.entries(membersAndScores).forEach(([member, score]) =>
+            args.push(score.toString(), member),
+        );
     }
 
-    
     return createCommand(RequestType.ZAdd, args);
 }
 
