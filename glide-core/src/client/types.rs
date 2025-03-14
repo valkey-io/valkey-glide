@@ -64,6 +64,7 @@ pub enum ReadFrom {
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Default)]
+#[repr(C)]
 pub enum TlsMode {
     #[default]
     NoTls,
@@ -71,6 +72,8 @@ pub enum TlsMode {
     SecureTls,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+#[repr(C)]
 pub struct ConnectionRetryStrategy {
     pub exponent_base: u32,
     pub factor: u32,
