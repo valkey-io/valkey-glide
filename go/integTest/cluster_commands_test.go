@@ -729,3 +729,28 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 		assert.NotContains(t, allKeys, elem)
 	}
 }
+
+func (suite *GlideTestSuite) TestLastSaveCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// LastSave with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	response, err := client.LastSaveWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	response, err = client.LastSaveWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// default sections, multi node route
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	response, err = client.LastSaveWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsMultiValue())
+}
