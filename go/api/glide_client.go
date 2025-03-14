@@ -238,3 +238,18 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	}
 	return handleStringResponse(result)
 }
+
+// Returns a random key.
+//
+// Return value:
+//
+//	A random key from the database.
+//
+// [valkey.io]: https://valkey.io/commands/randomkey/
+func (client *GlideClient) RandomKey() (string, error) {
+	result, err := client.executeCommand(C.RandomKey, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}

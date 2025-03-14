@@ -516,3 +516,12 @@ func (suite *GlideTestSuite) TestTime_Error() {
 	assert.Nil(suite.T(), results)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
+
+func (suite *GlideTestSuite) TestRandomKey() {
+	client := suite.defaultClient()
+	// Test 1: Check if Echo command return the message
+	t := suite.T()
+	result, err := client.RandomKey()
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+}
