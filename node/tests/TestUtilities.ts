@@ -572,13 +572,19 @@ export function checkFunctionStatsResponse(
 }
 
 /**
- * Specially test flaky cases. Returns false when the test is not a known flaky test or when errors arise.
+ * Checks if given test is a known flaky test, then handles it accordingly.
+ * 
+ * This function returns false in two cases:
+ *  1. The test is not a known flaky test (i.e., we don't have a case to specially test it).
+ *  2. An error occurs during the processing of the responses. Then, default back to regular testing instead.
+ * 
+ * Otherwise, returns true to prevent redundant testing.
  *
  * @param testName - The name of the test.
  * @param response - One of the transaction results received from `exec` call.
  * @param expectedResponse - One of the expected result data from {@link transactionTest}.
  */
-export function testFlakyCases(
+export function checkAndHandleFlakyTests(
     testName: string,
     response: GlideReturnType | undefined,
     expectedResponse: GlideReturnType,
@@ -631,7 +637,7 @@ export function validateTransactionResponse(
         const [testName, expectedResponse] = expectedResponseData[i];
 
         try {
-            if (!testFlakyCases(testName, response?.[i], expectedResponse)) {
+            if (!checkAndHandleFlakyTests(testName, response?.[i], expectedResponse)) {
                 expect(response?.[i]).toEqual(expectedResponse);
             }
         } catch {
