@@ -18,6 +18,6 @@ type GeoSpatialCommands interface {
 	GeoAddWithOptions(
 		key string,
 		membersToGeospatialData map[string]options.GeospatialData,
-		options *options.GeoAddOptions,
+		options options.GeoAddOptions,
 	) (int64, error)
 }

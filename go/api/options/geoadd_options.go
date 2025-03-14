@@ -7,7 +7,7 @@ import (
 )
 
 // Represents a geographic position defined by longitude and latitude
-// The exact limits, as specified by `EPSG:900913 / OSGeo:4326` are:
+// The exact limits, as specified by `EPSG:900913 / EPSG:3785 / OSGEO:41001` are:
 // - Longitude: -180 to 180 degrees
 // - Latitude: -85.05112878 to 85.05112878 degrees
 type GeospatialData struct {
@@ -36,14 +36,14 @@ func NewGeoAddOptions() *GeoAddOptions {
 }
 
 // `conditionalChange` defines conditions for updating or adding elements with `ZADD` command.
-func (options *GeoAddOptions) SetConditionalChange(c ConditionalSet) *GeoAddOptions {
-	options.conditionalChange = c
+func (options *GeoAddOptions) SetConditionalChange(conditionalChange ConditionalSet) *GeoAddOptions {
+	options.conditionalChange = conditionalChange
 	return options
 }
 
 // `Changed` changes the return value from the number of new elements added to the total number of elements changed.
-func (options *GeoAddOptions) SetChanged(ch bool) *GeoAddOptions {
-	options.changed = ch
+func (options *GeoAddOptions) SetChanged(changed bool) *GeoAddOptions {
+	options.changed = changed
 	return options
 }
 

@@ -6484,7 +6484,14 @@ func (client *baseClient) ZLexCount(key string, rangeQuery *options.RangeByLex) 
 //
 // [valkey.io]: https://valkey.io/commands/geoadd/
 func (client *baseClient) GeoAdd(key string, membersToGeospatialData map[string]options.GeospatialData) (int64, error) {
-	return client.GeoAddWithOptions(key, membersToGeospatialData, nil)
+	result, err := client.executeCommand(
+		C.GeoAdd,
+		append([]string{key}, options.MapGeoDataToArray(membersToGeospatialData)...),
+	)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
 }
 
 // Adds geospatial members with their positions to the specified sorted set stored at `key`.
@@ -6507,16 +6514,14 @@ func (client *baseClient) GeoAdd(key string, membersToGeospatialData map[string]
 func (client *baseClient) GeoAddWithOptions(
 	key string,
 	membersToGeospatialData map[string]options.GeospatialData,
-	geoAddOptions *options.GeoAddOptions,
+	geoAddOptions options.GeoAddOptions,
 ) (int64, error) {
 	args := []string{key}
-	if geoAddOptions != nil {
-		optionsArgs, err := geoAddOptions.ToArgs()
-		if err != nil {
-			return defaultIntResponse, err
-		}
-		args = append(args, optionsArgs...)
+	optionsArgs, err := geoAddOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
 	}
+	args = append(args, optionsArgs...)
 	args = append(args, options.MapGeoDataToArray(membersToGeospatialData)...)
 	result, err := client.executeCommand(C.GeoAdd, args)
 	if err != nil {
