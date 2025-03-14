@@ -1699,7 +1699,6 @@ public class CommandTests {
         script.close();
     }
 
-    //    @Disabled("flaky test: re-enable once fixed")
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
@@ -1770,7 +1769,6 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
     }
 
-    //    @Disabled("flaky test: re-enable once fixed")
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
@@ -1794,7 +1792,7 @@ public class CommandTests {
                 int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
-                        regularClient.get("KEYS[1]").get(); // Dummy test command
+                        regularClient.ping().get(); // Dummy test command
                     } catch (ExecutionException err) {
                         if (err.getCause() instanceof RequestException) {
 
@@ -1818,7 +1816,6 @@ public class CommandTests {
                 boolean foundUnkillable = false;
                 timeout = 4000;
                 while (timeout >= 0) {
-                    System.out.println("Running again: " + timeout);
                     try {
                         // valkey kills a script with 5 sec delay
                         // but this will always throw an error in the test
@@ -1831,7 +1828,6 @@ public class CommandTests {
                             foundUnkillable = true;
                             break;
                         }
-                        System.out.println(execException.getMessage());
                     }
                     Thread.sleep(500);
                     timeout -= 500;
