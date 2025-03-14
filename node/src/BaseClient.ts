@@ -59,7 +59,6 @@ import {
     TimeUnit,
     ZAddOptions,
     ZScanOptions,
-    convertElementsAndScores,
     convertFieldsAndValuesToHashDataType,
     convertKeysAndEntries,
     createAppend,

@@ -1481,7 +1481,7 @@ export function createZAdd(
         membersAndScores.forEach((p) => args.push(p.score.toString(), p.element));
     }
     else {
-        Object.entries(membersAndScores).forEach(([member, score]) => args.push(member, score.toString()));
+        Object.entries(membersAndScores).forEach(([member, score]) => args.push(score.toString(), member));
     }
 
     
