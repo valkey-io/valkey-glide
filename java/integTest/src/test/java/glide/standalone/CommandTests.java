@@ -1742,7 +1742,6 @@ public class CommandTests {
                                         .toLowerCase()
                                         .contains("no scripts in execution right now")) {
                             testClient.invokeScript(script);
-                            timeout = 4000; // TODO: see if this is a good idea or not
                             Thread.sleep(1000);
                         }
                     } catch (RequestException ignored) {
@@ -1806,7 +1805,7 @@ public class CommandTests {
                             if (timeout <= 2000
                                     && err.getMessage().toLowerCase().contains("no scripts in execution right now")) {
                                 promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
-                                timeout = 4000;
+                                Thread.sleep(1000);
                             }
                         }
                     }
