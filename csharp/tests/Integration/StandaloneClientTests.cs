@@ -10,9 +10,9 @@ public class StandaloneClientTests
         GlideClient client = TestConfiguration.DefaultStandaloneClient();
         // Assert.Multiple doesn't work with async tasks https://github.com/xunit/xunit/issues/3209
         Assert.Multiple(
-            () => Assert.Equal("PONG", client.CustomCommand(["ping"]).Result),
-            () => Assert.Equal("piping", client.CustomCommand(["ping", "piping"]).Result),
-            () => Assert.Contains("# Server", client.CustomCommand(["INFO"]).Result as string)
+            () => Assert.Equal("PONG", client.CustomCommand(["ping"]).Result.ToString()),
+            () => Assert.Equal("piping", client.CustomCommand(["ping", "piping"]).Result.ToString()),
+            () => Assert.Contains("# Server", client.CustomCommand(["INFO"]).Result.ToString())
         );
     }
 
@@ -36,5 +36,36 @@ public class StandaloneClientTests
         // Set and get a binary value
         Assert.Equal("OK", await client.Set(key3, dump!));
         Assert.Equal(dump, await client.Get(key3));
+    }
+
+    [Fact]
+    public void CanConnectWithDifferentParameters()
+    {
+        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+            .WithClientName("GLIDE").Build());
+
+        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+            .WithTls(false).Build());
+
+        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+            .WithConnectionTimeout(2000).Build());
+
+        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+            .WithRequestTimeout(2000).Build());
+
+        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+            .WithDataBaseId(4).Build());
+
+        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+            .WithConnectionRetryStrategy(1, 2, 3).Build());
+
+        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+            .WithAuthentication("default", "").Build());
+
+        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+            .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2).Build());
+
+        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+            .WithReadFrom(new ConnectionConfiguration.ReadFrom(ConnectionConfiguration.ReadFromStrategy.Primary)).Build());
     }
 }
