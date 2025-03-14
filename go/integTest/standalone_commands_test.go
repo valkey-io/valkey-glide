@@ -516,3 +516,13 @@ func (suite *GlideTestSuite) TestTime_Error() {
 	assert.Nil(suite.T(), results)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
+
+func (suite *GlideTestSuite) TestMove() {
+	client := suite.defaultClient()
+	t := suite.T()
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(key, "hello"))
+	result, err := client.Move(key, 2)
+	assert.Nil(t, err)
+	assert.True(suite.T(), result)
+}

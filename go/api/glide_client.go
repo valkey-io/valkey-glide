@@ -238,3 +238,24 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	}
 	return handleStringResponse(result)
 }
+
+// Move key from the currently selected database to the database specified by dbIndex.
+//
+// Parameters:
+//
+//	key - The key to move.
+//	dbIndex -  The index of the database to move key to.
+//
+// Return value:
+//
+//	Returns "OK".
+//
+// [valkey.io]: https://valkey.io/commands/move/
+func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
+	result, err := client.executeCommand(C.Move, []string{key, utils.IntToString(dbIndex)})
+	if err != nil {
+		return defaultBoolResponse, err
+	}
+
+	return handleBoolResponse(result)
+}
