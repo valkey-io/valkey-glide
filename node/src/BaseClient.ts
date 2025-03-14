@@ -4024,15 +4024,14 @@ export class BaseClient {
      */
     public async zadd(
         key: GlideString,
-        membersAndScores: SortedSetDataType | Record<string, number> | Record<string, InfScore>,
+        membersAndScores:
+            | SortedSetDataType
+            | Record<string, number>
+            | Record<string, InfScore>,
         options?: ZAddOptions,
     ): Promise<number> {
         return this.createWritePromise(
-            createZAdd(
-                key,
-                membersAndScores,
-                options,
-            ),
+            createZAdd(key, membersAndScores, options),
         );
     }
 
