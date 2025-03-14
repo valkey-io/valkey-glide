@@ -15,6 +15,7 @@
 * Go: Adding support for Az Affinity ([#3235](https://github.com/valkey-io/valkey-glide/pull/3235))
 * Go: Adding support for advanced client configs and connectionTimeout ([#3290](https://github.com/valkey-io/valkey-glide/pull/3290))
 * Go: Add Cluster Scan support ([#3295](https://github.com/valkey-io/valkey-glide/pull/3295))
+* Go: Add password update api ([#3346](https://github.com/valkey-io/valkey-glide/pull/3346))
 
 #### Breaking Changes
 
