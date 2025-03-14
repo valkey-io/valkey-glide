@@ -729,3 +729,21 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 		assert.NotContains(t, allKeys, elem)
 	}
 }
+
+func (suite *GlideTestSuite) TestConfigResetStatWithOptions() {
+	client := suite.defaultClusterClient()
+
+	// ConfigResetStat with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	suite.verifyOK(client.ConfigResetStatWithOptions(opts))
+
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigResetStatWithOptions(opts))
+
+	// default sections, multi node route
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigResetStatWithOptions(opts))
+}
