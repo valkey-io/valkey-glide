@@ -1735,8 +1735,10 @@ public class CommandTests {
                         scriptKilled = true;
                         break;
                     } catch (ExecutionException exception) {
-                        // If exception says "no scripts in execution right now", rerun script.
-                        if (exception.getCause() instanceof RequestException
+                        // If 2s passed and exception still says "no scripts in execution right now",
+                        // rerun script.
+                        if (timeout <= 2000
+                                && exception.getCause() instanceof RequestException
                                 && exception
                                         .getMessage()
                                         .toLowerCase()
