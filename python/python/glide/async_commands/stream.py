@@ -10,6 +10,14 @@ from glide.constants import TEncodable
 class StreamTrimOptions(ABC):
     """
     Abstract base class for stream trim options.
+
+    Attributes:
+        exact (bool): If `true`, the stream will be trimmed exactly.
+            Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
+        threshold (Union[TEncodable, int]): Threshold for trimming.
+        method (str): Method for trimming (e.g., MINID, MAXLEN).
+        limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+            Note: If `exact` is set to `True`, `limit` cannot be specified.
     """
 
     @abstractmethod
@@ -22,14 +30,6 @@ class StreamTrimOptions(ABC):
     ):
         """
         Initialize stream trim options.
-
-        Args:
-            exact (bool): If `true`, the stream will be trimmed exactly.
-                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
-            threshold (Union[TEncodable, int]): Threshold for trimming.
-            method (str): Method for trimming (e.g., MINID, MAXLEN).
-            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
-                Note: If `exact` is set to `True`, `limit` cannot be specified.
         """
         if exact and limit:
             raise ValueError(
@@ -60,18 +60,18 @@ class StreamTrimOptions(ABC):
 class TrimByMinId(StreamTrimOptions):
     """
     Stream trim option to trim by minimum ID.
+
+    Attributes:
+        exact (bool): If `true`, the stream will be trimmed exactly.
+            Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
+        threshold (TEncodable): Threshold for trimming by minimum ID.
+        limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+            Note: If `exact` is set to `True`, `limit` cannot be specified.
     """
 
     def __init__(self, exact: bool, threshold: TEncodable, limit: Optional[int] = None):
         """
         Initialize trim option by minimum ID.
-
-        Args:
-            exact (bool): If `true`, the stream will be trimmed exactly.
-                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
-            threshold (TEncodable): Threshold for trimming by minimum ID.
-            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
-                Note: If `exact` is set to `True`, `limit` cannot be specified.
         """
         super().__init__(exact, threshold, "MINID", limit)
 
@@ -79,18 +79,18 @@ class TrimByMinId(StreamTrimOptions):
 class TrimByMaxLen(StreamTrimOptions):
     """
     Stream trim option to trim by maximum length.
+
+    Attributes:
+        exact (bool): If `true`, the stream will be trimmed exactly.
+            Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
+        threshold (int): Threshold for trimming by maximum length.
+        limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+            Note: If `exact` is set to `True`, `limit` cannot be specified.
     """
 
     def __init__(self, exact: bool, threshold: int, limit: Optional[int] = None):
         """
         Initialize trim option by maximum length.
-
-        Args:
-            exact (bool): If `true`, the stream will be trimmed exactly.
-                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
-            threshold (int): Threshold for trimming by maximum length.
-            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
-                Note: If `exact` is set to `True`, `limit` cannot be specified.
         """
         super().__init__(exact, threshold, "MAXLEN", limit)
 
@@ -98,6 +98,13 @@ class TrimByMaxLen(StreamTrimOptions):
 class StreamAddOptions:
     """
     Options for adding entries to a stream.
+
+    Attributes:
+        id (Optional[TEncodable]): ID for the new entry. If set, the new entry will be added with this ID. If not
+            specified, '*' is used.
+        make_stream (bool, optional): If set to False, a new stream won't be created if no stream matches the given key.
+        trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream.
+            See `StreamTrimOptions`.
     """
 
     def __init__(
@@ -108,13 +115,6 @@ class StreamAddOptions:
     ):
         """
         Initialize stream add options.
-
-        Args:
-            id (Optional[TEncodable]): ID for the new entry. If set, the new entry will be added with this ID. If not
-                specified, '*' is used.
-            make_stream (bool, optional): If set to False, a new stream won't be created if no stream matches the given key.
-            trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream.
-                See `StreamTrimOptions`.
         """
         self.id = id
         self.make_stream = make_stream
@@ -180,6 +180,9 @@ class IdBound(StreamRangeBound):
     Inclusive (closed) stream ID boundary used to specify a range of IDs to search. Stream ID bounds can be complete
     with a timestamp and sequence number separated by a dash ("-"), for example "1526985054069-0". Stream ID bounds can
     also be incomplete, with just a timestamp.
+
+    Attributes:
+        stream_id (str): The stream ID.
     """
 
     @staticmethod
@@ -195,9 +198,6 @@ class IdBound(StreamRangeBound):
     def __init__(self, stream_id: TEncodable):
         """
         Creates a stream ID boundary for a range search.
-
-        Args:
-            stream_id (str): The stream ID.
         """
         self.stream_id = stream_id
 
@@ -212,6 +212,9 @@ class ExclusiveIdBound(StreamRangeBound):
     be incomplete, with just a timestamp.
 
     Since: Valkey version 6.2.0.
+
+    Attributes:
+        stream_id (TEncodable): The stream ID.
     """
 
     EXCLUSIVE_BOUND_VALKEY_API = "("
@@ -229,9 +232,6 @@ class ExclusiveIdBound(StreamRangeBound):
     def __init__(self, stream_id: TEncodable):
         """
         Creates a stream ID boundary for a range search.
-
-        Args:
-            stream_id (TEncodable): The stream ID.
         """
         if isinstance(stream_id, bytes):
             stream_id = stream_id.decode("utf-8")
@@ -242,18 +242,19 @@ class ExclusiveIdBound(StreamRangeBound):
 
 
 class StreamReadOptions:
+    """
+    Options for reading entries from streams. Can be used as an optional argument to `XREAD`.
+
+    Attributes:
+        block_ms (Optional[int]): If provided, the request will be blocked for the set amount of milliseconds or
+            until the server has the required number of entries. Equivalent to `BLOCK` in the Valkey API.
+        count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Valkey API.
+    """
+
     READ_COUNT_VALKEY_API = "COUNT"
     READ_BLOCK_VALKEY_API = "BLOCK"
 
     def __init__(self, block_ms: Optional[int] = None, count: Optional[int] = None):
-        """
-        Options for reading entries from streams. Can be used as an optional argument to `XREAD`.
-
-        Args:
-            block_ms (Optional[int]): If provided, the request will be blocked for the set amount of milliseconds or
-                until the server has the required number of entries. Equivalent to `BLOCK` in the Valkey API.
-            count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Valkey API.
-        """
         self.block_ms = block_ms
         self.count = count
 
@@ -275,19 +276,20 @@ class StreamReadOptions:
 
 
 class StreamGroupOptions:
+    """
+    Options for creating stream consumer groups. Can be used as an optional argument to `XGROUP CREATE`.
+
+    Attributes:
+        make_stream (bool): If set to True and the stream doesn't exist, this creates a new stream with a
+            length of 0.
+        entries_read: (Optional[int]): A value representing the number of stream entries already read by the
+            group. This option can only be specified if you are using Valkey version 7.0.0 or above.
+    """
+
     MAKE_STREAM_VALKEY_API = "MKSTREAM"
     ENTRIES_READ_VALKEY_API = "ENTRIESREAD"
 
     def __init__(self, make_stream: bool = False, entries_read: Optional[int] = None):
-        """
-        Options for creating stream consumer groups. Can be used as an optional argument to `XGROUP CREATE`.
-
-        Args:
-            make_stream (bool): If set to True and the stream doesn't exist, this creates a new stream with a
-                length of 0.
-            entries_read: (Optional[int]): A value representing the number of stream entries already read by the
-                group. This option can only be specified if you are using Valkey version 7.0.0 or above.
-        """
         self.make_stream = make_stream
         self.entries_read = entries_read
 
@@ -309,22 +311,23 @@ class StreamGroupOptions:
 
 
 class StreamReadGroupOptions(StreamReadOptions):
+    """
+    Options for reading entries from streams using a consumer group. Can be used as an optional argument to
+    `XREADGROUP`.
+
+    Attributes:
+        no_ack (bool): If set, messages are not added to the Pending Entries List (PEL). This is equivalent to
+            acknowledging the message when it is read. Equivalent to `NOACK` in the Valkey API.
+        block_ms (Optional[int]): If provided, the request will be blocked for the set amount of milliseconds or
+            until the server has the required number of entries. Equivalent to `BLOCK` in the Valkey API.
+        count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Valkey API.
+    """
+
     READ_NOACK_VALKEY_API = "NOACK"
 
     def __init__(
         self, no_ack=False, block_ms: Optional[int] = None, count: Optional[int] = None
     ):
-        """
-        Options for reading entries from streams using a consumer group. Can be used as an optional argument to
-        `XREADGROUP`.
-
-        Args:
-            no_ack (bool): If set, messages are not added to the Pending Entries List (PEL). This is equivalent to
-                acknowledging the message when it is read. Equivalent to `NOACK` in the Valkey API.
-            block_ms (Optional[int]): If provided, the request will be blocked for the set amount of milliseconds or
-                until the server has the required number of entries. Equivalent to `BLOCK` in the Valkey API.
-            count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Valkey API.
-        """
         super().__init__(block_ms=block_ms, count=count)
         self.no_ack = no_ack
 
@@ -343,6 +346,15 @@ class StreamReadGroupOptions(StreamReadOptions):
 
 
 class StreamPendingOptions:
+    """
+    Options for `XPENDING` that can be used to filter returned items by minimum idle time and consumer name.
+
+    Attributes:
+        min_idle_time_ms (Optional[int]): Filters pending entries by their minimum idle time in milliseconds. This
+            option can only be specified if you are using Valkey version 6.2.0 or above.
+        consumer_name (Optional[TEncodable]): Filters pending entries by consumer name.
+    """
+
     IDLE_TIME_VALKEY_API = "IDLE"
 
     def __init__(
@@ -350,19 +362,30 @@ class StreamPendingOptions:
         min_idle_time_ms: Optional[int] = None,
         consumer_name: Optional[TEncodable] = None,
     ):
-        """
-        Options for `XPENDING` that can be used to filter returned items by minimum idle time and consumer name.
-
-        Args:
-            min_idle_time_ms (Optional[int]): Filters pending entries by their minimum idle time in milliseconds. This
-                option can only be specified if you are using Valkey version 6.2.0 or above.
-            consumer_name (Optional[TEncodable]): Filters pending entries by consumer name.
-        """
         self.min_idle_time = min_idle_time_ms
         self.consumer_name = consumer_name
 
 
 class StreamClaimOptions:
+    """
+    Options for `XCLAIM`.
+
+    Attributes:
+        idle (Optional[int]): Set the idle time (last time it was delivered) of the message in milliseconds. If idle
+            is not specified, an idle of `0` is assumed, that is, the time count is reset because the message now has a
+            new owner trying to process it.
+        idle_unix_time (Optional[int]): This is the same as idle but instead of a relative amount of milliseconds,
+            it sets the idle time to a specific Unix time (in milliseconds). This is useful in order to rewrite the AOF
+            file generating `XCLAIM` commands.
+        retry_count (Optional[int]): Set the retry counter to the specified value. This counter is incremented every
+            time a message is delivered again. Normally `XCLAIM` does not alter this counter, which is just served to
+            clients when the `XPENDING` command is called: this way clients can detect anomalies, like messages that
+            are never processed for some reason after a big number of delivery attempts.
+        is_force (Optional[bool]): Creates the pending message entry in the PEL even if certain specified IDs are not
+            already in the PEL assigned to a different client. However, the message must exist in the stream, otherwise
+            the IDs of non-existing messages are ignored.
+    """
+
     IDLE_VALKEY_API = "IDLE"
     TIME_VALKEY_API = "TIME"
     RETRY_COUNT_VALKEY_API = "RETRYCOUNT"
@@ -376,24 +399,6 @@ class StreamClaimOptions:
         retry_count: Optional[int] = None,
         is_force: Optional[bool] = False,
     ):
-        """
-        Options for `XCLAIM`.
-
-        Args:
-            idle (Optional[int]): Set the idle time (last time it was delivered) of the message in milliseconds. If idle
-                is not specified, an idle of `0` is assumed, that is, the time count is reset because the message now has a
-                new owner trying to process it.
-            idle_unix_time (Optional[int]): This is the same as idle but instead of a relative amount of milliseconds,
-                it sets the idle time to a specific Unix time (in milliseconds). This is useful in order to rewrite the AOF
-                file generating `XCLAIM` commands.
-            retry_count (Optional[int]): Set the retry counter to the specified value. This counter is incremented every
-                time a message is delivered again. Normally `XCLAIM` does not alter this counter, which is just served to
-                clients when the `XPENDING` command is called: this way clients can detect anomalies, like messages that
-                are never processed for some reason after a big number of delivery attempts.
-            is_force (Optional[bool]): Creates the pending message entry in the PEL even if certain specified IDs are not
-                already in the PEL assigned to a different client. However, the message must exist in the stream, otherwise
-                the IDs of non-existing messages are ignored.
-        """
         self.idle = idle
         self.idle_unix_time = idle_unix_time
         self.retry_count = retry_count
