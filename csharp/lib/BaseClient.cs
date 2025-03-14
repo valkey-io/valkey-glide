@@ -72,11 +72,11 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         {
             lengths[i] = arguments[i].Length;
         }
-        GCHandle pinnedLengths = GCHandle.Alloc(args, GCHandleType.Pinned);
+        GCHandle pinnedLengths = GCHandle.Alloc(lengths, GCHandleType.Pinned);
         IntPtr lengthsPointer = pinnedLengths.AddrOfPinnedObject();
 
         // 5. Sumbit request to the rust part
-        Message message = _messageContainer.GetMessageForCall(args);
+        Message message = _messageContainer.GetMessageForCall();
         CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, argsPointer, (uint)arguments.Length, lengthsPointer);
         // All data must be copied in sync manner, so we
 
