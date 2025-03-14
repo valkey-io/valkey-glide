@@ -2,9 +2,11 @@
 
 using Glide.Commands;
 
+using static Glide.ConnectionConfiguration;
+
 namespace Glide;
 
-public class GlideClient(string host, uint port, bool useTLS) : BaseClient(host, port, useTLS), IConnectionManagementCommands, IGenericCommands
+public sealed class GlideClient(StandaloneClientConfiguration config) : BaseClient(config), IConnectionManagementCommands, IGenericCommands
 {
     public async Task<object?> CustomCommand(string[] args)
         => await Command<object?>(args, RequestType.CustomCommand);
