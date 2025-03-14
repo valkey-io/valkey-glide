@@ -91,12 +91,11 @@ public abstract class ConnectionConfiguration
     internal enum TlsMode : uint
     {
         NoTls = 0,
-        //InsecureTls = 1,
         SecureTls = 2,
     }
 
     /// <summary>
-    /// Represents the client's read from strategy and Avialability zone if applicable.
+    /// Represents the client's read from strategy and Availability zone if applicable.
     /// </summary>
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
     public struct ReadFrom
@@ -114,7 +113,7 @@ public abstract class ConnectionConfiguration
         {
             if (strategy is ReadFromStrategy.AzAffinity or ReadFromStrategy.AzAffinityReplicasAndPrimary)
             {
-                throw new ArgumentException("Avialability zone should be set when using `AzAffinity` or `AzAffinityReplicasAndPrimary` strategy.");
+                throw new ArgumentException("Availability zone should be set when using `AzAffinity` or `AzAffinityReplicasAndPrimary` strategy.");
             }
             Strategy = strategy;
             Az = null;
@@ -130,7 +129,7 @@ public abstract class ConnectionConfiguration
         {
             if (strategy is ReadFromStrategy.Primary or ReadFromStrategy.PreferReplica)
             {
-                throw new ArgumentException("Avialability zone could be set only when using `AzAffinity` or `AzAffinityReplicasAndPrimary` strategy.");
+                throw new ArgumentException("Availability zone could be set only when using `AzAffinity` or `AzAffinityReplicasAndPrimary` strategy.");
             }
             Strategy = strategy;
             Az = az;

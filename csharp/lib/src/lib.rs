@@ -119,19 +119,13 @@ pub unsafe extern "C" fn command(
     };
     let core = client.core.clone();
 
-    // The safety of these needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
-    let args_address = args as usize;
-
     let Some(mut cmd) = request_type.get_command() else {
         unsafe {
             (core.failure_callback)(callback_index); // TODO - report errors
             return;
         }
     };
-
-    let args_slice = unsafe {
-        std::slice::from_raw_parts(args_address as *const *mut c_char, arg_count as usize)
-    };
+    let args_slice = unsafe { std::slice::from_raw_parts(args, arg_count as usize) };
     for arg in args_slice {
         let c_str = unsafe { CStr::from_ptr(*arg as *mut c_char) };
         cmd.arg(c_str.to_bytes());
@@ -152,7 +146,7 @@ pub unsafe extern "C" fn command(
                 Ok(Some(c_str)) => (core.success_callback)(callback_index, c_str.as_ptr()),
                 Err(err) => {
                     dbg!(err); // TODO - report errors
-                    (core.failure_callback)(callback_index);
+                    (core.failure_callback)(callback_index)
                 }
             };
         }
