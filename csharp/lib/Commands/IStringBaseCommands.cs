@@ -20,7 +20,7 @@ internal interface IStringBaseCommands
     /// <param name="key">The <paramref name="key"/> to store.</param>
     /// <param name="value">The value to store with the given <paramref name="key"/>.</param>
     /// <returns>A simple <c>"OK"</c> response.</returns>
-    Task<string?> Set(string key, string value);
+    Task<string> Set(string key, string value);
 
     /// <summary>
     /// Gets the value associated with the given <paramref name="key"/>, or <see langword="null"/> if no such <paramref name="key"/> exists.
