@@ -1700,7 +1700,7 @@ public class CommandTests {
         script.close();
     }
 
-    @Disabled("flaky test: re-enable once fixed")
+//    @Disabled("flaky test: re-enable once fixed")
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
@@ -1724,19 +1724,41 @@ public class CommandTests {
         try (var testClient =
                 GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
-                testClient.invokeScript(script);
+//                testClient.invokeScript(script);
 
                 Thread.sleep(1000);
 
                 // Run script kill until it returns OK
                 boolean scriptKilled = false;
                 int timeout = 4000; // ms
+                boolean first = true;
                 while (timeout >= 0) {
                     try {
-                        assertEquals(OK, regularClient.scriptKill().get());
+                        if (first) {
+                            throw new ExecutionException(new RequestException("Hello!"));
+//                            assertEquals(OK, OK);
+                        } else {
+                            System.out.println("Trying to kill script now");
+                            assertEquals(OK, regularClient.scriptKill().get());
+                            System.out.println("We did it");
+                        }
                         scriptKilled = true;
                         break;
                     } catch (RequestException ignored) {
+                    } catch (ExecutionException exception) {
+                        // If exception says no scripts in execution right now, rerun script.
+                        System.out.println("caught the exception");
+                        if (exception.getCause() instanceof RequestException &&
+                            executionException
+                                .getMessage()
+                                .toLowerCase()
+                                .contains("no scripts in execution right now")) {
+                            testClient.invokeScript(script);
+                            timeout = 4000; // TODO: see if this is a good idea or not
+                            System.out.println("Printed!!");
+                            first = false;
+                            Thread.sleep(1000);
+                        }
                     }
                     Thread.sleep(500);
                     timeout -= 500;
