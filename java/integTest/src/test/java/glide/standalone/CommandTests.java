@@ -1771,7 +1771,7 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
     }
 
-    @Disabled("flaky test: re-enable once fixed")
+//    @Disabled("flaky test: re-enable once fixed")
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
@@ -1791,9 +1791,36 @@ public class CommandTests {
 
                 Thread.sleep(1000);
 
-                boolean foundUnkillable = false;
-                int timeout = 4000; // ms
+                // To prevent timeout issues, ensure script is actually running before trying to kill it
+                int timeout = 4000;
                 while (timeout >= 0) {
+                    try {
+                        regularClient.get("KEYS[1]").get();
+                    } catch (ExecutionException err) {
+                        if (err.getCause() instanceof RequestException) {
+
+                            // Check if the script is executing
+                            if (err.getMessage().toLowerCase().contains("valkey is busy running a script")) {
+                                break;
+                            }
+
+                            // Try rerunning the script if 2 seconds have passed and if exception does not change to
+                            // "busy running a script"
+                            if (timeout <= 2000 &&
+                                err.getMessage().toLowerCase().contains("no scripts in execution right now")) {
+                                promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+                                timeout = 4000;
+                            }
+
+                        }
+                    }
+                    timeout -= 500;
+                }
+
+                boolean foundUnkillable = false;
+                timeout = 4000; // ms
+                while (timeout >= 0) {
+                    System.out.println("Running again: " + timeout);
                     try {
                         // valkey kills a script with 5 sec delay
                         // but this will always throw an error in the test
@@ -1806,6 +1833,7 @@ public class CommandTests {
                             foundUnkillable = true;
                             break;
                         }
+                        System.out.println(execException.getMessage());
                     }
                     Thread.sleep(500);
                     timeout -= 500;
