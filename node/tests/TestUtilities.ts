@@ -572,12 +572,12 @@ export function checkFunctionStatsResponse(
 }
 
 /**
- * Checks if given test is a known flaky test, then handles it accordingly.
- * 
+ * Checks if the given test is a known flaky test. If it is, we test it accordingly.
+ *
  * This function returns false in two cases:
- *  1. The test is not a known flaky test (i.e., we don't have a case to specially test it).
- *  2. An error occurs during the processing of the responses. Then, default back to regular testing instead.
- * 
+ *  1. The test is not a known flaky test (i.e., we haven't created a case to specially test it).
+ *  2. An error occurs during the processing of the responses. Then, we default back to regular testing instead.
+ *
  * Otherwise, returns true to prevent redundant testing.
  *
  * @param testName - The name of the test.
@@ -637,7 +637,13 @@ export function validateTransactionResponse(
         const [testName, expectedResponse] = expectedResponseData[i];
 
         try {
-            if (!checkAndHandleFlakyTests(testName, response?.[i], expectedResponse)) {
+            if (
+                !checkAndHandleFlakyTests(
+                    testName,
+                    response?.[i],
+                    expectedResponse,
+                )
+            ) {
                 expect(response?.[i]).toEqual(expectedResponse);
             }
         } catch {
