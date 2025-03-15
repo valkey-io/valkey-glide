@@ -80,7 +80,7 @@ public static class SetCommands
     /// <inheritdoc cref="Builder.ExecuteAsync"/>
     /// <remarks>Executes <c>SET key value NX</c></remarks>
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
-    public static async Task SetIfNotExistAsync(this IGlideClient client, string key, string value)
+    public static async Task SetIfNotExistsAsync(this IGlideClient client, string key, string value)
     {
         var result = await new Builder().WithKey(key)
             .WithValue(value)

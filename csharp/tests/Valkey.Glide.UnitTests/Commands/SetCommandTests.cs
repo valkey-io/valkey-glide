@@ -25,7 +25,7 @@ public class SetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
     [InlineData(nameof(SetCommands.SetIfEqualWithKeepTtlAsync), new[] { "foobar", "barfoo", "raboof" }, "foobar \"barfoo\" IFEQ \"raboof\" KEEPTTL")]
     [InlineData(nameof(SetCommands.SetIfExistsAsync), new[] { "foobar", "barfoo" }, "foobar \"barfoo\" XX")]
     [InlineData(nameof(SetCommands.SetIfExistsWithKeepTtlAsync), new[] { "foobar", "barfoo" }, "foobar \"barfoo\" XX KEEPTTL")]
-    [InlineData(nameof(SetCommands.SetIfNotExistAsync), new[] { "foobar", "barfoo" }, "foobar \"barfoo\" NX")]
+    [InlineData(nameof(SetCommands.SetIfNotExistsAsync), new[] { "foobar", "barfoo" }, "foobar \"barfoo\" NX")]
     [InlineData(nameof(SetCommands.SetIfNotExistsWithKeepTtlAsync), new[] { "foobar", "barfoo" }, "foobar \"barfoo\" NX KEEPTTL")]
     [InlineData(nameof(SetCommands.SetWithKeepTtlAsync), new[] { "foobar", "barfoo" }, "foobar \"barfoo\" KEEPTTL")]
     [InlineData(nameof(SetCommands.SetAndGetAsync), new[] { "foobar", "barfoo" }, "foobar \"barfoo\" GET")]
@@ -482,100 +482,76 @@ public class SetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
         // ToDo: Create a test for the TTL
     }
 
-    ///////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////
-
     [Fact]
-    public async Task TestSetAndGetWithExpirationAsync()
+    public async Task TestSetAndGetWithExpirationExAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationExAsync);
+        var ttl = TimeSpan.FromSeconds(1234);
 
         // Act
-        var resultA = await client.SetAndGetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetAndGetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationAsync),
-            "raboof"
-        );
+        var resultA = await client.SetAndGetWithExpirationAsync(key, "foobar", ttl);
+        var resultB = await client.SetAndGetWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
         Assert.Null(resultA);
         Assert.Equal("foobar", resultB);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetAndGetWithExpirationAsync()
+    public async Task TestSetAndGetWithExpirationPxAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationPxAsync);
+        var ttl = TimeSpan.FromMilliseconds(1234);
 
         // Act
-        var resultA = await client.SetAndGetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetAndGetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationAsync),
-            "raboof"
-        );
+        var resultA = await client.SetAndGetWithExpirationAsync(key, "foobar", ttl);
+        var resultB = await client.SetAndGetWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
         Assert.Null(resultA);
         Assert.Equal("foobar", resultB);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetAndGetWithExpirationAsync()
+    public async Task TestSetAndGetWithExpirationExAtAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationExAtAsync);
+        var ttl = DateTime.Now.AddSeconds(1234);
 
         // Act
-        var resultA = await client.SetAndGetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetAndGetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationAsync),
-            "raboof"
-        );
+        var resultA = await client.SetAndGetWithExpirationAsync(key, "foobar", ttl);
+        var resultB = await client.SetAndGetWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
         Assert.Null(resultA);
         Assert.Equal("foobar", resultB);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetAndGetWithExpirationAsync()
+    public async Task TestSetAndGetWithExpirationPxAtAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationPxAtAsync);
+        var ttl = DateTime.Now.AddMilliseconds(1234);
 
         // Act
-        var resultA = await client.SetAndGetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetAndGetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithExpirationAsync),
-            "raboof"
-        );
+        var resultA = await client.SetAndGetWithExpirationAsync(key, "foobar", ttl);
+        var resultB = await client.SetAndGetWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
         Assert.Null(resultA);
         Assert.Equal("foobar", resultB);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
@@ -583,35 +559,82 @@ public class SetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithKeepTtlAsync);
 
         // Act
-        var resultA = await client.SetAndGetWithKeepTtlAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithKeepTtlAsync),
-            "foobar"
-        );
-        var resultB = await client.SetAndGetWithKeepTtlAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetAndGetWithKeepTtlAsync),
-            "raboof"
-        );
+        var resultA = await client.SetAndGetWithKeepTtlAsync(key, "foobar");
+        var resultB = await client.SetAndGetWithKeepTtlAsync(key, "raboof");
 
         // Assert
         Assert.Null(resultA);
         Assert.Equal("foobar", resultB);
+        // ToDo: Create a test for the TTL
     }
+
+
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+
 
     [Fact]
     public async Task TestSetAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetAsync);
 
         // Act
-        var resultA = await client.SetAsync(nameof(SetCommandTests) + "-" + nameof(TestSetAsync), "foobar");
-        var resultB = await client.SetAsync(nameof(SetCommandTests) + "-" + nameof(TestSetAsync), "raboof");
+        await client.SetAsync(key, "foobar");
+        var result = await client.GetAsync(key);
+        await client.SetAsync(key, "raboof");
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("foobar", result);
     }
 
     [Fact]
@@ -619,125 +642,112 @@ public class SetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualAsync);
 
         // Act
-        var resultA = await client.SetIfEqualAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfEqualAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualAsync),
-            "raboof"
-        );
+        await client.SetAsync(key, "raboof");
+        await client.SetIfEqualAsync(key, "foobar", "something-else");
+        var result = await client.GetAsync(key);
+        await client.SetIfEqualAsync(key, "foobar", "raboof");
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("raboof", result);
     }
 
     [Fact]
-    public async Task TestSetIfEqualWithExpirationAsync()
+    public async Task TestSetIfEqualWithExpirationExAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationExAsync);
 
         // Act
-        var resultA = await client.SetIfEqualWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfEqualWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetAsync(key, "raboof");
+        await client.SetIfEqualWithExpirationAsync(key, "foobar", "something-else", TimeSpan.FromSeconds(1234));
+        var result = await client.GetAsync(key);
+        await client.SetIfEqualWithExpirationAsync(key, "foobar", "raboof", TimeSpan.FromSeconds(1234));
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("raboof", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetIfEqualWithExpirationAsync()
+    public async Task TestSetIfEqualWithExpirationPxAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationPxAsync);
 
         // Act
-        var resultA = await client.SetIfEqualWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfEqualWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetAsync(key, "raboof");
+        await client.SetIfEqualWithExpirationAsync(key, "foobar", "something-else", TimeSpan.FromMilliseconds(1234));
+        var result = await client.GetAsync(key);
+        await client.SetIfEqualWithExpirationAsync(key, "foobar", "raboof", TimeSpan.FromMilliseconds(1234));
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("raboof", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetIfEqualWithExpirationAsync()
+    public async Task TestSetIfEqualWithExpirationExatAsync()
     {
         // Arrange
+        var now = DateTime.UtcNow;
+        var ttl = now + TimeSpan.FromSeconds(1234);
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationExatAsync);
 
         // Act
-        var resultA = await client.SetIfEqualWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfEqualWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetAsync(key, "raboof");
+        await client.SetIfEqualWithExpirationAsync(key, "foobar", "something-else", ttl);
+        var result = await client.GetAsync(key);
+        await client.SetIfEqualWithExpirationAsync(key, "foobar", "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("raboof", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetIfEqualWithExpirationAsync()
+    public async Task TestSetIfEqualWithExpirationPxatAsync()
     {
         // Arrange
+        var now = DateTime.UtcNow;
+        var ttl = now + TimeSpan.FromMilliseconds(1234);
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationPxatAsync);
 
         // Act
-        var resultA = await client.SetIfEqualWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfEqualWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetAsync(key, "raboof");
+        await client.SetIfEqualWithExpirationAsync(key, "foobar", "something-else", ttl);
+        var result = await client.GetAsync(key);
+        await client.SetIfEqualWithExpirationAsync(key, "foobar", "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("raboof", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
     public async Task TestSetIfEqualWithKeepTtlAsync()
     {
         // Arrange
+        var now = DateTime.UtcNow;
+        var ttl = now + TimeSpan.FromMinutes(10);
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithKeepTtlAsync);
 
         // Act
-        var resultA = await client.SetIfEqualWithKeepTtlAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithKeepTtlAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfEqualWithKeepTtlAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfEqualWithKeepTtlAsync),
-            "raboof"
-        );
+        await client.SetWithExpirationAsync(key, "raboof", ttl);
+        await client.SetIfEqualWithKeepTtlAsync(key, "foobar", "something-else");
+        var result = await client.GetAsync(key);
+        await client.SetIfEqualWithKeepTtlAsync(key, "foobar", "raboof");
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("foobar", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
@@ -745,104 +755,92 @@ public class SetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsAsync);
 
         // Act
-        var resultA = await client.SetIfExistsAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfExistsAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsAsync),
-            "raboof"
-        );
+        await client.SetIfExistsAsync(key, "foobar");
+        await client.SetAsync(key, "barfoo");
+        var result = await client.GetAsync(key);
+        await client.SetIfExistsAsync(key, "raboof");
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("barfoo", result);
     }
 
     [Fact]
-    public async Task TestSetIfExistsWithExpirationAsync()
+    public async Task TestSetIfExistsWithExpirationExAsync()
     {
         // Arrange
+        var ttl = TimeSpan.FromSeconds(1234);
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationExAsync);
 
         // Act
-        var resultA = await client.SetIfExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetIfExistsWithExpirationAsync(key, "foobar", ttl);
+        await client.SetAsync(key, "barfoo");
+        var result = await client.GetAsync(key);
+        await client.SetIfExistsWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("barfoo", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetIfExistsWithExpirationAsync()
+    public async Task TestSetIfExistsWithExpirationPxAsync()
     {
         // Arrange
+        var ttl = TimeSpan.FromMilliseconds(1234);
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationPxAsync);
 
         // Act
-        var resultA = await client.SetIfExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetIfExistsWithExpirationAsync(key, "foobar", ttl);
+        await client.SetAsync(key, "barfoo");
+        var result = await client.GetAsync(key);
+        await client.SetIfExistsWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("barfoo", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetIfExistsWithExpirationAsync()
+    public async Task TestSetIfExistsWithExpirationExatAsync()
     {
         // Arrange
+        var ttl = DateTime.Now + TimeSpan.FromSeconds(1234);
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationExatAsync);
 
         // Act
-        var resultA = await client.SetIfExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetIfExistsWithExpirationAsync(key, "foobar", ttl);
+        await client.SetAsync(key, "barfoo");
+        var result = await client.GetAsync(key);
+        await client.SetIfExistsWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("barfoo", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetIfExistsWithExpirationAsync()
+    public async Task TestSetIfExistsWithExpirationPxatAsync()
     {
         // Arrange
+        var ttl = DateTime.Now + TimeSpan.FromMilliseconds(1234);
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationPxatAsync);
 
         // Act
-        var resultA = await client.SetIfExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetIfExistsWithExpirationAsync(key, "foobar", ttl);
+        await client.SetAsync(key, "barfoo");
+        var result = await client.GetAsync(key);
+        await client.SetIfExistsWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("barfoo", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
@@ -850,125 +848,105 @@ public class SetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithKeepTtlAsync);
 
         // Act
-        var resultA = await client.SetIfExistsWithKeepTtlAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithKeepTtlAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfExistsWithKeepTtlAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfExistsWithKeepTtlAsync),
-            "raboof"
-        );
+        await client.SetIfExistsWithKeepTtlAsync(key, "foobar");
+        await client.SetWithExpirationAsync(key, "barfoo", TimeSpan.FromMinutes(10));
+        var result = await client.GetAsync(key);
+        await client.SetIfExistsWithKeepTtlAsync(key, "raboof");
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("barfoo", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetIfNotExistAsync()
+    public async Task TestSetIfNotExistsAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsAsync);
 
         // Act
-        var resultA = await client.SetIfNotExistAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfNotExistAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistAsync),
-            "raboof"
-        );
+        await client.SetIfNotExistsAsync(key, "foobar");
+        var result = await client.GetAsync(key);
+        await client.SetIfNotExistsAsync(key, "raboof");
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Null(result);
     }
 
     [Fact]
-    public async Task TestSetIfNotExistsWithExpirationAsync()
+    public async Task TestSetIfNotExistsWithExpirationExAsync()
     {
         // Arrange
+        var ttl = TimeSpan.FromSeconds(1234);
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationExAsync);
 
         // Act
-        var resultA = await client.SetIfNotExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfNotExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetIfNotExistsWithExpirationAsync(key, "foobar", ttl);
+        var result = await client.GetAsync(key);
+        await client.SetIfNotExistsWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Null(result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetIfNotExistsWithExpirationAsync()
+    public async Task TestSetIfNotExistsWithExpirationPxAsync()
     {
         // Arrange
+        var ttl = TimeSpan.FromMilliseconds(1234);
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationPxAsync);
 
         // Act
-        var resultA = await client.SetIfNotExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfNotExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetIfNotExistsWithExpirationAsync(key, "foobar", ttl);
+        var result = await client.GetAsync(key);
+        await client.SetIfNotExistsWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Null(result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetIfNotExistsWithExpirationAsync()
+    public async Task TestSetIfNotExistsWithExpirationExatAsync()
     {
         // Arrange
+        var ttl = DateTime.Now + TimeSpan.FromSeconds(1234);
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationExatAsync);
 
         // Act
-        var resultA = await client.SetIfNotExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfNotExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetIfNotExistsWithExpirationAsync(key, "foobar", ttl);
+        var result = await client.GetAsync(key);
+        await client.SetIfNotExistsWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Null(result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetIfNotExistsWithExpirationAsync()
+    public async Task TestSetIfNotExistsWithExpirationPxatAsync()
     {
         // Arrange
+        var ttl = DateTime.Now + TimeSpan.FromMilliseconds(1234);
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationPxatAsync);
 
         // Act
-        var resultA = await client.SetIfNotExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfNotExistsWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetIfNotExistsWithExpirationAsync(key, "foobar", ttl);
+        var result = await client.GetAsync(key);
+        await client.SetIfNotExistsWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Null(result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
@@ -976,104 +954,88 @@ public class SetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithKeepTtlAsync);
 
         // Act
-        var resultA = await client.SetIfNotExistsWithKeepTtlAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithKeepTtlAsync),
-            "foobar"
-        );
-        var resultB = await client.SetIfNotExistsWithKeepTtlAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetIfNotExistsWithKeepTtlAsync),
-            "raboof"
-        );
+        await client.SetIfNotExistsWithKeepTtlAsync(key, "foobar");
+        var result = await client.GetAsync(key);
+        await client.SetIfNotExistsWithKeepTtlAsync(key, "raboof");
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Null(result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetWithExpirationAsync()
+    public async Task TestSetWithExpirationExAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationExAsync);
+        var ttl = TimeSpan.FromSeconds(1234);
 
         // Act
-        var resultA = await client.SetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetWithExpirationAsync(key, "foobar", ttl);
+        var result = await client.GetAsync(key);
+        await client.SetWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("foobar", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetWithExpirationAsync()
+    public async Task TestSetWithExpirationPxAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationPxAsync);
+        var ttl = TimeSpan.FromMilliseconds(1234);
 
         // Act
-        var resultA = await client.SetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetWithExpirationAsync(key, "foobar", ttl);
+        var result = await client.GetAsync(key);
+        await client.SetWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("foobar", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetWithExpirationAsync()
+    public async Task TestSetWithExpirationExAtAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationExAtAsync);
+        var ttl = DateTime.Now.AddSeconds(1234);
 
         // Act
-        var resultA = await client.SetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetWithExpirationAsync(key, "foobar", ttl);
+        var result = await client.GetAsync(key);
+        await client.SetWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("foobar", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
-    public async Task TestSetWithExpirationAsync()
+    public async Task TestSetWithExpirationPxAtAsync()
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationPxAtAsync);
+        var ttl = DateTime.Now.AddMilliseconds(1234);
 
         // Act
-        var resultA = await client.SetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationAsync),
-            "foobar"
-        );
-        var resultB = await client.SetWithExpirationAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetWithExpirationAsync),
-            "raboof"
-        );
+        await client.SetWithExpirationAsync(key, "foobar", ttl);
+        var result = await client.GetAsync(key);
+        await client.SetWithExpirationAsync(key, "raboof", ttl);
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("foobar", result);
+        // ToDo: Create a test for the TTL
     }
 
     [Fact]
@@ -1081,19 +1043,15 @@ public class SetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
     {
         // Arrange
         using var client = new GlideClient(fixture.ConnectionRequest);
+        const string key = nameof(SetCommandTests) + "-" + nameof(TestSetWithKeepTtlAsync);
 
         // Act
-        var resultA = await client.SetWithKeepTtlAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetWithKeepTtlAsync),
-            "foobar"
-        );
-        var resultB = await client.SetWithKeepTtlAsync(
-            nameof(SetCommandTests) + "-" + nameof(TestSetWithKeepTtlAsync),
-            "raboof"
-        );
+        await client.SetWithKeepTtlAsync(key, "foobar");
+        var result = await client.GetAsync(key);
+        await client.SetWithKeepTtlAsync(key, "raboof");
 
         // Assert
-        Assert.Null(resultA);
-        Assert.Equal("foobar", resultB);
+        Assert.Equal("foobar", result);
+        // ToDo: Create a test for the TTL
     }
 }
