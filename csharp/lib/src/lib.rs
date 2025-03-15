@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 mod ffi;
-use ffi::{create_connection_request, ConnectionConfig};
+use ffi::{create_connection_request, create_route, ConnectionConfig, RouteInfo};
 use glide_core::{client::Client as GlideClient, request_type::RequestType};
 use redis::{FromRedisValue, RedisResult};
 use std::{
@@ -101,6 +101,8 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
 /// * `key` and `value` must not be `null`.
 /// * `key` and `value` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
 /// * `key` and `value` must be kept valid until the callback is called.
+/// * `route_info` could be `null`, but if it is not `null`, it must be a valid [`RouteInfo`] pointer. See the safety documentation of [`create_route`].
+#[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_ptr: *const c_void,
@@ -108,16 +110,18 @@ pub unsafe extern "C" fn command(
     request_type: RequestType,
     args: *const *mut c_char,
     arg_count: u32,
+    route_info: *const RouteInfo,
 ) {
     let client = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
         Arc::increment_strong_count(client_ptr);
         Arc::from_raw(client_ptr as *mut Client)
     };
+    let core = client.core.clone();
 
     let Some(mut cmd) = request_type.get_command() else {
         unsafe {
-            (client.core.failure_callback)(callback_index); // TODO - report errors
+            (core.failure_callback)(callback_index); // TODO - report errors
             return;
         }
     };
@@ -127,12 +131,13 @@ pub unsafe extern "C" fn command(
         cmd.arg(c_str.to_bytes());
     }
 
-    let core = client.core.clone();
+    let route = create_route(route_info, &cmd);
+
     client.runtime.spawn(async move {
         let result = core
             .client
             .clone()
-            .send_command(&cmd, None)
+            .send_command(&cmd, route)
             .await
             .and_then(Option::<CString>::from_owned_redis_value);
         unsafe {

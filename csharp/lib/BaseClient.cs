@@ -7,6 +7,7 @@ using Glide.Commands;
 using Glide.Internals;
 
 using static Glide.ConnectionConfiguration;
+using static Glide.Route;
 
 namespace Glide;
 
@@ -29,7 +30,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         }
     }
 
-    protected async Task<T> Command<T>(string[] arguments, RequestType requestType) where T : class?
+    protected async Task<T> Command<T>(string[] arguments, RequestType requestType, Route? route = null) where T : class?
     {
         IntPtr[] args = _arrayPool.Rent(arguments.Length);
         for (int i = 0; i < arguments.Length; i++)
@@ -40,7 +41,21 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         GCHandle pinnedArray = GCHandle.Alloc(args, GCHandleType.Pinned);
         IntPtr pointer = pinnedArray.AddrOfPinnedObject();
         Message message = _messageContainer.GetMessageForCall<T>(args);
-        CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, pointer, (uint)arguments.Length);
+
+        IntPtr routePtr = IntPtr.Zero;
+        if (route is not null)
+        {
+            routePtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(RouteInfo)));
+            Marshal.StructureToPtr(route.ToFfi(), routePtr, false);
+        }
+
+        CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, pointer, (uint)arguments.Length, routePtr);
+
+        if (route is not null)
+        {
+            Marshal.FreeHGlobal(routePtr);
+        }
+
         for (int i = 0; i < arguments.Length; i++)
         {
             Marshal.FreeHGlobal(args[i]);
@@ -123,7 +138,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     private delegate void StringAction(ulong index, IntPtr str);
     private delegate void FailureAction(ulong index);
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "command")]
-    private static extern void CommandFfi(IntPtr client, ulong index, int requestType, IntPtr args, uint argCount);
+    private static extern void CommandFfi(IntPtr client, ulong index, int requestType, IntPtr args, uint argCount, IntPtr routeInfo);
 
     private delegate void IntAction(IntPtr arg);
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_client")]
