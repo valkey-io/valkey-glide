@@ -8,6 +8,6 @@ namespace Glide;
 
 public sealed class GlideClient(StandaloneClientConfiguration config) : BaseClient(config), IConnectionManagementCommands, IGenericCommands
 {
-    public async Task<object?> CustomCommand(string[] args)
-        => await Command<object?>(args, RequestType.CustomCommand);
+    public async Task<object?> CustomCommand(GlideString[] args)
+        => await Command(args, RequestType.CustomCommand, HandleServerResponse<object?>);
 }

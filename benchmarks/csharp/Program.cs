@@ -264,7 +264,7 @@ public static class MainClass
                     .WithAddress(host, PORT).WithTls(useTLS).Build();
                 BaseClient glide_client = new GlideClient(config);
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
-                    (async (key) => await glide_client.Get(key),
+                    (async (key) => (await glide_client.Get(key))!,
                      async (key, value) => await glide_client.Set(key, value),
                      () => glide_client.Dispose()));
             });

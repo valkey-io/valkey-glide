@@ -8,7 +8,7 @@ public class SharedCommandTests(TestConfiguration config)
     internal static async Task GetAndSetValues(BaseClient client, string key, string value)
     {
         Assert.Equal("OK", await client.Set(key, value));
-        Assert.Equal(value, await client.Get(key));
+        Assert.Equal(value, (await client.Get(key))!);
     }
 
     internal static async Task GetAndSetRandomValues(BaseClient client)
