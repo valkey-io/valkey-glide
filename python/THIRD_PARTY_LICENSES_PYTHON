@@ -2764,59 +2764,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: byteorder:1.5.0
-
-The following copyrights and licenses were found in the source code of this package:
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-  --
-
-This is free and unencumbered software released into the public domain.
-
-Anyone is free to copy, modify, publish, use, compile, sell, or
-distribute this software, either in source code form or as a compiled
-binary, for any purpose, commercial or non-commercial, and by any
-means.
-
-In jurisdictions that recognize copyright laws, the author or authors
-of this software dedicate any and all copyright interest in the
-software to the public domain. We make this dedication for the benefit
-of the public at large and to the detriment of our heirs and
-successors. We intend this dedication to be an overt act of
-relinquishment in perpetuity of all present and future rights to this
-software under copyright law.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-For more information, please refer to <http://unlicense.org/>
-
-----
-
-Package: bytes:1.10.0
+Package: bytes:1.10.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12136,7 +12084,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libc:0.2.170
+Package: libc:0.2.171
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14831,7 +14779,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: once_cell:1.20.3
+Package: once_cell:1.21.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17375,7 +17323,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ppv-lite86:0.2.20
+Package: ppv-lite86:0.2.21
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17833,7 +17781,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: protobuf:3.7.1
+Package: protobuf:3.7.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17858,7 +17806,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: protobuf-support:3.7.1
+Package: protobuf-support:3.7.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19028,7 +18976,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: quote:1.0.39
+Package: quote:1.0.40
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20025,7 +19973,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ring:0.17.11
+Package: ring:0.17.14
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22627,7 +22575,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde:1.0.218
+Package: serde:1.0.219
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22856,7 +22804,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde_derive:1.0.218
+Package: serde_derive:1.0.219
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23934,7 +23882,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.99
+Package: syn:2.0.100
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25074,7 +25022,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time:0.3.37
+Package: time:0.3.39
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25303,7 +25251,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time-core:0.1.2
+Package: time-core:0.1.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25532,7 +25480,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time-macros:0.2.19
+Package: time-macros:0.2.20
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26259,7 +26207,7 @@ the following restrictions:
 
 ----
 
-Package: tokio:1.43.0
+Package: tokio:1.44.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26563,7 +26511,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tokio-util:0.7.13
+Package: tokio-util:0.7.14
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33218,7 +33166,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy:0.7.35
+Package: zerocopy:0.8.23
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33470,7 +33418,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.7.35
+Package: zerocopy-derive:0.8.23
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34639,7 +34587,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: google-api-core:2.24.1
+Package: google-api-core:2.24.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35471,7 +35419,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: googleapis-common-protos:1.69.0
+Package: googleapis-common-protos:1.69.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36904,7 +36852,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: proto-plus:1.26.0
+Package: proto-plus:1.26.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37143,7 +37091,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: protobuf:5.29.3
+Package: protobuf:6.30.1
 
 The following copyrights and licenses were found in the source code of this package:
 
