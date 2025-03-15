@@ -59,7 +59,6 @@ import {
     TimeUnit,
     ZAddOptions,
     ZScanOptions,
-    convertElementsAndScores,
     convertFieldsAndValuesToHashDataType,
     convertKeysAndEntries,
     createAppend,
@@ -347,6 +346,11 @@ export type HashDataType = {
  * The keys of the record are stream entry IDs, which are mapped to key-value pairs of the data.
  */
 export type StreamEntryDataType = Record<string, [GlideString, GlideString][]>;
+
+/**
+ * Union type that can store either a number or positive/negative infinity.
+ */
+export type InfScore = number | "+inf" | "-inf";
 
 /**
  * @internal
@@ -4020,15 +4024,14 @@ export class BaseClient {
      */
     public async zadd(
         key: GlideString,
-        membersAndScores: SortedSetDataType | Record<string, number>,
+        membersAndScores:
+            | SortedSetDataType
+            | Record<string, number>
+            | Record<string, InfScore>,
         options?: ZAddOptions,
     ): Promise<number> {
         return this.createWritePromise(
-            createZAdd(
-                key,
-                convertElementsAndScores(membersAndScores),
-                options,
-            ),
+            createZAdd(key, membersAndScores, options),
         );
     }
 
