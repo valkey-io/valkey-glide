@@ -1,0 +1,45 @@
+name: Glide FFI CI
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - glide-core/src/**
+            - glide-core/redis-rs/redis/src/**
+            - ffi/**
+    pull_request:
+        paths:
+            - glide-core/src/**
+            - glide-core/redis-rs/redis/src/**
+            - ffi/**
+    workflow_call:
+
+concurrency:
+    group: ffi-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    build-and-gen-c:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Install Rust and protoc
+              uses: ./.github/workflows/install-rust-and-protoc
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Build the FFI library
+              working-directory: ffi
+              run: |
+                  cargo build --release
+            - name: Generate the C header file
+              working-directory: ffi
+              run: |
+                  cargo install cbindgen
+                  cbindgen --config cbindgen.toml --crate glide_ffi --output lib.h --lang c

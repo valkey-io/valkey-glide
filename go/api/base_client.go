@@ -2,7 +2,7 @@
 
 package api
 
-// #cgo LDFLAGS: -lglide_rs
+// #cgo LDFLAGS: -lglide_ffi
 // #cgo !windows LDFLAGS: -lm
 // #cgo darwin LDFLAGS: -framework Security
 // #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
