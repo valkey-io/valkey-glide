@@ -119,16 +119,14 @@ jobs:
               working-directory: go
               run: |
                   make install-build-tools
-                  make build-glide-client
-                  # TODO: move generation of protobuf and header file to a non-matrix step
-                  make generate-protobuf
+                  make build
             - name: Upload artifacts
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
                   name: ${{ matrix.host.TARGET }}
                   path: |
-                      go/target/release/libglide_rs.a
+                      ffi/target/release/libglide_ffi.a
                       go/lib.h
                       go/protobuf/
 
@@ -149,7 +147,7 @@ jobs:
                   for dir in */; do
                     target_name=${dir%/}
                     mkdir -p $GITHUB_WORKSPACE/go/rustbin/${target_name}
-                    cp ${target_name}/target/release/libglide_rs.a $GITHUB_WORKSPACE/go/rustbin/${target_name}/
+                    cp ${target_name}/target/release/libglide_ffi.a $GITHUB_WORKSPACE/go/rustbin/${target_name}/
                   done
                   # TODO: move generation of protobuf and header file to a non-matrix step
                   cd x86_64-unknown-linux-gnu

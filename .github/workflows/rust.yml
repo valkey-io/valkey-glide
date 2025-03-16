@@ -10,6 +10,7 @@ on:
             - logger_core/**
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
+            - ffi/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -23,6 +24,7 @@ on:
             - logger_core/**
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
+            - ffi/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -126,6 +128,12 @@ jobs:
                   cargo-toml-folder: ./glide-core
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-core
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: ./ffi
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint glide-ffi
 
             - uses: ./.github/workflows/lint-rust
               with:
