@@ -3,6 +3,8 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
+using static Glide.ConnectionConfiguration;
+
 [assembly: AssemblyFixture(typeof(Tests.Integration.TestConfiguration))]
 
 namespace Tests.Integration;
@@ -11,11 +13,21 @@ public class TestConfiguration : IDisposable
 {
     public static bool IsMacOs => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
-    public static List<(string host, uint port)> STANDALONE_HOSTS { get; internal set; } = [];
-    public static List<(string host, uint port)> CLUSTER_HOSTS { get; internal set; } = [];
+    public static List<(string host, ushort port)> STANDALONE_HOSTS { get; internal set; } = [];
+    public static List<(string host, ushort port)> CLUSTER_HOSTS { get; internal set; } = [];
     public static Version SERVER_VERSION { get; internal set; } = new();
 
-    public static BaseClient DefaultStandaloneClient() => new GlideClient(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port, false);
+    public static StandaloneClientConfigurationBuilder DefaultClientConfig() =>
+        new StandaloneClientConfigurationBuilder()
+            .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port);
+
+    public static ClusterClientConfigurationBuilder DefaultClusterClientConfig() =>
+        new ClusterClientConfigurationBuilder()
+            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
+            .WithRequestTimeout(10000);
+
+    public static GlideClient DefaultStandaloneClient() => new(DefaultClientConfig().Build());
+    public static GlideClusterClient DefaultClusterClient() => new(DefaultClusterClientConfig().Build());
 
     private static TheoryData<BaseClient> s_testClients = [];
 
@@ -25,7 +37,7 @@ public class TestConfiguration : IDisposable
         {
             if (s_testClients.Count == 0)
             {
-                s_testClients = [DefaultStandaloneClient()];
+                s_testClients = [(BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient()];
             }
             return s_testClients;
         }
@@ -85,7 +97,7 @@ public class TestConfiguration : IDisposable
     private void TestConsoleWriteLine(string message) =>
         TestContext.Current.SendDiagnosticMessage(message);
 
-    internal List<(string host, uint port)> StartServer(bool cluster, bool tls = false, string? name = null)
+    internal List<(string host, ushort port)> StartServer(bool cluster, bool tls = false, string? name = null)
     {
         string cmd = $"start {(cluster ? "--cluster-mode" : "")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
         return ParseHostsFromOutput(RunClusterManager(cmd, false));
@@ -124,9 +136,9 @@ public class TestConfiguration : IDisposable
             : output ?? "";
     }
 
-    private static List<(string host, uint port)> ParseHostsFromOutput(string output)
+    private static List<(string host, ushort port)> ParseHostsFromOutput(string output)
     {
-        List<(string host, uint port)> hosts = [];
+        List<(string host, ushort port)> hosts = [];
         foreach (string line in output.Split("\n"))
         {
             if (!line.StartsWith("CLUSTER_NODES="))
@@ -138,7 +150,7 @@ public class TestConfiguration : IDisposable
             foreach (string address in addresses)
             {
                 string[] parts = address.Split(":");
-                hosts.Add((parts[0], uint.Parse(parts[1])));
+                hosts.Add((parts[0], ushort.Parse(parts[1])));
             }
         }
         return hosts;
