@@ -29,41 +29,40 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         }
     }
 
-    protected async Task<string?> Command(IntPtr[] args, int argsCount, RequestType requestType)
+    protected async Task<T> Command<T>(string[] arguments, RequestType requestType) where T : class?
     {
+        IntPtr[] args = _arrayPool.Rent(arguments.Length);
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            args[i] = Marshal.StringToHGlobalAnsi(arguments[i]);
+        }
         // We need to pin the array in place, in order to ensure that the GC doesn't move it while the operation is running.
         GCHandle pinnedArray = GCHandle.Alloc(args, GCHandleType.Pinned);
         IntPtr pointer = pinnedArray.AddrOfPinnedObject();
-        Message<string> message = _messageContainer.GetMessageForCall(args, argsCount);
-        CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, pointer, (uint)argsCount);
-        string? result = await message;
+        Message message = _messageContainer.GetMessageForCall<T>(args);
+        CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, pointer, (uint)arguments.Length);
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            Marshal.FreeHGlobal(args[i]);
+        }
         pinnedArray.Free();
-        return result;
+        _arrayPool.Return(args);
+#pragma warning disable CS8603 // Possible null reference return.
+        return await message as T;
+#pragma warning restore CS8603 // Possible null reference return.
     }
 
-    public async Task<string?> Set(string key, string value)
-    {
-        IntPtr[] args = _arrayPool.Rent(2);
-        args[0] = Marshal.StringToHGlobalAnsi(key);
-        args[1] = Marshal.StringToHGlobalAnsi(value);
-        string? result = await Command(args, 2, RequestType.Set);
-        _arrayPool.Return(args);
-        return result;
-    }
+    public async Task<string> Set(string key, string value)
+        => await Command<string>([key, value], RequestType.Set);
 
     public async Task<string?> Get(string key)
-    {
-        IntPtr[] args = _arrayPool.Rent(1);
-        args[0] = Marshal.StringToHGlobalAnsi(key);
-        string? result = await Command(args, 1, RequestType.Get);
-        _arrayPool.Return(args);
-        return result;
-    }
+        => await Command<string?>([key], RequestType.Get);
 
     private readonly object _lock = new();
 
     public void Dispose()
     {
+        GC.SuppressFinalize(this);
         lock (_lock)
         {
             if (_clientPointer == IntPtr.Zero)
@@ -79,14 +78,14 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     #endregion public methods
 
     #region private methods
-
+    // TODO rework the callback to handle other response types
     private void SuccessCallback(ulong index, IntPtr str)
     {
         string? result = str == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(str);
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
         _ = Task.Run(() =>
         {
-            Message<string> message = _messageContainer.GetMessage((int)index);
+            Message message = _messageContainer.GetMessage((int)index);
             message.SetResult(result);
         });
     }
@@ -95,7 +94,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
         Task.Run(() =>
         {
-            Message<string> message = _messageContainer.GetMessage((int)index);
+            Message message = _messageContainer.GetMessage((int)index);
             message.SetException(new Exception("Operation failed"));
         });
 
@@ -114,7 +113,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     /// Raw pointer to the underlying native client.
     private IntPtr _clientPointer;
-    private readonly MessageContainer<string> _messageContainer = new();
+    private readonly MessageContainer _messageContainer = new();
     private readonly ArrayPool<IntPtr> _arrayPool = ArrayPool<IntPtr>.Shared;
 
     #endregion private fields
