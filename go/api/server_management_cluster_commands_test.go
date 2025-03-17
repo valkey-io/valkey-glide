@@ -82,3 +82,33 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 
 	// Output: 0
 }
+
+func ExampleGlideClusterClient_LolwutWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	
+	lolwutOpts := options.NewLolwutOptions(6)
+	lolwutOpts.SetArgs([]int{20, 10})
+	
+	routeOpt := options.NewRouteOptions()
+	routeOpt.SetRoute(config.Route(config.RandomRoute))
+
+	randomRouteOptions := options.ClusterLolwutOptions{
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+			Args:    &[]int{10, 20},
+		},
+		RouteOption: &options.RouteOption{
+			Route: config.RandomRoute,
+		},
+	}
+	
+	result, err := client.LolwutWithOptions(randomRouteOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	
+	if len(result.SingleValue()) > 0 {
+		fmt.Println("LOLWUT pattern generated successfully")
+	}
+	// Output: LOLWUT pattern generated successfully
+}
