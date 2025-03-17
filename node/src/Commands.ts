@@ -1481,13 +1481,15 @@ export function createZAdd(
     }
 
     if (Array.isArray(membersAndScores)) {
-        membersAndScores.forEach((p) =>
-            args.push(p.score.toString(), p.element),
-        );
+        for (const memberAndScore of membersAndScores) {
+            args.push(memberAndScore.score.toString(), memberAndScore.element);
+        }
     } else {
-        Object.entries(membersAndScores).forEach(([member, score]) =>
-            args.push(score.toString(), member),
-        );
+        const members = Object.keys(membersAndScores);
+
+        for (const member of members) {
+            args.push(membersAndScores[member].toString(), member);
+        }
     }
 
     return createCommand(RequestType.ZAdd, args);
