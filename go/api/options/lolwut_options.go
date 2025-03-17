@@ -6,6 +6,12 @@ import (
 	"github.com/valkey-io/valkey-glide/go/utils"
 )
  
+type VersionString string
+
+const (
+	VersionStr VersionString = "VERSION"
+)
+
 type LolwutOptions struct {
 	Version int64
 	Args    *[]int
@@ -13,8 +19,6 @@ type LolwutOptions struct {
  
 type ClusterLolwutOptions struct {
 	*LolwutOptions
-	// Specifies the routing configuration for the command.
-	// The client will route the command to the nodes defined by *Route*.
 	*RouteOption
 }
  
@@ -32,7 +36,7 @@ func (options *LolwutOptions) ToArgs() ([]string, error) {
 		return []string{}, nil
 	}
 	//var err error
-	args := []string{"VERSION", utils.IntToString(options.Version)}
+	args := []string{string(VersionStr), utils.IntToString(options.Version)}
  
 	if options.Args != nil {
 		for _, arg := range *options.Args {

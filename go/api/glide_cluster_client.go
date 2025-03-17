@@ -452,3 +452,42 @@ func (client *GlideClusterClient) ScanWithOptions(
 	nextCursor, keys, err := handleScanResponse(response)
 	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
+
+func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error) {
+	args, err := lolwutOptions.ToArgs()
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+ 
+	if lolwutOptions.RouteOption == nil || lolwutOptions.RouteOption.Route == nil {
+		response, err := client.executeCommand(C.Lolwut, args)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		data, err := handleStringResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterSingleValue[string](data), nil
+	}
+ 
+	route := lolwutOptions.RouteOption.Route
+	response, err := client.executeCommandWithRoute(C.Lolwut, args, route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+
+	if route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}

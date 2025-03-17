@@ -25,4 +25,6 @@ type ServerManagementCommands interface {
 	DBSize() (int64, error)
 
 	Time() ([]string, error)
+
+	LolwutWithOptions(opts *options.LolwutOptions) (string, error)
 }
