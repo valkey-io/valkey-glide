@@ -1,6 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Collections;
+using System.ComponentModel;
 using System.Text;
 
 namespace Glide;
@@ -75,6 +76,7 @@ public static class GlideStringExtensions
 /// </code>
 /// </example>
 /// </summary>
+[ImmutableObject(true)]
 public sealed class GlideString : IComparable<GlideString>
 {
     /// <summary>

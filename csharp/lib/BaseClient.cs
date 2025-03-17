@@ -14,10 +14,10 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 {
     #region public methods
     public async Task<string> Set(GlideString key, GlideString value)
-        => (await Command([key, value], RequestType.Set, HandleServerResponse<GlideString>)).GetString();
+        => await Command([key, value], RequestType.Set, HandleOk);
 
     public async Task<GlideString?> Get(GlideString key)
-        => await Command([key], RequestType.Get, HandleServerResponse<GlideString?>);
+        => await Command([key], RequestType.Get, response => HandleServerResponse<GlideString>(response, true));
 
     public void Dispose()
     {
@@ -98,24 +98,43 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         return responseHandler(await message);
     }
 
-#pragma warning disable CS8603 // Possible null reference return.
-    protected static T HandleServerResponse<T>(object? response) where T : class?
+    protected static string HandleOk(object? response)
+        => HandleServerResponse<GlideString, string>(response, false, gs => gs.GetString());
+
+    protected static T HandleServerResponse<T>(object? response, bool isNullable) where T : class?
+        => HandleServerResponse<T, T>(response, isNullable, o => o);
+
+    /// <summary>
+    /// Process and convert server response.
+    /// </summary>
+    /// <typeparam name="R">GLIDE's return type.</typeparam>
+    /// <typeparam name="T">Command's return type.</typeparam>
+    /// <param name="response"></param>
+    /// <param name="isNullable"></param>
+    /// <param name="converter">Optional converted to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    protected static T HandleServerResponse<R, T>(object? response, bool isNullable, Func<R, T> converter) where T : class? where R : class?
     {
-        // T is a Nullable<>
-        if (Nullable.GetUnderlyingType(typeof(T)) != null && response == null)
+        if (response is null)
         {
-            return null;
+            if (isNullable)
+            {
+#pragma warning disable CS8603 // Possible null reference return.
+                return null;
+#pragma warning restore CS8603 // Possible null reference return.
+            }
+            throw new Exception($"Unexpected return type from Glide: got null expected {typeof(T).Name}");
         }
         response = ConvertByteArrayToGlideString(response);
 #pragma warning disable IDE0046 // Convert to conditional expression
-        if (response is T)
+        if (response is R)
         {
-            return response as T;
+            return converter((response as R)!);
         }
 #pragma warning restore IDE0046 // Convert to conditional expression
-        throw new Exception($"Unexpected return type from Glide: got {response?.GetType().Name ?? "null"} expected {typeof(T).Name}");
+        throw new Exception($"Unexpected return type from Glide: got {response?.GetType().Name} expected {typeof(T).Name}");
     }
-#pragma warning restore CS8603 // Possible null reference return.
 
     protected static object? ConvertByteArrayToGlideString(object? response)
     {

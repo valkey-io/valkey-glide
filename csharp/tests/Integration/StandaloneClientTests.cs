@@ -10,9 +10,9 @@ public class StandaloneClientTests
         GlideClient client = TestConfiguration.DefaultStandaloneClient();
         // Assert.Multiple doesn't work with async tasks https://github.com/xunit/xunit/issues/3209
         Assert.Multiple(
-            () => Assert.Equal("PONG", client.CustomCommand(["ping"]).Result.ToString()),
-            () => Assert.Equal("piping", client.CustomCommand(["ping", "piping"]).Result.ToString()),
-            () => Assert.Contains("# Server", client.CustomCommand(["INFO"]).Result.ToString())
+            () => Assert.Equal("PONG", client.CustomCommand(["ping"]).Result!.ToString()),
+            () => Assert.Equal("piping", client.CustomCommand(["ping", "piping"]).Result!.ToString()),
+            () => Assert.Contains("# Server", client.CustomCommand(["INFO"]).Result!.ToString())
         );
     }
 
