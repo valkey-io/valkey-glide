@@ -100,7 +100,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -1727,11 +1726,12 @@ public class CommandTests {
     //    @Disabled("flaky test: re-enable once fixed")
     @RepeatedTest(500)
     @SneakyThrows
-//    @ParameterizedTest
-//    @MethodSource("getClients")
+    //    @ParameterizedTest
+    //    @MethodSource("getClients")
     public void fcall_readonly_function() {
         Thread.sleep(500); // Make it slower
-        GlideClusterClient clusterClient = GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+        GlideClusterClient clusterClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "fcall_readonly_function";
