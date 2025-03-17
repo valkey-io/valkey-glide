@@ -181,9 +181,9 @@ public sealed class GlideString : IComparable<GlideString>
     }
 
     /// <inheritdoc cref="GetString()" />
-    public static implicit operator string(GlideString? gs) => gs?.ToString();
+    public static implicit operator string?(GlideString? gs) => gs?.ToString();
     /// <inheritdoc cref="GetBytes()" />
-    public static implicit operator byte[](GlideString? gs) => gs?.Bytes;
+    public static implicit operator byte[]?(GlideString? gs) => gs?.Bytes;
 
     /// <inheritdoc cref="GlideString(string)" />
     public static implicit operator GlideString(string @string) => new(@string);
