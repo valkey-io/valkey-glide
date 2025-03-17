@@ -6,12 +6,6 @@ import glideRs from "./glide-rs";
 
 let globalObject = global as unknown;
 
-=======
-import glideRs from './glide-rs';
-
-let globalObject = global as unknown;
-
->>>>>>> 3ed65fe3 (additional refactoring)
 function initialize() {
     const {
         AggregationType,
