@@ -1752,6 +1752,20 @@ public class CommandTests {
                             testClient.invokeScript(script);
                             System.out.println("Finished Invoking Script Due to Error");
                             Thread.sleep(1000);
+
+                            // Wait until script runs
+                            int scriptTimeout = 2000 ; // ms
+                            while (scriptTimeout >= 0) {
+                                try {
+                                    regularClient.ping().get(); // Dummy test command
+                                } catch (ExecutionException err) {
+                                    if (err.getCause() instanceof RequestException
+                                        && err.getMessage().toLowerCase().contains("valkey is busy running a script")) {
+                                        break;
+                                    }
+                                }
+                                scriptTimeout -= 500;
+                            }
                         }
                     } catch (RequestException ignored) {
                     }
@@ -1761,8 +1775,11 @@ public class CommandTests {
 
                 assertTrue(scriptKilled);
             } finally {
+                System.out.println("Waiting for not busy...");
                 waitForNotBusy(regularClient::scriptKill);
+                System.out.println("Done waiting for not busy...");
                 script.close();
+                System.out.println("Closed.");
             }
         }
 
