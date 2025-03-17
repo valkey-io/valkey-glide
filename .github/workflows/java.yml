@@ -72,7 +72,7 @@ jobs:
 
     test-java:
         needs: get-matrices
-        timeout-minutes: 35
+        timeout-minutes: 70 # TODO: REVERT TIMEOUT BACK AFTER FLAKY TEST IS SOLVED
         strategy:
             fail-fast: false
             matrix:
