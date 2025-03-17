@@ -281,18 +281,12 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 // Parameters:
 //
-//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
-//	routeOption - The RouteOption type.
+//	flushOptions - The [FlushClusterOptions] type.
 //
 // Return value:
 //
 //	`"OK"` response on success.
 //
-// Example:
-//
-//	route := options.RouteOption{Route: config.AllPrimaries}
-//	res, err := client.FlushAllWithOptions(options.SYNC, route)
-//	fmt.Println(res) // OK
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.FlushClusterOptions) (string, error) {
@@ -316,18 +310,12 @@ func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.Flush
 //
 // Parameters:
 //
-//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
-//	routeOption - The RouteOption type.
+//	flushOptions - The [FlushClusterOptions] type.
 //
 // Return value:
 //
 //	`"OK"` response on success.
 //
-// Example:
-//
-//	route := options.RouteOption{Route: config.AllPrimaries}
-//	res, err := client.FlushDBWithOptions(options.SYNC, route)
-//	fmt.Println(res) // OK
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushClusterOptions) (string, error) {

@@ -124,6 +124,7 @@ func ExampleGlideClient_FlushAll() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
+
 	// Output: OK
 
 	keyResult, _ := client.Get("test-key")
@@ -140,6 +141,7 @@ func ExampleGlideClient_FlushAllWithOptions() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
+
 	// Output: OK
 
 	keyResult, _ := client.Get("test-key")
@@ -156,6 +158,7 @@ func ExampleGlideClient_FlushDB() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
+
 	// Output: OK
 
 	keyResult, _ := client.Get("test-key")
@@ -172,6 +175,7 @@ func ExampleGlideClient_FlushDBWithOptions() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
+
 	// Output: OK
 
 	keyResult, _ := client.Get("test-key")

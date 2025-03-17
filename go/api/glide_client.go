@@ -247,11 +247,6 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 //
 //	`"OK"` response on success.
 //
-// Example:
-//
-//	res, err := client.FlushAll()
-//	fmt.Println(res) // OK
-//
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClient) FlushAll() (string, error) {
 	result, err := client.executeCommand(C.FlushAll, []string{})
@@ -273,11 +268,6 @@ func (client *GlideClient) FlushAll() (string, error) {
 //
 //	`"OK"` response on success.
 //
-// Example:
-//
-//	res, err := client.FlushAllWithOptions(options.SYNC)
-//	fmt.Println(res) // OK
-//
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, error) {
 	result, err := client.executeCommand(C.FlushAll, []string{string(mode)})
@@ -294,11 +284,6 @@ func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, 
 // Return value:
 //
 //	`"OK"` response on success.
-//
-// Example:
-//
-//	res, err := client.FlushDB()
-//	fmt.Println(res) // OK
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClient) FlushDB() (string, error) {
@@ -321,10 +306,6 @@ func (client *GlideClient) FlushDB() (string, error) {
 //
 //	`"OK"` response on success.
 //
-// Example:
-//
-//	res, err := client.FlushDBWithOptions(options.SYNC)
-//	fmt.Println(res) // OK
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, error) {
