@@ -11,7 +11,7 @@ import {
     GlideRecord,
     GlideString,
     HashDataType,
-    InfScore,
+    Score,
     ObjectType,
     SortedSetDataType,
 } from "./BaseClient";
@@ -1446,7 +1446,7 @@ export function createZAdd(
     membersAndScores:
         | SortedSetDataType
         | Record<string, number>
-        | Record<string, InfScore>,
+        | Record<string, Score>,
     options?: ZAddOptions,
     incr = false,
 ): command_request.Command {

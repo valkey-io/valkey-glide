@@ -350,7 +350,7 @@ export type StreamEntryDataType = Record<string, [GlideString, GlideString][]>;
 /**
  * Union type that can store either a number or positive/negative infinity.
  */
-export type InfScore = number | "+inf" | "-inf";
+export type Score = number | "+inf" | "-inf";
 
 /**
  * @internal
@@ -4027,7 +4027,7 @@ export class BaseClient {
         membersAndScores:
             | SortedSetDataType
             | Record<string, number>
-            | Record<string, InfScore>,
+            | Record<string, Score>,
         options?: ZAddOptions,
     ): Promise<number> {
         return this.createWritePromise(

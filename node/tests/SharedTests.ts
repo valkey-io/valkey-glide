@@ -35,7 +35,6 @@ import {
     HashDataType,
     InfBoundary,
     InfoOptions,
-    InfScore,
     InsertPosition,
     ListDirection,
     ProtocolVersion,
@@ -54,6 +53,7 @@ import {
     convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
+    Score,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
@@ -4155,7 +4155,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zadd(key, newMembersScores, { changed: true }),
                 ).toEqual(2);
-                const infMembersScores: Record<string, InfScore> = {
+                const infMembersScores: Record<string, Score> = {
                     infMember: "+inf",
                     negInfMember: "-inf",
                 };
@@ -4545,7 +4545,7 @@ export function runBaseTests(config: {
                 await expect(client.zscore(key2, "foo")).rejects.toThrow();
 
                 const inf_key = uuidv4();
-                const infMembersScores: Record<string, InfScore> = {
+                const infMembersScores: Record<string, Score> = {
                     infMember: "+inf",
                     negInfMember: "-inf",
                 };

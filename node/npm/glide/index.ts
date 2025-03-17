@@ -138,7 +138,6 @@ function initialize() {
         SetOptions,
         ZAddOptions,
         InfBoundary,
-        InfScore,
         KeyWeight,
         Boundary,
         ProtocolVersion,
@@ -192,6 +191,7 @@ function initialize() {
         ReturnTypeAttribute,
         ReturnTypeJson,
         UniversalReturnTypeJson,
+        Score,
     } = nativeBinding;
 
     module.exports = {
@@ -292,7 +292,6 @@ function initialize() {
         SetOptions,
         ZAddOptions,
         InfBoundary,
-        InfScore,
         KeyWeight,
         Boundary,
         ProtocolVersion,
@@ -342,6 +341,7 @@ function initialize() {
         ReturnTypeAttribute,
         ReturnTypeJson,
         UniversalReturnTypeJson,
+        Score,
     };
 
     globalObject = Object.assign(global, nativeBinding);
