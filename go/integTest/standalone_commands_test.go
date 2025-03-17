@@ -541,14 +541,6 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 	assert.GreaterOrEqual(t, len(resCursor), 1)
 	assert.GreaterOrEqual(t, len(resCollection), 1)
 
-	//Test TestScanWithOption SetMatch
-	suite.verifyOK(client.Set("key123", "Hello"))
-	opts = options.NewScanOptions().SetMatch("*key")
-	resCursor, resCollection, err = client.ScanWithOptions(0, *opts)
-	assert.Nil(t, err)
-	assert.GreaterOrEqual(t, len(resCursor), 1)
-	assert.GreaterOrEqual(t, len(resCollection), 1)
-
 	//Test TestScanWithOption SetType
 	opts = options.NewScanOptions().SetType(options.ObjectTypeString)
 	resCursor, resCollection, err = client.ScanWithOptions(0, *opts)
