@@ -1701,8 +1701,8 @@ public class CommandTests {
     }
 
     @RepeatedTest(1000) // TODO: remove
-//    @ParameterizedTest // TODO: uncomment
-//    @MethodSource("getClients")
+    @ParameterizedTest // TODO: uncomment
+    @MethodSource("getClients")
     @SneakyThrows
     public void scriptKill() {
         GlideClient regularClient = GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
@@ -1723,7 +1723,9 @@ public class CommandTests {
         try (var testClient =
                 GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
+                System.out.println("Invoking Script");
                 testClient.invokeScript(script);
+                System.out.println("Finished Invoking Script");
 
                 Thread.sleep(1000);
 
@@ -1732,7 +1734,9 @@ public class CommandTests {
                 int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
+                        System.out.println("Killing Script");
                         assertEquals(OK, regularClient.scriptKill().get());
+                        System.out.println("Finished Killing Script");
                         scriptKilled = true;
                         break;
                     } catch (ExecutionException exception) {
@@ -1744,7 +1748,9 @@ public class CommandTests {
                                         .getMessage()
                                         .toLowerCase()
                                         .contains("no scripts in execution right now")) {
+                            System.out.println("Invoking Script Due to Error");
                             testClient.invokeScript(script);
+                            System.out.println("Finished Invoking Script Due to Error");
                             Thread.sleep(1000);
                         }
                     } catch (RequestException ignored) {
