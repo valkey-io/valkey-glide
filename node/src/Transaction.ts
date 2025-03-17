@@ -10,6 +10,7 @@ import {
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     SortedSetDataType,
     convertGlideRecord,
+    Score,
 } from "./BaseClient";
 
 import {
@@ -66,7 +67,6 @@ import {
     TimeUnit,
     ZAddOptions,
     ZScanOptions,
-    convertElementsAndScores,
     convertFieldsAndValuesToHashDataType,
     createAppend,
     createBLMPop,
@@ -1738,16 +1738,13 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zadd(
         key: GlideString,
-        membersAndScores: SortedSetDataType | Record<string, number>,
+        membersAndScores:
+            | SortedSetDataType
+            | Record<string, number>
+            | Record<string, Score>,
         options?: ZAddOptions,
     ): T {
-        return this.addAndReturn(
-            createZAdd(
-                key,
-                convertElementsAndScores(membersAndScores),
-                options,
-            ),
-        );
+        return this.addAndReturn(createZAdd(key, membersAndScores, options));
     }
 
     /**
