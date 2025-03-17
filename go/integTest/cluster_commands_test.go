@@ -729,3 +729,98 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 		assert.NotContains(t, allKeys, elem)
 	}
 }
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+	 LolwutOptions: &options.LolwutOptions{
+		Version: 6,
+		Args: &[]int{10, 20},
+	 },
+	 RouteOption: &options.RouteOption{Route: config.AllNodes},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.Nil(suite.T(), err)
+
+	assert.True(suite.T(), result.IsMultiValue())
+	multiValue := result.MultiValue()
+
+	for _, value := range multiValue {
+		assert.Contains(suite.T(), value, "Redis ver.")
+	}
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+	 LolwutOptions: &options.LolwutOptions{
+		Version: 6,
+	 },
+	 RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.Nil(suite.T(), err)
+
+	assert.True(suite.T(), result.IsMultiValue())
+	multiValue := result.MultiValue()
+
+	for _,value := range multiValue {
+		assert.Contains(suite.T(), value, "Redis ver.")
+	}
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+	 LolwutOptions: &options.LolwutOptions{
+		Version: 6,
+	 },
+	 RouteOption: &options.RouteOption{Route: config.RandomRoute},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.Nil(suite.T(), err)
+
+	assert.True(suite.T(), result.IsSingleValue())
+	singleValue := result.SingleValue()
+	assert.Contains(suite.T(), singleValue, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_NoRoute_WithOnlyVersion() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+	 LolwutOptions: &options.LolwutOptions{
+	  Version: 8,
+	 },
+	 RouteOption: nil,
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.Nil(suite.T(), err)
+	assert.Contains(suite.T(), "Redis ver.", result)
+}
+
+// func (suite *GlideTestSuite) TestLolwutWithOptions_NoRoute_WithInvalidVersion() {
+// 	client := suite.defaultClusterClient()
+// 	options := options.ClusterLolwutOptions{
+// 	 LolwutOptions: &options.LolwutOptions{
+// 	  Version: -1,
+// 	 },
+// 	 RouteOption: nil,
+// 	}
+// 	result, err := client.LolwutWithOptions(options)
+// 	assert.NotNil(suite.T(), err)
+// 	assert.Contains(suite.T(), "", result)
+// }
+
+// func (suite *GlideTestSuite) TestLolwutWithOptions_NoRoute_WithInvalidArgs() {
+// 	client := suite.defaultClusterClient()
+// 	options := options.ClusterLolwutOptions{
+// 	 LolwutOptions: &options.LolwutOptions{
+// 	  Version: 8,
+// 	  Args: &[]int{-1},
+// 	 },
+// 	 RouteOption: nil,
+// 	}
+// 	result, err := client.LolwutWithOptions(options)
+// 	assert.NotNil(suite.T(), err)
+// 	assert.Contains(suite.T(), "", result)
+// }
