@@ -238,3 +238,57 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	}
 	return handleStringResponse(result)
 }
+
+// Iterates incrementally over a database for matching keys.
+//
+// Parameters:
+//
+//	cursor - The cursor that points to the next iteration of results. A value of 0
+//			 indicates the start of the search.
+//
+// Return value:
+//
+//		Returns the copy of message. An Array of Objects. The first element is always the cursor
+//	    for the next iteration of results. "0" will be the cursor
+//		returned on the last iteration of the scan.
+//		The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
+	return client.ScanWithOptions(cursor)
+}
+
+// Iterates incrementally over a database for matching keys.
+//
+// Parameters:
+//
+//	 cursor - The cursor that points to the next iteration of results. A value of 0
+//				 indicates the start of the search.
+//	 options - Additional command parameters, see [ScanOptions] for more details.
+//
+// Return value:
+//
+//		Returns the copy of message. An Array of Objects. The first element is always the cursor
+//	    for the next iteration of results. "0" will be the cursor
+//		returned on the last iteration of the scan.
+//		The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions ...options.ScanOptions) (string, []string, error) {
+	if len(scanOptions) > 0 {
+		optionArgs, err := scanOptions[0].ToArgs()
+		if err != nil {
+			return DefaultStringResponse, nil, err
+		}
+		res, err := client.executeCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
+		if err != nil {
+			return DefaultStringResponse, nil, err
+		}
+		return handleScanResponse(res)
+	}
+	res, err := client.executeCommand(C.Scan, []string{utils.IntToString(cursor)})
+	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	return handleScanResponse(res)
+}
