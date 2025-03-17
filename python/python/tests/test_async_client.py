@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
+from glide.async_commands.batch import Batch, ClusterBatch
 from glide.async_commands.bitmap import (
     BitFieldGet,
     BitFieldIncrBy,
@@ -69,7 +70,6 @@ from glide.async_commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide.async_commands.batch import Batch, ClusterBatch
 from glide.config import BackoffStrategy, ProtocolVersion, ServerCredentials
 from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient

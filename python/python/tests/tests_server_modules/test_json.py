@@ -6,6 +6,7 @@ import random
 import typing
 
 import pytest
+from glide.async_commands.batch import ClusterBatch
 from glide.async_commands.core import ConditionalChange
 from glide.async_commands.server_modules import glide_json as json
 from glide.async_commands.server_modules import json_batch
@@ -14,7 +15,6 @@ from glide.async_commands.server_modules.glide_json import (
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide.async_commands.batch import ClusterBatch
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError

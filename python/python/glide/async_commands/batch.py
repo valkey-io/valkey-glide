@@ -68,16 +68,17 @@ class BaseBatch:
         are documented alongside each method.
 
     Example:
-        transaction = BaseBatch(is_atomic=True)
+        transaction = BaseBatch(is_atomic=True, raise_on_error=True)
         >>> transaction.set("key", "value").get("key")
         >>> await client.exec(transaction)
         [OK , "value"]
     """
 
-    def __init__(self, is_atomic=False) -> None:
+    def __init__(self, is_atomic=False, raise_on_error=True) -> None:
         self.commands: List[Tuple[RequestType.ValueType, List[TEncodable]]] = []
         self.lock = threading.Lock()
         self.is_atomic = is_atomic
+        self.raise_on_error = raise_on_error
 
     def append_command(
         self: TBatch,

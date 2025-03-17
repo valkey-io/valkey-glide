@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+from glide.async_commands.batch import Batch, ClusterBatch, TBatch
 from glide.async_commands.bitmap import (
     BitEncoding,
     BitFieldGet,
@@ -106,7 +107,6 @@ from glide.async_commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide.async_commands.batch import Batch, ClusterBatch, TBatch
 from glide.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,

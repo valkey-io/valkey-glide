@@ -22,13 +22,13 @@ Examples:
 
 from typing import List, Optional, Union
 
+from glide.async_commands.batch import TBatch
 from glide.async_commands.core import ConditionalChange
 from glide.async_commands.server_modules.glide_json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide.async_commands.batch import TBatch
 from glide.constants import TEncodable
 
 

@@ -388,6 +388,7 @@ class CoreCommands(Protocol):
         commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
         route: Optional[Route] = None,
         is_atomic: bool = True,
+        raise_on_error: bool = True,
     ) -> List[TResult]: ...
 
     async def _execute_script(

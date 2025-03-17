@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
+from glide.async_commands.batch import Batch
 from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import (
     CoreCommands,
@@ -11,7 +12,6 @@ from glide.async_commands.core import (
     FunctionRestorePolicy,
     InfoSection,
 )
-from glide.async_commands.batch import Batch
 from glide.constants import (
     TOK,
     TEncodable,
@@ -82,7 +82,11 @@ class StandaloneCommands(CoreCommands):
                 If the transaction failed due to a WATCH command, `exec` will return `None`.
         """
         commands = transaction.commands[:]
-        return await self._execute_batch(commands, is_atomic=transaction.is_atomic)
+        return await self._execute_batch(
+            commands,
+            is_atomic=transaction.is_atomic,
+            raise_on_error=transaction.raise_on_error,
+        )
 
     async def select(self, index: int) -> TOK:
         """
