@@ -101,6 +101,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1723,11 +1724,14 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
-    @Disabled("flaky test: re-enable once fixed")
+    //    @Disabled("flaky test: re-enable once fixed")
+    @RepeatedTest(500)
     @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
-    public void fcall_readonly_function(GlideClusterClient clusterClient) {
+//    @ParameterizedTest
+//    @MethodSource("getClients")
+    public void fcall_readonly_function() {
+        Thread.sleep(500); // Make it slower
+        GlideClusterClient clusterClient = GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "fcall_readonly_function";
@@ -1741,7 +1745,7 @@ public class CommandTests {
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
         // let replica sync with the primary node
-        assertEquals(1L, clusterClient.wait(1L, 4000L).get());
+        assertEquals(1L, clusterClient.wait(1L, 5000L).get());
 
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
