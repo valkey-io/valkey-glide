@@ -1123,6 +1123,7 @@ export class BaseClient {
                   batch: command_request.Batch.create({
                       isAtomic: true,
                       commands: command,
+                      raiseOnError: true,
                   }),
                   route,
               })

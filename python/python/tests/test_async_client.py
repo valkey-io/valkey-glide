@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
+from glide.async_commands.batch import Batch, ClusterBatch
 from glide.async_commands.bitmap import (
     BitFieldGet,
     BitFieldIncrBy,
@@ -69,7 +70,6 @@ from glide.async_commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import BackoffStrategy, ProtocolVersion, ServerCredentials
 from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
@@ -8662,7 +8662,7 @@ class TestCommands:
             == key1.encode()
         )
 
-        transaction = ClusterTransaction()
+        transaction = ClusterBatch()
 
         transaction.fcall(func_name, keys=keys, arguments=[])
         transaction.fcall_ro(func_name, keys=keys, arguments=[])
@@ -9455,7 +9455,7 @@ class TestCommands:
         # watched key didn't change outside of transaction before transaction execution, transaction will execute
         assert await glide_client.set("key1", "original_value") == OK
         assert await glide_client.watch(["key1"]) == OK
-        transaction = Transaction()
+        transaction = Batch()
         transaction.set("key1", "transaction_value")
         transaction.get("key1")
         assert await glide_client.exec(transaction) is not None
@@ -9463,7 +9463,7 @@ class TestCommands:
         # watched key changed outside of transaction before transaction execution, transaction will not execute
         assert await glide_client.set("key1", "original_value") == OK
         assert await glide_client.watch(["key1"]) == OK
-        transaction = Transaction()
+        transaction = Batch()
         transaction.set("key1", "transaction_value")
         assert await glide_client.set("key1", "standalone_value") == OK
         transaction.get("key1")
@@ -9481,7 +9481,7 @@ class TestCommands:
         # outside of transaction, transaction will still execute
         assert await glide_client.set("key1", "original_value") == OK
         assert await glide_client.watch(["key1"]) == OK
-        transaction = Transaction()
+        transaction = Batch()
         transaction.set("key1", "transaction_value")
         assert await glide_client.set("key1", "standalone_value") == OK
         transaction.get("key1")
