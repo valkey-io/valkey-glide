@@ -1,17 +1,17 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use glide_core::client;
-use glide_core::client::Client as GlideClient;
-use glide_core::request_type::RequestType;
+mod ffi;
+use ffi::{create_connection_request, ConnectionConfig};
+use glide_core::{client::Client as GlideClient, request_type::RequestType};
 use redis::{FromRedisValue, RedisResult};
 use std::{
     ffi::{c_void, CStr, CString},
     os::raw::c_char,
     sync::Arc,
 };
-use tokio::runtime::Builder;
-use tokio::runtime::Runtime;
+use tokio::runtime::{Builder, Runtime};
 
+#[repr(C)]
 pub enum Level {
     Error = 0,
     Warn = 1,
@@ -32,33 +32,15 @@ struct CommandExecutionCore {
     failure_callback: unsafe extern "C" fn(usize) -> (), // TODO - add specific error codes
 }
 
-fn create_connection_request(host: String, port: u32, use_tls: bool) -> client::ConnectionRequest {
-    let address_info = client::NodeAddress {
-        host,
-        port: port as u16,
-    };
-    let addresses = vec![address_info];
-    client::ConnectionRequest {
-        addresses,
-        tls_mode: if use_tls {
-            Some(client::TlsMode::SecureTls)
-        } else {
-            Some(client::TlsMode::NoTls)
-        },
-        ..Default::default()
-    }
-}
-
-fn create_client_internal(
-    host: *const c_char,
-    port: u32,
-    use_tls: bool,
+/// # Safety
+///
+/// * `config` must be a valid [`ConnectionConfig`] pointer. See the safety documentation of [`create_connection_request`].
+unsafe fn create_client_internal(
+    config: *const ConnectionConfig,
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (),
 ) -> RedisResult<Client> {
-    let host_cstring = unsafe { CStr::from_ptr(host) };
-    let host_string = host_cstring.to_str()?.to_string();
-    let request = create_connection_request(host_string, port, use_tls);
+    let request = unsafe { create_connection_request(config) };
     let runtime = Builder::new_multi_thread()
         .enable_all()
         .thread_name("GLIDE C# thread")
@@ -73,38 +55,52 @@ fn create_client_internal(
     Ok(Client { runtime, core })
 }
 
-/// Creates a new client to the given address. The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns.
+/// Creates a new client with the given configuration.
+/// The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns.
 /// All callbacks should be offloaded to separate threads in order not to exhaust the client's thread pool.
+///
+/// # Safety
+///
+/// * `config` must be a valid [`ConnectionConfig`] pointer. See the safety documentation of [`create_client_internal`].
+#[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
-pub extern "C" fn create_client(
-    host: *const c_char,
-    port: u32,
-    use_tls: bool,
+pub unsafe extern "C" fn create_client(
+    config: *const ConnectionConfig,
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (),
 ) -> *const c_void {
-    match create_client_internal(host, port, use_tls, success_callback, failure_callback) {
+    match unsafe { create_client_internal(config, success_callback, failure_callback) } {
         Err(_) => std::ptr::null(), // TODO - log errors
         Ok(client) => Arc::into_raw(Arc::new(client)) as *const c_void,
     }
 }
 
+/// Closes the given client, deallocating it from the heap.
+/// This function should only be called once per pointer created by [`create_client`].
+/// After calling this function the `client_ptr` is not in a valid state.
+///
 /// # Safety
 ///
-/// This function should only be called once per pointer created by [create_client]. After calling this function
-/// the `client_ptr` is not in a valid state.
+/// * `client_ptr` must not be `null`.
+/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`std::boxed::Box::from_raw`].
 #[no_mangle]
-pub extern "C" fn close_client(client_adapter_ptr: *const c_void) {
-    assert!(!client_adapter_ptr.is_null());
+pub extern "C" fn close_client(client_ptr: *const c_void) {
+    assert!(!client_ptr.is_null());
     // This will bring the strong count down to 0 once all client requests are done.
-    unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const Client) };
+    unsafe { Arc::decrement_strong_count(client_ptr as *const Client) };
 }
 
-/// Expects that key and value will be kept valid until the callback is called.
+/// Execute a command.
+/// Expects that arguments will be kept valid until the callback is called.
 ///
 /// # Safety
 ///
-/// This function should only be called should with a pointer created by [create_client], before [close_client] was called with the pointer.
+/// * `client_ptr` must not be `null`.
+/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`std::boxed::Box::from_raw`].
+/// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
+/// * `key` and `value` must not be `null`.
+/// * `key` and `value` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
+/// * `key` and `value` must be kept valid until the callback is called.
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_ptr: *const c_void,
@@ -119,26 +115,20 @@ pub unsafe extern "C" fn command(
         Arc::from_raw(client_ptr as *mut Client)
     };
 
-    // The safety of these needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
-    let args_address = args as usize;
+    let Some(mut cmd) = request_type.get_command() else {
+        unsafe {
+            (client.core.failure_callback)(callback_index); // TODO - report errors
+            return;
+        }
+    };
+    let args_slice = unsafe { std::slice::from_raw_parts(args, arg_count as usize) };
+    for arg in args_slice {
+        let c_str = unsafe { CStr::from_ptr(*arg as *mut c_char) };
+        cmd.arg(c_str.to_bytes());
+    }
 
     let core = client.core.clone();
     client.runtime.spawn(async move {
-        let Some(mut cmd) = request_type.get_command() else {
-            unsafe {
-                (core.failure_callback)(callback_index); // TODO - report errors
-                return;
-            }
-        };
-
-        let args_slice = unsafe {
-            std::slice::from_raw_parts(args_address as *const *mut c_char, arg_count as usize)
-        };
-        for arg in args_slice {
-            let c_str = unsafe { CStr::from_ptr(*arg as *mut c_char) };
-            cmd.arg(c_str.to_bytes());
-        }
-
         let result = core
             .client
             .clone()
@@ -149,7 +139,10 @@ pub unsafe extern "C" fn command(
             match result {
                 Ok(None) => (core.success_callback)(callback_index, std::ptr::null()),
                 Ok(Some(c_str)) => (core.success_callback)(callback_index, c_str.as_ptr()),
-                Err(_) => (core.failure_callback)(callback_index), // TODO - report errors
+                Err(err) => {
+                    dbg!(err); // TODO - report errors
+                    (core.failure_callback)(callback_index)
+                }
             };
         }
     });
@@ -181,10 +174,14 @@ impl From<Level> for logger_core::Level {
     }
 }
 
+/// Unsafe function because creating string from pointer.
+///
+/// # Safety
+///
+/// * `message` and `log_identifier` must not be `null`.
+/// * `message` and `log_identifier` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
 #[no_mangle]
 #[allow(improper_ctypes_definitions)]
-/// # Safety
-/// Unsafe function because creating string from pointer
 pub unsafe extern "C" fn log(
     log_level: Level,
     log_identifier: *const c_char,
@@ -203,10 +200,14 @@ pub unsafe extern "C" fn log(
     }
 }
 
+/// Unsafe function because creating string from pointer.
+///
+/// # Safety
+///
+/// * `file_name` must not be `null`.
+/// * `file_name` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
 #[no_mangle]
 #[allow(improper_ctypes_definitions)]
-/// # Safety
-/// Unsafe function because creating string from pointer
 pub unsafe extern "C" fn init(level: Option<Level>, file_name: *const c_char) -> Level {
     let file_name_as_str;
     unsafe {

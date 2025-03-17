@@ -1,4 +1,5 @@
 #### Changes
+* Core: Add `opentelemetry` protocols support ([#3191](https://github.com/valkey-io/valkey-glide/pull/3191))
 * Go: Add JSON.SET and JSON.GET ([#3115](https://github.com/valkey-io/valkey-glide/pull/3115))
 * Csharp: updating xUnit, adding xUnit analyser rules and guidelines ([#3035](https://github.com/valkey-io/valkey-glide/pull/3035))
 * Go: Add ZRangeStore ([3105](https://github.com/valkey-io/valkey-glide/pull/3105))
@@ -15,6 +16,7 @@
 * Go: Adding support for advanced client configs and connectionTimeout ([#3290](https://github.com/valkey-io/valkey-glide/pull/3290))
 * Go: Add Cluster Scan support ([#3295](https://github.com/valkey-io/valkey-glide/pull/3295))
 * Go: Fix unsafe precondition violation for the slice::from_raw_parts ([#3350](https://github.com/valkey-io/valkey-glide/issues/3350))
+* Go: Add `GeoAdd` and the Geospatial interface ([#3366](https://github.com/valkey-io/valkey-glide/pull/3366))
 
 #### Breaking Changes
 
