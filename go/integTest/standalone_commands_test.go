@@ -516,3 +516,42 @@ func (suite *GlideTestSuite) TestTime_Error() {
 	assert.Nil(suite.T(), results)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
+
+func (suite *GlideTestSuite) TestScan() {
+	client := suite.defaultClient()
+	t := suite.T()
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(key, "Hello"))
+	resCursor, resCollection, err := client.Scan(0)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(resCursor), 1)
+	assert.GreaterOrEqual(t, len(resCollection), 1)
+}
+
+func (suite *GlideTestSuite) TestScanWithOption() {
+	client := suite.defaultClient()
+	t := suite.T()
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(key, "Hello"))
+	opts := options.NewScanOptions().SetCount(10)
+	resCursor, resCollection, err := client.ScanWithOptions(0, *opts)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(resCursor), 1)
+	assert.GreaterOrEqual(t, len(resCollection), 1)
+
+	suite.verifyOK(client.Set("key123", "Hello"))
+	opts = options.NewScanOptions().SetMatch("*key*")
+	resCursor, resCollection, err = client.ScanWithOptions(0, *opts)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(resCursor), 1)
+	assert.GreaterOrEqual(t, len(resCollection), 1)
+
+	lPushResp, err := client.LPush("keyList", []string{"one", "two", "three", "four", "five"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), int64(5), lPushResp)
+	opts = options.NewScanOptions().SetType(options.ObjectTypeList)
+	resCursor, resCollection, err = client.ScanWithOptions(0, *opts)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(resCursor), 1)
+	assert.GreaterOrEqual(t, len(resCollection), 1)
+}
