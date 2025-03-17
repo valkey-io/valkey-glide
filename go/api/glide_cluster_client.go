@@ -295,10 +295,17 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //	fmt.Println(res) // OK
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
-func (client *GlideClusterClient) FlushAllWithOptions(mode options.FlushMode, opts options.RouteOption) (string, error) {
-	result, err := client.executeCommandWithRoute(C.FlushAll, []string{string(mode)}, opts.Route)
+func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.FlushClusterOptions) (string, error) {
+	if flushOptions.RouteOption == nil || flushOptions.RouteOption.Route == nil {
+		result, err := client.executeCommand(C.FlushAll, flushOptions.ToArgs())
+		if err != nil {
+			return DefaultStringResponse, err
+		}
+		return handleStringResponse(result)
+	}
+	result, err := client.executeCommandWithRoute(C.FlushAll, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -323,10 +330,17 @@ func (client *GlideClusterClient) FlushAllWithOptions(mode options.FlushMode, op
 //	fmt.Println(res) // OK
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
-func (client *GlideClusterClient) FlushDBWithOptions(mode options.FlushMode, opts options.RouteOption) (string, error) {
-	result, err := client.executeCommandWithRoute(C.FlushDB, []string{string(mode)}, opts.Route)
+func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushClusterOptions) (string, error) {
+	if flushOptions.RouteOption == nil || flushOptions.RouteOption.Route == nil {
+		result, err := client.executeCommand(C.FlushDB, flushOptions.ToArgs())
+		if err != nil {
+			return DefaultStringResponse, err
+		}
+		return handleStringResponse(result)
+	}
+	result, err := client.executeCommandWithRoute(C.FlushDB, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }

@@ -740,8 +740,15 @@ func (suite *GlideTestSuite) TestFlushAllWithOptions_AllNodes() {
 	_, err = client.Set(key2, "value4")
 	assert.NoError(suite.T(), err)
 
-	route := config.Route(config.AllNodes)
-	result, err := client.FlushAllWithOptions(options.ASYNC, options.RouteOption{Route: route})
+	routeOption := &options.RouteOption{
+		Route: config.AllNodes,
+	}
+	asyncMode := options.FlushMode(options.ASYNC)
+	result, err := client.FlushAllWithOptions(options.FlushClusterOptions{
+		FlushMode: &asyncMode,
+		RouteOption: routeOption,
+	})
+
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "ReadOnly: You can't write against a read only replica")
 	assert.Empty(suite.T(), result)
@@ -757,8 +764,15 @@ func (suite *GlideTestSuite) TestFlushAllWithOptions_AllPrimaries() {
 	_, err = client.Set(key2, "value4")
 	assert.NoError(suite.T(), err)
 
-	route := config.Route(config.AllPrimaries)
-	result, err := client.FlushAllWithOptions(options.ASYNC, options.RouteOption{Route: route})
+	routeOption := &options.RouteOption{
+		Route: config.AllPrimaries,
+	}
+	asyncMode := options.FlushMode(options.ASYNC)
+	result, err := client.FlushAllWithOptions(options.FlushClusterOptions{
+		FlushMode: &asyncMode,
+		RouteOption: routeOption,
+	})
+
 	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), result)
 
@@ -774,8 +788,16 @@ func (suite *GlideTestSuite) TestFlushAllWithOptions_AllPrimaries() {
 func (suite *GlideTestSuite) TestFlushAllWithOptions_InvalidRoute() {
 	client := suite.defaultClusterClient()
 
-	invalidRoute := config.Route(config.NewByAddressRoute("invalidHost", 9999))
-	result, err := client.FlushAllWithOptions(options.SYNC, options.RouteOption{Route: invalidRoute})
+	invalidRoute := config.NewByAddressRoute("invalidHost", 9999)
+	routeOption := &options.RouteOption{
+		Route: invalidRoute,
+	}
+	syncMode := options.SYNC
+	result, err := client.FlushAllWithOptions(options.FlushClusterOptions{
+		FlushMode:   &syncMode,
+		RouteOption: routeOption,
+	})
+
 	assert.Error(suite.T(), err)
 	assert.Empty(suite.T(), result)
 }
@@ -787,8 +809,16 @@ func (suite *GlideTestSuite) TestFlushAllWithOptions_AsyncMode() {
 	_, err := client.Set(key, "value5")
 	assert.NoError(suite.T(), err)
 
-	route := config.Route(config.AllPrimaries)
-	result, err := client.FlushAllWithOptions(options.ASYNC, options.RouteOption{Route: route})
+	routeOption := &options.RouteOption{
+		Route: config.AllPrimaries,
+	}
+
+	asyncMode := options.FlushMode(options.ASYNC)
+	result, err := client.FlushAllWithOptions(options.FlushClusterOptions{
+		FlushMode: &asyncMode,
+		RouteOption: routeOption,
+	})
+
 	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), result)
 
@@ -807,8 +837,14 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_AllNodes() {
 	_, err = client.Set(key2, "value4")
 	assert.NoError(suite.T(), err)
 
-	route := config.Route(config.AllNodes)
-	result, err := client.FlushDBWithOptions(options.ASYNC, options.RouteOption{Route: route})
+	routeOption := &options.RouteOption{
+		Route: config.AllNodes,
+	}
+	asyncMode := options.ASYNC
+	result, err := client.FlushDBWithOptions(options.FlushClusterOptions{
+		FlushMode:   &asyncMode,
+		RouteOption: routeOption,
+	})
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "ReadOnly: You can't write against a read only replica")
 	assert.Empty(suite.T(), result)
@@ -824,8 +860,14 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_AllPrimaries() {
 	_, err = client.Set(key2, "value4")
 	assert.NoError(suite.T(), err)
 
-	route := config.Route(config.AllPrimaries)
-	result, err := client.FlushDBWithOptions(options.ASYNC, options.RouteOption{Route: route})
+	routeOption := &options.RouteOption{
+		Route: config.AllPrimaries,
+	}
+	asyncMode := options.ASYNC
+	result, err := client.FlushDBWithOptions(options.FlushClusterOptions{
+		FlushMode:   &asyncMode,
+		RouteOption: routeOption,
+	})
 	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), result)
 
@@ -842,7 +884,14 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_InvalidRoute() {
 	client := suite.defaultClusterClient()
 
 	invalidRoute := config.Route(config.NewByAddressRoute("invalidHost", 9999))
-	result, err := client.FlushDBWithOptions(options.SYNC, options.RouteOption{Route: invalidRoute})
+	routeOption := &options.RouteOption{
+		Route: invalidRoute,
+	}
+	syncMode := options.SYNC
+	result, err := client.FlushDBWithOptions(options.FlushClusterOptions{
+		FlushMode:   &syncMode,
+		RouteOption: routeOption,
+	})
 	assert.Error(suite.T(), err)
 	assert.Empty(suite.T(), result)
 }
@@ -854,8 +903,14 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_AsyncMode() {
 	_, err := client.Set(key, "value5")
 	assert.NoError(suite.T(), err)
 
-	route := config.Route(config.AllPrimaries)
-	result, err := client.FlushDBWithOptions(options.ASYNC, options.RouteOption{Route: route})
+	routeOption := &options.RouteOption{
+		Route: config.AllPrimaries,
+	}
+	syncMode := options.SYNC
+	result, err := client.FlushDBWithOptions(options.FlushClusterOptions{
+		FlushMode:   &syncMode,
+		RouteOption: routeOption,
+	})
 	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), result)
 

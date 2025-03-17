@@ -18,7 +18,7 @@ type ServerManagementClusterCommands interface {
 
 	DBSizeWithOptions(routeOption options.RouteOption) (int64, error)
 
-	FlushAllWithOptions(mode options.FlushMode, routeOption options.RouteOption) (string, error)
+	FlushAllWithOptions(options options.FlushClusterOptions) (string, error)
 
-	FlushDBWithOptions(mode options.FlushMode, routeOption options.RouteOption) (string, error)
+	FlushDBWithOptions(options options.FlushClusterOptions) (string, error)
 }

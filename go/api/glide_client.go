@@ -256,7 +256,7 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 func (client *GlideClient) FlushAll() (string, error) {
 	result, err := client.executeCommand(C.FlushAll, []string{})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -282,7 +282,7 @@ func (client *GlideClient) FlushAll() (string, error) {
 func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, error) {
 	result, err := client.executeCommand(C.FlushAll, []string{string(mode)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -304,7 +304,7 @@ func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, 
 func (client *GlideClient) FlushDB() (string, error) {
 	result, err := client.executeCommand(C.FlushDB, []string{})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -330,7 +330,7 @@ func (client *GlideClient) FlushDB() (string, error) {
 func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, error) {
 	result, err := client.executeCommand(C.FlushDB, []string{string(mode)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
