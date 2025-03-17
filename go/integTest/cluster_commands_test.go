@@ -745,7 +745,7 @@ func (suite *GlideTestSuite) TestFlushAllWithOptions_AllNodes() {
 	}
 	asyncMode := options.FlushMode(options.ASYNC)
 	result, err := client.FlushAllWithOptions(options.FlushClusterOptions{
-		FlushMode: &asyncMode,
+		FlushMode:   &asyncMode,
 		RouteOption: routeOption,
 	})
 
@@ -769,7 +769,7 @@ func (suite *GlideTestSuite) TestFlushAllWithOptions_AllPrimaries() {
 	}
 	asyncMode := options.FlushMode(options.ASYNC)
 	result, err := client.FlushAllWithOptions(options.FlushClusterOptions{
-		FlushMode: &asyncMode,
+		FlushMode:   &asyncMode,
 		RouteOption: routeOption,
 	})
 
@@ -815,7 +815,7 @@ func (suite *GlideTestSuite) TestFlushAllWithOptions_AsyncMode() {
 
 	asyncMode := options.FlushMode(options.ASYNC)
 	result, err := client.FlushAllWithOptions(options.FlushClusterOptions{
-		FlushMode: &asyncMode,
+		FlushMode:   &asyncMode,
 		RouteOption: routeOption,
 	})
 
