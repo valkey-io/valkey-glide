@@ -70,6 +70,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1699,10 +1700,13 @@ public class CommandTests {
         script.close();
     }
 
-    @ParameterizedTest
-    @MethodSource("getClients")
+    @RepeatedTest(1000) // TODO: remove
+//    @ParameterizedTest // TODO: uncomment
+//    @MethodSource("getClients")
     @SneakyThrows
-    public void scriptKill(GlideClient regularClient) {
+    public void scriptKill() {
+        GlideClient regularClient = GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
+
         // Verify that script_kill raises an error when no script is running
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> regularClient.scriptKill().get());
@@ -1712,9 +1716,6 @@ public class CommandTests {
                         .getMessage()
                         .toLowerCase()
                         .contains("no scripts in execution right now"));
-
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
 
         // create and load a long-running script
         Script script = new Script(createLongRunningLuaScript(5, true), true);
@@ -1770,10 +1771,13 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
     }
 
+    @RepeatedTest(1000) // TODO: remove
     @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
-    public void scriptKill_unkillable(GlideClient regularClient) {
+//    @ParameterizedTest // TODO: uncomment
+//    @MethodSource("getClients")
+    public void scriptKill_unkillable() {
+        GlideClient regularClient = GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
+
         String key = UUID.randomUUID().toString();
         String code = createLongRunningLuaScript(6, false);
         Script script = new Script(code, false);
