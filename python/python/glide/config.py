@@ -156,16 +156,31 @@ class AdvancedBaseClientConfiguration:
             This applies both during initial client creation and any reconnections that may occur during request processing.
             **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
             If not explicitly set, a default value of 250 milliseconds will be used.
+        tls_insecure (Optional[bool]): The TLS state; defaults to secured (False).
+            When set to True, the client will bypass certificate verification, allowing connections to
+            Valkey/Redis instances with self-signed or otherwise unauthorized certificates.
+            This option is intended for local development or testing environments where a valid
+            certificate may not be available. It is not recommended for production use,
+            as disabling certificate validation exposes the connection to potential security
+            risks such as man-in-the-middle attacks.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
+    def __init__(
+        self,
+        connection_timeout: Optional[int] = None,
+        tls_insecure: Optional[bool] = None,
+    ):
         self.connection_timeout = connection_timeout
+        self.tls_insecure = tls_insecure
 
     def _create_a_protobuf_conn_request(
         self, request: ConnectionRequest
     ) -> ConnectionRequest:
         if self.connection_timeout:
             request.connection_timeout = self.connection_timeout
+        if True == self.tls_insecure and TlsMode.SecureTls == request.tls_mode:
+            request.tls_mode = TlsMode.InsecureTls
+
         return request
 
 
@@ -179,7 +194,7 @@ class BaseClientConfiguration:
             the cluster and find all nodes.
             If the server is in standalone mode, only nodes whose addresses were provided will be used by the
             client.
-            For example::
+            For example:
 
                 [
                     {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
@@ -187,7 +202,9 @@ class BaseClientConfiguration:
                 ].
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
-            Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail
+            Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
+            If you need to configure an insecure TLS setup (for example, bypassing certificate validation),
+                please use the AdvancedGlideClusterClientConfiguration option.
         credentials (ServerCredentials): Credentials for authentication process.
             If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
@@ -317,9 +334,13 @@ class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
     Represents the advanced configuration settings for a Standalone Glide client.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
+    def __init__(
+        self,
+        connection_timeout: Optional[int] = None,
+        tls_insecure: Optional[bool] = None,
+    ):
 
-        super().__init__(connection_timeout)
+        super().__init__(connection_timeout, tls_insecure)
 
 
 class GlideClientConfiguration(BaseClientConfiguration):
@@ -337,6 +358,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
                 ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
+                If you need to configure an insecure TLS setup (for example, bypassing certificate validation),
+                please use the AdvancedGlideClusterClientConfiguration option.
         credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
@@ -479,8 +502,12 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
     Represents the advanced configuration settings for a Glide Cluster client.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
-        super().__init__(connection_timeout)
+    def __init__(
+        self,
+        connection_timeout: Optional[int] = None,
+        tls_insecure: Optional[bool] = None,
+    ):
+        super().__init__(connection_timeout, tls_insecure)
 
 
 class GlideClusterClientConfiguration(BaseClientConfiguration):
@@ -497,6 +524,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
                 ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
+                If you need to configure an insecure TLS setup (for example, bypassing certificate validation),
+                please use the AdvancedGlideClusterClientConfiguration option.
         credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.

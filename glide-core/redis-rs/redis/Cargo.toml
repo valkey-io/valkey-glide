@@ -113,6 +113,7 @@ default = [
     "connection-manager",
     "cluster",
     "cluster-async",
+    "tls-rustls-insecure",
 ]
 acl = []
 aio = [
