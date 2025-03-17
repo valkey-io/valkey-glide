@@ -1705,7 +1705,8 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void scriptKill() {
-        GlideClient regularClient = GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
+        GlideClient regularClient =
+                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
 
         // Verify that script_kill raises an error when no script is running
         ExecutionException executionException =
@@ -1718,20 +1719,45 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
 
         // create and load a long-running script
-        Script script = new Script(createLongRunningLuaScript(5, true), true);
+        Script script = new Script(createLongRunningLuaScript(6, true), true);
 
         try (var testClient =
                 GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 System.out.println("Invoking Script");
                 testClient.invokeScript(script);
-                System.out.println("Finished Invoking Script");
-
                 Thread.sleep(1000);
+
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        regularClient.ping().get(); // Dummy test command
+                    } catch (ExecutionException err) {
+                        if (err.getCause() instanceof RequestException) {
+
+                            // Check if the script is executing
+                            if (err.getMessage().toLowerCase().contains("valkey is busy running a script")) {
+                                break;
+                            }
+
+                            // Try rerunning the script if 2 seconds have passed and if the exception has not
+                            // changed to "busy running a script"
+                            if (timeout <= 2000
+                                    && err.getMessage().toLowerCase().contains("no scripts in execution right now")) {
+                                System.out.println("Invoking Script AGAIN");
+                                testClient.invokeScript(script);
+                                System.out.println("Done invoking Script AGAIN");
+                                Thread.sleep(1000);
+                            }
+                        }
+                    }
+                    timeout -= 500;
+                }
+                System.out.println("Script should be running now");
 
                 // Run script kill until it returns OK
                 boolean scriptKilled = false;
-                int timeout = 4000; // ms
+                timeout = 6000; // ms
                 while (timeout >= 0) {
                     try {
                         System.out.println("Killing Script");
@@ -1740,9 +1766,21 @@ public class CommandTests {
                         scriptKilled = true;
                         break;
                     } catch (ExecutionException exception) {
+                        System.out.println("Throwing an EE: " + exception);
+                        System.out.println("EE message: " + exception.getMessage().toLowerCase());
+
+                        try {
+                            System.out.println("Testing the ping command");
+                            regularClient.ping().get(); // Dummy test command
+                            System.out.println("Ping has finished no problem");
+                        } catch (ExecutionException err) {
+                            System.out.println("Script should NOT be running");
+                            System.out.println(err);
+                        }
+
                         // If 2s passed and exception still says "no scripts in execution right now",
                         // rerun script.
-                        if (timeout <= 2000
+                        if (timeout <= 4000
                                 && exception.getCause() instanceof RequestException
                                 && exception
                                         .getMessage()
@@ -1754,20 +1792,27 @@ public class CommandTests {
                             Thread.sleep(1000);
 
                             // Wait until script runs
-                            int scriptTimeout = 2000 ; // ms
+                            int scriptTimeout = 2000; // ms
                             while (scriptTimeout >= 0) {
                                 try {
-                                    regularClient.ping().get(); // Dummy test command
+                                    System.out.println("Testing ping again 2");
+                                    regularClient.ping().get(); // Dummy test
+                                    System.out.println("Finished Testing ping again 2");
                                 } catch (ExecutionException err) {
+                                    System.out.println("Printing EE 2: " + err);
                                     if (err.getCause() instanceof RequestException
-                                        && err.getMessage().toLowerCase().contains("valkey is busy running a script")) {
+                                            && err.getMessage()
+                                                    .toLowerCase()
+                                                    .contains("valkey is busy running a script")) {
                                         break;
                                     }
                                 }
                                 scriptTimeout -= 500;
                             }
+                            System.out.println("Script should be running again: " + scriptTimeout);
                         }
                     } catch (RequestException ignored) {
+                        System.out.println("Throwing an RE: " + ignored);
                     }
                     Thread.sleep(500);
                     timeout -= 500;
@@ -1796,10 +1841,11 @@ public class CommandTests {
 
     @RepeatedTest(1000) // TODO: remove
     @SneakyThrows
-//    @ParameterizedTest // TODO: uncomment
-//    @MethodSource("getClients")
+    //    @ParameterizedTest // TODO: uncomment
+    //    @MethodSource("getClients")
     public void scriptKill_unkillable() {
-        GlideClient regularClient = GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
+        GlideClient regularClient =
+                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
 
         String key = UUID.randomUUID().toString();
         String code = createLongRunningLuaScript(6, false);
