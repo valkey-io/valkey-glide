@@ -306,7 +306,6 @@ func (client *GlideClient) FlushDB() (string, error) {
 //
 //	`"OK"` response on success.
 //
-//
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, error) {
 	result, err := client.executeCommand(C.FlushDB, []string{string(mode)})

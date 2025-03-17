@@ -287,7 +287,6 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 //	`"OK"` response on success.
 //
-//
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.FlushClusterOptions) (string, error) {
 	if flushOptions.RouteOption == nil || flushOptions.RouteOption.Route == nil {
@@ -315,7 +314,6 @@ func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.Flush
 // Return value:
 //
 //	`"OK"` response on success.
-//
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushClusterOptions) (string, error) {

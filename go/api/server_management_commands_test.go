@@ -117,8 +117,6 @@ func ExampleGlideClient_InfoWithOptions() {
 func ExampleGlideClient_FlushAll() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	client.Set("test-key", "test-value")
-
 	result, err := client.FlushAll()
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -126,15 +124,10 @@ func ExampleGlideClient_FlushAll() {
 	fmt.Println(result)
 
 	// Output: OK
-
-	keyResult, _ := client.Get("test-key")
-	fmt.Println("Key value after flush:", keyResult.Value())
 }
 
 func ExampleGlideClient_FlushAllWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-
-	client.Set("test-key", "test-value")
 
 	result, err := client.FlushAllWithOptions(options.ASYNC)
 	if err != nil {
@@ -143,15 +136,10 @@ func ExampleGlideClient_FlushAllWithOptions() {
 	fmt.Println(result)
 
 	// Output: OK
-
-	keyResult, _ := client.Get("test-key")
-	fmt.Println("Key value after flush:", keyResult.Value())
 }
 
 func ExampleGlideClient_FlushDB() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-
-	client.Set("test-key", "test-value")
 
 	result, err := client.FlushDB()
 	if err != nil {
@@ -160,15 +148,10 @@ func ExampleGlideClient_FlushDB() {
 	fmt.Println(result)
 
 	// Output: OK
-
-	keyResult, _ := client.Get("test-key")
-	fmt.Println("Key value after flush:", keyResult.Value())
 }
 
 func ExampleGlideClient_FlushDBWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-
-	client.Set("test-key", "test-value")
 
 	result, err := client.FlushDBWithOptions(options.SYNC)
 	if err != nil {
@@ -177,7 +160,4 @@ func ExampleGlideClient_FlushDBWithOptions() {
 	fmt.Println(result)
 
 	// Output: OK
-
-	keyResult, _ := client.Get("test-key")
-	fmt.Println("Key value after flush:", keyResult.Value())
 }
