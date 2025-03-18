@@ -454,7 +454,30 @@ func (client *GlideClusterClient) ScanWithOptions(
 	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
 
-// Sets configuration parameters to the specified values.<br>
+// Sets configuration parameters to the specified values.
+// Starting from server version 7, command supports multiple parameters.<br>
+// The command will be sent to all nodes.
+//
+// Parameters:
+//
+//	parameters -  A map consisting of configuration parameters and their respective values to set.
+//
+// Return value:
+//
+//	OK if all configurations have been successfully set. Otherwise, raises an error.
+//
+// [valkey.io]: https://valkey.io/commands/config-set/
+func (client *GlideClusterClient) ConfigSet(
+	parameters map[string]string, opts options.RouteOption,
+) (string, error) {
+	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Sets configuration parameters to the specified values
 // Starting from server version 7, command supports multiple parameters.<br>
 // The command will be sent to all nodes.
 //
@@ -477,6 +500,33 @@ func (client *GlideClusterClient) ConfigSetWithOptions(
 		return defaultStringResponse, err
 	}
 	return handleStringResponse(result)
+}
+
+// Get the values of configuration parameters.
+// Starting from server version 7, command supports multiple parameters.
+// The command will be sent to a random node.
+//
+// Parameters:
+//
+//	parameters -  An array of configuration parameter names to retrieve values for.
+//
+// Return value:
+//
+//	A map of values corresponding to the configuration parameters.
+//
+// [valkey.io]: https://valkey.io/commands/config-get/
+func (client *GlideClusterClient) ConfigGet(
+	args []string, opts options.RouteOption,
+) (ClusterValue[interface{}], error) {
+	res, err := client.executeCommand(C.ConfigGet, args)
+	if err != nil {
+		return createEmptyClusterValue[interface{}](), err
+	}
+	data, err := handleInterfaceResponse(res)
+	if err != nil {
+		return createEmptyClusterValue[interface{}](), err
+	}
+	return createClusterValue[interface{}](data), nil
 }
 
 // Get the values of configuration parameters.
