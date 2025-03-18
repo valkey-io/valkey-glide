@@ -197,3 +197,10 @@ const (
 	// Represents a stream data type
 	ObjectTypeStream ObjectType = "stream"
 )
+
+// Valkey API keywords for the `GeoSearch` command
+const (
+	WithcoordValkeyApi = "WITHCOORD"
+	WithdistValkeyApi  = "WITHDIST"
+	WithhashValkeyApi  = "WITHHASH"
+)

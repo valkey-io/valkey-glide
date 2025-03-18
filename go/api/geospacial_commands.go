@@ -20,4 +20,32 @@ type GeoSpatialCommands interface {
 		membersToGeospatialData map[string]options.GeospatialData,
 		options options.GeoAddOptions,
 	) (int64, error)
+
+	GeoSearch(
+		key string,
+		searchFrom options.GeoSearchOrigin,
+		searchByShape options.GeoSearchShape,
+	) ([]string, error)
+
+	GeoSearchWithResultOptions(
+		key string,
+		searchFrom options.GeoSearchOrigin,
+		searchByShape options.GeoSearchShape,
+		resultOptions options.GeoSearchResultOptions,
+	) ([]string, error)
+
+	GeoSearchWithOptions(
+		key string,
+		searchFrom options.GeoSearchOrigin,
+		searchByShape options.GeoSearchShape,
+		options options.GeoSearchOptions,
+	) ([]string, error)
+
+	GeoSearchWithFullOptions(
+		key string,
+		searchFrom options.GeoSearchOrigin,
+		searchByShape options.GeoSearchShape,
+		resultOptions options.GeoSearchResultOptions,
+		options options.GeoSearchOptions,
+	) ([]string, error)
 }
