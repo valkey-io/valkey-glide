@@ -50,7 +50,8 @@ func ExampleGlideClient_ClientSetName() {
 	}
 	fmt.Println(result)
 
-	// Output: OK
+	// Output:
+	// OK
 }
 
 func ExampleGlideClient_ClientGetName() {
@@ -61,5 +62,6 @@ func ExampleGlideClient_ClientGetName() {
 	}
 	fmt.Println(result)
 
-	// Output: ConnectionName
+	// Output:
+	// ConnectionName
 }
