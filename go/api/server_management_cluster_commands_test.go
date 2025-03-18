@@ -77,23 +77,23 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-
 	fmt.Println(result)
 
-	// Output: 0
+	// Output:
+	// 0
 }
 
 func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
 	route := config.Route(config.RandomRoute)
-	opts = options.RouteOption{Route: route}
-	response, err = client.ConfigRewriteWithOptions(opts)
+	opts := options.RouteOption{Route: route}
+	response, err := client.ConfigRewriteWithOptions(opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-
 	fmt.Println(response)
 
-	// Output: OK
+	// Output:
+	// OK
 }
