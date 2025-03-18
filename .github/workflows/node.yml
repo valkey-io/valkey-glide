@@ -76,7 +76,7 @@ jobs:
     test-node:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-matrices]
-        timeout-minutes: 25
+        timeout-minutes: 180 # TODO: REVERT THIS TIMEOUT BEFORE MERGING PR
         strategy:
             fail-fast: false
             matrix:

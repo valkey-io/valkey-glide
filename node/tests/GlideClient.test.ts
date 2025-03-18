@@ -1494,12 +1494,13 @@ describe("GlideClient", () => {
     );
 
     // TODO: enable once flakiness is solved
-    it.skip.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it.each(Array.from({ length: 1000 }, (_, i) => i + 1))(
         "script kill unkillable test_%p",
-        async (protocol) => {
+        async (i) => {
+            console.log(`Test: ${i}`);
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
-                protocol,
+                ProtocolVersion.RESP2,
                 { requestTimeout: 10000 },
             );
             const client1 = await GlideClient.createClient(config);
