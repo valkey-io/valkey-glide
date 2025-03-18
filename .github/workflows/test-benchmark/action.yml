@@ -15,7 +15,7 @@ runs:
           if: ${{ runner.environment == 'self-hosted' }}
           uses: actions/setup-node@v4
           with:
-              node-version: 20
+              node-version: 23
 
         - name: Install extra software on self-hosted runner
           if: ${{ runner.environment == 'self-hosted' }}
