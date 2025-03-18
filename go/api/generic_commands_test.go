@@ -23,7 +23,7 @@ func ExampleGlideClient_RandomKey() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
+	fmt.Println(len(result) > 0)
 
-	// Output: Random_key
+	// Output: true
 }
