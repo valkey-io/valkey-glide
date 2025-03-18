@@ -349,6 +349,93 @@ mod test_pipeline {
 
     #[tokio::test]
     #[serial_test::serial]
+    async fn test_transaction_with_moved_error_with_retries() {
+        // Create a test cluster with 3 masters and no replicas.
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(1),
+            false,
+        );
+        let mut connection = cluster.async_connection(None).await;
+
+        // Get the current slot distribution.
+        let cluster_nodes = cluster.get_cluster_nodes().await;
+        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+
+        let moved_key = generate_random_string(10);
+        let key_slot = get_slot(moved_key.as_str().as_bytes());
+        let route = SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
+
+        cluster
+            .move_specific_slot(key_slot, slot_distribution)
+            .await;
+
+        // Create a pipeline with several commands.
+        let mut pipeline = redis::pipe();
+        pipeline.atomic().set(&moved_key, "value").get(&moved_key);
+
+        // Execute the pipeline.
+        let result = connection
+            .route_pipeline(&pipeline, 3, 1, route)
+            .await
+            .expect("Pipeline execution failed");
+
+        let expected = vec![Value::Array(vec![
+            Value::Okay,
+            Value::BulkString(b"value".to_vec()),
+        ])];
+        assert_eq!(
+            result, expected,
+            "Pipeline result did not match expected output.\n\
+             Keys chosen: ('{}')\n\
+             key_slot: {}\n\
+             Actual result: {:?}",
+            moved_key, key_slot, result
+        );
+
+        assert_moved_err_occurred(&mut connection, 2).await;
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_transaction_with_moved_error_with_no_retries() {
+        // Create a test cluster with 3 masters and no replicas.
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0),
+            false,
+        );
+        let mut connection = cluster.async_connection(None).await;
+
+        // Get the current slot distribution.
+        let cluster_nodes = cluster.get_cluster_nodes().await;
+        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+
+        let moved_key = generate_random_string(10);
+        let key_slot = get_slot(moved_key.as_str().as_bytes());
+        let route = SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
+
+        cluster
+            .move_specific_slot(key_slot, slot_distribution)
+            .await;
+
+        // Create a pipeline with several commands.
+        let mut pipeline = redis::pipe();
+        pipeline.atomic().set(&moved_key, "value").get(&moved_key);
+
+        // Execute the pipeline.
+        let result = connection.route_pipeline(&pipeline, 3, 1, route).await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().kind() == ErrorKind::Moved);
+
+        assert_moved_err_occurred(&mut connection, 2).await;
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
 
     async fn test_mset_mget_with_moved_error() {
         for &retries in &[0, 1] {
