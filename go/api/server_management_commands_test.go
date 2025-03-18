@@ -120,8 +120,10 @@ func ExampleGlideClient_LastSave() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
+
+	assert := response > 0
+	fmt.Printf("response is greater than 0: %T\n", assert)
 	fmt.Println(response)
 
-	// Output:
-	// 1742239667
+	// Output: esponse is greater than 0: true
 }
