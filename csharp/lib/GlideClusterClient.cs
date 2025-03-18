@@ -8,6 +8,6 @@ namespace Glide;
 
 public sealed class GlideClusterClient(ClusterClientConfiguration config) : BaseClient(config), IGenericClusterCommands
 {
-    public async Task<object?> CustomCommand(string[] args, Route? route = null)
-        => await Command<object?>(args, RequestType.CustomCommand, route);
+    public async Task<object?> CustomCommand(GlideString[] args, Route? route = null)
+        => await Command<object?>(RequestType.CustomCommand, args, resp => HandleServerResponse<object?>(resp, true), route);
 }
