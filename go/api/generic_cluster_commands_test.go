@@ -213,6 +213,18 @@ func ExampleGlideClusterClient_ScanWithOptions_type() {
 	// Output: [someKey]
 }
 
+func ExampleGlideClusterClient_RandomKey() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	result, err := client.RandomKey()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(len(result) > 0)
+
+	// Output: true
+}
+
 func ExampleGlideClusterClient_RandomKeyWithRoute() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	options := options.RouteOption{Route: nil}

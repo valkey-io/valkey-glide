@@ -455,6 +455,21 @@ func (client *GlideClusterClient) ScanWithOptions(
 
 // Returns a random key.
 //
+// Return value:
+//
+//	A random key from the database.
+//
+// [valkey.io]: https://valkey.io/commands/randomkey/
+func (client *GlideClusterClient) RandomKey() (string, error) {
+	result, err := client.executeCommand(C.RandomKey, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Returns a random key.
+//
 // Parameters:
 //
 // route - specifies the routing configuration for the command.
