@@ -2,6 +2,10 @@
 
 package api
 
+import (
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
+
 // GenericCommands supports commands for the "Generic Commands" group for standalone client.
 //
 // See [valkey.io] for details.
