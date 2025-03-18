@@ -136,6 +136,7 @@ public class ConnectionManagerTest {
                         .address(NodeAddress.builder().host(HOST).port(PORT).build())
                         .address(NodeAddress.builder().host(DEFAULT_HOST).port(DEFAULT_PORT).build())
                         .useTLS(true)
+                        .useInsecureTLS(false)
                         .readFrom(ReadFrom.PREFER_REPLICA)
                         .credentials(ServerCredentials.builder().username(USERNAME).password(PASSWORD).build())
                         .requestTimeout(REQUEST_TIMEOUT)
@@ -436,6 +437,35 @@ public class ConnectionManagerTest {
 
         // verify
         assertThrows(ConfigurationError.class, () -> connectionManager.connectToValkey(config));
+    }
+
+    @SneakyThrows
+    @Test
+    public void connection_request_protobuf_generation_use_insecure_tls() {
+        // setup
+        GlideClusterClientConfiguration glideClusterClientConfiguration =
+                GlideClusterClientConfiguration.builder()
+                .useTLS(true)
+                .useInsecureTLS(true)
+                .build();
+        ConnectionRequest expectedProtobufConnectionRequest =
+                ConnectionRequest.newBuilder()
+                        .setTlsMode(TlsMode.InsecureTls)
+                        .setClusterModeEnabled(true)
+                        .setReadFrom(ConnectionRequestOuterClass.ReadFrom.Primary)
+                        .build();
+        CompletableFuture<Response> completedFuture = new CompletableFuture<>();
+        Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
+        completedFuture.complete(response);
+
+        // execute
+        when(channel.connect(eq(expectedProtobufConnectionRequest))).thenReturn(completedFuture);
+        CompletableFuture<Void> result =
+                connectionManager.connectToValkey(glideClusterClientConfiguration);
+
+        // verify
+        assertNull(result.get());
+        verify(channel).connect(eq(expectedProtobufConnectionRequest));
     }
 
     private ConnectionRequestOuterClass.ReadFrom mapReadFrom(ReadFrom readFrom) {
