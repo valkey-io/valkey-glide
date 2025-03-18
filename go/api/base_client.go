@@ -42,6 +42,7 @@ type BaseClient interface {
 	HyperLogLogCommands
 	GenericBaseCommands
 	BitmapCommands
+	GeoSpatialCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -6460,6 +6461,69 @@ func (client *baseClient) ZLexCount(key string, rangeQuery *options.RangeByLex) 
 	args := []string{key}
 	args = append(args, rangeQuery.ToArgsLexCount()...)
 	result, err := client.executeCommand(C.ZLexCount, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Adds geospatial members with their positions to the specified sorted set stored at `key`.
+// If a member is already a part of the sorted set, its position is updated.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	membersToGeospatialData - A map of member names to their corresponding positions. See [options.GeospatialData].
+//	  The command will report an error when index coordinates are out of the specified range.
+//
+// Return value:
+//
+//	The number of elements added to the sorted set.
+//
+// [valkey.io]: https://valkey.io/commands/geoadd/
+func (client *baseClient) GeoAdd(key string, membersToGeospatialData map[string]options.GeospatialData) (int64, error) {
+	result, err := client.executeCommand(
+		C.GeoAdd,
+		append([]string{key}, options.MapGeoDataToArray(membersToGeospatialData)...),
+	)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Adds geospatial members with their positions to the specified sorted set stored at `key`.
+// If a member is already a part of the sorted set, its position is updated.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	membersToGeospatialData - A map of member names to their corresponding positions. See [options.GeospatialData].
+//	  The command will report an error when index coordinates are out of the specified range.
+//	geoAddOptions - The options for the GeoAdd command, see - [options.GeoAddOptions].
+//
+// Return value:
+//
+//	The number of elements added to the sorted set.
+//
+// [valkey.io]: https://valkey.io/commands/geoadd/
+func (client *baseClient) GeoAddWithOptions(
+	key string,
+	membersToGeospatialData map[string]options.GeospatialData,
+	geoAddOptions options.GeoAddOptions,
+) (int64, error) {
+	args := []string{key}
+	optionsArgs, err := geoAddOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, optionsArgs...)
+	args = append(args, options.MapGeoDataToArray(membersToGeospatialData)...)
+	result, err := client.executeCommand(C.GeoAdd, args)
 	if err != nil {
 		return defaultIntResponse, err
 	}
