@@ -22,5 +22,5 @@ public interface IGenericCommands
     /// </summary>
     /// <param name="args">A list including the command name and arguments for the custom command.</param>
     /// <returns>The returning value depends on the executed command.</returns>
-    Task<object?> CustomCommand(string[] args);
+    Task<object?> CustomCommand(GlideString[] args);
 }
