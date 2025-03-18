@@ -120,7 +120,8 @@ func ExampleGlideClient_LastSave() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Printf(response)
+	fmt.Println(response)
 
-	// Output: 123456
+	// Output:
+	// 1742239667
 }
