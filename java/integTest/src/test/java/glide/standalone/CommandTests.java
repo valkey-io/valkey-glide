@@ -1701,8 +1701,8 @@ public class CommandTests {
     }
 
     @RepeatedTest(1000) // TODO: remove
-    @ParameterizedTest // TODO: uncomment
-    @MethodSource("getClients")
+    //    @ParameterizedTest // TODO: uncomment
+    //    @MethodSource("getClients")
     @SneakyThrows
     public void scriptKill() {
         GlideClient regularClient =
@@ -1724,7 +1724,6 @@ public class CommandTests {
         try (var testClient =
                 GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
-                System.out.println("Invoking Script");
                 testClient.invokeScript(script);
                 Thread.sleep(1000);
 
@@ -1744,37 +1743,27 @@ public class CommandTests {
                             // changed to "busy running a script"
                             if (timeout <= 2000
                                     && err.getMessage().toLowerCase().contains("no scripts in execution right now")) {
-                                System.out.println("Invoking Script AGAIN");
                                 testClient.invokeScript(script);
-                                System.out.println("Done invoking Script AGAIN");
                                 Thread.sleep(1000);
                             }
                         }
                     }
                     timeout -= 500;
                 }
-                System.out.println("Script should be running now");
 
                 // Run script kill until it returns OK
                 boolean scriptKilled = false;
                 timeout = 6000; // ms
                 while (timeout >= 0) {
                     try {
-                        System.out.println("Killing Script");
                         assertEquals(OK, regularClient.scriptKill().get());
-                        System.out.println("Finished Killing Script");
                         scriptKilled = true;
                         break;
                     } catch (ExecutionException exception) {
-                        System.out.println("Throwing an EE: " + exception);
-                        System.out.println("EE message: " + exception.getMessage().toLowerCase());
 
                         try {
-                            System.out.println("Testing the ping command");
                             regularClient.ping().get(); // Dummy test command
-                            System.out.println("Ping has finished no problem");
                         } catch (ExecutionException err) {
-                            System.out.println("Script should NOT be running");
                             System.out.println(err);
                         }
 
@@ -1786,20 +1775,15 @@ public class CommandTests {
                                         .getMessage()
                                         .toLowerCase()
                                         .contains("no scripts in execution right now")) {
-                            System.out.println("Invoking Script Due to Error");
                             testClient.invokeScript(script);
-                            System.out.println("Finished Invoking Script Due to Error");
                             Thread.sleep(1000);
 
                             // Wait until script runs
                             int scriptTimeout = 2000; // ms
                             while (scriptTimeout >= 0) {
                                 try {
-                                    System.out.println("Testing ping again 2");
                                     regularClient.ping().get(); // Dummy test
-                                    System.out.println("Finished Testing ping again 2");
                                 } catch (ExecutionException err) {
-                                    System.out.println("Printing EE 2: " + err);
                                     if (err.getCause() instanceof RequestException
                                             && err.getMessage()
                                                     .toLowerCase()
@@ -1809,10 +1793,8 @@ public class CommandTests {
                                 }
                                 scriptTimeout -= 500;
                             }
-                            System.out.println("Script should be running again: " + scriptTimeout);
                         }
                     } catch (RequestException ignored) {
-                        System.out.println("Throwing an RE: " + ignored);
                     }
                     Thread.sleep(500);
                     timeout -= 500;
@@ -1820,11 +1802,8 @@ public class CommandTests {
 
                 assertTrue(scriptKilled);
             } finally {
-                System.out.println("Waiting for not busy...");
                 waitForNotBusy(regularClient::scriptKill);
-                System.out.println("Done waiting for not busy...");
                 script.close();
-                System.out.println("Closed.");
             }
         }
 
