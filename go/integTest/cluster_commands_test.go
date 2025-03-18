@@ -730,11 +730,10 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 	}
 }
 
-func (suite *GlideTestSuite) TestConfigResetStat() {
+func (suite *GlideTestSuite) TestConfigResetStatCluster() {
 	client := suite.defaultClusterClient()
 
 	// ConfigResetStat with option or with multiple options without route
-	opts := options.RouteOption{Route: nil}
 	suite.verifyOK(client.ConfigResetStat())
 }
 
