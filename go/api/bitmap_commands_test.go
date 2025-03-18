@@ -245,8 +245,8 @@ func ExampleGlideClient_BitOp() {
 	}
 
 	// Output:
-	// BitOp AND Result: (expected bit count)
-	// BitOp OR Result: (expected bit count)
-	// BitOp XOR Result: (expected bit count)
-	// BitOp NOT Result: (expected bit count)
+	// BitOp AND Result: 6
+	// BitOp OR Result: 6
+	// BitOp XOR Result: 6
+	// BitOp NOT Result: 6
 }
