@@ -18,5 +18,7 @@ type ServerManagementClusterCommands interface {
 
 	DBSizeWithOptions(routeOption options.RouteOption) (int64, error)
 
+	ConfigRewrite() (string, error)
+
 	ConfigRewriteWithOptions(routeOption options.RouteOption) (string, error)
 }
