@@ -109,7 +109,7 @@ func ExampleGlideClusterClient_ConfigSetWithOptions() {
 func ExampleGlideClusterClient_ConfigGet() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	configParam := []string{"timeout", "maxmemory"}
-	result, err := client.ConfigGetWithOptions(configParam)
+	result, err := client.ConfigGet(configParam)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
