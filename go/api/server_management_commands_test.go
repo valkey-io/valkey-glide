@@ -114,14 +114,15 @@ func ExampleGlideClient_InfoWithOptions() {
 	// Output: response is of type string
 }
 
-func ExampleGlideClient_Info() {
+func ExampleGlideClient_ConfigRewrite() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
 	response, err := client.ConfigRewrite()
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Printf("Output: ", response)
+	fmt.Println(response)
 
-	// Output: OK
+	// Output:
+	// OK
 }

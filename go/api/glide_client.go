@@ -257,7 +257,7 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 func (client *GlideClient) ConfigRewrite() (string, error) {
 	response, err := client.executeCommand(C.ConfigRewrite, []string{})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(response)
 }
