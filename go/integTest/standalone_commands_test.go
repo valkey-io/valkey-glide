@@ -532,7 +532,7 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 	client := suite.defaultClient()
 	t := suite.T()
 
-	//Test TestScanWithOption SetCount
+	// Test TestScanWithOption SetCount
 	key := uuid.New().String()
 	suite.verifyOK(client.Set(key, "Hello"))
 	opts := options.NewScanOptions().SetCount(10)
@@ -541,7 +541,7 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 	assert.GreaterOrEqual(t, len(resCursor), 1)
 	assert.GreaterOrEqual(t, len(resCollection), 1)
 
-	//Test TestScanWithOption SetType
+	// Test TestScanWithOption SetType
 	opts = options.NewScanOptions().SetType(options.ObjectTypeString)
 	resCursor, resCollection, err = client.ScanWithOptions(0, *opts)
 	assert.Nil(t, err)
