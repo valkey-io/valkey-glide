@@ -100,7 +100,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1723,11 +1722,9 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
-    //    @Disabled("flaky test: re-enable once fixed")
-    @RepeatedTest(500)
     @SneakyThrows
-    //    @ParameterizedTest
-    //    @MethodSource("getClients")
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void fcall_readonly_function() {
         Thread.sleep(500); // Make it slower
         GlideClusterClient clusterClient =
