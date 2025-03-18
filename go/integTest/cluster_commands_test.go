@@ -733,6 +733,14 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 func (suite *GlideTestSuite) TestLastSaveCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
+	response, err := client.LastSave()
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestLastSaveWithOptionCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
 
 	// LastSave with option or with multiple options without route
 	opts := options.RouteOption{Route: nil}
