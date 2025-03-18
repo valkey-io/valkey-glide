@@ -23,10 +23,10 @@ internal static class ResultHelpers
     internal static async Task<Result<T>> ParseResultAsync<T>(Task<string?> commandAsync)
         where T : ISpanParsable<T>
     {
-        var result = await commandAsync.ConfigureAwait(false);
+        string? result = await commandAsync.ConfigureAwait(false);
         if (result is null)
             return new Result<T>(default, true);
-        if (T.TryParse(result, CultureInfo.InvariantCulture, out var value))
+        if (T.TryParse(result, CultureInfo.InvariantCulture, out T? value))
             return new Result<T>(value, false);
         throw new FormatException($"The result '{result}' could not be parsed as an integer.");
     }

@@ -31,14 +31,14 @@ public sealed class GlideClient : IDisposable, IGlideClient
     }
 
     [EditorBrowsable(EditorBrowsableState.Advanced)]
-    public async Task<InterOp.Value> CommandAsync(ERequestType requestType, params IEnumerable<string> args)
+    public async Task<InterOp.Value> CommandAsync(ERequestType requestType, params string[] args)
     {
         return await _nativeClient.SendCommandAsync(requestType, args as string[] ?? args.ToArray());
     }
 
     [EditorBrowsable(EditorBrowsableState.Advanced)]
     [SuppressMessage("ReSharper", "MethodHasAsyncOverload")]
-    public InterOp.Value Command(ERequestType requestType, params IEnumerable<string> args)
+    public InterOp.Value Command(ERequestType requestType, params string[] args)
     {
         return _nativeClient.SendCommand(requestType, args as string[] ?? args.ToArray());
     }

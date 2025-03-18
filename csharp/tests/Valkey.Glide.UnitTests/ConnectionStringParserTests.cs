@@ -1,6 +1,8 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+
 using Valkey.Glide.Hosting;
 using Valkey.Glide.InterOp;
+
 using Xunit.Sdk;
 
 namespace Valkey.Glide.UnitTests;
@@ -30,7 +32,7 @@ public sealed class ConnectionStringParserTests
         const string connectionString = "HOST=srv01.example.com:1234,srv02.example.com:5678;";
 
         // Act
-        var result = ConnectionStringParser.Parse(connectionString);
+        ConnectionRequest result = ConnectionStringParser.Parse(connectionString);
 
         // Assert
         Assert.Collection(
@@ -54,7 +56,7 @@ public sealed class ConnectionStringParserTests
         // Arrange
         const string connectionString = "HOST=srv01.example.com,srv02.example.com,srv03.example.com:1234;";
         // Act
-        var result = ConnectionStringParser.Parse(connectionString);
+        ConnectionRequest result = ConnectionStringParser.Parse(connectionString);
 
         // Assert
         Assert.Collection(
@@ -84,17 +86,12 @@ public sealed class ConnectionStringParserTests
         const string connectionString = "HOST=srv01.example.com;";
 
         // Act
-        var result = ConnectionStringParser.Parse(connectionString);
+        ConnectionRequest result = ConnectionStringParser.Parse(connectionString);
 
         // Assert
-        Assert.Collection(
-            result.Addresses,
-            node =>
-            {
-                Assert.Equal("srv01.example.com", node.Address);
-                Assert.Equal(ValKeyConstants.DefaultPort, node.Port);
-            }
-        );
+        Node node = Assert.Single(result.Addresses);
+        Assert.Equal("srv01.example.com", node.Address);
+        Assert.Equal(ValKeyConstants.DefaultPort, node.Port);
     }
 
     [Fact(DisplayName = "HOST - Single with port")]
@@ -104,17 +101,12 @@ public sealed class ConnectionStringParserTests
         const string connectionString = "HOST=srv01.example.com:1234;";
 
         // Act
-        var result = ConnectionStringParser.Parse(connectionString);
+        ConnectionRequest result = ConnectionStringParser.Parse(connectionString);
 
         // Assert
-        Assert.Collection(
-            result.Addresses,
-            node =>
-            {
-                Assert.Equal("srv01.example.com", node.Address);
-                Assert.Equal(1234, node.Port);
-            }
-        );
+        Node node = Assert.Single(result.Addresses);
+        Assert.Equal("srv01.example.com", node.Address);
+        Assert.Equal(1234, node.Port);
     }
 
     [Fact(DisplayName = "HOST - Ignores prefixed or suffixed comma and whitespace")]
@@ -125,7 +117,7 @@ public sealed class ConnectionStringParserTests
             "   ;   HOST   =   ,   srv01.example.com  :   1234 , srv02.example.com   : 5678 ,  ;    ";
 
         // Act
-        var result = ConnectionStringParser.Parse(connectionString);
+        ConnectionRequest result = ConnectionStringParser.Parse(connectionString);
 
         // Assert
         Assert.Collection(
@@ -198,7 +190,7 @@ public sealed class ConnectionStringParserTests
         // Arrange
         const string connectionString = "CLIENTNAME=test-client;";
         // Act
-        var result = ConnectionStringParser.Parse(connectionString);
+        ConnectionRequest result = ConnectionStringParser.Parse(connectionString);
         // Assert
         Assert.Equal("test-client", result.ClientName);
     }
@@ -209,7 +201,7 @@ public sealed class ConnectionStringParserTests
         // Arrange
         const string connectionString = "CLIENTNAME=;";
         // Act
-        var result = ConnectionStringParser.Parse(connectionString);
+        ConnectionRequest result = ConnectionStringParser.Parse(connectionString);
         // Assert
         Assert.Null(result.ClientName);
     }
@@ -221,16 +213,17 @@ public sealed class ConnectionStringParserTests
 
     // @formatter:max_line_length 2000
     [Theory]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "yes", "CLUSTERED=", null, Int32.MaxValue, new object[] { true }, MemberType = typeof(MemberDataHelpers))]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "true", "CLUSTERED=", null, Int32.MaxValue, new object[] { true }, MemberType = typeof(MemberDataHelpers))]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "no", "CLUSTERED=", null, Int32.MaxValue, new object[] { false }, MemberType = typeof(MemberDataHelpers))]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "false", "CLUSTERED=", null, Int32.MaxValue, new object[] { false }, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "yes", "CLUSTERED=", null, Int32.MaxValue, new object[] {true}, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "true", "CLUSTERED=", null, Int32.MaxValue, new object[] {true}, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "no", "CLUSTERED=", null, Int32.MaxValue, new object[] {false}, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "false", "CLUSTERED=", null, Int32.MaxValue, new object[] {false}, MemberType = typeof(MemberDataHelpers))]
+    [SuppressMessage("Usage", "xUnit1042:The member referenced by the MemberData attribute returns untyped data rows")]
     // @formatter:max_line_length restore
     public void CanParseConnectionStringClustered(string connectionString, bool expected)
     {
         // Arrange
         // Act
-        var result = ConnectionStringParser.Parse(connectionString);
+        ConnectionRequest result = ConnectionStringParser.Parse(connectionString);
 
         // Assert
         Assert.Equal(expected, result.ClusterMode);
@@ -242,14 +235,15 @@ public sealed class ConnectionStringParserTests
 
     // @formatter:max_line_length 2000
     [Theory]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "resp2", "PROTOCOL=", null, Int32.MaxValue, new object[] { EProtocolVersion.Resp2 }, MemberType = typeof(MemberDataHelpers))]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "resp3", "PROTOCOL=", null, Int32.MaxValue, new object[] { EProtocolVersion.Resp3 }, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "resp2", "PROTOCOL=", null, Int32.MaxValue, new object[] {EProtocolVersion.Resp2}, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "resp3", "PROTOCOL=", null, Int32.MaxValue, new object[] {EProtocolVersion.Resp3}, MemberType = typeof(MemberDataHelpers))]
+    [SuppressMessage("Usage", "xUnit1042:The member referenced by the MemberData attribute returns untyped data rows")]
     // @formatter:max_line_length restore
     public void CanParseConnectionStringProtocol(string connectionString, EProtocolVersion expected)
     {
         // Arrange
         // Act
-        var result = ConnectionStringParser.Parse(connectionString);
+        ConnectionRequest result = ConnectionStringParser.Parse(connectionString);
 
         // Assert
         Assert.Equal(expected, result.Protocol);
@@ -261,18 +255,19 @@ public sealed class ConnectionStringParserTests
 
     // @formatter:max_line_length 2000
     [Theory]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "no", "TLS=", null, Int32.MaxValue, new object[] { ETlsMode.NoTls }, MemberType = typeof(MemberDataHelpers))]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "false", "TLS=", null, Int32.MaxValue, new object[] { ETlsMode.NoTls }, MemberType = typeof(MemberDataHelpers))]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "yes", "TLS=", null, Int32.MaxValue, new object[] { ETlsMode.SecureTls }, MemberType = typeof(MemberDataHelpers))]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "true", "TLS=", null, Int32.MaxValue, new object[] { ETlsMode.SecureTls }, MemberType = typeof(MemberDataHelpers))]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "secure", "TLS=", null, Int32.MaxValue, new object[] { ETlsMode.SecureTls }, MemberType = typeof(MemberDataHelpers))]
-    [MemberData(nameof(MemberDataHelpers.MultiCase), "insecure", "TLS=", null, Int32.MaxValue, new object[] { ETlsMode.InsecureTls }, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "no", "TLS=", null, Int32.MaxValue, new object[] {ETlsMode.NoTls}, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "false", "TLS=", null, Int32.MaxValue, new object[] {ETlsMode.NoTls}, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "yes", "TLS=", null, Int32.MaxValue, new object[] {ETlsMode.SecureTls}, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "true", "TLS=", null, Int32.MaxValue, new object[] {ETlsMode.SecureTls}, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "secure", "TLS=", null, Int32.MaxValue, new object[] {ETlsMode.SecureTls}, MemberType = typeof(MemberDataHelpers))]
+    [MemberData(nameof(MemberDataHelpers.MultiCase), "insecure", "TLS=", null, Int32.MaxValue, new object[] {ETlsMode.InsecureTls}, MemberType = typeof(MemberDataHelpers))]
+    [SuppressMessage("Usage", "xUnit1042:The member referenced by the MemberData attribute returns untyped data rows")]
     // @formatter:max_line_length restore
     public void CanParseConnectionStringTls(string connectionString, ETlsMode expected)
     {
         // Arrange
         // Act
-        var result = ConnectionStringParser.Parse(connectionString);
+        ConnectionRequest result = ConnectionStringParser.Parse(connectionString);
 
         // Assert
         Assert.Equal(expected, result.TlsMode);

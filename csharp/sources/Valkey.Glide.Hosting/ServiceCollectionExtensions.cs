@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
 
+using ConnectionRequest = Valkey.Glide.InterOp.ConnectionRequest;
+
 namespace Valkey.Glide.Hosting;
 
 /// <summary>
@@ -35,10 +37,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<InterOp.ConnectionRequest>(
             serviceProvider =>
             {
-                var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+                IConfiguration? configuration = serviceProvider.GetRequiredService<IConfiguration>();
 
                 // Read ValKey connection string
-                var connectionString = configuration[string.Concat("ConnectionStrings:", resourceName)];
+                string? connectionString = configuration[string.Concat("ConnectionStrings:", resourceName)];
                 if (string.IsNullOrWhiteSpace(connectionString))
                     throw new InvalidOperationException(
                         $"Connection string '{resourceName}' not found in IConfiguration[\"ConnectionStrings:{resourceName}\"]."
@@ -73,9 +75,9 @@ public static class ServiceCollectionExtensions
     )
     {
         NativeClient.Initialize(nativeLoggerLevel, nativeLogFilePath);
-        var builder = new ConnectionConfigBuilder();
+        ConnectionConfigBuilder? builder = new ConnectionConfigBuilder();
         configure(builder);
-        var config = builder.Build();
+        ConnectionRequest? config = builder.Build();
         return AddValkeyGlide(services, config);
     }
 

@@ -31,7 +31,7 @@ public sealed class ConnectionConfigBuilder
     /// </summary>
     /// <param name="addresses">A collection of <see cref="Node"/> representing the server addresses and their ports.</param>
     /// <returns>The <see langword="this"/> reference.</returns>
-    public ConnectionConfigBuilder WithAddresses(params IEnumerable<Node> addresses)
+    public ConnectionConfigBuilder WithAddresses(params Node[] addresses)
     {
         _addresses.AddRange(addresses);
         return this;

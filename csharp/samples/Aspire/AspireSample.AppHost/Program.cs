@@ -1,7 +1,7 @@
-var builder = DistributedApplication.CreateBuilder(args);
+IDistributedApplicationBuilder? builder = DistributedApplication.CreateBuilder(args);
 
 
-var valkey = builder.AddValkey("valkey");
+IResourceBuilder<ValkeyResource>? valkey = builder.AddValkey("valkey");
 
 builder.AddProject<Projects.AspireSample_Worker>("worker")
     .WithReference(valkey)

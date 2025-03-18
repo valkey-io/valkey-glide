@@ -303,7 +303,7 @@ public struct Value : IComparable<Value>, IEquatable<Value>, IEqualityComparer<V
     {
         unchecked
         {
-            var hashCode = (int) obj.Kind;
+            int hashCode = (int) obj.Kind;
             hashCode = (hashCode * 397) ^ (obj.Format != null ? obj.Format.GetHashCode() : 0);
             hashCode = (hashCode * 397) ^ (obj.Data != null ? obj.Data.GetHashCode() : 0);
             hashCode = (hashCode * 397) ^ obj.Flag.GetHashCode();

@@ -1,6 +1,6 @@
-var builder = DistributedApplication.CreateBuilder(args);
+IDistributedApplicationBuilder? builder = DistributedApplication.CreateBuilder(args);
 
-var valkey = builder.AddValkey("cache");
+IResourceBuilder<ValkeyResource>? valkey = builder.AddValkey("cache");
 
 builder.Build()
     .Run();

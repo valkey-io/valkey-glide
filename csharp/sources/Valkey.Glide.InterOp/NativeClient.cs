@@ -35,13 +35,13 @@ public sealed class NativeClient : IDisposable, INativeClient
             throw new InvalidOperationException("API is not initialized");
         request.Validate();
 
-        var strings = new List<nint>();
-        var addresses = new NodeAddress[request.Addresses.Length];
+        List<nint> strings = new List<nint>();
+        NodeAddress[] addresses = new NodeAddress[request.Addresses.Length];
         try
         {
             fixed (NodeAddress* addressesPtr = addresses)
             {
-                var nativeRequest = new Native.ConnectionRequest
+                Native.ConnectionRequest nativeRequest = new Native.ConnectionRequest
                 {
                     client_name          = MarshalCollectingString(request.ClientName),
                     cluster_mode_enabled = request.ClusterMode ? 1 : 0,
@@ -119,9 +119,9 @@ public sealed class NativeClient : IDisposable, INativeClient
                     addresses_length = (uint) request.Addresses.LongLength,
                     addresses        = addressesPtr,
                 };
-                for (var i = 0; i < request.Addresses.Length; i++)
+                for (int i = 0; i < request.Addresses.Length; i++)
                 {
-                    var host = request.Addresses[i];
+                    Node host = request.Addresses[i];
                     addresses[i] = new NodeAddress
                     {
                         host = MarshalCollectingString(host.Address),
@@ -129,7 +129,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                     };
                 }
 
-                var result = Imports.create_client_handle(nativeRequest);
+                CreateClientHandleResult result = Imports.create_client_handle(nativeRequest);
                 switch (result.result)
                 {
                     case ECreateClientHandleCode.Success:
@@ -190,7 +190,7 @@ public sealed class NativeClient : IDisposable, INativeClient
         {
             if (input is null)
                 return null;
-            var ptr = MarshalUtf8String(input);
+            byte* ptr = MarshalUtf8String(input);
             strings.Add((nint) ptr);
             return ptr;
         }
@@ -216,14 +216,14 @@ public sealed class NativeClient : IDisposable, INativeClient
             {
                 fixed (char* logFilePathPtr = logFilePath)
                 {
-                    var result = Imports.system_init(loggerLevel, (byte*) logFilePathPtr);
+                    InitResult result = Imports.system_init(loggerLevel, (byte*) logFilePathPtr);
                     if (result.success == 0 /* is false */)
                         throw new GlideException("Failed to initialize the API.");
                 }
             }
             else
             {
-                var result = Imports.system_init(loggerLevel, null);
+                InitResult result = Imports.system_init(loggerLevel, null);
                 if (result.success == 0 /* is false */)
                     throw new GlideException("Failed to initialize the API.");
             }
@@ -240,7 +240,7 @@ public sealed class NativeClient : IDisposable, INativeClient
     {
         if (buffer is null)
             return;
-        var ptr = (nint) buffer - 1;
+        nint ptr = (nint) buffer - 1;
         if (Marshal.ReadByte(ptr) == 0) // Is allocated on heap
             Marshal.FreeCoTaskMem(ptr);
     }
@@ -249,14 +249,14 @@ public sealed class NativeClient : IDisposable, INativeClient
     {
         if (buffer is null && bufferLength is not 0)
             throw new ArgumentException("Buffer is null and bufferLength is not 0", nameof(buffer));
-        var utf8 = Encoding.UTF8.GetBytes(s);
+        byte[] utf8 = Encoding.UTF8.GetBytes(s);
         if (bufferLength is 0 || utf8.Length > bufferLength - 2)
         {
             nint ptr = Marshal.AllocHGlobal(utf8.Length + 2);
             fixed (byte* utf8Ptr = utf8)
             {
                 Marshal.WriteByte(ptr, 0); // Is allocated on heap
-                for (var i = 0; i < utf8.Length; i++)
+                for (int i = 0; i < utf8.Length; i++)
                     Marshal.WriteByte(ptr + i + 1, utf8Ptr[i]);
                 Marshal.WriteByte(ptr + utf8.Length + 1, 0);
             }
@@ -265,11 +265,11 @@ public sealed class NativeClient : IDisposable, INativeClient
         }
         else
         {
-            var ptr = (nint) buffer;
+            nint ptr = (nint) buffer;
             fixed (byte* utf8Ptr = utf8)
             {
                 Marshal.WriteByte(ptr, 1); // Is allocated on buffer (potentially stack)
-                for (var i = 0; i < utf8.Length; i++)
+                for (int i = 0; i < utf8.Length; i++)
                     Marshal.WriteByte(ptr + i + 1, utf8Ptr[i]);
                 Marshal.WriteByte(ptr + utf8.Length + 1, 0);
             }
@@ -284,7 +284,7 @@ public sealed class NativeClient : IDisposable, INativeClient
             return null;
         try
         {
-            var len = length ?? Strlen(resultErrorString);
+            int len = length ?? Strlen(resultErrorString);
             return Encoding.UTF8.GetString(resultErrorString, len);
         }
         finally
@@ -296,7 +296,7 @@ public sealed class NativeClient : IDisposable, INativeClient
 
     private static unsafe int Strlen(byte* input)
     {
-        var i = 0;
+        int i = 0;
         for (; input[i] != 0; i++)
             ;
         return i;
@@ -308,7 +308,7 @@ public sealed class NativeClient : IDisposable, INativeClient
     {
         try
         {
-            var dataHandle = GCHandle.FromIntPtr(data);
+            GCHandle dataHandle = GCHandle.FromIntPtr(data);
             TaskCompletionSource<Value>? commandCallbackData;
             try
             {
@@ -361,30 +361,30 @@ public sealed class NativeClient : IDisposable, INativeClient
     {
         if (_handle is null)
             throw new ObjectDisposedException(nameof(NativeClient), "ClientHandle is null");
-        var tcs = new TaskCompletionSource<Value>(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource<Value> tcs = new TaskCompletionSource<Value>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var dataHandle = GCHandle.Alloc(tcs, GCHandleType.Normal);
+        GCHandle dataHandle = GCHandle.Alloc(tcs, GCHandleType.Normal);
         try
         {
-            var argsArr = new byte*[args.Length];
+            byte*[] argsArr = new byte*[args.Length];
             try
             {
                 if (args.Length <= 20)
                 {
-                    for (var i = 0; i < args.Length; i++)
+                    for (int i = 0; i < args.Length; i++)
                     {
                         // ReSharper disable once StackAllocInsideLoop
                         // We do this intentionally here in a "low allocation" (max: 20 * 100 bytes) environment
-                        var buffer = stackalloc byte[100];
-                        var ptr = MarshalUtf8String(args[i], buffer, 100);
+                        byte* buffer = stackalloc byte[100];
+                        byte* ptr = MarshalUtf8String(args[i], buffer, 100);
                         argsArr[i] = ptr;
                     }
                 }
                 else
                 {
-                    for (var i = 0; i < args.Length; i++)
+                    for (int i = 0; i < args.Length; i++)
                     {
-                        var ptr = MarshalUtf8String(args[i]);
+                        byte* ptr = MarshalUtf8String(args[i]);
                         argsArr[i] = ptr;
                     }
                 }
@@ -407,7 +407,7 @@ public sealed class NativeClient : IDisposable, INativeClient
             }
             finally
             {
-                foreach (var t in argsArr)
+                foreach (byte* t in argsArr)
                 {
                     MarshalFreeUtf8String(t);
                 }
@@ -425,23 +425,23 @@ public sealed class NativeClient : IDisposable, INativeClient
         if (_handle is null)
             throw new ObjectDisposedException(nameof(NativeClient), "ClientHandle is null");
 
-        var argsArr = new byte*[args.Length];
+        byte*[] argsArr = new byte*[args.Length];
         if (args.Length <= 20)
         {
-            for (var i = 0; i < args.Length; i++)
+            for (int i = 0; i < args.Length; i++)
             {
                 // ReSharper disable once StackAllocInsideLoop
                 // We do this intentionally here in a "low allocation" (max: 20 * 100 bytes) environment
-                var buffer = stackalloc byte[100];
-                var ptr = MarshalUtf8String(args[i], buffer, 100);
+                byte* buffer = stackalloc byte[100];
+                byte* ptr = MarshalUtf8String(args[i], buffer, 100);
                 argsArr[i] = ptr;
             }
         }
         else
         {
-            for (var i = 0; i < args.Length; i++)
+            for (int i = 0; i < args.Length; i++)
             {
-                var ptr = MarshalUtf8String(args[i]);
+                byte* ptr = MarshalUtf8String(args[i]);
                 argsArr[i] = ptr;
             }
         }
@@ -449,7 +449,7 @@ public sealed class NativeClient : IDisposable, INativeClient
         BlockingCommandResult result;
         fixed (byte** argsArrPtr = argsArr)
             result = Imports.command_blocking(_handle.Value, requestType, argsArrPtr, argsArr.Length);
-        foreach (var arg in argsArr)
+        foreach (byte* arg in argsArr)
         {
             MarshalFreeUtf8String(arg);
         }
@@ -474,9 +474,9 @@ public sealed class NativeClient : IDisposable, INativeClient
                     return Value.CreateString(HandleString(input.data.ptr, (int) input.length, false));
                 case Native.EValueKind.Array:
                 {
-                    var array = new Value[input.length];
-                    var ptr = (Native.Value*) input.data.ptr;
-                    for (var i = 0; i < input.length; i++)
+                    Value[] array = new Value[input.length];
+                    Native.Value* ptr = (Native.Value*) input.data.ptr;
+                    for (int i = 0; i < input.length; i++)
                     {
                         array[i] = FromNativeValue(ptr[i], false);
                     }
@@ -489,12 +489,12 @@ public sealed class NativeClient : IDisposable, INativeClient
                     return Value.CreateOkay();
                 case Native.EValueKind.Map:
                 {
-                    var array = new KeyValuePair<Value, Value>[input.length];
-                    var ptr = (Native.Value*) input.data.ptr;
+                    KeyValuePair<Value, Value>[] array = new KeyValuePair<Value, Value>[input.length];
+                    Native.Value* ptr = (Native.Value*) input.data.ptr;
                     for (int i = 0, j = 0; i < input.length; i++, j += 2)
                     {
-                        var key = FromNativeValue(ptr[j], false);
-                        var value = FromNativeValue(ptr[j + 1], false);
+                        Value key = FromNativeValue(ptr[j], false);
+                        Value value = FromNativeValue(ptr[j + 1], false);
                         array[i] = new KeyValuePair<Value, Value>(key, value);
                     }
 
@@ -504,9 +504,9 @@ public sealed class NativeClient : IDisposable, INativeClient
                     throw new NotImplementedException();
                 case Native.EValueKind.Set:
                 {
-                    var array = new Value[input.length];
-                    var ptr = (Native.Value*) input.data.ptr;
-                    for (var i = 0; i < input.length; i++)
+                    Value[] array = new Value[input.length];
+                    Native.Value* ptr = (Native.Value*) input.data.ptr;
+                    for (int i = 0; i < input.length; i++)
                     {
                         array[i] = FromNativeValue(ptr[i], false);
                     }
@@ -519,9 +519,9 @@ public sealed class NativeClient : IDisposable, INativeClient
                     return Value.CreateBoolean(input.data.i != 0);
                 case Native.EValueKind.VerbatimString:
                 {
-                    var ptr = (StringPair*) input.data.ptr;
-                    var key = HandleString(ptr->a_start, (int) (ptr->a_end - ptr->a_start), false);
-                    var value = HandleString(ptr->a_start, (int) (ptr->a_end - ptr->a_start), false);
+                    StringPair* ptr = (StringPair*) input.data.ptr;
+                    string? key = HandleString(ptr->a_start, (int) (ptr->a_end - ptr->a_start), false);
+                    string? value = HandleString(ptr->a_start, (int) (ptr->a_end - ptr->a_start), false);
 
                     return Value.CreateFormatString(key, value);
                 }

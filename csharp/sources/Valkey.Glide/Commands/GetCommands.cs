@@ -1,6 +1,8 @@
 ﻿using Valkey.Glide.InterOp.Exceptions;
 using Valkey.Glide.InterOp.Native;
 
+using Value = Valkey.Glide.InterOp.Value;
+
 namespace Valkey.Glide.Commands;
 
 /// <summary>
@@ -26,10 +28,10 @@ public static class GetCommands
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        var result = await client.CommandAsync(ERequestType.Get, key.AsRedisCommandText());
+        Value result = await client.CommandAsync(ERequestType.Get, key.AsRedisCommandText());
         if (result.IsNone())
             return null;
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
 
         throw new GlideException("Get failed");

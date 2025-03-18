@@ -12,7 +12,7 @@ public class ValkeyController(IGlideClient glideClient) : ControllerBase
     [HttpGet("get/{key}")]
     public async Task<string?> Get([FromRoute] string key)
     {
-        var client = await glideClient.GetAsync(key);
+        string? client = await glideClient.GetAsync(key);
         return client;
     }
 

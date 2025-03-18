@@ -9,10 +9,10 @@ public class GetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
     public async Task NonExistingKeyReturnsNull()
     {
         // Arrange
-        using var glideClient = new GlideClient(fixture.ConnectionRequest);
+        using GlideClient? glideClient = new GlideClient(fixture.ConnectionRequest);
 
         // Act
-        var result = await glideClient.GetAsync("does-not-exist");
+        string? result = await glideClient.GetAsync("does-not-exist");
 
         // Assert
         Assert.Null(result);
@@ -22,11 +22,11 @@ public class GetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
     public async Task ExistingKeyReturnsValue()
     {
         // Arrange
-        using var glideClient = new GlideClient(fixture.ConnectionRequest);
+        using GlideClient? glideClient = new GlideClient(fixture.ConnectionRequest);
         await glideClient.SetAsync("get-key", nameof(ExistingKeyReturnsValue));
 
         // Act
-        var result = await glideClient.GetAsync("get-key");
+        string? result = await glideClient.GetAsync("get-key");
 
         // Assert
         Assert.Equal(nameof(ExistingKeyReturnsValue), result);

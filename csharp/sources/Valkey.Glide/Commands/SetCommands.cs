@@ -51,7 +51,7 @@ public static class SetCommands
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
     public static async Task SetAsync(this IGlideClient client, string key, string value)
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .ExecuteAsync(client);
         if (result.IsOk())
@@ -66,11 +66,11 @@ public static class SetCommands
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
     public static async Task<string?> SetAndGetAsync(this IGlideClient client, string key, string value)
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -80,9 +80,9 @@ public static class SetCommands
     /// <inheritdoc cref="Builder.ExecuteAsync"/>
     /// <remarks>Executes <c>SET key value NX</c></remarks>
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
-    public static async Task SetIfNotExistsAsync(this IGlideClient client, string key, string value)
+    public static async Task SetIfNotExistAsync(this IGlideClient client, string key, string value)
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .ExecuteAsync(client);
@@ -96,12 +96,12 @@ public static class SetCommands
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
     public static async Task<string?> SetAndGetIfNotExistsAsync(this IGlideClient client, string key, string value)
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -113,7 +113,7 @@ public static class SetCommands
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
     public static async Task SetIfExistsAsync(this IGlideClient client, string key, string value)
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .ExecuteAsync(client);
@@ -127,12 +127,12 @@ public static class SetCommands
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
     public static async Task<string?> SetAndGetIfExistsAsync(this IGlideClient client, string key, string value)
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -144,7 +144,7 @@ public static class SetCommands
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
     public static async Task SetIfEqualAsync(this IGlideClient client, string key, string value, string comparisonValue)
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .ExecuteAsync(client);
@@ -163,12 +163,12 @@ public static class SetCommands
         string comparisonValue
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -185,7 +185,7 @@ public static class SetCommands
         TimeSpan expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithExpiresIn(expiration)
             .ExecuteAsync(client);
@@ -204,12 +204,12 @@ public static class SetCommands
         TimeSpan expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithExpiresIn(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -226,7 +226,7 @@ public static class SetCommands
         TimeSpan expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresIn(expiration)
@@ -246,13 +246,13 @@ public static class SetCommands
         TimeSpan expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresIn(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -269,7 +269,7 @@ public static class SetCommands
         TimeSpan expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresIn(expiration)
@@ -289,13 +289,13 @@ public static class SetCommands
         TimeSpan expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresIn(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -313,7 +313,7 @@ public static class SetCommands
         TimeSpan expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresIn(expiration)
@@ -334,13 +334,13 @@ public static class SetCommands
         TimeSpan expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresIn(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -358,7 +358,7 @@ public static class SetCommands
         DateTime expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithExpiresAt(expiration)
             .ExecuteAsync(client);
@@ -377,12 +377,12 @@ public static class SetCommands
         DateTime expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithExpiresAt(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -399,7 +399,7 @@ public static class SetCommands
         DateTime expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresAt(expiration)
@@ -419,13 +419,13 @@ public static class SetCommands
         DateTime expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresAt(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -442,7 +442,7 @@ public static class SetCommands
         DateTime expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresAt(expiration)
@@ -462,13 +462,13 @@ public static class SetCommands
         DateTime expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresAt(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -486,7 +486,7 @@ public static class SetCommands
         DateTime expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresAt(expiration)
@@ -507,13 +507,13 @@ public static class SetCommands
         DateTime expiration
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresAt(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -526,7 +526,7 @@ public static class SetCommands
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
     public static async Task SetWithKeepTtlAsync(this IGlideClient client, string key, string value)
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithKeepTtl()
             .ExecuteAsync(client);
@@ -540,12 +540,12 @@ public static class SetCommands
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
     public static async Task<string?> SetAndGetWithKeepTtlAsync(this IGlideClient client, string key, string value)
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithKeepTtl()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -557,7 +557,7 @@ public static class SetCommands
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
     public static async Task SetIfNotExistsWithKeepTtlAsync(this IGlideClient client, string key, string value)
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithKeepTtl()
@@ -576,13 +576,13 @@ public static class SetCommands
         string value
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithKeepTtl()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -594,7 +594,7 @@ public static class SetCommands
     /// <exception cref="GlideSetCommandFailedException">Thrown if the operation failed</exception>
     public static async Task SetIfExistsWithKeepTtlAsync(this IGlideClient client, string key, string value)
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithKeepTtl()
@@ -613,13 +613,13 @@ public static class SetCommands
         string value
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithKeepTtl()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -636,7 +636,7 @@ public static class SetCommands
         string comparisonValue
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithKeepTtl()
@@ -656,13 +656,13 @@ public static class SetCommands
         string comparisonValue
     )
     {
-        var result = await new Builder().WithKey(key)
+        Value result = await new Builder().WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithKeepTtl()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out var text))
+        if (result.IsString(out string? text))
             return text;
         if (result.IsNone())
             return null;
@@ -776,7 +776,7 @@ public static class SetCommands
                     );
             if (_expiresAt.HasValue)
             {
-                var unixTimeSpan = _expiresAt.Value - DateTime.UnixEpoch;
+                TimeSpan unixTimeSpan = _expiresAt.Value - DateTime.UnixEpoch;
                 if (unixTimeSpan.TotalMilliseconds % 1000 != 0)
                     return ExecuteTtlWithGet(
                         client,
