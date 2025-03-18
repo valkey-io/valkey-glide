@@ -12,6 +12,8 @@ using LinqStatistics;
 
 using StackExchange.Redis;
 
+using static Glide.ConnectionConfiguration;
+
 public static class MainClass
 {
     private enum ChosenAction { GET_NON_EXISTING, GET_EXISTING, SET };
@@ -49,11 +51,6 @@ public static class MainClass
 
     private static string GetAddressForStackExchangeRedis(string host, bool useTLS) => $"{GetAddress(host)},ssl={useTLS}";
 
-    private static string GetAddressWithRedisPrefix(string host, bool useTLS)
-    {
-        string protocol = useTLS ? "rediss" : "redis";
-        return $"{protocol}://{GetAddress(host)}";
-    }
     private const double PROB_GET = 0.8;
 
     private const double PROB_GET_EXISTING_KEY = 0.8;
@@ -95,7 +92,7 @@ public static class MainClass
         }
     }
 
-    private static double CalculateLatency(IEnumerable<double> latency_list, double percentile_point) => Math.Round(Percentile(latency_list.ToArray(), percentile_point), 2);
+    private static double CalculateLatency(IEnumerable<double> latency_list, double percentile_point) => Math.Round(Percentile([.. latency_list], percentile_point), 2);
 
     private static void PrintResults(string resultsFile)
     {
@@ -263,7 +260,9 @@ public static class MainClass
         {
             ClientWrapper[] clients = await CreateClients(clientCount, () =>
             {
-                BaseClient glide_client = new GlideClient(host, PORT, useTLS);
+                StandaloneClientConfiguration config = new StandaloneClientConfigurationBuilder()
+                    .WithAddress(host, PORT).WithTls(useTLS).Build();
+                BaseClient glide_client = new GlideClient(config);
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await glide_client.Get(key),
                      async (key, value) => await glide_client.Set(key, value),
