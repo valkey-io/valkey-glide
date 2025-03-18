@@ -20,6 +20,8 @@ const (
 	StoreKeyword      string = "STORE"
 	DbKeyword         string = "DB"
 	TypeKeyword       string = "TYPE"
+	ChangedKeyword    string = "CH"   // Valkey API keyword used to return total number of elements changed
+	IncrKeyword       string = "INCR" // Valkey API keyword to make zadd act like ZINCRBY.
 	/// Valkey API keywords for stream commands
 	IdleKeyword         string = "IDLE"       // ValKey API string to designate IDLE time in milliseconds
 	TimeKeyword         string = "TIME"       // ValKey API string to designate TIME time in unix-milliseconds
