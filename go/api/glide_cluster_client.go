@@ -474,7 +474,6 @@ func (client *GlideClusterClient) LastSave() (ClusterValue[int64], error) {
 }
 
 // Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
-// The command is routed to a random node by default, which is safe for read-only commands.
 //
 // Parameters:
 //
