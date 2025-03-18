@@ -1700,8 +1700,9 @@ public class CommandTests {
         script.close();
     }
 
-    @ParameterizedTest
-    @MethodSource("getClients")
+    @RepeatedTest(1000)
+    //    @ParameterizedTest
+    //    @MethodSource("getClients")
     @SneakyThrows
     public void scriptKill() {
         GlideClient regularClient =
@@ -1753,7 +1754,7 @@ public class CommandTests {
 
                 // Run script kill until it returns OK
                 boolean scriptKilled = false;
-                timeout = 6000; // ms
+                timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         assertEquals(OK, regularClient.scriptKill().get());
@@ -1769,7 +1770,7 @@ public class CommandTests {
 
                         // If 2s passed and exception still says "no scripts in execution right now",
                         // rerun script.
-                        if (timeout <= 4000
+                        if (timeout <= 2000
                                 && exception.getCause() instanceof RequestException
                                 && exception
                                         .getMessage()
@@ -1818,14 +1819,10 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
     }
 
-    @RepeatedTest(1000) // TODO: remove
     @SneakyThrows
-    //    @ParameterizedTest // TODO: uncomment
-    //    @MethodSource("getClients")
-    public void scriptKill_unkillable() {
-        GlideClient regularClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
-
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void scriptKill_unkillable(GlideClient regularClient) {
         String key = UUID.randomUUID().toString();
         String code = createLongRunningLuaScript(6, false);
         Script script = new Script(code, false);
