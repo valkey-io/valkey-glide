@@ -239,7 +239,7 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	return handleStringResponse(result)
 }
 
-// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
 // Return value:
 //
