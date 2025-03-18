@@ -222,7 +222,7 @@ func ExampleGlideClusterClient_RandomKeyWithRoute() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	fmt.Println(result.IsSingleValue)
+	fmt.Println(len(result.SingleValue()) == 2)
 
 	// Output: true
 }
