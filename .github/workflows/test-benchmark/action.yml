@@ -19,6 +19,7 @@ runs:
 
         - name: Install extra software on self-hosted runner
           if: ${{ runner.environment == 'self-hosted' }}
+          shell: bash
           run: |
               sudo apt-get update
               sudo apt-get install -y npm
