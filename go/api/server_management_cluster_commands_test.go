@@ -83,7 +83,18 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 	// Output: 0
 }
 
-func LastSaveWithOptions() {
+func ExampleGlideClusterClient_LastSave() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	result, err := client.LastSave()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.IsSingleValue())
+
+	// Output: true
+}
+
+func ExampleGlideClusterClient_LastSaveWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	opts := options.RouteOption{Route: nil}
 	result, err := client.LastSaveWithOptions(opts)
