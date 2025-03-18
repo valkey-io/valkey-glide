@@ -468,7 +468,7 @@ func (client *GlideClusterClient) ScanWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *GlideClusterClient) ConfigSet(
-	parameters map[string]string, opts options.RouteOption,
+	parameters map[string]string,
 ) (string, error) {
 	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
@@ -516,7 +516,7 @@ func (client *GlideClusterClient) ConfigSetWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClusterClient) ConfigGet(
-	args []string, opts options.RouteOption,
+	args []string,
 ) (ClusterValue[interface{}], error) {
 	res, err := client.executeCommand(C.ConfigGet, args)
 	if err != nil {
