@@ -497,7 +497,7 @@ func (client *GlideClusterClient) ConfigSetWithOptions(
 ) (string, error) {
 	result, err := client.executeCommandWithRoute(C.ConfigSet, utils.MapToString(parameters), opts.Route)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }

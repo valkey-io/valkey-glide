@@ -737,9 +737,9 @@ func (suite *GlideTestSuite) TestConfigSetGet() {
 	// ConfigResetStat with option or with multiple options without route
 	//opts := options.RouteOption{Route: nil}
 	configParam := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
-	suite.verifyOK(client.ConfigSet(configParam, opts))
+	suite.verifyOK(client.ConfigSet(configParam))
 	configGetParam := []string{"timeout", "maxmemory"}
-	resp, err := client.ConfigGet(configGetParam, opts)
+	resp, err := client.ConfigGet(configGetParam)
 	assert.NoError(t, err)
 	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
 }
