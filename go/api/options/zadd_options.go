@@ -88,8 +88,3 @@ const (
 	// to "GT" in the Valkey API.
 	ScoreGreaterThanCurrent UpdateOptions = "GT"
 )
-
-const (
-	ChangedKeyword string = "CH"   // Valkey API keyword used to return total number of elements changed
-	IncrKeyword    string = "INCR" // Valkey API keyword to make zadd act like ZINCRBY.
-)
