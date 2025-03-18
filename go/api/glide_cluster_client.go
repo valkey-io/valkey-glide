@@ -460,6 +460,30 @@ func (client *GlideClusterClient) ScanWithOptions(
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
+func (client *GlideClusterClient) ClientGetName() (ClusterValue[string], error) {
+	response, err := client.executeCommand(C.ClientGetName, []string{})
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
+
+// Gets the name of the current connection.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//
+// [valkey.io]: https://valkey.io/commands/client-getname/
 func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOption) (ClusterValue[string], error) {
 	response, err := client.executeCommandWithRoute(C.ClientGetName, []string{}, opts.Route)
 	if err != nil {

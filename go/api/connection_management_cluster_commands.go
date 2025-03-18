@@ -18,5 +18,7 @@ type ConnectionManagementClusterCommands interface {
 
 	EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error)
 
+	ClientGetName() (ClusterValue[string], error)
+
 	ClientGetNameWithOptions(routeOptions options.RouteOption) (ClusterValue[string], error)
 }
