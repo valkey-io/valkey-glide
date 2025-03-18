@@ -1739,7 +1739,7 @@ public class CommandTests {
         // intentionally using a REPLICA route
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
-        String funcName = "fcall_readonly_function";
+        String funcName = libName;
 
         // function $funcName returns a magic number
         String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
