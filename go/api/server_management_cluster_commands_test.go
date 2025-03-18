@@ -83,6 +83,28 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 	// Output: 0
 }
 
+func ExampleGlideClusterClient_FlushAll() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	result, err := client.FlushAll()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+	
+	// Output: OK
+}
+
+func ExampleGlideClusterClient_FlushDB() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	result, err := client.FlushDB()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+	
+	// Output: OK
+}
+
 func ExampleGlideClusterClient_FlushAllWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 

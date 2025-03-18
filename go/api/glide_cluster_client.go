@@ -279,6 +279,23 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 // See [valkey.io] for details.
 //
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *GlideClusterClient) FlushAll() (string, error) {
+	result, err := client.executeCommand(C.FlushAll, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
 // Parameters:
 //
 //	flushOptions - The [FlushClusterOptions] type.
@@ -297,6 +314,23 @@ func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.Flush
 		return handleStringResponse(result)
 	}
 	result, err := client.executeCommandWithRoute(C.FlushAll, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (client *GlideClusterClient) FlushDB() (string, error) {
+	result, err := client.executeCommand(C.FlushDB, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
