@@ -444,10 +444,7 @@ public class ConnectionManagerTest {
     public void connection_request_protobuf_generation_use_insecure_tls() {
         // setup
         GlideClusterClientConfiguration glideClusterClientConfiguration =
-                GlideClusterClientConfiguration.builder()
-                .useTLS(true)
-                .useInsecureTLS(true)
-                .build();
+                GlideClusterClientConfiguration.builder().useTLS(true).useInsecureTLS(true).build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
                         .setTlsMode(TlsMode.InsecureTls)
