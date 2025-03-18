@@ -88,10 +88,24 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Install Node on self-hosted runner
+              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+
+            - name: Install extra software on self-hosted runner
+              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y npm
+
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
                   dotnet-version: ${{ matrix.dotnet }}
+              env:
+                  DOTNET_INSTALL_DIR: ~/.dotnet
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -100,6 +114,13 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            # Older dotnet fails if sees a references to a newer one
+            - name: Patch project files
+              run: |
+                  SED_FOR_MACOS=`if [[ "${{ matrix.host.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+                  find {benchmarks,csharp} -name '*.csproj' | xargs \
+                      sed -i $SED_FOR_MACOS "s|<TargetFrameworks>.*</TargetFrameworks>|<TargetFrameworks>net${{ matrix.dotnet }}</TargetFrameworks>|g"
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
@@ -160,8 +181,6 @@ jobs:
                   echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
@@ -175,6 +194,12 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            # Older dotnet fails if sees a references to a newer one
+            - name: Patch project files
+              run: |
+                  find {benchmarks,csharp} -name '*.csproj' | xargs \
+                      sed -i "s|<TargetFrameworks>.*</TargetFrameworks>|<TargetFrameworks>net${{ matrix.dotnet }}</TargetFrameworks>|g"
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
