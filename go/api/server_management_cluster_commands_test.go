@@ -121,15 +121,12 @@ func ExampleGlideClusterClient_ConfigGet() {
 
 func ExampleGlideClusterClient_ConfigGetWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-
 	opts := options.RouteOption{Route: config.RandomRoute}
 	configParam := []string{"timeout", "maxmemory"}
 	result, err := client.ConfigGetWithOptions(configParam, opts)
-
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-
 	fmt.Println(result)
 
 	// Output: {2 <nil> map[maxmemory:1073741824 timeout:1000]}
