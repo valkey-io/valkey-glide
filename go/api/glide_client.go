@@ -83,7 +83,7 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 func (client *GlideClient) ConfigSet(parameters map[string]string) (string, error) {
 	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -125,7 +125,7 @@ func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 func (client *GlideClient) Select(index int64) (string, error) {
 	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -160,11 +160,11 @@ func (client *GlideClient) Info() (string, error) {
 func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Info, optionArgs)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -230,11 +230,11 @@ func (client *GlideClient) Ping() (string, error) {
 func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
 	optionArgs, err := pingOptions.ToArgs()
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Ping, optionArgs)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
