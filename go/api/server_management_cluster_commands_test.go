@@ -94,6 +94,5 @@ func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
 	}
 	fmt.Println(response)
 
-	// Output:
-	// OK
+	// Output: OK
 }
