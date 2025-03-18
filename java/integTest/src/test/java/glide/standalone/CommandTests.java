@@ -70,7 +70,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
-import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1700,13 +1699,10 @@ public class CommandTests {
         script.close();
     }
 
-    @RepeatedTest(1000)
-    //    @ParameterizedTest
-    //    @MethodSource("getClients")
+    @ParameterizedTest
+    @MethodSource("getClients")
     @SneakyThrows
-    public void scriptKill() {
-        GlideClient regularClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
+    public void scriptKill(GlideClient regularClient) {
 
         // Verify that script_kill raises an error when no script is running
         ExecutionException executionException =
@@ -1761,13 +1757,6 @@ public class CommandTests {
                         scriptKilled = true;
                         break;
                     } catch (ExecutionException exception) {
-
-                        try {
-                            regularClient.ping().get(); // Dummy test command
-                        } catch (ExecutionException err) {
-                            System.out.println(err);
-                        }
-
                         // If 2s passed and exception still says "no scripts in execution right now",
                         // rerun script.
                         if (timeout <= 2000
