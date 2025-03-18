@@ -132,6 +132,54 @@ jobs:
                       benchmarks/results/**
                       java/client/build/reports/spotbugs/**
 
+    test-pubsub:
+        needs: get-matrices
+        timeout-minutes: 35
+        strategy:
+            fail-fast: false
+            matrix:
+                java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+        runs-on: ${{ matrix.host.RUNNER }}
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up JDK ${{ matrix.java }}
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: ${{ matrix.java }}
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Test pubsub
+              working-directory: java
+              run: ./gradlew :integTest:pubsubTest
+
+            - name: Upload test & spotbugs reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-pubsub-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+                  path: |
+                      java/integTest/build/reports/**
+                      utils/clusters/**
+
     get-containers:
         runs-on: ubuntu-latest
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
