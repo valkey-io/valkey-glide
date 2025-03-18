@@ -230,6 +230,25 @@ jobs:
               run: |
                   black --check --diff .
 
+    docs-test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install dependencies
+              working-directory: ./python
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install sphinx sphinx-rtd-theme
+
+            - name: Build docs
+              working-directory: ./python/docs
+              run: |
+                  sphinx-apidoc -o . ../python/glide
+                  make clean
+                  make html SPHINXOPTS="-W --keep-going"
+
     get-containers:
         runs-on: ubuntu-latest
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}

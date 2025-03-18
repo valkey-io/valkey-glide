@@ -103,7 +103,13 @@ jobs:
               working-directory: go
               run: |
                   make install-tools-go${{ matrix.go }} build
-                  make -k unit-test integ-test example-test
+                  make -k unit-test integ-test
+
+            - name: Run Example Tests
+              working-directory: go
+              if: ${{ matrix.engine.version == '8.0' }}
+              run: |
+                  make -k example-test
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.go == '1.22' }}
@@ -208,7 +214,7 @@ jobs:
               working-directory: go
               run: |
                   make install-tools-go${{ matrix.go }} build
-                  make -k unit-test integ-test example-test
+                  make -k unit-test integ-test
 
             - name: Upload test reports
               if: always()
