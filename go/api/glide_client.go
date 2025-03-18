@@ -245,14 +245,6 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 //
 //	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
 //
-// Example:
-//
-//	response, err = client.executeCommand()
-//	if err != nil {
-//	  // handle error
-//	}
-//	fmt.Println(response) // Output: OK
-//
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *GlideClient) ConfigRewrite() (string, error) {
 	response, err := client.executeCommand(C.ConfigRewrite, []string{})

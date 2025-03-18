@@ -454,7 +454,7 @@ func (client *GlideClusterClient) ScanWithOptions(
 }
 
 // Rewrites the configuration file with the current configuration.
-// The command will be routed a random node, unless `Route` in `routeOptions` is provided.
+// The command will be routed a random node.
 //
 // Return value:
 //
@@ -470,11 +470,10 @@ func (client *GlideClusterClient) ConfigRewrite() (string, error) {
 }
 
 // Rewrites the configuration file with the current configuration.
-// The command will be routed a random node, unless `Route` in `routeOptions` is provided.
 //
 // Parameters:
 //
-//	route - Specifies the routing configuration for the command. The client will route the
+//	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
 // Return value:
