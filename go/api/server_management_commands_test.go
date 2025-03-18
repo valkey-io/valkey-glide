@@ -120,7 +120,8 @@ func ExampleGlideClient_ConfigResetStat() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Printf(response)
+	fmt.Println(response)
 
-	// Output: OK
+	// Output:
+	// OK
 }
