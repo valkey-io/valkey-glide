@@ -90,7 +90,7 @@ func ExampleGlideClusterClient_FlushAll() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	
+
 	// Output: OK
 }
 
@@ -101,7 +101,7 @@ func ExampleGlideClusterClient_FlushDB() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	
+
 	// Output: OK
 }
 

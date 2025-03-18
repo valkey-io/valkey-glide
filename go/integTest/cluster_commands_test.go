@@ -750,7 +750,7 @@ func (suite *GlideTestSuite) TestFlushDB_Success() {
 func (suite *GlideTestSuite) TestFlushDB_Failure() {
 	client := suite.defaultClusterClient()
 	client.Close()
-	
+
 	result, err := client.FlushDB()
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
@@ -776,7 +776,7 @@ func (suite *GlideTestSuite) TestFlushAll_Success() {
 func (suite *GlideTestSuite) TestFlushAll_Failure() {
 	client := suite.defaultClusterClient()
 	client.Close()
-	
+
 	result, err := client.FlushAll()
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
