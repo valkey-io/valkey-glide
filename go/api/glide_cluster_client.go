@@ -469,8 +469,7 @@ func (client *GlideClusterClient) ConfigResetStat() (string, error) {
 	return handleStringResponse(response)
 }
 
-// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM
-// The command will be routed a random node, unless `Route` in `routeOptions` is provided.
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
 // Parameters:
 //
