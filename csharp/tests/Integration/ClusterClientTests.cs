@@ -14,9 +14,7 @@ public class ClusterClientTests
         SortedSet<string> ports = [];
         foreach (int i in Enumerable.Range(0, 100))
         {
-#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
-            string res = await client.CustomCommand(["info", "server"], Route.Random) as string;
-#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+            string res = ((await client.CustomCommand(["info", "server"], Route.Random))! as GlideString)!;
             foreach (string line in res!.Split("\r\n"))
             {
                 if (line.Contains("tcp_port"))
@@ -38,22 +36,20 @@ public class ClusterClientTests
     {
         GlideClusterClient client = TestConfiguration.DefaultClusterClient();
 
-#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
-        string res = await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Primary)) as string;
-        Assert.Contains("role:master", res!);
+        string res = (await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Primary))! as GlideString)!;
+        Assert.Contains("role:master", res);
 
-        res = await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Replica)) as string;
-        Assert.Contains("role:slave", res!);
+        res = (await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Replica))! as GlideString)!;
+        Assert.Contains("role:slave", res);
 
-        res = await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Primary)) as string;
-        Assert.Contains("role:master", res!);
+        res = (await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Primary))! as GlideString)!;
+        Assert.Contains("role:master", res);
 
-        res = await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Replica)) as string;
-        Assert.Contains("role:slave", res!);
+        res = (await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Replica))! as GlideString)!;
+        Assert.Contains("role:slave", res);
 
-        res = await client.CustomCommand(["info", "replication"], new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port)) as string;
-        Assert.Contains("# Replication", res!);
-#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+        res = (await client.CustomCommand(["info", "replication"], new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port))! as GlideString)!;
+        Assert.Contains("# Replication", res);
     }
 
     [Fact(Skip = "non-string return types are not supported yet")]
