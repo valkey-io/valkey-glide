@@ -109,7 +109,7 @@ jobs:
 
             # workaround for https://github.com/actions/setup-dotnet/issues/608
             - name: Fix dotnet installation on mac
-              if: ${{ matrix.host.OS == "macos" }}
+              if: ${{ matrix.host.OS == 'macos' }}
               run: dotnet new globaljson --sdk-version ${{ matrix.dotnet }}.0 --roll-forward latestFeature
 
             - name: Install shared software dependencies
