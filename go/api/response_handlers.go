@@ -287,6 +287,27 @@ func convertStringArray(response *C.struct_CommandResponse, isNilable bool) ([]s
 	return slice, nil
 }
 
+func convertAnyArray(response *C.struct_CommandResponse, isNilable bool) ([]any, error) {
+	typeErr := checkResponseType(response, C.Array, isNilable)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	if isNilable && response.array_value == nil {
+		return nil, nil
+	}
+
+	slice := make([]any, 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		res, err := parseInterface(&v)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, res)
+	}
+	return slice, nil
+}
+
 func handleStringOrNilArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
 	defer C.free_command_response(response)
 
@@ -303,6 +324,12 @@ func handleStringArrayOrNilResponse(response *C.struct_CommandResponse) ([]strin
 	defer C.free_command_response(response)
 
 	return convertStringArray(response, true)
+}
+
+func handleAnyArrayResponse(response *C.struct_CommandResponse) ([]any, error) {
+	defer C.free_command_response(response)
+
+	return convertAnyArray(response, false)
 }
 
 func handleIntResponse(response *C.struct_CommandResponse) (int64, error) {

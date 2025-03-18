@@ -9312,3 +9312,264 @@ func (suite *GlideTestSuite) TestGeoPos() {
 		assert.IsType(t, &errors.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestGeoSearch() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.New().String()
+		key2 := "{key}-2-" + uuid.New().String()
+
+		// Setup test data
+		members := []string{"Catania", "Palermo", "edge2", "edge1"}
+		membersToCoordinates := map[string]options.GeospatialData{
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"edge2":   {Longitude: 17.241510, Latitude: 38.788135},
+			"edge1":   {Longitude: 12.758489, Latitude: 38.788135},
+		}
+
+		expectedResults := []any{
+			[]any{
+				"Catania",
+				[]any{
+					56.4413,
+					int64(3479447370796909),
+					[]any{15.087267458438873, 37.50266842333162},
+				},
+			},
+			[]any{
+				"Palermo",
+				[]any{
+					190.4424,
+					int64(3479099956230698),
+					[]any{13.361389338970184, 38.1155563954963},
+				},
+			},
+			[]any{
+				"edge2",
+				[]any{
+					279.7403,
+					int64(3481342659049484),
+					[]any{17.241510450839996, 38.78813451624225},
+				},
+			},
+			[]any{
+				"edge1",
+				[]any{
+					279.7405,
+					int64(3479273021651468),
+					[]any{12.75848776102066, 38.78813451624225},
+				},
+			},
+		}
+
+		// Add geospatial data
+		result, err := client.GeoAdd(key1, membersToCoordinates)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), result)
+
+		// Test search by box, unit: km, from a geospatial data point
+		searchOrigin := options.GeoCoordOrigin{
+			GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+		}
+		searchShape := options.NewBoxSearchShape(400, 400, options.GeoUnitKilometers)
+		resultOpts := options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc)
+
+		results, err := client.GeoSearchWithResultOptions(key1, &searchOrigin, *searchShape, *resultOpts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), members, results)
+
+		// Search with all options (WITHDIST, WITHHASH, WITHCOORD)
+		searchOpts := options.NewGeoSearchOptions().
+			SetWithDist(true).
+			SetWithHash(true).
+			SetWithCoord(true)
+
+		fullResults, err := client.GeoSearchWithFullOptions(key1, &searchOrigin, *searchShape, *resultOpts, *searchOpts)
+		assert.NoError(suite.T(), err)
+		// Verify structure of results - exact values may vary slightly due to floating-point precision
+		assert.Equal(suite.T(), 4, len(fullResults))
+		assert.Equal(suite.T(), expectedResults, fullResults)
+
+		// Test with count limiting result to 1
+		resultOptsWithCount := options.NewGeoSearchResultOptions().
+			SetSortOrder(options.SortOrderAsc).
+			SetCount(1)
+
+		countResults, err := client.GeoSearchWithResultOptions(key1, &searchOrigin, *searchShape, *resultOptsWithCount)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 1, len(countResults))
+		assert.Equal(suite.T(), "Catania", countResults[0])
+
+		// Test search by box from member, with distance included
+		meters := float64(400 * 1000)
+		expectedResults2 := []any{
+			[]any{"edge2", []any{236529.1799}},
+			[]any{"Palermo", []any{166274.1516}},
+			[]any{"Catania", []any{0.0}},
+		}
+		memberResults, err := client.GeoSearchWithFullOptions(
+			key1,
+			&options.GeoMemberOrigin{Member: "Catania"},
+			*options.NewBoxSearchShape(meters, meters, options.GeoUnitMeters),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderDesc),
+			*options.NewGeoSearchOptions().SetWithDist(true),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expectedResults2, memberResults)
+
+		// Test search by box, unit: feet, from a member, with limited ANY count to 2, with hash
+		feetValue := 400 * 3280.8399
+		feetShape := options.NewBoxSearchShape(feetValue, feetValue, options.GeoUnitFeet)
+		feetResult, err := client.GeoSearchWithFullOptions(
+			key1,
+			&options.GeoMemberOrigin{Member: "Palermo"},
+			*feetShape,
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc).SetCount(2),
+			*options.NewGeoSearchOptions().SetWithHash(true),
+		)
+		expectedResults3 := []any{
+			[]any{"Palermo", []any{int64(3479099956230698)}},
+			[]any{"edge1", []any{int64(3479273021651468)}},
+		}
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 2, len(feetResult))
+		assert.Equal(suite.T(), expectedResults3, feetResult)
+
+		// Test search by radius with feet units from member
+		feetRadius := 200 * 3280.8399
+
+		feetResults, err := client.GeoSearchWithResultOptions(
+			key1,
+			&options.GeoMemberOrigin{Member: "Catania"},
+			*options.NewCircleSearchShape(feetRadius, options.GeoUnitFeet),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{"Catania", "Palermo"}, feetResults)
+
+		// Test search by radius with meters units from member
+		metersRadius := 200 * 1000
+		metersResults, err := client.GeoSearchWithResultOptions(
+			key1,
+			&options.GeoMemberOrigin{Member: "Catania"},
+			*options.NewCircleSearchShape(float64(metersRadius), options.GeoUnitMeters),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderDesc),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{"Palermo", "Catania"}, metersResults)
+
+		// Test search by radius with miles units from geospatial data
+		milesResults, err := client.GeoSearchWithResultOptions(
+			key1,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*options.NewCircleSearchShape(175, options.GeoUnitMiles),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderDesc),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{"edge1", "edge2", "Palermo", "Catania"}, milesResults)
+
+		// Test search by radius with kilometers units, with limited count and all options
+
+		kmResults, err := client.GeoSearchWithFullOptions(
+			key1,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc).SetCount(2),
+			*options.NewGeoSearchOptions().SetWithDist(true).SetWithHash(true).SetWithCoord(true),
+		)
+		assert.NoError(suite.T(), err)
+		expectedKmResults := []any{
+			[]any{
+				"Catania",
+				[]any{
+					56.4413,
+					int64(3479447370796909),
+					[]any{15.087267458438873, 37.50266842333162},
+				},
+			},
+			[]any{
+				"Palermo",
+				[]any{
+					190.4424,
+					int64(3479099956230698),
+					[]any{13.361389338970184, 38.1155563954963},
+				},
+			},
+		}
+		assert.Equal(suite.T(), expectedKmResults, kmResults)
+
+		// Test search with ANY option
+		expectedAnyResults := []any{
+			[]any{
+				"Palermo",
+				[]any{190.4424, int64(3479099956230698), []any{13.361389338970184, 38.1155563954963}},
+			},
+		}
+		anyResult, err := client.GeoSearchWithFullOptions(
+			key1,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc).SetCount(1).SetIsAny(true),
+			*options.NewGeoSearchOptions().SetWithDist(true).SetWithHash(true).SetWithCoord(true),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expectedAnyResults, anyResult)
+
+		// Test empty results - small area
+		smallShape := options.NewBoxSearchShape(50, 50, options.GeoUnitMeters)
+		emptyResults1, err := client.GeoSearchWithResultOptions(
+			key1,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*smallShape,
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc).SetCount(1),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), emptyResults1)
+
+		// Test empty results - very small radius
+		tinyShape := options.NewCircleSearchShape(5, options.GeoUnitMeters)
+		emptyResults2, err := client.GeoSearchWithResultOptions(
+			key1,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*tinyShape,
+			*resultOpts,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), emptyResults2)
+
+		// Test non-existing member error
+		nonExistingMemberOrigin := &options.GeoMemberOrigin{Member: "non-existing-member"}
+		_, err = client.GeoSearchWithResultOptions(
+			key1,
+			nonExistingMemberOrigin,
+			*options.NewCircleSearchShape(100, options.GeoUnitMeters),
+			*resultOpts,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// Test wrong key type error
+		_, err = client.Set(key2, "nonZSETvalue")
+		assert.NoError(suite.T(), err)
+		_, err = client.GeoSearchWithResultOptions(
+			key2,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*options.NewCircleSearchShape(100, options.GeoUnitMeters),
+			*resultOpts,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}

@@ -210,3 +210,10 @@ const (
 	// Represents distance in feet
 	GeoUnitFeet GeoUnit = "ft"
 )
+
+// Valkey API keywords for the `GeoSearch` command
+const (
+	WithcoordValkeyApi = "WITHCOORD"
+	WithdistValkeyApi  = "WITHDIST"
+	WithhashValkeyApi  = "WITHHASH"
+)

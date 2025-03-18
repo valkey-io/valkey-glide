@@ -28,4 +28,32 @@ type GeoSpatialCommands interface {
 	GeoDist(key string, member1 string, member2 string) (Result[float64], error)
 
 	GeoDistWithUnit(key string, member1 string, member2 string, unit options.GeoUnit) (Result[float64], error)
+
+	GeoSearch(
+		key string,
+		searchFrom options.GeoSearchOrigin,
+		searchByShape options.GeoSearchShape,
+	) ([]string, error)
+
+	GeoSearchWithResultOptions(
+		key string,
+		searchFrom options.GeoSearchOrigin,
+		searchByShape options.GeoSearchShape,
+		resultOptions options.GeoSearchResultOptions,
+	) ([]string, error)
+
+	GeoSearchWithOptions(
+		key string,
+		searchFrom options.GeoSearchOrigin,
+		searchByShape options.GeoSearchShape,
+		options options.GeoSearchOptions,
+	) ([]any, error)
+
+	GeoSearchWithFullOptions(
+		key string,
+		searchFrom options.GeoSearchOrigin,
+		searchByShape options.GeoSearchShape,
+		resultOptions options.GeoSearchResultOptions,
+		options options.GeoSearchOptions,
+	) ([]any, error)
 }
