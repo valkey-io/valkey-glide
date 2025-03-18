@@ -1725,10 +1725,7 @@ public class CommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void fcall_readonly_function() {
-        Thread.sleep(500); // Make it slower
-        GlideClusterClient clusterClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+    public void fcall_readonly_function(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "fcall_readonly_function_" + UUID.randomUUID().toString().replace("-", "_");
