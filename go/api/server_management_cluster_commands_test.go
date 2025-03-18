@@ -89,7 +89,7 @@ func ExampleGlideClusterClient_LastSave() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result.IsSingleValue())
+	fmt.Println(result())
 
 	// Output: true
 }

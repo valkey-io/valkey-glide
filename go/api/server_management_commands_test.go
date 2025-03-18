@@ -125,5 +125,5 @@ func ExampleGlideClient_LastSave() {
 	fmt.Printf("response is greater than 0: %T\n", assert)
 	fmt.Println(response)
 
-	// Output: esponse is greater than 0: true
+	// Output: response is greater than 0: true
 }
