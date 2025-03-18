@@ -730,6 +730,11 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 	}
 }
 
+func (suite *GlideTestSuite) TestConfigRewriteCluster() {
+	client := suite.defaultClusterClient()
+	suite.verifyOK(client.ConfigRewrite())
+}
+
 func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
 	client := suite.defaultClusterClient()
 
