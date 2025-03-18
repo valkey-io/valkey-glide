@@ -123,6 +123,5 @@ func ExampleGlideClient_ConfigRewrite() {
 	}
 	fmt.Println(response)
 
-	// Output:
-	// OK
+	// Output: OK
 }
