@@ -5427,7 +5427,7 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 func (client *baseClient) BitOp(bitwiseOperation options.BitOpType, destination string, keys []string) (int64, error) {
 	bitOp, err := options.NewBitOp(bitwiseOperation, destination, keys)
 	if err != nil {
-	 	return defaultIntResponse, err
+		return defaultIntResponse, err
 	}
 	args, err := bitOp.ToArgs()
 	if err != nil {
