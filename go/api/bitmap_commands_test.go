@@ -203,47 +203,47 @@ func ExampleGlideClusterClient_BitFieldRO() {
 
 func ExampleGlideClient_BitOp() {
 	var client *GlideClient = getExampleGlideClient()
-	
+
 	bitopkey1 := "{bitop_test}key1"
 	bitopkey2 := "{bitop_test}key2"
 	destKey := "{bitop_test}dest"
-	
+
 	// Set initial values
 	client.Set(bitopkey1, "foobar")
 	client.Set(bitopkey2, "abcdef")
-	
+
 	// Perform BITOP AND
 	result, err := client.BitOp(options.AND, destKey, []string{bitopkey1, bitopkey2})
 	if err != nil {
-	 fmt.Println("BitOp AND failed:", err)
+		fmt.Println("BitOp AND failed:", err)
 	} else {
-	 fmt.Println("BitOp AND Result:", result)
+		fmt.Println("BitOp AND Result:", result)
 	}
-	
+
 	// Perform BITOP OR
 	result, err = client.BitOp(options.OR, destKey, []string{bitopkey1, bitopkey2})
 	if err != nil {
-	 fmt.Println("BitOp OR failed:", err)
+		fmt.Println("BitOp OR failed:", err)
 	} else {
-	 fmt.Println("BitOp OR Result:", result)
+		fmt.Println("BitOp OR Result:", result)
 	}
-	
+
 	// Perform BITOP XOR
 	result, err = client.BitOp(options.XOR, destKey, []string{bitopkey1, bitopkey2})
 	if err != nil {
-	 fmt.Println("BitOp XOR failed:", err)
+		fmt.Println("BitOp XOR failed:", err)
 	} else {
-	 fmt.Println("BitOp XOR Result:", result)
+		fmt.Println("BitOp XOR Result:", result)
 	}
-	
+
 	// Perform BITOP NOT (only one source key allowed)
 	result, err = client.BitOp(options.NOT, destKey, []string{bitopkey1})
 	if err != nil {
-	 fmt.Println("BitOp NOT failed:", err)
+		fmt.Println("BitOp NOT failed:", err)
 	} else {
-	 fmt.Println("BitOp NOT Result:", result)
+		fmt.Println("BitOp NOT Result:", result)
 	}
-	
+
 	// Output:
 	// BitOp AND Result: (expected bit count)
 	// BitOp OR Result: (expected bit count)
