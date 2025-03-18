@@ -1700,9 +1700,8 @@ public class CommandTests {
         script.close();
     }
 
-    @RepeatedTest(1000) // TODO: remove
-    //    @ParameterizedTest // TODO: uncomment
-    //    @MethodSource("getClients")
+    @ParameterizedTest
+    @MethodSource("getClients")
     @SneakyThrows
     public void scriptKill() {
         GlideClient regularClient =
@@ -1727,6 +1726,7 @@ public class CommandTests {
                 testClient.invokeScript(script);
                 Thread.sleep(1000);
 
+                // Wait until script runs
                 int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
