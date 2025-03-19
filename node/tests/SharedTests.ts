@@ -54,6 +54,7 @@ import {
     convertGlideRecordToRecord,
     parseInfoResponse,
     Score,
+    ElementAndScore,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
@@ -4160,6 +4161,12 @@ export function runBaseTests(config: {
                     negInfMember: "-inf",
                 };
                 expect(await client.zadd(key, infMembersScores)).toEqual(2);
+
+                const infElementAndScore: ElementAndScore = [
+                    { element: "infMemberEAS", score: "+inf" },
+                    { element: "negInfMemberEAS", score: "-inf" },
+                ];
+                expect(await client.zadd(key, infElementAndScore)).toEqual(2);
             }, protocol);
         },
         config.timeout,

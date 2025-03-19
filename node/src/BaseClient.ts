@@ -353,6 +353,17 @@ export type StreamEntryDataType = Record<string, [GlideString, GlideString][]>;
 export type Score = number | "+inf" | "-inf";
 
 /**
+ * Data type which represents sorted sets data for input parameter of ZADD command,
+ * including elements and their respective scores.
+ */
+export type ElementAndScore = {
+    /** The sorted set element name. */
+    element: GlideString;
+    /** The element score. */
+    score: Score;
+}[];
+
+/**
  * @internal
  * Convert `GlideRecord<number>` recevied after resolving the value pointer into `SortedSetDataType`.
  */
@@ -4024,10 +4035,7 @@ export class BaseClient {
      */
     public async zadd(
         key: GlideString,
-        membersAndScores:
-            | SortedSetDataType
-            | Record<string, number>
-            | Record<string, Score>,
+        membersAndScores: ElementAndScore | Record<string, Score>,
         options?: ZAddOptions,
     ): Promise<number> {
         return this.createWritePromise(

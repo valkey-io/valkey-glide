@@ -14,6 +14,7 @@ import {
     Score,
     ObjectType,
     SortedSetDataType,
+    ElementAndScore,
 } from "./BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "./GlideClient";
@@ -1443,10 +1444,7 @@ export function convertElementsAndScores(
  */
 export function createZAdd(
     key: GlideString,
-    membersAndScores:
-        | SortedSetDataType
-        | Record<string, number>
-        | Record<string, Score>,
+    membersAndScores: ElementAndScore | Record<string, Score>,
     options?: ZAddOptions,
     incr = false,
 ): command_request.Command {
