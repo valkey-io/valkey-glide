@@ -732,6 +732,9 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 
 func (suite *GlideTestSuite) TestConfigRewriteCluster() {
 	client := suite.defaultClusterClient()
+	resultConfig, err := client.CustomCommand([]string{"CONFIG", "GET", "timeout", "maxmemory"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000", "maxmemory": "1073741824"}, resultConfig)
 	suite.verifyOK(client.ConfigRewrite())
 }
 
@@ -740,15 +743,24 @@ func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
 
 	// ConfigResetStat with option or with multiple options without route
 	opts := options.RouteOption{Route: nil}
+	resultConfig, err := client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000"}, resultConfig)
 	suite.verifyOK(client.ConfigRewriteWithOptions(opts))
 
 	// same sections with random route
 	route := config.Route(config.RandomRoute)
 	opts = options.RouteOption{Route: route}
+	resultConfig, err = client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000"}, resultConfig)
 	suite.verifyOK(client.ConfigRewriteWithOptions(opts))
 
 	// default sections, multi node route
 	route = config.Route(config.AllPrimaries)
 	opts = options.RouteOption{Route: route}
+	resultConfig, err = client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000"}, resultConfig)
 	suite.verifyOK(client.ConfigRewriteWithOptions(opts))
 }
