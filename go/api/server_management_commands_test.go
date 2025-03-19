@@ -116,7 +116,7 @@ func ExampleGlideClient_InfoWithOptions() {
 
 func ExampleGlideClient_ConfigRewrite() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-
+	client.ConfigSet(map[string]string{"timeout": "1000", "maxmemory": "1GB"})
 	response, err := client.ConfigRewrite()
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)

@@ -519,5 +519,7 @@ func (suite *GlideTestSuite) TestTime_Error() {
 
 func (suite *GlideTestSuite) TestConfigRewrite() {
 	client := suite.defaultClient()
+	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
+	suite.verifyOK(client.ConfigSet(configMap))
 	suite.verifyOK(client.ConfigRewrite())
 }
