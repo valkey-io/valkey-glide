@@ -374,12 +374,8 @@ impl Cmd {
     pub fn with_span_by_ptr(&mut self, span_ptr: u64) -> &mut Cmd {
         unsafe {
             Arc::increment_strong_count(span_ptr as *const GlideSpan);
-            println!(
-                "after increment ------------------------------!!!! {:?}",
-                span_ptr
-            );
-            self.span = Some((*unsafe { Arc::from_raw(span_ptr as *const GlideSpan) }).clone());
-            self.span.clone().unwrap().print_span();
+            self.span = Some((*Arc::from_raw(span_ptr as *const GlideSpan)).clone());
+            self.span.clone().unwrap().add_reference();
         }
         self
     }
@@ -610,6 +606,7 @@ impl Cmd {
     /// Return this command span
     #[inline]
     pub fn span(&self) -> Option<GlideSpan> {
+        // println!("%% return the span.clone");
         self.span.clone()
     }
 }

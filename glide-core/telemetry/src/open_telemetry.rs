@@ -8,6 +8,7 @@ use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use url::Url;
@@ -91,6 +92,7 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
 struct GlideSpanInner {
     span: Arc<RwLock<opentelemetry::global::BoxedSpan>>,
     span_name: String,
+    reference_count: Arc<AtomicUsize>,
 }
 
 impl GlideSpanInner {
@@ -107,12 +109,13 @@ impl GlideSpanInner {
         GlideSpanInner {
             span,
             span_name: name.to_string(),
+            reference_count: Arc::new(AtomicUsize::new(1)),
         }
     }
 
     /// Print span name by retrieving the attribute
     pub fn print_span_name(&self) {
-        println!("^^^^^^^^^^^ The span name : {}", self.span_name);
+        println!("The span name is: {}", self.span_name);
     }
 
     /// Create new span as a child of `parent`, returning an error if the parent span lock is poisoned.
@@ -137,6 +140,7 @@ impl GlideSpanInner {
         Ok(GlideSpanInner {
             span,
             span_name: name.to_string(),
+            reference_count: Arc::new(AtomicUsize::new(1)),
         })
     }
 
@@ -208,12 +212,32 @@ impl GlideSpanInner {
     pub fn end(&self) {
         self.span.write().expect(SPAN_READ_LOCK_ERR).end()
     }
+
+    pub fn get_reference_count(&self) -> usize {
+        self.reference_count.load(Ordering::SeqCst)
+    }
+
+    pub fn increment_reference_count(&self) {
+        self.reference_count.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub fn decrement_reference_count(&self) {
+        self.reference_count.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 impl Drop for GlideSpanInner {
     fn drop(&mut self) {
-        println!("im droping the span ****** ");
-        self.print_span_name();
+        // Only print debug info if the reference count is non-zero
+        let current_count = self.reference_count.load(Ordering::SeqCst);
+        if current_count > 0 {
+            self.decrement_reference_count();
+            // Print debug info only for non-zero reference counts
+            // println!("Dropping span '{}' with reference count: {}",
+            //     self.span_name,
+            //     self.reference_count.load(Ordering::SeqCst)
+            // );
+        }
     }
 }
 
@@ -230,7 +254,6 @@ impl GlideSpan {
     }
 
     pub fn print_span(&self) {
-        println!("--##---- The span name: ----##-- ");
         self.inner.print_span_name();
     }
 
@@ -264,6 +287,22 @@ impl GlideSpan {
     /// Finishes the `Span`.
     pub fn end(&self) {
         self.inner.end()
+    }
+
+    pub fn add_reference(&self) {
+        self.inner.increment_reference_count();
+        // Only print debug info if the reference count is significant
+        let count = self.inner.get_reference_count();
+        // if count > 2 {
+        //     println!(
+        //         "Span '{}' reference count increased to: {}",
+        //         self.inner.span_name, count
+        //     );
+        // }
+    }
+
+    pub fn get_reference_count(&self) -> usize {
+        self.inner.get_reference_count()
     }
 }
 
