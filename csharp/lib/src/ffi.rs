@@ -1,6 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use std::ffi::{c_char, CStr};
+use std::{
+    ffi::{c_char, c_void, CStr},
+    slice::from_raw_parts,
+};
 
 use glide_core::client::{
     AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, NodeAddress,
@@ -11,7 +14,7 @@ use redis::{
         MultipleNodeRoutingInfo, ResponsePolicy, Routable, Route, RoutingInfo,
         SingleNodeRoutingInfo, SlotAddr,
     },
-    Cmd,
+    Cmd, Value,
 };
 
 /// Convert raw C string to a rust string.
@@ -287,5 +290,184 @@ pub(crate) unsafe fn create_route(route_info: *const RouteInfo, cmd: &Cmd) -> Op
             host: ptr_to_str((*route_info).hostname),
             port: (*route_info).port as u16,
         })),
+    }
+}
+
+/// Converts a double pointer to a vec.
+///
+/// # Safety
+///
+/// * `data` and `data_len` must not be `null`.
+/// * `data` must point to `len` consecutive string pointers.
+/// * `data_len` must point to `len` consecutive string lengths.
+/// * `data`, `data_len` and also each pointer stored in `data` must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`].
+///   See the safety documentation of [`from_raw_parts`].
+/// * The caller is responsible of freeing the allocated memory.
+pub(crate) unsafe fn convert_double_pointer_to_vec<'a>(
+    data: *const *const c_void,
+    len: u32,
+    data_len: *const u32,
+) -> Vec<&'a [u8]> {
+    let string_ptrs = unsafe { from_raw_parts(data, len as usize) };
+    let string_lengths = unsafe { from_raw_parts(data_len, len as usize) };
+    let mut result = Vec::<&[u8]>::with_capacity(string_ptrs.len());
+    for (i, &str_ptr) in string_ptrs.iter().enumerate() {
+        let slice = unsafe { from_raw_parts(str_ptr as *const u8, string_lengths[i] as usize) };
+        result.push(slice);
+    }
+    result
+}
+
+pub(crate) fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*const T, usize) {
+    vec.shrink_to_fit();
+    let vec_ptr = vec.as_ptr();
+    let len = vec.len();
+    let _ = Box::into_raw(Box::new(vec));
+    (vec_ptr, len)
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone)]
+pub enum ValueType {
+    #[default]
+    Null = 0,
+    Int = 1,
+    Float = 2,
+    Bool = 3,
+    String = 4,
+    Array = 5,
+    Map = 6,
+    Set = 7,
+    BulkString = 8,
+    OK = 9,
+}
+
+/// Represents FFI-safe variant of [`Value`].
+/// * For [`Value::Nil`] and [`Value::Okay`], only [`ResponseValue::typ`] is stored.
+/// * Simple values such as [`Value::Int`], [`Value::Double`], and [`Value::Boolean`] are stored in [`ResponseValue::val`],
+///   while corresponding [`ResponseValue::typ`] is set.
+/// * For complex values, such as [`Value::BulkString`], [`Value::VerbatimString`], [`Value::SimpleString`], only a pointer
+///   is stored in [`ResponseValue::val`], while corresponding [`ResponseValue::typ`] and [`ResponseValue::size`] are set.
+/// * Way more complex types are stored by reference. For [`Value::Array`], [`Value::Set`] and [`Value::Map`], in
+///   [`ResponseValue::val`] a pointer to an array of another [`ResponseValue`] is stored and [`ResponseValue::size`] contains
+///   the array length (for a map - it is 2x map size).
+#[repr(C)]
+#[derive(Default, Debug, Clone)]
+pub struct ResponseValue {
+    pub typ: ValueType,
+    pub val: i64,
+    /// For [`Value::BulkString`], [`Value::VerbatimString`], [`Value::SimpleString`] - size in bytes.
+    /// For Maps, sets and arrays - amount of values [`ResponseValue::val`] points to.
+    pub size: u32,
+}
+
+impl ResponseValue {
+    /// Build [`ResponseValue`] from a [`Value`].
+    pub(crate) fn from_value(value: Value) -> Self {
+        match value {
+            Value::Nil => ResponseValue {
+                typ: ValueType::Null,
+                ..Default::default()
+            },
+            Value::Int(int) => ResponseValue {
+                typ: ValueType::Int,
+                val: int,
+                size: 0,
+            },
+            Value::BulkString(text) => {
+                let (vec_ptr, len) = convert_vec_to_pointer(text.clone());
+                ResponseValue {
+                    typ: ValueType::BulkString,
+                    val: vec_ptr as i64,
+                    size: len as u32,
+                }
+            }
+            Value::Array(values) => {
+                let vec: Vec<ResponseValue> =
+                    values.into_iter().map(ResponseValue::from_value).collect();
+                let (vec_ptr, len) = convert_vec_to_pointer(vec.clone());
+                ResponseValue {
+                    typ: ValueType::Array,
+                    val: vec_ptr as i64,
+                    size: len as u32,
+                }
+            }
+            Value::Set(values) => {
+                let vec: Vec<ResponseValue> =
+                    values.into_iter().map(ResponseValue::from_value).collect();
+                let (vec_ptr, len) = convert_vec_to_pointer(vec.clone());
+                ResponseValue {
+                    typ: ValueType::Set,
+                    val: vec_ptr as i64,
+                    size: len as u32,
+                }
+            }
+            Value::Okay => ResponseValue {
+                typ: ValueType::OK,
+                ..Default::default()
+            },
+            Value::Map(items) => {
+                let vec: Vec<ResponseValue> = items
+                    .into_iter()
+                    .flat_map(|(k, v)| {
+                        vec![ResponseValue::from_value(k), ResponseValue::from_value(v)]
+                    })
+                    .collect();
+                let (vec_ptr, len) = convert_vec_to_pointer(vec.clone());
+                ResponseValue {
+                    typ: ValueType::Map,
+                    val: vec_ptr as i64,
+                    size: len as u32,
+                }
+            }
+            Value::Double(num) => ResponseValue {
+                typ: ValueType::Float,
+                val: num.to_bits() as i64,
+                size: 0,
+            },
+            Value::Boolean(boolean) => ResponseValue {
+                typ: ValueType::Bool,
+                val: if boolean { 1 } else { 0 },
+                size: 0,
+            },
+            Value::VerbatimString { format: _, text } | Value::SimpleString(text) => {
+                let (vec_ptr, len) = convert_vec_to_pointer(text.clone().into_bytes());
+                ResponseValue {
+                    typ: ValueType::String,
+                    val: vec_ptr as i64,
+                    size: len as u32,
+                }
+            }
+            _ => todo!(), // push, bigint, attribute
+        }
+    }
+
+    /// Restore ownership and free all memory allocated by the current [`ResponseValue`] and referenced [`ResponseValue`] recursively.
+    ///
+    /// # Safety
+    /// * [`ResponseValue::val`] must not be `null` if [`ResponseValue::typ`] is [`ValueType::Array`] or [`ValueType::Set`] or [`ValueType::Map`] or [`ValueType::String`] or [`ValueType::BulkString`].
+    /// * [`ResponseValue::val`] must be able to be safely casted to a valid [`Vec<u8>`] (when [`ResponseValue::typ`] is [`ValueType::String`] or [`ValueType::BulkString`])
+    ///   or [`Vec<ResponseValue>`] in other cases via [`Vec::from_raw_parts`]. See the safety documentation of [`Vec::from_raw_parts`].
+    pub(crate) unsafe fn free_memory(&self) {
+        match self.typ {
+            ValueType::Array | ValueType::Set | ValueType::Map => {
+                let vec = unsafe {
+                    Vec::from_raw_parts(
+                        self.val as *mut ResponseValue,
+                        self.size as usize,
+                        self.size as usize,
+                    )
+                };
+                for val in vec {
+                    val.free_memory();
+                }
+            }
+            ValueType::String | ValueType::BulkString => {
+                let _ = unsafe {
+                    Vec::from_raw_parts(self.val as *mut u8, self.size as usize, self.size as usize)
+                };
+            }
+            _ => (),
+        }
     }
 }

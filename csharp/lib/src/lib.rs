@@ -1,12 +1,14 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 mod ffi;
-use ffi::{create_connection_request, create_route, ConnectionConfig, RouteInfo};
+use ffi::{
+    convert_double_pointer_to_vec, create_connection_request, create_route, ConnectionConfig,
+    ResponseValue, RouteInfo,
+};
 use glide_core::{client::Client as GlideClient, request_type::RequestType};
-use redis::{RedisResult, Value};
+use redis::RedisResult;
 use std::{
     ffi::{c_char, c_void, CStr},
-    slice::from_raw_parts,
     sync::Arc,
 };
 use tokio::runtime::{Builder, Runtime};
@@ -30,7 +32,7 @@ pub struct Client {
 
 struct CommandExecutionCore {
     client: GlideClient,
-    success_callback: unsafe extern "C" fn(usize, i32, *const c_char) -> (),
+    success_callback: unsafe extern "C" fn(usize, *const ResponseValue) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (), // TODO - add specific error codes
 }
 
@@ -39,7 +41,7 @@ struct CommandExecutionCore {
 /// * `config` must be a valid [`ConnectionConfig`] pointer. See the safety documentation of [`create_connection_request`].
 unsafe fn create_client_internal(
     config: *const ConnectionConfig,
-    success_callback: unsafe extern "C" fn(usize, i32, *const c_char) -> (),
+    success_callback: unsafe extern "C" fn(usize, *const ResponseValue) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (),
 ) -> RedisResult<Client> {
     let request = unsafe { create_connection_request(config) };
@@ -68,7 +70,7 @@ unsafe fn create_client_internal(
 #[no_mangle]
 pub unsafe extern "C" fn create_client(
     config: *const ConnectionConfig,
-    success_callback: unsafe extern "C" fn(usize, i32, *const c_char) -> (),
+    success_callback: unsafe extern "C" fn(usize, *const ResponseValue) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (),
 ) -> *const c_void {
     match unsafe { create_client_internal(config, success_callback, failure_callback) } {
@@ -84,7 +86,7 @@ pub unsafe extern "C" fn create_client(
 /// # Safety
 ///
 /// * `client_ptr` must not be `null`.
-/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`std::boxed::Box::from_raw`].
+/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
 #[no_mangle]
 pub extern "C" fn close_client(client_ptr: *const c_void) {
     assert!(!client_ptr.is_null());
@@ -92,50 +94,16 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
     unsafe { Arc::decrement_strong_count(client_ptr as *const Client) };
 }
 
-/// Converts a double pointer to a vec.
-///
-/// # Safety
-///
-/// * `data` and `data_len` must not be `null`.
-/// * `data` must point to `len` consecutive string pointers.
-/// * `data_len` must point to `len` consecutive string lengths.
-/// * `data`, `data_len` and also each pointer stored in `data` must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`].
-///   See the safety documentation of [`from_raw_parts`].
-/// * The caller is responsible of freeing the allocated memory.
-unsafe fn convert_double_pointer_to_vec<'a>(
-    data: *const *const c_void,
-    len: u32,
-    data_len: *const u32,
-) -> Vec<&'a [u8]> {
-    let string_ptrs = unsafe { from_raw_parts(data, len as usize) };
-    let string_lengths = unsafe { from_raw_parts(data_len, len as usize) };
-    let mut result = Vec::<&[u8]>::with_capacity(string_ptrs.len());
-    for (i, &str_ptr) in string_ptrs.iter().enumerate() {
-        let slice = unsafe { from_raw_parts(str_ptr as *const u8, string_lengths[i] as usize) };
-        result.push(slice);
-    }
-    result
-}
-
-fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*const T, usize) {
-    vec.shrink_to_fit();
-    let vec_ptr = vec.as_ptr();
-    let len = vec.len();
-    // TODO use `Box::into_raw`
-    std::mem::forget(vec);
-    (vec_ptr, len)
-}
-
 /// Execute a command.
 /// Expects that arguments will be kept valid until the callback is called.
 ///
 /// # Safety
 /// * `client_ptr` must not be `null`.
-/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`std::boxed::Box::from_raw`].
+/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
 /// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
-/// * `key` and `value` must not be `null`.
-/// * `key` and `value` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
-/// * `key` and `value` must be kept valid until the callback is called.
+/// * `args` and `args_len` must not be `null`.
+/// * `data` must point to `arg_count` consecutive string pointers.
+/// * `args_len` must point to `arg_count` consecutive string lengths. See the safety documentation of [`convert_double_pointer_to_vec`].
 /// * `route_info` could be `null`, but if it is not `null`, it must be a valid [`RouteInfo`] pointer. See the safety documentation of [`create_route`].
 #[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
@@ -175,34 +143,32 @@ pub unsafe extern "C" fn command(
         let result = core.client.clone().send_command(&cmd, route).await;
         unsafe {
             match result {
-                Ok(Value::SimpleString(text)) => {
-                    let (vec_ptr, len) = convert_vec_to_pointer(text.into_bytes());
-                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
+                Ok(value) => {
+                    let res = ResponseValue::from_value(value);
+                    let ptr = Box::into_raw(Box::new(res));
+                    (core.success_callback)(callback_index, ptr);
                 }
-                Ok(Value::BulkString(text)) => {
-                    let (vec_ptr, len) = convert_vec_to_pointer(text);
-                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
-                }
-                Ok(Value::VerbatimString { format: _, text }) => {
-                    let (vec_ptr, len) = convert_vec_to_pointer(text.into_bytes());
-                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
-                }
-                Ok(Value::Okay) => {
-                    let (vec_ptr, len) = convert_vec_to_pointer(String::from("OK").into_bytes());
-                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
-                }
-                Ok(Value::Nil) => (core.success_callback)(callback_index, 0, std::ptr::null()),
                 Err(err) => {
                     dbg!(err); // TODO - report errors
-                    (core.failure_callback)(callback_index)
-                }
-                Ok(value) => {
-                    dbg!(value); // TODO - handle other response types
                     (core.failure_callback)(callback_index)
                 }
             };
         };
     });
+}
+
+/// Free the memory allocated for a [`ResponseValue`] and nested structure.
+///
+/// # Safety
+/// * `ptr` must not be `null`.
+/// * `ptr` must be able to be safely casted to a valid [`Box<ResponseValue>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
+#[allow(rustdoc::private_intra_doc_links)]
+#[no_mangle]
+pub unsafe extern "C" fn free_respose(ptr: *mut ResponseValue) {
+    unsafe {
+        let val = Box::leak(Box::from_raw(ptr));
+        val.free_memory();
+    }
 }
 
 impl From<logger_core::Level> for Level {
