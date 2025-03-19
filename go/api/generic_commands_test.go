@@ -4,6 +4,8 @@ package api
 
 import (
 	"fmt"
+
+	"github.com/google/uuid"
 )
 
 func ExampleGlideClient_CustomCommand() {
@@ -19,6 +21,8 @@ func ExampleGlideClient_CustomCommand() {
 
 func ExampleGlideClient_RandomKey() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
+	key := uuid.New().String()
+	client.Set(key, "Hello")
 	result, err := client.RandomKey()
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
