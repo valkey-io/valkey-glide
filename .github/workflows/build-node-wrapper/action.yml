@@ -88,8 +88,8 @@ runs:
           shell: bash
           working-directory: ./node
           env:
-            TARGET: ${{ inputs.target }}
-            PUBLISH: ${{ inputs.publish }}
+              TARGET: ${{ inputs.target }}
+              PUBLISH: ${{ inputs.publish }}
           run: |
               source "$HOME/.cargo/env"
               TARGET_FLAG=`if [ "$TARGET" != ''  ]; then echo "--target $TARGET"; fi`
