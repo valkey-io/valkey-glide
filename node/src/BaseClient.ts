@@ -924,6 +924,15 @@ export class BaseClient {
         }
     }
 
+    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
+        if (spanPtr === null || spanPtr === undefined) return;
+        if (typeof spanPtr === "number") {
+            return dropOtelSpan(BigInt(spanPtr)); // Convert number to BigInt
+        } else if (spanPtr instanceof LongJS) {
+            return dropOtelSpan(BigInt(spanPtr.toString())); // Convert Long to BigInt via string
+        }
+    }
+
     processResponse(message: response.Response) {
         if (message.closingError != null) {
             this.close(message.closingError);
@@ -973,10 +982,7 @@ export class BaseClient {
         } else {
             resolve(null);
         }
-        console.log(`6666666666 adarrrrrrr :span ptr:  '${message.spanCommand}'`);
-        if(message.spanCommand != null && message.spanCommand != 0 && message.spanCommand instanceof LongJS) {
-            dropOtelSpan(BigInt(message.spanCommand.toString()));
-        }
+        this.dropCommandSpan(message.spanCommand);
     }
 
     processPush(response: response.Response) {
@@ -1072,14 +1078,14 @@ export class BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             
-            //TODO: check the request type.
             let commandObj = Array.isArray(command)? "Batch": (JSON.parse(JSON.stringify(command))).requestType;
-            console.log("Node: Request Type:", commandObj);
+            console.log(" The request is: ", commandObj);
             //TODO: creates the span only if the otel config exits
-            let pair = createLeakedOtelSpan(commandObj);
-            console.log("Node: span created the pair which created is :", pair);
-            let spanPtr = new LongJS(pair[0], pair[1]);
-            console.log("Node: the combained Longggg span created: ", spanPtr, spanPtr.toString());
+            let spanPtr = null;
+            if (Math.random() < 0.01) { // Only create spans for 1% of requests
+                let pair = createLeakedOtelSpan(commandObj);
+                spanPtr = new LongJS(pair[0], pair[1]);
+            }
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
