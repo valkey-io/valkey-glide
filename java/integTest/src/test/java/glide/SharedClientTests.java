@@ -34,7 +34,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(55) // seconds
+@Timeout(35) // seconds
 public class SharedClientTests {
 
     private static GlideClient standaloneClient = null;
@@ -169,7 +169,7 @@ public class SharedClientTests {
         System.out.println(testClient.get(keyName).get());
         List<CompletableFuture<String[]>> responses = new ArrayList<>();
         for (int i = 0; i < inflightRequestsLimit + 1; i++) {
-            responses.add(testClient.blpop(new String[] {keyName}, 0));
+            responses.add(testClient.blpop(new String[] {keyName}, 10));
         }
         System.out.println("Finished adding blpops");
 
