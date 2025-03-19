@@ -144,8 +144,7 @@ pub unsafe extern "C" fn command(
         unsafe {
             match result {
                 Ok(value) => {
-                    let res = ResponseValue::from_value(value);
-                    let ptr = Box::into_raw(Box::new(res));
+                    let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
                     (core.success_callback)(callback_index, ptr);
                 }
                 Err(err) => {

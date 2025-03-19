@@ -9,7 +9,7 @@ using static Glide.ConnectionConfiguration;
 
 namespace Tests.Integration;
 
-public class TestConfiguration// : IDisposable
+public class TestConfiguration : IDisposable
 {
     public static bool IsMacOs => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
@@ -63,7 +63,7 @@ public class TestConfiguration// : IDisposable
         _scriptDir = Path.Combine(projectDir, "..", "utils");
 
         // Stop all if weren't stopped on previous test run
-        //StopServer(false);
+        StopServer(false);
 
         // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
         // Not using `Directory.Exists` before deleting, because another process may delete the dir while IT is running.
@@ -75,22 +75,22 @@ public class TestConfiguration// : IDisposable
         catch (DirectoryNotFoundException) { }
 
         // Start cluster
-        CLUSTER_HOSTS = [(host: "localhost", port: 7000)];// StartServer(true);
+        CLUSTER_HOSTS = StartServer(true);
         // Start standalone
-        STANDALONE_HOSTS = [(host: "localhost", port: 6379)]; //StartServer(false);
+        STANDALONE_HOSTS = StartServer(false);
         // Get redis version
-        SERVER_VERSION = new("8.0.0");// GetServerVersion();
+        SERVER_VERSION = GetServerVersion();
 
         TestConsoleWriteLine($"Cluster hosts = {string.Join(", ", CLUSTER_HOSTS)}");
         TestConsoleWriteLine($"Standalone hosts = {string.Join(", ", STANDALONE_HOSTS)}");
         TestConsoleWriteLine($"Server version = {SERVER_VERSION}");
     }
 
-    //~TestConfiguration() => Dispose();
+    ~TestConfiguration() => Dispose();
 
-    //public void Dispose() =>
-    //    // Stop all
-    //    StopServer(true);
+    public void Dispose() =>
+        // Stop all
+        StopServer(true);
 
     private readonly string _scriptDir;
 
@@ -156,23 +156,23 @@ public class TestConfiguration// : IDisposable
         return hosts;
     }
 
-    //private static Version GetServerVersion()
-    //{
-    //    ProcessStartInfo info = new()
-    //    {
-    //        FileName = "redis-server",
-    //        Arguments = "-v",
-    //        UseShellExecute = false,
-    //        RedirectStandardOutput = true,
-    //    };
-    //    Process? proc = Process.Start(info);
-    //    proc?.WaitForExit();
-    //    string output = proc?.StandardOutput.ReadToEnd() ?? "";
+    private static Version GetServerVersion()
+    {
+        ProcessStartInfo info = new()
+        {
+            FileName = "redis-server",
+            Arguments = "-v",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+        };
+        Process? proc = Process.Start(info);
+        proc?.WaitForExit();
+        string output = proc?.StandardOutput.ReadToEnd() ?? "";
 
-    //    // Redis response:
-    //    // Redis server v=7.2.3 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=7504b1fedf883f2
-    //    // Valkey response:
-    //    // Server v=7.2.5 sha=26388270:0 malloc=jemalloc-5.3.0 bits=64 build=ea40bb1576e402d6
-    //    return new Version(output.Split("v=")[1].Split(" ")[0]);
-    //}
+        // Redis response:
+        // Redis server v=7.2.3 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=7504b1fedf883f2
+        // Valkey response:
+        // Server v=7.2.5 sha=26388270:0 malloc=jemalloc-5.3.0 bits=64 build=ea40bb1576e402d6
+        return new Version(output.Split("v=")[1].Split(" ")[0]);
+    }
 }
