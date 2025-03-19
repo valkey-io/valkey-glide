@@ -24,6 +24,8 @@ runs:
           with:
               cache-on-failure: true
               workspaces: ${{ inputs.cargo-toml-folder }}
+              # this action should be used on the most common runner only
+              shared-key: x86_64-unknown-linux-gnu-${{ inputs.cargo-toml-folder }}
 
         - run: cargo fmt --all -- --check
           working-directory: ${{ inputs.cargo-toml-folder }}
