@@ -13,27 +13,36 @@ type GeoSearchOrigin interface {
 	ToArgs() ([]string, error)
 }
 
+const (
+	GeoCoordOriginAPIKeyword  = "FROMLONLAT"
+	GeoMemberOriginAPIKeyword = "FROMMEMBER"
+)
+
 // The search origin represented by a [GeospatialData] position
 type GeoCoordOrigin struct {
-	geospatialData GeospatialData
+	GeospatialData GeospatialData
 }
 
 // Converts the [GeoCoordOrigin] to the arguments for the `GeoSearch` command
 func (o *GeoCoordOrigin) ToArgs() ([]string, error) {
 	return []string{
-		utils.FloatToString(o.geospatialData.Latitude),
-		utils.FloatToString(o.geospatialData.Longitude),
+		GeoCoordOriginAPIKeyword,
+		utils.FloatToString(o.GeospatialData.Latitude),
+		utils.FloatToString(o.GeospatialData.Longitude),
 	}, nil
 }
 
 // The search origin represented by an existing member in the sorted set
 type GeoMemberOrigin struct {
-	member string
+	Member string
 }
 
 // Converts the [GeoMemberOrigin] to the arguments for the `GeoSearch` command
 func (o *GeoMemberOrigin) ToArgs() ([]string, error) {
-	return []string{o.member}, nil
+	return []string{
+		GeoMemberOriginAPIKeyword,
+		o.Member,
+	}, nil
 }
 
 // The shape of the search area for the `GeoSearch` command
@@ -194,16 +203,17 @@ func (o *GeoSearchResultOptions) SetIsAny(isAny bool) *GeoSearchResultOptions {
 func (o *GeoSearchResultOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
-	if o.countIsSet {
-		args = append(args, utils.IntToString(o.count))
-	}
-
-	if o.isAny {
-		args = append(args, "ANY")
-	}
-
 	if o.sortOrder != "" {
 		args = append(args, string(o.sortOrder))
+	}
+
+	if o.countIsSet {
+		args = append(args, CountKeyword)
+		args = append(args, utils.IntToString(o.count))
+
+		if o.isAny {
+			args = append(args, "ANY")
+		}
 	}
 
 	return args, nil

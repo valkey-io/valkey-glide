@@ -39,7 +39,7 @@ type GeoSpatialCommands interface {
 		searchFrom options.GeoSearchOrigin,
 		searchByShape options.GeoSearchShape,
 		options options.GeoSearchOptions,
-	) ([]string, error)
+	) ([]any, error)
 
 	GeoSearchWithFullOptions(
 		key string,
@@ -47,5 +47,5 @@ type GeoSpatialCommands interface {
 		searchByShape options.GeoSearchShape,
 		resultOptions options.GeoSearchResultOptions,
 		options options.GeoSearchOptions,
-	) ([]string, error)
+	) ([]any, error)
 }
