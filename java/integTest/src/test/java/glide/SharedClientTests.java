@@ -151,11 +151,13 @@ public class SharedClientTests {
         String keyName = "nonexistkeylist" + RandomString.make(4);
 
         if (clusterMode) {
+            System.out.println("Creating regular client");
             testClient =
                     GlideClient.createClient(
                                     commonClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
                             .get();
         } else {
+            System.out.println("Creating cluster client");
             testClient =
                     GlideClusterClient.createClient(
                                     commonClusterClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
@@ -165,24 +167,33 @@ public class SharedClientTests {
         // exercise
         List<CompletableFuture<String[]>> responses = new ArrayList<>();
         for (int i = 0; i < inflightRequestsLimit + 1; i++) {
+            System.out.println("Adding blpop " + i);
             responses.add(testClient.blpop(new String[] {keyName}, 0));
         }
 
         // verify
         // Check that all requests except the last one are still pending
         for (int i = 0; i < inflightRequestsLimit; i++) {
+            System.out.println("Running blpop " + i);
             assertFalse(responses.get(i).isDone(), "Request " + i + " should still be pending");
+            System.out.println("Finished blpop " + i);
         }
 
         // The last request should complete exceptionally
         try {
+            System.out.println("Trying to get the last response");
             responses.get(inflightRequestsLimit).get(100, TimeUnit.MILLISECONDS);
+            System.out.println("Done trying to get the last response");
             fail("Expected the last request to throw an exception");
         } catch (ExecutionException e) {
+            System.out.println("Asserting right exception");
             assertInstanceOf(RequestException.class, e.getCause());
             assertTrue(e.getCause().getMessage().contains("maximum inflight requests"));
+            System.out.println("Done asserting right exception");
         }
 
+        System.out.println("Closing client");
         testClient.close();
+        System.out.println("Done closing client");
     }
 }
