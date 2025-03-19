@@ -22,11 +22,11 @@ func ExampleGlideClient_CustomCommand() {
 func ExampleGlideClient_Move() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	key := uuid.New().String()
-	newKey, err := client.Set(key, "hello")
+	_, err := client.Set(key, "hello")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	result, err := client.Move(newKey, 2)
+	result, err := client.Move(key, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
