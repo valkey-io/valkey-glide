@@ -27,8 +27,8 @@ type GeoCoordOrigin struct {
 func (o *GeoCoordOrigin) ToArgs() ([]string, error) {
 	return []string{
 		GeoCoordOriginAPIKeyword,
-		utils.FloatToString(o.GeospatialData.Latitude),
 		utils.FloatToString(o.GeospatialData.Longitude),
+		utils.FloatToString(o.GeospatialData.Latitude),
 	}, nil
 }
 

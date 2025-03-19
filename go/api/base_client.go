@@ -6645,7 +6645,9 @@ func (client *baseClient) GeoSearchWithResultOptions(
 		return nil, err
 	}
 	args = append(args, geoSearchResultOptionsArgs...)
-
+	// fmt.Println("================================================")
+	// fmt.Println("args:", args)
+	// fmt.Println("================================================")
 	result, err := client.executeCommand(C.GeoSearch, args)
 	if err != nil {
 		return nil, err
