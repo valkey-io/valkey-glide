@@ -1867,12 +1867,12 @@ public class CommandTests {
                             foundUnkillable = true;
                             break;
                         }
-
+                        
                         if (execException.getCause() instanceof RequestException
-                                && execException
-                                        .getMessage()
-                                        .toLowerCase()
-                                        .contains("no scripts in execution right now")) {
+                            && execException
+                            .getMessage()
+                            .toLowerCase()
+                            .contains("no scripts in execution right now")) {
                             promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
                             Thread.sleep(1000);
                         }
