@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.logging.Logger;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
 import java.util.List;
@@ -147,6 +148,9 @@ public class SharedClientTests {
         boolean clusterMode = false;
         int inflightRequestsLimit = 1000;
 
+        Logger.Level originalValue = Logger.getLoggerLevel();
+        Logger.setLoggerConfig(Logger.Level.ERROR);
+
         BaseClient testClient;
         String keyName = "nonexistkeylist" + RandomString.make(4);
 
@@ -197,5 +201,7 @@ public class SharedClientTests {
         System.out.println("Closing client");
         testClient.close();
         System.out.println("Done closing client");
+
+        Logger.setLoggerConfig(originalValue);
     }
 }
