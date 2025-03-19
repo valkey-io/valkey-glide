@@ -30,15 +30,22 @@ outputs:
         description: "Version matrix"
         value: ${{ steps.create-lang-version-matrix.outputs.version-matrix }}
 
-env:
-    EVENT_NAME: ${{ github.event_name }}
-    RUN_FULL_MATRIX: ${{ inputs.run-full-matrix }}
-    CONTAINERS: ${{ inputs.containers }}
-    LANGUAGE_NAME: ${{ inputs.language-name }}
-
 runs:
     using: "composite"
     steps:
+        - name: 'Setup Environment Variables'
+          shell: bash
+          env:
+            EVENT_NAME: ${{ github.event_name }}
+            RUN_FULL_MATRIX: ${{ inputs.run-full-matrix }}
+            CONTAINERS: ${{ inputs.containers }}
+            LANGUAGE_NAME: ${{ inputs.language-name }}
+          run: |
+              echo "EVENT_NAME=$EVENT_NAME" >> $GITHUB_ENV
+              echo "RUN_FULL_MATRIX=$RUN_FULL_MATRIX" >> $GITHUB_ENV
+              echo "CONTAINERS=$CONTAINERS" >> $GITHUB_ENV
+              echo "LANGUAGE_NAME=$LANGUAGE_NAME" >> $GITHUB_ENV
+
         - name: Load engine matrix
           id: load-engine-matrix
           shell: bash
