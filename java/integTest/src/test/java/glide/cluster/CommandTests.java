@@ -1771,6 +1771,7 @@ public class CommandTests {
 
         // create the same function, but with RO flag
         code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), true);
+        System.out.println(code);
 
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
