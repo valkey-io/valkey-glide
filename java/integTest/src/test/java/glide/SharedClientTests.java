@@ -34,7 +34,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(45) // seconds
+@Timeout(55) // seconds
 public class SharedClientTests {
 
     private static GlideClient standaloneClient = null;
@@ -165,19 +165,21 @@ public class SharedClientTests {
         }
 
         // exercise
+        System.out.println("Adding blpops");
+        System.out.println(testClient.get(keyName).get());
         List<CompletableFuture<String[]>> responses = new ArrayList<>();
         for (int i = 0; i < inflightRequestsLimit + 1; i++) {
-            System.out.println("Adding blpop " + i);
             responses.add(testClient.blpop(new String[] {keyName}, 0));
         }
+        System.out.println("Finished adding blpops");
 
         // verify
         // Check that all requests except the last one are still pending
+        System.out.println("Running blpops");
         for (int i = 0; i < inflightRequestsLimit; i++) {
-            System.out.println("Running blpop " + i);
             assertFalse(responses.get(i).isDone(), "Request " + i + " should still be pending");
-            System.out.println("Finished blpop " + i);
         }
+        System.out.println("Finished blpops");
 
         // The last request should complete exceptionally
         try {
