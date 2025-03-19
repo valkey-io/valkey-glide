@@ -36,6 +36,16 @@
     <NoWarn>$(NoWarn);CS1591;CS1573;CS1587</NoWarn>
   </PropertyGroup>
 
+  <Target Name="PreClean" BeforeTargets="Clean">
+    <!-- ToDo: Build for all platforms -->
+    <Exec Command="cargo clean"
+          EnvironmentVariables="CARGO_TERM_COLOR=always"
+          ConsoleToMSBuild="true"
+          WorkingDirectory="$(SolutionDir)/rust">
+      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec"/>
+    </Exec>
+  </Target>
+
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
     <!-- ToDo: Build for all platforms -->
     <Exec Condition="'$(Configuration)' == 'Debug'"

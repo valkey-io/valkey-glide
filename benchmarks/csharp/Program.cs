@@ -61,7 +61,6 @@ public static class MainClass
         return $"{protocol}://{GetAddress(host, port)}";
     }
     private const double PROB_GET = 0.8;
-
     private const double PROB_GET_EXISTING_KEY = 0.8;
     private const int SIZE_GET_KEYSPACE = 3750000; // 3.75 million
     private const int SIZE_SET_KEYSPACE = 3000000; // 3 million
@@ -325,8 +324,9 @@ public static class MainClass
             .ParseArguments<CommandLineOptions>(args).WithParsed(parsed => options = parsed);
 
         NativeClient.Initialize(ELoggerLevel.Info, Path.GetFileNameWithoutExtension(options.ResultsFile));
-        IEnumerable<(int concurrentTasks, int dataSize, int clientCount)> product = options.ConcurrentTasks.SelectMany(concurrentTasks =>
-            options.ClientCount.Select(clientCount => (concurrentTasks, options.DataSize, clientCount))).Where(tuple => tuple.concurrentTasks >= tuple.clientCount);
+        IEnumerable<(int concurrentTasks, int dataSize, int clientCount)> product = options.ConcurrentTasks
+            .SelectMany(concurrentTasks => options.ClientCount.Select(clientCount => (concurrentTasks, options.DataSize, clientCount)))
+            .Where(tuple => tuple.concurrentTasks >= tuple.clientCount);
         foreach ((int concurrentTasks, int dataSize, int clientCount) in product)
         {
             int iterations = options.Minimal ? 1000 : NumberOfIterations(concurrentTasks);

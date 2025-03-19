@@ -22,17 +22,19 @@ use tokio::runtime::Builder;
 /// MUST be used!
 #[no_mangle]
 pub unsafe extern "C-unwind" fn csharp_free_value(mut input: Value) {
-    logger_core::log_debug("csharp_ffi", "Entered csharp_free_value");
+    logger_core::log_trace("csharp_ffi", format!("Entered csharp_free_value to free {:?}", input.kind));
     input.free_data();
+    logger_core::log_trace("csharp_ffi", "Exiting csharp_free_value");
 }
 /// # Summary
 /// Special method to free the returned strings.
 /// MUST be used instead of calling c-free!
 #[no_mangle]
 pub unsafe extern "C-unwind" fn csharp_free_string(input: *const c_char) {
-    logger_core::log_debug("csharp_ffi", "Entered csharp_free_string");
+    logger_core::log_trace("csharp_ffi", "Entered csharp_free_string");
     let str = CString::from_raw(input as *mut c_char);
     drop(str);
+    logger_core::log_trace("csharp_ffi", "Exiting csharp_free_string");
 }
 
 /// # Summary
@@ -62,7 +64,7 @@ pub extern "C-unwind" fn csharp_system_init(
     in_minimal_level: ELoggerLevel,
     in_file_name: *const c_char,
 ) -> InitResult {
-    logger_core::log_debug("csharp_ffi", "Entered csharp_system_init");
+    logger_core::log_trace("csharp_ffi", "Entered csharp_system_init");
     // ToDo: Rebuild into having a log-callback so that we can manage logging at the dotnet side
     let file_name = match helpers::grab_str(in_file_name) {
         Ok(d) => d,
@@ -100,6 +102,7 @@ pub extern "C-unwind" fn csharp_system_init(
         ),
     };
 
+    logger_core::log_trace("csharp_ffi", "Exiting csharp_system_init");
     InitResult {
         success: true as c_int,
         logger_level: match logger_level {
@@ -132,7 +135,7 @@ pub extern "C-unwind" fn csharp_system_init(
 /// It is **not optional** to call them to free data allocated by the API!
 #[no_mangle]
 pub extern "C-unwind" fn csharp_create_client_handle(
-    in_connection_request: ConnectionRequest
+    in_connection_request: ConnectionRequest,
 ) -> CreateClientHandleResult {
     let request = match in_connection_request.to_redis() {
         Ok(d) => d,
@@ -159,7 +162,6 @@ pub extern "C-unwind" fn csharp_create_client_handle(
             }
         },
     };
-
 
     let runtime = match Builder::new_multi_thread()
         .enable_all()
@@ -234,10 +236,11 @@ pub extern "C-unwind" fn csharp_create_client_handle(
 /// It is **not optional** to call them to free data allocated by the API!
 #[no_mangle]
 pub extern "C-unwind" fn csharp_free_client_handle(in_client_ptr: *const c_void) {
-    logger_core::log_debug("csharp_ffi", "Entered csharp_free_client_handle");
+    logger_core::log_trace("csharp_ffi", "Entered csharp_free_client_handle");
     let client_ptr = unsafe { Box::from_raw(in_client_ptr as *mut FFIHandle) };
     let _runtime_handle = client_ptr.runtime.enter();
     drop(client_ptr);
+    logger_core::log_trace("csharp_ffi", "Exiting csharp_free_client_handle");
 }
 
 /// # Summary
@@ -280,60 +283,38 @@ pub extern "C-unwind" fn csharp_command(
     in_args: *const *const c_char,
     in_args_count: c_int,
 ) -> CommandResult {
-    logger_core::log_debug("csharp_ffi", "Entered csharp_command");
+    logger_core::log_trace("csharp_ffi", "Entered csharp_command");
     if in_client_ptr.is_null() {
-        return CommandResult {
-            success: false as c_int,
-            error_string: match CString::from_str("Null handle passed") {
-                Ok(d) => d.into_raw(),
-                Err(_) => null(),
-            },
-        };
+        logger_core::log_error(
+            "csharp_ffi",
+            "Error in csharp_command called with null handle",
+        );
+        return CommandResult::new_error(helpers::to_cstr_ptr_or_null("Null handle passed"));
     }
-    let args = match helpers::grab_vec::<*const c_char, String, Utf8OrEmptyError>(
-        in_args,
-        in_args_count as usize,
-        |it| -> Result<String, Utf8OrEmptyError> {
-            match helpers::grab_str(*it) {
-                Ok(d) => match d {
-                    None => Err(Utf8OrEmptyError::Empty),
-                    Some(d) => Ok(d),
-                },
-                Err(e) => Err(Utf8OrEmptyError::Utf8Error(e)),
-            }
-        },
-    ) {
+    let args = match helpers::grab_vec_str(in_args, in_args_count as usize) {
         Ok(d) => d,
-        Err(e) => match e {
-            Utf8OrEmptyError::Utf8Error(e) => {
-                return CommandResult {
-                    success: false as c_int,
-                    error_string: match CString::from_str(e.to_string().as_str()) {
-                        Ok(d) => d.into_raw(),
-                        Err(_) => null(),
-                    },
+        Err(e) => {
+            logger_core::log_error(
+                "csharp_ffi",
+                format!("Error in string transformation: {:?}", e.to_string()),
+            );
+            return match e {
+                Utf8OrEmptyError::Utf8Error(e) => {
+                    CommandResult::new_error(helpers::to_cstr_ptr_or_null(e.to_string().as_str()))
                 }
-            }
-            Utf8OrEmptyError::Empty => {
-                return CommandResult {
-                    success: false as c_int,
-                    error_string: match CString::from_str("Null value passed for host") {
-                        Ok(d) => d.into_raw(),
-                        Err(_) => null(),
-                    },
-                }
-            }
-        },
+                Utf8OrEmptyError::Empty => CommandResult::new_error(helpers::to_cstr_ptr_or_null(
+                    "Null value passed for host",
+                )),
+            };
+        }
     };
     let cmd = match in_request_type.get_command() {
         None => {
-            return CommandResult {
-                success: false as c_int,
-                error_string: match CString::from_str("Unknown request type") {
-                    Ok(d) => d.into_raw(),
-                    Err(_) => null(),
-                },
-            }
+            logger_core::log_error(
+                "csharp_ffi",
+                "Error in csharp_command called with unknown request type",
+            );
+            return CommandResult::new_error(helpers::to_cstr_ptr_or_null("Unknown request type"));
         }
         Some(d) => d,
     };
@@ -343,27 +324,20 @@ pub extern "C-unwind" fn csharp_command(
     let ffi_handle = unsafe { Box::leak(Box::from_raw(in_client_ptr as *mut FFIHandle)) };
     let handle = ffi_handle.handle.clone();
     ffi_handle.runtime.spawn(async move {
-        logger_core::log_debug("csharp_ffi", "Entered command task");
+        logger_core::log_trace("csharp_ffi", "Entered command task with");
         let data: redis::Value = match handle.command(cmd, args).await {
             Ok(d) => d,
             Err(e) => {
-                let message = match CString::from_str(e.to_string().as_str()) {
-                    Ok(d) => d.into_raw() as *const c_char,
-                    Err(_) => null(),
-                };
-                logger_core::log_debug("csharp_ffi", "Error in command task");
+                logger_core::log_error("csharp_ffi", format!("Error handling command in task of csharp_command: {:?}", e.to_string()));
+                let value = Value::simple_string_with_null(e.to_string().as_str());
                 match catch_unwind(|| unsafe {
+                    logger_core::log_trace("csharp_ffi", "Calling command callback of csharp_command");
                     callback(
                         callback_data as *mut c_void,
                         false as c_int,
-                        Value {
-                            data: ValueUnion {
-                                ptr: message as *mut c_void,
-                            },
-                            kind: ValueKind::SimpleString,
-                            length: 0,
-                        },
-                    )
+                        value,
+                    );
+                    logger_core::log_trace("csharp_ffi", "Called command callback of csharp_command");
                 }) {
                     Err(e) => logger_core::log_error(
                         "csharp_ffi",
@@ -378,7 +352,9 @@ pub extern "C-unwind" fn csharp_command(
             match Value::from_redis(&data) {
                 Ok(data) => {
                     match catch_unwind(|| {
-                        callback(callback_data as *mut c_void, true as c_int, data)
+                        logger_core::log_trace("csharp_ffi", "Calling command callback of csharp_command");
+                        callback(callback_data as *mut c_void, true as c_int, data);
+                        logger_core::log_trace("csharp_ffi", "Called command callback of csharp_command");
                     }) {
                         Err(e) => logger_core::log_error(
                             "csharp_ffi",
@@ -388,23 +364,15 @@ pub extern "C-unwind" fn csharp_command(
                     }
                 }
                 Err(e) => {
-                    let message = match CString::from_str(e.to_string().as_str()) {
-                        Ok(d) => d.into_raw() as *const c_char,
-                        Err(_) => null(),
-                    };
-                    logger_core::log_debug("csharp_ffi", "Error in command task");
+                    logger_core::log_error("csharp_ffi", format!("Error transforming command result in task of csharp_command: {:?}", e.to_string()));
                     match catch_unwind(|| {
+                        logger_core::log_trace("csharp_ffi", "Calling command callback of csharp_command");
                         callback(
                             callback_data as *mut c_void,
                             false as c_int,
-                            Value {
-                                data: ValueUnion {
-                                    ptr: message as *mut c_void,
-                                },
-                                kind: ValueKind::SimpleString,
-                                length: 0,
-                            },
-                        )
+                            Value::simple_string_with_null(e.to_string().as_str()),
+                        );
+                        logger_core::log_trace("csharp_ffi", "Called command callback of csharp_command");
                     }) {
                         Err(e) => logger_core::log_error(
                             "csharp_ffi",
@@ -416,13 +384,11 @@ pub extern "C-unwind" fn csharp_command(
             }
         }
 
-        logger_core::log_debug("csharp_ffi", "Exiting tokio spawn from csharp_command");
+        logger_core::log_trace("csharp_ffi", "Exiting tokio spawn from csharp_command");
     });
 
-    CommandResult {
-        success: true as c_int,
-        error_string: null(),
-    }
+    logger_core::log_trace("csharp_ffi", "Exiting csharp_command");
+    CommandResult::new_success()
 }
 #[no_mangle]
 pub extern "C-unwind" fn csharp_command_blocking(
@@ -431,67 +397,36 @@ pub extern "C-unwind" fn csharp_command_blocking(
     in_args: *const *const c_char,
     in_args_count: c_int,
 ) -> BlockingCommandResult {
-    logger_core::log_debug("csharp_ffi", "Entered csharp_command_blocking");
+    logger_core::log_trace("csharp_ffi", "Entered csharp_command_blocking");
     if in_client_ptr.is_null() {
-        return BlockingCommandResult {
-            success: false as c_int,
-            error_string: match CString::from_str("Null handle passed") {
-                Ok(d) => d.into_raw(),
-                Err(_) => null(),
-            },
-            value: Value::nil(),
-        };
+        return BlockingCommandResult::new_error(helpers::to_cstr_ptr_or_null(
+            "Null handle passed",
+        ));
     }
-    let args = match helpers::grab_vec(
-        in_args,
-        in_args_count as usize,
-        |it| -> Result<String, Utf8OrEmptyError> {
-            match helpers::grab_str(*it) {
-                Ok(d) => match d {
-                    None => Err(Utf8OrEmptyError::Empty),
-                    Some(d) => Ok(d),
-                },
-                Err(e) => Err(Utf8OrEmptyError::Utf8Error(e)),
-            }
-        },
-    ) {
+    let args = match helpers::grab_vec_str(in_args, in_args_count as usize) {
         Ok(d) => d,
         Err(e) => match e {
             Utf8OrEmptyError::Utf8Error(e) => {
-                return BlockingCommandResult {
-                    success: false as c_int,
-                    error_string: match CString::from_str(e.to_string().as_str()) {
-                        Ok(d) => d.into_raw(),
-                        Err(_) => null(),
-                    },
-                    value: Value::nil(),
-                }
+                return BlockingCommandResult::new_error(helpers::to_cstr_ptr_or_null(
+                    e.to_string().as_str(),
+                ))
             }
             Utf8OrEmptyError::Empty => {
-                return BlockingCommandResult {
-                    success: false as c_int,
-                    error_string: match CString::from_str("Null value passed for host") {
-                        Ok(d) => d.into_raw(),
-                        Err(_) => null(),
-                    },
-                    value: Value::nil(),
-                }
+                return BlockingCommandResult::new_error(helpers::to_cstr_ptr_or_null(
+                    "Null value passed for host",
+                ))
             }
         },
     };
     let cmd = match in_request_type.get_command() {
         None => {
-            return BlockingCommandResult {
-                success: false as c_int,
-                error_string: match CString::from_str("Unknown request type") {
-                    Ok(d) => d.into_raw(),
-                    Err(_) => null(),
-                },
-                value: Value::nil(),
-            }
+            return BlockingCommandResult::new_error(helpers::to_cstr_ptr_or_null(
+                "Unknown request type",
+            ))
         }
         Some(d) => d,
     };
+
 
     let ffi_handle = unsafe { Box::leak(Box::from_raw(in_client_ptr as *mut FFIHandle)) };
     let result: BlockingCommandResult;
@@ -499,65 +434,37 @@ pub extern "C-unwind" fn csharp_command_blocking(
         let _runtime_handle = ffi_handle.runtime.enter();
         let handle = ffi_handle.handle.clone();
         result = ffi_handle.runtime.block_on(async move {
-            logger_core::log_debug("csharp_ffi", "Entered command task");
+            logger_core::log_trace("csharp_ffi", "Entered command task");
             let data = match handle.command(cmd, args).await {
                 Ok(d) => d,
                 Err(e) => {
-                    let message = match CString::from_str(e.to_string().as_str()) {
-                        Ok(d) => d.into_raw() as *const c_char,
-                        Err(_) => null(),
-                    };
-                    logger_core::log_debug("csharp_ffi", "Error in command task");
-                    return BlockingCommandResult {
-                        success: 1,
-                        value: Value {
-                            data: ValueUnion {
-                                ptr: message as *mut c_void,
-                            },
-                            kind: ValueKind::SimpleString,
-                            length: 0,
-                        },
-                        error_string: null(),
-                    };
+                    let message = helpers::to_cstr_ptr_or_null(e.to_string().as_str());
+                    logger_core::log_error(
+                        "csharp_ffi",
+                        format!("Error handling command: {:?}", e),
+                    );
+                    return BlockingCommandResult::new_error(message);
                 }
             };
             return match Value::from_redis(&data) {
-                Ok(data) => BlockingCommandResult {
-                    success: 1,
-                    value: data,
-                    error_string: null(),
-                },
+                Ok(data) => BlockingCommandResult::new_success(data),
                 Err(e) => {
-                    let message = match CString::from_str(e.to_string().as_str()) {
-                        Ok(d) => d.into_raw() as *const c_char,
-                        Err(_) => null(),
-                    };
-                    logger_core::log_debug("csharp_ffi", "Error in command task");
-                    BlockingCommandResult {
-                        success: 1,
-                        value: Value {
-                            data: ValueUnion {
-                                ptr: message as *mut c_void,
-                            },
-                            kind: ValueKind::SimpleString,
-                            length: 0,
-                        },
-                        error_string: null(),
-                    }
+                    let message = helpers::to_cstr_ptr_or_null(e.to_string().as_str());
+                    logger_core::log_error(
+                        "csharp_ffi",
+                        format!("Error transforming result: {:?}", e),
+                    );
+                    BlockingCommandResult::new_error(message)
                 }
             };
         });
     }
-    logger_core::log_debug("csharp_ffi", "Exiting csharp_command_blocking");
-
-    return result;
+    logger_core::log_trace("csharp_ffi", "Exiting csharp_command_blocking");
+    result
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::data::*;
-
     const HOST: &str = "localhost";
     const PORT: u16 = 49493;
 }

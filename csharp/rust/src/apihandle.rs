@@ -20,6 +20,7 @@ impl Handle {
         for arg in args {
             cmd.arg(arg.into_bytes());
         }
+        logger_core::log_trace("csharp_ffi::Handle", format!("Sending command {:?}", cmd));
         let result = match clone.send_command(&cmd, None).await {
             Ok(d) => d,
             Err(e) => return Err(e),

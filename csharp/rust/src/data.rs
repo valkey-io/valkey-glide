@@ -4,12 +4,11 @@ use crate::helpers;
 use crate::helpers::grab_str;
 use glide_core::client;
 use glide_core::client::AuthenticationInfo;
-use redis::{RedisWrite, VerbatimFormat};
+use redis::VerbatimFormat;
 use std::ffi::{
-    c_double, c_int, c_long, c_longlong, c_uint, c_ulonglong, c_void, CString,
-    NulError,
+    c_double, c_int, c_long, c_longlong, c_uint, c_ulonglong, c_void, CString, NulError,
 };
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 use std::mem::forget;
 use std::ops::Add;
 use std::os::raw::c_char;
@@ -48,6 +47,8 @@ pub struct NodeAddress {
     pub host: *const c_char,
     pub port: u16,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Utf8OrEmptyError {
     Utf8Error(Utf8Error),
     Empty,
@@ -55,6 +56,15 @@ pub enum Utf8OrEmptyError {
 impl From<Utf8Error> for Utf8OrEmptyError {
     fn from(value: Utf8Error) -> Self {
         Self::Utf8Error(value)
+    }
+}
+
+impl Display for Utf8OrEmptyError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Utf8OrEmptyError::Utf8Error(e) => e.fmt(f),
+            Utf8OrEmptyError::Empty => "Empty".fmt(f),
+        }
     }
 }
 
@@ -80,11 +90,46 @@ pub struct CommandResult {
     pub success: c_int,
     pub error_string: *const c_char,
 }
+
+impl CommandResult {
+    pub fn new_success() -> Self {
+        Self {
+            success: 1,
+            error_string: null(),
+        }
+    }
+
+    pub fn new_error(error_message: *const c_char) -> Self {
+        Self {
+            success: 0,
+            error_string: error_message,
+        }
+    }
+}
+
 #[repr(C)]
 pub struct BlockingCommandResult {
     pub success: c_int,
     pub error_string: *const c_char,
     pub value: Value,
+}
+
+impl BlockingCommandResult {
+    pub fn new_success(value: Value) -> Self {
+        Self {
+            success: 1,
+            value,
+            error_string: null(),
+        }
+    }
+
+    pub fn new_error(error_message: *const c_char) -> Self {
+        Self {
+            success: 0,
+            value: Value::nil(),
+            error_string: error_message,
+        }
+    }
 }
 
 pub type CommandCallback =
@@ -98,6 +143,7 @@ pub union ValueUnion {
 }
 #[repr(C)]
 #[allow(dead_code)]
+#[derive(Debug)]
 pub enum ValueKind {
     /// # Summary
     /// A nil response from the server.
@@ -245,11 +291,7 @@ impl Value {
     pub fn from_redis(value: &redis::Value) -> Result<Self, ValueError> {
         unsafe {
             Ok(match value {
-                redis::Value::Nil => Self {
-                    data: ValueUnion { ptr: null() },
-                    length: 0,
-                    kind: ValueKind::Nil,
-                },
+                redis::Value::Nil => Self::nil(),
                 redis::Value::Int(i) => Self {
                     data: ValueUnion { i: *i as c_long },
                     length: 0,
@@ -258,14 +300,16 @@ impl Value {
                 redis::Value::BulkString(d) => {
                     let mut d = d.clone();
                     d.shrink_to_fit();
-                    assert_eq!(d.len(), d.capacity());
-                    Self {
+                    debug_assert_eq!(d.len(), d.capacity());
+                    let result = Self {
                         data: ValueUnion {
                             ptr: d.as_mut_ptr() as *mut c_void,
                         },
                         length: d.len() as c_long,
-                        kind: ValueKind::SimpleString,
-                    }
+                        kind: ValueKind::BulkString,
+                    };
+                    forget(d);
+                    result
                 }
                 redis::Value::Array(values) => {
                     let mut values = values
@@ -273,7 +317,7 @@ impl Value {
                         .map(|d| Value::from_redis(d))
                         .collect::<Result<Vec<_>, _>>()?;
                     values.shrink_to_fit();
-                    assert_eq!(values.len(), values.capacity());
+                    debug_assert_eq!(values.len(), values.capacity());
                     let result = Self {
                         data: ValueUnion {
                             ptr: values.as_mut_ptr() as *mut c_void,
@@ -284,21 +328,8 @@ impl Value {
                     forget(values);
                     result
                 }
-                redis::Value::SimpleString(s) => Self {
-                    data: ValueUnion {
-                        ptr: match CString::from_str(s.as_str()) {
-                            Ok(d) => d.into_raw() as *mut c_void,
-                            Err(e) => return Err(ValueError::NulError(e)),
-                        },
-                    },
-                    length: s.len() as c_long,
-                    kind: ValueKind::SimpleString,
-                },
-                redis::Value::Okay => Self {
-                    data: ValueUnion { ptr: null() },
-                    length: 0,
-                    kind: ValueKind::Okay,
-                },
+                redis::Value::SimpleString(s) => return Self::simple_string(s.as_str()),
+                redis::Value::Okay => Self::okay(),
                 redis::Value::Map(tuples) => {
                     let mut out_tuples = Vec::with_capacity(tuples.len() * 2);
                     for (k, v) in tuples {
@@ -393,6 +424,35 @@ impl Value {
 }
 
 impl Value {
+    pub fn simple_string(s: &str) -> Result<Self, ValueError> {
+        if s.len() == 0 {
+            Ok(Self {
+                data: ValueUnion { ptr: null() },
+                length: 0,
+                kind: ValueKind::SimpleString,
+            })
+        } else {
+            Ok(Self {
+                data: ValueUnion {
+                    ptr: match CString::from_str(s) {
+                        Ok(d) => d.into_raw() as *mut c_void,
+                        Err(e) => return Err(ValueError::NulError(e)),
+                    },
+                },
+                length: s.len() as c_long,
+                kind: ValueKind::SimpleString,
+            })
+        }
+    }
+    pub fn simple_string_with_null(s: &str) -> Self {
+        let ptr = helpers::to_cstr_ptr_or_null(s) as *mut c_void;
+        let len = s.len() as c_long;
+        Self {
+            data: ValueUnion { ptr },
+            length: if !ptr.is_null() { len } else { 0 },
+            kind: ValueKind::SimpleString,
+        }
+    }
     pub fn nil() -> Self {
         Self {
             data: ValueUnion { i: 0 },
@@ -400,16 +460,27 @@ impl Value {
             kind: ValueKind::Nil,
         }
     }
+    pub fn okay() -> Self {
+        Self {
+            data: ValueUnion { i: 0 },
+            length: 0,
+            kind: ValueKind::Okay,
+        }
+    }
     pub unsafe fn free_data(&mut self) {
         match self.kind {
             ValueKind::Nil => { /* empty */ }
             ValueKind::Int => { /* empty */ }
-            ValueKind::BulkString => drop(Vec::from_raw_parts(
-                self.data.ptr as *mut u8,
-                self.length as usize,
-                self.length as usize,
-            )),
+            ValueKind::BulkString => {
+                debug_assert_ne!(null(), self.data.ptr);
+                drop(Vec::from_raw_parts(
+                    self.data.ptr as *mut u8,
+                    self.length as usize,
+                    self.length as usize,
+                ))
+            }
             ValueKind::Array => {
+                debug_assert_ne!(null(), self.data.ptr);
                 let mut values = Vec::from_raw_parts(
                     self.data.ptr as *mut Value,
                     self.length as usize,
@@ -420,9 +491,15 @@ impl Value {
                 }
                 drop(values);
             }
-            ValueKind::SimpleString => drop(CString::from_raw(self.data.ptr as *mut c_char)),
+            ValueKind::SimpleString => {
+                debug_assert!(self.data.ptr != null() || self.length == 0);
+                if self.data.ptr != null() {
+                    drop(CString::from_raw(self.data.ptr as *mut c_char))
+                }
+            }
             ValueKind::Okay => { /* empty */ }
             ValueKind::Map => {
+                debug_assert_ne!(null(), self.data.ptr);
                 let mut values = Vec::from_raw_parts(
                     self.data.ptr as *mut Value,
                     self.length as usize * 2,
@@ -437,6 +514,7 @@ impl Value {
                 todo!("Implement")
             }
             ValueKind::Set => {
+                debug_assert_ne!(null(), self.data.ptr);
                 let mut values = Vec::from_raw_parts(
                     self.data.ptr as *mut Value,
                     self.length as usize,
@@ -450,6 +528,7 @@ impl Value {
             ValueKind::Double => { /* empty */ }
             ValueKind::Boolean => { /* empty */ }
             ValueKind::VerbatimString => {
+                debug_assert_ne!(null(), self.data.ptr);
                 let vec = Vec::from_raw_parts(
                     self.data.ptr as *mut u8,
                     self.length as usize,
@@ -466,7 +545,6 @@ impl Value {
         }
     }
 }
-
 
 #[repr(C)]
 pub enum EReadFromKind {
@@ -498,9 +576,7 @@ impl ReadFrom {
             }
             EReadFromKind::AZAffinityReplicasAndPrimary => {
                 let value = helpers::grab_str_not_null(self.value)?;
-                Some(client::ReadFrom::AZAffinityReplicasAndPrimary(
-                    value,
-                ))
+                Some(client::ReadFrom::AZAffinityReplicasAndPrimary(value))
             }
         })
     }
@@ -587,11 +663,9 @@ impl PeriodicCheck {
             EPeriodicCheckKind::None => None,
             EPeriodicCheckKind::Enabled => Some(client::PeriodicCheck::Enabled),
             EPeriodicCheckKind::Disabled => Some(client::PeriodicCheck::Disabled),
-            EPeriodicCheckKind::ManualInterval => {
-                Some(client::PeriodicCheck::ManualInterval(
-                    Duration::from_secs(self.secs).add(Duration::from_nanos(self.nanos)),
-                ))
-            }
+            EPeriodicCheckKind::ManualInterval => Some(client::PeriodicCheck::ManualInterval(
+                Duration::from_secs(self.secs).add(Duration::from_nanos(self.nanos)),
+            )),
         }
     }
 }

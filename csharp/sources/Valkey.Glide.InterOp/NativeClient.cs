@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+
 using Valkey.Glide.InterOp.Exceptions;
 using Valkey.Glide.InterOp.Native;
 
@@ -25,8 +27,8 @@ public sealed class NativeClient : IDisposable, INativeClient
     private static readonly nint CommandCallbackFptr = Marshal.GetFunctionPointerForDelegate(CommandCallbackDel);
 
     private static readonly SemaphoreSlim Semaphore = new(1, 1);
-    private static          bool          _initialized;
-    private                 nint?         _handle;
+    private static bool _initialized;
+    private nint? _handle;
 
     internal const int SmallStringOptimizationArgs = 20;
     internal const int SmallStringOptimizationBuffer = 100;
@@ -46,60 +48,63 @@ public sealed class NativeClient : IDisposable, INativeClient
             {
                 Native.ConnectionRequest nativeRequest = new Native.ConnectionRequest
                 {
-                    client_name          = MarshalCollectingString(request.ClientName),
+                    client_name = MarshalCollectingString(request.ClientName),
                     cluster_mode_enabled = request.ClusterMode ? 1 : 0,
                     connection_retry_strategy = new Native.ConnectionRetryStrategy
                     {
-                        ignore            = !request.ConnectionRetryStrategy.HasValue ? 1 : default,
+                        ignore = !request.ConnectionRetryStrategy.HasValue ? 1 : default,
                         number_of_retries = request.ConnectionRetryStrategy?.NumberOfRetries ?? default,
-                        exponent_base     = request.ConnectionRetryStrategy?.ExponentialBase ?? default,
-                        factor            = request.ConnectionRetryStrategy?.Factor ?? default,
+                        exponent_base = request.ConnectionRetryStrategy?.ExponentialBase ?? default,
+                        factor = request.ConnectionRetryStrategy?.Factor ?? default,
                     },
-                    connection_timeout = new OptionalU32
-                    {
-                        ignore = !request.ConnectionTimeout.HasValue ? 1 : 0,
-                        value  = (uint?)request.ConnectionTimeout?.TotalMilliseconds ?? default
-                    },
-                    otel_span_flush_interval_ms = new OptionalU64
-                    {
-                        ignore = !request.OpenTelemetrySpanFlushInterval.HasValue ? 1 : 0,
-                        value  = (ulong?)request.OpenTelemetrySpanFlushInterval?.TotalMilliseconds ?? default
-                    },
-                    request_timeout = new OptionalU32
-                    {
-                        ignore = !request.RequestTimeout.HasValue ? 1 : 0,
-                        value  = (uint?) request.RequestTimeout?.TotalMilliseconds ?? default
-                    },
+                    connection_timeout =
+                        new OptionalU32
+                        {
+                            ignore = !request.ConnectionTimeout.HasValue ? 1 : 0,
+                            value = (uint?)request.ConnectionTimeout?.TotalMilliseconds ?? default
+                        },
+                    otel_span_flush_interval_ms =
+                        new OptionalU64
+                        {
+                            ignore = !request.OpenTelemetrySpanFlushInterval.HasValue ? 1 : 0,
+                            value = (ulong?)request.OpenTelemetrySpanFlushInterval?.TotalMilliseconds ?? default
+                        },
+                    request_timeout =
+                        new OptionalU32
+                        {
+                            ignore = !request.RequestTimeout.HasValue ? 1 : 0,
+                            value = (uint?)request.RequestTimeout?.TotalMilliseconds ?? default
+                        },
                     inflight_requests_limit = new OptionalU32
                     {
                         ignore = !request.InflightRequestsLimit.HasValue ? 1 : 0,
-                        value  = request.InflightRequestsLimit ?? default
+                        value = request.InflightRequestsLimit ?? default
                     },
                     periodic_checks = new Native.PeriodicCheck
                     {
                         kind = request.PeriodicChecks?.Kind switch
                         {
-                            EPeriodicCheckKind.Enabled        => Native.EPeriodicCheckKind.Enabled,
-                            EPeriodicCheckKind.Disabled       => Native.EPeriodicCheckKind.Disabled,
+                            EPeriodicCheckKind.Enabled => Native.EPeriodicCheckKind.Enabled,
+                            EPeriodicCheckKind.Disabled => Native.EPeriodicCheckKind.Disabled,
                             EPeriodicCheckKind.ManualInterval => Native.EPeriodicCheckKind.ManualInterval,
-                            null                              => Native.EPeriodicCheckKind.None,
-                            _                                 => throw new ArgumentOutOfRangeException(),
+                            null => Native.EPeriodicCheckKind.None,
+                            _ => throw new ArgumentOutOfRangeException(),
                         }
                     },
                     protocol = request.Protocol switch
                     {
                         EProtocolVersion.Resp2 => Native.EProtocolVersion.RESP2,
                         EProtocolVersion.Resp3 => Native.EProtocolVersion.RESP3,
-                        null                   => Native.EProtocolVersion.None,
-                        _                      => throw new ArgumentOutOfRangeException()
+                        null => Native.EProtocolVersion.None,
+                        _ => throw new ArgumentOutOfRangeException()
                     },
                     tls_mode = request.TlsMode switch
                     {
-                        ETlsMode.NoTls       => Native.ETlsMode.None,
+                        ETlsMode.NoTls => Native.ETlsMode.None,
                         ETlsMode.InsecureTls => Native.ETlsMode.InsecureTls,
-                        ETlsMode.SecureTls   => Native.ETlsMode.SecureTls,
-                        null                 => Native.ETlsMode.None,
-                        _                    => throw new ArgumentOutOfRangeException()
+                        ETlsMode.SecureTls => Native.ETlsMode.SecureTls,
+                        null => Native.ETlsMode.None,
+                        _ => throw new ArgumentOutOfRangeException()
                     },
                     auth_password = MarshalCollectingString(request.AuthPassword),
                     auth_username = MarshalCollectingString(request.AuthUsername),
@@ -108,28 +113,24 @@ public sealed class NativeClient : IDisposable, INativeClient
                     {
                         kind = request.ReplicationStrategy?.Kind switch
                         {
-                            EReadFromKind.Primary       => Native.EReadFromKind.Primary,
+                            EReadFromKind.Primary => Native.EReadFromKind.Primary,
                             EReadFromKind.PreferReplica => Native.EReadFromKind.PreferReplica,
-                            EReadFromKind.AzAffinity    => Native.EReadFromKind.AZAffinity,
+                            EReadFromKind.AzAffinity => Native.EReadFromKind.AZAffinity,
                             EReadFromKind.AzAffinityReplicasAndPrimary => Native.EReadFromKind
                                 .AZAffinityReplicasAndPrimary,
                             null => Native.EReadFromKind.None,
-                            _    => throw new ArgumentOutOfRangeException()
+                            _ => throw new ArgumentOutOfRangeException()
                         },
                         value = MarshalCollectingString(request.ReplicationStrategy?.AvailabilityZone),
                     },
-                    database_id      = request.DatabaseId,
-                    addresses_length = (uint) request.Addresses.LongLength,
-                    addresses        = addressesPtr,
+                    database_id = request.DatabaseId,
+                    addresses_length = (uint)request.Addresses.LongLength,
+                    addresses = addressesPtr,
                 };
                 for (int i = 0; i < request.Addresses.Length; i++)
                 {
                     Node host = request.Addresses[i];
-                    addresses[i] = new NodeAddress
-                    {
-                        host = MarshalCollectingString(host.Address),
-                        port = host.Port,
-                    };
+                    addresses[i] = new NodeAddress {host = MarshalCollectingString(host.Address), port = host.Port,};
                 }
 
                 CreateClientHandleResult result = Imports.create_client_handle(nativeRequest);
@@ -194,7 +195,7 @@ public sealed class NativeClient : IDisposable, INativeClient
             if (input is null)
                 return null;
             byte* ptr = MarshalUtf8String(input);
-            strings.Add((nint) ptr);
+            strings.Add((nint)ptr);
             return ptr;
         }
     }
@@ -219,7 +220,7 @@ public sealed class NativeClient : IDisposable, INativeClient
             {
                 fixed (char* logFilePathPtr = logFilePath)
                 {
-                    InitResult result = Imports.system_init(loggerLevel, (byte*) logFilePathPtr);
+                    InitResult result = Imports.system_init(loggerLevel, (byte*)logFilePathPtr);
                     if (result.success == 0 /* is false */)
                         throw new GlideException("Failed to initialize the API.");
                 }
@@ -243,7 +244,7 @@ public sealed class NativeClient : IDisposable, INativeClient
     {
         if (buffer is null)
             return;
-        nint ptr = (nint) buffer - 1;
+        nint ptr = (nint)buffer - 1;
         if (Marshal.ReadByte(ptr) == 0) // Is allocated on heap
             Marshal.FreeCoTaskMem(ptr);
     }
@@ -264,11 +265,11 @@ public sealed class NativeClient : IDisposable, INativeClient
                 Marshal.WriteByte(ptr + utf8.Length + 1, 0);
             }
 
-            return (byte*) ptr + 1;
+            return (byte*)ptr + 1;
         }
         else
         {
-            nint ptr = (nint) buffer;
+            nint ptr = (nint)buffer;
             fixed (byte* utf8Ptr = utf8)
             {
                 Marshal.WriteByte(ptr, 1); // Is allocated on buffer (potentially stack)
@@ -315,29 +316,23 @@ public sealed class NativeClient : IDisposable, INativeClient
             TaskCompletionSource<Value>? commandCallbackData;
             try
             {
-                commandCallbackData = (TaskCompletionSource<Value>) dataHandle.Target;
+                commandCallbackData = (TaskCompletionSource<Value>)dataHandle.Target;
             }
             finally
             {
                 dataHandle.Free();
             }
 
+            Value value = FromNativeValue(payload);
             if (success != 0 /* is true */)
-                commandCallbackData.SetResult(FromNativeValue(payload));
+                commandCallbackData.SetResult(value);
+            else if (value.IsString(out string message))
+                commandCallbackData.SetException(new Exception(message));
             else
-                commandCallbackData.SetException(
-                    new Exception(
-                        FromNativeValue(payload)
-                            .Data
-                        ?? "Unknown error"
-                    )
-                );
+                commandCallbackData.SetException(new Exception("Unknown error"));
         }
         catch (Exception)
         {
-            #if DEBUG
-            Debugger.Break();
-            #endif
             // empty
         }
     }
@@ -367,7 +362,8 @@ public sealed class NativeClient : IDisposable, INativeClient
     {
         if (_handle is null)
             throw new ObjectDisposedException(nameof(NativeClient), "ClientHandle is null");
-        TaskCompletionSource<Value> tcs = new TaskCompletionSource<Value>(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource<Value> tcs =
+            new TaskCompletionSource<Value>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         GCHandle dataHandle = GCHandle.Alloc(tcs, GCHandleType.Normal);
         try
@@ -477,60 +473,60 @@ public sealed class NativeClient : IDisposable, INativeClient
                 case Native.EValueKind.Int:
                     return Value.CreateInteger(input.data.i);
                 case Native.EValueKind.BulkString:
-                    return Value.CreateString(HandleString(input.data.ptr, (int) input.length, false));
+                    return Value.CreateString(HandleString(input.data.ptr, (int)input.length, false));
                 case Native.EValueKind.Array:
-                {
-                    Value[] array = new Value[input.length];
-                    Native.Value* ptr = (Native.Value*) input.data.ptr;
-                    for (int i = 0; i < input.length; i++)
                     {
-                        array[i] = FromNativeValue(ptr[i], false);
-                    }
+                        Value[] array = new Value[input.length];
+                        Native.Value* ptr = (Native.Value*)input.data.ptr;
+                        for (int i = 0; i < input.length; i++)
+                        {
+                            array[i] = FromNativeValue(ptr[i], false);
+                        }
 
-                    return Value.CreateArray(array);
-                }
+                        return Value.CreateArray(array);
+                    }
                 case Native.EValueKind.SimpleString:
-                    return InterOp.Value.CreateString(HandleString(input.data.ptr, (int) input.length, false));
+                    return InterOp.Value.CreateString(HandleString(input.data.ptr, (int)input.length, false));
                 case Native.EValueKind.Okay:
                     return Value.CreateOkay();
                 case Native.EValueKind.Map:
-                {
-                    KeyValuePair<Value, Value>[] array = new KeyValuePair<Value, Value>[input.length];
-                    Native.Value* ptr = (Native.Value*) input.data.ptr;
-                    for (int i = 0, j = 0; i < input.length; i++, j += 2)
                     {
-                        Value key = FromNativeValue(ptr[j], false);
-                        Value value = FromNativeValue(ptr[j + 1], false);
-                        array[i] = new KeyValuePair<Value, Value>(key, value);
-                    }
+                        KeyValuePair<Value, Value>[] array = new KeyValuePair<Value, Value>[input.length];
+                        Native.Value* ptr = (Native.Value*)input.data.ptr;
+                        for (int i = 0, j = 0; i < input.length; i++, j += 2)
+                        {
+                            Value key = FromNativeValue(ptr[j], false);
+                            Value value = FromNativeValue(ptr[j + 1], false);
+                            array[i] = new KeyValuePair<Value, Value>(key, value);
+                        }
 
-                    return Value.CreatePairs(array);
-                }
+                        return Value.CreatePairs(array);
+                    }
                 case Native.EValueKind.Attribute:
                     throw new NotImplementedException();
                 case Native.EValueKind.Set:
-                {
-                    Value[] array = new Value[input.length];
-                    Native.Value* ptr = (Native.Value*) input.data.ptr;
-                    for (int i = 0; i < input.length; i++)
                     {
-                        array[i] = FromNativeValue(ptr[i], false);
-                    }
+                        Value[] array = new Value[input.length];
+                        Native.Value* ptr = (Native.Value*)input.data.ptr;
+                        for (int i = 0; i < input.length; i++)
+                        {
+                            array[i] = FromNativeValue(ptr[i], false);
+                        }
 
-                    return Value.CreateArray(array);
-                }
+                        return Value.CreateArray(array);
+                    }
                 case Native.EValueKind.Double:
                     return Value.CreateFloatingPoint(input.data.f);
                 case Native.EValueKind.Boolean:
                     return Value.CreateBoolean(input.data.i != 0);
                 case Native.EValueKind.VerbatimString:
-                {
-                    StringPair* ptr = (StringPair*) input.data.ptr;
-                    string? key = HandleString(ptr->a_start, (int) (ptr->a_end - ptr->a_start), false);
-                    string? value = HandleString(ptr->a_start, (int) (ptr->a_end - ptr->a_start), false);
+                    {
+                        StringPair* ptr = (StringPair*)input.data.ptr;
+                        string? key = HandleString(ptr->a_start, (int)(ptr->a_end - ptr->a_start), false);
+                        string? value = HandleString(ptr->a_start, (int)(ptr->a_end - ptr->a_start), false);
 
-                    return Value.CreateFormatString(key, value);
-                }
+                        return Value.CreateFormatString(key, value);
+                    }
                 case Native.EValueKind.BigNumber:
                     throw new NotImplementedException();
                 case Native.EValueKind.Push:

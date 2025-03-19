@@ -1,6 +1,8 @@
-﻿use std::ffi::c_char;
-use std::str::Utf8Error;
+﻿use std::ffi::{c_char, CString};
+use std::ptr::null;
+use std::str::{FromStr, Utf8Error};
 use crate::data::Utf8OrEmptyError;
+use crate::helpers;
 
 pub fn grab_str(input: *const c_char) -> Result<Option<String>, Utf8Error> {
     if input.is_null() {
@@ -36,5 +38,28 @@ pub fn grab_vec<TIn, TOut, TErr>(
             result.push(f(&*it)?);
         }
         Ok(result)
+    }
+}
+
+pub fn grab_vec_str(input: *const *const c_char, len: usize) -> Result<Vec<String>, Utf8OrEmptyError> {
+    grab_vec(
+        input,
+        len as usize,
+        |it| -> Result<String, Utf8OrEmptyError> {
+            match helpers::grab_str(*it) {
+                Ok(d) => match d {
+                    None => Err(Utf8OrEmptyError::Empty),
+                    Some(d) => Ok(d),
+                },
+                Err(e) => Err(Utf8OrEmptyError::Utf8Error(e)),
+            }
+        },
+    )
+}
+
+pub fn to_cstr_ptr_or_null(input: &str) -> *const c_char {
+    match CString::from_str(input) {
+        Ok(d) => d.into_raw() as *const std::os::raw::c_char,
+        Err(_) => null(),
     }
 }
