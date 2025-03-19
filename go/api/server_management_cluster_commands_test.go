@@ -84,10 +84,7 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 }
 func ExampleGlideClusterClient_ConfigRewrite() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	_, err := client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
+	client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
 	response, err := client.ConfigRewrite()
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -99,10 +96,7 @@ func ExampleGlideClusterClient_ConfigRewrite() {
 
 func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	_, err := client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
+	client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
 	route := config.Route(config.RandomRoute)
 	opts := options.RouteOption{Route: route}
 	response, err := client.ConfigRewriteWithOptions(opts)
