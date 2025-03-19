@@ -100,7 +100,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1723,13 +1722,10 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
-    @RepeatedTest(600)
     @SneakyThrows
-    //    @ParameterizedTest
-    //    @MethodSource("getClients")
-    public void fcall_readonly_function() {
-        GlideClusterClient clusterClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void fcall_readonly_function(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "fcall_readonly_function_" + UUID.randomUUID().toString().replace("-", "_");
@@ -1774,14 +1770,13 @@ public class CommandTests {
                         .contains("Can not execute a script with write flag using *_ro command."));
 
         // create the same function, but with RO flag
-        String funcName2 = funcName + "2";
-        code = generateLuaLibCode(libName, Map.of(funcName2, "return 42"), true);
-        System.out.println(code);
+        String funcNameRO = funcName + "_ro";
+        code = generateLuaLibCode(libName, Map.of(funcNameRO, "return 42"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
         // fcall should succeed now
-        assertEquals(42L, clusterClient.fcall(funcName2, replicaRoute).get().getSingleValue());
+        assertEquals(42L, clusterClient.fcall(funcNameRO, replicaRoute).get().getSingleValue());
 
         assertEquals(OK, clusterClient.functionDelete(libName).get());
     }
