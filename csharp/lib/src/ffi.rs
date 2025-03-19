@@ -6,6 +6,13 @@ use glide_core::client::{
     AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, NodeAddress,
     ReadFrom as coreReadFrom, TlsMode,
 };
+use redis::{
+    cluster_routing::{
+        MultipleNodeRoutingInfo, ResponsePolicy, Routable, Route, RoutingInfo,
+        SingleNodeRoutingInfo, SlotAddr,
+    },
+    Cmd,
+};
 
 /// Convert raw C string to a rust string.
 ///
@@ -13,7 +20,7 @@ use glide_core::client::{
 ///
 /// * `ptr` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
 unsafe fn ptr_to_str(ptr: *const c_char) -> String {
-    if ptr as u64 != 0 {
+    if !ptr.is_null() {
         unsafe { CStr::from_ptr(ptr) }.to_str().unwrap().into()
     } else {
         "".into()
@@ -26,7 +33,7 @@ unsafe fn ptr_to_str(ptr: *const c_char) -> String {
 ///
 /// * `ptr` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
 unsafe fn ptr_to_opt_str(ptr: *const c_char) -> Option<String> {
-    if ptr as u64 != 0 {
+    if !ptr.is_null() {
         Some(unsafe { ptr_to_str(ptr) })
     } else {
         None
@@ -194,4 +201,91 @@ pub struct Credentials {
     pub username: *const c_char,
     /// zero pointer is valid, means no password is given (`None`)
     pub password: *const c_char,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum RouteType {
+    Random,
+    AllNodes,
+    AllPrimaries,
+    SlotId,
+    SlotKey,
+    ByAddress,
+}
+
+/// A mirror of [`SlotAddr`]
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum SlotType {
+    Primary,
+    Replica,
+}
+
+impl From<&SlotType> for SlotAddr {
+    fn from(val: &SlotType) -> Self {
+        match val {
+            SlotType::Primary => SlotAddr::Master,
+            SlotType::Replica => SlotAddr::ReplicaRequired,
+        }
+    }
+}
+
+/// A structure which represents a route. To avoid extra pointer mandgling, it has fields for all route types.
+/// Depending on [`RouteType`], the struct stores:
+/// * Only `route_type` is filled, if route is a simple route;
+/// * `route_type`, `slot_id` and `slot_type`, if route is a Slot ID route;
+/// * `route_type`, `slot_key` and `slot_type`, if route is a Slot key route;
+/// * `route_type`, `hostname` and `port`, if route is a Address route;
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct RouteInfo {
+    pub route_type: RouteType,
+    pub slot_id: i32,
+    /// zero pointer is valid, means no slot key is given (`None`)
+    pub slot_key: *const c_char,
+    pub slot_type: SlotType,
+    /// zero pointer is valid, means no hostname is given (`None`)
+    pub hostname: *const c_char,
+    pub port: i32,
+}
+
+/// Convert route configuration to a corresponding object.
+///
+/// # Safety
+///
+/// * `route_info` could be `null`, but if it is not `null`, it must be a valid pointer to a [`RouteInfo`] struct.
+/// * `slot_key` and `hostname` in dereferenced [`RouteInfo`] struct must contain valid string pointers when corresponding `route_type` is set.
+///   See description of [`RouteInfo`] and the safety documentation of [`ptr_to_str`].
+pub(crate) unsafe fn create_route(route_info: *const RouteInfo, cmd: &Cmd) -> Option<RoutingInfo> {
+    if route_info.is_null() {
+        return None;
+    }
+    match (*route_info).route_type {
+        RouteType::Random => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
+        RouteType::AllNodes => Some(RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::AllNodes,
+            ResponsePolicy::for_command(&cmd.command().unwrap()),
+        ))),
+        RouteType::AllPrimaries => Some(RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::AllMasters,
+            ResponsePolicy::for_command(&cmd.command().unwrap()),
+        ))),
+        RouteType::SlotId => Some(RoutingInfo::SingleNode(
+            SingleNodeRoutingInfo::SpecificNode(Route::new(
+                (*route_info).slot_id as u16,
+                (&(*route_info).slot_type).into(),
+            )),
+        )),
+        RouteType::SlotKey => Some(RoutingInfo::SingleNode(
+            SingleNodeRoutingInfo::SpecificNode(Route::new(
+                redis::cluster_topology::get_slot(ptr_to_str((*route_info).slot_key).as_bytes()),
+                (&(*route_info).slot_type).into(),
+            )),
+        )),
+        RouteType::ByAddress => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+            host: ptr_to_str((*route_info).hostname),
+            port: (*route_info).port as u16,
+        })),
+    }
 }
