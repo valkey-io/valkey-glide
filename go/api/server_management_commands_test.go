@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -116,6 +117,8 @@ func ExampleGlideClient_InfoWithOptions() {
 
 func ExampleGlideClient_LastSave() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
+	key := "key-" + uuid.NewString()
+	client.Set(key, "hello")
 	response, err := client.LastSave()
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
