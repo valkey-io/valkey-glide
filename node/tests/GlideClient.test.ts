@@ -244,7 +244,6 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "string decoder client test %p",
         async (protocol) => {
-            console.log("startt test -------------------------------------------------");
             const clientConfig = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,

@@ -2,8 +2,6 @@
 
 use glide_core::{GlideOpenTelemetry, GlideSpan, Telemetry};
 use redis::GlideConnectionOptions;
-use std::io;
-use std::io::Write;
 
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
@@ -312,7 +310,6 @@ pub fn value_from_split_pointer(
 // The pointer is split into 2 `number`s, and then combined back in `value_from_split_pointer`.
 fn split_pointer<T>(pointer: *mut T) -> [u32; 2] {
     let pointer = pointer as usize;
-    println!("the pointer before the split is : {:?}", pointer);
     let bytes = usize::to_le_bytes(pointer);
     let [lower, higher] = unsafe { std::mem::transmute::<[u8; 8], [u32; 2]>(bytes) };
     [lower, higher]

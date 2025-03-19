@@ -294,7 +294,6 @@ impl GlideSpan {
     }
 
     pub fn print_span(&self) {
-        println!("--##---- The span name: ----##-- ");
         self.inner.print_span_name();
     }
 
@@ -486,6 +485,8 @@ impl GlideOpenTelemetry {
 
 #[cfg(test)]
 mod tests {
+    use std::ptr::null;
+
     use super::*;
     const SPANS_JSON: &str = "/tmp/spans.json";
 

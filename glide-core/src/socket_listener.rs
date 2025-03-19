@@ -521,7 +521,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
     task::spawn_local(async move {
         let mut updated_inflight_counter = true;
         let client_clone = client.clone();
-        eprintln!("rust::r adarovvvv command {:?}", request.command);
+
         let result = match client.reserve_inflight_request() {
             false => {
                 updated_inflight_counter = false;
@@ -536,10 +536,6 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                         cluster_scan(cluster_scan_command, client).await
                     }
                     command_request::Command::SingleCommand(command) => {
-                        eprintln!(
-                            "rust::request span {:?}",
-                            request.span_command.unwrap().to_string()
-                        );
                         match get_redis_command(&command) {
                             Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
                                 Ok(routes) => {
