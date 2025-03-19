@@ -8,7 +8,10 @@ use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
+use std::thread::panicking;
 use thiserror::Error;
 use url::Url;
 
@@ -91,6 +94,8 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
 struct GlideSpanInner {
     span: Arc<RwLock<opentelemetry::global::BoxedSpan>>,
     span_name: String,
+    #[cfg(test)]
+    reference_count: Arc<AtomicUsize>,
 }
 
 impl GlideSpanInner {
@@ -107,12 +112,13 @@ impl GlideSpanInner {
         GlideSpanInner {
             span,
             span_name: name.to_string(),
+            #[cfg(test)]
+            reference_count: Arc::new(AtomicUsize::new(1)),
         }
     }
 
-    /// Print span name by retrieving the attribute
     pub fn print_span_name(&self) {
-        println!("^^^^^^^^^^^ The span name : {}", self.span_name);
+        println!("The span name is: {}", self.span_name);
     }
 
     /// Create new span as a child of `parent`, returning an error if the parent span lock is poisoned.
@@ -137,6 +143,8 @@ impl GlideSpanInner {
         Ok(GlideSpanInner {
             span,
             span_name: name.to_string(),
+            #[cfg(test)]
+            reference_count: Arc::new(AtomicUsize::new(1)),
         })
     }
 
@@ -208,12 +216,33 @@ impl GlideSpanInner {
     pub fn end(&self) {
         self.span.write().expect(SPAN_READ_LOCK_ERR).end()
     }
+
+    #[cfg(test)]
+    pub fn get_reference_count(&self) -> usize {
+        self.reference_count.load(Ordering::SeqCst)
+    }
+
+    #[cfg(test)]
+    pub fn increment_reference_count(&self) {
+        self.reference_count.fetch_add(1, Ordering::SeqCst);
+    }
+
+    #[cfg(test)]
+    pub fn decrement_reference_count(&self) {
+        self.reference_count.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
+#[cfg(test)]
 impl Drop for GlideSpanInner {
     fn drop(&mut self) {
-        println!("im droping the span ****** ");
-        self.print_span_name();
+        // Only print debug info if the reference count is non-zero
+        let current_count = self.reference_count.load(Ordering::SeqCst);
+        if current_count > 0 {
+            self.decrement_reference_count();
+        } else {
+            panic!("Span reference count is 0");
+        }
     }
 }
 
@@ -230,7 +259,6 @@ impl GlideSpan {
     }
 
     pub fn print_span(&self) {
-        println!("--##---- The span name: ----##-- ");
         self.inner.print_span_name();
     }
 
@@ -264,6 +292,16 @@ impl GlideSpan {
     /// Finishes the `Span`.
     pub fn end(&self) {
         self.inner.end()
+    }
+
+    #[cfg(test)]
+    pub fn add_reference(&self) {
+        self.inner.increment_reference_count();
+    }
+
+    #[cfg(test)]
+    pub fn get_reference_count(&self) -> usize {
+        self.inner.get_reference_count()
     }
 }
 
@@ -393,6 +431,8 @@ impl GlideOpenTelemetry {
 
 #[cfg(test)]
 mod tests {
+    use std::ptr::null;
+
     use super::*;
     const SPANS_JSON: &str = "/tmp/spans.json";
 
@@ -406,7 +446,7 @@ mod tests {
         span.add_event("Event1");
         span.set_status(GlideSpanStatus::Ok);
 
-        let child1 = span.add_span("Network_Span");
+        let child1 = span.add_span("Network_Span").unwrap();
 
         // Simulate some work
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -508,5 +548,13 @@ mod tests {
             let _ = GlideOpenTelemetry::initialise(config);
             create_test_spans().await;
         });
+    }
+
+    #[test]
+    fn test_span_reference_count() {
+        let span = GlideOpenTelemetry::new_span("Root_Span_1");
+        span.add_reference();
+        assert_eq!(span.get_reference_count(), 2);
+        drop(span);
     }
 }
