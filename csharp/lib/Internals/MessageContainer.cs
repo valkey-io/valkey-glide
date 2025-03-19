@@ -9,10 +9,10 @@ internal class MessageContainer
 {
     internal Message GetMessage(int index) => _messages[index];
 
-    internal Message GetMessageForCall<T>(nint[] args)
+    internal Message GetMessageForCall()
     {
         Message message = GetFreeMessage();
-        message.SetupTask(args, this);
+        message.SetupTask(this);
         return message;
     }
 

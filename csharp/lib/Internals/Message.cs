@@ -13,8 +13,6 @@ internal class Message(int index, MessageContainer container) : INotifyCompletio
     /// This is the index of the message in an external array, that allows the user to
     /// know how to find the message and set its result.
     public int Index { get; } = index;
-    /// The array holding the pointers to the unmanaged memory that contains the operation's arguments.
-    public IntPtr[]? Args { get; private set; }
     private MessageContainer Container { get; } = container;
     private Action? _continuation = () => { };
     private const int COMPLETION_STAGE_STARTED = 0;
@@ -73,24 +71,16 @@ internal class Message(int index, MessageContainer container) : INotifyCompletio
     /// This returns a task that will complete once SetException / SetResult are called,
     /// and ensures that the internal state of the message is set-up before the task is created,
     /// and cleaned once it is complete.
-    public void SetupTask(IntPtr[] arguments, object client)
+    public void SetupTask(object client)
     {
         _continuation = null;
         _completionState = COMPLETION_STAGE_STARTED;
         _result = default;
         _exception = null;
         _client = client;
-        Args = arguments;
     }
 
-    private void CleanUp()
-    {
-        if (Args is { })
-        {
-            Args = null;
-        }
-        _client = null;
-    }
+    private void CleanUp() => _client = null;
 
     public void OnCompleted(Action continuation)
     {
