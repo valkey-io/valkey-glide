@@ -1168,15 +1168,15 @@ export async function transactionTest(
     responseData.push(['smove(key7, key7, "non_existing_member")', false]);
     baseTransaction.scard(key7);
     responseData.push(["scard(key7)", 0]);
-    baseTransaction.zadd(key8, {
-        member1: 1,
-        member2: 2,
-        member3: 3.5,
-        member4: 4,
-        member5: 5,
-        infMember: "+inf",
-        negInfMember: "-inf",
-    });
+    baseTransaction.zadd(key8, [
+        { element: member1, score: 1 },
+        { element: member2, score: 2 },
+        { element: member3, score: 3.5 },
+        { element: member4, score: 4 },
+        { element: member5, score: 5 },
+        { element: "infMember", score: "+inf" },
+        { element: "negInfMember", score: "-inf" },
+    ]);
     responseData.push(["zadd(key8, { ... } ", 7]);
     baseTransaction.zrank(key8, member1);
     responseData.push(['zrank(key8, "member1")', 1]);

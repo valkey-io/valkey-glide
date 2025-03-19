@@ -8,9 +8,9 @@ import {
     GlideString,
     HashDataType,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    SortedSetDataType,
     convertGlideRecord,
     Score,
+    ElementAndScore,
 } from "./BaseClient";
 
 import {
@@ -1738,10 +1738,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zadd(
         key: GlideString,
-        membersAndScores:
-            | SortedSetDataType
-            | Record<string, number>
-            | Record<string, Score>,
+        membersAndScores: ElementAndScore | Record<string, Score>,
         options?: ZAddOptions,
     ): T {
         return this.addAndReturn(createZAdd(key, membersAndScores, options));
