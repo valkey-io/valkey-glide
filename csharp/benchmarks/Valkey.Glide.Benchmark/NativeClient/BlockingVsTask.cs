@@ -1,8 +1,8 @@
 ﻿using BenchmarkDotNet.Attributes;
-using Valkey.Glide.InterOp;
+
 using Valkey.Glide.InterOp.Native;
 
-namespace Valkey.Glide.Benchmark;
+namespace Valkey.Glide.Benchmark.NativeClient;
 
 /// <summary>
 /// A class designed to benchmark the performance difference between asynchronous and blocking operations
@@ -17,7 +17,7 @@ public class BlockingVsTask
 {
     #region Setup / Teardown
 
-    private NativeClient        _nativeClient = null!;
+    private InterOp.NativeClient        _nativeClient = null!;
     private ValkeyAspireFixture _fixture      = null!;
 
     [GlobalSetup]
@@ -25,7 +25,7 @@ public class BlockingVsTask
     {
         _fixture = new ValkeyAspireFixture();
         await _fixture.InitializeAsync();
-        _nativeClient = new NativeClient(_fixture.ConnectionRequest);
+        _nativeClient = new InterOp.NativeClient(_fixture.ConnectionRequest);
     }
 
     [GlobalCleanup]

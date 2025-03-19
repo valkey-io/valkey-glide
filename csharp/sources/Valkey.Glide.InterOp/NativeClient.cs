@@ -28,6 +28,9 @@ public sealed class NativeClient : IDisposable, INativeClient
     private static          bool          _initialized;
     private                 nint?         _handle;
 
+    internal const int SmallStringOptimizationArgs = 20;
+    internal const int SmallStringOptimizationBuffer = 100;
+
 
     public unsafe NativeClient(ConnectionRequest request)
     {
@@ -341,9 +344,12 @@ public sealed class NativeClient : IDisposable, INativeClient
 
     private void ReleaseUnmanagedResources()
     {
-        if (_handle.HasValue)
-            Imports.free_client_handle(_handle.Value);
-        _handle = null;
+        lock (this)
+        {
+            if (_handle.HasValue)
+                Imports.free_client_handle(_handle.Value);
+            _handle = null;
+        }
     }
 
     public void Dispose()
@@ -369,14 +375,14 @@ public sealed class NativeClient : IDisposable, INativeClient
             byte*[] argsArr = new byte*[args.Length];
             try
             {
-                if (args.Length <= 20)
+                if (args.Length <= SmallStringOptimizationArgs)
                 {
                     for (int i = 0; i < args.Length; i++)
                     {
                         // ReSharper disable once StackAllocInsideLoop
                         // We do this intentionally here in a "low allocation" (max: 20 * 100 bytes) environment
-                        byte* buffer = stackalloc byte[100];
-                        byte* ptr = MarshalUtf8String(args[i], buffer, 100);
+                        byte* buffer = stackalloc byte[SmallStringOptimizationBuffer];
+                        byte* ptr = MarshalUtf8String(args[i], buffer, SmallStringOptimizationBuffer);
                         argsArr[i] = ptr;
                     }
                 }

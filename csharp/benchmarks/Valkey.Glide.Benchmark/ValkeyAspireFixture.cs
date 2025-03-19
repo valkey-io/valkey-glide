@@ -39,7 +39,7 @@ public sealed class ValkeyAspireFixture
             _distributedApplication = null;
             throw;
         }
-        NativeClient.Initialize(ELoggerLevel.Off);
+        InterOp.NativeClient.Initialize(ELoggerLevel.Off);
     }
 
     public InterOp.Node Node => new(Host, Port);

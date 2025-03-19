@@ -54,6 +54,11 @@
     </Exec>
   </Target>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Valkey.Glide.UnitTests" />
+    <InternalsVisibleTo Include="Valkey.Glide.IntegrationTests" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(Configuration)' != 'Lint'">
     <!-- ToDo: put at correct, prefix folder -->
     <Content Include="$(SolutionDir)/rust/target/$(Configuration)/glide_rs.dll" Condition="'$(OS)' == 'Windows_NT'">

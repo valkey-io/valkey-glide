@@ -117,4 +117,18 @@ public class SetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
     }
 
     #endregion
+
+    [Theory]
+    [InlineData("foobar")]
+    [InlineData("some \"quoted\" value")]
+    public async Task SimpleSetAsync(string value)
+    {
+        // Arrange
+        const string key = nameof(SetCommandTests) + "-" + nameof(SimpleSetAsync);
+        using GlideClient glideClient = new GlideClient(fixture.ConnectionRequest);
+
+        // Act
+        // Assert
+        await glideClient.SetAsync(key, value);
+    }
 }

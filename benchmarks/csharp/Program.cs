@@ -45,17 +45,20 @@ public static class MainClass
 
         [Option('m', "minimal", HelpText = "Should use a minimal number of actions")]
         public bool Minimal { get; set; } = false;
+
+
+        [Option('p', "port", HelpText = "The port to connect to")]
+        public ushort Port { get; set; } = 6379;
     }
 
-    private const int PORT = 6379;
-    private static string GetAddress(string host) => $"{host}:{PORT}";
+    private static string GetAddress(string host, int port) => $"{host}:{port}";
 
-    private static string GetAddressForStackExchangeRedis(string host, bool useTLS) => $"{GetAddress(host)},ssl={useTLS}";
+    private static string GetAddressForStackExchangeRedis(string host, int port, bool useTLS) => $"{GetAddress(host, port)},ssl={useTLS}";
 
-    private static string GetAddressWithRedisPrefix(string host, bool useTLS)
+    private static string GetAddressWithRedisPrefix(string host, int port, bool useTLS)
     {
         string protocol = useTLS ? "rediss" : "redis";
-        return $"{protocol}://{GetAddress(host)}";
+        return $"{protocol}://{GetAddress(host, port)}";
     }
     private const double PROB_GET = 0.8;
 
@@ -242,14 +245,16 @@ public static class MainClass
     }
 
     private static async Task<ClientWrapper[]> CreateClients(int clientCount,
-        Func<Task<(Func<string, Task<string?>>,
-            Func<string, string, Task>,
-            Action)>> clientCreation)
+        Func<Task<(
+            Func<string, Task<string?>> get,
+            Func<string, string, Task> set,
+            Action dispose
+            )>> clientCreation)
     {
         IEnumerable<Task<ClientWrapper>> tasks = Enumerable.Range(0, clientCount).Select(async (_) =>
         {
-            (Func<string, Task<string?>>, Func<string, string, Task>, Action) tuple = await clientCreation();
-            return new ClientWrapper(tuple.Item1, tuple.Item2, tuple.Item3);
+            var (get, set, dispose) = await clientCreation();
+            return new ClientWrapper(get, set, dispose);
         });
         return await Task.WhenAll(tasks);
     }
@@ -259,6 +264,7 @@ public static class MainClass
         int num_of_concurrent_tasks,
         string clientsToRun,
         string host,
+        ushort port,
         int clientCount,
         bool useTLS)
     {
@@ -266,8 +272,8 @@ public static class MainClass
         {
             ClientWrapper[] clients = await CreateClients(clientCount, () =>
             {
-                ConnectionConfigBuilder builder = new ConnectionConfigBuilder().WithAddress(host, PORT)
-                    .WithTlsMode(ETlsMode.SecureTls);
+                ConnectionConfigBuilder builder = new ConnectionConfigBuilder().WithAddress(host, port)
+                    .WithTlsMode(useTLS ? ETlsMode.SecureTls : ETlsMode.NoTls);
                 GlideClient glide_client = new GlideClient(builder);
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await glide_client.GetAsync(key),
@@ -288,7 +294,7 @@ public static class MainClass
         {
             ClientWrapper[] clients = await CreateClients(clientCount, () =>
             {
-                ConnectionMultiplexer connection = ConnectionMultiplexer.Connect(GetAddressForStackExchangeRedis(host, useTLS));
+                ConnectionMultiplexer connection = ConnectionMultiplexer.Connect(GetAddressForStackExchangeRedis(host, port, useTLS));
                 IDatabase db = connection.GetDatabase();
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await db.StringGetAsync(key),
@@ -324,7 +330,7 @@ public static class MainClass
         foreach ((int concurrentTasks, int dataSize, int clientCount) in product)
         {
             int iterations = options.Minimal ? 1000 : NumberOfIterations(concurrentTasks);
-            await RunWithParameters(iterations, dataSize, concurrentTasks, options.ClientsToRun, options.Host, clientCount, options.Tls);
+            await RunWithParameters(iterations, dataSize, concurrentTasks, options.ClientsToRun, options.Host, options.Port, clientCount, options.Tls);
         }
 
         PrintResults(options.ResultsFile);
