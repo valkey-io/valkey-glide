@@ -276,6 +276,7 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 }
 
 // Deletes all the keys of all the existing databases.
+// The command will be routed to all primary nodes.
 //
 // See [valkey.io] for details.
 //
@@ -321,6 +322,7 @@ func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.Flush
 }
 
 // Deletes all the keys of the currently selected database.
+// The command will be routed to all primary nodes.
 //
 // See [valkey.io] for details.
 //
