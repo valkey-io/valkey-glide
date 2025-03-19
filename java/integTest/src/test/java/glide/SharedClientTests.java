@@ -28,6 +28,7 @@ import lombok.SneakyThrows;
 import net.bytebuddy.utility.RandomString;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -138,10 +139,14 @@ public class SharedClientTests {
                 Arguments.of(true, 1000));
     }
 
+    @RepeatedTest(1000)
     @SneakyThrows
-    @ParameterizedTest()
-    @MethodSource("inflightRequestsLimitSizeAndClusterMode")
-    public void inflight_requests_limit(boolean clusterMode, int inflightRequestsLimit) {
+    //    @ParameterizedTest()
+    //    @MethodSource("inflightRequestsLimitSizeAndClusterMode")
+    public void inflight_requests_limit() {
+        boolean clusterMode = false;
+        int inflightRequestsLimit = 1000;
+
         BaseClient testClient;
         String keyName = "nonexistkeylist" + RandomString.make(4);
 
