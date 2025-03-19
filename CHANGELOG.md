@@ -14,6 +14,7 @@
 * Python: Add equality check to `ExpirySet` ([#3554](https://github.com/valkey-io/valkey-glide/issues/3554))
 * Java: replacing map usage in response handling with LinkedHashMap ([#3324](https://github.com/valkey-io/valkey-glide/pull/3324))
 * Go: Fix Rust binary size ([#3508](https://github.com/valkey-io/valkey-glide/pull/3508))
+* JAVA: remove reference to outdated build task in DEVELOPER.md ([#3393](https://github.com/valkey-io/valkey-glide/pull/3393))
 
 ## 1.3.2 (2025-04-06)
 
