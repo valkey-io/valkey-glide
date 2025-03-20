@@ -268,11 +268,11 @@ func (client *GlideClient) Lolwut() (string, error) {
 func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string, error) {
 	commandArgs, err := opts.ToArgs()
 	if err != nil {
-	 return DefaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Lolwut, commandArgs)
 	if err != nil {
-	 return DefaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }

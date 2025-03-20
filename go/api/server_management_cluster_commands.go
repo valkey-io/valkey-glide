@@ -19,6 +19,6 @@ type ServerManagementClusterCommands interface {
 	DBSizeWithOptions(routeOption options.RouteOption) (int64, error)
 
 	Lolwut() (string, error)
-	
+
 	LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error)
 }

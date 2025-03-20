@@ -521,23 +521,22 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersion() {
 	client := suite.defaultClient()
 	options := options.NewLolwutOptions(8)
 	res, err := client.LolwutWithOptions(*options)
-	 assert.Nil(suite.T(), err)
-	 assert.Contains(suite.T(), res, "Redis ver.")
+	assert.Nil(suite.T(), err)
+	assert.Contains(suite.T(), res, "Redis ver.")
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
 	client := suite.defaultClient()
-	opts := options.NewLolwutOptions(8).SetArgs([]int{10,20})
+	opts := options.NewLolwutOptions(8).SetArgs([]int{10, 20})
 	res, err := client.LolwutWithOptions(*opts)
-	 assert.Nil(suite.T(), err)
-	 assert.Contains(suite.T(), res, "Redis ver.")
-
+	assert.Nil(suite.T(), err)
+	assert.Contains(suite.T(), res, "Redis ver.")
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
-	 client := suite.defaultClient()
-	 opts := options.NewLolwutOptions(6).SetArgs([]int{})
-	 res, err := client.LolwutWithOptions(*opts)
-	 assert.Nil(suite.T(), err)
-	 assert.Contains(suite.T(), res, "Redis ver.")	
+	client := suite.defaultClient()
+	opts := options.NewLolwutOptions(6).SetArgs([]int{})
+	res, err := client.LolwutWithOptions(*opts)
+	assert.Nil(suite.T(), err)
+	assert.Contains(suite.T(), res, "Redis ver.")
 }
