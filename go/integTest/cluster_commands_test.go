@@ -742,36 +742,35 @@ func (suite *GlideTestSuite) TestConfigSetGet() {
 	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
 }
 
-// func (suite *GlideTestSuite) TestConfigSetGetWithOptions() {
-// 	client := suite.defaultClusterClient()
-// 	t := suite.T()
-// 	// ConfigResetStat with option or with multiple options without route
-// 	opts := options.RouteOption{Route: nil}
-// 	configParam := map[string]string{"timeout": "1000"}
-// 	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
-// 	configGetParam := []string{"timeout", "maxmemory"}
-// 	resp, err := client.ConfigGetWithOptions(configGetParam, opts)
-// 	assert.NoError(t, err)
-// 	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
+func (suite *GlideTestSuite) TestConfigSetGetWithOptions() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	// ConfigResetStat with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	configParam := map[string]string{"timeout": "1000"}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	configGetParam := []string{"timeout"}
+	resp, err := client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
 
-// 	// same sections with random route
-// 	route := config.Route(config.RandomRoute)
-// 	opts = options.RouteOption{Route: route}
-// 	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
-// 	resp, err = client.ConfigGetWithOptions(configGetParam, opts)
-// 	assert.NoError(t, err)
-// 	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	resp, err = client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
 
-// 	// default sections, multi node route
-// 	route = config.Route(config.AllPrimaries)
-// 	opts = options.RouteOption{Route: route}
-// 	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
-
-// 	resp, err = client.ConfigGetWithOptions(configGetParam, opts)
-// 	assert.NoError(t, err)
-// 	assert.True(t, resp.IsMultiValue())
-// 	for _, messages := range resp.MultiValue() {
-// 		mapString := fmt.Sprint(messages)
-// 		assert.Contains(t, strings.ToLower(mapString), strings.ToLower("timeout"))
-// 	}
-// }
+	// default sections, multi node route
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	resp, err = client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.True(t, resp.IsMultiValue())
+	for _, messages := range resp.MultiValue() {
+		mapString := fmt.Sprint(messages)
+		assert.Contains(t, strings.ToLower(mapString), strings.ToLower("timeout"))
+	}
+}
