@@ -455,7 +455,7 @@ func (client *GlideClusterClient) ScanWithOptions(
 }
 
 // Sets configuration parameters to the specified values.
-// Starting from server version 7, command supports multiple parameters.<br>
+// Starting from server version 7, command supports multiple parameters.
 // The command will be sent to all nodes.
 //
 // Parameters:
@@ -478,8 +478,7 @@ func (client *GlideClusterClient) ConfigSet(
 }
 
 // Sets configuration parameters to the specified values
-// Starting from server version 7, command supports multiple parameters.<br>
-// The command will be sent to all nodes.
+// Starting from server version 7, command supports multiple parameters.
 //
 // Parameters:
 //
