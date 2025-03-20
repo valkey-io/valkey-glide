@@ -574,7 +574,7 @@ func (client *GlideClusterClient) ConfigSet(
 //
 // Parameters:
 //
-//	route - Specifies the routing configuration for the command. The client will route the
+//	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //	parameters -  A map consisting of configuration parameters and their respective values to set.
 //
@@ -607,9 +607,9 @@ func (client *GlideClusterClient) ConfigSetWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClusterClient) ConfigGet(
-	args []string,
+	parameters []string,
 ) (ClusterValue[interface{}], error) {
-	res, err := client.executeCommand(C.ConfigGet, args)
+	res, err := client.executeCommand(C.ConfigGet, parameters)
 	if err != nil {
 		return createEmptyClusterValue[interface{}](), err
 	}
@@ -626,9 +626,9 @@ func (client *GlideClusterClient) ConfigGet(
 //
 // Parameters:
 //
-//		route - Specifies the routing configuration for the command. The client will route the
-//		        command to the nodes defined by route.
-//	 	parameters -  An array of configuration parameter names to retrieve values for.
+//		opts - Specifies the routing configuration for the command. The client will route the
+//		       command to the nodes defined by route.
+//	 	parameters - An array of configuration parameter names to retrieve values for.
 //
 // Return value:
 //
@@ -636,9 +636,9 @@ func (client *GlideClusterClient) ConfigGet(
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClusterClient) ConfigGetWithOptions(
-	args []string, opts options.RouteOption,
+	parameters []string, opts options.RouteOption,
 ) (ClusterValue[interface{}], error) {
-	res, err := client.executeCommandWithRoute(C.ConfigGet, args, opts.Route)
+	res, err := client.executeCommandWithRoute(C.ConfigGet, parameters, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[interface{}](), err
 	}
