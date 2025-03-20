@@ -120,7 +120,6 @@ func ExampleGlideClusterClient_ConfigGet() {
 
 	// Output:
 	// map[timeout:1000]
-
 }
 
 func ExampleGlideClusterClient_ConfigGetWithOptions() {
