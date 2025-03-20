@@ -9065,6 +9065,110 @@ func (suite *GlideTestSuite) TestZLexCount() {
 	})
 }
 
+func (suite *GlideTestSuite) TestGeoAdd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key1 := "{testKey}:1-" + uuid.New().String()
+		key2 := "{testKey}:2-" + uuid.New().String()
+
+		// Test basic GEOADD
+		membersToCoordinates := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+		}
+
+		result, err := client.GeoAdd(key1, membersToCoordinates)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), result)
+
+		// Test with NX option (only if not exists)
+		membersToCoordinates = map[string]options.GeospatialData{
+			"Catania": {Longitude: 15.087269, Latitude: 39},
+		}
+		result, err = client.GeoAddWithOptions(
+			key1,
+			membersToCoordinates,
+			*options.NewGeoAddOptions().SetConditionalChange(options.OnlyIfDoesNotExist),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), result)
+
+		// Test with XX option (only if exists)
+		result, err = client.GeoAddWithOptions(
+			key1,
+			membersToCoordinates,
+			*options.NewGeoAddOptions().SetConditionalChange(options.OnlyIfExists),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), result)
+
+		// Test with CH option (change coordinates)
+		membersToCoordinates = map[string]options.GeospatialData{
+			"Catania":  {Longitude: 15.087269, Latitude: 40},
+			"Tel-Aviv": {Longitude: 32.0853, Latitude: 34.7818},
+		}
+		result, err = client.GeoAddWithOptions(
+			key1,
+			membersToCoordinates,
+			*options.NewGeoAddOptions().SetChanged(true),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), result)
+
+		// Test error case with wrong key type
+		_, err = client.Set(key2, "bar")
+		assert.NoError(t, err)
+
+		_, err = client.GeoAddWithOptions(
+			key2,
+			membersToCoordinates,
+			*options.NewGeoAddOptions().SetChanged(true),
+		)
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestGeoAdd_InvalidArgs() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key := "{testKey}:3-" + uuid.New().String()
+
+		// Test empty members
+		_, err := client.GeoAdd(key, map[string]options.GeospatialData{})
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+
+		// Test invalid longitude (-181)
+		_, err = client.GeoAdd(key, map[string]options.GeospatialData{
+			"Place": {Longitude: -181, Latitude: 0},
+		})
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+
+		// Test invalid longitude (181)
+		_, err = client.GeoAdd(key, map[string]options.GeospatialData{
+			"Place": {Longitude: 181, Latitude: 0},
+		})
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+
+		// Test invalid latitude (86)
+		_, err = client.GeoAdd(key, map[string]options.GeospatialData{
+			"Place": {Longitude: 0, Latitude: 86},
+		})
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+
+		// Test invalid latitude (-86)
+		_, err = client.GeoAdd(key, map[string]options.GeospatialData{
+			"Place": {Longitude: 0, Latitude: -86},
+		})
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := suite.GenerateLargeUuid()
