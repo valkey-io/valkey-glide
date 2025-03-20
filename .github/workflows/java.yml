@@ -108,7 +108,12 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              run: ./gradlew --continue build -x javadoc
+              run: |
+                  sudo tcpdump -i lo -w dump.pcap tcp port 6379 &
+                  ./gradlew --continue build -x javadoc
+                  pkill tcpdump
+                  tcpdump -r dump.pcap
+                  rm dump.pcap
 
             - name: Ensure no skipped files by linter
               working-directory: java

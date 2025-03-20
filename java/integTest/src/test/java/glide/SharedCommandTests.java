@@ -132,7 +132,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(20) // seconds
+@Timeout(10) // seconds
 public class SharedCommandTests {
 
     @Getter private static final List<Arguments> clients = new ArrayList<>();

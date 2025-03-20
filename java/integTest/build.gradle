@@ -114,7 +114,7 @@ tasks.register('startStandalone') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '-r', '0']
+                    def args = ['python3', 'cluster_manager.py', 'start', '-p', '6379', '-r', '0']
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
@@ -165,8 +165,9 @@ tasks.withType(Test) {
 
 test {
     filter {
-        excludeTestsMatching 'glide.PubSubTests'
-        excludeTestsMatching 'glide.modules.*'
+//        excludeTestsMatching 'glide.PubSubTests'
+//        excludeTestsMatching 'glide.modules.*'
+          setIncludePatterns(new String[] {"*.inflight_requests_limit", "*.scan*"})
     }
 }
 
