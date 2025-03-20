@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -728,6 +729,247 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 	for _, elem := range streamKeys {
 		assert.NotContains(t, allKeys, elem)
 	}
+}
+
+func (suite *GlideTestSuite) TestFlushDB_Success() {
+	client := suite.defaultClusterClient()
+
+	key := uuid.New().String()
+	_, err := client.Set(key, "test-value")
+	assert.NoError(suite.T(), err)
+
+	result, err := client.FlushDB()
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+
+	val, err := client.Get(key)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushDB_Failure() {
+	client := suite.defaultClusterClient()
+	client.Close()
+
+	result, err := client.FlushDB()
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
+func (suite *GlideTestSuite) TestFlushAll_Success() {
+	client := suite.defaultClusterClient()
+
+	key := uuid.New().String()
+	_, err := client.Set(key, "test-value")
+	assert.NoError(suite.T(), err)
+
+	result, err := client.FlushAll()
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+
+	val, err := client.Get(key)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushAll_Failure() {
+	client := suite.defaultClusterClient()
+	client.Close()
+
+	result, err := client.FlushAll()
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
+func (suite *GlideTestSuite) TestFlushAllWithOptions_AllNodes() {
+	client := suite.defaultClusterClient()
+
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+	_, err := client.Set(key1, "value3")
+	assert.NoError(suite.T(), err)
+	_, err = client.Set(key2, "value4")
+	assert.NoError(suite.T(), err)
+
+	routeOption := &options.RouteOption{
+		Route: config.AllNodes,
+	}
+	asyncMode := options.FlushMode(options.ASYNC)
+	result, err := client.FlushAllWithOptions(options.FlushClusterOptions{
+		FlushMode:   &asyncMode,
+		RouteOption: routeOption,
+	})
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "ReadOnly: You can't write against a read only replica")
+	assert.Empty(suite.T(), result)
+}
+
+func (suite *GlideTestSuite) TestFlushAllWithOptions_AllPrimaries() {
+	client := suite.defaultClusterClient()
+
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+	_, err := client.Set(key1, "value3")
+	assert.NoError(suite.T(), err)
+	_, err = client.Set(key2, "value4")
+	assert.NoError(suite.T(), err)
+
+	routeOption := &options.RouteOption{
+		Route: config.AllPrimaries,
+	}
+	asyncMode := options.FlushMode(options.ASYNC)
+	result, err := client.FlushAllWithOptions(options.FlushClusterOptions{
+		FlushMode:   &asyncMode,
+		RouteOption: routeOption,
+	})
+
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+
+	val1, err := client.Get(key1)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val1.Value())
+
+	val2, err := client.Get(key2)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val2.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushAllWithOptions_InvalidRoute() {
+	client := suite.defaultClusterClient()
+
+	invalidRoute := config.NewByAddressRoute("invalidHost", 9999)
+	routeOption := &options.RouteOption{
+		Route: invalidRoute,
+	}
+	syncMode := options.SYNC
+	result, err := client.FlushAllWithOptions(options.FlushClusterOptions{
+		FlushMode:   &syncMode,
+		RouteOption: routeOption,
+	})
+
+	assert.Error(suite.T(), err)
+	assert.Empty(suite.T(), result)
+}
+
+func (suite *GlideTestSuite) TestFlushAllWithOptions_AsyncMode() {
+	client := suite.defaultClusterClient()
+
+	key := uuid.New().String()
+	_, err := client.Set(key, "value5")
+	assert.NoError(suite.T(), err)
+
+	routeOption := &options.RouteOption{
+		Route: config.AllPrimaries,
+	}
+
+	asyncMode := options.FlushMode(options.ASYNC)
+	result, err := client.FlushAllWithOptions(options.FlushClusterOptions{
+		FlushMode:   &asyncMode,
+		RouteOption: routeOption,
+	})
+
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+
+	val, err := client.Get(key)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushDBWithOptions_AllNodes() {
+	client := suite.defaultClusterClient()
+
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+	_, err := client.Set(key1, "value3")
+	assert.NoError(suite.T(), err)
+	_, err = client.Set(key2, "value4")
+	assert.NoError(suite.T(), err)
+
+	routeOption := &options.RouteOption{
+		Route: config.AllNodes,
+	}
+	asyncMode := options.ASYNC
+	result, err := client.FlushDBWithOptions(options.FlushClusterOptions{
+		FlushMode:   &asyncMode,
+		RouteOption: routeOption,
+	})
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "ReadOnly: You can't write against a read only replica")
+	assert.Empty(suite.T(), result)
+}
+
+func (suite *GlideTestSuite) TestFlushDBWithOptions_AllPrimaries() {
+	client := suite.defaultClusterClient()
+
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+	_, err := client.Set(key1, "value3")
+	assert.NoError(suite.T(), err)
+	_, err = client.Set(key2, "value4")
+	assert.NoError(suite.T(), err)
+
+	routeOption := &options.RouteOption{
+		Route: config.AllPrimaries,
+	}
+	asyncMode := options.ASYNC
+	result, err := client.FlushDBWithOptions(options.FlushClusterOptions{
+		FlushMode:   &asyncMode,
+		RouteOption: routeOption,
+	})
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+
+	val1, err := client.Get(key1)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val1.Value())
+
+	val2, err := client.Get(key2)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val2.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushDBWithOptions_InvalidRoute() {
+	client := suite.defaultClusterClient()
+
+	invalidRoute := config.Route(config.NewByAddressRoute("invalidHost", 9999))
+	routeOption := &options.RouteOption{
+		Route: invalidRoute,
+	}
+	syncMode := options.SYNC
+	result, err := client.FlushDBWithOptions(options.FlushClusterOptions{
+		FlushMode:   &syncMode,
+		RouteOption: routeOption,
+	})
+	assert.Error(suite.T(), err)
+	assert.Empty(suite.T(), result)
+}
+
+func (suite *GlideTestSuite) TestFlushDBWithOptions_AsyncMode() {
+	client := suite.defaultClusterClient()
+
+	key := uuid.New().String()
+	_, err := client.Set(key, "value5")
+	assert.NoError(suite.T(), err)
+
+	routeOption := &options.RouteOption{
+		Route: config.AllPrimaries,
+	}
+	syncMode := options.SYNC
+	result, err := client.FlushDBWithOptions(options.FlushClusterOptions{
+		FlushMode:   &syncMode,
+		RouteOption: routeOption,
+	})
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+
+	val, err := client.Get(key)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val.Value())
 }
 
 func (suite *GlideTestSuite) TestConfigResetStatCluster() {
