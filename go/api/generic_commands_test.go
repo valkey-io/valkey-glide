@@ -29,8 +29,8 @@ func ExampleGlideClient_Scan() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println("Cursor: ", resCursor)
-	fmt.Println("Collection: ", resCollection)
+	fmt.Println("Cursor:", resCursor)
+	fmt.Println("Collection:", resCollection)
 
 	// Output:
 	// Cursor: 0
@@ -48,8 +48,8 @@ func ExampleGlideClient_ScanWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println("Cursor: ", resCursor)
-	fmt.Println("Collection: ", resCollection)
+	fmt.Println("Cursor:", resCursor)
+	fmt.Println("Collection:", resCollection)
 
 	// Output:
 	// Cursor: 0
