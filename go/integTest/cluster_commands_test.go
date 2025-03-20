@@ -747,7 +747,7 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	// ClientGetName with option or with multiple options without route
 	opts := options.RouteOption{Route: nil}
 	connectionName := "ConnectionName-" + uuid.NewString()
-	response, err := ClientSetNameWithOptions(connectionName, opts)
+	response, err := client.ClientSetNameWithOptions(connectionName, opts)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
 	response, err = client.ClientGetNameWithOptions(opts)
@@ -758,7 +758,7 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	connectionName = "ConnectionName-" + uuid.NewString()
 	route := config.Route(config.RandomRoute)
 	opts = options.RouteOption{Route: route}
-	response, err = ClientSetNameWithOptions(connectionName, opts)
+	response, err = client.ClientSetNameWithOptions(connectionName, opts)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
 	response, err = client.ClientGetNameWithOptions(opts)
