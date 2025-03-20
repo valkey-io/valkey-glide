@@ -5424,6 +5424,19 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 	return handleIntResponse(result)
 }
 
+// Perform a bitwise operation between multiple keys (containing string values) and store the result in the destination.
+//
+// Parameters:
+//
+//		bitwiseOperation - The bitwise operation to perform.
+//	 destination      - The key that will store the resulting string.
+//	 keys             - The list of keys to perform the bitwise operation on.
+//
+// Return value:
+//
+//	The size of the string stored in destination.
+//
+// [valkey.io]: https://valkey.io/commands/bitop/
 func (client *baseClient) BitOp(bitwiseOperation options.BitOpType, destination string, keys []string) (int64, error) {
 	bitOp, err := options.NewBitOp(bitwiseOperation, destination, keys)
 	if err != nil {
