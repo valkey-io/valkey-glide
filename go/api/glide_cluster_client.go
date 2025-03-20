@@ -484,7 +484,7 @@ func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.Cluste
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
- 
+
 	if lolwutOptions.RouteOption == nil || lolwutOptions.RouteOption.Route == nil {
 		response, err := client.executeCommand(C.Lolwut, args)
 		if err != nil {
@@ -496,7 +496,7 @@ func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.Cluste
 		}
 		return createClusterSingleValue[string](data), nil
 	}
- 
+
 	route := lolwutOptions.RouteOption.Route
 	response, err := client.executeCommandWithRoute(C.Lolwut, args, route)
 	if err != nil {

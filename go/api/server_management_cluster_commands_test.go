@@ -94,12 +94,12 @@ func ExampleGlideClusterClient_LolwutWithOptions() {
 			Route: config.RandomRoute,
 		},
 	}
-	
+
 	result, err := client.LolwutWithOptions(randomRouteOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	
+
 	if len(result.SingleValue()) > 0 {
 		fmt.Println("LOLWUT pattern generated successfully")
 	}

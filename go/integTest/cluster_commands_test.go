@@ -731,22 +731,22 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 }
 
 func (suite *GlideTestSuite) TestClusterLolwut() {
-    client := suite.defaultClusterClient()
-    
-    result, err := client.Lolwut()
-    assert.Nil(suite.T(), err)
-    assert.NotEmpty(suite.T(), result)
-    assert.Contains(suite.T(), result, "Redis ver.")
+	client := suite.defaultClusterClient()
+
+	result, err := client.Lolwut()
+	assert.Nil(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+	assert.Contains(suite.T(), result, "Redis ver.")
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
 	client := suite.defaultClusterClient()
 	options := options.ClusterLolwutOptions{
-	 LolwutOptions: &options.LolwutOptions{
-		Version: 6,
-		Args: &[]int{10, 20},
-	 },
-	 RouteOption: &options.RouteOption{Route: config.AllNodes},
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+			Args:    &[]int{10, 20},
+		},
+		RouteOption: &options.RouteOption{Route: config.AllNodes},
 	}
 	result, err := client.LolwutWithOptions(options)
 	assert.Nil(suite.T(), err)
@@ -762,10 +762,10 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
 	client := suite.defaultClusterClient()
 	options := options.ClusterLolwutOptions{
-	 LolwutOptions: &options.LolwutOptions{
-		Version: 6,
-	 },
-	 RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+		},
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
 	}
 	result, err := client.LolwutWithOptions(options)
 	assert.Nil(suite.T(), err)
@@ -773,7 +773,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
 	assert.True(suite.T(), result.IsMultiValue())
 	multiValue := result.MultiValue()
 
-	for _,value := range multiValue {
+	for _, value := range multiValue {
 		assert.Contains(suite.T(), value, "Redis ver.")
 	}
 }
@@ -781,10 +781,10 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
 	client := suite.defaultClusterClient()
 	options := options.ClusterLolwutOptions{
-	 LolwutOptions: &options.LolwutOptions{
-		Version: 6,
-	 },
-	 RouteOption: &options.RouteOption{Route: config.RandomRoute},
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+		},
+		RouteOption: &options.RouteOption{Route: config.RandomRoute},
 	}
 	result, err := client.LolwutWithOptions(options)
 	assert.Nil(suite.T(), err)
