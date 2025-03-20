@@ -79,6 +79,7 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 
 	// Output: 0
 }
+
 func ExampleGlideClusterClient_ConfigSet() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	configParam := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
@@ -108,26 +109,32 @@ func ExampleGlideClusterClient_ConfigSetWithOptions() {
 
 func ExampleGlideClusterClient_ConfigGet() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	configParam := []string{"timeout", "maxmemory"}
-	result, err := client.ConfigGet(configParam)
+	configParamSet := map[string]string{"timeout": "1000"}
+	client.ConfigSet(configParamSet)
+	configParamGet := []string{"timeout"}
+	result, err := client.ConfigGet(configParamGet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
+	fmt.Println(result.MultiValue())
 
 	// Output:
-	//{2 <nil> map[maxmemory:1073741824 timeout:1000]}
+	// map[timeout:1000]
+
 }
 
 func ExampleGlideClusterClient_ConfigGetWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	opts := options.RouteOption{Route: config.RandomRoute}
-	configParam := []string{"timeout", "maxmemory"}
-	result, err := client.ConfigGetWithOptions(configParam, opts)
+	configParamSet := map[string]string{"timeout": "1000"}
+	client.ConfigSetWithOptions(configParamSet, opts)
+	configParamGet := []string{"timeout"}
+	result, err := client.ConfigGetWithOptions(configParamGet, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
+	fmt.Println(result.MultiValue())
 
-	// Output: {2 <nil> map[maxmemory:1073741824 timeout:1000]}
+	// Output:
+	// map[timeout:1000]
 }
