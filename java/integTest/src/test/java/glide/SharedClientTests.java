@@ -148,20 +148,19 @@ public class SharedClientTests {
         boolean clusterMode = false;
         int inflightRequestsLimit = 1000;
 
+        // Remove warnings for this test due to abundance of timeouts in blpop
         Logger.Level originalValue = Logger.getLoggerLevel();
         Logger.setLoggerConfig(Logger.Level.ERROR);
 
         BaseClient testClient;
         String keyName = "nonexistkeylist" + RandomString.make(4);
 
-        if (clusterMode) {
-            System.out.println("Creating regular client");
+        if (!clusterMode) {
             testClient =
                     GlideClient.createClient(
                                     commonClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
                             .get();
         } else {
-            System.out.println("Creating cluster client");
             testClient =
                     GlideClusterClient.createClient(
                                     commonClusterClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
@@ -169,39 +168,29 @@ public class SharedClientTests {
         }
 
         // exercise
-        System.out.println("Adding blpops");
-        System.out.println(testClient.get(keyName).get());
         List<CompletableFuture<String[]>> responses = new ArrayList<>();
         for (int i = 0; i < inflightRequestsLimit + 1; i++) {
             responses.add(testClient.blpop(new String[] {keyName}, 10));
         }
-        System.out.println("Finished adding blpops");
 
         // verify
         // Check that all requests except the last one are still pending
-        System.out.println("Running blpops");
         for (int i = 0; i < inflightRequestsLimit; i++) {
             assertFalse(responses.get(i).isDone(), "Request " + i + " should still be pending");
         }
-        System.out.println("Finished blpops");
 
         // The last request should complete exceptionally
         try {
-            System.out.println("Trying to get the last response");
             responses.get(inflightRequestsLimit).get(100, TimeUnit.MILLISECONDS);
-            System.out.println("Done trying to get the last response");
             fail("Expected the last request to throw an exception");
         } catch (ExecutionException e) {
-            System.out.println("Asserting right exception");
             assertInstanceOf(RequestException.class, e.getCause());
             assertTrue(e.getCause().getMessage().contains("maximum inflight requests"));
-            System.out.println("Done asserting right exception");
         }
 
-        System.out.println("Closing client");
         testClient.close();
-        System.out.println("Done closing client");
 
+        // Restore log level
         Logger.setLoggerConfig(originalValue);
     }
 }
