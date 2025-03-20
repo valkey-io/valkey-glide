@@ -285,13 +285,7 @@ class TestAuthCommands:
             management_client, USERNAME, NEW_PASSWORD
         )
 
-        result = await acl_glide_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=False
-        )
-
-        assert result == OK
-
-        # ensure client disconnection and password update
+        # ensure client disconnection
         await asyncio.sleep(2)
 
         with pytest.raises(RequestError):
@@ -316,6 +310,10 @@ class TestAuthCommands:
         )
 
         assert result == OK
+
+        assert await acl_glide_client.set("test_key", "test_value") == OK
+        value = await acl_glide_client.get("test_key")
+        assert value == b"test_value"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
