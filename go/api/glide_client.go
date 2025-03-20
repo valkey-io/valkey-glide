@@ -314,3 +314,18 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 	}
 	return handleStringResponse(result)
 }
+
+// Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
+//
+// Return value:
+//
+//	UNIX TIME of the last DB save executed with success.
+//
+// [valkey.io]: https://valkey.io/commands/lastsave/
+func (client *GlideClient) LastSave() (int64, error) {
+	response, err := client.executeCommand(C.LastSave, []string{})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(response)
+}

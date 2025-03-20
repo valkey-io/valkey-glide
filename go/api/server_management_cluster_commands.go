@@ -25,4 +25,8 @@ type ServerManagementClusterCommands interface {
 	FlushDB() (string, error)
 
 	FlushDBWithOptions(options options.FlushClusterOptions) (string, error)
+
+	LastSave() (ClusterValue[int64], error)
+
+	LastSaveWithOptions(routeOption options.RouteOption) (ClusterValue[int64], error)
 }

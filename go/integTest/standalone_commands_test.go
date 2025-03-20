@@ -701,3 +701,11 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_ClosedClient() {
 	assert.Equal(suite.T(), "", result)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
 }
+
+func (suite *GlideTestSuite) TestLastSave() {
+	client := suite.defaultClient()
+	t := suite.T()
+	result, err := client.LastSave()
+	assert.Nil(t, err)
+	assert.Greater(t, result, int64(0))
+}
