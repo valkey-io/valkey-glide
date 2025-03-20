@@ -14458,8 +14458,11 @@ public class SharedCommandTests {
         final Set<Object> secondResultValues = new HashSet<>();
         boolean isFirstLoop = true;
         do {
+            System.out.println("scanning subset of the key");
             result = client.sscan(key1, resultCursor).get();
             resultCursor = gs(result[resultCursorIndex].toString());
+            System.out.println("resultCursor: " + resultCursor);
+            System.out.println("result: " + result);
             secondResultValues.addAll(
                     Arrays.stream((Object[]) result[resultCollectionIndex]).collect(Collectors.toSet()));
 
