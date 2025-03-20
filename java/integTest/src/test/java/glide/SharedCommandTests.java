@@ -14452,6 +14452,7 @@ public class SharedCommandTests {
         System.out.println("finished scanning whole set");
 
         // Result contains a subset of the key
+        System.out.println("subset of the key");
         assertEquals(numberMembers.length, client.sadd(key1, numberMembers).get());
         GlideString resultCursor = gs("0");
         final Set<Object> secondResultValues = new HashSet<>();
@@ -14494,22 +14495,28 @@ public class SharedCommandTests {
                 String.format(
                         "secondResultValues: {%s}, numberMembersSet: {%s}",
                         secondResultValues, numberMembersSet));
+        System.out.println("Finished subset of the key");
 
         // Test match pattern
+        System.out.println("Test match");
         result =
                 client
                         .sscan(key1, initialCursor, SScanOptionsBinary.builder().matchPattern(gs("*")).build())
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
+        System.out.println("Finished test match");
 
         // Test count
+        System.out.println("Test count");
         result =
                 client.sscan(key1, initialCursor, SScanOptionsBinary.builder().count(20L).build()).get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
+        System.out.println("Finished test count");
 
         // Test count with match returns a non-empty list
+        System.out.println("Test count with match");
         result =
                 client
                         .sscan(
@@ -14519,9 +14526,11 @@ public class SharedCommandTests {
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
+        System.out.println("Finished test count with match");
 
         // Exceptions
         // Non-set key
+        System.out.println("Test non-set key exception");
         assertEquals(OK, client.set(key2, gs("test")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sscan(key2, initialCursor).get());
@@ -14538,8 +14547,10 @@ public class SharedCommandTests {
                                                 SScanOptionsBinary.builder().matchPattern(gs("test")).count(1L).build())
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+        System.out.println("Finished non-set key exception");
 
         // Negative count
+        System.out.println("Test negative count exception");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -14548,6 +14559,7 @@ public class SharedCommandTests {
                                         .sscan(key1, gs("-1"), SScanOptionsBinary.builder().count(-1L).build())
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+        System.out.println("Finished negative count exception");
     }
 
     @SneakyThrows
