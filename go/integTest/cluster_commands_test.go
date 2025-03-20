@@ -978,7 +978,7 @@ func (suite *GlideTestSuite) TestRandomKeyWithRoute() {
 	t := suite.T()
 	route := config.Route(config.RandomRoute)
 	options := options.RouteOption{Route: route}
-	result, err := client.RandomKeyWithRoute(options.Route)
+	result, err := client.RandomKeyWithRoute(options)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }

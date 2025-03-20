@@ -233,7 +233,7 @@ func ExampleGlideClusterClient_RandomKeyWithRoute() {
 	options := options.RouteOption{Route: nil}
 	key := uuid.New().String()
 	client.Set(key, "Hello")
-	result, err := client.RandomKeyWithRoute(options.Route)
+	result, err := client.RandomKeyWithRoute(options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
