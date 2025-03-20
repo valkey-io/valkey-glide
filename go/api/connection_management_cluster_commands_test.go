@@ -5,6 +5,7 @@ package api
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -64,27 +65,54 @@ func ExampleGlideClusterClient_EchoWithOptions() {
 	// Output: Hello World
 }
 
-func ExampleGlideClusterClient_ClientGetNameWithOptions() {
+func ExampleGlideClusterClient_ClientSetName() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.ClientGetName()
+	connectionName := "ConnectionName-" + uuid.NewString()
+	result, err := client.ClientSetName(connectionName)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
+	fmt.Println(result.SingleValue())
 
-	// Output:
-	// ConnectionName
+	// Output: OK
 }
 
 func ExampleGlideClusterClient_ClientGetName() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	connectionName := "ConnectionName-" + uuid.NewString()
+	client.ClientSetName(connectionName)
+	result, err := client.ClientGetName()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.SingleValue() == connectionName)
+
+	// Output: true
+}
+
+func ExampleGlideClusterClient_ClientSetNameWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	connectionName := "ConnectionName-" + uuid.NewString()
 	opts := options.RouteOption{Route: nil}
+	result, err := client.ClientSetNameWithOptions(connectionName, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.SingleValue())
+
+	// Output: OK
+}
+
+func ExampleGlideClusterClient_ClientGetNameWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	connectionName := "ConnectionName-" + uuid.NewString()
+	opts := options.RouteOption{Route: nil}
+	client.ClientSetNameWithOptions(connectionName, opts)
 	result, err := client.ClientGetNameWithOptions(opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
+	fmt.Println(result.SingleValue() == connectionName)
 
-	// Output:
-	// ConnectionName
+	// Output: true
 }
