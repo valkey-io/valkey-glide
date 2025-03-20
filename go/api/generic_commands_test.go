@@ -34,7 +34,7 @@ func ExampleGlideClient_Scan() {
 
 	// Output:
 	// Cursor: 0
-	// Collection [key3 key2 key1]
+	// Collection: [key3 key2 key1]
 }
 
 func ExampleGlideClient_ScanWithOptions() {
@@ -53,5 +53,5 @@ func ExampleGlideClient_ScanWithOptions() {
 
 	// Output:
 	// Cursor: 0
-	// Collection [key3 key2 key1]
+	// Collection: [key3 key2 key1]
 }
