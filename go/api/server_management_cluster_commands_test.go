@@ -82,6 +82,7 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 	// Output:
 	// 0
 }
+
 func ExampleGlideClusterClient_ConfigRewrite() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
