@@ -99,9 +99,13 @@ jobs:
 
             - uses: Swatinem/rust-cache@v2
 
-            - name: Run tests
+            - name: Run glide-core tests
               working-directory: ./glide-core
-              run: cargo test --all-features --release -- --test-threads=1 # TODO remove the concurrency limit after we fix test flakyness.
+              run: cargo test --all-features --release
+
+            - name: Run glide-ffi tests
+              working-directory: ./ffi
+              run: cargo test
 
             - name: Run logger tests
               working-directory: ./logger_core
