@@ -14413,21 +14413,26 @@ public class SharedCommandTests {
         int resultCollectionIndex = 1;
 
         // Empty set
+        System.out.println("Initial Scan");
         Object[] result = client.sscan(key1, initialCursor).get();
         assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
         assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
+        System.out.println("Finished initial Scan");
 
         // Negative cursor
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.sscan(key1, gs("-1")).get());
         } else {
+            System.out.println("scanning neg");
             result = client.sscan(key1, gs("-1")).get();
             assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
             assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
+            System.out.println("finished scanning neg");
         }
 
         // Result contains the whole set
+        System.out.println("scanning whole set");
         assertEquals(charMembers.length, client.sadd(key1, charMembers).get());
         result = client.sscan(key1, initialCursor).get();
         assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
@@ -14444,6 +14449,7 @@ public class SharedCommandTests {
                         .get();
         assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
         assertDeepEquals(new GlideString[] {gs("a")}, result[resultCollectionIndex]);
+        System.out.println("finished scanning whole set");
 
         // Result contains a subset of the key
         assertEquals(numberMembers.length, client.sadd(key1, numberMembers).get());

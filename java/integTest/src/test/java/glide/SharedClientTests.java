@@ -166,7 +166,7 @@ public class SharedClientTests {
         // exercise
         List<CompletableFuture<String[]>> responses = new ArrayList<>();
         for (int i = 0; i < inflightRequestsLimit + 1; i++) {
-            responses.add(testClient.blpop(new String[] {keyName}, 10));
+            responses.add(testClient.blpop(new String[] {keyName}, 5));
         }
 
         // verify
@@ -186,7 +186,9 @@ public class SharedClientTests {
 
         testClient.close();
 
-        // Restore log level for other tests
+        // Allow time for cleanup and restore log level.\
+        Thread.sleep(1000);
         Logger.setLoggerConfig(originalValue);
+
     }
 }
