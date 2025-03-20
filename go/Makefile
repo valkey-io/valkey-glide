@@ -6,6 +6,25 @@ ROOT_FOLDER := $(abspath $(GO_DIR)/..)
 GLIDE_CORE_FOLDER := $(ROOT_FOLDER)/glide-core
 GLIDE_FFI_FOLDER := $(ROOT_FOLDER)/ffi
 
+# Determine the target folder based on OS and architecture
+UNAME := $(shell uname)
+ARCH := $(shell uname -m)
+
+ifeq ($(UNAME), Darwin)
+    TARGET_FOLDER := $(if $(filter arm64,$(ARCH)),aarch64-apple-darwin,x86_64-apple-darwin)
+    STRIP_CMD := strip -x
+else ifeq ($(UNAME), Linux)
+    TARGET_FOLDER := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu)
+    STRIP_CMD := strip --strip-unneeded
+else
+    $(error Unsupported platform: $(UNAME) $(ARCH))
+endif
+
+TARGET_FOLDER := rustbin/$(TARGET_FOLDER)
+
+# Ensure the target directory exists
+$(shell mkdir -p $(TARGET_FOLDER))
+
 install-build-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
 	cargo install cbindgen
@@ -46,9 +65,6 @@ clean:
 	rm -rf target
 	rm -rf reports
 
-build-glide-ffi:
-	cd $(GLIDE_FFI_FOLDER) && cargo build $(BUILD_FLAGS)
-	$(MAKE) gen-c-bindings
 
 # Release build
 build-glide-client: BUILD_FLAGS=--release
@@ -58,35 +74,17 @@ build-glide-client: build-glide-ffi
 build-glide-client-debug: BUILD_FLAGS=
 build-glide-client-debug: build-glide-ffi
 
-gen-c-bindings:
+libglide_ffi:
+	cd $(GLIDE_FFI_FOLDER) && cargo build $(BUILD_FLAGS)
+
+build-glide-ffi: gen-c-bindings
+
+gen-c-bindings: libglide_ffi
 	cd $(GLIDE_FFI_FOLDER) && \
 	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)/lib.h --lang c
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		strip -x $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a; \
-		if [ "$$(uname -m)" = "arm64" ]; then \
-			echo "Platform: aarch64-apple-darwin"; \
-			mkdir -p rustbin/aarch64-apple-darwin; \
-			cp $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a rustbin/aarch64-apple-darwin/; \
-		elif [ "$$(uname -m)" = "x86_64" ]; then \
-			echo "Platform: x86_64-apple-darwin"; \
-			mkdir -p rustbin/x86_64-apple-darwin; \
-			cp $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a rustbin/x86_64-apple-darwin/; \
-		fi; \
-	elif [ "$$(uname)" = "Linux" ]; then \
-		strip --strip-unneeded $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a; \
-		if [ "$$(uname -m)" = "arm64" ] || [ "$$(uname -m)" = "aarch64" ]; then \
-			echo "Platform: aarch64-unknown-linux-gnu"; \
-			mkdir -p rustbin/aarch64-unknown-linux-gnu; \
-			cp $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a rustbin/aarch64-unknown-linux-gnu/; \
-		elif [ "$$(uname -m)" = "x86_64" ]; then \
-			echo "Platform: x86_64-unknown-linux-gnu"; \
-			mkdir -p rustbin/x86_64-unknown-linux-gnu; \
-			cp $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a rustbin/x86_64-unknown-linux-gnu/; \
-		fi; \
-	else \
-		echo "Unsupported platform: $(shell uname), $(shell uname -m)"; \
-		exit 1; \
-	fi
+	echo $(TARGET_FOLDER)
+	$(STRIP_CMD) $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a
+	cp $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a $(TARGET_FOLDER)
 
 generate-protobuf:
 	rm -rf protobuf

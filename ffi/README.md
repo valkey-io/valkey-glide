@@ -12,17 +12,22 @@ The glide_ffi crate provides a C-compatible Foreign Function Interface (FFI) for
 ## Building the Library
 
 To build the FFI library:
-```
+```bash
 cargo build --release
 ```
-
-To generate the C header file:
+To run tests:
+```bash
+cargo test
 ```
+
+## Generating the C Header File
+
+```bash
 cargo install cbindgen
 cbindgen --config cbindgen.toml --crate glide-ffi --output lib.h --lang c
 ```
 
-## Running the linters
+## Running Linters and Formatting
 
 ```bash
 rustup component add clippy rustfmt
