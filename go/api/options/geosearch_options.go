@@ -102,15 +102,15 @@ func (o *GeoSearchShape) ToArgs() ([]string, error) {
 // Optional arguments for the `GeoSearch` command
 //
 // @see [valkey.io](https://valkey.io/commands/geosearch/)
-type GeoSearchOptions struct {
+type GeoSearchInfoOptions struct {
 	WithDist  bool
 	WithCoord bool
 	WithHash  bool
 }
 
-// Creates a new [GeoSearchOptions] with the default options
-func NewGeoSearchOptions() *GeoSearchOptions {
-	return &GeoSearchOptions{
+// Creates a new [GeoSearchInfoOptions] with the default options
+func NewGeoSearchInfoOptions() *GeoSearchInfoOptions {
+	return &GeoSearchInfoOptions{
 		WithDist:  false,
 		WithCoord: false,
 		WithHash:  false,
@@ -120,25 +120,25 @@ func NewGeoSearchOptions() *GeoSearchOptions {
 // WITHDIST: GeoSearch also return the distance of the returned items from the specified center point.
 //
 //	The distance is returned in the same unit as specified for the `searchBy` argument.
-func (o *GeoSearchOptions) SetWithDist(withDist bool) *GeoSearchOptions {
+func (o *GeoSearchInfoOptions) SetWithDist(withDist bool) *GeoSearchInfoOptions {
 	o.WithDist = withDist
 	return o
 }
 
 // WITHCOORD: GeoSearch also return the coordinate of the returned items.
-func (o *GeoSearchOptions) SetWithCoord(withCoord bool) *GeoSearchOptions {
+func (o *GeoSearchInfoOptions) SetWithCoord(withCoord bool) *GeoSearchInfoOptions {
 	o.WithCoord = withCoord
 	return o
 }
 
 // WITHHASH: GeoSearch also return the geohash of the returned items.
-func (o *GeoSearchOptions) SetWithHash(withHash bool) *GeoSearchOptions {
+func (o *GeoSearchInfoOptions) SetWithHash(withHash bool) *GeoSearchInfoOptions {
 	o.WithHash = withHash
 	return o
 }
 
 // Returns the arguments for the `GeoSearch` command
-func (o *GeoSearchOptions) ToArgs() ([]string, error) {
+func (o *GeoSearchInfoOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
 	if o.WithDist {
@@ -214,6 +214,36 @@ func (o *GeoSearchResultOptions) ToArgs() ([]string, error) {
 		if o.isAny {
 			args = append(args, "ANY")
 		}
+	}
+
+	return args, nil
+}
+
+const StoreDistAPIKeyword = "STOREDIST"
+
+// Optional arguments for `GeoSearchStore` that contains up to 1 optional input
+type GeoSearchStoreInfoOptions struct {
+	StoreDist bool
+}
+
+func NewGeoSearchStoreInfoOptions() *GeoSearchStoreInfoOptions {
+	return &GeoSearchStoreInfoOptions{
+		StoreDist: false,
+	}
+}
+
+// Optional argument for `GeoSearchStore` that sets the query to store the distance of the returned items.
+func (o *GeoSearchStoreInfoOptions) SetStoreDist(storeDist bool) *GeoSearchStoreInfoOptions {
+	o.StoreDist = storeDist
+	return o
+}
+
+// Returns the arguments for the `GeoSearchStore` command
+func (o *GeoSearchStoreInfoOptions) ToArgs() ([]string, error) {
+	args := []string{}
+
+	if o.StoreDist {
+		args = append(args, StoreDistAPIKeyword)
 	}
 
 	return args, nil
