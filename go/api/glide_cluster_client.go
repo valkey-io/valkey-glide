@@ -544,3 +544,38 @@ func (client *GlideClusterClient) ScanWithOptions(
 	nextCursor, keys, err := handleScanResponse(response)
 	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
+
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM
+//
+// Return value:
+//
+//	OK to confirm that the statistics were successfully reset.
+//
+// [valkey.io]: https://valkey.io/commands/config-resetstat/
+func (client *GlideClusterClient) ConfigResetStat() (string, error) {
+	response, err := client.executeCommand(C.ConfigResetStat, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	OK to confirm that the statistics were successfully reset.
+//
+// [valkey.io]: https://valkey.io/commands/config-resetstat/
+func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteOption) (string, error) {
+	response, err := client.executeCommandWithRoute(C.ConfigResetStat, []string{}, opts.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}

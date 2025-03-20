@@ -25,4 +25,8 @@ type ServerManagementClusterCommands interface {
 	FlushDB() (string, error)
 
 	FlushDBWithOptions(options options.FlushClusterOptions) (string, error)
+
+	ConfigResetStat() (string, error)
+
+	ConfigResetStatWithOptions(routeOption options.RouteOption) (string, error)
 }

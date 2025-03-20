@@ -161,3 +161,15 @@ func ExampleGlideClient_FlushDBWithOptions() {
 
 	// Output: OK
 }
+
+func ExampleGlideClient_ConfigResetStat() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	response, err := client.ConfigResetStat()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(response)
+
+	// Output:
+	// OK
+}
