@@ -248,7 +248,7 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 //
 // Return value:
 //
-//		Returns the copy of message. An Array of Objects. The first element is always the cursor
+//		Returns the copy of objects. An Array of Objects. The first element is always the cursor
 //	    for the next iteration of results. "0" will be the cursor
 //		returned on the last iteration of the scan.
 //		The second element is always an Array of matched keys from the database.
@@ -268,7 +268,7 @@ func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
 //
 // Return value:
 //
-//		Returns the copy of message. An Array of Objects. The first element is always the cursor
+//		Returns the copy of objects. An Array of Objects. The first element is always the cursor
 //	    for the next iteration of results. "0" will be the cursor
 //		returned on the last iteration of the scan.
 //		The second element is always an Array of matched keys from the database.
