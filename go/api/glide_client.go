@@ -239,6 +239,82 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	return handleStringResponse(result)
 }
 
+// FlushAll deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *GlideClient) FlushAll() (string, error) {
+	result, err := client.executeCommand(C.FlushAll, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(C.FlushAll, []string{string(mode)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (client *GlideClient) FlushDB() (string, error) {
+	result, err := client.executeCommand(C.FlushDB, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(C.FlushDB, []string{string(mode)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Iterates incrementally over a database for matching keys.
 //
 // Parameters:
@@ -248,10 +324,9 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 //
 // Return value:
 //
-//		Returns the copy of objects. An Array of Objects. The first element is always the cursor
-//	    for the next iteration of results. "0" will be the cursor
-//		returned on the last iteration of the scan.
-//		The second element is always an Array of matched keys from the database.
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
@@ -264,14 +339,13 @@ func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
 //
 //	 cursor - The cursor that points to the next iteration of results. A value of 0
 //				 indicates the start of the search.
-//	 options - Additional command parameters, see [ScanOptions] for more details.
+//	 scanOptions - Additional command parameters, see [ScanOptions] for more details.
 //
 // Return value:
 //
-//		Returns the copy of objects. An Array of Objects. The first element is always the cursor
-//	    for the next iteration of results. "0" will be the cursor
-//		returned on the last iteration of the scan.
-//		The second element is always an Array of matched keys from the database.
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions ...options.ScanOptions) (string, []string, error) {
