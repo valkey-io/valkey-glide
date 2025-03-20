@@ -9168,3 +9168,14 @@ func (suite *GlideTestSuite) TestGeoAdd_InvalidArgs() {
 		assert.IsType(t, &errors.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := suite.GenerateLargeUuid()
+		value := suite.GenerateLargeUuid()
+		suite.verifyOK(client.Set(key, value))
+		result, err := client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), value, result.Value())
+	})
+}
