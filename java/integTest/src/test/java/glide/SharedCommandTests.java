@@ -14458,11 +14458,11 @@ public class SharedCommandTests {
         final Set<Object> secondResultValues = new HashSet<>();
         boolean isFirstLoop = true;
         do {
-            System.out.println("scanning subset of the key");
+//            System.out.println("scanning subset of the key");
             result = client.sscan(key1, resultCursor).get();
             resultCursor = gs(result[resultCursorIndex].toString());
-            System.out.println("initial resultCursor: " + resultCursor);
-            System.out.println("initial result: " + result);
+//            System.out.println("initial resultCursor: " + resultCursor);
+//            System.out.println("initial result: " + result);
             secondResultValues.addAll(
                     Arrays.stream((Object[]) result[resultCollectionIndex]).collect(Collectors.toSet()));
 
@@ -14474,11 +14474,11 @@ public class SharedCommandTests {
             }
 
             // Scan with result cursor has a different set
-            System.out.println("scanning second time");
+//            System.out.println("scanning second time");
             Object[] secondResult = client.sscan(key1, resultCursor).get();
             GlideString newResultCursor = gs(secondResult[resultCursorIndex].toString());
-            System.out.println("second resultCursor: " + newResultCursor);
-            System.out.println("second result: " + secondResult);
+//            System.out.println("second resultCursor: " + newResultCursor);
+//            System.out.println("second result: " + secondResult);
             assertNotEquals(resultCursor, newResultCursor);
             resultCursor = newResultCursor;
             assertFalse(

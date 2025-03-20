@@ -189,6 +189,5 @@ public class SharedClientTests {
         // Allow time for cleanup and restore log level.\
         Thread.sleep(1000);
         Logger.setLoggerConfig(originalValue);
-
     }
 }
