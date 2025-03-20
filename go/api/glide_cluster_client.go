@@ -574,7 +574,7 @@ func (client *GlideClusterClient) RandomKey() (string, error) {
 //	A random key from the database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
-func (client *GlideClusterClient) RandomKeyWithRoute(opts config.RouteOption) (string, error) {
+func (client *GlideClusterClient) RandomKeyWithRoute(opts options.RouteOption) (string, error) {
 	result, err := client.executeCommandWithRoute(C.RandomKey, []string{}, opts)
 	if err != nil {
 		return DefaultStringResponse, err
