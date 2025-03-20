@@ -26,5 +26,13 @@ type ServerManagementCommands interface {
 
 	Time() ([]string, error)
 
+	FlushAll() (string, error)
+
+	FlushAllWithOptions(mode options.FlushMode) (string, error)
+
+	FlushDB() (string, error)
+
+	FlushDBWithOptions(mode options.FlushMode) (string, error)
+
 	ConfigRewrite() (string, error)
 }
