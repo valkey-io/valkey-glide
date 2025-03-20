@@ -5428,9 +5428,9 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 //
 // Parameters:
 //
-//	 bitwiseOperation - The bitwise operation to perform.
-//	 destination      - The key that will store the resulting string.
-//	 keys             - The list of keys to perform the bitwise operation on.
+//	bitwiseOperation - The bitwise operation to perform.
+//	destination      - The key that will store the resulting string.
+//	keys             - The list of keys to perform the bitwise operation on.
 //
 // Return value:
 //
