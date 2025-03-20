@@ -291,6 +291,9 @@ class TestAuthCommands:
 
         assert result == OK
 
+        # ensure client disconnection and password update
+        await asyncio.sleep(2)
+
         with pytest.raises(RequestError):
             await acl_glide_client.update_connection_password(
                 NEW_PASSWORD, immediate_auth=True
