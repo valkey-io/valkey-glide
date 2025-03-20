@@ -22,9 +22,9 @@ func ExampleGlideClient_CustomCommand() {
 func ExampleGlideClient_Scan() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	client.CustomCommand([]string{"FLUSHALL"})
-	client.Set("key", "hello")
 	client.Set("key1", "hello")
 	client.Set("key2", "hello")
+	client.Set("key3", "hello")
 	resCursor, resCollection, err := client.Scan(0)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -34,7 +34,7 @@ func ExampleGlideClient_Scan() {
 
 	// Output:
 	// Cursor: 0
-	// Collection [key2 key1 key0]
+	// Collection [key3 key2 key1]
 }
 
 func ExampleGlideClient_ScanWithOptions() {
