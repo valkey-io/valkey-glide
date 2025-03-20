@@ -131,6 +131,7 @@ jobs:
               with:
                   name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
+                      pkill tcpdump
                       java/client/build/reports/**
                       java/integTest/build/reports/**
                       utils/clusters/**
