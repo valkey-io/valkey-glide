@@ -5,6 +5,7 @@ package api
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -50,18 +51,18 @@ func ExampleGlideClient_ClientSetName() {
 	}
 	fmt.Println(result)
 
-	// Output:
-	// OK
+	// Output: OK
 }
 
 func ExampleGlideClient_ClientGetName() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
+	connectionName := "ConnectionName-" + uuid.NewString()
+	client.ClientSetName(connectionName)
 	result, err := client.ClientGetName()
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
+	fmt.Println(result == connectionName)
 
-	// Output:
-	// ConnectionName
+	// Output: true
 }
