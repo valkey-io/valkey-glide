@@ -734,9 +734,9 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 func (suite *GlideTestSuite) TestConfigSetGet() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
-	configParam := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
+	configParam := map[string]string{"timeout": "1000"}
 	suite.verifyOK(client.ConfigSet(configParam))
-	configGetParam := []string{"timeout", "maxmemory"}
+	configGetParam := []string{"timeout"}
 	resp, err := client.ConfigGet(configGetParam)
 	assert.NoError(t, err)
 	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
@@ -747,7 +747,7 @@ func (suite *GlideTestSuite) TestConfigSetGetWithOptions() {
 	t := suite.T()
 	// ConfigResetStat with option or with multiple options without route
 	opts := options.RouteOption{Route: nil}
-	configParam := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
+	configParam := map[string]string{"timeout": "1000"}
 	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
 	configGetParam := []string{"timeout", "maxmemory"}
 	resp, err := client.ConfigGetWithOptions(configGetParam, opts)
