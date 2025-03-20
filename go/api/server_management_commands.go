@@ -26,5 +26,7 @@ type ServerManagementCommands interface {
 
 	Time() ([]string, error)
 
-	LolwutWithOptions(opts *options.LolwutOptions) (string, error)
+	Lolwut() (string, error)
+
+	LolwutWithOptions(opts options.LolwutOptions) (string, error)
 }

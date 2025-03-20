@@ -453,6 +453,32 @@ func (client *GlideClusterClient) ScanWithOptions(
 	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
 
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *GlideClusterClient) Lolwut() (string, error) {
+	result, err := client.executeCommand(C.Lolwut, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Parameters:
+//
+//	lolwutOptions - The [LolwutOptions] type.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
 func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error) {
 	args, err := lolwutOptions.ToArgs()
 	if err != nil {
