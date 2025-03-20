@@ -114,52 +114,28 @@ func ExampleGlideClient_InfoWithOptions() {
 	// Output: response is of type string
 }
 
-func ExampleGlideClusterClient_LolwutWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	
-	opts := &options.ClusterLolwutOptions{
-		LolwutOptions: options.NewLolwutOptions(6),
-		RouteOption:   options.NewRouteOptions().SetSlots([]int{10, 20}),
-	}
-	
-	result, err := client.LolwutWithOptions(opts)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	
-	fmt.Printf("result is of type %T\n", result)
-	
-	// Output: result is of type string
+func ExampleGlideClient_LolwutWithOptions() {
+  var client *GlideClient = getExampleGlideClient() // example helper function
+  // Test with only version
+  opts := options.NewLolwutOptions(6)
+  result, err := client.LolwutWithOptions(*opts)
+  if err != nil {
+   fmt.Println("Glide example failed with an error:", err)
+  } else {
+   fmt.Printf("LOLWUT version result is of type %T\n", result)
+  }
+ 
+  // Test with version and arguments
+  opts = options.NewLolwutOptions(6).SetArgs([]int{10, 20})
+  result, err = client.LolwutWithOptions(*opts)
+  if err != nil {
+   fmt.Println("Glide example failed with an error:", err)
+  } else {
+   fmt.Printf("LOLWUT version with args result is of type %T\n", result)
+  }
+
+  // Output:
+  // LOLWUT version result is of type string
+  // LOLWUT version with args result is of type string
+ 
 }
-
-
-// func ExampleGlideClient_LolwutWithOptions() {
-// 	var client *GlideClient = getExampleGlideClient() // example helper function
-// 	//Test with no args
-// 	response, err := client.LolwutWithOptions(nil)
-// 	if err != nil {
-// 		 fmt.Println("Glide example failed with an error: ", err)
-// 	} else {
-// 	 fmt.Printf("response is of type %T\n", response)
-//     }
-
-
-//   // Test with only version
-//   opts := options.NewLolwutOptions(6)
-//   result, err := client.LolwutWithOptions(opts)
-//   if err != nil {
-//    fmt.Println("Glide example failed with an error:", err)
-//   } else {
-//    fmt.Printf("LOLWUT version result is of type %T\n", result)
-//   }
- 
-//   // Test with version and arguments
-//   opts = options.NewLolwutOptions(6).SetArgs([]int{10, 20})
-//   result, err = client.LolwutWithOptions(opts)
-//   if err != nil {
-//    fmt.Println("Glide example failed with an error:", err)
-//   } else {
-//    fmt.Printf("LOLWUT version with args result is of type %T\n", result)
-//   }
- 
-// }

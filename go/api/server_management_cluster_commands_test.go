@@ -85,13 +85,6 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 
 func ExampleGlideClusterClient_LolwutWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	
-	lolwutOpts := options.NewLolwutOptions(6)
-	lolwutOpts.SetArgs([]int{20, 10})
-	
-	routeOpt := options.NewRouteOptions()
-	routeOpt.SetRoute(config.Route(config.RandomRoute))
-
 	randomRouteOptions := options.ClusterLolwutOptions{
 		LolwutOptions: &options.LolwutOptions{
 			Version: 6,
