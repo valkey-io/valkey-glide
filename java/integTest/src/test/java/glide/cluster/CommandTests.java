@@ -100,7 +100,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1723,25 +1722,24 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
-    @Disabled("flaky test: re-enable once fixed")
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
     public void fcall_readonly_function(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
-        String libName = "fcall_readonly_function";
+        String libName = "fcall_readonly_function_" + UUID.randomUUID().toString().replace("-", "_");
         // intentionally using a REPLICA route
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
-        String funcName = "fcall_readonly_function";
+        String funcName = libName;
 
         // function $funcName returns a magic number
         String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
         // let replica sync with the primary node
-        assertEquals(1L, clusterClient.wait(1L, 4000L).get());
+        assertEquals(1L, clusterClient.wait(1L, 5000L).get());
 
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
@@ -1772,12 +1770,13 @@ public class CommandTests {
                         .contains("Can not execute a script with write flag using *_ro command."));
 
         // create the same function, but with RO flag
-        code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), true);
+        String funcNameRO = funcName + "_ro";
+        code = generateLuaLibCode(libName, Map.of(funcNameRO, "return 42"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
         // fcall should succeed now
-        assertEquals(42L, clusterClient.fcall(funcName, replicaRoute).get().getSingleValue());
+        assertEquals(42L, clusterClient.fcall(funcNameRO, replicaRoute).get().getSingleValue());
 
         assertEquals(OK, clusterClient.functionDelete(libName).get());
     }
