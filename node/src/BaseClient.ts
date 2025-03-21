@@ -354,14 +354,14 @@ export type Score = number | "+inf" | "-inf";
 
 /**
  * Data type which represents sorted sets data for input parameter of ZADD command,
- * including elements and their respective scores.
+ * including element and its respective score.
  */
 export type ElementAndScore = {
     /** The sorted set element name. */
     element: GlideString;
     /** The element score. */
     score: Score;
-}[];
+};
 
 /**
  * @internal
@@ -4035,7 +4035,7 @@ export class BaseClient {
      */
     public async zadd(
         key: GlideString,
-        membersAndScores: ElementAndScore | Record<string, Score>,
+        membersAndScores: ElementAndScore[] | Record<string, Score>,
         options?: ZAddOptions,
     ): Promise<number> {
         return this.createWritePromise(

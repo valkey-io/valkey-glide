@@ -1444,7 +1444,7 @@ export function convertElementsAndScores(
  */
 export function createZAdd(
     key: GlideString,
-    membersAndScores: ElementAndScore | Record<string, Score>,
+    membersAndScores: ElementAndScore[] | Record<string, Score>,
     options?: ZAddOptions,
     incr = false,
 ): command_request.Command {

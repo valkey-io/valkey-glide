@@ -4162,7 +4162,7 @@ export function runBaseTests(config: {
                 };
                 expect(await client.zadd(key, infMembersScores)).toEqual(2);
 
-                const infElementAndScore: ElementAndScore = [
+                const infElementAndScore: ElementAndScore[] = [
                     { element: "infMemberEAS", score: "+inf" },
                     { element: "negInfMemberEAS", score: "-inf" },
                 ];

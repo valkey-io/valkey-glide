@@ -1738,7 +1738,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zadd(
         key: GlideString,
-        membersAndScores: ElementAndScore | Record<string, Score>,
+        membersAndScores: ElementAndScore[] | Record<string, Score>,
         options?: ZAddOptions,
     ): T {
         return this.addAndReturn(createZAdd(key, membersAndScores, options));
