@@ -42,7 +42,7 @@ pub enum PeriodicCheck {
     ManualInterval(Duration),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NodeAddress {
     pub host: String,
     pub port: u16,
