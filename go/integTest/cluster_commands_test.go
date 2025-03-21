@@ -1129,27 +1129,75 @@ func (suite *GlideTestSuite) TestConfigRewriteCluster() {
 
 func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
 	client := suite.defaultClusterClient()
+	t := suite.T()
+	sections := []options.Section{options.Server}
 
-	// ConfigResetStat with option or with multiple options without route
-	opts := options.RouteOption{Route: nil}
-	resultConfig, err := client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
-	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000"}, resultConfig)
-	suite.verifyOK(client.ConfigRewriteWithOptions(opts))
+	// info with option or with multiple options without route
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: nil,
+	}
+	response, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range response.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+			break
+		}
+	}
 
 	// same sections with random route
-	route := config.Route(config.RandomRoute)
-	opts = options.RouteOption{Route: route}
-	resultConfig, err = client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
-	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000"}, resultConfig)
-	suite.verifyOK(client.ConfigRewriteWithOptions(opts))
+	opts = options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: &options.RouteOption{Route: config.RandomRoute},
+	}
+	response, err = client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	lines := strings.Split(response.SingleValue(), "\n")
+	var configFile string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "config_file:") {
+			configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+			break
+		}
+	}
+	if len(configFile) > 0 {
+		responseRewrite, err := client.ConfigRewrite()
+		assert.NoError(t, err)
+		assert.Equal(t, "OK", responseRewrite)
+	}
 
 	// default sections, multi node route
-	route = config.Route(config.AllPrimaries)
-	opts = options.RouteOption{Route: route}
-	resultConfig, err = client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
-	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000"}, resultConfig)
-	suite.verifyOK(client.ConfigRewriteWithOptions(opts))
+	opts = options.ClusterInfoOptions{
+		InfoOptions: nil,
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	}
+	response, err = client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range response.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+			break
+		}
+	}
 }
