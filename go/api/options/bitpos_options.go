@@ -6,7 +6,6 @@ import (
 	"github.com/valkey-io/valkey-glide/go/utils"
 )
 
-
 // Optional arguments to `BitPos` in [BitMapCommands]
 type BitPosOptions struct {
 	start           *int64
