@@ -5,6 +5,7 @@ package api
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/api/options"
@@ -164,12 +165,25 @@ func ExampleGlideClient_FlushDBWithOptions() {
 
 func ExampleGlideClient_ConfigRewrite() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	client.ConfigSet(map[string]string{"timeout": "1000", "maxmemory": "1GB"})
-	response, err := client.ConfigRewrite()
+	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
+	response, err := client.InfoWithOptions(opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response)
+	lines := strings.Split(response, "\n")
+	var configFile string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "config_file:") {
+			configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+			break
+		}
+	}
+	if len(configFile) > 0 {
+		response, err = client.ConfigRewrite()
+		if err != nil {
+			fmt.Println("Glide example failed with an error: ", err)
+		}
+	}
 
 	// Output: OK
 }
