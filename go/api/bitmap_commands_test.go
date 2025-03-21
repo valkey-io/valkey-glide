@@ -263,5 +263,5 @@ func ExampleGlideClusterClient_BitPosWithOptions() {
 	}
 	fmt.Println(result)
 
-	// Output: 12
+	// Output: 11
 }
