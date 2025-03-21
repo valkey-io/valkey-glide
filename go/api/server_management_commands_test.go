@@ -181,11 +181,10 @@ func ExampleGlideClient_ConfigRewrite() {
 	}
 	if len(configFile) > 0 {
 		response, err = client.ConfigRewrite()
-		fmt.Println(err)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
-		resultRewrite = response
+		resultRewrite = "response" + response + err
 	} else {
 		resultRewrite = "OK"
 	}
