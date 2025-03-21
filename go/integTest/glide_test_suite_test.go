@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/valkey-io/valkey-glide/go/api"
@@ -379,4 +381,13 @@ func (suite *GlideTestSuite) SkipIfServerVersionLowerThanBy(version string) {
 	if suite.serverVersion < version {
 		suite.T().Skipf("This feature is added in version %s", version)
 	}
+}
+
+func (suite *GlideTestSuite) GenerateLargeUuid() string {
+	wantedLength := math.Pow(2, 16)
+	id := uuid.New().String()
+	for len(id) < int(wantedLength) {
+		id += uuid.New().String()
+	}
+	return id
 }
