@@ -5514,6 +5514,10 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 
 // Perform a bitwise operation between multiple keys (containing string values) and store the result in the destination.
 //
+// Note:
+//
+// When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+//
 // Parameters:
 //
 //	bitwiseOperation - The bitwise operation to perform.
@@ -5638,6 +5642,7 @@ func (client *baseClient) XClaimWithOptions(
 	}
 	return handleMapOfArrayOfStringArrayResponse(result)
 }
+
 
 // Changes the ownership of a pending message. This function returns an `array` with
 // only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
