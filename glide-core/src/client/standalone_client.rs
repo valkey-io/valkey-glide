@@ -142,10 +142,10 @@ impl StandaloneClient {
             DEFAULT_CONNECTION_TIMEOUT,
         );
 
-        let mut stream = stream::iter(connection_request.addresses.iter())
-            .map(|address| async {
+        let mut stream = stream::iter(connection_request.addresses.iter().cloned())
+            .map(async |address| {
                 get_connection_and_replication_info(
-                    address,
+                    &address,
                     &retry_strategy,
                     if address.to_string() != pubsub_addr.to_string() {
                         &redis_connection_info
