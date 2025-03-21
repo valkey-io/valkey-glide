@@ -66,7 +66,7 @@ func ExampleGlideClusterClient_EchoWithOptions() {
 
 func ExampleGlideClusterClient_ClientIdCluster() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.ClientIdWithOptions()
+	result, err := client.ClientId()
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
