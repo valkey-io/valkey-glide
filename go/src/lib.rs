@@ -900,7 +900,7 @@ pub unsafe extern "C" fn update_connection_password(
                 let c_err_str = CString::into_raw(
                     CString::new(message).expect("Couldn't convert error message to CString"),
                 );
-                unsafe { ( core.failure_callback)(channel, c_err_str, error_type) };
+                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
                 return;
             }
         };
@@ -909,9 +909,7 @@ pub unsafe extern "C" fn update_connection_password(
 
         unsafe {
             match result {
-                Ok(message) => {
-                    (core.success_callback)(channel, Box::into_raw(Box::new(message)))
-                }
+                Ok(message) => (core.success_callback)(channel, Box::into_raw(Box::new(message))),
                 Err(err) => {
                     let message = errors::error_message(&err);
                     let error_type = errors::error_type(&err);
