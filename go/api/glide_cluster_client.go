@@ -546,6 +546,25 @@ func (client *GlideClusterClient) ScanWithOptions(
 }
 
 // Gets the current connection id.
+//
+// Return value:
+//
+//	The id of the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-id/
+func (client *GlideClusterClient) ClientIdWithOptions() (ClusterValue[int64], error) {
+	response, err := client.executeCommand(C.ClientId, []string{})
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	data, err := handleIntResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	return createClusterSingleValue[int64](data), nil
+}
+
+// Gets the current connection id.
 // The command will be routed a random node, unless `Route` in `routeOptions` is provided.
 //
 // Parameters:
