@@ -298,6 +298,94 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	return cStrings, stringLengths
 }
 
+func (client *baseClient) submitConnectionPasswordUpdate(password string, immediateAuth bool) (Result[string], error) {
+	// Create a channel to receive the result
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return CreateNilStringResult(), &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+
+	C.update_connection_password(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		C.CString(password),
+		C._Bool(immediateAuth),
+	)
+	client.mu.Unlock()
+
+	// Wait for response
+	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return CreateNilStringResult(), payload.error
+	}
+
+	return handleStringOrNilResponse(payload.value)
+}
+
+// Update the current connection with a new password.
+//
+// This method is useful in scenarios where the server password has changed or when utilizing
+// short-lived passwords for enhanced security. It allows the client to update its password to
+// reconnect upon disconnection without the need to recreate the client instance. This ensures
+// that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+// loss of in-flight commands.
+//
+// Note:
+//
+// This method updates the client's internal password configuration and does not perform
+// password rotation on the server side.
+//
+// Parameters:
+//
+//		password - The new password to update the connection with.
+//		immediateAuth - immediateAuth A boolean flag. If true, the client will
+//	    authenticate immediately with the new password against all connections, Using AUTH
+//	    command. If password supplied is an empty string, the client will not perform auth and a warning
+//	    will be returned. The default is `false`.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+func (client *baseClient) UpdateConnectionPassword(password string, immediateAuth bool) (Result[string], error) {
+	return client.submitConnectionPasswordUpdate(password, immediateAuth)
+}
+
+// Update the current connection by removing the password.
+//
+// This method is useful in scenarios where the server password has changed or when utilizing
+// short-lived passwords for enhanced security. It allows the client to update its password to
+// reconnect upon disconnection without the need to recreate the client instance. This ensures
+// that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+// loss of in-flight commands.
+//
+// Note:
+//
+// This method updates the client's internal password configuration and does not perform
+// password rotation on the server side.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+func (client *baseClient) ResetConnectionPassword() (Result[string], error) {
+	return client.submitConnectionPasswordUpdate("", false)
+}
+
 // Set the given key with the given value. The return value is a response from Valkey containing the string "OK".
 //
 // See [valkey.io] for details.
