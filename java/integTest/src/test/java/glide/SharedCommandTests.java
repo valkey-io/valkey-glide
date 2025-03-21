@@ -14459,6 +14459,7 @@ public class SharedCommandTests {
         boolean isFirstLoop = true;
         do {
             //            System.out.println("scanning subset of the key");
+            System.out.println("Result: " + resultCursor);
             result = client.sscan(key1, resultCursor).get();
             resultCursor = gs(result[resultCursorIndex].toString());
             //            System.out.println("initial resultCursor: " + resultCursor);
@@ -14853,6 +14854,10 @@ public class SharedCommandTests {
         final Set<Object> secondResultAllValues = new HashSet<>();
         boolean isFirstLoop = true;
         do {
+            System.out.println("Result: " + resultCursor);
+            client.set("i am setting invalid key: first zscan", "val").get();
+            client.set("line number:", "14859").get();
+            client.set("current cursor:", resultCursor.toString()).get();
             result = client.zscan(key1, resultCursor).get();
             resultCursor = gs(result[resultCursorIndex].toString());
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
@@ -14869,6 +14874,9 @@ public class SharedCommandTests {
             }
 
             // Scan with result cursor has a different set
+            client.set("i am setting invalid key: second zscan", "val").get();
+            client.set("line number:", "14877").get();
+            client.set("current cursor:", resultCursor.toString()).get();
             Object[] secondResult = client.zscan(key1, resultCursor).get();
             GlideString newResultCursor = gs(secondResult[resultCursorIndex].toString());
             assertNotEquals(resultCursor, newResultCursor);
@@ -15234,6 +15242,7 @@ public class SharedCommandTests {
         final Set<Object> secondResultAllValues = new HashSet<>();
         boolean isFirstLoop = true;
         do {
+            System.out.println("Result: " + resultCursor);
             result = client.hscan(key1, resultCursor).get();
             resultCursor = gs(result[resultCursorIndex].toString());
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
