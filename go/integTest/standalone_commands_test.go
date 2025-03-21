@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -700,6 +701,93 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_ClosedClient() {
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
+func (suite *GlideTestSuite) TestUpdateConnectionPasswordAuthNonValidPass() {
+	// Create test client
+	testClient := suite.defaultClient()
+	defer testClient.Close()
+
+	// Test empty password
+	_, err := testClient.UpdateConnectionPassword("", true)
+	assert.NotNil(suite.T(), err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+	// Test with no password parameter
+	_, err = testClient.UpdateConnectionPassword("", true)
+	assert.NotNil(suite.T(), err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+}
+
+func (suite *GlideTestSuite) TestUpdateConnectionPassword_NoServerAuth() {
+	// Create test client
+	testClient := suite.defaultClient()
+	defer testClient.Close()
+
+	// Validate that we can use the client
+	_, err := testClient.Info()
+	assert.Nil(suite.T(), err)
+
+	// Test immediate re-authentication fails when no server password is set
+	pwd := uuid.NewString()
+	_, err = testClient.UpdateConnectionPassword(pwd, true)
+	assert.NotNil(suite.T(), err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+}
+
+func (suite *GlideTestSuite) TestUpdateConnectionPassword_LongPassword() {
+	// Create test client
+	testClient := suite.defaultClient()
+	defer testClient.Close()
+
+	// Generate long random password (1000 chars)
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	pwd := make([]byte, 1000)
+	for i := range pwd {
+		pwd[i] = letters[rand.Intn(len(letters))]
+	}
+
+	// Validate that we can use the client
+	_, err := testClient.Info()
+	assert.NoError(suite.T(), err)
+
+	// Test replacing connection password with a long password string
+	_, err = testClient.UpdateConnectionPassword(string(pwd), false)
+	assert.NoError(suite.T(), err)
+}
+
+func (suite *GlideTestSuite) TestUpdateConnectionPassword_ImmediateAuthWrongPassword() {
+	// Create admin client
+	adminClient := suite.defaultClient()
+	defer adminClient.Close()
+
+	// Create test client
+	testClient := suite.defaultClient()
+	defer testClient.Close()
+
+	pwd := uuid.NewString()
+	notThePwd := uuid.NewString()
+
+	// Validate that we can use the client
+	_, err := testClient.Info()
+	assert.Nil(suite.T(), err)
+
+	// Set the password to something else
+	_, err = adminClient.ConfigSet(map[string]string{"requirepass": notThePwd})
+	assert.Nil(suite.T(), err)
+
+	// Test that re-authentication fails when using wrong password
+	_, err = testClient.UpdateConnectionPassword(pwd, true)
+	assert.NotNil(suite.T(), err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+	// But using correct password returns OK
+	_, err = testClient.UpdateConnectionPassword(notThePwd, true)
+	assert.NoError(suite.T(), err)
+
+	// Cleanup: Reset password
+	_, err = adminClient.ConfigSet(map[string]string{"requirepass": ""})
+	assert.NoError(suite.T(), err)
 }
 
 func (suite *GlideTestSuite) TestClientGetSetName() {
