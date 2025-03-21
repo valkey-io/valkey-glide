@@ -574,9 +574,9 @@ func (client *GlideClusterClient) ConfigSet(
 //
 // Parameters:
 //
+//	parameters -  A map consisting of configuration parameters and their respective values to set.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
-//	parameters -  A map consisting of configuration parameters and their respective values to set.
 //
 // Return value:
 //
@@ -626,9 +626,9 @@ func (client *GlideClusterClient) ConfigGet(
 //
 // Parameters:
 //
-//		opts - Specifies the routing configuration for the command. The client will route the
-//		       command to the nodes defined by route.
-//	 	parameters - An array of configuration parameter names to retrieve values for.
+//	parameters - An array of configuration parameter names to retrieve values for.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	       command to the nodes defined by route.
 //
 // Return value:
 //
