@@ -164,14 +164,14 @@ func ExampleGlideClient_FlushDBWithOptions() {
 
 func ExampleGlideClient_Lolwut() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	
+
 	result, err := client.Lolwut()
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 	} else {
 		fmt.Printf("LOLWUT result is of type %T\n", result)
 	}
-	
+
 	// Output:
 	// LOLWUT result is of type string
 }
