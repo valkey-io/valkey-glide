@@ -622,7 +622,6 @@ func (client *GlideClusterClient) ConfigGet(
 
 // Get the values of configuration parameters.
 // Starting from server version 7, command supports multiple parameters.
-// The command will be sent to a random node.
 //
 // Parameters:
 //
