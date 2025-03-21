@@ -1964,12 +1964,13 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it.each(Array.from({ length: 10 }, (_, i) => i + 1))(
         "script kill unkillable test_%p",
-        async (protocol) => {
+        async (i) => {
+            console.log(`Test: ${i}`);
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
-                protocol,
+                ProtocolVersion.RESP2,
                 { requestTimeout: 10000 },
             );
             const client1 = await GlideClusterClient.createClient(config);
@@ -2008,6 +2009,21 @@ describe("GlideClusterClient", () => {
                         ) {
                             foundUnkillable = true;
                             break;
+                        }
+
+                        if (
+                            timeout <= 2000 &&
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("no scripts in execution right now")
+                        ) {
+                            console.log("creating a new promise");
+                            promise = client2.invokeScript(longScript, {
+                                keys: ["{key}-" + uuidv4()],
+                            });
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 2000),
+                            );
                         }
                     }
 

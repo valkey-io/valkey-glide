@@ -105,9 +105,13 @@ jobs:
 
             - name: test
               run: |
+                  sudo tcpdump -i lo -w node.pcap tcp port '(7001 or 7002 or 7003 or 7004 or 7005 or 7006)' &
                   python3 ../utils/cluster_manager.py start --cluster-mode -p 7001 7002 7003 7004 7005 7006
                   npm run test-dbg -- --cluster-endpoints=localhost:7001 --standalone-endpoints=localhost:6379 --testNamePattern="script kill unkillable test*" --testPathPattern="GlideClusterClient" --verbose
                   python3 ../utils/cluster_manager.py stop --prefix cluster
+                  sudo pkill tcpdump
+                  tcpdump -r node.pcap -A -n
+                  rm node.pcap
               working-directory: ./node
 
             - name: test hybrid node modules - commonjs
