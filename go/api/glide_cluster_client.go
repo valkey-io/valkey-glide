@@ -565,7 +565,6 @@ func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
 }
 
 // Gets the current connection id.
-// The command will be routed a random node, unless `Route` in `routeOptions` is provided.
 //
 // Parameters:
 //
