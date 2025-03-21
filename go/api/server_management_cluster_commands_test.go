@@ -276,9 +276,9 @@ func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
 		}
 		runResultMultiNodeRoute = "OK"
 	}
-	fmt.Println("Multiple options without route result: ", err)
-	fmt.Println("Random route result: ", err)
-	fmt.Println("Multi node route result: ", err)
+	fmt.Println("Multiple options without route result:", runResultNilRoute)
+	fmt.Println("Random route result:", runResultRandomRoute)
+	fmt.Println("Multi node route result:", runResultMultiNodeRoute)
 
 	// Output:
 	// Multiple options without route result: OK
