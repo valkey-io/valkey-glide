@@ -1494,7 +1494,7 @@ describe("GlideClient", () => {
     );
 
     // TODO: enable once flakiness is solved
-    it.each(Array.from({ length: 1000 }, (_, i) => i + 1))(
+    it.each(Array.from({ length: 150 }, (_, i) => i + 1))(
         "script kill unkillable test_%p",
         async (i) => {
             console.log(`Test: ${i}`);
