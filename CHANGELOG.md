@@ -19,6 +19,7 @@
 * Go: Add `GeoAdd` and the Geospatial interface ([#3366](https://github.com/valkey-io/valkey-glide/pull/3366))
 * Go: Add `FLUSHALL` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
 * Go: Add `FLUSHDB` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
+* Go: Add password update api ([#3346](https://github.com/valkey-io/valkey-glide/pull/3346))
 * Go: Add `Random Key` ([#3358](https://github.com/valkey-io/valkey-glide/pull/3358))
 
 #### Breaking Changes
