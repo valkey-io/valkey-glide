@@ -30,7 +30,7 @@ func NewLolwutOptions(version int64) *LolwutOptions {
 }
 
 // SetArgs sets the additional numeric arguments for the LOLWUT command.
-// These arguments customize the dimensions or parameters of the ASCII art 
+// These arguments customize the dimensions or parameters of the ASCII art
 // based on the version.
 func (options *LolwutOptions) SetArgs(args []int) *LolwutOptions {
 	options.Args = &args
