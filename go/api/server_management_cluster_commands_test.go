@@ -153,6 +153,21 @@ func ExampleGlideClusterClient_FlushDBWithOptions() {
 	// Output: OK
 }
 
+func ExampleGlideClusterClient_Lolwut() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	
+	result, err := client.Lolwut()
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+	} else {
+		if len(result) > 0 {
+			fmt.Println("LOLWUT pattern generated successfully")
+		}
+	}
+	
+	// Output: LOLWUT pattern generated successfully
+ }
+
 func ExampleGlideClusterClient_LolwutWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	randomRouteOptions := options.ClusterLolwutOptions{

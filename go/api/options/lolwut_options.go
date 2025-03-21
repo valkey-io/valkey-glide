@@ -12,20 +12,26 @@ const (
 	VersionStr VersionString = "VERSION"
 )
 
+// Optional arguments to `Lolwut` for standalone client
 type LolwutOptions struct {
 	Version int64
 	Args    *[]int
 }
 
+// Optional arguments to `Lolwut` for cluster client
 type ClusterLolwutOptions struct {
 	*LolwutOptions
 	*RouteOption
 }
 
+// NewLolwutOptions creates a new LolwutOptions with the specified version.
 func NewLolwutOptions(version int64) *LolwutOptions {
 	return &LolwutOptions{Version: version}
 }
 
+// SetArgs sets the additional numeric arguments for the LOLWUT command.
+// These arguments customize the dimensions or parameters of the ASCII art 
+// based on the version.
 func (options *LolwutOptions) SetArgs(args []int) *LolwutOptions {
 	options.Args = &args
 	return options
@@ -35,7 +41,6 @@ func (options *LolwutOptions) ToArgs() ([]string, error) {
 	if options == nil {
 		return []string{}, nil
 	}
-	// var err error
 	args := []string{string(VersionStr), utils.IntToString(options.Version)}
 
 	if options.Args != nil {
