@@ -8,10 +8,10 @@ use crate::command_request::{
 };
 use crate::connection_request::ConnectionRequest;
 use crate::errors::{error_message, error_type, RequestErrorType};
+use crate::glide_paths::GlidePaths;
 use crate::response;
 use crate::response::Response;
 use bytes::Bytes;
-use directories::BaseDirs;
 use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
 use once_cell::sync::Lazy;
 use protobuf::{Chars, Message};
@@ -24,8 +24,8 @@ use std::cell::Cell;
 use std::collections::HashSet;
 use std::ptr::from_mut;
 use std::rc::Rc;
+use std::str;
 use std::sync::RwLock;
-use std::{env, str};
 use std::{io, thread};
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
@@ -37,9 +37,6 @@ use tokio::task;
 use tokio_util::task::LocalPoolHandle;
 use ClosingReason::*;
 use PipeListeningResult::*;
-
-/// The socket file name
-const SOCKET_FILE_NAME: &str = "glide-socket";
 
 /// The maximum length of a request's arguments to be passed as a vector of
 /// strings instead of a pointer
@@ -567,11 +564,6 @@ async fn handle_requests(
     task::yield_now().await;
 }
 
-pub fn close_socket(socket_path: &String) {
-    log_info("close_socket", format!("closing socket at {socket_path}"));
-    let _ = std::fs::remove_file(socket_path);
-}
-
 async fn create_client(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
@@ -780,34 +772,6 @@ struct ClosingError {
     err_message: String,
 }
 
-/// Get the socket full path.
-/// The socket file name will contain the process ID and will try to be saved into the user's runtime directory
-/// (e.g. /run/user/1000) in Unix systems. If the runtime dir isn't found, the socket file will be saved to the temp dir.
-/// For Windows, the socket file will be saved to %AppData%\Local.
-pub fn get_socket_path_from_name(socket_name: String) -> String {
-    let base_dirs = BaseDirs::new().expect("Failed to create BaseDirs");
-    let tmp_dir;
-    let folder = if cfg!(windows) {
-        base_dirs.data_local_dir()
-    } else {
-        base_dirs.runtime_dir().unwrap_or({
-            tmp_dir = env::temp_dir();
-            tmp_dir.as_path()
-        })
-    };
-    folder
-        .join(socket_name)
-        .into_os_string()
-        .into_string()
-        .expect("Couldn't create socket path")
-}
-
-/// Get the socket path as a string
-pub fn get_socket_path() -> String {
-    let socket_name = format!("{}-{}", SOCKET_FILE_NAME, std::process::id());
-    get_socket_path_from_name(socket_name)
-}
-
 /// This function is exposed only for the sake of testing with a nonstandard `socket_path`.
 /// Avoid using this function, unless you explicitly want to test the behavior of the listener
 /// without using the sockets used by other tests.
@@ -820,15 +784,19 @@ pub fn start_socket_listener_internal<InitCallback>(
     static INITIALIZED_SOCKETS: Lazy<RwLock<HashSet<String>>> =
         Lazy::new(|| RwLock::new(HashSet::new()));
 
-    let socket_path = socket_path.unwrap_or_else(get_socket_path);
+    let mut glide_paths = match socket_path {
+        Some(path) => GlidePaths::from_file_path(&path),
+        None => GlidePaths::default(),
+    };
+    let socket_file_path = glide_paths.glide_file();
 
     {
         // Optimize for already initialized
         let initialized_sockets = INITIALIZED_SOCKETS
             .read()
             .expect("Failed to acquire sockets db read guard");
-        if initialized_sockets.contains(&socket_path) {
-            init_callback(Ok(socket_path.clone()));
+        if initialized_sockets.contains(&socket_file_path) {
+            init_callback(Ok(socket_file_path));
             return;
         }
     }
@@ -837,13 +805,12 @@ pub fn start_socket_listener_internal<InitCallback>(
     let mut sockets_write_guard = INITIALIZED_SOCKETS
         .write()
         .expect("Failed to acquire sockets db write guard");
-    if sockets_write_guard.contains(&socket_path) {
-        init_callback(Ok(socket_path.clone()));
+    if sockets_write_guard.contains(&socket_file_path) {
+        init_callback(Ok(socket_file_path));
         return;
     }
-
     let (tx, rx) = std::sync::mpsc::channel();
-    let socket_path_cloned = socket_path.clone();
+    let socket_file_path_cloned = socket_file_path.clone();
     let init_callback_cloned = init_callback.clone();
     let tx_cloned = tx.clone();
     thread::Builder::new()
@@ -860,9 +827,18 @@ pub fn start_socket_listener_internal<InitCallback>(
                     }
                     Ok(runtime) => runtime,
                 };
-
                 runtime.block_on(async move {
-                    let listener_socket = match UnixListener::bind(socket_path_cloned.clone()) {
+                    // Check if the socket file is occupied, if so, remove it.
+                    // Since we checked above if the socket is already initialized, if the file exists, it is a leftover from a previous run.
+                    if let Err(e) = glide_paths.remove_glide_file() {
+                        log_warn(
+                            "remove socket file",
+                            format!("Error removing socket file: {e}"),
+                        );
+                    }
+                    glide_paths.set_glide_file_string(&socket_file_path_cloned);
+                    let listener_socket = match UnixListener::bind(socket_file_path_cloned.clone())
+                    {
                         Err(err) => {
                             log_error(
                                 "listen_on_socket",
@@ -874,10 +850,8 @@ pub fn start_socket_listener_internal<InitCallback>(
                     };
 
                     // Signal initialization is successful.
-                    // IMPORTANT:
-                    // tx.send() must be called before init_callback_cloned() to ensure runtimes, such as Python, can properly complete the main function
                     let _ = tx.send(true);
-                    init_callback_cloned(Ok(socket_path_cloned.clone()));
+                    init_callback_cloned(Ok(socket_file_path_cloned.clone()));
 
                     let local_set_pool = LocalPoolHandle::new(num_cpus::get());
                     loop {
@@ -898,13 +872,17 @@ pub fn start_socket_listener_internal<InitCallback>(
 
                     // ensure socket file removal
                     drop(listener_socket);
-                    let _ = std::fs::remove_file(socket_path_cloned.clone());
-
-                    // no more listening on socket - update the sockets db
+                    if let Err(e) = glide_paths.remove_glide_file() {
+                        log_warn(
+                            "remove socket file",
+                            format!("Error removing socket file: {e}"),
+                        );
+                    }
+                    drop(glide_paths);
                     let mut sockets_write_guard = INITIALIZED_SOCKETS
                         .write()
                         .expect("Failed to acquire sockets db write guard");
-                    sockets_write_guard.remove(&socket_path_cloned);
+                    sockets_write_guard.remove(&socket_file_path_cloned);
                     Ok(())
                 })
             };
@@ -917,10 +895,9 @@ pub fn start_socket_listener_internal<InitCallback>(
         })
         .expect("Thread spawn failed. Cannot report error because callback was moved.");
 
-    // wait for thread initialization signaling, callback invocation is done in the thread
     let _ = rx.recv().map(|res| {
         if res {
-            sockets_write_guard.insert(socket_path);
+            sockets_write_guard.insert(socket_file_path);
         }
     });
 }

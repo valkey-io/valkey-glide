@@ -7,7 +7,7 @@ use glide_core::{
     connection_request::{self, AuthenticationInfo, NodeAddress, ProtocolVersion},
 };
 use once_cell::sync::Lazy;
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{distr::Alphanumeric, Rng};
 use redis::{
     cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
     ConnectionAddr, GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisResult, Value,
@@ -517,7 +517,7 @@ pub fn get_address_info(address: &ConnectionAddr) -> NodeAddress {
 }
 
 pub fn generate_random_string(length: usize) -> String {
-    rand::thread_rng()
+    rand::rng()
         .sample_iter(&Alphanumeric)
         .take(length)
         .map(char::from)
