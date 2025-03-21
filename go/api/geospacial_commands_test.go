@@ -96,3 +96,26 @@ func ExampleGlideClusterClient_GeoHash() {
 	// Output:
 	// [sqc8b49rny0 sqdtr74hyu0]
 }
+
+func ExampleGlideClient_GeoPos() {
+	client := getExampleGlideClient()
+
+	key := uuid.New().String()
+	_, err := client.GeoAdd(key, map[string]options.GeospatialData{
+		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+		"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+	})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	positions, err := client.GeoPos(key, []string{"Palermo", "Catania"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(positions)
+
+	// Output:
+	// [[13.361389338970184 38.1155563954963] [15.087267458438873 37.50266842333162]]
+}
