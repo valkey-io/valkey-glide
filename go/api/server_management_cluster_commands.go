@@ -25,4 +25,12 @@ type ServerManagementClusterCommands interface {
 	FlushDB() (string, error)
 
 	FlushDBWithOptions(options options.FlushClusterOptions) (string, error)
+
+	ConfigSet(parameters map[string]string) (string, error)
+
+	ConfigSetWithOptions(parameters map[string]string, routeOption options.RouteOption) (string, error)
+
+	ConfigGet(parameters []string) (ClusterValue[interface{}], error)
+
+	ConfigGetWithOptions(parameters []string, routeOption options.RouteOption) (ClusterValue[interface{}], error)
 }
