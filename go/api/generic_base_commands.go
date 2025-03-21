@@ -81,4 +81,8 @@ type GenericBaseCommands interface {
 	Copy(source string, destination string) (bool, error)
 
 	CopyWithOptions(source string, destination string, option options.CopyOptions) (bool, error)
+
+	UpdateConnectionPassword(password string, immediateAuth bool) (Result[string], error)
+
+	ResetConnectionPassword() (Result[string], error)
 }
