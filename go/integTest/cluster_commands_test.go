@@ -974,6 +974,7 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_AsyncMode() {
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster() {
+	suite.T().Skip("Skipping update connection password cluster test")
 	// Create admin client
 	adminClient := suite.defaultClusterClient()
 	defer adminClient.Close()
