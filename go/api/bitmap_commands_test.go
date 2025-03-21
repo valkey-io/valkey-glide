@@ -200,3 +200,68 @@ func ExampleGlideClusterClient_BitFieldRO() {
 
 	// output: [{24 false}]
 }
+
+func ExampleGlideClient_BitPos() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.SetBit("my_key", 7, 1)
+	
+	result, err := client.BitPos("my_key", 1)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: 7
+}
+
+func ExampleGlideClusterClient_BitPos() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.SetBit("my_key", 7, 1)
+	
+	result, err := client.BitPos("my_key", 1)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: 7
+}
+
+func ExampleGlideClient_BitPosWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.Set("my_key", "\x00\x01\x00")
+	
+	options := options.NewBitPosOptions().
+		SetStart(0).
+		SetEnd(1)
+	
+	result, err := client.BitPosWithOptions("my_key", 1, *options)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: 15
+}
+
+func ExampleGlideClusterClient_BitPosWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.Set("my_key", "\x00\x10\x00")
+	
+	options := options.NewBitPosOptions().
+		SetStart(10).
+		SetEnd(14).
+		SetBitmapIndexType(options.BIT)
+	
+	result, err := client.BitPosWithOptions("my_key", 1, *options)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: 12
+}
