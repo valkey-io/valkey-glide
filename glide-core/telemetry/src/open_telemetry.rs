@@ -8,6 +8,7 @@ use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use url::Url;
@@ -90,6 +91,8 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
 #[derive(Clone, Debug)]
 struct GlideSpanInner {
     span: Arc<RwLock<opentelemetry::global::BoxedSpan>>,
+    span_name: String,
+    reference_count: Arc<AtomicUsize>,
 }
 
 impl GlideSpanInner {
@@ -102,15 +105,25 @@ impl GlideSpanInner {
                 .with_kind(SpanKind::Client)
                 .start(&tracer),
         ));
-        GlideSpanInner { span }
+
+        GlideSpanInner {
+            span,
+            span_name: name.to_string(),
+            reference_count: Arc::new(AtomicUsize::new(1)),
+        }
     }
 
-    /// Create new span as a child of `parent`.
-    pub fn new_with_parent(name: &str, parent: &GlideSpanInner) -> Self {
+    /// Print span name by retrieving the attribute
+    pub fn print_span_name(&self) {
+        println!("The span name is: {}", self.span_name);
+    }
+
+    /// Create new span as a child of `parent`, returning an error if the parent span lock is poisoned.
+    pub fn new_with_parent(name: &str, parent: &GlideSpanInner) -> Result<Self, TraceError> {
         let parent_span_ctx = parent
             .span
             .read()
-            .expect(SPAN_READ_LOCK_ERR)
+            .map_err(|_| TraceError::from(SPAN_READ_LOCK_ERR))?
             .span_context()
             .clone();
 
@@ -124,7 +137,11 @@ impl GlideSpanInner {
                 .with_kind(SpanKind::Client)
                 .start_with_context(&tracer, &parent_context),
         ));
-        GlideSpanInner { span }
+        Ok(GlideSpanInner {
+            span,
+            span_name: name.to_string(),
+            reference_count: Arc::new(AtomicUsize::new(1)),
+        })
     }
 
     /// Attach event with name and list of attributes to this span.
@@ -164,17 +181,21 @@ impl GlideSpanInner {
         }
     }
 
-    /// Create new span, add it as a child to this span and return it
-    pub fn add_span(&self, name: &str) -> GlideSpanInner {
-        let child = GlideSpanInner::new_with_parent(name, self);
+    /// Create new span, add it as a child to this span and return it.
+    /// Returns an error if the child span creation fails.
+    pub fn add_span(&self, name: &str) -> Result<GlideSpanInner, TraceError> {
+        let child = GlideSpanInner::new_with_parent(name, self)?;
         {
-            let child_span = child.span.read().expect(SPAN_WRITE_LOCK_ERR);
+            let child_span = child
+                .span
+                .read()
+                .map_err(|_| TraceError::from(SPAN_READ_LOCK_ERR))?;
             self.span
                 .write()
                 .expect(SPAN_WRITE_LOCK_ERR)
                 .add_link(child_span.span_context().clone(), Vec::default());
         }
-        child
+        Ok(child)
     }
 
     /// Return the span ID
@@ -191,6 +212,33 @@ impl GlideSpanInner {
     pub fn end(&self) {
         self.span.write().expect(SPAN_READ_LOCK_ERR).end()
     }
+
+    pub fn get_reference_count(&self) -> usize {
+        self.reference_count.load(Ordering::SeqCst)
+    }
+
+    pub fn increment_reference_count(&self) {
+        self.reference_count.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub fn decrement_reference_count(&self) {
+        self.reference_count.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+impl Drop for GlideSpanInner {
+    fn drop(&mut self) {
+        // Only print debug info if the reference count is non-zero
+        let current_count = self.reference_count.load(Ordering::SeqCst);
+        if current_count > 0 {
+            self.decrement_reference_count();
+            // Print debug info only for non-zero reference counts
+            // println!("Dropping span '{}' with reference count: {}",
+            //     self.span_name,
+            //     self.reference_count.load(Ordering::SeqCst)
+            // );
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -203,6 +251,10 @@ impl GlideSpan {
         GlideSpan {
             inner: GlideSpanInner::new(name),
         }
+    }
+
+    pub fn print_span(&self) {
+        self.inner.print_span_name();
     }
 
     /// Attach event with name to this span.
@@ -220,10 +272,12 @@ impl GlideSpan {
     }
 
     /// Add child span to this span and return it
-    pub fn add_span(&self, name: &str) -> GlideSpan {
-        GlideSpan {
-            inner: self.inner.add_span(name),
-        }
+    pub fn add_span(&self, name: &str) -> Result<GlideSpan, TraceError> {
+        let inner_span = self.inner.add_span(name).map_err(|err| {
+            TraceError::from(format!("Failed to create child span '{}': {}", name, err))
+        })?;
+
+        Ok(GlideSpan { inner: inner_span })
     }
 
     pub fn id(&self) -> String {
@@ -234,6 +288,26 @@ impl GlideSpan {
     pub fn end(&self) {
         self.inner.end()
     }
+
+    pub fn add_reference(&self) {
+        self.inner.increment_reference_count();
+        // Only print debug info if the reference count is significant
+        let count = self.inner.get_reference_count();
+        // if count > 2 {
+        //     println!(
+        //         "Span '{}' reference count increased to: {}",
+        //         self.inner.span_name, count
+        //     );
+        // }
+    }
+
+    pub fn get_reference_count(&self) -> usize {
+        self.inner.get_reference_count()
+    }
+}
+
+pub struct GlideSignal {
+    span: Option<GlideSpan>,
 }
 
 /// OpenTelemetry configuration object. Use `GlideOpenTelemetryConfigBuilder` to construct it:

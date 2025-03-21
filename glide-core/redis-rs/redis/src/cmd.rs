@@ -6,6 +6,7 @@ use futures_util::{
 };
 #[cfg(feature = "aio")]
 use std::pin::Pin;
+use std::sync::Arc;
 use std::{fmt, io};
 
 use crate::connection::ConnectionLike;
@@ -370,8 +371,12 @@ impl Cmd {
     ///
     /// A span is used by an OpenTelemetry backend to track the lifetime of the command
     #[inline]
-    pub fn with_span(&mut self, name: &str) -> &mut Cmd {
-        self.span = Some(telemetrylib::GlideOpenTelemetry::new_span(name));
+    pub fn with_span_by_ptr(&mut self, span_ptr: u64) -> &mut Cmd {
+        unsafe {
+            Arc::increment_strong_count(span_ptr as *const GlideSpan);
+            self.span = Some((*Arc::from_raw(span_ptr as *const GlideSpan)).clone());
+            self.span.clone().unwrap().add_reference();
+        }
         self
     }
 
@@ -601,6 +606,7 @@ impl Cmd {
     /// Return this command span
     #[inline]
     pub fn span(&self) -> Option<GlideSpan> {
+        // println!("%% return the span.clone");
         self.span.clone()
     }
 }

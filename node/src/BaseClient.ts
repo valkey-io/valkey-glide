@@ -7,8 +7,10 @@ import {
     DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
+    createLeakedOtelSpan,
+    dropOtelSpan,
     getStatistics,
-    valueFromSplitPointer,
+    valueFromSplitPointer
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
@@ -253,6 +255,7 @@ import {
     connection_request,
     response,
 } from "./ProtobufMessage";
+const LongJS = require('long');
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -906,6 +909,15 @@ export class BaseClient {
         }
     }
 
+    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
+        if (spanPtr === null || spanPtr === undefined) return;
+        if (typeof spanPtr === "number") {
+            return dropOtelSpan(BigInt(spanPtr)); // Convert number to BigInt
+        } else if (spanPtr instanceof LongJS) {
+            return dropOtelSpan(BigInt(spanPtr.toString())); // Convert Long to BigInt via string
+        }
+    }
+
     processResponse(message: response.Response) {
         if (message.closingError != null) {
             this.close(message.closingError);
@@ -955,6 +967,7 @@ export class BaseClient {
         } else {
             resolve(null);
         }
+        this.dropCommandSpan(message.spanCommand);
     }
 
     processPush(response: response.Response) {
@@ -1049,12 +1062,18 @@ export class BaseClient {
         const route = this.toProtobufRoute(options?.route);
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
+            
+            //TODO: check the request type.
+            let commandObj = Array.isArray(command)? "Batch": (JSON.parse(JSON.stringify(command))).requestType;
+            //TODO: creates the span only if the otel config exits
+            let pair = createLeakedOtelSpan(commandObj);
+            let spanPtr = new LongJS(pair[0], pair[1]);
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
                 options?.decoder,
             ];
-            this.writeOrBufferCommandRequest(callbackIndex, command, route);
+            this.writeOrBufferCommandRequest(callbackIndex, command, route, spanPtr);
         });
     }
 
@@ -1116,6 +1135,7 @@ export class BaseClient {
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
+        spanCommand?: number | typeof LongJS | null,
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
@@ -1124,11 +1144,13 @@ export class BaseClient {
                       commands: command,
                   }),
                   route,
+                  spanCommand,
               })
             : command_request.CommandRequest.create({
                   callbackIdx,
                   singleCommand: command,
                   route,
+                  spanCommand,
               });
 
         this.writeOrBufferRequest(
