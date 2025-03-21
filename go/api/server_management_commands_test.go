@@ -166,6 +166,7 @@ func ExampleGlideClient_FlushDBWithOptions() {
 func ExampleGlideClient_ConfigRewrite() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
+	var resultRewrite string
 	response, err := client.InfoWithOptions(opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -183,9 +184,9 @@ func ExampleGlideClient_ConfigRewrite() {
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
-	} else {
-		fmt.Println("OK")
+		resultRewrite = response
 	}
+	fmt.Println(resultRewrite)
 
 	// Output: OK
 }
