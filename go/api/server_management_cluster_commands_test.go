@@ -179,7 +179,7 @@ func ExampleGlideClusterClient_FlushDBWithOptions() {
 	// Output: OK
 }
 
-func ExampleGlideClient_ConfigRewriteCluster() {
+func ExampleGlideClusterClient_ConfigRewriteCluster() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	opts := options.ClusterInfoOptions{
 		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
