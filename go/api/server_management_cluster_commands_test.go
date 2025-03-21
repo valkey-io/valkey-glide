@@ -83,32 +83,6 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 	// 0
 }
 
-func ExampleGlideClusterClient_ConfigRewrite() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
-	response, err := client.ConfigRewrite()
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(response)
-
-	// Output: OK
-}
-
-func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	client.CustomCommand([]string{"CONFIG", "SET", "timeout", "1000"})
-	route := config.Route(config.RandomRoute)
-	opts := options.RouteOption{Route: route}
-	response, err := client.ConfigRewriteWithOptions(opts)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(response)
-
-	// Output: OK
-}
-
 func ExampleGlideClusterClient_FlushAll() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	result, err := client.FlushAll()
@@ -177,4 +151,127 @@ func ExampleGlideClusterClient_FlushDBWithOptions() {
 	fmt.Println(result)
 
 	// Output: OK
+}
+
+func ExampleGlideClusterClient_ConfigRewrite() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+	}
+	res, err := client.InfoWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	for _, data := range res.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			if err != nil {
+				fmt.Println("Glide example failed with an error: ", err)
+			}
+			fmt.Println(responseRewrite)
+			break
+		}
+
+	}
+
+	// Output: OK
+}
+
+func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	sections := []options.Section{options.Server}
+
+	// info with option or with multiple options without route
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: nil,
+	}
+	response, err := client.InfoWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	for _, data := range response.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			if err != nil {
+				fmt.Println("Glide example failed with an error: ", err)
+			}
+			fmt.Println("multiple options without route result:", responseRewrite)
+			break
+		}
+	}
+
+	// same sections with random route
+	opts = options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: &options.RouteOption{Route: config.RandomRoute},
+	}
+	response, err = client.InfoWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	lines := strings.Split(response.SingleValue(), "\n")
+	var configFile string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "config_file:") {
+			configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+			break
+		}
+	}
+	if len(configFile) > 0 {
+		responseRewrite, err := client.ConfigRewrite()
+		if err != nil {
+			fmt.Println("Glide example failed with an error: ", err)
+		}
+		fmt.Println("random route result:", responseRewrite)
+	}
+
+	// default sections, multi node route
+	opts = options.ClusterInfoOptions{
+		InfoOptions: nil,
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	}
+	response, err = client.InfoWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	for _, data := range response.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			if err != nil {
+				fmt.Println("Glide example failed with an error: ", err)
+			}
+			fmt.Println("multi node route result:", responseRewrite)
+			break
+		}
+	}
+
+	// Output:
+	// multiple options without route result: OK
+	// random route result: OK
+	// multi node route result: OK
 }
