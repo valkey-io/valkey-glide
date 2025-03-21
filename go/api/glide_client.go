@@ -238,3 +238,79 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	}
 	return handleStringResponse(result)
 }
+
+// FlushAll deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *GlideClient) FlushAll() (string, error) {
+	result, err := client.executeCommand(C.FlushAll, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(C.FlushAll, []string{string(mode)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (client *GlideClient) FlushDB() (string, error) {
+	result, err := client.executeCommand(C.FlushDB, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(C.FlushDB, []string{string(mode)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
