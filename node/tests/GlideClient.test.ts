@@ -1494,7 +1494,7 @@ describe("GlideClient", () => {
     );
 
     // TODO: enable once flakiness is solved
-    it.each(Array.from({ length: 150 }, (_, i) => i + 1))(
+    it.each(Array.from({ length: 10 }, (_, i) => i + 1))(
         "script kill unkillable test_%p",
         async (i) => {
             console.log(`Test: ${i}`);
@@ -1551,7 +1551,9 @@ describe("GlideClient", () => {
                             promise = client2.invokeScript(longScript, {
                                 keys: ["{key}-" + uuidv4()],
                             });
-                            await new Promise((resolve) => setTimeout(resolve, 2000));
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 2000),
+                            );
                         }
                     }
 

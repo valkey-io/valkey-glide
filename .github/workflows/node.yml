@@ -104,7 +104,14 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
 
             - name: test
-              run: npm test
+              run: |
+                  sudo tcpdump -i lo -w node.pcap tcp port '(7001 or 7002 or 7003 or 7004 or 7005 or 7006)' &
+                  python3 ../utils/cluster_manager.py start --cluster-mode -p 7001 7002 7003 7004 7005 7006
+                  npm run test-dbg -- --cluster-endpoints=localhost:7001 --standalone-endpoints=localhost:6379 --testNamePattern="script kill unkillable test*" --verbose
+                  python3 ../utils/cluster_manager.py stop --prefix cluster
+                  sudo pkill tcpdump
+                  tcpdump -r node.pcap -A -n
+                  rm node.pcap
               working-directory: ./node
 
             - name: test hybrid node modules - commonjs
@@ -137,6 +144,7 @@ jobs:
               with:
                   name: test-report-node-${{ matrix.node }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
+                      sudo pkill tcpdump
                       node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
