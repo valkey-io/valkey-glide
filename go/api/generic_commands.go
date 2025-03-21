@@ -16,6 +16,6 @@ type GenericCommands interface {
 
 	Scan(cursor int64) (string, []string, error)
 
-	ScanWithOptions(cursor int64, scanOptions ...options.ScanOptions) (string, []string,
+	ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string,
 		error)
 }

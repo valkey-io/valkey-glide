@@ -330,7 +330,11 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
-	return client.ScanWithOptions(cursor)
+	res, err := client.executeCommand(C.Scan, []string{utils.IntToString(cursor)})
+	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	return handleScanResponse(res)
 }
 
 // Iterates incrementally over a database for matching keys.
@@ -348,19 +352,12 @@ func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
 //	of the scan. The second element is always an Array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
-func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions ...options.ScanOptions) (string, []string, error) {
-	if len(scanOptions) > 0 {
-		optionArgs, err := scanOptions[0].ToArgs()
-		if err != nil {
-			return DefaultStringResponse, nil, err
-		}
-		res, err := client.executeCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
-		if err != nil {
-			return DefaultStringResponse, nil, err
-		}
-		return handleScanResponse(res)
+func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string, error) {
+	optionArgs, err := scanOptions.ToArgs()
+	if err != nil {
+		return DefaultStringResponse, nil, err
 	}
-	res, err := client.executeCommand(C.Scan, []string{utils.IntToString(cursor)})
+	res, err := client.executeCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
 	if err != nil {
 		return DefaultStringResponse, nil, err
 	}
