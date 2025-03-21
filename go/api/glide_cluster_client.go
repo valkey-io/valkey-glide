@@ -569,7 +569,7 @@ func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
 //
 // Parameters:
 //
-//	route - Specifies the routing configuration for the command. The client will route the
+//	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
 // Return value:
