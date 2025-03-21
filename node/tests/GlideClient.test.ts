@@ -1512,7 +1512,7 @@ describe("GlideClient", () => {
             );
 
             // Create a long-running script
-            const longScript = new Script(createLongRunningLuaScript(5, true));
+            const longScript = new Script(createLongRunningLuaScript(6, true));
             let promise = null;
 
             try {
@@ -1539,6 +1539,19 @@ describe("GlideClient", () => {
                         ) {
                             foundUnkillable = true;
                             break;
+                        }
+
+                        if (
+                            timeout <= 2000 &&
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("no scripts in execution right now")
+                        ) {
+                            console.log("creating a new promise");
+                            promise = client2.invokeScript(longScript, {
+                                keys: ["{key}-" + uuidv4()],
+                            });
+                            await new Promise((resolve) => setTimeout(resolve, 2000));
                         }
                     }
 
