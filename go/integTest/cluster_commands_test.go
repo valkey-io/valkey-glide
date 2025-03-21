@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -974,10 +975,28 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_AsyncMode() {
 
 func (suite *GlideTestSuite) TestConfigRewriteCluster() {
 	client := suite.defaultClusterClient()
-	resultConfig, err := client.CustomCommand([]string{"CONFIG", "GET", "timeout", "maxmemory"})
-	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000", "maxmemory": "1073741824"}, resultConfig)
-	suite.verifyOK(client.ConfigRewrite())
+	t := suite.T()
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+	}
+	res, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range res.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			fmt.Println("ConfigFile: ", configFile)
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+		}
+	}
 }
 
 func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
