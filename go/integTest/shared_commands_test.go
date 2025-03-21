@@ -8242,6 +8242,100 @@ func (suite *GlideTestSuite) TestBitField_MultipleOperations() {
 	})
 }
 
+func (suite *GlideTestSuite) TestBitPos_ExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x10")
+		result, err := client.BitPos(key, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPos_NonExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		result, err := client.BitPos(key, 0)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_StartEnd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x01\x80")
+		
+		opts := options.NewBitPosOptions().
+			SetStart(0).
+			SetEnd(1)
+		
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(15), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_BitmapIndexType() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x02\x00")
+		
+		opts := options.NewBitPosOptions().
+			SetStart(1).
+			SetEnd(2).
+			SetBitmapIndexType(options.BYTE)
+		
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(14), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_BitIndexType() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x10\x00")
+		
+		opts := options.NewBitPosOptions().
+			SetStart(10).
+			SetEnd(14).
+			SetBitmapIndexType(options.BIT)
+		
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(11), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPos_FindBitZero() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\xFF\xF7")
+		
+		result, err := client.BitPos(key, 0)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(12), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_NegativeEnd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x01\x80")
+		
+		opts := options.NewBitPosOptions().
+			SetStart(0).
+			SetEnd(-2)
+		
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(15), result)
+	})
+}
+
 func (suite *GlideTestSuite) TestBitField_Failures() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
