@@ -190,6 +190,7 @@ func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
 	sections := []options.Section{options.Server}
 
 	// info with option or with multiple options without route
+	var runResultNilRoute string
 	opts := options.ClusterInfoOptions{
 		InfoOptions: &options.InfoOptions{Sections: sections},
 		RouteOption: nil,
@@ -198,6 +199,7 @@ func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
+
 	for _, data := range response.MultiValue() {
 		lines := strings.Split(data, "\n")
 		var configFile string
@@ -212,12 +214,14 @@ func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
 			if err != nil {
 				fmt.Println("Glide example failed with an error: ", err)
 			}
-			fmt.Println("multiple options without route result:", responseRewrite)
+			runResultNilRoute = responseRewrite
 			break
 		}
+		runResultNilRoute = "OK"
 	}
 
 	// same sections with random route
+	var runResultRandomRoute string
 	opts = options.ClusterInfoOptions{
 		InfoOptions: &options.InfoOptions{Sections: sections},
 		RouteOption: &options.RouteOption{Route: config.RandomRoute},
@@ -239,10 +243,12 @@ func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
-		fmt.Println("random route result:", responseRewrite)
+		runResultRandomRoute = responseRewrite
 	}
+	runResultRandomRoute = "OK"
 
 	// default sections, multi node route
+	var runResultMultiNodeRoute string
 	opts = options.ClusterInfoOptions{
 		InfoOptions: nil,
 		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
@@ -265,13 +271,17 @@ func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
 			if err != nil {
 				fmt.Println("Glide example failed with an error: ", err)
 			}
-			fmt.Println("multi node route result:", responseRewrite)
+			runResultMultiNodeRoute = responseRewrite
 			break
 		}
+		runResultMultiNodeRoute = "OK"
 	}
+	fmt.Println("Multiple options without route result: ", err)
+	fmt.Println("Random route result: ", err)
+	fmt.Println("Multi node route result: ", err)
 
 	// Output:
-	// multiple options without route result: OK
-	// random route result: OK
-	// multi node route result: OK
+	// Multiple options without route result: OK
+	// Random route result: OK
+	// Multi node route result: OK
 }
