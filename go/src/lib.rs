@@ -875,11 +875,7 @@ pub unsafe extern "C" fn update_connection_password(
 ) {
     let client_adapter =
         unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before
-    // all operations have completed.
-    let ptr_address = client_adapter_ptr as usize;
-
-    let mut client_clone = client_adapter.client.clone();
+    let core = client_adapter.core.clone();
 
     // argument conversion to be used in the async block
     let password = unsafe { CStr::from_ptr(password).to_str().unwrap() };
@@ -890,10 +886,11 @@ pub unsafe extern "C" fn update_connection_password(
     };
 
     client_adapter.runtime.spawn(async move {
-        let result = client_clone
+        let result = core
+            .client
+            .clone()
             .update_connection_password(password_option, immediate_auth)
             .await;
-        let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
         let value = match result {
             Ok(value) => value,
             Err(err) => {
@@ -903,7 +900,7 @@ pub unsafe extern "C" fn update_connection_password(
                 let c_err_str = CString::into_raw(
                     CString::new(message).expect("Couldn't convert error message to CString"),
                 );
-                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
+                unsafe { ( core.failure_callback)(channel, c_err_str, error_type) };
                 return;
             }
         };
@@ -913,7 +910,7 @@ pub unsafe extern "C" fn update_connection_password(
         unsafe {
             match result {
                 Ok(message) => {
-                    (client_adapter.success_callback)(channel, Box::into_raw(Box::new(message)))
+                    (core.success_callback)(channel, Box::into_raw(Box::new(message)))
                 }
                 Err(err) => {
                     let message = errors::error_message(&err);
@@ -922,7 +919,7 @@ pub unsafe extern "C" fn update_connection_password(
                     let c_err_str = CString::into_raw(
                         CString::new(message).expect("Couldn't convert error message to CString"),
                     );
-                    (client_adapter.failure_callback)(channel, c_err_str, error_type);
+                    (core.failure_callback)(channel, c_err_str, error_type);
                 }
             };
         }
