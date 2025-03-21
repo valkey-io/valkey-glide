@@ -789,3 +789,12 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_ImmediateAuthWrongPass
 	_, err = adminClient.ConfigSet(map[string]string{"requirepass": ""})
 	assert.NoError(suite.T(), err)
 }
+
+func (suite *GlideTestSuite) TestRandomKey() {
+	client := suite.defaultClient()
+	// Test 1: Check if Echo command return the message
+	t := suite.T()
+	result, err := client.RandomKey()
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+}

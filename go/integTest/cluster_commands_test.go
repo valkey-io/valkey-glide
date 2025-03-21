@@ -1099,3 +1099,14 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_ImmediateAuthWr
 	_, err = adminClient.CustomCommand([]string{"CONFIG", "SET", "requirepass", ""})
 	assert.NoError(suite.T(), err)
 }
+
+func (suite *GlideTestSuite) TestRandomKeyWithRoute() {
+	client := suite.defaultClusterClient()
+	// Test 1: Check if Echo command return the message
+	t := suite.T()
+	route := config.Route(config.RandomRoute)
+	options := options.RouteOption{Route: route}
+	result, err := client.RandomKeyWithRoute(options)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
