@@ -1103,7 +1103,7 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_ImmediateAuthWr
 func (suite *GlideTestSuite) TestClientIdCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
-	response, err := client.ClientId(ops)
+	response, err := client.ClientId()
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
 }
