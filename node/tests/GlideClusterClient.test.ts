@@ -1964,7 +1964,7 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each(Array.from({ length: 10 }, (_, i) => i + 1))(
+    it.each(Array.from({ length: 50 }, (_, i) => i + 1))(
         "script kill unkillable test_%p",
         async (i) => {
             console.log(`Test: ${i}`);
