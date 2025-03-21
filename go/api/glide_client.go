@@ -315,11 +315,11 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 	return handleStringResponse(result)
 }
 
-// Returns a random key.
+// Returns a random existing key name from the currently selected database.
 //
 // Return value:
 //
-//	A random key from the database.
+//	A random existing key name from the currently selected database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
 func (client *GlideClient) RandomKey() (string, error) {
