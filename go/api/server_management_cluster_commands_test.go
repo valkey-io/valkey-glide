@@ -155,6 +155,7 @@ func ExampleGlideClusterClient_FlushDBWithOptions() {
 
 func ExampleGlideClusterClient_ConfigRewrite() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	var resultRewrite string
 	opts := options.ClusterInfoOptions{
 		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
 	}
@@ -176,12 +177,12 @@ func ExampleGlideClusterClient_ConfigRewrite() {
 			if err != nil {
 				fmt.Println("Glide example failed with an error: ", err)
 			}
-			fmt.Println(responseRewrite)
+			resultRewrite = responseRewrite
 			break
 		}
 
 	}
-
+	fmt.Println(resultRewrite)
 	// Output: OK
 }
 
