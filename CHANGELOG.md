@@ -17,6 +17,7 @@
 * Go: Add Cluster Scan support ([#3295](https://github.com/valkey-io/valkey-glide/pull/3295))
 * Go: Fix unsafe precondition violation for the slice::from_raw_parts ([#3350](https://github.com/valkey-io/valkey-glide/issues/3350))
 * Go: Add `GeoAdd` and the Geospatial interface ([#3366](https://github.com/valkey-io/valkey-glide/pull/3366))
+* Go: Add `BITPOS` ([#3407](https://github.com/valkey-io/valkey-glide/pull/3407))
 
 #### Breaking Changes
 
