@@ -552,7 +552,7 @@ func (client *GlideClusterClient) ScanWithOptions(
 //	The id of the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
-func (client *GlideClusterClient) ClientIdWithOptions() (ClusterValue[int64], error) {
+func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
 	response, err := client.executeCommand(C.ClientId, []string{})
 	if err != nil {
 		return createEmptyClusterValue[int64](), err
