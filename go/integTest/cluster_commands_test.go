@@ -975,6 +975,14 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_AsyncMode() {
 func (suite *GlideTestSuite) TestClientIdCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
+	response, err := client.ClientId(ops)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestClientIdWithOptionsCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
 
 	// ClientId with option or with multiple options without route
 	opts := options.RouteOption{Route: nil}
