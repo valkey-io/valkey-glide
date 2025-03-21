@@ -17,4 +17,12 @@ type ServerManagementClusterCommands interface {
 	TimeWithOptions(routeOption options.RouteOption) (ClusterValue[[]string], error)
 
 	DBSizeWithOptions(routeOption options.RouteOption) (int64, error)
+
+	FlushAll() (string, error)
+
+	FlushAllWithOptions(options options.FlushClusterOptions) (string, error)
+
+	FlushDB() (string, error)
+
+	FlushDBWithOptions(options options.FlushClusterOptions) (string, error)
 }
