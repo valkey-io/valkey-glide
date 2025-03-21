@@ -5643,7 +5643,6 @@ func (client *baseClient) XClaimWithOptions(
 	return handleMapOfArrayOfStringArrayResponse(result)
 }
 
-
 // Changes the ownership of a pending message. This function returns an `array` with
 // only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
 //
