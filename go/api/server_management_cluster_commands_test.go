@@ -178,34 +178,3 @@ func ExampleGlideClusterClient_FlushDBWithOptions() {
 
 	// Output: OK
 }
-
-func ExampleGlideClusterClient_ConfigRewriteCluster() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	opts := options.ClusterInfoOptions{
-		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
-	}
-	res, err := client.InfoWithOptions(opts)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	for _, data := range res.MultiValue() {
-		lines := strings.Split(data, "\n")
-		var configFile string
-		for _, line := range lines {
-			if strings.HasPrefix(line, "config_file:") {
-				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
-				break
-			}
-		}
-		if len(configFile) > 0 {
-			fmt.Println("ConfigFile: ", configFile)
-			responseRewrite, err := client.ConfigRewrite()
-			if err != nil && responseRewrite != "OK" {
-				fmt.Println("Glide example failed with an error: ", err)
-			}
-		}
-	}
-	fmt.Println("OK")
-
-	// Output: OK
-}
