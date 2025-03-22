@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -515,4 +516,276 @@ func (suite *GlideTestSuite) TestTime_Error() {
 	assert.NotNil(suite.T(), err)
 	assert.Nil(suite.T(), results)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
+func (suite *GlideTestSuite) TestFlushAll() {
+	client := suite.defaultClient()
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+
+	_, err := client.Set(key1, "value1")
+	assert.Nil(suite.T(), err)
+	_, err = client.Set(key2, "value2")
+	assert.Nil(suite.T(), err)
+
+	result, err := client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "value1", result.Value())
+
+	response, err := client.FlushAll()
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", response)
+
+	result, err = client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Empty(suite.T(), result.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushAll_Sync() {
+	client := suite.defaultClient()
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+
+	_, err := client.Set(key1, "value1")
+	assert.Nil(suite.T(), err)
+	_, err = client.Set(key2, "value2")
+	assert.Nil(suite.T(), err)
+
+	result, err := client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "value1", result.Value())
+
+	response, err := client.FlushAllWithOptions(options.SYNC)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", response)
+
+	result, err = client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Empty(suite.T(), result.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushAll_Async() {
+	client := suite.defaultClient()
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+
+	_, err := client.Set(key1, "value1")
+	assert.Nil(suite.T(), err)
+	_, err = client.Set(key2, "value2")
+	assert.Nil(suite.T(), err)
+
+	response, err := client.FlushAllWithOptions(options.ASYNC)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", response)
+
+	result, err := client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Empty(suite.T(), result.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushAll_ClosedClient() {
+	client := suite.defaultClient()
+	client.Close()
+
+	response, err := client.FlushAllWithOptions(options.SYNC)
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", response)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
+func (suite *GlideTestSuite) TestFlushAll_MultipleFlush() {
+	client := suite.defaultClient()
+	key1 := uuid.New().String()
+
+	response, err := client.FlushAllWithOptions(options.SYNC)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", response)
+
+	_, err = client.Set(key1, "value1")
+	assert.Nil(suite.T(), err)
+
+	response, err = client.FlushAllWithOptions(options.ASYNC)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", response)
+
+	result, err := client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Empty(suite.T(), result.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushDB() {
+	client := suite.defaultClient()
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+
+	_, err := client.Set(key1, "value1")
+	assert.Nil(suite.T(), err)
+	_, err = client.Set(key2, "value2")
+	assert.Nil(suite.T(), err)
+
+	result, err := client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "value1", result.Value())
+
+	response, err := client.FlushDB()
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", response)
+
+	result, err = client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Empty(suite.T(), result.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushDBWithOptions_SYNC() {
+	client := suite.defaultClient()
+
+	key := uuid.New().String()
+	_, err := client.Set(key, "value1")
+	assert.NoError(suite.T(), err)
+
+	result, err := client.FlushDBWithOptions(options.SYNC)
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+
+	val, err := client.Get(key)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushDBWithOptions_ASYNC() {
+	client := suite.defaultClient()
+
+	key := uuid.New().String()
+	_, err := client.Set(key, "value1")
+	assert.NoError(suite.T(), err)
+
+	result, err := client.FlushDBWithOptions(options.ASYNC)
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+
+	val, err := client.Get(key)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushDBWithOptions_MultipleKeys() {
+	client := suite.defaultClient()
+
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+
+	_, err := client.Set(key1, "value1")
+	assert.NoError(suite.T(), err)
+	_, err = client.Set(key2, "value2")
+	assert.NoError(suite.T(), err)
+
+	result, err := client.FlushDBWithOptions(options.SYNC)
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+
+	val1, err := client.Get(key1)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val1.Value())
+
+	val2, err := client.Get(key2)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), val2.Value())
+}
+
+func (suite *GlideTestSuite) TestFlushDBWithOptions_ClosedClient() {
+	client := suite.defaultClient()
+
+	client.Close()
+
+	result, err := client.FlushDBWithOptions(options.SYNC)
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result)
+	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+}
+
+func (suite *GlideTestSuite) TestUpdateConnectionPasswordAuthNonValidPass() {
+	// Create test client
+	testClient := suite.defaultClient()
+	defer testClient.Close()
+
+	// Test empty password
+	_, err := testClient.UpdateConnectionPassword("", true)
+	assert.NotNil(suite.T(), err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+	// Test with no password parameter
+	_, err = testClient.UpdateConnectionPassword("", true)
+	assert.NotNil(suite.T(), err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+}
+
+func (suite *GlideTestSuite) TestUpdateConnectionPassword_NoServerAuth() {
+	// Create test client
+	testClient := suite.defaultClient()
+	defer testClient.Close()
+
+	// Validate that we can use the client
+	_, err := testClient.Info()
+	assert.Nil(suite.T(), err)
+
+	// Test immediate re-authentication fails when no server password is set
+	pwd := uuid.NewString()
+	_, err = testClient.UpdateConnectionPassword(pwd, true)
+	assert.NotNil(suite.T(), err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+}
+
+func (suite *GlideTestSuite) TestUpdateConnectionPassword_LongPassword() {
+	// Create test client
+	testClient := suite.defaultClient()
+	defer testClient.Close()
+
+	// Generate long random password (1000 chars)
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	pwd := make([]byte, 1000)
+	for i := range pwd {
+		pwd[i] = letters[rand.Intn(len(letters))]
+	}
+
+	// Validate that we can use the client
+	_, err := testClient.Info()
+	assert.NoError(suite.T(), err)
+
+	// Test replacing connection password with a long password string
+	_, err = testClient.UpdateConnectionPassword(string(pwd), false)
+	assert.NoError(suite.T(), err)
+}
+
+func (suite *GlideTestSuite) TestUpdateConnectionPassword_ImmediateAuthWrongPassword() {
+	// Create admin client
+	adminClient := suite.defaultClient()
+	defer adminClient.Close()
+
+	// Create test client
+	testClient := suite.defaultClient()
+	defer testClient.Close()
+
+	pwd := uuid.NewString()
+	notThePwd := uuid.NewString()
+
+	// Validate that we can use the client
+	_, err := testClient.Info()
+	assert.Nil(suite.T(), err)
+
+	// Set the password to something else
+	_, err = adminClient.ConfigSet(map[string]string{"requirepass": notThePwd})
+	assert.Nil(suite.T(), err)
+
+	// Test that re-authentication fails when using wrong password
+	_, err = testClient.UpdateConnectionPassword(pwd, true)
+	assert.NotNil(suite.T(), err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+	// But using correct password returns OK
+	_, err = testClient.UpdateConnectionPassword(notThePwd, true)
+	assert.NoError(suite.T(), err)
+
+	// Cleanup: Reset password
+	_, err = adminClient.ConfigSet(map[string]string{"requirepass": ""})
+	assert.NoError(suite.T(), err)
 }
