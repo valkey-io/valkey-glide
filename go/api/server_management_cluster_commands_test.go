@@ -179,11 +179,15 @@ func ExampleGlideClusterClient_ConfigRewrite() {
 			}
 			resultRewrite = responseRewrite
 			break
+		} else {
+			resultRewrite = "OK"
 		}
 
 	}
 	fmt.Println(resultRewrite)
-	// Output: OK
+
+	// Output:
+	// OK
 }
 
 func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
