@@ -7,6 +7,7 @@ using Glide.Commands;
 using Glide.Internals;
 
 using static Glide.ConnectionConfiguration;
+using static Glide.Route;
 
 namespace Glide;
 
@@ -14,10 +15,10 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 {
     #region public methods
     public async Task<string> Set(GlideString key, GlideString value)
-        => await Command([key, value], RequestType.Set, HandleOk);
+        => await Command(RequestType.Set, [key, value], HandleOk);
 
     public async Task<GlideString?> Get(GlideString key)
-        => await Command([key], RequestType.Get, response => HandleServerResponse<GlideString>(response, true));
+        => await Command(RequestType.Get, [key], response => HandleServerResponse<GlideString>(response, true));
 
     public void Dispose()
     {
@@ -55,7 +56,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     protected delegate T ResponseHandler<T>(object? response);
 
-    protected async Task<T> Command<T>(GlideString[] arguments, RequestType requestType, ResponseHandler<T> responseHandler) where T : class?
+    protected async Task<T> Command<T>(RequestType requestType, GlideString[] arguments, ResponseHandler<T> responseHandler, Route? route = null) where T : class?
     {
         // 1. Allocate memory for arguments and marshal them
         IntPtr[] args = _arrayPool.Rent(arguments.Length);
@@ -79,12 +80,25 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         GCHandle pinnedLengths = GCHandle.Alloc(lengths, GCHandleType.Pinned);
         IntPtr lengthsPointer = pinnedLengths.AddrOfPinnedObject();
 
+        // 4. Allocate memory for route
+        IntPtr routePtr = IntPtr.Zero;
+        if (route is not null)
+        {
+            routePtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(RouteInfo)));
+            Marshal.StructureToPtr(route.ToFfi(), routePtr, false);
+        }
+
         // 5. Sumbit request to the rust part
         Message message = _messageContainer.GetMessageForCall();
-        CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, argsPointer, (uint)arguments.Length, lengthsPointer);
+        CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, argsPointer, (uint)arguments.Length, lengthsPointer, routePtr);
         // All data must be copied in sync manner, so we
 
         // 6. Free memories allocated
+        if (route is not null)
+        {
+            Marshal.FreeHGlobal(routePtr);
+        }
+
         for (int i = 0; i < arguments.Length; i++)
         {
             Marshal.FreeHGlobal(args[i]);
@@ -204,7 +218,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     private delegate void StringAction(ulong index, int strLen, IntPtr strPtr);
     private delegate void FailureAction(ulong index);
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "command")]
-    private static extern void CommandFfi(IntPtr client, ulong index, int requestType, IntPtr args, uint argCount, IntPtr argLengths);
+    private static extern void CommandFfi(IntPtr client, ulong index, int requestType, IntPtr args, uint argCount, IntPtr argLengths, IntPtr routeInfo);
 
     private delegate void IntAction(IntPtr arg);
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_client")]

@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 mod ffi;
-use ffi::{create_connection_request, ConnectionConfig};
+use ffi::{create_connection_request, create_route, ConnectionConfig, RouteInfo};
 use glide_core::{client::Client as GlideClient, request_type::RequestType};
 use redis::{RedisResult, Value};
 use std::{
@@ -136,6 +136,8 @@ fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*const T, usize) {
 /// * `key` and `value` must not be `null`.
 /// * `key` and `value` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
 /// * `key` and `value` must be kept valid until the callback is called.
+/// * `route_info` could be `null`, but if it is not `null`, it must be a valid [`RouteInfo`] pointer. See the safety documentation of [`create_route`].
+#[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_ptr: *const c_void,
@@ -144,13 +146,13 @@ pub unsafe extern "C" fn command(
     args: *const *mut c_char,
     arg_count: u32,
     args_len: *const u32,
+    route_info: *const RouteInfo,
 ) {
     let client = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
         Arc::increment_strong_count(client_ptr);
         Arc::from_raw(client_ptr as *mut Client)
     };
-
     let core = client.core.clone();
 
     let arg_vec =
@@ -167,8 +169,10 @@ pub unsafe extern "C" fn command(
         cmd.arg(command_arg);
     }
 
+    let route = create_route(route_info, &cmd);
+
     client.runtime.spawn(async move {
-        let result = core.client.clone().send_command(&cmd, None).await;
+        let result = core.client.clone().send_command(&cmd, route).await;
         unsafe {
             match result {
                 Ok(Value::SimpleString(text)) => {
