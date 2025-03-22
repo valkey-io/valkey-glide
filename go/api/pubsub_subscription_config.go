@@ -3,12 +3,8 @@
 package api
 
 import (
-	"errors"
-	"sync"
-)
-
-var (
-	ErrPubSubConfigInvalid = errors.New("PubSub subscriptions with a context requires a callback function to be configured")
+	"github.com/valkey-io/valkey-glide/go/api/errors"
+	"github.com/valkey-io/valkey-glide/go/protobuf"
 )
 
 // *** BaseSubscriptionConfig ***
@@ -22,12 +18,34 @@ type ChannelMode interface {
 type MessageCallback func(message *PubSubMessage, ctx any)
 
 type BaseSubscriptionConfig struct {
-	callback MessageCallback
-	context  any
+	callback      MessageCallback
+	context       any
+	subscriptions map[uint32][]string
 }
 
 func NewBaseSubscriptionConfig() *BaseSubscriptionConfig {
 	return &BaseSubscriptionConfig{}
+}
+
+func (config *BaseSubscriptionConfig) toProtobuf() *protobuf.PubSubSubscriptions {
+	request := protobuf.PubSubSubscriptions{
+		ChannelsOrPatternsByType: make(map[uint32]*protobuf.PubSubChannelsOrPatterns),
+	}
+
+	if config.subscriptions != nil {
+		for mode, channelsSlice := range config.subscriptions {
+
+			channels := make([][]byte, len(channelsSlice))
+			for idx, channel := range channelsSlice {
+				channels[idx] = []byte(channel)
+			}
+
+			request.ChannelsOrPatternsByType[mode] = &protobuf.PubSubChannelsOrPatterns{
+				ChannelsOrPatterns: channels,
+			}
+		}
+	}
+	return &request
 }
 
 func (config *BaseSubscriptionConfig) WithCallback(callback MessageCallback, context any) *BaseSubscriptionConfig {
@@ -41,13 +59,9 @@ func (config *BaseSubscriptionConfig) SetCallback(callback MessageCallback) *Bas
 	return config
 }
 
-func (config *BaseSubscriptionConfig) GetCallback(callback MessageCallback) MessageCallback {
-	return config.callback
-}
-
 func (config *BaseSubscriptionConfig) Validate() error {
 	if config.context != nil && config.callback == nil {
-		return ErrPubSubConfigInvalid
+		return &errors.PubSubConfigError{Msg: "PubSub subscriptions with a context requires a callback function to be configured"}
 	}
 	return nil
 }
@@ -75,7 +89,6 @@ func (mode PubSubChannelMode) UnsubscribeCommand() string {
 
 type StandaloneSubscriptionConfig struct {
 	*BaseSubscriptionConfig
-	subscriptions sync.Map // map[PubSubChannelMode]map[string]string
 }
 
 func NewStandaloneSubscriptionConfig() *StandaloneSubscriptionConfig {
@@ -94,48 +107,17 @@ func (config *StandaloneSubscriptionConfig) SetCallback(callback MessageCallback
 	return config
 }
 
-func (config *StandaloneSubscriptionConfig) GetCallback() MessageCallback {
-	return config.callback
-}
-
 func (config *StandaloneSubscriptionConfig) WithSubscription(mode PubSubChannelMode, channelOrPattern string) *StandaloneSubscriptionConfig {
-	channelsMap, _ := config.subscriptions.LoadOrStore(mode, make(map[string]string))
-	channels := channelsMap.(map[string]string)
+	if config.subscriptions == nil {
+		config.subscriptions = make(map[uint32][]string)
+	}
+	modeKey := uint32(mode)
+	channels := config.subscriptions[modeKey]
 
-	channels[channelOrPattern] = channelOrPattern
+	newValue := append(channels, channelOrPattern)
+	config.subscriptions[modeKey] = newValue
+
 	return config
-}
-
-func (c *StandaloneSubscriptionConfig) GetSubscriptions(mode PubSubChannelMode) []string {
-	channels := make([]string, 0)
-	channelsMap, ok := c.subscriptions.Load(mode)
-	if !ok {
-		return channels
-	}
-
-	for channel := range channelsMap.(map[string]string) {
-		channels = append(channels, channel)
-	}
-	return channels
-}
-
-func (config *StandaloneSubscriptionConfig) GetAllSubscriptions() map[PubSubChannelMode][]string {
-	result := make(map[PubSubChannelMode][]string)
-
-	config.subscriptions.Range(func(key, value any) bool {
-		mode := key.(PubSubChannelMode)
-		channelsMap := value.(map[string]string)
-
-		channels := make([]string, 0, len(channelsMap))
-		for _, channel := range channelsMap {
-			channels = append(channels, channel)
-		}
-
-		result[mode] = channels
-		return true
-	})
-
-	return result
 }
 
 func (config *StandaloneSubscriptionConfig) Validate() error {
@@ -166,7 +148,6 @@ func (mode PubSubClusterChannelMode) UnsubscribeCommand() string {
 
 type ClusterSubscriptionConfig struct {
 	*BaseSubscriptionConfig
-	subscriptions sync.Map // map[PubSubClusterChannelMode]map[string]string
 }
 
 func NewClusterSubscriptionConfig() *ClusterSubscriptionConfig {
@@ -185,48 +166,12 @@ func (config *ClusterSubscriptionConfig) SetCallback(callback MessageCallback) *
 	return config
 }
 
-func (config *ClusterSubscriptionConfig) GetCallback() MessageCallback {
-	return config.callback
-}
-
 func (config *ClusterSubscriptionConfig) WithSubscription(mode PubSubClusterChannelMode, channelOrPattern string) *ClusterSubscriptionConfig {
-	channelsMap, _ := config.subscriptions.LoadOrStore(mode, make(map[string]string))
-	channels := channelsMap.(map[string]string)
+	modeKey := uint32(mode)
+	channels := config.subscriptions[modeKey]
 
-	channels[channelOrPattern] = channelOrPattern
+	config.subscriptions[modeKey] = append(channels, channelOrPattern)
 	return config
-}
-
-func (c *ClusterSubscriptionConfig) GetSubscriptions(mode PubSubClusterChannelMode) []string {
-	channels := make([]string, 0)
-	channelsMap, ok := c.subscriptions.Load(mode)
-	if !ok {
-		return channels
-	}
-
-	for channel := range channelsMap.(map[string]string) {
-		channels = append(channels, channel)
-	}
-	return channels
-}
-
-func (config *ClusterSubscriptionConfig) GetAllSubscriptions() map[PubSubClusterChannelMode][]string {
-	result := make(map[PubSubClusterChannelMode][]string)
-
-	config.subscriptions.Range(func(key, value any) bool {
-		mode := key.(PubSubClusterChannelMode)
-		channelsMap := value.(map[string]string)
-
-		channels := make([]string, 0, len(channelsMap))
-		for _, channel := range channelsMap {
-			channels = append(channels, channel)
-		}
-
-		result[mode] = channels
-		return true
-	})
-
-	return result
 }
 
 func (config *ClusterSubscriptionConfig) Validate() error {

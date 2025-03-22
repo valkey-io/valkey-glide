@@ -68,6 +68,7 @@ func NewMessageHandler(callback MessageCallback, context any, resolver ResponseR
 	}
 }
 
+// Handle processes the incoming response and invokes the callback if available
 func (handler *MessageHandler) Handle(response any) error {
 	data, err := handler.resolver(response)
 	if err != nil {

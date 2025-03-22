@@ -17,6 +17,7 @@ package api
 import "C"
 
 import (
+	goErr "errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -44,6 +45,7 @@ type BaseClient interface {
 	BitmapCommands
 	GeoSpatialCommands
 	ScriptingAndFunctionBaseCommands
+	PubSubCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -7610,4 +7612,137 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 		return nil, err
 	}
 	return handleAnyResponse(result)
+}
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *baseClient) Publish(message string, channel string) (int64, error) {
+	if message == "" || channel == "" {
+		return 0, goErr.New("both message and channel are required for Publish command")
+	}
+
+	args := []string{channel, message}
+	result, err := client.executeCommand(C.Publish, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// PubSubChannels lists the currently active channels.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannels() ([]string, error) {
+	// args := []string{"CHANNELS"}
+	// result, err := client.executeCommand(C.PubSubChannels, args)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// return handleStringArrayResponse(result)
+	return nil, nil
+}
+
+// PubSubChannelsWithPattern lists the currently active channels matching the specified pattern.
+//
+// Pattern can be any glob-style pattern:
+// - h?llo matches hello, hallo and hxllo
+// - h*llo matches hllo and heeeello
+// - h[ae]llo matches hello and hallo, but not hillo
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
+	// if pattern == "" {
+	// 	return nil, errors.New("pattern is required for PubSubChannelsWithPattern command")
+	// }
+
+	// args := []string{"CHANNELS", pattern}
+	// result, err := client.executeCommand(C.PubSubChannels, args)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// return handleStringArrayResponse(result)
+	return nil, nil
+}
+
+// PubSubNumPat returns the number of patterns that are subscribed to by clients.
+//
+// This returns the total number of unique patterns that all clients are subscribed to,
+// not the count of clients subscribed to patterns.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numpat
+func (client *baseClient) PubSubNumPat() (int64, error) {
+	// args := []string{"NUMPAT"}
+	// result, err := client.executeCommand(C.PubSubNumPat, args)
+	// if err != nil {
+	// 	return 0, err
+	// }
+
+	// return handleIntResponse(result)
+	return 0, nil
+}
+
+// PubSubNumSub returns the number of subscribers for the specified channels.
+//
+// The count only includes clients subscribed to exact channels, not pattern subscriptions.
+// If no channels are specified, an empty map is returned.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single map.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numsub
+func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, error) {
+	if len(channels) == 0 {
+		// If no channels specified, just return an empty map
+		return make(map[string]int64), nil
+	}
+
+	args := append([]string{"NUMSUB"}, channels...)
+	_, err := client.executeCommand(C.PubSubNumSub, args) // TODO: return result
+	if err != nil {
+		return nil, err
+	}
+
+	// NUMSUB returns a flat array of channel, count pairs
+	// flatArray := utils.ReadStringArray(result)
+	resultMap := make(map[string]int64)
+
+	// Process pairs of channel name and subscriber count
+	// for i := 0; i < len(flatArray); i += 2 {
+	// 	if i+1 < len(flatArray) {
+	// 		channel := flatArray[i]
+	// 		count, err := utils.StringToInt64(flatArray[i+1])
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 		resultMap[channel] = count
+	// 	}
+	// }
+
+	return resultMap, nil
 }

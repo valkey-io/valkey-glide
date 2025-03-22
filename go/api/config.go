@@ -90,14 +90,13 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 }
 
 type baseClientConfiguration struct {
-	addresses          []NodeAddress
-	useTLS             bool
-	credentials        *ServerCredentials
-	readFrom           ReadFrom
-	requestTimeout     int
-	clientName         string
-	clientAZ           string
-	subscriptionConfig *BaseSubscriptionConfig
+	addresses      []NodeAddress
+	useTLS         bool
+	credentials    *ServerCredentials
+	readFrom       ReadFrom
+	requestTimeout int
+	clientName     string
+	clientAZ       string
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -134,15 +133,6 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 		if config.clientAZ == "" {
 			return nil, errors.New("client AZ must be set when using AZ affinity or AZ affinity with replicas and primary")
 		}
-	}
-
-	if config.subscriptionConfig != nil {
-		if err := config.subscriptionConfig.Validate(); err != nil {
-			return nil, err
-		}
-		// Add subscription configuration to the protobuf request
-		// Note: The actual protobuf field names and types will depend on your protobuf definition
-		request.PubsubSubscriptions = append(request.PubsubSubscriptions, config.subscriptionConfig.toProtobuf())
 	}
 
 	return &request, nil
@@ -184,8 +174,9 @@ func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy 
 // GlideClientConfiguration represents the configuration settings for a Standalone client.
 type GlideClientConfiguration struct {
 	baseClientConfiguration
-	reconnectStrategy *BackoffStrategy
-	databaseId        int
+	reconnectStrategy  *BackoffStrategy
+	databaseId         int
+	subscriptionConfig *StandaloneSubscriptionConfig
 	AdvancedGlideClientConfiguration
 }
 
@@ -207,6 +198,9 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 
 	if config.databaseId != 0 {
 		request.DatabaseId = uint32(config.databaseId)
+	}
+	if config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0 {
+		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
 
 	if config.AdvancedGlideClientConfiguration.connectionTimeout != 0 {
@@ -299,7 +293,7 @@ func (config *GlideClientConfiguration) WithAdvancedConfiguration(
 
 // WithSubscriptionConfig sets the subscription configuration for the client.
 func (config *GlideClientConfiguration) WithSubscriptionConfig(subscriptionConfig *StandaloneSubscriptionConfig) *GlideClientConfiguration {
-	config.subscriptionConfig = subscriptionConfig.BaseSubscriptionConfig
+	config.subscriptionConfig = subscriptionConfig
 	return config
 }
 
@@ -308,6 +302,7 @@ func (config *GlideClientConfiguration) WithSubscriptionConfig(subscriptionConfi
 // used.
 type GlideClusterClientConfiguration struct {
 	baseClientConfiguration
+	subscriptionConfig *ClusterSubscriptionConfig
 	AdvancedGlideClusterClientConfiguration
 }
 
@@ -325,6 +320,10 @@ func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.Connectio
 	if err != nil {
 		return nil, err
 	}
+	// if config.subscriptionConfig != nil {
+	// 	request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
+	// }
+
 	request.ClusterModeEnabled = true
 	if (config.AdvancedGlideClusterClientConfiguration.connectionTimeout) != 0 {
 		request.ConnectionTimeout = uint32(config.AdvancedGlideClusterClientConfiguration.connectionTimeout)
@@ -404,7 +403,7 @@ func (config *GlideClusterClientConfiguration) WithAdvancedConfiguration(
 
 // WithSubscriptionConfig sets the subscription configuration for the client.
 func (config *GlideClusterClientConfiguration) WithSubscriptionConfig(subscriptionConfig *ClusterSubscriptionConfig) *GlideClusterClientConfiguration {
-	config.subscriptionConfig = subscriptionConfig.BaseSubscriptionConfig
+	config.subscriptionConfig = subscriptionConfig
 	return config
 }
 
