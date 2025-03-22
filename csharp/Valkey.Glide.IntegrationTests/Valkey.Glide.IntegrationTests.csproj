@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Valkey.Glide.IntegrationTests</RootNamespace>
+    <AssemblyName>Valkey.Glide.IntegrationTests</AssemblyName>
     <Nullable>enable</Nullable>
     <LangVersion>12.0</LangVersion>
     <IsPackable>false</IsPackable>
@@ -50,7 +52,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\lib\glide.csproj" />
+    <ProjectReference Include="..\sources\Valkey.Glide\Valkey.Glide.csproj" />
   </ItemGroup>
 
   <ItemGroup>

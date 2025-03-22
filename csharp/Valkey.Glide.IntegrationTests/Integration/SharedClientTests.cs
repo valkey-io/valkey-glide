@@ -1,6 +1,8 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-namespace Tests.Integration;
+using Valkey.Glide;
+
+namespace tests.Integration;
 
 public class SharedClientTests(TestConfiguration config)
 {

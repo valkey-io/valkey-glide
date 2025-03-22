@@ -2,9 +2,9 @@
 
 using System.Runtime.InteropServices;
 
-using static Glide.ConnectionConfiguration;
+using static Valkey.Glide.ConnectionConfiguration;
 
-namespace Glide;
+namespace Valkey.Glide;
 
 /// <summary>
 /// Basic class. Please use one of the following implementations:
