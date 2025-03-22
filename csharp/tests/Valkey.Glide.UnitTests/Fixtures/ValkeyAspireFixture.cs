@@ -11,12 +11,12 @@ public sealed class ValkeyAspireFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        IDistributedApplicationTestingBuilder? appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Valkey_Glide_AppHost>();
+        IDistributedApplicationTestingBuilder appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Valkey_Glide_AppHost>();
         _distributedApplication = await appHost.BuildAsync();
         await _distributedApplication.StartAsync();
         try
         {
-            ResourceEvent? resourceEvent = await _distributedApplication.ResourceNotifications.WaitForResourceHealthyAsync(
+            ResourceEvent resourceEvent = await _distributedApplication.ResourceNotifications.WaitForResourceHealthyAsync(
                 "cache",
                 WaitBehavior.StopOnResourceUnavailable
             );
@@ -25,7 +25,7 @@ public sealed class ValkeyAspireFixture : IAsyncLifetime
             UrlSnapshot? url = resourceEvent.Snapshot.Urls.FirstOrDefault();
             if (url is null)
                 throw new Exception("Cache has no URL, aspire initialization failed.");
-            Uri? uri = new Uri(url.Url);
+            Uri uri = new Uri(url.Url);
             Port     = (ushort) uri.Port;
             Host     = uri.Host;
             IsSecure = uri.Scheme == "https";

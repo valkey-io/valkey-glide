@@ -7,13 +7,13 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        WebApplicationBuilder? builder = WebApplication.CreateBuilder(args);
+        WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
         builder.Services.AddControllers();
         builder.Services.AddOpenApi();
         builder.Services.AddValkeyGlide("valkey"); // We configure the glide client to use the "valkey" connection string here.
         builder.AddServiceDefaults();
 
-        WebApplication? app = builder.Build();
+        WebApplication app = builder.Build();
         app.UseHttpsRedirection();
         app.UseAuthorization();
         app.MapOpenApi();

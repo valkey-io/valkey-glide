@@ -27,14 +27,14 @@ public static class Helpers
     )
     {
         input = input.ToLower();
-        char[]? chars = input.ToCharArray();
+        char[] chars = input.ToCharArray();
         int permutations = Math.Min(chars.Length * 2, maxPermutations);
-        string[]? results = new string[permutations];
+        string[] results = new string[permutations];
         for (int i = 0; i < permutations; i++)
         {
             char c = chars[i % chars.Length];
             chars[i % chars.Length] = char.IsUpper(c) ? char.ToLower(c) : char.ToUpper(c);
-            string? result = new string(chars);
+            string result = new string(chars);
             if (prefix is not null && suffix is not null)
                 results[i] = string.Concat(prefix, result, suffix);
             else if (prefix is not null)

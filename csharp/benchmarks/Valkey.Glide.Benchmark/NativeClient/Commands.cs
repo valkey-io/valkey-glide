@@ -13,7 +13,7 @@ namespace Valkey.Glide.Benchmark.NativeClient;
 /// through both asynchronous and blocking command execution. These methods are set up to be
 /// benchmarked using BenchmarkDotNet.
 /// </remarks>
-public class BlockingVsTask
+public class Commands
 {
     #region Setup / Teardown
 
@@ -26,6 +26,7 @@ public class BlockingVsTask
         _fixture = new ValkeyAspireFixture();
         await _fixture.InitializeAsync();
         _nativeClient = new InterOp.NativeClient(_fixture.ConnectionRequest);
+        await _nativeClient.SendCommandAsync(ERequestType.Set, "existing-key", "\"value\"");
     }
 
     [GlobalCleanup]
@@ -41,11 +42,5 @@ public class BlockingVsTask
     public async Task AsyncGetNonExistingKey()
     {
         _ = await _nativeClient.SendCommandAsync(ERequestType.Get, "non-existing-key");
-    }
-
-    [Benchmark]
-    public void BlockingGetNonExistingKey()
-    {
-        _ = _nativeClient.SendCommand(ERequestType.Get, "non-existing-key");
     }
 }

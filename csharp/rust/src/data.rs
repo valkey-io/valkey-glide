@@ -1,5 +1,6 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use crate::buffering::FFIBuffer;
 use crate::helpers;
 use crate::helpers::grab_str;
 use glide_core::client;
@@ -9,7 +10,6 @@ use std::ffi::{
     c_double, c_int, c_long, c_longlong, c_uint, c_ulonglong, c_void, CString, NulError,
 };
 use std::fmt::{Display, Formatter};
-use std::mem::forget;
 use std::ops::Add;
 use std::os::raw::c_char;
 use std::ptr::null;
@@ -102,31 +102,6 @@ impl CommandResult {
     pub fn new_error(error_message: *const c_char) -> Self {
         Self {
             success: 0,
-            error_string: error_message,
-        }
-    }
-}
-
-#[repr(C)]
-pub struct BlockingCommandResult {
-    pub success: c_int,
-    pub error_string: *const c_char,
-    pub value: Value,
-}
-
-impl BlockingCommandResult {
-    pub fn new_success(value: Value) -> Self {
-        Self {
-            success: 1,
-            value,
-            error_string: null(),
-        }
-    }
-
-    pub fn new_error(error_message: *const c_char) -> Self {
-        Self {
-            success: 0,
-            value: Value::nil(),
             error_string: error_message,
         }
     }
@@ -257,6 +232,7 @@ pub enum ValueKind {
     /// Second will be array of results
     Push,
 }
+
 #[repr(C)]
 pub struct Value {
     pub kind: ValueKind,
@@ -288,143 +264,113 @@ impl Value {
     // ToDo: Create a new "blob" creating method that first counts the bytes needed,
     //       allocates one big blob and secondly fills in the bytes in that blob, returning
     //       just that as ValueBlob to allow better large-scale result operations.
-    pub fn from_redis(value: &redis::Value) -> Result<Self, ValueError> {
-        unsafe {
-            Ok(match value {
-                redis::Value::Nil => Self::nil(),
-                redis::Value::Int(i) => Self {
-                    data: ValueUnion { i: *i as c_long },
-                    length: 0,
-                    kind: ValueKind::Int,
-                },
-                redis::Value::BulkString(d) => {
-                    let mut d = d.clone();
-                    d.shrink_to_fit();
-                    debug_assert_eq!(d.len(), d.capacity());
-                    let result = Self {
-                        data: ValueUnion {
-                            ptr: d.as_mut_ptr() as *mut c_void,
-                        },
-                        length: d.len() as c_long,
-                        kind: ValueKind::BulkString,
-                    };
-                    forget(d);
-                    result
+    pub fn from_redis(value: &redis::Value, buffer: &mut FFIBuffer) -> Result<Self, ValueError> {
+        Ok(match value {
+            redis::Value::Nil => Self::nil(),
+            redis::Value::Int(i) => Self {
+                data: ValueUnion { i: *i as c_long },
+                length: 0,
+                kind: ValueKind::Int,
+            },
+            redis::Value::BulkString(d) => {
+                let result = Self {
+                    data: ValueUnion {
+                        ptr: buffer.write_to_buffer(d.as_slice()) as *mut c_void,
+                    },
+                    length: d.len() as c_long,
+                    kind: ValueKind::BulkString,
+                };
+                result
+            }
+            redis::Value::Array(values) => {
+                // ToDo: Optimize the allocation here with buffer too
+                let values = values
+                    .iter()
+                    .map(|d| Value::from_redis(d, buffer))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let result = Self {
+                    data: ValueUnion {
+                        ptr: buffer.write_values_to_buffer(values.as_slice()) as *mut c_void,
+                    },
+                    length: values.len() as c_long,
+                    kind: ValueKind::Set,
+                };
+                result
+            }
+            redis::Value::SimpleString(s) => return Self::simple_string(s.as_str(), Some(buffer)),
+            redis::Value::Okay => Self::okay(),
+            redis::Value::Map(tuples) => {
+                let mut out_tuples = Vec::with_capacity(tuples.len() * 2);
+                for (k, v) in tuples {
+                    out_tuples.push(Value::from_redis(k, buffer)?);
+                    out_tuples.push(Value::from_redis(v, buffer)?);
                 }
-                redis::Value::Array(values) => {
-                    let mut values = values
-                        .iter()
-                        .map(|d| Value::from_redis(d))
-                        .collect::<Result<Vec<_>, _>>()?;
-                    values.shrink_to_fit();
-                    debug_assert_eq!(values.len(), values.capacity());
-                    let result = Self {
-                        data: ValueUnion {
-                            ptr: values.as_mut_ptr() as *mut c_void,
-                        },
-                        length: values.len() as c_long,
-                        kind: ValueKind::Set,
-                    };
-                    forget(values);
-                    result
+                Self {
+                    data: ValueUnion {
+                        ptr: buffer.write_values_to_buffer(out_tuples.as_slice()) as *mut c_void,
+                    },
+                    length: tuples.len() as c_long,
+                    kind: ValueKind::Map,
                 }
-                redis::Value::SimpleString(s) => return Self::simple_string(s.as_str()),
-                redis::Value::Okay => Self::okay(),
-                redis::Value::Map(tuples) => {
-                    let mut out_tuples = Vec::with_capacity(tuples.len() * 2);
-                    for (k, v) in tuples {
-                        out_tuples.push(Value::from_redis(k));
-                        out_tuples.push(Value::from_redis(v));
-                    }
-                    out_tuples.shrink_to_fit();
-                    Self {
-                        data: ValueUnion {
-                            ptr: out_tuples.as_mut_ptr() as *mut c_void,
-                        },
-                        length: tuples.len() as c_long,
-                        kind: ValueKind::Map,
-                    }
+            }
+            redis::Value::Attribute { .. } => {
+                todo!("Implement")
+            }
+            redis::Value::Set(values) => {
+                let values = values
+                    .iter()
+                    .map(|d| Value::from_redis(d, buffer))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let result = Self {
+                    data: ValueUnion {
+                        ptr: buffer.write_values_to_buffer(values.as_slice()) as *mut c_void,
+                    },
+                    length: values.len() as c_long,
+                    kind: ValueKind::Set,
+                };
+                result
+            }
+            redis::Value::Double(d) => Self {
+                data: ValueUnion { f: *d },
+                length: 0,
+                kind: ValueKind::Double,
+            },
+            redis::Value::Boolean(b) => Self {
+                data: ValueUnion { i: *b as c_long },
+                length: 0,
+                kind: ValueKind::Boolean,
+            },
+            redis::Value::VerbatimString { format, text } => {
+                let format_length = match format {
+                    VerbatimFormat::Unknown(unknown) => unknown.len(),
+                    VerbatimFormat::Markdown => "markdown".len(),
+                    VerbatimFormat::Text => "text".len(),
+                };
+                let format = match format {
+                    VerbatimFormat::Unknown(unknown) => unknown,
+                    VerbatimFormat::Markdown => &"markdown".to_string(),
+                    VerbatimFormat::Text => &"text".to_string(),
+                };
+                Self {
+                    length: (size_of::<StringPair>() + format_length + text.len()) as c_long,
+                    kind: ValueKind::VerbatimString,
+                    data: ValueUnion {
+                        ptr: buffer.write_string_pair_to_buffer(format, text) as *mut c_void,
+                    },
                 }
-                redis::Value::Attribute { .. } => {
-                    todo!("Implement")
-                }
-                redis::Value::Set(values) => {
-                    let mut values = values
-                        .iter()
-                        .map(|d| Value::from_redis(d))
-                        .collect::<Result<Vec<_>, _>>()?;
-                    values.shrink_to_fit();
-                    assert_eq!(values.len(), values.capacity());
-                    let result = Self {
-                        data: ValueUnion {
-                            ptr: values.as_mut_ptr() as *mut c_void,
-                        },
-                        length: values.len() as c_long,
-                        kind: ValueKind::Set,
-                    };
-                    forget(values);
-                    result
-                }
-                redis::Value::Double(d) => Self {
-                    data: ValueUnion { f: *d },
-                    length: 0,
-                    kind: ValueKind::Double,
-                },
-                redis::Value::Boolean(b) => Self {
-                    data: ValueUnion { i: *b as c_long },
-                    length: 0,
-                    kind: ValueKind::Boolean,
-                },
-                redis::Value::VerbatimString { format, text } => {
-                    let format_length = match format {
-                        VerbatimFormat::Unknown(unknown) => unknown.len(),
-                        VerbatimFormat::Markdown => "markdown".len(),
-                        VerbatimFormat::Text => "text".len(),
-                    };
-                    let format = match format {
-                        VerbatimFormat::Unknown(unknown) => unknown,
-                        VerbatimFormat::Markdown => &"markdown".to_string(),
-                        VerbatimFormat::Text => &"text".to_string(),
-                    };
-                    let mut vec = Vec::<u8>::with_capacity(
-                        size_of::<StringPair>() + format_length + text.len(),
-                    );
-                    let out_vec = vec.as_mut_ptr(); // we leak here
-                    let output = StringPair {
-                        a_start: out_vec.add(size_of::<StringPair>()) as *mut c_char,
-                        a_end: out_vec.add(size_of::<StringPair>() + format_length) as *mut c_char,
-                        b_start: out_vec.add(size_of::<StringPair>() + format_length)
-                            as *mut c_char,
-                        b_end: out_vec.add(size_of::<StringPair>() + format_length + text.len())
-                            as *mut c_char,
-                    };
-                    for i in 0..format_length {
-                        *output.a_start.wrapping_add(i) = format.as_ptr().wrapping_add(i) as c_char
-                    }
-                    for i in 0..text.len() {
-                        *output.b_start.wrapping_add(i) = text.as_ptr().wrapping_add(i) as c_char
-                    }
-                    Self {
-                        length: vec.len() as c_long,
-                        kind: ValueKind::VerbatimString,
-                        data: ValueUnion {
-                            ptr: out_vec as *mut c_void,
-                        },
-                    }
-                }
-                redis::Value::BigNumber(_) => {
-                    todo!("Implement")
-                }
-                redis::Value::Push { .. } => {
-                    todo!("Implement")
-                }
-            })
-        }
+            }
+            redis::Value::BigNumber(_) => {
+                todo!("Implement")
+            }
+            redis::Value::Push { .. } => {
+                todo!("Implement")
+            }
+        })
     }
 }
 
 impl Value {
-    pub fn simple_string(s: &str) -> Result<Self, ValueError> {
+    pub fn simple_string(s: &str, buffer: Option<&mut FFIBuffer>) -> Result<Self, ValueError> {
         if s.len() == 0 {
             Ok(Self {
                 data: ValueUnion { ptr: null() },
@@ -432,16 +378,29 @@ impl Value {
                 kind: ValueKind::SimpleString,
             })
         } else {
-            Ok(Self {
-                data: ValueUnion {
-                    ptr: match CString::from_str(s) {
-                        Ok(d) => d.into_raw() as *mut c_void,
-                        Err(e) => return Err(ValueError::NulError(e)),
+            if let Some(buffer) = buffer {
+                Ok(Self {
+                    data: ValueUnion {
+                        ptr: match CString::from_str(s) {
+                            Ok(d) => buffer.write_string_to_buffer(&d) as *mut c_void,
+                            Err(e) => return Err(ValueError::NulError(e)),
+                        },
                     },
-                },
-                length: s.len() as c_long,
-                kind: ValueKind::SimpleString,
-            })
+                    length: s.len() as c_long,
+                    kind: ValueKind::SimpleString,
+                })
+            } else {
+                Ok(Self {
+                    data: ValueUnion {
+                        ptr: match CString::from_str(s) {
+                            Ok(d) => d.into_raw() as *mut c_void,
+                            Err(e) => return Err(ValueError::NulError(e)),
+                        },
+                    },
+                    length: s.len() as c_long,
+                    kind: ValueKind::SimpleString,
+                })
+            }
         }
     }
     pub fn simple_string_with_null(s: &str) -> Self {
@@ -465,83 +424,6 @@ impl Value {
             data: ValueUnion { i: 0 },
             length: 0,
             kind: ValueKind::Okay,
-        }
-    }
-    pub unsafe fn free_data(&mut self) {
-        match self.kind {
-            ValueKind::Nil => { /* empty */ }
-            ValueKind::Int => { /* empty */ }
-            ValueKind::BulkString => {
-                debug_assert_ne!(null(), self.data.ptr);
-                drop(Vec::from_raw_parts(
-                    self.data.ptr as *mut u8,
-                    self.length as usize,
-                    self.length as usize,
-                ))
-            }
-            ValueKind::Array => {
-                debug_assert_ne!(null(), self.data.ptr);
-                let mut values = Vec::from_raw_parts(
-                    self.data.ptr as *mut Value,
-                    self.length as usize,
-                    self.length as usize,
-                );
-                for value in values.iter_mut() {
-                    value.free_data()
-                }
-                drop(values);
-            }
-            ValueKind::SimpleString => {
-                debug_assert!(self.data.ptr != null() || self.length == 0);
-                if self.data.ptr != null() {
-                    drop(CString::from_raw(self.data.ptr as *mut c_char))
-                }
-            }
-            ValueKind::Okay => { /* empty */ }
-            ValueKind::Map => {
-                debug_assert_ne!(null(), self.data.ptr);
-                let mut values = Vec::from_raw_parts(
-                    self.data.ptr as *mut Value,
-                    self.length as usize * 2,
-                    self.length as usize * 2,
-                );
-                for value in values.iter_mut() {
-                    value.free_data()
-                }
-                drop(values);
-            }
-            ValueKind::Attribute => {
-                todo!("Implement")
-            }
-            ValueKind::Set => {
-                debug_assert_ne!(null(), self.data.ptr);
-                let mut values = Vec::from_raw_parts(
-                    self.data.ptr as *mut Value,
-                    self.length as usize,
-                    self.length as usize,
-                );
-                for value in values.iter_mut() {
-                    value.free_data()
-                }
-                drop(values);
-            }
-            ValueKind::Double => { /* empty */ }
-            ValueKind::Boolean => { /* empty */ }
-            ValueKind::VerbatimString => {
-                debug_assert_ne!(null(), self.data.ptr);
-                let vec = Vec::from_raw_parts(
-                    self.data.ptr as *mut u8,
-                    self.length as usize,
-                    self.length as usize,
-                );
-                drop(vec);
-            }
-            ValueKind::BigNumber => {
-                todo!("Implement")
-            }
-            ValueKind::Push => {
-                todo!("Implement")
-            }
         }
     }
 }

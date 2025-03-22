@@ -13,7 +13,7 @@ public class NativeClientTests(ValkeyAspireFixture fixture) : IClassFixture<Valk
     {
         // Arrange
         // Act
-        using NativeClient? nativeClient = new NativeClient(fixture.ConnectionRequest);
+        using NativeClient nativeClient = new(fixture.ConnectionRequest);
         // Assert
         Assert.NotNull(nativeClient);
     }
@@ -21,18 +21,11 @@ public class NativeClientTests(ValkeyAspireFixture fixture) : IClassFixture<Valk
     [Fact]
     public async Task CanSendGetCommandAsync()
     {
-        using NativeClient? nativeClient = new NativeClient(fixture.ConnectionRequest);
+        using NativeClient nativeClient = new(fixture.ConnectionRequest);
         Value result = await nativeClient.SendCommandAsync(ERequestType.Get, "test");
         Assert.Equivalent(InterOp.EValueKind.None, result.Kind);
     }
 
-    [Fact]
-    public void CanSendGetCommandBlocking()
-    {
-        using NativeClient? nativeClient = new NativeClient(fixture.ConnectionRequest);
-        Value result = nativeClient.SendCommand(ERequestType.Get, "test");
-        Assert.Equivalent(InterOp.EValueKind.None, result.Kind);
-    }
     [Theory]
     [InlineData(NativeClient.SmallStringOptimizationArgs - 3)]
     [InlineData(NativeClient.SmallStringOptimizationArgs - 2)]
@@ -42,11 +35,11 @@ public class NativeClientTests(ValkeyAspireFixture fixture) : IClassFixture<Valk
     [InlineData(NativeClient.SmallStringOptimizationArgs + 2)]
     [InlineData(NativeClient.SmallStringOptimizationArgs + 3)]
     [InlineData(NativeClient.SmallStringOptimizationArgs + NativeClient.SmallStringOptimizationArgs)]
-    public void CanSendGetCommandWithSmallStringOptimization(int argsCount)
+    public async Task CanSendGetCommandWithSmallStringOptimization(int argsCount)
     {
         Assert.InRange(argsCount, 0, int.MaxValue);
-        using NativeClient? nativeClient = new NativeClient(fixture.ConnectionRequest);
-        Value result = nativeClient.SendCommand(ERequestType.Get, new string('0', argsCount));
+        using NativeClient nativeClient = new(fixture.ConnectionRequest);
+        Value result = await nativeClient.SendCommandAsync(ERequestType.Get, new string('0', argsCount));
         Assert.Equivalent(InterOp.EValueKind.None, result.Kind);
     }
     [Theory]
@@ -58,17 +51,17 @@ public class NativeClientTests(ValkeyAspireFixture fixture) : IClassFixture<Valk
     [InlineData(NativeClient.SmallStringOptimizationArgs + 2)]
     [InlineData(NativeClient.SmallStringOptimizationArgs + 3)]
     [InlineData(NativeClient.SmallStringOptimizationArgs + NativeClient.SmallStringOptimizationArgs)]
-    public void CanSendSetCommandWithSmallStringOptimization(int argsCount)
+    public async Task CanSendSetCommandWithSmallStringOptimization(int argsCount)
     {
         Assert.InRange(argsCount, 2, int.MaxValue);
-        using NativeClient? nativeClient = new NativeClient(fixture.ConnectionRequest);
-        Value result = nativeClient.SendCommand(ERequestType.Set, new string('0', argsCount), string.Concat("\"", new string('0', argsCount - 2), "\""));
+        using NativeClient nativeClient = new(fixture.ConnectionRequest);
+        Value result = await nativeClient.SendCommandAsync(ERequestType.Set, new string('0', argsCount), string.Concat("\"", new string('0', argsCount - 2), "\""));
         Assert.Equivalent(InterOp.EValueKind.Okay, result.Kind);
     }
     [Fact]
     public async Task CanRunConcurrently()
     {
-        using NativeClient? nativeClient = new NativeClient(fixture.ConnectionRequest);
+        using NativeClient nativeClient = new(fixture.ConnectionRequest);
         await Parallel.ForAsync(0, 1000, new ParallelOptions
         {
             MaxDegreeOfParallelism = 1000,
@@ -81,7 +74,7 @@ public class NativeClientTests(ValkeyAspireFixture fixture) : IClassFixture<Valk
     public void CanDoubleDispose()
     {
         // Arrange
-        NativeClient? nativeClient = new NativeClient(fixture.ConnectionRequest);
+        NativeClient nativeClient = new(fixture.ConnectionRequest);
         // Act
         nativeClient.Dispose();
         nativeClient.Dispose();

@@ -1,8 +1,9 @@
-﻿use std::ffi::{c_char, CString};
-use std::ptr::null;
-use std::str::{FromStr, Utf8Error};
-use crate::data::Utf8OrEmptyError;
+﻿use crate::data::Utf8OrEmptyError;
 use crate::helpers;
+use std::ffi::{c_char, CString};
+use std::ptr::null;
+use std::slice::from_raw_parts;
+use std::str::{FromStr, Utf8Error};
 
 pub fn grab_str(input: *const c_char) -> Result<Option<String>, Utf8Error> {
     if input.is_null() {
@@ -21,7 +22,7 @@ pub fn grab_str_not_null(input: *const c_char) -> Result<String, Utf8OrEmptyErro
         Ok(d) => match d {
             None => Err(Utf8OrEmptyError::Empty),
             Some(s) => Ok(s),
-        }
+        },
         Err(e) => Err(Utf8OrEmptyError::Utf8Error(e)),
     }
 }
@@ -41,7 +42,10 @@ pub fn grab_vec<TIn, TOut, TErr>(
     }
 }
 
-pub fn grab_vec_str(input: *const *const c_char, len: usize) -> Result<Vec<String>, Utf8OrEmptyError> {
+pub fn grab_vec_str(
+    input: *const *const c_char,
+    len: usize,
+) -> Result<Vec<String>, Utf8OrEmptyError> {
     grab_vec(
         input,
         len as usize,
@@ -62,4 +66,8 @@ pub fn to_cstr_ptr_or_null(input: &str) -> *const c_char {
         Ok(d) => d.into_raw() as *const std::os::raw::c_char,
         Err(_) => null(),
     }
+}
+
+pub unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
+    from_raw_parts((p as *const T) as *const u8, size_of::<T>())
 }

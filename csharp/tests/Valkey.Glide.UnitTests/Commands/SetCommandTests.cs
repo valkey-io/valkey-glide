@@ -88,7 +88,7 @@ public class SetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
                         }
                     )
                     .ToArray();
-                Type[]? types = args.Select(e => e.GetType())
+                Type[] types = args.Select(e => e.GetType())
                     .Prepend(typeof(IGlideClient))
                     .ToArray();
                 MethodInfo? methodInfo = typeof(SetCommands).GetMethod(method, types);
@@ -111,8 +111,8 @@ public class SetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<Valkey
         // Assert
         ICall? call = Assert.Single(client.ReceivedCalls());
         Assert.Equal(ERequestType.Set, call.GetArguments()[0]);
-        IEnumerable<string>? parameters = (IEnumerable<string>) call.GetArguments()[1]!;
-        string? input = string.Join(" ", parameters);
+        IEnumerable<string> parameters = (IEnumerable<string>) call.GetArguments()[1]!;
+        string input = string.Join(" ", parameters);
         Assert.Equal(command, input);
     }
 

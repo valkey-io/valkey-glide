@@ -1,11 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 using Valkey.Glide.InterOp.Exceptions;
 using Valkey.Glide.InterOp.Native;
@@ -27,7 +21,7 @@ public sealed class NativeClient : IDisposable, INativeClient
     private static readonly nint CommandCallbackFptr = Marshal.GetFunctionPointerForDelegate(CommandCallbackDel);
 
     private static readonly SemaphoreSlim Semaphore = new(1, 1);
-    private static bool _initialized;
+    private static bool s_initialized;
     private nint? _handle;
 
     internal const int SmallStringOptimizationArgs = 20;
@@ -36,17 +30,17 @@ public sealed class NativeClient : IDisposable, INativeClient
 
     public unsafe NativeClient(ConnectionRequest request)
     {
-        if (!_initialized)
+        if (!s_initialized)
             throw new InvalidOperationException("API is not initialized");
         request.Validate();
 
-        List<nint> strings = new List<nint>();
+        List<nint> strings = [];
         NodeAddress[] addresses = new NodeAddress[request.Addresses.Length];
         try
         {
             fixed (NodeAddress* addressesPtr = addresses)
             {
-                Native.ConnectionRequest nativeRequest = new Native.ConnectionRequest
+                Native.ConnectionRequest nativeRequest = new()
                 {
                     client_name = MarshalCollectingString(request.ClientName),
                     cluster_mode_enabled = request.ClusterMode ? 1 : 0,
@@ -109,7 +103,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                     auth_password = MarshalCollectingString(request.AuthPassword),
                     auth_username = MarshalCollectingString(request.AuthUsername),
                     otel_endpoint = MarshalCollectingString(request.OpenTelemetryEndpoint),
-                    read_from = new Native.ReadFrom
+                    read_from = new ReadFrom
                     {
                         kind = request.ReplicationStrategy?.Kind switch
                         {
@@ -214,7 +208,7 @@ public sealed class NativeClient : IDisposable, INativeClient
         Semaphore.Wait();
         try
         {
-            if (_initialized)
+            if (s_initialized)
                 return;
             if (logFilePath is not null)
             {
@@ -232,7 +226,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                     throw new GlideException("Failed to initialize the API.");
             }
 
-            _initialized = true;
+            s_initialized = true;
         }
         finally
         {
@@ -244,7 +238,7 @@ public sealed class NativeClient : IDisposable, INativeClient
     {
         if (buffer is null)
             return;
-        nint ptr = (nint)buffer - 1;
+        nint ptr = (nint)(buffer - 1);
         if (Marshal.ReadByte(ptr) == 0) // Is allocated on heap
             Marshal.FreeCoTaskMem(ptr);
     }
@@ -339,7 +333,7 @@ public sealed class NativeClient : IDisposable, INativeClient
 
     private void ReleaseUnmanagedResources()
     {
-        lock (this)
+        lock (this) // We lock here to prevent a possible double-free
         {
             if (_handle.HasValue)
                 Imports.free_client_handle(_handle.Value);
@@ -360,10 +354,10 @@ public sealed class NativeClient : IDisposable, INativeClient
 
     public unsafe Task<Value> SendCommandAsync(ERequestType requestType, params string[] args)
     {
+        // ReSharper disable once InconsistentlySynchronizedField -- The lock is done to prevent double-free in all scenarios
         if (_handle is null)
             throw new ObjectDisposedException(nameof(NativeClient), "ClientHandle is null");
-        TaskCompletionSource<Value> tcs =
-            new TaskCompletionSource<Value>(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource<Value> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         GCHandle dataHandle = GCHandle.Alloc(tcs, GCHandleType.Normal);
         try
@@ -394,6 +388,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                 CommandResult result;
                 fixed (byte** argsArrPtr = argsArr)
                     result = Imports.command(
+                        // ReSharper disable once InconsistentlySynchronizedField -- The lock is done to prevent double-free in all scenarios
                         _handle.Value,
                         CommandCallbackFptr,
                         GCHandle.ToIntPtr(dataHandle),
@@ -422,46 +417,6 @@ public sealed class NativeClient : IDisposable, INativeClient
         }
     }
 
-    public unsafe Value SendCommand(ERequestType requestType, params string[] args)
-    {
-        if (_handle is null)
-            throw new ObjectDisposedException(nameof(NativeClient), "ClientHandle is null");
-
-        byte*[] argsArr = new byte*[args.Length];
-        if (args.Length <= 20)
-        {
-            for (int i = 0; i < args.Length; i++)
-            {
-                // ReSharper disable once StackAllocInsideLoop
-                // We do this intentionally here in a "low allocation" (max: 20 * 100 bytes) environment
-                byte* buffer = stackalloc byte[100];
-                byte* ptr = MarshalUtf8String(args[i], buffer, 100);
-                argsArr[i] = ptr;
-            }
-        }
-        else
-        {
-            for (int i = 0; i < args.Length; i++)
-            {
-                byte* ptr = MarshalUtf8String(args[i]);
-                argsArr[i] = ptr;
-            }
-        }
-
-        BlockingCommandResult result;
-        fixed (byte** argsArrPtr = argsArr)
-            result = Imports.command_blocking(_handle.Value, requestType, argsArrPtr, argsArr.Length);
-        foreach (byte* arg in argsArr)
-        {
-            MarshalFreeUtf8String(arg);
-        }
-
-        if (result.success != 0 /* is true */)
-            return FromNativeValue(result.value);
-        else
-            throw new Exception(HandleString(result.error_string));
-    }
-
     private static unsafe Value FromNativeValue(Native.Value input, bool free = true)
     {
         try
@@ -486,7 +441,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                         return Value.CreateArray(array);
                     }
                 case Native.EValueKind.SimpleString:
-                    return InterOp.Value.CreateString(HandleString(input.data.ptr, (int)input.length, false));
+                    return Value.CreateString(HandleString(input.data.ptr, (int)input.length, false));
                 case Native.EValueKind.Okay:
                     return Value.CreateOkay();
                 case Native.EValueKind.Map:

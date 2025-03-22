@@ -5,6 +5,7 @@ extern crate core;
 mod apihandle;
 mod data;
 mod helpers;
+mod buffering;
 
 use crate::apihandle::Handle;
 use crate::data::*;
@@ -16,15 +17,15 @@ use std::panic::catch_unwind;
 use std::ptr::null;
 use std::str::FromStr;
 use tokio::runtime::Builder;
+use crate::buffering::FFIBuffer;
 
 /// # Summary
 /// Special method to free the returned values.
 /// MUST be used!
 #[no_mangle]
 pub unsafe extern "C-unwind" fn csharp_free_value(mut input: Value) {
-    logger_core::log_trace("csharp_ffi", format!("Entered csharp_free_value to free {:?}", input.kind));
-    input.free_data();
-    logger_core::log_trace("csharp_ffi", "Exiting csharp_free_value");
+    // We use this just to make the pattern more "future-proof".
+    // Right now, no freeing is done here
 }
 /// # Summary
 /// Special method to free the returned strings.
@@ -349,7 +350,13 @@ pub extern "C-unwind" fn csharp_command(
             }
         };
         unsafe {
-            match Value::from_redis(&data) {
+            let mut buffer = FFIBuffer::new();
+
+            // "Simulation" run
+            _ = Value::from_redis(&data, &mut buffer);
+            buffer.switch_mode();
+
+            match Value::from_redis(&data, &mut buffer) {
                 Ok(data) => {
                     match catch_unwind(|| {
                         logger_core::log_trace("csharp_ffi", "Calling command callback of csharp_command");
@@ -389,78 +396,6 @@ pub extern "C-unwind" fn csharp_command(
 
     logger_core::log_trace("csharp_ffi", "Exiting csharp_command");
     CommandResult::new_success()
-}
-#[no_mangle]
-pub extern "C-unwind" fn csharp_command_blocking(
-    in_client_ptr: *const c_void,
-    in_request_type: RequestType,
-    in_args: *const *const c_char,
-    in_args_count: c_int,
-) -> BlockingCommandResult {
-    logger_core::log_trace("csharp_ffi", "Entered csharp_command_blocking");
-    if in_client_ptr.is_null() {
-        return BlockingCommandResult::new_error(helpers::to_cstr_ptr_or_null(
-            "Null handle passed",
-        ));
-    }
-    let args = match helpers::grab_vec_str(in_args, in_args_count as usize) {
-        Ok(d) => d,
-        Err(e) => match e {
-            Utf8OrEmptyError::Utf8Error(e) => {
-                return BlockingCommandResult::new_error(helpers::to_cstr_ptr_or_null(
-                    e.to_string().as_str(),
-                ))
-            }
-            Utf8OrEmptyError::Empty => {
-                return BlockingCommandResult::new_error(helpers::to_cstr_ptr_or_null(
-                    "Null value passed for host",
-                ))
-            }
-        },
-    };
-    let cmd = match in_request_type.get_command() {
-        None => {
-            return BlockingCommandResult::new_error(helpers::to_cstr_ptr_or_null(
-                "Unknown request type",
-            ))
-        }
-        Some(d) => d,
-    };
-
-
-    let ffi_handle = unsafe { Box::leak(Box::from_raw(in_client_ptr as *mut FFIHandle)) };
-    let result: BlockingCommandResult;
-    {
-        let _runtime_handle = ffi_handle.runtime.enter();
-        let handle = ffi_handle.handle.clone();
-        result = ffi_handle.runtime.block_on(async move {
-            logger_core::log_trace("csharp_ffi", "Entered command task");
-            let data = match handle.command(cmd, args).await {
-                Ok(d) => d,
-                Err(e) => {
-                    let message = helpers::to_cstr_ptr_or_null(e.to_string().as_str());
-                    logger_core::log_error(
-                        "csharp_ffi",
-                        format!("Error handling command: {:?}", e),
-                    );
-                    return BlockingCommandResult::new_error(message);
-                }
-            };
-            return match Value::from_redis(&data) {
-                Ok(data) => BlockingCommandResult::new_success(data),
-                Err(e) => {
-                    let message = helpers::to_cstr_ptr_or_null(e.to_string().as_str());
-                    logger_core::log_error(
-                        "csharp_ffi",
-                        format!("Error transforming result: {:?}", e),
-                    );
-                    BlockingCommandResult::new_error(message)
-                }
-            };
-        });
-    }
-    logger_core::log_trace("csharp_ffi", "Exiting csharp_command_blocking");
-    result
 }
 
 #[cfg(test)]

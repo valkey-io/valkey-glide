@@ -37,7 +37,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<InterOp.ConnectionRequest>(
             serviceProvider =>
             {
-                IConfiguration? configuration = serviceProvider.GetRequiredService<IConfiguration>();
+                IConfiguration configuration = serviceProvider.GetRequiredService<IConfiguration>();
 
                 // Read ValKey connection string
                 string? connectionString = configuration[string.Concat("ConnectionStrings:", resourceName)];
@@ -75,9 +75,9 @@ public static class ServiceCollectionExtensions
     )
     {
         NativeClient.Initialize(nativeLoggerLevel, nativeLogFilePath);
-        ConnectionConfigBuilder? builder = new ConnectionConfigBuilder();
+        ConnectionConfigBuilder builder = new ConnectionConfigBuilder();
         configure(builder);
-        ConnectionRequest? config = builder.Build();
+        ConnectionRequest config = builder.Build();
         return AddValkeyGlide(services, config);
     }
 
