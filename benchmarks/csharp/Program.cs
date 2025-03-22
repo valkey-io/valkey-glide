@@ -262,7 +262,7 @@ public static class MainClass
             {
                 StandaloneClientConfiguration config = new StandaloneClientConfigurationBuilder()
                     .WithAddress(host, PORT).WithTls(useTLS).Build();
-                BaseClient glide_client = new GlideClient(config);
+                BaseClient glide_client = GlideClient.CreateClient(config).Result;
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await glide_client.Get(key),
                      async (key, value) => await glide_client.Set(key, value),

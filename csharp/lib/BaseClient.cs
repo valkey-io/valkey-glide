@@ -7,6 +7,7 @@ using Glide.Commands;
 using Glide.Internals;
 
 using static Glide.ConnectionConfiguration;
+using static Glide.Errors;
 using static Glide.Route;
 
 namespace Glide;
@@ -38,20 +39,27 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     #endregion public methods
 
     #region protected methods
-    protected BaseClient(BaseClientConfiguration config)
+    protected static async Task<T> CreateClient<T>(BaseClientConfiguration config, Func<T> ctor) where T : BaseClient
     {
-        _successCallbackDelegate = SuccessCallback;
-        nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(_successCallbackDelegate);
-        _failureCallbackDelegate = FailureCallback;
-        nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(_failureCallbackDelegate);
+        T client = ctor();
+
+        nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(client._successCallbackDelegate);
+        nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(client._failureCallbackDelegate);
         nint configPtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(ConnectionRequest)));
         Marshal.StructureToPtr(config.ToRequest(), configPtr, false);
-        _clientPointer = CreateClientFfi(configPtr, successCallbackPointer, failureCallbackPointer);
+        Message message = client._messageContainer.GetMessageForCall();
+        CreateClientFfi(configPtr, successCallbackPointer, failureCallbackPointer);
         Marshal.FreeHGlobal(configPtr);
-        if (_clientPointer == IntPtr.Zero)
-        {
-            throw new Exception("Failed creating a client");
-        }
+        client._clientPointer = (IntPtr)(await message)!; // This will throw an error thru failure callback if any
+        return client._clientPointer != IntPtr.Zero
+            ? client
+            : throw new ConnectionException("Failed creating a client");
+    }
+
+    protected BaseClient()
+    {
+        _successCallbackDelegate = SuccessCallback;
+        _failureCallbackDelegate = FailureCallback;
     }
 
     protected delegate T ResponseHandler<T>(object? response);
@@ -138,7 +146,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
                 return null;
 #pragma warning restore CS8603 // Possible null reference return.
             }
-            throw new Exception($"Unexpected return type from Glide: got null expected {typeof(T).Name}");
+            throw new RequestException($"Unexpected return type from Glide: got null expected {typeof(T).Name}");
         }
         response = ConvertByteArrayToGlideString(response);
 #pragma warning disable IDE0046 // Convert to conditional expression
@@ -147,7 +155,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
             return converter((response as R)!);
         }
 #pragma warning restore IDE0046 // Convert to conditional expression
-        throw new Exception($"Unexpected return type from Glide: got {response?.GetType().Name} expected {typeof(T).Name}");
+        throw new RequestException($"Unexpected return type from Glide: got {response?.GetType().Name} expected {typeof(T).Name}");
     }
 
     protected static object? ConvertByteArrayToGlideString(object? response)
@@ -172,9 +180,18 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         object? result = null;
         if (strPtr != IntPtr.Zero)
         {
-            byte[] bytes = new byte[strLen];
-            Marshal.Copy(strPtr, bytes, 0, strLen);
-            result = bytes;
+            // hacky hack © Max Ksyunz
+            // TODO: merge with #3395 https://github.com/valkey-io/valkey-glide/pull/3395
+            if (strLen >= 0)
+            {
+                byte[] bytes = new byte[strLen];
+                Marshal.Copy(strPtr, bytes, 0, strLen);
+                result = bytes;
+            }
+            else
+            {
+                result = strPtr;
+            }
         }
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
         _ = Task.Run(() =>
@@ -184,13 +201,16 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         });
     }
 
-    private void FailureCallback(ulong index) =>
+    private void FailureCallback(ulong index, IntPtr strPtr, RequestErrorType errType)
+    {
+        string str = Marshal.PtrToStringAnsi(strPtr)!;
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
-        Task.Run(() =>
+        _ = Task.Run(() =>
         {
             Message message = _messageContainer.GetMessage((int)index);
-            message.SetException(new Exception("Operation failed"));
+            message.SetException(Create(errType, str));
         });
+    }
 
     ~BaseClient() => Dispose();
     #endregion private methods
@@ -216,13 +236,13 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     #region FFI function declarations
 
     private delegate void StringAction(ulong index, int strLen, IntPtr strPtr);
-    private delegate void FailureAction(ulong index);
+    private delegate void FailureAction(ulong index, IntPtr strPtr, RequestErrorType err);
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "command")]
     private static extern void CommandFfi(IntPtr client, ulong index, int requestType, IntPtr args, uint argCount, IntPtr argLengths, IntPtr routeInfo);
 
     private delegate void IntAction(IntPtr arg);
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_client")]
-    private static extern IntPtr CreateClientFfi(IntPtr config, IntPtr successCallback, IntPtr failureCallback);
+    private static extern void CreateClientFfi(IntPtr config, IntPtr successCallback, IntPtr failureCallback);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_client")]
     private static extern void CloseClientFfi(IntPtr client);

@@ -2,10 +2,14 @@
 
 mod ffi;
 use ffi::{create_connection_request, create_route, ConnectionConfig, RouteInfo};
-use glide_core::{client::Client as GlideClient, request_type::RequestType};
-use redis::{RedisResult, Value};
+use glide_core::{
+    client::Client as GlideClient,
+    errors::{error_message, error_type, RequestErrorType},
+    request_type::RequestType,
+};
+use redis::Value;
 use std::{
-    ffi::{c_char, c_void, CStr},
+    ffi::{c_char, c_void, CStr, CString},
     slice::from_raw_parts,
     sync::Arc,
 };
@@ -21,59 +25,86 @@ pub enum Level {
     Off = 5,
 }
 
-// TODO define `SuccessCallback` and `FailureCallback` types
-
 pub struct Client {
     runtime: Runtime,
     core: Arc<CommandExecutionCore>,
 }
 
+// TODO safety
+// TODO: merge with #3395 https://github.com/valkey-io/valkey-glide/pull/3395
+
+/// Success callback that is called when a command succeeds.
+///
+/// The success callback needs to copy the given data synchronously, since it will be dropped by Rust once the callback returns.
+/// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
+///
+/// `index` is a baton-pass back to the caller language to uniquely identify the promise.
+/// `message` is the value returned by the command. The 'message' is managed by Rust and is freed when the callback returns control back to the caller.
+pub type SuccessCallback = unsafe extern "C" fn(index: usize, len: i32, value: *const c_char) -> ();
+
+/// Failure callback that is called when a command fails.
+///
+/// The failure callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns.
+/// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
+///
+/// * `index` is a baton-pass back to the caller language to uniquely identify the promise.
+/// * `error_message` is an UTF-8 string storing the error message returned by server for the failed command.
+///   The `error_message` is managed by Rust and is freed when the callback returns control back to the caller.
+/// * `error_type` is the type of error returned by glide-core, depending on the [`RedisError`](redis::RedisError) returned.
+pub type FailureCallback = unsafe extern "C" fn(
+    index: usize,
+    error_message: *const c_char,
+    error_type: RequestErrorType,
+) -> ();
+
 struct CommandExecutionCore {
     client: GlideClient,
-    success_callback: unsafe extern "C" fn(usize, i32, *const c_char) -> (),
-    failure_callback: unsafe extern "C" fn(usize) -> (), // TODO - add specific error codes
+    success_callback: SuccessCallback,
+    failure_callback: FailureCallback,
 }
 
-/// # Safety
-///
-/// * `config` must be a valid [`ConnectionConfig`] pointer. See the safety documentation of [`create_connection_request`].
-unsafe fn create_client_internal(
-    config: *const ConnectionConfig,
-    success_callback: unsafe extern "C" fn(usize, i32, *const c_char) -> (),
-    failure_callback: unsafe extern "C" fn(usize) -> (),
-) -> RedisResult<Client> {
-    let request = unsafe { create_connection_request(config) };
-    let runtime = Builder::new_multi_thread()
-        .enable_all()
-        .thread_name("GLIDE C# thread")
-        .build()?;
-    let _runtime_handle = runtime.enter();
-    let client = runtime.block_on(GlideClient::new(request, None)).unwrap(); // TODO - handle errors.
-    let core = Arc::new(CommandExecutionCore {
-        success_callback,
-        failure_callback,
-        client,
-    });
-    Ok(Client { runtime, core })
-}
-
+// TODO make this async if possible
 /// Creates a new client with the given configuration.
 /// The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns.
 /// All callbacks should be offloaded to separate threads in order not to exhaust the client's thread pool.
 ///
 /// # Safety
 ///
-/// * `config` must be a valid [`ConnectionConfig`] pointer. See the safety documentation of [`create_client_internal`].
+/// * `config` must be a valid [`ConnectionConfig`] pointer. See the safety documentation of [`create_connection_request`].
 #[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
 pub unsafe extern "C" fn create_client(
     config: *const ConnectionConfig,
-    success_callback: unsafe extern "C" fn(usize, i32, *const c_char) -> (),
-    failure_callback: unsafe extern "C" fn(usize) -> (),
-) -> *const c_void {
-    match unsafe { create_client_internal(config, success_callback, failure_callback) } {
-        Err(_) => std::ptr::null(), // TODO - log errors
-        Ok(client) => Arc::into_raw(Arc::new(client)) as *const c_void,
+    success_callback: SuccessCallback,
+    failure_callback: FailureCallback,
+) {
+    let request = unsafe { create_connection_request(config) };
+    let runtime = Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("GLIDE C# thread")
+        .build()
+        .unwrap();
+
+    let _runtime_handle = runtime.enter();
+    let res = runtime.block_on(GlideClient::new(request, None));
+    match res {
+        Ok(client) => {
+            let core = Arc::new(CommandExecutionCore {
+                success_callback,
+                failure_callback,
+                client,
+            });
+
+            let client_ptr = Arc::into_raw(Arc::new(Client { runtime, core }));
+            unsafe { success_callback(0, -1, client_ptr as *const i8) };
+        }
+        Err(err) => {
+            let err_ptr = CString::into_raw(
+                CString::new(err.to_string()).expect("Couldn't convert error message to CString"),
+            );
+            unsafe { failure_callback(0, err_ptr, RequestErrorType::Disconnect) };
+            _ = CString::from_raw(err_ptr);
+        }
     }
 }
 
@@ -126,6 +157,7 @@ fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*const T, usize) {
     (vec_ptr, len)
 }
 
+// TODO handle panic if possible
 /// Execute a command.
 /// Expects that arguments will be kept valid until the callback is called.
 ///
@@ -160,10 +192,13 @@ pub unsafe extern "C" fn command(
 
     // Create the command outside of the task to ensure that the command arguments passed are still valid
     let Some(mut cmd) = request_type.get_command() else {
-        unsafe {
-            (core.failure_callback)(callback_index); // TODO - report errors
-            return;
-        }
+        let err_str = "Couldn't fetch command type";
+        let err_ptr = CString::into_raw(
+            CString::new(err_str).expect("Couldn't convert error message to CString"),
+        );
+        unsafe { (core.failure_callback)(callback_index, err_ptr, RequestErrorType::ExecAbort) };
+        _ = CString::from_raw(err_ptr);
+        return;
     };
     for command_arg in arg_vec {
         cmd.arg(command_arg);
@@ -193,12 +228,22 @@ pub unsafe extern "C" fn command(
                 }
                 Ok(Value::Nil) => (core.success_callback)(callback_index, 0, std::ptr::null()),
                 Err(err) => {
-                    dbg!(err); // TODO - report errors
-                    (core.failure_callback)(callback_index)
+                    let err_str = error_message(&err);
+                    let err_ptr = CString::into_raw(
+                        CString::new(err_str).expect("Couldn't convert error message to CString"),
+                    );
+                    (core.failure_callback)(callback_index, err_ptr, error_type(&err));
+                    _ = CString::from_raw(err_ptr);
                 }
                 Ok(value) => {
-                    dbg!(value); // TODO - handle other response types
-                    (core.failure_callback)(callback_index)
+                    dbg!(value);
+                    // TODO: merge with #3395 https://github.com/valkey-io/valkey-glide/pull/3395 and remove this
+                    let err_str = "Couldn't process this value";
+                    let err_ptr = CString::into_raw(
+                        CString::new(err_str).expect("Couldn't convert error message to CString"),
+                    );
+                    (core.failure_callback)(callback_index, err_ptr, RequestErrorType::ExecAbort);
+                    _ = CString::from_raw(err_ptr);
                 }
             };
         };

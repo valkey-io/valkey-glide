@@ -26,8 +26,8 @@ public class TestConfiguration : IDisposable
             .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
             .WithRequestTimeout(10000);
 
-    public static GlideClient DefaultStandaloneClient() => new(DefaultClientConfig().Build());
-    public static GlideClusterClient DefaultClusterClient() => new(DefaultClusterClientConfig().Build());
+    public static GlideClient DefaultStandaloneClient() => GlideClient.CreateClient(DefaultClientConfig().Build()).Result;
+    public static GlideClusterClient DefaultClusterClient() => GlideClusterClient.CreateClient(DefaultClusterClientConfig().Build()).Result;
 
     private static TheoryData<BaseClient> s_testClients = [];
 
