@@ -42,12 +42,12 @@ If you have any questions, feature requests, encounter issues, or need assistanc
 
 ## Known issues
 
-GLIDE has a native component as a Rust based library. Currently the native componnent is not compatible with certion older GLIBC based OS's.
+GLIDE has a native component as a Rust based library. Currently the native component is not compatible with certain older GLIBC based OS's.
 The most relevant one is Debian 11, which is the base of ubuntu 20, which some other distros are based on, like Mint and Pop!_OS 20 etc. As a result, the ones mentioned above are incompatible with GLIDE.
 
-Another OS which is known to be incompatible is Amazon Linux 2, which is the previoues versions of what [AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) is running on (node 18, py <=11, java <= 17). Note that this is not affecting MUSL based distros, which are not based on GLIBC.
+Another OS which is known to be incompatible is Amazon Linux 2, which is the previous versions of what [AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) is running on (node 18, py <=11, java <= 17). Note that this is not affecting MUSL based distros, which are not based on GLIBC.
 
-For all the incompatible Linux distros listed, there's at least one newer and stable version available, and it is recomended to use them.
+For all the incompatible Linux distros listed, there's at least one newer and stable version available, and it is recommended to use them.
 
 | Incompatible Distro Version | Compatible Successor Version |
 |-----------------------------|------------------------------|
