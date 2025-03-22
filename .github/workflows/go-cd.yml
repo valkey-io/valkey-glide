@@ -94,6 +94,9 @@ jobs:
             matrix:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         runs-on: ${{ matrix.host.RUNNER }}
+        container:
+            image: ${{ matrix.host.IMAGE || '' }}
+            options: ${{ matrix.host.CONTAINER_OPTIONS || 'none'}}
         steps:
             - name: Setup self-hosted runner access
               run: |
