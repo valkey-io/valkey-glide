@@ -61,31 +61,48 @@ public abstract class ConnectionConfiguration
     /// reconnect attempt is successful. The client will attempt to reconnect indefinitely.
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    public struct RetryStrategy(uint numberOfRetries, uint factor, uint exponentBase)
+    public struct RetryStrategy
     {
         /// <summary>
         /// Number of retry attempts that the client should perform when disconnected from the server,
         /// where the time between retries increases. Once the retries have reached the maximum value, the
         /// time between retries will remain constant until a reconnect attempt is successful.
         /// </summary>
-        public uint NumberOfRetries = numberOfRetries;
+        public uint NumberOfRetries;
         /// <summary>
         /// The multiplier that will be applied to the waiting time between each retry.
         /// </summary>
-        public uint Factor = factor;
+        public uint Factor;
         /// <summary>
         /// The exponent base configured for the strategy.
         /// </summary>
-        public uint ExponentBase = exponentBase;
+        public uint ExponentBase;
+
+        /// <inheritdoc cref="RetryStrategy" />
+        /// <param name="numberOfRetries"><inheritdoc cref="NumberOfRetries" path="/summary" /></param>
+        /// <param name="factor"><inheritdoc cref="Factor" path="/summary" /></param>
+        /// <param name="exponentBase"><inheritdoc cref="ExponentBase" path="/summary" /></param>
+        public RetryStrategy(uint numberOfRetries, uint factor, uint exponentBase)
+        {
+            NumberOfRetries = numberOfRetries;
+            Factor = factor;
+            ExponentBase = exponentBase;
+        }
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct AuthenticationInfo(string? username, string password)
+    internal struct AuthenticationInfo
     {
         [MarshalAs(UnmanagedType.LPStr)]
-        public string? Username = username;
+        public string? Username;
         [MarshalAs(UnmanagedType.LPStr)]
-        public string Password = password;
+        public string Password;
+
+        public AuthenticationInfo(string? username, string password)
+        {
+            Username = username;
+            Password = password;
+        }
     }
 
     internal enum TlsMode : uint
@@ -223,7 +240,7 @@ public abstract class ConnectionConfiguration
         }
 
         #region address
-        private readonly List<NodeAddress> _addresses = [];
+        private readonly List<NodeAddress> _addresses = new();
 
         /// <inheritdoc cref="Addresses"/>
         /// <b>Add</b> a new address to the list.<br />

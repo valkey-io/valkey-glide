@@ -15,10 +15,10 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 {
     #region public methods
     public async Task<string> Set(GlideString key, GlideString value)
-        => await Command(RequestType.Set, [key, value], HandleOk);
+        => await Command(RequestType.Set, Args(key, value), HandleOk);
 
     public async Task<GlideString?> Get(GlideString key)
-        => await Command(RequestType.Get, [key], response => HandleServerResponse<GlideString>(response, true));
+        => await Command(RequestType.Get, Args(key), response => HandleServerResponse<GlideString>(response, true));
 
     public void Dispose()
     {
@@ -55,6 +55,9 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     }
 
     protected delegate T ResponseHandler<T>(object? response);
+
+    // Syntax sugar - use `Args(a, b, c)` instead of `new GlideString[] { a, b, c }`
+    internal static GlideString[] Args(params GlideString[] args) => args;
 
     protected async Task<T> Command<T>(RequestType requestType, GlideString[] arguments, ResponseHandler<T> responseHandler, Route? route = null) where T : class?
     {

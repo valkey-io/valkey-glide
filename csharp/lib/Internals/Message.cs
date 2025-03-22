@@ -8,12 +8,12 @@ using Glide.Internals;
 /// Reusable source of ValueTask. This object can be allocated once and then reused
 /// to create multiple asynchronous operations, as long as each call to CreateTask
 /// is awaited to completion before the next call begins.
-internal class Message(int index, MessageContainer container) : INotifyCompletion
+internal class Message : INotifyCompletion
 {
     /// This is the index of the message in an external array, that allows the user to
     /// know how to find the message and set its result.
-    public int Index { get; } = index;
-    private MessageContainer Container { get; } = container;
+    public int Index { get; }
+    private MessageContainer Container { get; }
     private Action? _continuation = () => { };
     private const int COMPLETION_STAGE_STARTED = 0;
     private const int COMPLETION_STAGE_NEXT_SHOULD_EXECUTE_CONTINUATION = 1;
@@ -25,6 +25,12 @@ internal class Message(int index, MessageContainer container) : INotifyCompletio
 #pragma warning disable IDE0052 // Remove unread private members
     private object? _client;
 #pragma warning restore IDE0052 // Remove unread private members
+
+    internal Message(int index, MessageContainer container)
+    {
+        Index = index;
+        Container = container;
+    }
 
     /// Triggers a succesful completion of the task returned from the latest call
     /// to CreateTask.
