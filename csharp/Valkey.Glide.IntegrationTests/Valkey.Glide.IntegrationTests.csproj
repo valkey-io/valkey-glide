@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Valkey.Glide.IntegrationTests</RootNamespace>
+    <AssemblyName>Valkey.Glide.IntegrationTests</AssemblyName>
     <Nullable>enable</Nullable>
     <LangVersion>12.0</LangVersion>
     <IsPackable>false</IsPackable>
@@ -15,6 +17,7 @@
     <IsPackable>false</IsPackable>
     <OutputType>exe</OutputType>
     <Configurations>Debug;Release;Lint</Configurations>
+    <RootNamespace>tests</RootNamespace>
   </PropertyGroup>
 
   <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
@@ -49,7 +52,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\lib\glide.csproj" />
+    <ProjectReference Include="..\sources\Valkey.Glide\Valkey.Glide.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -58,7 +61,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <Using Include="Glide" />
+    <Using Include="Valkey.Glide" />
   </ItemGroup>
 
 </Project>
