@@ -33,4 +33,6 @@ type ServerManagementCommands interface {
 	FlushDB() (string, error)
 
 	FlushDBWithOptions(mode options.FlushMode) (string, error)
+
+	ConfigRewrite() (string, error)
 }
