@@ -99,9 +99,15 @@ public class ConnectionManager {
                             .build());
         }
 
-        connectionRequestBuilder
-                .setTlsMode(configuration.isUseTLS() ? TlsMode.SecureTls : TlsMode.NoTls)
-                .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
+        if (configuration.isUseTLS()) {
+            connectionRequestBuilder
+                    .setTlsMode(configuration.isUseInsecureTLS() ? TlsMode.InsecureTls : TlsMode.SecureTls)
+                    .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
+        } else {
+            connectionRequestBuilder
+                    .setTlsMode(TlsMode.NoTls)
+                    .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
+        }
 
         if (configuration.getCredentials() != null) {
             AuthenticationInfo.Builder authenticationInfoBuilder = AuthenticationInfo.newBuilder();
