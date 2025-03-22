@@ -61,7 +61,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <Using Include="Glide" />
+    <Using Include="Valkey.Glide" />
   </ItemGroup>
 
 </Project>
