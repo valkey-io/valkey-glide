@@ -29,6 +29,7 @@ runs:
         - name: Get GLIBC Version
           id: glibc
           if: ${{!contains(inputs.target, 'aarch64-unknown') }}
+          shell: bash
           run: |
               if [[ "${{ inputs.target }}" =~ linux-gnu ]]; then
                 GLIBC_VERSION=$(ldd --version | head -n1 | awk '{print $NF}')
