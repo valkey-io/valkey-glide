@@ -9,7 +9,9 @@ use glide_core::connection_request;
 use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
+use glide_core::response::Response;
 use glide_core::ConnectionRequest;
+use glide_core::{connection_request, response};
 use protobuf::Message;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
@@ -20,6 +22,7 @@ use redis::ScanStateRC;
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, RedisResult, Value};
 use std::ffi::CStr;
+use std::ptr::from_mut;
 use std::slice::from_raw_parts;
 use std::str;
 use std::sync::Arc;
@@ -125,6 +128,18 @@ pub type FailureCallback = unsafe extern "C" fn(
     error_type: RequestErrorType,
 ) -> ();
 
+/// PubSub callback that is called when a push notification is received.
+///
+/// The PubSub callback needs to handle the push notification synchronously, since the data will be dropped by Rust once the callback returns.
+/// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
+///
+/// `kind` is an integer representing the PushKind enum value (0=Disconnection, 1=Other, 2=Invalidate, 3=Message, etc.)
+/// `data_ptr` is a pointer to the CommandResponse containing the push data
+pub type PubSubCallback = unsafe extern "C" fn(
+    kind: u32,
+    data_ptr: *const CommandResponse,
+) -> ();
+
 /// The connection response.
 ///
 /// It contains either a connection or an error. It is represented as a struct instead of a union for ease of use in the wrapper language.
@@ -152,7 +167,10 @@ fn create_client_internal(
     connection_request_bytes: &[u8],
     success_callback: SuccessCallback,
     failure_callback: FailureCallback,
+    pubsub_callback: PubSubCallback,
 ) -> Result<ClientAdapter, String> {
+    let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
+
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
     // TODO: optimize this using multiple threads instead of a single worker thread (e.g. by pinning each go thread to a rust thread)
@@ -166,8 +184,57 @@ fn create_client_internal(
             errors::error_message(&redis_error)
         })?;
     let client = runtime
-        .block_on(GlideClient::new(ConnectionRequest::from(request), None))
+        .block_on(GlideClient::new(
+            ConnectionRequest::from(request),
+            Some(push_tx),
+        ))
         .map_err(|err| err.to_string())?;
+
+    runtime.spawn(async move {
+        loop {
+            let result = push_rx.recv().await;
+            match result {
+                None => {
+                    //log_error("push manager loop", "got None from push manager");
+                    return;
+                }
+                Some(push_msg) => {
+                    //log_debug("push manager loop", format!("got PushInfo: {:?}", push_msg));
+                    
+                    // Convert the push_msg.data to a CommandResponse
+                    let data_response = match valkey_value_to_command_response(Value::Array(push_msg.data)) {
+                        Ok(response) => response,
+                        Err(_) => continue, // Skip this message if conversion fails
+                    };
+                    
+                    // Get the numeric value of the PushKind enum
+                    let kind_value = match push_msg.kind {
+                        redis::PushKind::Disconnection => 0,
+                        redis::PushKind::Other(_) => 1,
+                        redis::PushKind::Invalidate => 2,
+                        redis::PushKind::Message => 3,
+                        redis::PushKind::PMessage => 4,
+                        redis::PushKind::SMessage => 5,
+                        redis::PushKind::Unsubscribe => 6,
+                        redis::PushKind::PUnsubscribe => 7,
+                        redis::PushKind::SUnsubscribe => 8,
+                        redis::PushKind::Subscribe => 9,
+                        redis::PushKind::PSubscribe => 10,
+                        redis::PushKind::SSubscribe => 11,
+                    };
+                    
+                    // Call the pubsub callback with the push notification data
+                    unsafe {
+                        pubsub_callback(
+                            kind_value,
+                            Box::into_raw(Box::new(data_response)),
+                        );
+                    }
+                }
+            }
+        }
+    });
+
     let core = Arc::new(CommandExecutionCore {
         success_callback,
         failure_callback,
@@ -199,10 +266,18 @@ pub unsafe extern "C" fn create_client(
     connection_request_len: usize,
     success_callback: SuccessCallback,
     failure_callback: FailureCallback,
+    pubsub_callback: PubSubCallback,
+    // need to add a callback for pubsub
 ) -> *const ConnectionResponse {
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
-    let response = match create_client_internal(request_bytes, success_callback, failure_callback) {
+    let response = match create_client_internal(
+        request_bytes,
+        success_callback,
+        failure_callback,
+        pubsub_callback,
+    ) {
+        // add the callback for pubsub
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
