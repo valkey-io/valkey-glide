@@ -26,6 +26,16 @@ runs:
     # TODO: self-hosted runners are actually cloning the repo, using the cache from the previous run
     # will not work as expected. We need to find a way to cache the valkey repo on the runner itself.
     steps:
+        - name: Get GLIBC Version
+        id: glibc
+        if: ${{!contains(inputs.target, 'aarch64-unknown') }}
+        run: |
+          if [[ "${{ inputs.target }}" =~ linux-gnu ]]; then
+            GLIBC_VERSION=$(ldd --version | head -n1 | awk '{print $NF}')
+            echo "GLIBC_VERSION=$GLIBC_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "GLIBC_VERSION=" >> $GITHUB_OUTPUT
+          fi
         - name: Cache Valkey for non self hosted runners
           if: ${{!contains(inputs.target, 'aarch64-unknown') }}
           uses: actions/cache@v4
@@ -33,7 +43,7 @@ runs:
           with:
               path: |
                   ~/valkey
-              key: valkey-${{ inputs.engine-version }}-${{ inputs.target }}
+              key: valkey-${{ inputs.engine-version }}-${{ inputs.target }}-${{ steps.glibc.outputs.GLIBC_VERSION }}
 
         - name: Prepare Valkey sources
           if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
