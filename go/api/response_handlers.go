@@ -215,6 +215,33 @@ func handle2DStringArrayResponse(response *C.struct_CommandResponse) ([][]string
 	return res, nil
 }
 
+func handle2DFloat64OrNullArrayResponse(response *C.struct_CommandResponse) ([][]float64, error) {
+	defer C.free_command_response(response)
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	array, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := arrayConverter[[]float64]{
+		arrayConverter[float64]{
+			nil,
+			false,
+		},
+		false,
+	}.convert(array)
+	if err != nil {
+		return nil, err
+	}
+	res, ok := converted.([][]float64)
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+	}
+	return res, nil
+}
+
 func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
 	defer C.free_command_response(response)
 
