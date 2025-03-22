@@ -100,17 +100,16 @@ jobs:
                   sudo apt-get update
                   sudo apt-get install -y npm
 
+            # As per https://github.com/actions/setup-dotnet/issues/608, it is nice to have (but mandatory for mac runners)
+            - name: Create global.json
+              run: dotnet new globaljson --sdk-version ${{ matrix.dotnet }}.0 --roll-forward latestFeature
+
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
                   dotnet-version: ${{ matrix.dotnet }}
               env:
                   DOTNET_INSTALL_DIR: ~/.dotnet
-
-            # workaround for https://github.com/actions/setup-dotnet/issues/608
-            - name: Fix dotnet installation on mac
-              if: ${{ matrix.host.OS == 'macos' }}
-              run: dotnet new globaljson --sdk-version ${{ matrix.dotnet }}.0 --roll-forward latestFeature
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
