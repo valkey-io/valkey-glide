@@ -3,16 +3,13 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
-
 using CommandLine;
-
-using Glide;
-
 using LinqStatistics;
-
 using StackExchange.Redis;
+using Valkey.Glide;
+using static Valkey.Glide.ConnectionConfiguration;
 
-using static Glide.ConnectionConfiguration;
+namespace csharp_benchmark;
 
 public static class MainClass
 {
