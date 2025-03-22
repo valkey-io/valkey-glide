@@ -15,6 +15,7 @@
     <IsPackable>false</IsPackable>
     <OutputType>exe</OutputType>
     <Configurations>Debug;Release;Lint</Configurations>
+    <RootNamespace>tests</RootNamespace>
   </PropertyGroup>
 
   <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
