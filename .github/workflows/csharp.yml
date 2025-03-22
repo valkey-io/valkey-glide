@@ -102,7 +102,15 @@ jobs:
 
             # As per https://github.com/actions/setup-dotnet/issues/608, it is nice to have (but mandatory for mac runners)
             - name: Create global.json
-              run: echo "{ \"sdk\": { \"rollForward\": \"latestFeature\", \"version\": \"${{ matrix.dotnet }}.0\" } }" > global.json
+              run: |
+                  cat << EOF > global.json
+                  {
+                     "sdk": {
+                         "rollForward": "latestFeature",
+                         "version": "${{ matrix.dotnet }}.0"
+                     }
+                  }
+                  EOF
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
