@@ -6,10 +6,9 @@ using System.Text.Json;
 using CommandLine;
 using LinqStatistics;
 using StackExchange.Redis;
-using Valkey.Glide;
 using static Valkey.Glide.ConnectionConfiguration;
 
-namespace csharp_benchmark;
+namespace Valkey.Glide.CustomBenchmark;
 
 public static class MainClass
 {

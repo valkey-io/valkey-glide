@@ -33,17 +33,24 @@
     <NoWarn>$(NoWarn);CS1591;CS1573;CS1587</NoWarn>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Valkey.Glide.IntegrationTests" />
+    <InternalsVisibleTo Include="Valkey.Glide.UnitTests" />
+  </ItemGroup>
+
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
     <Exec Condition="'$(Configuration)' == 'Debug'"
           Command="cargo build"
           EnvironmentVariables="CARGO_TERM_COLOR=always"
-          ConsoleToMSBuild="true">
+          ConsoleToMSBuild="true"
+          WorkingDirectory="$(SolutionDir)/rust">
       <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
     </Exec>
     <Exec Condition="'$(Configuration)' == 'Release'"
           Command="cargo build --release"
           EnvironmentVariables="CARGO_TERM_COLOR=always"
-          ConsoleToMSBuild="true">
+          ConsoleToMSBuild="true"
+          WorkingDirectory="$(SolutionDir)/rust">
       <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
     </Exec>
   </Target>
