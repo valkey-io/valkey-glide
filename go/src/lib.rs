@@ -9,9 +9,8 @@ use glide_core::connection_request;
 use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
-use glide_core::response::Response;
 use glide_core::ConnectionRequest;
-use glide_core::{connection_request, response};
+use glide_core::{connection_request};
 use protobuf::Message;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
@@ -22,7 +21,6 @@ use redis::ScanStateRC;
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, RedisResult, Value};
 use std::ffi::CStr;
-use std::ptr::from_mut;
 use std::slice::from_raw_parts;
 use std::str;
 use std::sync::Arc;
@@ -200,11 +198,18 @@ fn create_client_internal(
                 }
                 Some(push_msg) => {
                     //log_debug("push manager loop", format!("got PushInfo: {:?}", push_msg));
+                    dbg!("Push message data:", &push_msg.data);
                     
                     // Convert the push_msg.data to a CommandResponse
-                    let data_response = match valkey_value_to_command_response(Value::Array(push_msg.data)) {
-                        Ok(response) => response,
-                        Err(_) => continue, // Skip this message if conversion fails
+                    let data_response = match valkey_value_to_command_response(Value::Array(push_msg.data.clone())) {
+                        Ok(response) => {
+                            dbg!("Converted response:", &response);
+                            response
+                        },
+                        Err(e) => {
+                            dbg!("Conversion error:", &e);
+                            continue; // Skip this message if conversion fails
+                        }
                     };
                     
                     // Get the numeric value of the PushKind enum
@@ -223,6 +228,8 @@ fn create_client_internal(
                         redis::PushKind::SSubscribe => 11,
                     };
                     
+                    dbg!(&data_response);
+
                     // Call the pubsub callback with the push notification data
                     unsafe {
                         pubsub_callback(
