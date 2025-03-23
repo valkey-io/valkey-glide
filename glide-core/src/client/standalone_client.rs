@@ -604,7 +604,7 @@ impl StandaloneClient {
         });
     }
 
-    /// Update the password used to authenticate with the server.
+    /// Update the password used to authenticate with the servers.
     /// If the password is `None`, the password will be removed.
     pub async fn update_connection_password(
         &self,

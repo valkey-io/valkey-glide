@@ -484,17 +484,7 @@ public class TestUtilities {
                     client
                             .customCommand(
                                     new String[] {
-                                        "ACL",
-                                        "SETUSER",
-                                        username,
-                                        "on",
-                                        "allkeys",
-                                        "+get",
-                                        "+cluster",
-                                        "+ping",
-                                        "+info",
-                                        "+client",
-                                        ">" + password,
+                                        "ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all",
                                     })
                             .get());
         } catch (InterruptedException e) {
@@ -535,17 +525,7 @@ public class TestUtilities {
                     client
                             .customCommand(
                                     new String[] {
-                                        "ACL",
-                                        "SETUSER",
-                                        username,
-                                        "on",
-                                        "allkeys",
-                                        "+get",
-                                        "+cluster",
-                                        "+ping",
-                                        "+info",
-                                        "+client",
-                                        ">" + password,
+                                        "ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all",
                                     })
                             .get()
                             .getSingleValue());

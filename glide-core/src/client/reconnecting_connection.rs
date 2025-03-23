@@ -21,6 +21,9 @@ use tokio_retry2::{Retry, RetryError};
 
 use super::{run_with_timeout, DEFAULT_CONNECTION_TIMEOUT};
 
+const WRITE_LOCK_ERR: &str = "Failed to acquire the write lock";
+const READ_LOCK_ERR: &str = "Failed to acquire the read lock";
+
 /// The reason behind the call to `reconnect()`
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum ReconnectReason {
@@ -124,7 +127,7 @@ async fn create_connection(
         let guard = connection_backend
             .connection_info
             .read()
-            .expect("READ_LOCK_ERR");
+            .expect(READ_LOCK_ERR);
         guard.clone()
     };
 
@@ -216,7 +219,7 @@ fn internal_retry_iterator() -> impl Iterator<Item = Duration> {
 impl ConnectionBackend {
     /// Returns a read-only reference to the client's connection information
     fn get_backend_client(&self) -> RwLockReadGuard<'_, redis::Client> {
-        self.connection_info.read().expect("READ_LOCK_ERR")
+        self.connection_info.read().expect(READ_LOCK_ERR)
     }
 }
 
@@ -391,18 +394,13 @@ impl ReconnectingConnection {
             .backend
             .connection_info
             .write()
-            .expect("WRITE_LOCK_ERR");
+            .expect(WRITE_LOCK_ERR);
         client.update_password(new_password);
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
     pub(crate) fn get_username(&self) -> Option<String> {
-        let client = self
-            .inner
-            .backend
-            .connection_info
-            .read()
-            .expect("READ_LOCK_ERR");
+        let client = self.inner.backend.get_backend_client();
         client.get_connection_info().redis.username.clone()
     }
 }

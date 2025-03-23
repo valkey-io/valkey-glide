@@ -263,6 +263,7 @@ public class StandaloneClientTests {
                                     commonClientConfig()
                                             .credentials(
                                                     ServerCredentials.builder().username(username).password(pwd).build())
+                                            .requestTimeout(5000)
                                             .build())
                             .get();
 
@@ -313,6 +314,7 @@ public class StandaloneClientTests {
                                     commonClientConfig()
                                             .credentials(
                                                     ServerCredentials.builder().username(username).password(pwd).build())
+                                            .requestTimeout(5000)
                                             .build())
                             .get();
 
