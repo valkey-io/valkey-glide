@@ -20,6 +20,7 @@
 * Go: Add `FLUSHALL` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
 * Go: Add `FLUSHDB` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
 * Go: Add password update api ([#3346](https://github.com/valkey-io/valkey-glide/pull/3346))
+* Add/update documentation for `GlideClient` and `GlideClusterClient` and for factory constructor for all clients ([#3418](https://github.com/valkey-io/valkey-glide/pull/3418))
 
 #### Breaking Changes
 
