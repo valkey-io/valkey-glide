@@ -96,7 +96,6 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
         container:
             image: ${{ matrix.host.IMAGE || '' }}
-            options: ${{ matrix.host.CONTAINER_OPTIONS || '' }}
         steps:
             - name: Setup self-hosted runner access
               run: |
