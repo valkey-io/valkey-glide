@@ -264,7 +264,7 @@ async def create_client(
     # Create async socket client
     use_tls = request.config.getoption("--tls")
     if cluster_mode:
-        valkey_cluster = valkey_cluster or pytest.valkey_cluster
+        valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
         assert database_id == 0
         k = min(3, len(valkey_cluster.nodes_addr))
