@@ -6,11 +6,15 @@ indent_size = 2
 #### .NET & C# Coding Conventions ####
 [*.cs]
 
+# Common preferences
+insert_final_newline = true
+max_line_length = 120
+
 # License header
 file_header_template = Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 # Organize usings
-dotnet_separate_import_directive_groups = true
+dotnet_separate_import_directive_groups = false
 dotnet_sort_system_directives_first = true
 
 # this. and Me. preferences
