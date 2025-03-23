@@ -71,7 +71,6 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRout
 import glide.api.models.configuration.ServerCredentials;
 import glide.ffi.resolvers.ClusterScanCursorResolver;
 import glide.managers.CommandManager;
-import glide.models.protobuf.response.ResponseOuterClass.Response;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -82,6 +81,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.NonNull;
+import response.ResponseOuterClass.Response;
 
 /**
  * Client used for connection to cluster servers.<br>

@@ -81,7 +81,8 @@ class BaseClient(CoreCommands):
         """Creates a Glide client.
 
         Args:
-            config (ClientConfiguration): The configuration options for the client, including cluster addresses, authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
+            config (ClientConfiguration): The configuration options for the client, including cluster addresses,
+            authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
 
         Returns:
             Self: A promise that resolves to a connected client instance.
@@ -106,7 +107,8 @@ class BaseClient(CoreCommands):
             >>> client = await GlideClient.create(config)
 
             # Connecting to a Cluster
-            >>> from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient, PeriodicChecksManualInterval
+            >>> from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient,
+            ... PeriodicChecksManualInterval
             >>> config = GlideClusterClientConfiguration(
             ...     [
             ...         NodeAddress('address1.example.com', 6379),
@@ -128,14 +130,20 @@ class BaseClient(CoreCommands):
 
         Remarks:
             Use this static method to create and connect a client to a Valkey server.
-            The client will automatically handle connection establishment, including cluster topology discovery and handling of authentication and TLS configurations.
+            The client will automatically handle connection establishment, including cluster topology discovery and
+            handling of authentication and TLS configurations.
 
-                - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based on the seed addresses provided.
-                - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate using the specified username and password.
+                - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based
+                  on the seed addresses provided.
+                - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
+                  using the specified username and password.
                 - **TLS**: If `use_tls` is set to `true`, the client will establish secure connections using TLS.
-                - **Periodic Checks**: The `periodic_checks` setting allows you to configure how often the client checks for cluster topology changes.
-                - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect in case of disconnections.
-                - **Pub/Sub Subscriptions**: Any channels or patterns specified in `PubSubSubscriptions` will be subscribed to upon connection.
+                - **Periodic Checks**: The `periodic_checks` setting allows you to configure how often the client
+                  checks for cluster topology changes.
+                - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to
+                  reconnect in case of disconnections.
+                - **Pub/Sub Subscriptions**: Any channels or patterns specified in `PubSubSubscriptions` will be
+                  subscribed to upon connection.
 
         """
         config = config
