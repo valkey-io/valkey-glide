@@ -897,7 +897,7 @@ impl fmt::Debug for RedisError {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub(crate) enum RetryMethod {
     Reconnect,
     ReconnectAndRetry,
