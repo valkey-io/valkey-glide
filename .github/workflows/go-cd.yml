@@ -96,6 +96,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
         container:
             image: ${{ matrix.host.IMAGE || '' }}
+            options: ${{ matrix.host.CONTAINER_OPTIONS || '--user root'}}
         steps:
             - name: Setup self-hosted runner access
               run: |
@@ -107,7 +108,8 @@ jobs:
                   else
                     echo "No cleaning needed"
                   fi
-            - name: Install Node.js 16
+            - name: Install Node.js 16 on amazon-linux
+              if: ${{ matrix.host.OS == 'amazon-linux' }}
               run: |
                   yum update -y
                   curl -fsSL https://rpm.nodesource.com/setup_16.x | bash -
