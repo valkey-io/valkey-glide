@@ -9,10 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func defaultResponseResolver(response any) (any, error) {
-	return response, nil
-}
-
 func TestPubSubPushKind(t *testing.T) {
 	var kind PushKind = Message
 
