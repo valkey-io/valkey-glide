@@ -10,6 +10,10 @@ use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
 use glide_core::ConnectionRequest;
+
+// Telemetry required for get_statistics
+use glide_core::Telemetry;
+
 use protobuf::Message;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
@@ -922,4 +926,78 @@ pub unsafe extern "C" fn update_connection_password(
             };
         }
     });
+}
+
+/// Returns statistics collected for this process.
+///
+/// This function is meant to be invoked by Go using CGO.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `channel` must be Go channel pointer and must be valid until either `success_callback` or `failure_callback` is finished.
+#[no_mangle]
+pub unsafe extern "C" fn get_statistics(client_adapter_ptr: *const c_void, channel: usize) {
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+    let core = client_adapter.core.clone();
+
+    // Execute on the runtime to maintain async pattern used elsewhere
+    client_adapter.runtime.spawn(async move {
+        // Create a map of statistics
+        let mut map = Vec::new();
+
+        // Add statistics to the map as strings
+        add_string_stat_to_map(
+            &mut map,
+            "total_connections",
+            &format!("{}", Telemetry::total_connections()),
+        );
+
+        add_string_stat_to_map(
+            &mut map,
+            "total_clients",
+            &format!("{}", Telemetry::total_clients()),
+        );
+
+        // Create the CommandResponse containing the map
+        let mut command_response = CommandResponse::default();
+        let (vec_ptr, len) = convert_vec_to_pointer(map);
+        command_response.array_value = vec_ptr;
+        command_response.array_value_len = len;
+        command_response.response_type = ResponseType::Map;
+
+        // Send the response via the success callback
+        unsafe { (core.success_callback)(channel, Box::into_raw(Box::new(command_response))) };
+    });
+}
+
+// Helper function to add a string statistic to the map
+fn add_string_stat_to_map(map: &mut Vec<CommandResponse>, key: &str, value: &str) {
+    // Create a CommandResponse for this key-value pair
+    let mut map_entry = CommandResponse::default();
+
+    // Create key CommandResponse (string)
+    let mut key_response = CommandResponse::default();
+    let key_bytes = key.as_bytes().to_vec();
+    let (key_ptr, key_len) = convert_vec_to_pointer(key_bytes);
+    key_response.string_value = key_ptr as *mut c_char;
+    key_response.string_value_len = key_len;
+    key_response.response_type = ResponseType::String;
+    map_entry.map_key = Box::into_raw(Box::new(key_response));
+
+    // Create value CommandResponse (string)
+    let mut value_response = CommandResponse::default();
+    let value_bytes = value.as_bytes().to_vec();
+    let (value_ptr, value_len) = convert_vec_to_pointer(value_bytes);
+    value_response.string_value = value_ptr as *mut c_char;
+    value_response.string_value_len = value_len;
+    value_response.response_type = ResponseType::String;
+    map_entry.map_value = Box::into_raw(Box::new(value_response));
+
+    // Add to the map
+    map.push(map_entry);
 }
