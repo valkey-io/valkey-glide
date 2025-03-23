@@ -3,9 +3,13 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
+
 using CommandLine;
+
 using LinqStatistics;
+
 using StackExchange.Redis;
+
 using static Valkey.Glide.ConnectionConfiguration;
 
 namespace Valkey.Glide.CustomBenchmark;
