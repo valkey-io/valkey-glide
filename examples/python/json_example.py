@@ -1,6 +1,6 @@
 import asyncio
 import json as jsonpy
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, cast
 
 from glide import AllNodes, ClosingError
 from glide import ConnectionError as GlideConnectionError
@@ -62,7 +62,7 @@ async def app_logic(client: GlideClusterClient):
     set_response = await json.set(client, "key", "$", json_str)
     Logger.log(LogLevel.INFO, "app", f"Set response is = {set_response!r}")  # 'OK'
 
-    get_response: bytes = await json.get(client, "key", "$")
+    get_response = cast(bytes, await json.get(client, "key", "$"))
     Logger.log(
         LogLevel.INFO, "app", f"Get response is = {get_response.decode()!r}"
     )  # "[{\"a\":1.0,\"b\":2}]"

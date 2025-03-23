@@ -71,7 +71,7 @@ class TestAZAffinity:
             request_timeout=2000,
             client_az=az,
         )
-        assert type(client_for_testing_az) == GlideClusterClient
+        assert type(client_for_testing_az) is GlideClusterClient
         for _ in range(GET_CALLS):
             await client_for_testing_az.get("foo")
 
@@ -136,7 +136,7 @@ class TestAZAffinity:
             request_timeout=2000,
             client_az=az,
         )
-        assert type(client_for_testing_az) == GlideClusterClient
+        assert type(client_for_testing_az) is GlideClusterClient
         azs = cast(
             Mapping[bytes, Mapping[bytes, bytes]],
             await client_for_testing_az.config_get(["availability-zone"], AllNodes()),
@@ -190,7 +190,7 @@ class TestAZAffinity:
             request_timeout=2000,
             client_az="non-existing-az",
         )
-        assert type(client_for_testing_az) == GlideClusterClient
+        assert type(client_for_testing_az) is GlideClusterClient
         assert await client_for_testing_az.config_resetstat() == OK
 
         for _ in range(GET_CALLS):
@@ -296,7 +296,7 @@ class TestAZAffinity:
             for i in range(GET_CALLS):
                 await client_for_testing_az.get("foo")
 
-            assert type(client_for_testing_az) == GlideClusterClient
+            assert type(client_for_testing_az) is GlideClusterClient
             # Collect info from all nodes
             result = await client_for_testing_az.info(
                 [
