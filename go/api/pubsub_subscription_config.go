@@ -75,7 +75,9 @@ func (config *BaseSubscriptionConfig) SetCallback(callback MessageCallback) *Bas
 
 func (config *BaseSubscriptionConfig) Validate() error {
 	if config.context != nil && config.callback == nil {
-		return &errors.PubSubConfigError{Msg: "PubSub subscriptions with a context requires a callback function to be configured"}
+		return &errors.PubSubConfigError{
+			Msg: "PubSub subscriptions with a context requires a callback function to be configured",
+		}
 	}
 	return nil
 }
@@ -121,7 +123,10 @@ func (config *StandaloneSubscriptionConfig) SetCallback(callback MessageCallback
 	return config
 }
 
-func (config *StandaloneSubscriptionConfig) WithSubscription(mode PubSubChannelMode, channelOrPattern string) *StandaloneSubscriptionConfig {
+func (config *StandaloneSubscriptionConfig) WithSubscription(
+	mode PubSubChannelMode,
+	channelOrPattern string,
+) *StandaloneSubscriptionConfig {
 	if config.subscriptions == nil {
 		config.subscriptions = make(map[uint32][]string)
 	}
@@ -180,7 +185,10 @@ func (config *ClusterSubscriptionConfig) SetCallback(callback MessageCallback) *
 	return config
 }
 
-func (config *ClusterSubscriptionConfig) WithSubscription(mode PubSubClusterChannelMode, channelOrPattern string) *ClusterSubscriptionConfig {
+func (config *ClusterSubscriptionConfig) WithSubscription(
+	mode PubSubClusterChannelMode,
+	channelOrPattern string,
+) *ClusterSubscriptionConfig {
 	if config.subscriptions == nil {
 		config.subscriptions = make(map[uint32][]string)
 	}

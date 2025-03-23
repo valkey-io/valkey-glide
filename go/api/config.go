@@ -292,7 +292,9 @@ func (config *GlideClientConfiguration) WithAdvancedConfiguration(
 }
 
 // WithSubscriptionConfig sets the subscription configuration for the client.
-func (config *GlideClientConfiguration) WithSubscriptionConfig(subscriptionConfig *StandaloneSubscriptionConfig) *GlideClientConfiguration {
+func (config *GlideClientConfiguration) WithSubscriptionConfig(
+	subscriptionConfig *StandaloneSubscriptionConfig,
+) *GlideClientConfiguration {
 	config.subscriptionConfig = subscriptionConfig
 	return config
 }
@@ -402,7 +404,9 @@ func (config *GlideClusterClientConfiguration) WithAdvancedConfiguration(
 }
 
 // WithSubscriptionConfig sets the subscription configuration for the client.
-func (config *GlideClusterClientConfiguration) WithSubscriptionConfig(subscriptionConfig *ClusterSubscriptionConfig) *GlideClusterClientConfiguration {
+func (config *GlideClusterClientConfiguration) WithSubscriptionConfig(
+	subscriptionConfig *ClusterSubscriptionConfig,
+) *GlideClusterClientConfiguration {
 	config.subscriptionConfig = subscriptionConfig
 	return config
 }

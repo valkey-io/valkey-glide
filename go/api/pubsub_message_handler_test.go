@@ -14,7 +14,6 @@ func defaultResponseResolver(response any) (any, error) {
 }
 
 func TestPubSubPushKind(t *testing.T) {
-
 	var kind PushKind = Message
 
 	assert.Equal(t, "Message", kind.String())
