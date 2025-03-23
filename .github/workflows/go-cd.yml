@@ -107,6 +107,12 @@ jobs:
                   else
                     echo "No cleaning needed"
                   fi
+            - name: Install Node.js 16
+              run: |
+                  yum update -y
+                  curl -fsSL https://rpm.nodesource.com/setup_16.x | bash -
+                  yum install -y nodejs
+                  node --version
             - uses: actions/checkout@v4
             - uses: actions/setup-go@v5
               with:
