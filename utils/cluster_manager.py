@@ -283,12 +283,25 @@ def print_servers_json(servers: List[Server]):
     print("SERVERS_JSON={}".format(json.dumps(arr)))
 
 
-def next_free_port(
-    min_port: int = 6379, max_port: int = 55535, timeout: int = 60
-) -> int:
+def approximate_ports_in_use() -> int:
+    """
+    Returns a rough count of lines from `netstat -an`.
+    Enough to see if we're in the hundreds or thousands.
+    """
+    output = subprocess.check_output(["netstat", "-an"])
+    # or ["ss", "-an"] if `netstat` isn't installed
+    lines = output.decode().splitlines()
+    return len(lines)
+
+def next_free_port(min_port: int = 6379, max_port: int = 55535, timeout: int = 60) -> int:
+    # Log how many sockets show up right now
+    num_sockets = approximate_ports_in_use()
+    logging.debug(f"Approximate lines in netstat output before binding: {num_sockets}")
+
     tic = time.perf_counter()
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     timeout_start = time.time()
+
     while time.time() < timeout_start + timeout:
         try:
             port = random.randint(min_port, max_port)
@@ -296,13 +309,15 @@ def next_free_port(
             sock.bind(("127.0.0.1", port))
             sock.close()
             toc = time.perf_counter()
-            logging.debug(f"next_free_port() is {port} Elapsed time: {toc - tic:0.4f}")
+            logging.debug(f"next_free_port() is {port} | Elapsed time: {toc - tic:0.4f}s")
             return port
+
         except OSError as e:
-            logging.warning(f"next_free_port error for port {port}: {e}")
+            logging.warning(f"next_free_port() error for port {port}: {e}")
             # Sleep so we won't spam the system with sockets
             time.sleep(random.randint(0, 9) / 10000 + 0.01)
             continue
+
     logging.error("Timeout Expired: No free port found")
     raise Exception("Timeout Expired: No free port found")
 
