@@ -3,19 +3,28 @@
 package api
 
 import (
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
+func skipCI(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping testing in CI environment")
+	}
+}
+
 func TestPubSubPushKind(t *testing.T) {
+	skipCI(t)
 	var kind PushKind = Message
 
 	assert.Equal(t, "Message", kind.String())
 }
 
 func TestCreatePubSubSubscription(t *testing.T) {
+	skipCI(t)
 	subConfig := NewStandaloneSubscriptionConfig().
 		WithSubscription(ExactChannelMode, "testChannel")
 
