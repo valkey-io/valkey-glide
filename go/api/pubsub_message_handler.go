@@ -375,7 +375,9 @@ func (queue *PubSubMessageQueue) UnregisterSignalChannel(ch chan struct{}) {
 
 	for idx, channel := range queue.nextMessageReadySignals {
 		if channel == ch {
-			queue.nextMessageReadySignals = append(queue.nextMessageReadySignals[:idx], queue.nextMessageReadySignals[idx+1:]...)
+			queue.nextMessageReadySignals = append(
+				queue.nextMessageReadySignals[:idx],
+				queue.nextMessageReadySignals[idx+1:]...)
 			break
 		}
 	}
