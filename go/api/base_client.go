@@ -14,6 +14,7 @@ package api
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
 // void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
+// void pubSubCallback(uint32_t kind, struct CommandResponse *message);
 import "C"
 
 import (
@@ -72,14 +73,108 @@ func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorTyp
 	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
 }
 
+// Global message handler that will be set when a client is created with a PubSub subscription
+var globalMessageHandler *MessageHandler
+
+//export pubSubCallback
+func pubSubCallback(kind C.uint32_t, cResponse *C.struct_CommandResponse) {
+	defer C.free_command_response(cResponse)
+
+	if globalMessageHandler == nil {
+		// No message handler registered
+		return
+	}
+
+	// Convert kind directly to PushKind enum value
+	pushKind := PushKind(kind)
+
+	fmt.Printf("Received pubsub callback with kind: %s\n", pushKind)
+
+	// Extract values from the CommandResponse
+	arrayValues, err := processCommandResponseArray(cResponse)
+	if err != nil {
+		return
+	}
+
+	// Create a direct struct for the message handler
+	pushMsg := struct {
+		Kind   PushKind
+		Values []any
+	}{
+		Kind:   pushKind,
+		Values: arrayValues,
+	}
+
+	// Process the push through the message handler
+	if globalMessageHandler != nil {
+		globalMessageHandler.Handle(pushMsg)
+	}
+}
+
+// Helper function to process a CommandResponse array into a Go slice
+func processCommandResponseArray(cResponse *C.struct_CommandResponse) ([]any, error) {
+	if cResponse.response_type != C.Array {
+		return nil, fmt.Errorf("expected array response type, got %d", cResponse.response_type)
+	}
+
+	arrayLen := int(cResponse.array_value_len)
+	arrayPtr := cResponse.array_value
+	result := make([]any, arrayLen)
+
+	// Iterate through the array elements
+	for i := 0; i < arrayLen; i++ {
+		element := unsafe.Pointer(uintptr(unsafe.Pointer(arrayPtr)) + uintptr(i)*unsafe.Sizeof(*arrayPtr))
+		elemPtr := (*C.struct_CommandResponse)(element)
+
+		// Convert element based on type
+		switch elemPtr.response_type {
+		case C.String:
+			strLen := int(elemPtr.string_value_len)
+			if strLen > 0 && elemPtr.string_value != nil {
+				bytes := C.GoBytes(unsafe.Pointer(elemPtr.string_value), C.int(strLen))
+				result[i] = bytes
+			} else {
+				result[i] = []byte{}
+			}
+		case C.Int:
+			result[i] = int64(elemPtr.int_value)
+		case C.Float:
+			result[i] = float64(elemPtr.float_value)
+		case C.Bool:
+			result[i] = bool(elemPtr.bool_value)
+		case C.Null:
+			result[i] = nil
+		default:
+			// For other types, we'd need more complex handling
+			// For simplicity, convert to string representation
+			result[i] = fmt.Sprintf("Unsupported type: %d", elemPtr.response_type)
+		}
+	}
+
+	return result, nil
+}
+
 type clientConfiguration interface {
 	toProtobuf() (*protobuf.ConnectionRequest, error)
 }
 
 type baseClient struct {
-	pending    map[unsafe.Pointer]struct{}
-	coreClient unsafe.Pointer
-	mu         sync.Mutex
+	pending        map[unsafe.Pointer]struct{}
+	coreClient     unsafe.Pointer
+	mu             sync.Mutex
+	handler        *MessageHandler
+	messageHandler *MessageHandler
+}
+
+// SetMessageHandler assigns a message handler to the client for processing pub/sub messages
+func (client *baseClient) SetMessageHandler(handler *MessageHandler) {
+	client.messageHandler = handler
+	globalMessageHandler = handler // Set global handler for FFI callbacks
+}
+
+// GetMessageHandler returns the currently assigned message handler
+func (client *baseClient) GetMessageHandler() *MessageHandler {
+	return client.messageHandler
 }
 
 // buildAsyncClientType safely initializes a C.ClientType with an AsyncClient_Body.
@@ -161,6 +256,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
 			&clientType,
+			(C.PubSubCallback)(unsafe.Pointer(C.pubSubCallback)),
 		),
 	)
 	defer C.free_connection_response(cResponse)
@@ -7622,7 +7718,7 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 // See [valkey.io] for details.
 //
 // [valkey.io]: https://valkey.io/commands/publish
-func (client *baseClient) Publish(message string, channel string) (int64, error) {
+func (client *baseClient) Publish(channel string, message string) (int64, error) {
 	if message == "" || channel == "" {
 		return 0, goErr.New("both message and channel are required for Publish command")
 	}

@@ -15,25 +15,87 @@ var (
 	ErrPubSubPushMissingValues = errors.New("received invalid push: missing values field")
 )
 
-type PushKind string
+// PushKind represents the type of push message received from the server
+type PushKind int
 
+// PushKind enum values - these match the numeric values from the Rust side
 const (
-	Disconnection PushKind = "Disconnection"
-	Other         PushKind = "Other"
-	Invalidate    PushKind = "Invalidate"
-	Message       PushKind = "Message"
-	PMessage      PushKind = "PMessage"
-	SMessage      PushKind = "SMessage"
-	Unsubscribe   PushKind = "Unsubscribe"
-	PUnsubscribe  PushKind = "PUnsubscribe"
-	SUnsubscribe  PushKind = "SUnsubscribe"
-	Subscribe     PushKind = "Subscribe"
-	PSubscribe    PushKind = "PSubscribe"
-	SSubscribe    PushKind = "SSubscribe"
+	Disconnection PushKind = iota // 0
+	Other                         // 1
+	Invalidate                    // 2
+	Message                       // 3
+	PMessage                      // 4
+	SMessage                      // 5
+	Unsubscribe                   // 6
+	PUnsubscribe                  // 7
+	SUnsubscribe                  // 8
+	Subscribe                     // 9
+	PSubscribe                    // 10
+	SSubscribe                    // 11
 )
 
+// String returns the string representation of a PushKind
 func (kind PushKind) String() string {
-	return string(kind)
+	switch kind {
+	case Disconnection:
+		return "Disconnection"
+	case Other:
+		return "Other"
+	case Invalidate:
+		return "Invalidate"
+	case Message:
+		return "Message"
+	case PMessage:
+		return "PMessage"
+	case SMessage:
+		return "SMessage"
+	case Unsubscribe:
+		return "Unsubscribe"
+	case PUnsubscribe:
+		return "PUnsubscribe"
+	case SUnsubscribe:
+		return "SUnsubscribe"
+	case Subscribe:
+		return "Subscribe"
+	case PSubscribe:
+		return "PSubscribe"
+	case SSubscribe:
+		return "SSubscribe"
+	default:
+		return fmt.Sprintf("Unknown(%d)", kind)
+	}
+}
+
+// PushKindFromString converts a string representation to a PushKind
+func PushKindFromString(s string) PushKind {
+	switch s {
+	case "Disconnection":
+		return Disconnection
+	case "Other":
+		return Other
+	case "Invalidate":
+		return Invalidate
+	case "Message":
+		return Message
+	case "PMessage":
+		return PMessage
+	case "SMessage":
+		return SMessage
+	case "Unsubscribe":
+		return Unsubscribe
+	case "PUnsubscribe":
+		return PUnsubscribe
+	case "SUnsubscribe":
+		return SUnsubscribe
+	case "Subscribe":
+		return Subscribe
+	case "PSubscribe":
+		return PSubscribe
+	case "SSubscribe":
+		return SSubscribe
+	default:
+		return Other
+	}
 }
 
 type MessageCallbackError struct {
@@ -75,57 +137,121 @@ func (handler *MessageHandler) Handle(response any) error {
 		return err
 	}
 
-	push, ok := data.(map[string]any)
-	if !ok {
+	// Handle cases where the response might be a map or might include a direct kind value
+	var kind PushKind
+	var values []any
+
+	switch v := data.(type) {
+	case map[string]any:
+		// Traditional path from Rust conversion
+		push := v
+		if len(push) == 0 {
+			log.Println("invalid push", ErrPubSubPushInvalid.Error())
+			return ErrPubSubPushInvalid
+		}
+
+		// The kind might be a string or an int, depending on the source
+		switch kindVal := push["kind"].(type) {
+		case string:
+			kind = PushKindFromString(kindVal)
+		case int:
+			kind = PushKind(kindVal)
+		case float64: // JSON numbers come as float64
+			kind = PushKind(int(kindVal))
+		default:
+			log.Println("invalid push", ErrPubSubPushMissingKind.Error())
+			return ErrPubSubPushMissingKind
+		}
+
+		// Values might be direct or nested in an array response
+		switch vals := push["values"].(type) {
+		case []any:
+			values = vals
+		case map[string]any:
+			if arr, ok := vals["array_value"].([]any); ok {
+				values = arr
+			} else {
+				log.Println("invalid push", ErrPubSubPushMissingValues.Error())
+				return ErrPubSubPushMissingValues
+			}
+		default:
+			log.Println("invalid push", ErrPubSubPushMissingValues.Error())
+			return ErrPubSubPushMissingValues
+		}
+
+	case struct {
+		Kind   PushKind
+		Values []any
+	}:
+		// Direct structure from new callback
+		kind = v.Kind
+		values = v.Values
+
+	default:
 		log.Println("invalid push", ErrPubSubPushInvalid.Error())
 		return ErrPubSubPushInvalid
 	}
 
-	kindStr, ok := push["kind"].(string)
-	if !ok {
-		log.Println("invalid push", ErrPubSubPushMissingKind.Error())
-		return ErrPubSubPushMissingKind
+	// Convert value to string based on its type
+	toString := func(v any) string {
+		switch val := v.(type) {
+		case []byte:
+			return string(val)
+		case string:
+			return val
+		case int64:
+			return fmt.Sprintf("%d", val)
+		case float64:
+			return fmt.Sprintf("%g", val)
+		case int:
+			return fmt.Sprintf("%d", val)
+		case map[string]any:
+			// Handle CommandResponse structure
+			if str, ok := val["string_value"].(string); ok {
+				return str
+			}
+			if i, ok := val["int_value"].(float64); ok {
+				return fmt.Sprintf("%d", int64(i))
+			}
+			return fmt.Sprintf("%v", val)
+		default:
+			return fmt.Sprintf("%v", val)
+		}
 	}
 
-	kind := PushKind(kindStr)
-	values, ok := push["values"].([]any)
-	if !ok {
-		log.Println("invalid push", ErrPubSubPushMissingValues.Error())
-		return ErrPubSubPushMissingValues
-	}
-
+	// Process based on kind
 	switch kind {
 	case Disconnection:
 		log.Println("disconnect notification", "Transport disconnected, messages might be lost")
-	case PMessage:
-		// Pattern message: values are [pattern, channel, message]
-		if len(values) < 3 {
-			return fmt.Errorf("invalid PMessage: expected 3 values, got %d", len(values))
-		}
-		pattern := CreateStringResult(string(values[0].([]byte))) // Result[string]
-		channel := string(values[1].([]byte))                     // string
-		message := string(values[2].([]byte))                     // string
-		return handler.handleMessage(NewPubSubMessageWithPattern(message, channel, pattern.Value()))
 
 	case Message, SMessage:
 		if len(values) < 2 {
 			return fmt.Errorf("invalid Message/SMessage: expected 2 values, got %d", len(values))
 		}
-		channel := string(values[0].([]byte)) // string
-		message := string(values[1].([]byte)) // string
+		channel := toString(values[0]) // string
+		message := toString(values[1]) // string
 		return handler.handleMessage(NewPubSubMessage(message, channel))
+
+	case PMessage:
+		// Pattern message: values are [pattern, channel, message]
+		if len(values) < 3 {
+			return fmt.Errorf("invalid PMessage: expected 3 values, got %d", len(values))
+		}
+		pattern := CreateStringResult(toString(values[0])) // Result[string]
+		channel := toString(values[1])                     // string
+		message := toString(values[2])                     // string
+		return handler.handleMessage(NewPubSubMessageWithPattern(message, channel, pattern.Value()))
 
 	case Subscribe, PSubscribe, SSubscribe, Unsubscribe, PUnsubscribe, SUnsubscribe:
 		valuesStr := make([]string, len(values))
 		for i, v := range values {
-			valuesStr[i] = string(v.([]byte))
+			valuesStr[i] = toString(v)
 		}
-		log.Println("subscribe/unsubscribe notification",
-			fmt.Sprintf("Received push notification of type '%s': %v", kind, valuesStr))
+		log.Printf("subscribe/unsubscribe notification: type='%s' values=%v\n", kind.String(), valuesStr)
+		// We don't return here anymore - subscription notifications should not stop message processing
 
 	default:
-		log.Println("unknown notification",
-			fmt.Sprintf("Unknown notification message: '%s'", kind))
+		log.Printf("unknown notification message: '%s'\n", kind.String())
 	}
 
 	return nil

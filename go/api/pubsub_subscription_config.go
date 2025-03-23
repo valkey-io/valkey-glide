@@ -51,11 +51,25 @@ func (config *BaseSubscriptionConfig) toProtobuf() *protobuf.PubSubSubscriptions
 func (config *BaseSubscriptionConfig) WithCallback(callback MessageCallback, context any) *BaseSubscriptionConfig {
 	config.callback = callback
 	config.context = context
+
+	// Create a message handler for this callback
+	if callback != nil {
+		// Set up the global message handler to handle push messages from Rust
+		globalMessageHandler = NewMessageHandler(callback, context, createPushResponseResolver())
+	}
+
 	return config
 }
 
 func (config *BaseSubscriptionConfig) SetCallback(callback MessageCallback) *BaseSubscriptionConfig {
 	config.callback = callback
+
+	// Create a message handler for this callback
+	if callback != nil {
+		// Set up the global message handler to handle push messages from Rust
+		globalMessageHandler = NewMessageHandler(callback, nil, createPushResponseResolver())
+	}
+
 	return config
 }
 
@@ -167,6 +181,9 @@ func (config *ClusterSubscriptionConfig) SetCallback(callback MessageCallback) *
 }
 
 func (config *ClusterSubscriptionConfig) WithSubscription(mode PubSubClusterChannelMode, channelOrPattern string) *ClusterSubscriptionConfig {
+	if config.subscriptions == nil {
+		config.subscriptions = make(map[uint32][]string)
+	}
 	modeKey := uint32(mode)
 	channels := config.subscriptions[modeKey]
 
@@ -176,4 +193,11 @@ func (config *ClusterSubscriptionConfig) WithSubscription(mode PubSubClusterChan
 
 func (config *ClusterSubscriptionConfig) Validate() error {
 	return config.BaseSubscriptionConfig.Validate()
+}
+
+// Helper function to create a resolver for PubSub push messages
+func createPushResponseResolver() ResponseResolver {
+	return func(response any) (any, error) {
+		return response, nil
+	}
 }
