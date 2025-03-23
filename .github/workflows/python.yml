@@ -102,7 +102,6 @@ jobs:
               uses: actions/setup-python@v5
               with:
                   python-version: ${{ matrix.python }}
-                  check-latest: true
 
             - name: Install dependencies
               working-directory: ./python
