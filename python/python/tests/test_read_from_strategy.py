@@ -49,7 +49,7 @@ class TestAZAffinity:
             protocol=protocol,
             request_timeout=2000,
         )
-        assert type(client_for_config_set) == GlideClusterClient
+        assert type(client_for_config_set) is GlideClusterClient
         # Reset the availability zone for all nodes
         await client_for_config_set.custom_command(
             ["CONFIG", "SET", "availability-zone", ""],
@@ -122,7 +122,7 @@ class TestAZAffinity:
             protocol=protocol,
             request_timeout=2000,
         )
-        assert type(client_for_config_set) == GlideClusterClient
+        assert type(client_for_config_set) is GlideClusterClient
         assert await client_for_config_set.config_resetstat() == OK
         await client_for_config_set.custom_command(
             ["CONFIG", "SET", "availability-zone", az], AllNodes()
@@ -255,7 +255,7 @@ class TestAZAffinity:
                 request_timeout=2000,
             )
 
-            assert type(client_for_config_set) == GlideClusterClient
+            assert type(client_for_config_set) is GlideClusterClient
 
             # Reset stats and set all nodes to other_az
             await client_for_config_set.config_resetstat()
