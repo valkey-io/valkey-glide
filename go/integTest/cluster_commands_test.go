@@ -1099,3 +1099,16 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_ImmediateAuthWr
 	_, err = adminClient.CustomCommand([]string{"CONFIG", "SET", "requirepass", ""})
 	assert.NoError(suite.T(), err)
 }
+
+func (suite *GlideTestSuite) TestGetStatistics() {
+	// Create test client
+	testClient := suite.defaultClusterClient()
+	defer testClient.Close()
+
+	// GetStatistics
+	result, err := testClient.GetStatistics()
+	assert.Nil(suite.T(), err)
+	assert.Len(suite.T(), result, 2)
+	assert.Contains(suite.T(), result, "total_connections")
+	assert.Contains(suite.T(), result, "total_clients")
+}
