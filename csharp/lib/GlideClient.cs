@@ -35,6 +35,8 @@ public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGe
     /// </summary>
     /// <remarks>
     /// <b>Remarks:</b>
+    /// Use this static method to create and connect a <see cref="GlideClient" /> to a standalone Valkey server.<br />
+    /// The client will automatically handle connection establishment, including any authentication and TLS configurations.
     ///   <list type="bullet">
     ///     <item>
     ///       <b>Authentication</b>: If credentials are provided, the client will attempt to authenticate using the specified username and password.

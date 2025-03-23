@@ -1,5 +1,8 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using System.Diagnostics.Metrics;
+using System.Reflection.Metadata;
+
 using Glide.Commands;
 
 using static Glide.ConnectionConfiguration;
@@ -35,6 +38,8 @@ public sealed class GlideClusterClient : BaseClient, IGenericClusterCommands
     /// </summary>
     /// <remarks>
     /// <b>Remarks:</b>
+    /// Use this static method to create and connect a <see cref="GlideClusterClient" /> to a Valkey Cluster.<br />
+    /// The client will automatically handle connection establishment, including cluster topology discovery and handling of authentication and TLS configurations.
     ///   <list type="bullet">
     ///     <item>
     ///       <b>Authentication</b>: If credentials are provided, the client will attempt to authenticate using the specified username and password.
