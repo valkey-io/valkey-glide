@@ -2,7 +2,7 @@
 /* eslint @typescript-eslint/no-require-imports: off */
 const { GlideClient } = require("@valkey/valkey-glide");
 const FreePort = require("find-free-port");
-const { checkWhichCommandAvailable } = require("../../tests/TestUtilities");
+const { checkWhichCommandAvailable } = require("../../tests/TestUtilities.ts");
 
 const PORT_NUMBER = 4001;
 
