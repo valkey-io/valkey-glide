@@ -540,7 +540,7 @@ impl Client {
             ClientWrapper::Cluster { client } => match client.get_username().await {
                 Ok(Value::SimpleString(username)) => Some(username),
                 Ok(Value::Nil) => None,
-                Ok(other) => panic!("Expected SimpleString, got: {:?}", other),
+                Ok(other) => unreachable!("Expected SimpleString or Nil, got: {:?}", other),
                 Err(e) => panic!("Got error trying to get username: {:?}", e),
             },
             ClientWrapper::Standalone(client) => client.get_username(),
