@@ -63,11 +63,15 @@ import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
+import glide.api.models.configuration.ServerCredentials;
 import glide.ffi.resolvers.ClusterScanCursorResolver;
 import glide.managers.CommandManager;
+import glide.models.protobuf.response.ResponseOuterClass.Response;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -78,9 +82,15 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.NonNull;
-import response.ResponseOuterClass.Response;
 
-/** Async (non-blocking) client for Cluster mode. Use {@link #createClient} to request a client. */
+/**
+ * Client used for connection to cluster servers.<br>
+ * Use {@link #createClient} to request a client.
+ *
+ * @see For full documentation refer to <a
+ *     href="https://github.com/valkey-io/valkey-glide/wiki/Java-Wrapper#cluster">Valkey Glide
+ *     Wiki</a>.
+ */
 public class GlideClusterClient extends BaseClient
         implements ConnectionManagementClusterCommands,
                 GenericClusterCommands,
@@ -95,10 +105,49 @@ public class GlideClusterClient extends BaseClient
     }
 
     /**
-     * Async request for an async (non-blocking) client in Cluster mode.
+     * Creates a new {@link GlideClusterClient} instance and establishes connections to a Valkey
+     * Cluster.
      *
-     * @param config Glide cluster client Configuration.
-     * @return A Future to connect and return a GlideClusterClient.
+     * @param config The configuration options for the client, including cluster addresses,
+     *     authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
+     * @return A Future that resolves to a connected {@link GlideClusterClient} instance.
+     * @remarks Use this static method to create and connect a {@link GlideClusterClient} to a Valkey
+     *     Cluster. The client will automatically handle connection establishment, including cluster
+     *     topology discovery and handling of authentication and TLS configurations.
+     *     <ul>
+     *       <li><b>Cluster Topology Discovery</b>: The client will automatically discover the cluster
+     *           topology based on the seed addresses provided.
+     *       <li><b>Authentication</b>: If {@link ServerCredentials} are provided, the client will
+     *           attempt to authenticate using the specified username and password.
+     *       <li><b>TLS</b>: If {@link
+     *           BaseClientConfiguration.BaseClientConfigurationBuilder#useTLS(boolean)} is set to
+     *           <code>true</code>, the client will establish secure connections using TLS.
+     *       <li><b>Pub/Sub Subscriptions</b>: Any channels or patterns specified in {@link
+     *           ClusterSubscriptionConfiguration} will be subscribed to upon connection.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * GlideClientConfiguration glideClientConfiguration =
+     *     GlideClientConfiguration.builder()
+     *         .address(node1address)
+     *         .address(node2address)
+     *         .useTLS(true)
+     *         .readFrom(ReadFrom.PREFER_REPLICA)
+     *         .credentials(credentialsConfiguration)
+     *         .requestTimeout(2000)
+     *         .clientName("GLIDE")
+     *         .subscriptionConfiguration(
+     *             ClusterSubscriptionConfiguration.builder()
+     *                 .subscription(EXACT, "notifications")
+     *                 .subscription(EXACT, "news")
+     *                 .subscription(SHARDED, "data")
+     *                 .callback(callback)
+     *                 .build())
+     *         .inflightRequestsLimit(1000)
+     *         .build();
+     * GlideClusterClient client = GlideClusterClient.createClient(glideClientConfiguration).get();
+     * }</pre>
      */
     public static CompletableFuture<GlideClusterClient> createClient(
             @NonNull GlideClusterClientConfiguration config) {
