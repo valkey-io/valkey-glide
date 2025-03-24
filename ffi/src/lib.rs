@@ -38,36 +38,36 @@ use tokio::runtime::Runtime;
 /// The struct is freed by the external caller by using `free_command_response` to avoid memory leaks.
 /// TODO: Add a type enum to validate what type of response is being sent in the CommandResponse.
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CommandResponse {
-    response_type: ResponseType,
-    int_value: i64,
-    float_value: c_double,
-    bool_value: bool,
+    pub response_type: ResponseType,
+    pub int_value: i64,
+    pub float_value: c_double,
+    pub bool_value: bool,
 
     /// Below two values are related to each other.
     /// `string_value` represents the string.
     /// `string_value_len` represents the length of the string.
-    string_value: *mut c_char,
-    string_value_len: c_long,
+    pub string_value: *mut c_char,
+    pub string_value_len: c_long,
 
     /// Below two values are related to each other.
     /// `array_value` represents the array of CommandResponse.
     /// `array_value_len` represents the length of the array.
-    array_value: *mut CommandResponse,
-    array_value_len: c_long,
+    pub array_value: *mut CommandResponse,
+    pub array_value_len: c_long,
 
     /// Below two values represent the Map structure inside CommandResponse.
     /// The map is transformed into an array of (map_key: CommandResponse, map_value: CommandResponse) and passed to Go.
     /// These are represented as pointers as the map can be null (optionally present).
-    map_key: *mut CommandResponse,
-    map_value: *mut CommandResponse,
+    pub map_key: *mut CommandResponse,
+    pub map_value: *mut CommandResponse,
 
     /// Below two values are related to each other.
     /// `sets_value` represents the set of CommandResponse.
     /// `sets_value_len` represents the length of the set.
-    sets_value: *mut CommandResponse,
-    sets_value_len: c_long,
+    pub sets_value: *mut CommandResponse,
+    pub sets_value_len: c_long,
 }
 
 impl Default for CommandResponse {
@@ -90,7 +90,7 @@ impl Default for CommandResponse {
 }
 
 #[repr(C)]
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub enum ResponseType {
     #[default]
     Null = 0,
@@ -132,8 +132,8 @@ pub type FailureCallback = unsafe extern "C" fn(
 /// The struct is freed by the external caller by using `free_connection_response` to avoid memory leaks.
 #[repr(C)]
 pub struct ConnectionResponse {
-    conn_ptr: *const c_void,
-    connection_error_message: *const c_char,
+    pub conn_ptr: *const c_void,
+    pub connection_error_message: *const c_char,
 }
 
 /// A `GlideClient` adapter.
