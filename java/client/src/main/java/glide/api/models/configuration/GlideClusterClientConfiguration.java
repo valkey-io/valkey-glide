@@ -25,6 +25,7 @@ import lombok.experimental.SuperBuilder;
  *         .reconnectStrategy(reconnectionConfiguration)
  *         .inflightRequestsLimit(1000)
  *         .advancedConfiguration(AdvancedGlideClusterClientConfiguration.builder().connectionTimeout(500).build())
+ *         .tlsAdvancedConfiguration(TlsAdvancedConfiguration.builder().useInsecureTLS(true).build())
  *         .build();
  * }</pre>
  */
@@ -37,4 +38,7 @@ public class GlideClusterClientConfiguration extends BaseClientConfiguration {
 
     /** Advanced configuration settings for the client. */
     private final AdvancedGlideClusterClientConfiguration advancedConfiguration;
+
+    /** Advanced TLS configuration settings for the client. */
+    private final TlsAdvancedConfiguration tlsAdvancedConfiguration;
 }

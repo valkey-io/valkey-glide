@@ -32,6 +32,7 @@ import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
+import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.connectors.handlers.ChannelHandler;
@@ -136,7 +137,6 @@ public class ConnectionManagerTest {
                         .address(NodeAddress.builder().host(HOST).port(PORT).build())
                         .address(NodeAddress.builder().host(DEFAULT_HOST).port(DEFAULT_PORT).build())
                         .useTLS(true)
-                        .useInsecureTLS(false)
                         .readFrom(ReadFrom.PREFER_REPLICA)
                         .credentials(ServerCredentials.builder().username(USERNAME).password(PASSWORD).build())
                         .requestTimeout(REQUEST_TIMEOUT)
@@ -156,6 +156,8 @@ public class ConnectionManagerTest {
                                         .subscription(PATTERN, gs("*chatRoom*"))
                                         .build())
                         .inflightRequestsLimit(INFLIGHT_REQUESTS_LIMIT)
+                        .tlsAdvancedConfiguration(
+                                TlsAdvancedConfiguration.builder().useInsecureTLS(false).build())
                         .build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
@@ -444,7 +446,11 @@ public class ConnectionManagerTest {
     public void connection_request_protobuf_generation_use_insecure_tls() {
         // setup
         GlideClusterClientConfiguration glideClusterClientConfiguration =
-                GlideClusterClientConfiguration.builder().useTLS(true).useInsecureTLS(true).build();
+                GlideClusterClientConfiguration.builder()
+                        .useTLS(true)
+                        .tlsAdvancedConfiguration(
+                                TlsAdvancedConfiguration.builder().useInsecureTLS(true).build())
+                        .build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
                         .setTlsMode(TlsMode.InsecureTls)

@@ -35,19 +35,6 @@ public abstract class BaseClientConfiguration {
      */
     @Builder.Default private final boolean useTLS = false;
 
-    /**
-     * True if communication with the cluster should check certificate validity.
-     *
-     * <p>If the server/cluster's certificate does not validate, not setting this will cause the
-     * connection attempt to fail.
-     *
-     * <p>If the server/cluster's certificate does not validate, setting this will cause the
-     * connection to ignore the certificate's validity and succeed.
-     *
-     * <p>This is useful for when CNAMEs are used to point to a server/cluster.
-     */
-    @Builder.Default private final boolean useInsecureTLS = false;
-
     /** Represents the client's read from strategy. */
     @NonNull @Builder.Default private final ReadFrom readFrom = ReadFrom.PRIMARY;
 

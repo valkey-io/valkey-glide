@@ -15,6 +15,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ReadFrom;
+import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.connectors.handlers.ChannelHandler;
@@ -99,15 +100,9 @@ public class ConnectionManager {
                             .build());
         }
 
-        if (configuration.isUseTLS()) {
-            connectionRequestBuilder
-                    .setTlsMode(configuration.isUseInsecureTLS() ? TlsMode.InsecureTls : TlsMode.SecureTls)
-                    .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
-        } else {
-            connectionRequestBuilder
-                    .setTlsMode(TlsMode.NoTls)
-                    .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
-        }
+        connectionRequestBuilder
+                .setTlsMode(configuration.isUseTLS() ? TlsMode.SecureTls : TlsMode.NoTls)
+                .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
 
         if (configuration.getCredentials() != null) {
             AuthenticationInfo.Builder authenticationInfoBuilder = AuthenticationInfo.newBuilder();
@@ -199,28 +194,36 @@ public class ConnectionManager {
             connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
         }
 
-        if (configuration.getAdvancedConfiguration() != null) {
-            connectionRequestBuilder =
-                    setupConnectionRequestBuilderAdvancedBaseConfiguration(
-                            connectionRequestBuilder, configuration.getAdvancedConfiguration());
-        }
+        connectionRequestBuilder =
+                setupConnectionRequestBuilderAdvancedBaseConfiguration(
+                        connectionRequestBuilder,
+                        configuration.getAdvancedConfiguration(),
+                        configuration.getTlsAdvancedConfiguration());
 
         return connectionRequestBuilder;
     }
 
     /**
      * Configures the {@link ConnectionRequest.Builder} with settings from the provided {@link
-     * AdvancedBaseClientConfiguration}.
+     * AdvancedBaseClientConfiguration} and {@link TlsAdvancedConfiguration}.
      *
      * @param connectionRequestBuilder The builder for the {@link ConnectionRequest}.
      * @param configuration The advanced configuration settings.
+     * @param tlsConfiguration The advanced TLS configuration settings.
      * @return The updated {@link ConnectionRequest.Builder}.
      */
     private ConnectionRequest.Builder setupConnectionRequestBuilderAdvancedBaseConfiguration(
             ConnectionRequest.Builder connectionRequestBuilder,
-            AdvancedBaseClientConfiguration configuration) {
+            AdvancedBaseClientConfiguration configuration,
+            TlsAdvancedConfiguration tlsConfiguration) {
+
         if (configuration.getConnectionTimeout() != null) {
             connectionRequestBuilder.setConnectionTimeout(configuration.getConnectionTimeout());
+        }
+
+        if (connectionRequestBuilder.getTlsMode() == TlsMode.SecureTls
+                && tlsConfiguration.isUseInsecureTLS()) {
+            connectionRequestBuilder.setTlsMode(TlsMode.InsecureTls);
         }
 
         return connectionRequestBuilder;
@@ -254,11 +257,11 @@ public class ConnectionManager {
             connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
         }
 
-        if (configuration.getAdvancedConfiguration() != null) {
-            connectionRequestBuilder =
-                    setupConnectionRequestBuilderAdvancedBaseConfiguration(
-                            connectionRequestBuilder, configuration.getAdvancedConfiguration());
-        }
+        connectionRequestBuilder =
+                setupConnectionRequestBuilderAdvancedBaseConfiguration(
+                        connectionRequestBuilder,
+                        configuration.getAdvancedConfiguration(),
+                        configuration.getTlsAdvancedConfiguration());
 
         return connectionRequestBuilder;
     }
