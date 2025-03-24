@@ -6746,16 +6746,16 @@ func (client *baseClient) GeoDistWithUnit(
 //
 // Parameters:
 //
-//		key - The key of the sorted set.
-//		searchFrom - The query's center point options, could be one of:
-//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
 //	          set.
-//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//		searchBy - The query's shape options:
-//		 - `BYRADIUS` to search inside circular area according to given radius.
-//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
-//		resultOptions - Optional inputs for sorting/limiting the results.
-//		infoOptions - The optional inputs to request additional information.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchBy - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//	infoOptions - The optional inputs to request additional information.
 //
 // Return value:
 //
@@ -6813,15 +6813,15 @@ func (client *baseClient) GeoSearchWithFullOptions(
 //
 // Parameters:
 //
-//		key - The key of the sorted set.
-//		searchFrom - The query's center point options, could be one of:
-//		 - `MemberOrigin` to use the position of the given existing member in the sorted
-//	          set.
-//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//		searchBy - The query's shape options:
-//		 - `BYRADIUS` to search inside circular area according to given radius.
-//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
-//		geoSearchResultOptions - Optional inputs for sorting/limiting the results.
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchBy - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	geoSearchResultOptions - Optional inputs for sorting/limiting the results.
 //
 // Return value:
 //
@@ -6869,15 +6869,15 @@ func (client *baseClient) GeoSearchWithResultOptions(
 //
 // Parameters:
 //
-//		key - The key of the sorted set.
-//		searchFrom - The query's center point options, could be one of:
-//		 - `MemberOrigin` to use the position of the given existing member in the sorted
-//	          set.
-//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//		searchBy - The query's shape options:
-//		 - `BYRADIUS` to search inside circular area according to given radius.
-//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
-//		geoSearchOptions - The optional inputs to request additional information.
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchBy - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	geoSearchOptions - The optional inputs to request additional information.
 //
 // Return value:
 //
@@ -6915,14 +6915,14 @@ func (client *baseClient) GeoSearchWithInfoOptions(
 //
 // Parameters:
 //
-//		key - The key of the sorted set.
-//		searchFrom - The query's center point options, could be one of:
-//		 - `MemberOrigin` to use the position of the given existing member in the sorted
-//	          set.
-//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//		searchBy - The query's shape options:
-//		 - `BYRADIUS` to search inside circular area according to given radius.
-//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchBy - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
 //
 // Return value:
 //
@@ -6963,11 +6963,11 @@ func (client *baseClient) GeoSearch(
 //		 - `MemberOrigin` to use the position of the given existing member in the sorted
 //	          set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//		searchBy - The query's shape options:
+//	searchBy - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
 //		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
-//		resultOptions - Optional inputs for sorting/limiting the results.
-//		infoOptions - The optional inputs to request additional information.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//	infoOptions - The optional inputs to request additional information.
 //
 // Return value:
 //
@@ -7032,7 +7032,7 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 //		 - `MemberOrigin` to use the position of the given existing member in the sorted
 //	          set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//		searchBy - The query's shape options:
+//	searchBy - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
 //		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
 //
@@ -7078,10 +7078,10 @@ func (client *baseClient) GeoSearchStore(
 //		 - `MemberOrigin` to use the position of the given existing member in the sorted
 //	          set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//		searchBy - The query's shape options:
+//	searchBy - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
 //		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
-//		resultOptions - Optional inputs for sorting/limiting the results.
+//	resultOptions - Optional inputs for sorting/limiting the results.
 //
 // Return value:
 //
@@ -7126,10 +7126,10 @@ func (client *baseClient) GeoSearchStoreWithResultOptions(
 //		 - `MemberOrigin` to use the position of the given existing member in the sorted
 //	          set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//		searchBy - The query's shape options:
+//	searchBy - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
 //		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
-//		infoOptions - The optional inputs to request additional information.
+//	infoOptions - The optional inputs to request additional information.
 //
 // Return value:
 //

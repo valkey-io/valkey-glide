@@ -25,20 +25,6 @@ func MapGeoDataToArray(memberGeoMap map[string]GeospatialData) []string {
 	return result
 }
 
-// The unit of measurement for the geospatial data
-type GeoUnit string
-
-const (
-	// Represents distance in kilometers
-	GeoUnitKilometers GeoUnit = "km"
-	// Represents distance in meters
-	GeoUnitMeters GeoUnit = "m"
-	// Represents distance in miles
-	GeoUnitMiles GeoUnit = "mi"
-	// Represents distance in feet
-	GeoUnitFeet GeoUnit = "ft"
-)
-
 // Optional arguments to `GeoAdd` in [GeoSpatialCommands]
 type GeoAddOptions struct {
 	conditionalChange ConditionalSet

@@ -13,11 +13,6 @@ type GeoSearchOrigin interface {
 	ToArgs() ([]string, error)
 }
 
-const (
-	GeoCoordOriginAPIKeyword  = "FROMLONLAT"
-	GeoMemberOriginAPIKeyword = "FROMMEMBER"
-)
-
 // The search origin represented by a [GeospatialData] position
 type GeoCoordOrigin struct {
 	GeospatialData GeospatialData
@@ -44,14 +39,6 @@ func (o *GeoMemberOrigin) ToArgs() ([]string, error) {
 		o.Member,
 	}, nil
 }
-
-// The shape of the search area for the `GeoSearch` command
-type SearchShape string
-
-const (
-	BYRADIUS SearchShape = "BYRADIUS"
-	BYBOX    SearchShape = "BYBOX"
-)
 
 // The search options for the `GeoSearch` command
 type GeoSearchShape struct {
