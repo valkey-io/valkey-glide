@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import re
+from typing import Mapping, cast
 
 import pytest
 from glide.async_commands.core import InfoSection
@@ -48,7 +49,7 @@ class TestAZAffinity:
             protocol=protocol,
             request_timeout=2000,
         )
-
+        assert type(client_for_config_set) is GlideClusterClient
         # Reset the availability zone for all nodes
         await client_for_config_set.custom_command(
             ["CONFIG", "SET", "availability-zone", ""],
@@ -70,12 +71,15 @@ class TestAZAffinity:
             request_timeout=2000,
             client_az=az,
         )
-
+        assert type(client_for_testing_az) is GlideClusterClient
         for _ in range(GET_CALLS):
             await client_for_testing_az.get("foo")
 
-        info_result = await client_for_testing_az.info(
-            [InfoSection.SERVER, InfoSection.COMMAND_STATS], AllNodes()
+        info_result = cast(
+            Mapping[bytes, bytes],
+            await client_for_testing_az.info(
+                [InfoSection.SERVER, InfoSection.COMMAND_STATS], AllNodes()
+            ),
         )
 
         # Check that only the replica with az has all the GET calls
@@ -118,6 +122,7 @@ class TestAZAffinity:
             protocol=protocol,
             request_timeout=2000,
         )
+        assert type(client_for_config_set) is GlideClusterClient
         assert await client_for_config_set.config_resetstat() == OK
         await client_for_config_set.custom_command(
             ["CONFIG", "SET", "availability-zone", az], AllNodes()
@@ -131,19 +136,14 @@ class TestAZAffinity:
             request_timeout=2000,
             client_az=az,
         )
-        azs = await client_for_testing_az.custom_command(
-            ["CONFIG", "GET", "availability-zone"], AllNodes()
+        assert type(client_for_testing_az) is GlideClusterClient
+        azs = cast(
+            Mapping[bytes, Mapping[bytes, bytes]],
+            await client_for_testing_az.config_get(["availability-zone"], AllNodes()),
         )
 
         # Check that all replicas have the availability zone set to the az
-        assert all(
-            (
-                node[1].decode() == az
-                if isinstance(node, list)
-                else node[b"availability-zone"].decode() == az
-            )
-            for node in azs.values()
-        )
+        assert all((node[b"availability-zone"].decode() == az) for node in azs.values())
 
         n_replicas = await self._get_num_replicas(client_for_testing_az)
         GET_CALLS = 4 * n_replicas
@@ -152,8 +152,11 @@ class TestAZAffinity:
         for _ in range(GET_CALLS):
             await client_for_testing_az.get("foo")
 
-        info_result = await client_for_testing_az.info(
-            [InfoSection.COMMAND_STATS, InfoSection.SERVER], AllNodes()
+        info_result = cast(
+            Mapping[bytes, bytes],
+            await client_for_testing_az.info(
+                [InfoSection.COMMAND_STATS, InfoSection.SERVER], AllNodes()
+            ),
         )
 
         # Check that all replicas have the same number of GET calls
@@ -187,6 +190,7 @@ class TestAZAffinity:
             request_timeout=2000,
             client_az="non-existing-az",
         )
+        assert type(client_for_testing_az) is GlideClusterClient
         assert await client_for_testing_az.config_resetstat() == OK
 
         for _ in range(GET_CALLS):
@@ -196,8 +200,11 @@ class TestAZAffinity:
         # We expect the calls to be distributed evenly among the replicas
         get_cmdstat = "cmdstat_get" + ":" + f"calls={GET_CALLS // n_replicas}"
 
-        info_result = await client_for_testing_az.info(
-            [InfoSection.COMMAND_STATS, InfoSection.SERVER], AllNodes()
+        info_result = cast(
+            Mapping[bytes, bytes],
+            await client_for_testing_az.info(
+                [InfoSection.COMMAND_STATS, InfoSection.SERVER], AllNodes()
+            ),
         )
 
         matching_entries_count = sum(
@@ -248,6 +255,8 @@ class TestAZAffinity:
                 request_timeout=2000,
             )
 
+            assert type(client_for_config_set) is GlideClusterClient
+
             # Reset stats and set all nodes to other_az
             await client_for_config_set.config_resetstat()
             await client_for_config_set.custom_command(
@@ -262,9 +271,12 @@ class TestAZAffinity:
             )
 
             # Verify primary AZ
-            primary_az = await client_for_config_set.custom_command(
-                ["CONFIG", "GET", "availability-zone"],
-                route=SlotIdRoute(SlotType.PRIMARY, 12182),
+            primary_az = cast(
+                Mapping[bytes, bytes],
+                await client_for_config_set.custom_command(
+                    ["CONFIG", "GET", "availability-zone"],
+                    route=SlotIdRoute(SlotType.PRIMARY, 12182),
+                ),
             )
             assert (
                 primary_az[b"availability-zone"].decode() == az
@@ -284,8 +296,9 @@ class TestAZAffinity:
             for i in range(GET_CALLS):
                 await client_for_testing_az.get("foo")
 
+            assert type(client_for_testing_az) is GlideClusterClient
             # Collect info from all nodes
-            info_result = await client_for_testing_az.info(
+            result = await client_for_testing_az.info(
                 [
                     InfoSection.SERVER,
                     InfoSection.REPLICATION,
@@ -293,6 +306,7 @@ class TestAZAffinity:
                 ],
                 AllNodes(),
             )
+            info_result = cast(dict[bytes, bytes], result)
 
             matching_entries_count = 0
             total_get_calls = 0

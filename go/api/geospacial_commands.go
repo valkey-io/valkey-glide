@@ -20,4 +20,6 @@ type GeoSpatialCommands interface {
 		membersToGeospatialData map[string]options.GeospatialData,
 		options options.GeoAddOptions,
 	) (int64, error)
+
+	GeoHash(key string, members []string) ([]string, error)
 }
