@@ -6671,3 +6671,31 @@ func (client *baseClient) GeoPos(key string, members []string) ([][]float64, err
 	}
 	return handle2DFloat64OrNullArrayResponse(result)
 }
+
+func (client *baseClient) GeoDist(key string, member1 string, member2 string) (Result[float64], error) {
+	result, err := client.executeCommand(
+		C.GeoDist,
+		[]string{key, member1, member2},
+	)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+
+}
+
+func (client *baseClient) GeoDistWithUnit(
+	key string,
+	member1 string,
+	member2 string,
+	unit options.GeoUnit,
+) (Result[float64], error) {
+	result, err := client.executeCommand(
+		C.GeoDist,
+		[]string{key, member1, member2, string(unit)},
+	)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+}

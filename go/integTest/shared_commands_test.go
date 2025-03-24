@@ -9129,6 +9129,58 @@ func (suite *GlideTestSuite) TestGeoAdd() {
 	})
 }
 
+func (suite *GlideTestSuite) TestGeoDist() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+		member1 := "Palermo"
+		member2 := "Catania"
+		member3 := "NonExisting"
+		expected := 166274.1516
+		expectedKM := 166.2742
+		delta := 1e-9
+
+		// adding locations
+		membersToCoordinates := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+		}
+		result, err := client.GeoAdd(key1, membersToCoordinates)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), result)
+
+		// assert correct result with default metric
+		actual, err := client.GeoDist(key1, member1, member2)
+		if err != nil {
+			t.Fatalf("Failed to get geo distance: %v", err)
+		}
+		if math.Abs(actual.Value()-expected) > delta {
+			t.Errorf("Expected distance %f, got %f", expected, actual.Value())
+		}
+
+		// assert correct result with manual metric specification kilometers
+		actualKM, err := client.GeoDistWithUnit(key1, member1, member2, options.Kilometers)
+		if err != nil {
+			t.Fatalf("Failed to get geo distance: %v", err)
+		}
+		if math.Abs(actualKM.Value()-expectedKM) > delta {
+			t.Errorf("Expected distance %f, got %f", expectedKM, actualKM.Value())
+		}
+
+		// assert null result when member index is missing
+		actual, err = client.GeoDist(key1, member1, member3)
+		assert.True(t, actual.IsNil())
+
+		// key exists but holds a non-ZSET value
+		_, err = client.Set(key2, "bar")
+		assert.NoError(t, err)
+		_, err = client.GeoDist(key2, member1, member2)
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestGeoAdd_InvalidArgs() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		t := suite.T()
