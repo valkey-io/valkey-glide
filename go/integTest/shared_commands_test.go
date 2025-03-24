@@ -7584,17 +7584,17 @@ func (suite *GlideTestSuite) TestBitOp_AND() {
 		destKey := "{bitop_test}" + uuid.New().String()
 
 		_, err := client.Set(bitopkey1, "foobar")
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 
 		_, err = client.Set(bitopkey2, "abcdef")
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 
 		result, err := client.BitOp(options.AND, destKey, []string{bitopkey1, bitopkey2})
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.GreaterOrEqual(suite.T(), result, int64(0))
 
 		bitResult, err := client.Get(destKey)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.NotEmpty(suite.T(), bitResult.Value())
 	})
 }
@@ -7606,17 +7606,17 @@ func (suite *GlideTestSuite) TestBitOp_OR() {
 		destKey := "{bitop_test}" + uuid.New().String()
 
 		_, err := client.Set(key1, "foo")
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 
 		_, err = client.Set(key2, "bar")
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 
 		result, err := client.BitOp(options.OR, destKey, []string{key1, key2})
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.GreaterOrEqual(suite.T(), result, int64(0))
 
 		bitResult, err := client.Get(destKey)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.NotEmpty(suite.T(), bitResult.Value())
 	})
 }
@@ -7628,17 +7628,17 @@ func (suite *GlideTestSuite) TestBitOp_XOR() {
 		destKey := "{bitop_test}" + uuid.New().String()
 
 		_, err := client.Set(key1, "foo")
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 
 		_, err = client.Set(key2, "bar")
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 
 		result, err := client.BitOp(options.XOR, destKey, []string{key1, key2})
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.GreaterOrEqual(suite.T(), result, int64(0))
 
 		bitResult, err := client.Get(destKey)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.NotEmpty(suite.T(), bitResult.Value())
 	})
 }
@@ -7649,14 +7649,14 @@ func (suite *GlideTestSuite) TestBitOp_NOT() {
 		destKey := "{bitop_test}" + uuid.New().String()
 
 		_, err := client.Set(srcKey, "foobar")
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 
 		result, err := client.BitOp(options.NOT, destKey, []string{srcKey})
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.GreaterOrEqual(suite.T(), result, int64(0))
 
 		bitResult, err := client.Get(destKey)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.NotEmpty(suite.T(), bitResult.Value())
 	})
 }
@@ -7668,10 +7668,10 @@ func (suite *GlideTestSuite) TestBitOp_InvalidArguments() {
 		key2 := "{bitop_test}" + uuid.New().String()
 
 		_, err := client.Set(key1, "foo")
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 
 		_, err = client.Set(key2, "bar")
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 
 		_, err = client.BitOp(options.AND, destKey, []string{key1})
 		assert.NotNil(suite.T(), err)
