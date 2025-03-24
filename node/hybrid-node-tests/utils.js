@@ -47,7 +47,9 @@ async function checkWhichCommandAvailable() {
  */
 function startServer(serverCmd, port) {
     return new Promise((resolve, reject) => {
-        const serverProcess = spawn(serverCmd, ["--port", port.toString()]);
+        const serverProcess = spawn(serverCmd, ["--port", port.toString()], {
+            stdio: ["ignore", "pipe", "pipe"],
+        });
         let output = "";
 
         serverProcess.stdout.on("data", (data) => {
