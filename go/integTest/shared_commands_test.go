@@ -9187,6 +9187,7 @@ func (suite *GlideTestSuite) TestGeoHash() {
 
 		// Test getting geohash for multiple members
 		geoHashResults, err := client.GeoHash(key1, []string{"Palermo", "Catania"})
+		fmt.Println(geoHashResults)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(geoHashResults))
 		assert.Equal(t, geoHashResults[0], "sqc8b49rny0")
