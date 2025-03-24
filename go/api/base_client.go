@@ -6699,7 +6699,6 @@ func (client *baseClient) GeoDist(key string, member1 string, member2 string) (R
 		return CreateNilFloat64Result(), err
 	}
 	return handleFloatOrNilResponse(result)
-
 }
 
 // Returns the distance between `member1` and `member2` saved in the
