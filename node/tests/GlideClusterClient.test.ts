@@ -2047,7 +2047,6 @@ describe("GlideClusterClient", () => {
                                 .toLowerCase()
                                 .includes("no scripts in execution right now")
                         ) {
-                            console.log("creating a new promise");
                             promise = client2.invokeScript(longScript, {
                                 keys: ["{key}-" + uuidv4()],
                             });

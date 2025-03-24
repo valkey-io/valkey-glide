@@ -76,7 +76,7 @@ jobs:
     test-node:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-matrices]
-        timeout-minutes: 180 # TODO: REVERT THIS TIMEOUT BEFORE MERGING PR
+        timeout-minutes: 25
         strategy:
             fail-fast: false
             matrix:
@@ -104,8 +104,7 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
 
             - name: test
-              run: |
-                  npm test
+              run: npm test
               working-directory: ./node
 
             - name: test hybrid node modules - commonjs
