@@ -1,6 +1,6 @@
 /* eslint @typescript-eslint/no-require-imports: off */
 /* eslint no-undef: off */
-'use strict';
+"use strict";
 const util = require("util");
 const { exec, spawn } = require("child_process");
 const execAsync = util.promisify(exec);
@@ -31,8 +31,7 @@ async function checkWhichCommandAvailable() {
         }
 
         console.log("Redis response", redisResponse);
-    }
-    catch (error) {
+    } catch (error) {
         // Ignore error
         console.log("Redis response", error);
     }
@@ -49,9 +48,9 @@ async function checkWhichCommandAvailable() {
 function startServer(serverCmd, port) {
     return new Promise((resolve, reject) => {
         const serverProcess = spawn(serverCmd, ["--port", port.toString()]);
-        let output = '';
+        let output = "";
 
-        serverProcess.stdout.on('data', (data) => {
+        serverProcess.stdout.on("data", (data) => {
             output += data.toString();
 
             if (output.includes("Ready to accept connections")) {
@@ -60,11 +59,11 @@ function startServer(serverCmd, port) {
             }
         });
 
-        serverProcess.stderr.on('data', (data) => {
+        serverProcess.stderr.on("data", (data) => {
             console.error(`Server stderr: ${data}`);
         });
 
-        serverProcess.on('error', (error) => {
+        serverProcess.on("error", (error) => {
             reject(new Error(`Failed to start server: ${error.message}`));
         });
 
@@ -72,7 +71,9 @@ function startServer(serverCmd, port) {
         setTimeout(() => {
             if (!output.includes("Ready to accept connections")) {
                 serverProcess.kill();
-                reject(new Error("Server failed to start within timeout period"));
+                reject(
+                    new Error("Server failed to start within timeout period"),
+                );
             }
         }, 5000);
     });
@@ -81,4 +82,4 @@ function startServer(serverCmd, port) {
 module.exports = {
     checkWhichCommandAvailable,
     startServer,
-}
+};
