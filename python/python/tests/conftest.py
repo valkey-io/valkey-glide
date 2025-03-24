@@ -264,7 +264,7 @@ async def create_client(
     # Create async socket client
     use_tls = request.config.getoption("--tls")
     if cluster_mode:
-        valkey_cluster = valkey_cluster or pytest.valkey_cluster
+        valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
         assert database_id == 0
         k = min(3, len(valkey_cluster.nodes_addr))
@@ -284,10 +284,10 @@ async def create_client(
         )
         return await GlideClusterClient.create(cluster_config)
     else:
-        assert type(pytest.standalone_cluster) is ValkeyCluster
+        assert type(pytest.standalone_cluster) is ValkeyCluster  # type: ignore
         config = GlideClientConfiguration(
             addresses=(
-                pytest.standalone_cluster.nodes_addr if addresses is None else addresses
+                pytest.standalone_cluster.nodes_addr if addresses is None else addresses  # type: ignore
             ),
             use_tls=use_tls,
             credentials=credentials,
