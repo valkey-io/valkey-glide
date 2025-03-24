@@ -9169,6 +9169,44 @@ func (suite *GlideTestSuite) TestGeoAdd_InvalidArgs() {
 	})
 }
 
+func (suite *GlideTestSuite) TestGeoHash() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		t := suite.T()
+
+		// Add some locations to the geo index
+		membersToCoordinates := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+		}
+
+		// Add the coordinates
+		result, err := client.GeoAdd(key1, membersToCoordinates)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), result)
+
+		// Test getting geohash for multiple members
+		geoHashResults, err := client.GeoHash(key1, []string{"Palermo", "Catania"})
+		assert.NoError(t, err)
+		assert.Equal(t, 2, len(geoHashResults))
+		assert.Equal(t, geoHashResults[0], "sqc8b49rny0")
+		assert.Equal(t, geoHashResults[1], "sqdtr74hyu0")
+
+		// Test getting geohash for empty members
+		geoHashResults, err = client.GeoHash(key1, []string{})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(geoHashResults))
+
+		// Test with wrong key type
+		wrongKey := "{testKey}:3-" + uuid.New().String()
+		_, err = client.Set(wrongKey, "value")
+		assert.NoError(t, err)
+		_, err = client.GeoHash(wrongKey, []string{"Palermo"})
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := suite.GenerateLargeUuid()
