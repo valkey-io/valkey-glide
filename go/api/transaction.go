@@ -67,8 +67,8 @@ func (t *Transaction) Exec() error {
 }
 
 // NewTransaction creates a Transaction by embedding the BaseClient
-func NewTransaction(client BaseClient) *Transaction {
-	glideCli, ok := client.(*glideClient)
+func NewTransaction(client GlideClientCommands) *Transaction {
+	glideCli, ok := client.(*GlideClient)
 	if !ok {
 		panic("client is not of type *glideClient")
 	}
@@ -83,3 +83,13 @@ func NewTransaction(client BaseClient) *Transaction {
 
 	return tx
 }
+
+// // NewGlideClient creates a [GlideClientCommands] in standalone mode using the given [GlideClientConfiguration].
+// func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, error) {
+// 	client, err := createClient(config)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	return &GlideClient{client}, nil
+// }

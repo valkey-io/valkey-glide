@@ -97,6 +97,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	msg, err := proto.Marshal(request)
 	if err != nil {
 		return nil, err
