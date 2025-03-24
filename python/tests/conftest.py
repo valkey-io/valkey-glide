@@ -16,6 +16,7 @@ from glide.config import (
     ProtocolVersion,
     ReadFrom,
     ServerCredentials,
+    TlsAdvancedConfiguration,
 )
 from glide.exceptions import ClosingError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
@@ -366,9 +367,15 @@ async def create_client(
     client_az: Optional[str] = None,
     reconnect_strategy: Optional[BackoffStrategy] = None,
     valkey_cluster: Optional[ValkeyCluster] = None,
+    use_tls: Optional[bool] = None,
+    tls_insecure: Optional[bool] = None,
 ) -> Union[GlideClient, GlideClusterClient]:
     # Create async socket client
-    use_tls = request.config.getoption("--tls")
+    if use_tls is not None:
+        use_tls = use_tls
+    else:
+        use_tls = request.config.getoption("--tls")
+    tls_adv_conf = TlsAdvancedConfiguration(insecure=tls_insecure)
     if cluster_mode:
         valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
@@ -386,15 +393,16 @@ async def create_client(
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
-            advanced_config=AdvancedGlideClusterClientConfiguration(connection_timeout),
+            advanced_config=AdvancedGlideClusterClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
         )
         return await GlideClusterClient.create(cluster_config)
     else:
-        assert type(pytest.standalone_cluster) is ValkeyCluster  # type: ignore
+        valkey_cluster = valkey_cluster or pytest.standalone_cluster
+        assert type(valkey_cluster) is ValkeyCluster
         config = GlideClientConfiguration(
-            addresses=(
-                pytest.standalone_cluster.nodes_addr if addresses is None else addresses  # type: ignore
-            ),
+            addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
             use_tls=use_tls,
             credentials=credentials,
             database_id=database_id,
@@ -405,7 +413,9 @@ async def create_client(
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
-            advanced_config=AdvancedGlideClientConfiguration(connection_timeout),
+            advanced_config=AdvancedGlideClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
             reconnect_strategy=reconnect_strategy,
         )
         return await GlideClient.create(config)
