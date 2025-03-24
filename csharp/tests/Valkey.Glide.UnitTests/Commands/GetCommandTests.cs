@@ -1,4 +1,5 @@
 ﻿using Valkey.Glide.Commands;
+using Valkey.Glide.Commands.ExtensionMethods;
 using Valkey.Glide.UnitTests.Fixtures;
 
 namespace Valkey.Glide.UnitTests.Commands;

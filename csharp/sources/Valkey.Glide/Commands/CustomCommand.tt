@@ -1,0 +1,54 @@
+﻿<#@ template language="C#" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Linq" #>
+using Valkey.Glide.InterOp.Native;
+using Value = Valkey.Glide.InterOp.Value;
+
+namespace Valkey.Glide.Commands;
+
+<#
+    for (var t = 1; t <= 20; t++)
+    {
+        var templateArgs = Enumerable.Range(0, t).Select(i => $"T{i + 1}").ToArray();
+        var templateArgNames = Enumerable.Range(0, t).Select(i => $"Arg{i + 1}").ToArray();
+        var templateArgsWithNames = templateArgs.Zip(templateArgNames, (l, r) => (templateArg: l, name: r)).ToArray();
+        var templateArgsCommaSeparated = string.Join(", ", templateArgs);
+        var fullTemplateArgs = string.Concat("<", templateArgsCommaSeparated, ">");
+#>
+public readonly struct CustomCommand<#= fullTemplateArgs #> : IGlideCommand
+{
+<#
+        foreach (var (templateArg, name) in templateArgsWithNames)
+        {
+#>
+    private <#= templateArg #>? <#= name #> { get; init; }
+    private bool <#= name #>Set { get; init; }
+    public CustomCommand<#= fullTemplateArgs #> With<#= name #>(<#= templateArg #> arg)
+    {
+        // ReSharper disable once WithExpressionModifiesAllMembers
+        // ReSharper disable once ArrangeMethodOrOperatorBody
+        return this with { <#= name #> = arg, <#= name #>Set = true };
+    }
+<#
+        }
+#>
+
+    Task<Value> IGlideCommand.ExecuteAsync(IGlideClient client, CancellationToken cancellationToken = default)
+    {
+<#
+        for (var i = 0; i < templateArgNames.Length; i++)
+        {
+            var name = templateArgNames[i];
+#>
+        if (!<#= name #>Set)
+            throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, <#= i #>));
+<#
+        }
+#>
+        return client.CommandAsync(ERequestType.CustomCommand, <#= string.Join(", ", templateArgNames.Select(s => $"client.Transform({s})")) #>);
+    }
+}
+<#
+    }
+#>

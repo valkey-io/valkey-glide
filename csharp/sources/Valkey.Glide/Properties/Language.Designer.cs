@@ -96,11 +96,65 @@ namespace Valkey.Glide.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to CustomCommand setup incomplete, Arg{0} not set..
+        /// </summary>
+        internal static string CustomCommand_ArgumentNotSet_0index {
+            get {
+                return ResourceManager.GetString("CustomCommand_ArgumentNotSet_0index", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The get command failed to execute..
+        /// </summary>
+        internal static string Exceptions_GlideGetCommandFailedException {
+            get {
+                return ResourceManager.GetString("Exceptions_GlideGetCommandFailedException", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The set command failed to execute successful.
         /// </summary>
-        internal static string Set_CommandExecutionWasNotSuccessfull {
+        internal static string Exceptions_GlideSetCommandFailedException {
             get {
-                return ResourceManager.GetString("Set_CommandExecutionWasNotSuccessfull", resourceCulture);
+                return ResourceManager.GetString("Exceptions_GlideSetCommandFailedException", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Key not provided with GetCommand..
+        /// </summary>
+        internal static string GetCommand_KeyNotSet {
+            get {
+                return ResourceManager.GetString("GetCommand_KeyNotSet", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Cannot seal GlideTransformer as already sealed..
+        /// </summary>
+        internal static string GlideTransformer_AlreadySealedError {
+            get {
+                return ResourceManager.GetString("GlideTransformer_AlreadySealedError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Cannot transform values as GlideTransformer is not sealed..
+        /// </summary>
+        internal static string GlideTransformer_NotSealedError {
+            get {
+                return ResourceManager.GetString("GlideTransformer_NotSealedError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Cannot register transformers after the GlideTransformer was sealed..
+        /// </summary>
+        internal static string GlideTransformer_SealedError {
+            get {
+                return ResourceManager.GetString("GlideTransformer_SealedError", resourceCulture);
             }
         }
         
@@ -110,6 +164,24 @@ namespace Valkey.Glide.Properties {
         internal static string Set_TypeConverterFailedToConvertValueToInvariantString {
             get {
                 return ResourceManager.GetString("Set_TypeConverterFailedToConvertValueToInvariantString", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Key not provided with SetCommand..
+        /// </summary>
+        internal static string SetCommand_KeyNotSet {
+            get {
+                return ResourceManager.GetString("SetCommand_KeyNotSet", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Value not provided with SetCommand..
+        /// </summary>
+        internal static string SetCommand_ValueNotSet {
+            get {
+                return ResourceManager.GetString("SetCommand_ValueNotSet", resourceCulture);
             }
         }
     }

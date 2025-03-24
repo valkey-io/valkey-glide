@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Valkey.Glide;
 using Valkey.Glide.Commands;
+using Valkey.Glide.Commands.ExtensionMethods;
 using Valkey.Glide.InterOp.Native;
 
 namespace AspireSample.Worker.Controllers;

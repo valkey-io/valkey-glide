@@ -1,3 +1,4 @@
+using OpenTelemetry.Logs;
 using Scalar.AspNetCore;
 using Valkey.Glide.Hosting;
 
@@ -11,6 +12,7 @@ public class Program
         builder.Services.AddControllers();
         builder.Services.AddOpenApi();
         builder.Services.AddValkeyGlide("valkey"); // We configure the glide client to use the "valkey" connection string here.
+        // builder.Services.ConfigureValkeyGlideTransformers(builder => ...) // Optionally register custom transformers for your types (relevant for CustomCommand)
         builder.AddServiceDefaults();
 
         WebApplication app = builder.Build();

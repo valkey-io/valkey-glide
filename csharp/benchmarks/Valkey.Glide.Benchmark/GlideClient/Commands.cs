@@ -1,6 +1,7 @@
 ﻿using BenchmarkDotNet.Attributes;
 
 using Valkey.Glide.Commands;
+using Valkey.Glide.Commands.ExtensionMethods;
 using Valkey.Glide.InterOp.Native;
 
 namespace Valkey.Glide.Benchmark.GlideClient;
@@ -26,7 +27,7 @@ public class Commands
     {
         _fixture = new ValkeyAspireFixture();
         await _fixture.InitializeAsync();
-        _client = new Valkey.Glide.GlideClient(_fixture.ConnectionRequest);
+        _client = new Valkey.Glide.GlideClient(_fixture.ConnectionRequest, new GlideTransformer());
         await _client.SetAsync("existing-key", "value");
     }
 

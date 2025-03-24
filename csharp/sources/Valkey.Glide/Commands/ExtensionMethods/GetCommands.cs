@@ -1,9 +1,8 @@
-﻿using Valkey.Glide.InterOp.Exceptions;
-using Valkey.Glide.InterOp.Native;
-
+﻿using Valkey.Glide.Exceptions;
+using Valkey.Glide.InterOp.Exceptions;
 using Value = Valkey.Glide.InterOp.Value;
 
-namespace Valkey.Glide.Commands;
+namespace Valkey.Glide.Commands.ExtensionMethods;
 
 /// <summary>
 /// The <see langword="class"/> provides extensions for executing
@@ -28,12 +27,12 @@ public static class GetCommands
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        Value result = await client.CommandAsync(ERequestType.Get, key.AsRedisCommandText());
+        Value result = await new GetCommand().WithKey(key).ExecuteAsync(client);
         if (result.IsNone())
             return null;
         if (result.IsString(out string? text))
             return text;
 
-        throw new GlideException("Get failed");
+        throw new GlideGetCommandFailedException(key, result);
     }
 }

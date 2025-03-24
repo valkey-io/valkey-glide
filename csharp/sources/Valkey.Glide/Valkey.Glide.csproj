@@ -58,6 +58,35 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Language.resx</DependentUpon>
     </Compile>
+    <Compile Update="Commands\CustomCommand.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>CustomCommand.tt</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Commands\CustomCommand.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>CustomCommand.cs</LastGenOutput>
+    </None>
+    <Compile Update="CustomCommand.cs">
+      <DependentUpon>CustomCommand.tt</DependentUpon>
+    </Compile>
+    <None Update="IGlideClient.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>IGlideClient.cs</LastGenOutput>
+    </None>
+    <Compile Update="IGlideClient.cs">
+      <DependentUpon>IGlideClient.tt</DependentUpon>
+    </Compile>
+    <None Update="GlideClient.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>GlideClient.cs</LastGenOutput>
+    </None>
+    <Compile Update="GlideClient.cs">
+      <DependentUpon>GlideClient.tt</DependentUpon>
+    </Compile>
   </ItemGroup>
 
 </Project>

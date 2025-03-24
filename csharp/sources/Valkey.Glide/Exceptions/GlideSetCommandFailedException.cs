@@ -2,7 +2,7 @@
 using Valkey.Glide.InterOp.Exceptions;
 using Valkey.Glide.Properties;
 
-namespace Valkey.Glide.Commands;
+namespace Valkey.Glide.Exceptions;
 
 /// <summary>
 /// Represents an exception thrown when a "set" command execution fails in the context of Glide operations.
@@ -13,12 +13,14 @@ namespace Valkey.Glide.Commands;
 /// It contains information about the associated <see cref="Value"/> that caused the failure and provides
 /// a message describing the error.
 /// </remarks>
+/// <seealso cref="GlideKeyCommandFailedException"/>
 /// <seealso cref="GlideCommandFailedException"/>
 /// <seealso cref="GlideException"/>
-public sealed class GlideSetCommandFailedException : GlideCommandFailedException
+/// <seealso cref="Value"/>
+public sealed class GlideSetCommandFailedException : GlideKeyCommandFailedException
 {
 
-    internal GlideSetCommandFailedException(Value value) : base(value, Language.Set_CommandExecutionWasNotSuccessfull)
+    internal GlideSetCommandFailedException(string key, Value value) : base(Language.Exceptions_GlideSetCommandFailedException, key, value)
     {
     }
 }

@@ -3,6 +3,7 @@ using NSubstitute;
 using NSubstitute.Core;
 
 using Valkey.Glide.Commands;
+using Valkey.Glide.Commands.ExtensionMethods;
 using Valkey.Glide.InterOp.Native;
 using Valkey.Glide.UnitTests.Fixtures;
 

@@ -3,7 +3,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
-
 using ConnectionRequest = Valkey.Glide.InterOp.ConnectionRequest;
 
 namespace Valkey.Glide.Hosting;
@@ -15,6 +14,36 @@ namespace Valkey.Glide.Hosting;
 [PublicAPI]
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Configures and registers custom <see cref="IGlideTransformer{T}"/>'s for Valkey Glide within the service collection.
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item>
+    /// This is safe to be called multiple times and by library authors.
+    /// Each registered configuration action will be applied
+    /// sequentially.
+    /// </item>
+    /// <item>
+    /// To override default <see cref="IGlideTransformer{T}"/>'s, use this call <b>AFTER</b> adding the client.
+    /// </item>
+    /// </list>
+    /// </remarks>
+    /// <param name="services">The service collection to which the custom Glide transformers will be added.</param>
+    /// <param name="configure">An action to configure the GlideTransformerBuilder, allowing the registration of custom transformers.</param>
+    /// <returns>The modified service collection with the custom Glide transformers registered.</returns>
+    public static IServiceCollection ConfigureValkeyGlideTransformers(this IServiceCollection services,
+        Action<GlideTransformerBuilder> configure)
+    {
+        services.AddTransient<GlideTransformerBuilder>(_ =>
+        {
+            GlideTransformerBuilder builder = new();
+            configure(builder);
+            return builder;
+        });
+        return services;
+    }
+
     /// <summary>
     /// Configures and registers the necessary services for Valkey Glide within the service collection using a connection string.
     /// </summary>
@@ -34,7 +63,7 @@ public static class ServiceCollectionExtensions
     )
     {
         NativeClient.Initialize(nativeLoggerLevel, nativeLogFilePath);
-        services.AddSingleton<InterOp.ConnectionRequest>(
+        services.AddSingleton<ConnectionRequest>(
             serviceProvider =>
             {
                 IConfiguration configuration = serviceProvider.GetRequiredService<IConfiguration>();
@@ -49,9 +78,7 @@ public static class ServiceCollectionExtensions
             }
         );
 
-        services.AddScoped<IGlideClient, GlideClient>(
-            serviceProvider => new GlideClient(serviceProvider.GetRequiredService<InterOp.ConnectionRequest>())
-        );
+        AddGlideClient(services);
         return services;
     }
 
@@ -94,16 +121,32 @@ public static class ServiceCollectionExtensions
     /// </exception>
     public static IServiceCollection AddValkeyGlide(
         this IServiceCollection services,
-        InterOp.ConnectionRequest connectionRequest,
+        ConnectionRequest connectionRequest,
         ELoggerLevel nativeLoggerLevel = ELoggerLevel.Off,
         string? nativeLogFilePath = null
     )
     {
         NativeClient.Initialize(nativeLoggerLevel, nativeLogFilePath);
         services.AddSingleton(connectionRequest);
-        services.AddScoped<IGlideClient, GlideClient>(
-            serviceProvider => new GlideClient(serviceProvider.GetRequiredService<InterOp.ConnectionRequest>())
-        );
+        AddGlideClient(services);
         return services;
     }
+
+    private static void AddGlideClient(this IServiceCollection services)
+        => services.AddScoped<IGlideClient, GlideClient>(
+            serviceProvider =>
+            {
+                IEnumerable<GlideTransformerBuilder> glideTransformerBuilders =
+                    serviceProvider.GetServices<GlideTransformerBuilder>();
+                GlideTransformer glideTransformer = new();
+                foreach (GlideTransformerBuilder glideTransformerBuilder in glideTransformerBuilders)
+                {
+                    foreach (Action<GlideTransformer> action in glideTransformerBuilder.GetTransformers())
+                    {
+                        action(glideTransformer);
+                    }
+                }
+                ConnectionRequest connectionRequest = serviceProvider.GetRequiredService<ConnectionRequest>();
+                return new GlideClient(connectionRequest, glideTransformer);
+            });
 }

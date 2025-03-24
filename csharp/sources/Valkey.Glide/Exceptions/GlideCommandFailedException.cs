@@ -1,7 +1,7 @@
 ﻿using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Exceptions;
 
-namespace Valkey.Glide.Commands;
+namespace Valkey.Glide.Exceptions;
 
 /// <summary>
 /// Represents an exception that is thrown when a command execution fails within Glide operations.
@@ -28,7 +28,7 @@ public abstract class GlideCommandFailedException : GlideException
     /// This exception provides details about the specific <see cref="Value"/> that caused the failure
     /// and captures a meaningful error message for diagnostic purposes.
     /// </remarks>
-    protected GlideCommandFailedException(Value value, string message, Exception? innerException = null) : base(message, innerException)
+    protected GlideCommandFailedException(string message, Value value, Exception? innerException = null) : base(message, innerException)
     {
         Value = value;
     }

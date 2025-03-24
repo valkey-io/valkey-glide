@@ -1,4 +1,7 @@
-﻿using System.ComponentModel;
+﻿<#@ template language="C#" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+using System.ComponentModel;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
 
@@ -10,18 +13,18 @@ public sealed class GlideClient : IDisposable, IGlideClient
     private readonly INativeClient _nativeClient;
     private readonly bool          _ownsNativeClient;
 
-    public GlideClient(INativeClient nativeClient, GlideTransformer? glideTransformer = null)
+    public GlideClient(INativeClient nativeClient, GlideTransformer glideTransformer)
     {
         _nativeClient     = nativeClient;
         _ownsNativeClient = false;
-        _glideTransformer = glideTransformer ?? new GlideTransformer().AddDefaultTransformers();
+        _glideTransformer = glideTransformer;
     }
 
-    public GlideClient(InterOp.ConnectionRequest connectionRequest, GlideTransformer? glideTransformer = null)
+    public GlideClient(InterOp.ConnectionRequest connectionRequest, GlideTransformer glideTransformer)
     {
         _nativeClient     = new NativeClient(connectionRequest);
         _ownsNativeClient = true;
-        _glideTransformer = glideTransformer ?? new GlideTransformer().AddDefaultTransformers();
+        _glideTransformer = glideTransformer;
     }
 
     /// <inheritdoc />
@@ -34,11 +37,4 @@ public sealed class GlideClient : IDisposable, IGlideClient
     [EditorBrowsable(EditorBrowsableState.Advanced)]
     public Task<InterOp.Value> CommandAsync(ERequestType requestType, params string[] args)
         => _nativeClient.SendCommandAsync(requestType, args);
-
-    public string Transform<T>(T arg)
-    {
-        if (arg is IHasGlideTransformer<T> hasGlideTransformer)
-            return hasGlideTransformer.GetGlideTransformer().ToValkeyString(arg);
-        return _glideTransformer.Transform(arg);
-    }
 }

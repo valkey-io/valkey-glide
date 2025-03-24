@@ -33,7 +33,31 @@
     <data name="Set_TypeConverterFailedToConvertValueToInvariantString" xml:space="preserve">
         <value>While converting the value for the SET command to a string, using the default type converter, ConvertToInvariantString returned null. Please make sure that the type converter you are using can convert the value to a string. If that is not possible, please use this method with a string value instead, allowing you to handle the conversion yourself.</value>
     </data>
-    <data name="Set_CommandExecutionWasNotSuccessfull" xml:space="preserve">
+    <data name="Exceptions_GlideSetCommandFailedException" xml:space="preserve">
         <value>The set command failed to execute successful</value>
+    </data>
+    <data name="GlideTransformer_SealedError" xml:space="preserve">
+        <value>Cannot register transformers after the GlideTransformer was sealed.</value>
+    </data>
+    <data name="GlideTransformer_NotSealedError" xml:space="preserve">
+        <value>Cannot transform values as GlideTransformer is not sealed.</value>
+    </data>
+    <data name="GlideTransformer_AlreadySealedError" xml:space="preserve">
+        <value>Cannot seal GlideTransformer as already sealed.</value>
+    </data>
+    <data name="CustomCommand_ArgumentNotSet_0index" xml:space="preserve">
+        <value>CustomCommand setup incomplete, Arg{0} not set.</value>
+    </data>
+    <data name="SetCommand_KeyNotSet" xml:space="preserve">
+        <value>Key not provided with SetCommand.</value>
+    </data>
+    <data name="SetCommand_ValueNotSet" xml:space="preserve">
+        <value>Value not provided with SetCommand.</value>
+    </data>
+    <data name="GetCommand_KeyNotSet" xml:space="preserve">
+        <value>Key not provided with GetCommand.</value>
+    </data>
+    <data name="Exceptions_GlideGetCommandFailedException" xml:space="preserve">
+        <value>The get command failed to execute.</value>
     </data>
 </root>
