@@ -2,7 +2,7 @@
 
 package api
 
-// #cgo LDFLAGS: -lglide_rs
+// #cgo LDFLAGS: -lglide_ffi
 // #cgo !windows LDFLAGS: -lm
 // #cgo darwin LDFLAGS: -framework Security
 // #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
@@ -6616,4 +6616,32 @@ func (client *baseClient) GeoAddWithOptions(
 		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
+}
+
+// Returns the GeoHash strings representing the positions of all the specified
+// `members` in the sorted set stored at the `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key -  The key of the sorted set.
+//	members - The array of members whose GeoHash strings are to be retrieved.
+//
+// Returns value:
+//
+//	An array of GeoHash strings representing the positions of the specified members stored
+//	at key. If a member does not exist in the sorted set, a `null` value is returned
+//	for that member.
+//
+// [valkey.io]: https://valkey.io/commands/geohash/
+func (client *baseClient) GeoHash(key string, members []string) ([]string, error) {
+	result, err := client.executeCommand(
+		C.GeoHash,
+		append([]string{key}, members...),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
 }
