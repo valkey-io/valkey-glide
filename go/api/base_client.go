@@ -79,6 +79,55 @@ type baseClient struct {
 	mu         sync.Mutex
 }
 
+// buildAsyncClientType safely initializes a C.ClientType with an AsyncClient_Body.
+//
+// It manually writes into the union field of the following C layout:
+//
+//	typedef struct ClientType {
+//	    ClientType_Tag tag;
+//	    union {
+//	        AsyncClient_Body async_client;
+//	    };
+//	};
+//
+// Since cgo doesn’t support C unions directly, this is exposed in Go as:
+//
+//	type _Ctype_ClientType struct {
+//	    tag   _Ctype_ClientType_Tag
+//	    _     [4]uint8       // padding/alignment
+//	    anon0 [16]uint8      // raw bytes of the union
+//	}
+//
+// This function verifies that AsyncClient_Body fits in the union's underlying memory (anon0),
+// and writes it using unsafe.Pointer.
+//
+// # Returns
+// A fully initialized C.ClientType struct, or an error if layout validation fails.
+func buildAsyncClientType(successCb C.SuccessCallback, failureCb C.FailureCallback) (C.ClientType, error) {
+	var clientType C.ClientType
+	clientType.tag = C.AsyncClient
+
+	asyncBody := C.AsyncClient_Body{
+		success_callback: successCb,
+		failure_callback: failureCb,
+	}
+
+	// Validate that AsyncClient_Body fits in the union's allocated memory.
+	if unsafe.Sizeof(C.AsyncClient_Body{}) > unsafe.Sizeof(clientType.anon0) {
+		return clientType, fmt.Errorf(
+			"internal client error: AsyncClient_Body size (%d bytes) exceeds union field size (%d bytes)",
+			unsafe.Sizeof(C.AsyncClient_Body{}),
+			unsafe.Sizeof(clientType.anon0),
+		)
+	}
+
+	// Write asyncBody into the union using unsafe casting.
+	anonPtr := unsafe.Pointer(&clientType.anon0[0])
+	*(*C.AsyncClient_Body)(anonPtr) = asyncBody
+
+	return clientType, nil
+}
+
 // Creates a connection by invoking the `create_client` function from Rust library via FFI.
 // Passes the pointers to callback functions which will be invoked when the command succeeds or fails.
 // Once the connection is established, this function invokes `free_connection_response` exposed by rust library to free the
@@ -95,12 +144,20 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 
 	byteCount := len(msg)
 	requestBytes := C.CBytes(msg)
+
+	clientType, err := buildAsyncClientType(
+		(C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
+		(C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
+	)
+	if err != nil {
+		return nil, &errors.ClosingError{Msg: err.Error()}
+	}
+
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
-			(C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
-			(C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
+			&clientType,
 		),
 	)
 	defer C.free_connection_response(cResponse)
