@@ -3,7 +3,6 @@
 package integTest
 
 import (
-	"fmt"
 	"math/rand"
 	"strings"
 
@@ -1119,7 +1118,6 @@ func (suite *GlideTestSuite) TestConfigRewriteCluster() {
 			}
 		}
 		if len(configFile) > 0 {
-			fmt.Println("ConfigFile: ", configFile)
 			responseRewrite, err := client.ConfigRewrite()
 			assert.NoError(t, err)
 			assert.Equal(t, "OK", responseRewrite)
