@@ -73,10 +73,19 @@ type clientConfiguration interface {
 	toProtobuf() (*protobuf.ConnectionRequest, error)
 }
 
+type CommandExecutor interface {
+	ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error)
+}
+
+func (client *baseClient) ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
+	return client.executeCommand(requestType, args)
+}
+
 type baseClient struct {
 	pending    map[unsafe.Pointer]struct{}
 	coreClient unsafe.Pointer
 	mu         sync.Mutex
+	executor   CommandExecutor
 }
 
 // Creates a connection by invoking the `create_client` function from Rust library via FFI.
@@ -111,7 +120,15 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 		return nil, &errors.ConnectionError{Msg: message}
 	}
 
-	return &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}, nil
+	client := &baseClient{
+		coreClient: cResponse.conn_ptr,
+		executor:   nil, // Will be set after initialization
+	}
+
+	// Set executor after the client is created to avoid self-reference issues
+	client.executor = client
+
+	return client, nil
 }
 
 // Close terminates the client by closing all associated resources.
@@ -459,8 +476,12 @@ func (client *baseClient) SetWithOptions(key string, value string, options optio
 //
 // [valkey.io]: https://valkey.io/commands/get/
 func (client *baseClient) Get(key string) (Result[string], error) {
-	result, err := client.executeCommand(C.Get, []string{key})
+	result, err := client.executor.ExecuteCommand(C.Get, []string{key})
 	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	if result == nil {
 		return CreateNilStringResult(), err
 	}
 
