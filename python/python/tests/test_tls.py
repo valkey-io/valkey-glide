@@ -1,16 +1,11 @@
 import asyncio
-from typing import AsyncGenerator, List, cast
+from typing import AsyncGenerator
 
 import pytest
-from glide import ByAddressRoute
-from glide.async_commands.command_args import ObjectType
 from glide.config import ProtocolVersion
-from glide.exceptions import RequestError
-from glide.glide import ClusterScanCursor
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_client import TGlideClient
 from tests.conftest import create_client
 from tests.utils.cluster import ValkeyCluster
-from tests.utils.utils import get_random_string
 
 
 @pytest.fixture(scope="module")
