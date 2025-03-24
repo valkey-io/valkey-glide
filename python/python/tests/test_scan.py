@@ -384,10 +384,13 @@ class TestScan:
         # check the keys we can get with keys command, and scan from the beginning
         keys = []
         for address in all_other_addresses:
-            result = await glide_client_scoped.custom_command(
-                ["KEYS", "*"], ByAddressRoute(address.host, address.port)
+            result_keys = cast(
+                List[bytes],
+                await glide_client_scoped.custom_command(
+                    ["KEYS", "*"], ByAddressRoute(address.host, address.port)
+                ),
             )
-            keys.extend(cast(List[bytes], result))
+            keys.extend(cast(List[bytes], result_keys))
 
         cursor = ClusterScanCursor()
         results = []
