@@ -4,6 +4,7 @@ import copy
 import json as OuterJson
 import random
 import typing
+from typing import List, Optional
 
 import pytest
 from glide.async_commands.core import ConditionalChange
@@ -186,7 +187,7 @@ class TestJson:
             [key1, key2],
             "$",
         )
-        expected_result = [
+        expected_result: List[Optional[bytes]] = [
             b'[{"a":1.0,"b":{"a":1,"b":2.5,"c":true}}]',
             b'[{"a":3.0,"b":{"a":1,"b":4}}]',
         ]
