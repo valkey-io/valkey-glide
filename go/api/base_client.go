@@ -5684,12 +5684,12 @@ func (client *baseClient) XClaimJustIdWithOptions(
 //
 // Parameters:
 //
-//		key - The key of the string.
+//	 key - The key of the string.
 //	 bit - The bit value to match. The value must be 0 or 1.
 //
 // Return value:
 //
-//		The position of the first occurrence matching bit in the binary value of
+//	 The position of the first occurrence matching bit in the binary value of
 //	 the string held at key. If bit is not found, a -1 is returned.
 //
 // [valkey.io]: https://valkey.io/commands/bitpos/
@@ -5705,13 +5705,13 @@ func (client *baseClient) BitPos(key string, bit int64) (int64, error) {
 //
 // Parameters:
 //
-//		key - The key of the string.
+//	 key - The key of the string.
 //	 bit - The bit value to match. The value must be 0 or 1.
 //	 bitposOptions  - The [BitPosOptions] type.
 //
 // Return value:
 //
-//		The position of the first occurrence matching bit in the binary value of
+//	 The position of the first occurrence matching bit in the binary value of
 //	 the string held at key. If bit is not found, a -1 is returned.
 //
 // [valkey.io]: https://valkey.io/commands/bitpos/
