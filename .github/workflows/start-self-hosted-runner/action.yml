@@ -23,7 +23,7 @@ runs:
         - name: Start EC2 self hosted runner
           shell: bash
           env:
-            EC2_INSTANCE_ID: ${{ inputs.ec2-instance-id }}
+              EC2_INSTANCE_ID: ${{ inputs.ec2-instance-id }}
           run: |
               sudo snap refresh
               sudo snap install aws-cli --classic

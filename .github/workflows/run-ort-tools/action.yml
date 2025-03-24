@@ -13,7 +13,7 @@ runs:
           working-directory: ./ort/
           shell: bash
           env:
-            FOLDER_PATH: ${{ inputs.folder_path }}
+              FOLDER_PATH: ${{ inputs.folder_path }}
           run: |
               echo "Running ORT tools for $FOLDER_PATH"
               FOLDER="$FOLDER_PATH"
