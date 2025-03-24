@@ -6618,19 +6618,20 @@ func (client *baseClient) GeoAddWithOptions(
 	return handleIntResponse(result)
 }
 
-// GeoHash returns the GeoHash strings for specified members in a sorted set.
+// Returns the GeoHash strings representing the positions of all the specified
+// `members` in the sorted set stored at the `key`.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	key -  The key of the sorted set.
-//	members - he array of members whose GeoHash strings are to be retrieved.
+//	members - The array of members whose GeoHash strings are to be retrieved.
 //
 // Returns value:
 //
 //	An array of GeoHash strings representing the positions of the specified members stored
-//	at key. If a member does not exist in the sorted set, a null value is returned
+//	at key. If a member does not exist in the sorted set, a `null` value is returned
 //	for that member.
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
