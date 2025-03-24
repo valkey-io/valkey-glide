@@ -399,7 +399,7 @@ async def create_client(
         )
         return await GlideClusterClient.create(cluster_config)
     else:
-        valkey_cluster = valkey_cluster or pytest.standalone_cluster
+        valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
         config = GlideClientConfiguration(
             addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
