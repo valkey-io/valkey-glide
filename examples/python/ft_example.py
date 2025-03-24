@@ -1,5 +1,5 @@
 import asyncio
-import json as jsonpy
+import json
 import uuid
 from typing import List, Optional, Tuple
 
@@ -15,8 +15,7 @@ from glide import (
     RequestError,
 )
 from glide import TimeoutError as GlideTimeoutError
-from glide.async_commands.server_modules import ft
-from glide.async_commands.server_modules import glide_json as json
+from glide.async_commands.server_modules import ft, glide_json
 from glide.async_commands.server_modules.ft_options.ft_create_options import (
     DataType,
     FtCreateOptions,
@@ -88,8 +87,8 @@ async def app_logic(client: GlideClusterClient):
     )  # 'OK'
 
     # Create a json key.
-    assert await json.set(client, json_key1, "$", jsonpy.dumps(json_value1)) == OK
-    assert await json.set(client, json_key2, "$", jsonpy.dumps(json_value2)) == OK
+    assert await glide_json.set(client, json_key1, "$", json.dumps(json_value1)) == OK
+    assert await glide_json.set(client, json_key2, "$", json.dumps(json_value2)) == OK
 
     # Search for the vector
     ft_search_options = FtSearchOptions(
