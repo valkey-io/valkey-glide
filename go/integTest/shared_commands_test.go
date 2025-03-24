@@ -9152,6 +9152,7 @@ func (suite *GlideTestSuite) TestGeoDist() {
 
 		// assert correct result with default metric
 		actual, err := client.GeoDist(key1, member1, member2)
+		fmt.Println(actual.Value())
 		if err != nil {
 			t.Fatalf("Failed to get geo distance: %v", err)
 		}
