@@ -16,7 +16,12 @@ import (
 // GlideClusterClient interface compliance check.
 var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
 
-// GlideClusterClientCommands is a client used for connection in cluster mode.
+// Client used for connection to cluster servers.
+// Use [NewGlideClusterClient] to request a client.
+//
+// For full documentation refer to [Valkey Glide Wiki].
+//
+// [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#cluster
 type GlideClusterClientCommands interface {
 	BaseClient
 	GenericClusterCommands
@@ -24,13 +29,38 @@ type GlideClusterClientCommands interface {
 	ConnectionManagementClusterCommands
 }
 
-// GlideClusterClient implements cluster mode operations by extending baseClient functionality.
+// Client used for connection to cluster servers.
+// Use [NewGlideClusterClient] to request a client.
+//
+// For full documentation refer to [Valkey Glide Wiki].
+//
+// [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#cluster
 type GlideClusterClient struct {
 	*baseClient
 }
 
-// NewGlideClusterClient creates a [GlideClusterClientCommands] in cluster mode using the given
-// [GlideClusterClientConfiguration].
+// Creates a new `GlideClusterClient` instance and establishes a connection to a Valkey Cluster.
+//
+// Parameters:
+//
+//	config - The configuration options for the client, including cluster addresses, authentication credentials, TLS settings,
+//	   periodic checks, and Pub/Sub subscriptions.
+//
+// Return value:
+//
+//	A connected `GlideClusterClient` instance.
+//
+// Remarks:
+//
+//	Use this static method to create and connect a `GlideClient` to a Valkey Cluster.
+//	The client will automatically handle connection establishment, including cluster topology discovery and handling
+//	    of authentication and TLS configurations.
+//
+//	  - **Cluster Topology Discovery**: The client will automatically discover the cluster topology
+//	      based on the seed addresses provided.
+//	  - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
+//	      using the specified username and password.
+//	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
 func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
@@ -42,8 +72,7 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
-// the executed
-// command.
+// the executed command.
 //
 // The command will be routed automatically based on the passed command's default request policy.
 //
