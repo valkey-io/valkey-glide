@@ -26,6 +26,13 @@ runs:
     # TODO: self-hosted runners are actually cloning the repo, using the cache from the previous run
     # will not work as expected. We need to find a way to cache the valkey repo on the runner itself.
     steps:
+        - name: "Setup Environment Variables"
+          shell: bash
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+          run: |
+              echo "ENGINE_VERSION=$ENGINE_VERSION" >> $GITHUB_ENV
+
         - name: Cache Valkey for non self hosted runners
           if: ${{!contains(inputs.target, 'aarch64-unknown') }}
           uses: actions/cache@v4
@@ -39,7 +46,7 @@ runs:
           if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
           shell: bash
           run: |
-              echo "Cloning and checking out Valkey ${{ inputs.engine-version }}"
+              echo "Cloning and checking out Valkey $ENGINE_VERSION"
               cd ~/
               if [[ -d valkey ]]; then
                 echo "Removing existing valkey directory..."
@@ -47,7 +54,7 @@ runs:
               fi
               git clone https://github.com/valkey-io/valkey.git
               cd valkey
-              git checkout ${{ inputs.engine-version }}
+              git checkout "$ENGINE_VERSION"
 
         - name: Build and install engine
           shell: bash
@@ -73,7 +80,7 @@ runs:
               # In Valkey releases, the engine is built with symlinks from valkey-server and valkey-cli
               # to redis-server and redis-cli. This step ensures that the engine is properly installed
               # with the expected version and that Valkey symlinks are correctly created.
-              EXPECTED_VERSION=`echo ${{ inputs.engine-version }} | sed -e "s/^redis-//"`
+              EXPECTED_VERSION=`echo "$ENGINE_VERSION" | sed -e "s/^redis-//"`
               INSTALLED_VER=$(redis-server -v)
               if [[ $INSTALLED_VER != *"${EXPECTED_VERSION}"* ]]; then
                   echo "Wrong version has been installed. Expected: $EXPECTED_VERSION, Installed: $INSTALLED_VER"
