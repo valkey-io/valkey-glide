@@ -547,6 +547,10 @@ func (client *GlideClusterClient) ScanWithOptions(
 
 // Set the name of the current connection.
 //
+// Parameters:
+//
+//	connectionName - Connection name of the current connection.
+//
 // Return value:
 //
 //	OK - when connection name is set
