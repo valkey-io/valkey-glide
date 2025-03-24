@@ -1,5 +1,5 @@
 [env]
-GLIDE_NAME = { value = "GlideGo", force = true }
+GLIDE_NAME = { value = "GlideFFI", force = true }
 GLIDE_VERSION = "0.1.0"
 # Suppress error
 # > ... was built for newer 'macOS' version (14.5) than being linked (14.0)

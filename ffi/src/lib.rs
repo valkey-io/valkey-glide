@@ -38,36 +38,36 @@ use tokio::runtime::Runtime;
 /// The struct is freed by the external caller by using `free_command_response` to avoid memory leaks.
 /// TODO: Add a type enum to validate what type of response is being sent in the CommandResponse.
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CommandResponse {
-    response_type: ResponseType,
-    int_value: i64,
-    float_value: c_double,
-    bool_value: bool,
+    pub response_type: ResponseType,
+    pub int_value: i64,
+    pub float_value: c_double,
+    pub bool_value: bool,
 
     /// Below two values are related to each other.
     /// `string_value` represents the string.
     /// `string_value_len` represents the length of the string.
-    string_value: *mut c_char,
-    string_value_len: c_long,
+    pub string_value: *mut c_char,
+    pub string_value_len: c_long,
 
     /// Below two values are related to each other.
     /// `array_value` represents the array of CommandResponse.
     /// `array_value_len` represents the length of the array.
-    array_value: *mut CommandResponse,
-    array_value_len: c_long,
+    pub array_value: *mut CommandResponse,
+    pub array_value_len: c_long,
 
     /// Below two values represent the Map structure inside CommandResponse.
     /// The map is transformed into an array of (map_key: CommandResponse, map_value: CommandResponse) and passed to Go.
     /// These are represented as pointers as the map can be null (optionally present).
-    map_key: *mut CommandResponse,
-    map_value: *mut CommandResponse,
+    pub map_key: *mut CommandResponse,
+    pub map_value: *mut CommandResponse,
 
     /// Below two values are related to each other.
     /// `sets_value` represents the set of CommandResponse.
     /// `sets_value_len` represents the length of the set.
-    sets_value: *mut CommandResponse,
-    sets_value_len: c_long,
+    pub sets_value: *mut CommandResponse,
+    pub sets_value_len: c_long,
 }
 
 impl Default for CommandResponse {
@@ -90,7 +90,7 @@ impl Default for CommandResponse {
 }
 
 #[repr(C)]
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub enum ResponseType {
     #[default]
     Null = 0,
@@ -132,8 +132,8 @@ pub type FailureCallback = unsafe extern "C" fn(
 /// The struct is freed by the external caller by using `free_connection_response` to avoid memory leaks.
 #[repr(C)]
 pub struct ConnectionResponse {
-    conn_ptr: *const c_void,
-    connection_error_message: *const c_char,
+    pub conn_ptr: *const c_void,
+    pub connection_error_message: *const c_char,
 }
 
 /// A `GlideClient` adapter.
@@ -817,6 +817,79 @@ pub unsafe extern "C" fn request_cluster_scan(
             .client
             .clone()
             .cluster_scan(&scan_state_cursor, cluster_scan_args)
+            .await;
+        let value = match result {
+            Ok(value) => value,
+            Err(err) => {
+                let message = errors::error_message(&err);
+                let error_type = errors::error_type(&err);
+
+                let c_err_str = CString::into_raw(
+                    CString::new(message).expect("Couldn't convert error message to CString"),
+                );
+                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
+                return;
+            }
+        };
+
+        let result: RedisResult<CommandResponse> = valkey_value_to_command_response(value);
+
+        unsafe {
+            match result {
+                Ok(message) => (core.success_callback)(channel, Box::into_raw(Box::new(message))),
+                Err(err) => {
+                    let message = errors::error_message(&err);
+                    let error_type = errors::error_type(&err);
+
+                    let c_err_str = CString::into_raw(
+                        CString::new(message).expect("Couldn't convert error message to CString"),
+                    );
+                    (core.failure_callback)(channel, c_err_str, error_type);
+                }
+            };
+        }
+    });
+}
+
+/// CGO method which allows the Go client to request an update to the connection password.
+///
+/// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
+/// `channel` is a pointer to a valid payload buffer which is created in the Go client.
+/// `password` is a pointer to C string representation of the password passed in Go.
+/// `immediate_auth` is a boolean flag to indicate if the password should be updated immediately.
+/// `success_callback` is the callback that will be called when a command succeeds.
+/// `failure_callback` is the callback that will be called when a command fails.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be valid until `close_client` is called.
+/// * `channel` must be valid until it is passed in a call to [`free_command_response`].
+/// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
+#[no_mangle]
+pub unsafe extern "C" fn update_connection_password(
+    client_adapter_ptr: *const c_void,
+    channel: usize,
+    password: *const c_char,
+    immediate_auth: bool,
+) {
+    let client_adapter =
+        unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
+    let core = client_adapter.core.clone();
+
+    // argument conversion to be used in the async block
+    let password = unsafe { CStr::from_ptr(password).to_str().unwrap() };
+    let password_option = if password.is_empty() {
+        None
+    } else {
+        Some(password.to_string())
+    };
+
+    client_adapter.runtime.spawn(async move {
+        let result = core
+            .client
+            .clone()
+            .update_connection_password(password_option, immediate_auth)
             .await;
         let value = match result {
             Ok(value) => value,

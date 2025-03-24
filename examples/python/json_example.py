@@ -1,5 +1,6 @@
 import asyncio
-from typing import List, Optional, Tuple
+import json
+from typing import List, Optional, Tuple, cast
 
 from glide import AllNodes, ClosingError
 from glide import ConnectionError as GlideConnectionError
@@ -13,11 +14,11 @@ from glide import (
     RequestError,
 )
 from glide import TimeoutError as GlideTimeoutError
-from glide.async_commands.server_modules import glide_json as json
+from glide.async_commands.server_modules import glide_json
 
 
 async def create_client(
-    nodes_list: Optional[List[Tuple[str, int]]] = None
+    nodes_list: Optional[List[Tuple[str, int]]] = None,
 ) -> GlideClusterClient:
     """
     Creates and returns a GlideClusterClient instance.
@@ -58,10 +59,10 @@ async def app_logic(client: GlideClusterClient):
     json_value = {"a": 1.0, "b": 2}
     json_str = json.dumps(json_value)
     # Send SET and GET
-    set_response = await json.set(client, "key", "$", json_str)
+    set_response = await glide_json.set(client, "key", "$", json_str)
     Logger.log(LogLevel.INFO, "app", f"Set response is = {set_response!r}")  # 'OK'
 
-    get_response = await json.get(client, "key", "$")
+    get_response = cast(bytes, await glide_json.get(client, "key", "$"))
     Logger.log(
         LogLevel.INFO, "app", f"Get response is = {get_response.decode()!r}"
     )  # "[{\"a\":1.0,\"b\":2}]"
