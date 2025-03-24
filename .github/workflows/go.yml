@@ -72,6 +72,7 @@ jobs:
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
 
     test-go:
+        name: Go Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
         timeout-minutes: 35
         strategy:
@@ -84,6 +85,11 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
 
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
