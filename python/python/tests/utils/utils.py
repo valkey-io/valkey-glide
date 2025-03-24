@@ -83,7 +83,7 @@ async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> 
     global version_str
     if not version_str:
         info = parse_info_response(await client.info([InfoSection.SERVER]))
-        version_str = info.get("valkey_version") or info.get("redis_version")
+        version_str = info.get("valkey_version") or info.get("redis_version")  # type: ignore
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
