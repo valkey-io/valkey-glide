@@ -1104,7 +1104,7 @@ func (suite *GlideTestSuite) TestClusterLolwut() {
 	client := suite.defaultClusterClient()
 
 	result, err := client.Lolwut()
-	assert.Nil(suite.T(), err)
+	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), result)
 	assert.Contains(suite.T(), result, "Redis ver.")
 }
@@ -1119,7 +1119,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
 		RouteOption: &options.RouteOption{Route: config.AllNodes},
 	}
 	result, err := client.LolwutWithOptions(options)
-	assert.Nil(suite.T(), err)
+	assert.NoError(suite.T(), err)
 
 	assert.True(suite.T(), result.IsMultiValue())
 	multiValue := result.MultiValue()
@@ -1138,7 +1138,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
 		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
 	}
 	result, err := client.LolwutWithOptions(options)
-	assert.Nil(suite.T(), err)
+	assert.NoError(suite.T(), err)
 
 	assert.True(suite.T(), result.IsMultiValue())
 	multiValue := result.MultiValue()
@@ -1157,7 +1157,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
 		RouteOption: &options.RouteOption{Route: config.RandomRoute},
 	}
 	result, err := client.LolwutWithOptions(options)
-	assert.Nil(suite.T(), err)
+	assert.NoError(suite.T(), err)
 
 	assert.True(suite.T(), result.IsSingleValue())
 	singleValue := result.SingleValue()
