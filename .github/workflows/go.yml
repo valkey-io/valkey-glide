@@ -9,6 +9,7 @@ on:
         paths:
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
+            - ffi/src/**
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
@@ -22,6 +23,7 @@ on:
         paths:
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
+            - ffi/src/**
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
@@ -72,6 +74,7 @@ jobs:
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
 
     test-go:
+        name: Go Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
         timeout-minutes: 35
         strategy:
@@ -84,6 +87,11 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
 
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
@@ -132,11 +140,6 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: go
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
