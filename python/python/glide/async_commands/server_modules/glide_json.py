@@ -896,7 +896,7 @@ async def mget(
                     # stored at `doc1`.
     """
     args = ["JSON.MGET"] + keys + [path]
-    return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
+    return cast(List[Optional[bytes]], await client.custom_command(args))
 
 
 async def numincrby(
