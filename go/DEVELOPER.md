@@ -202,33 +202,18 @@ Development on the Go wrapper may involve changes in either the Go or Rust code.
 - staticcheck
 - golines
 
-**Rust:**
-
-- clippy
-- fmt
-
 #### Running the linters
 
 Run from the main `/go` folder
 
-1. Go
+```bash
+# For go1.22:
+make install-dev-tools
+# For go1.22:
+make install-dev-tools-go1.22
 
-    ```bash
-    # For go1.22:
-    make install-dev-tools
-    # For go1.22:
-    make install-dev-tools-go1.22
-
-    make lint
-    ```
-
-2. Rust
-
-    ```bash
-    rustup component add clippy rustfmt
-    cargo clippy --all-features --all-targets -- -D warnings
-    cargo fmt --manifest-path ./Cargo.toml --all
-    ```
+make lint
+```
 
 #### Fixing lint formatting errors
 
