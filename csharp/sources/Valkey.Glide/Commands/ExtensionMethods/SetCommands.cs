@@ -1,5 +1,6 @@
 ﻿using Valkey.Glide.Exceptions;
 using Valkey.Glide.InterOp;
+using Valkey.Glide.InterOp.Routing;
 
 namespace Valkey.Glide.Commands.ExtensionMethods;
 
@@ -21,7 +22,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .ExecuteAsync(client);
         if (result.IsOk())
@@ -40,7 +41,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithGet()
             .ExecuteAsync(client);
@@ -60,7 +61,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .ExecuteAsync(client);
@@ -78,7 +79,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithGet()
@@ -99,7 +100,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .ExecuteAsync(client);
@@ -117,7 +118,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithGet()
@@ -139,7 +140,7 @@ public static class SetCommands
         string comparisonValue)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .ExecuteAsync(client);
@@ -159,7 +160,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithGet()
@@ -182,7 +183,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithExpiresIn(expiration)
             .ExecuteAsync(client);
@@ -202,7 +203,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithExpiresIn(expiration)
             .WithGet()
@@ -225,7 +226,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresIn(expiration)
@@ -246,7 +247,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresIn(expiration)
@@ -270,7 +271,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresIn(expiration)
@@ -291,7 +292,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresIn(expiration)
@@ -316,7 +317,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresIn(expiration)
@@ -338,7 +339,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresIn(expiration)
@@ -363,7 +364,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithExpiresAt(expiration)
             .ExecuteAsync(client);
@@ -383,7 +384,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithExpiresAt(expiration)
             .WithGet()
@@ -406,7 +407,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresAt(expiration)
@@ -427,7 +428,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresAt(expiration)
@@ -451,7 +452,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresAt(expiration)
@@ -472,7 +473,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresAt(expiration)
@@ -497,7 +498,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresAt(expiration)
@@ -519,7 +520,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresAt(expiration)
@@ -542,7 +543,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithKeepTtl()
             .ExecuteAsync(client);
@@ -560,7 +561,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithKeepTtl()
             .WithGet()
@@ -581,7 +582,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithKeepTtl()
@@ -601,7 +602,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithKeepTtl()
@@ -623,7 +624,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithKeepTtl()
@@ -643,7 +644,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithKeepTtl()
@@ -667,7 +668,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithKeepTtl()
@@ -688,7 +689,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<T>().WithKey(key)
+        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithKeepTtl()

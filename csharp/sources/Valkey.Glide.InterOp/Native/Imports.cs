@@ -166,6 +166,9 @@ public static class Imports
     /// <param name="in_request_type">
     /// The type of command to issue.
     /// </param>
+    /// <param name="in_routing_info">
+    /// Either nullptr or the routing info to use for the command
+    /// </param>
     /// <param name="in_args">
     /// A C-String array of arguments to be passed, with the size of <paramref name="in_args_count"/> and zero terminated.
     /// </param>
@@ -204,6 +207,7 @@ public static class Imports
         [In] nint in_callback,
         [In] nint in_callback_data,
         [In] ERequestType in_request_type,
+        [In] RoutingInfo* in_routing_info,
         [In] byte** in_args,
         [In] int in_args_count
     );

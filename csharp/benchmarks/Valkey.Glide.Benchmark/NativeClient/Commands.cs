@@ -1,6 +1,6 @@
 ﻿using BenchmarkDotNet.Attributes;
-
 using Valkey.Glide.InterOp.Native;
+using Valkey.Glide.InterOp.Routing;
 
 namespace Valkey.Glide.Benchmark.NativeClient;
 
@@ -17,8 +17,8 @@ public class Commands
 {
     #region Setup / Teardown
 
-    private InterOp.NativeClient        _nativeClient = null!;
-    private ValkeyAspireFixture _fixture      = null!;
+    private InterOp.NativeClient _nativeClient = null!;
+    private ValkeyAspireFixture _fixture = null!;
 
     [GlobalSetup]
     public async Task Setup()
@@ -26,7 +26,7 @@ public class Commands
         _fixture = new ValkeyAspireFixture();
         await _fixture.InitializeAsync();
         _nativeClient = new InterOp.NativeClient(_fixture.ConnectionRequest);
-        await _nativeClient.SendCommandAsync(ERequestType.Set, "existing-key", "\"value\"");
+        await _nativeClient.SendCommandAsync(ERequestType.Set, new NoRouting(), "existing-key", "\"value\"");
     }
 
     [GlobalCleanup]
@@ -41,6 +41,6 @@ public class Commands
     [Benchmark]
     public async Task AsyncGetNonExistingKey()
     {
-        _ = await _nativeClient.SendCommandAsync(ERequestType.Get, "non-existing-key");
+        _ = await _nativeClient.SendCommandAsync(ERequestType.Get, new NoRouting(), "non-existing-key");
     }
 }

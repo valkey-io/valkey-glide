@@ -3,7 +3,7 @@ using Valkey.Glide;
 using Valkey.Glide.Commands;
 using Valkey.Glide.Commands.ExtensionMethods;
 using Valkey.Glide.Data;
-using Valkey.Glide.InterOp;
+using Valkey.Glide.InterOp.Routing;
 
 namespace AspireSample.Worker.Controllers;
 
@@ -27,7 +27,7 @@ public class ValkeyController(IGlideClient glideClient) : ControllerBase
     [HttpGet("set/builder/{key}")]
     public async Task SetBuilder([FromRoute] string key, [FromQuery] string value, [FromQuery] TimeSpan? expiresIn = null)
     {
-        SetCommand<string> command = SetCommand.Create(key, value);
+        var command = SetCommand.Create(key, value);
         if (expiresIn.HasValue)
             command = command.WithExpiresIn(TimeSpan.FromSeconds(100));
         await glideClient.ExecuteAsync(command);
@@ -36,6 +36,6 @@ public class ValkeyController(IGlideClient glideClient) : ControllerBase
     [HttpGet("custom/set/{key}")]
     public async Task CustomSet([FromRoute] string key, [FromQuery] string value)
     {
-        _ = await glideClient.ExecuteAsync(CustomCommand.Create(new CommandText("SET"), new CommandText(key), value));
+        _ = await glideClient.ExecuteAsync(CustomCommand.Create(new NoRouting(), new CommandText("SET"), new CommandText(key), value));
     }
 }

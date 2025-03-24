@@ -1,4 +1,5 @@
 ﻿using Valkey.Glide.InterOp.Native;
+using Valkey.Glide.InterOp.Routing;
 
 namespace Valkey.Glide.InterOp;
 
@@ -14,5 +15,6 @@ public interface INativeClient
     /// <param name="requestType">The type of request to be sent to the native client.</param>
     /// <param name="args">The arguments associated with the request.</param>
     /// <returns>A task representing the asynchronous operation, containing the result as a Value structure.</returns>
-    Task<Value> SendCommandAsync(ERequestType requestType, params string[] args);
+    Task<Value> SendCommandAsync<TRoutingInfo>(ERequestType requestType, TRoutingInfo routingInfo, params string[] args)
+        where TRoutingInfo : IRoutingInfo;
 }

@@ -1,8 +1,8 @@
 ﻿using System.Runtime.InteropServices;
 using System.Text;
-
 using Valkey.Glide.InterOp.Exceptions;
 using Valkey.Glide.InterOp.Native;
+using Valkey.Glide.InterOp.Routing;
 
 namespace Valkey.Glide.InterOp;
 
@@ -180,7 +180,7 @@ public sealed class NativeClient : IDisposable, INativeClient
         {
             foreach (byte* ptr in strings)
             {
-                MarshalFreeUtf8String(ptr);
+                MarshalFree(ptr);
             }
         }
 
@@ -234,7 +234,7 @@ public sealed class NativeClient : IDisposable, INativeClient
         }
     }
 
-    private static unsafe void MarshalFreeUtf8String(byte* buffer)
+    private static unsafe void MarshalFree(byte* buffer)
     {
         if (buffer is null)
             return;
@@ -352,7 +352,9 @@ public sealed class NativeClient : IDisposable, INativeClient
         ReleaseUnmanagedResources();
     }
 
-    public unsafe Task<Value> SendCommandAsync(ERequestType requestType, params string[] args)
+    public unsafe Task<Value> SendCommandAsync<TRoutingInfo>(ERequestType requestType, TRoutingInfo routingInfo,
+        params string[] args)
+        where TRoutingInfo : IRoutingInfo
     {
         // ReSharper disable once InconsistentlySynchronizedField -- The lock is done to prevent double-free in all scenarios
         if (_handle is null)
@@ -360,6 +362,7 @@ public sealed class NativeClient : IDisposable, INativeClient
         TaskCompletionSource<Value> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         GCHandle dataHandle = GCHandle.Alloc(tcs, GCHandleType.Normal);
+        var bytes = new List<nint>();
         try
         {
             byte*[] argsArr = new byte*[args.Length];
@@ -386,16 +389,35 @@ public sealed class NativeClient : IDisposable, INativeClient
                 }
 
                 CommandResult result;
-                fixed (byte** argsArrPtr = argsArr)
-                    result = Imports.command(
-                        // ReSharper disable once InconsistentlySynchronizedField -- The lock is done to prevent double-free in all scenarios
-                        _handle.Value,
-                        CommandCallbackFptr,
-                        GCHandle.ToIntPtr(dataHandle),
-                        requestType,
-                        argsArrPtr,
-                        argsArr.Length
-                    );
+                var routingInfoNative = routingInfo.ToNative(MarshalCollectingString, MarshalCollectingBytes);
+                if (routingInfoNative is { } routingInfoNativeValue)
+                {
+                    fixed (byte** argsArrPtr = argsArr)
+                        result = Imports.command(
+                            // ReSharper disable once InconsistentlySynchronizedField -- The lock is done to prevent double-free in all scenarios
+                            _handle.Value,
+                            CommandCallbackFptr,
+                            GCHandle.ToIntPtr(dataHandle),
+                            requestType,
+                            &routingInfoNativeValue,
+                            argsArrPtr,
+                            argsArr.Length
+                        );
+                }
+                else
+                {
+                    fixed (byte** argsArrPtr = argsArr)
+                        result = Imports.command(
+                            // ReSharper disable once InconsistentlySynchronizedField -- The lock is done to prevent double-free in all scenarios
+                            _handle.Value,
+                            CommandCallbackFptr,
+                            GCHandle.ToIntPtr(dataHandle),
+                            requestType,
+                            null,
+                            argsArrPtr,
+                            argsArr.Length
+                        );
+                }
 
                 if (result.success != 0 /* is true */)
                     return tcs.Task;
@@ -406,7 +428,7 @@ public sealed class NativeClient : IDisposable, INativeClient
             {
                 foreach (byte* t in argsArr)
                 {
-                    MarshalFreeUtf8String(t);
+                    MarshalFree(t);
                 }
             }
         }
@@ -414,6 +436,29 @@ public sealed class NativeClient : IDisposable, INativeClient
         {
             dataHandle.Free();
             throw;
+        }
+        finally
+        {
+            foreach (byte* ptr in bytes)
+            {
+                MarshalFree(ptr);
+            }
+        }
+
+        byte* MarshalCollectingString(string? input)
+        {
+            if (input is null)
+                return null;
+            byte* ptr = MarshalUtf8String(input);
+            bytes.Add((nint)ptr);
+            return ptr;
+        }
+
+        nint MarshalCollectingBytes(int size)
+        {
+            nint ptr = Marshal.AllocHGlobal(size);
+            bytes.Add(ptr);
+            return ptr;
         }
     }
 

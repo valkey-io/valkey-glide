@@ -5,6 +5,7 @@ using Valkey.Glide.Commands;
 using Valkey.Glide.Data;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
+using Valkey.Glide.InterOp.Routing;
 using Value = Valkey.Glide.InterOp.Value;
 
 namespace Valkey.Glide.UnitTests.CommandSyntax;
@@ -17,7 +18,7 @@ public class CustomCommandBuilderTests
     public CustomCommandBuilderTests()
     {
         _nativeClientSubstitute = Substitute.For<INativeClient>();
-        _nativeClientSubstitute.SendCommandAsync(Arg.Any<ERequestType>(), Arg.Any<string[]>())
+        _nativeClientSubstitute.SendCommandAsync(Arg.Any<ERequestType>(), Arg.Any<IRoutingInfo>(), Arg.Any<string[]>())
             .ReturnsForAnyArgs(Value.CreateOkay());
         GlideSerializerCollection serializerCollection = new GlideSerializerCollection();
         serializerCollection.RegisterDefaultSerializers();
@@ -29,20 +30,20 @@ public class CustomCommandBuilderTests
     public async Task SimpleSetAsync()
     {
         // Arrange
-        CustomCommand<CommandText, CommandText, string> command = CustomCommand.Create(new CommandText("SET"), new CommandText("foo"), "bar");
+        var command = CustomCommand.Create(new NoRouting(), new CommandText("SET"), new CommandText("foo"), "bar");
 
         // Act
         Value result = await _glideClient.ExecuteAsync(command);
 
         // Assert
-        await _nativeClientSubstitute.Received(1).SendCommandAsync(ERequestType.CustomCommand, ["SET", "foo", "\"bar\""]);
+        await _nativeClientSubstitute.Received(1).SendCommandAsync(ERequestType.CustomCommand, Arg.Any<IRoutingInfo>(), ["SET", "foo", "\"bar\""]);
     }
 
     [Fact(DisplayName = "SET foo \"bar\"")]
     public async Task ThrowsInvalidOperationIfNotAllParametersAreSet()
     {
         // Arrange
-        CustomCommand<CommandText, CommandText, string> command = new();
+        var command = new CustomCommand<NoRouting, CommandText, CommandText, string>{RoutingInfo = new NoRouting()};
         command = command.WithArg1(""); // We only set arg1, arg2 and arg3 are not set.
 
         // Act

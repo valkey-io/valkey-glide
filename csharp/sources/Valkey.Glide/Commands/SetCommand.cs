@@ -3,6 +3,7 @@
 using System.Runtime.CompilerServices;
 using Valkey.Glide.Commands.Abstraction;
 using Valkey.Glide.InterOp.Native;
+using Valkey.Glide.InterOp.Routing;
 using Value = Valkey.Glide.InterOp.Value;
 
 namespace Valkey.Glide.Commands;
@@ -20,7 +21,22 @@ public static class SetCommand
     /// <param name="key">The key associated with the value being set.</param>
     /// <param name="value">The value to be set.</param>
     /// <returns>A new instance of <see cref="SetCommand{T}"/> configured with the specified key and value.</returns>
-    public static SetCommand<T> Create<T>(string key, T value) => new SetCommand<T>().WithKey(key).WithValue(value);
+    public static SetCommand<NoRouting, TValue> Create<TValue>(string key, TValue value) =>
+        new SetCommand<NoRouting, TValue> {RoutingInfo = new NoRouting()}.WithKey(key).WithValue(value);
+
+    /// <summary>
+    /// Creates a new instance of <see cref="SetCommand{NoRouting, TValue}"/> configured with a key and a value using default routing.
+    /// </summary>
+    /// <typeparam name="TValue">The type of the value to be set.</typeparam>
+    /// <param name="key">The key associated with the value to be set.</param>
+    /// <param name="value">The value to be set.</param>
+    /// <returns>A new instance of <see cref="SetCommand{NoRouting, TValue}"/> configured with the specified key and value.</returns>
+    public static SetCommand<TRoutingInfo, TValue> Create<TRoutingInfo, TValue>(
+        TRoutingInfo routingInfo,
+        string key,
+        TValue value
+    ) where TRoutingInfo : IRoutingInfo =>
+        new SetCommand<TRoutingInfo, TValue> {RoutingInfo = routingInfo}.WithKey(key).WithValue(value);
 }
 
 /// <summary>
@@ -29,13 +45,12 @@ public static class SetCommand
 /// including expiration policies, conditional setting, and value retrieval.
 /// </summary>
 /// <typeparam name="T">The type of the value being set.</typeparam>
-public readonly struct SetCommand<T> : IGlideCommand
+public readonly struct SetCommand<TRoutingInfo, TValue>()
+    : IGlideCommand where TRoutingInfo : IRoutingInfo
 {
-
-    public SetCommand() { }
     private string Key { get; init; } = string.Empty; // key
     private bool ValueSet { get; init; }
-    private T? Value { get; init; } = default; // value
+    private TValue? Value { get; init; } = default; // value
     private bool Get { get; init; } // GET
 
     private TimeSpan? ExpiresIn { get; init; } // EX seconds / PX milliseconds
@@ -45,41 +60,42 @@ public readonly struct SetCommand<T> : IGlideCommand
     private bool SetIfDoesNotExists { get; init; } // NX
     private bool SetIfExists { get; init; } // XX
     private string? SetIfEquals { get; init; } // IFEQ comparison-value
+    public required TRoutingInfo RoutingInfo { get; init; }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public SetCommand<T> WithKey(string key)
+    public SetCommand<TRoutingInfo, TValue> WithKey(string key)
         => this with {Key = key};
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public SetCommand<T> WithValue(T value)
+    public SetCommand<TRoutingInfo, TValue> WithValue(TValue value)
         => this with {Value = value, ValueSet = true};
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public SetCommand<T> WithGet()
+    public SetCommand<TRoutingInfo, TValue> WithGet()
         => this with {Get = true};
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public SetCommand<T> WithExpiresIn(TimeSpan expiresIn)
+    public SetCommand<TRoutingInfo, TValue> WithExpiresIn(TimeSpan expiresIn)
         => this with {ExpiresIn = expiresIn, ExpiresAt = null, KeepTtl = false};
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public SetCommand<T> WithExpiresAt(DateTime expiresAt)
+    public SetCommand<TRoutingInfo, TValue> WithExpiresAt(DateTime expiresAt)
         => this with {ExpiresIn = null, ExpiresAt = expiresAt, KeepTtl = false};
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public SetCommand<T> WithKeepTtl()
+    public SetCommand<TRoutingInfo, TValue> WithKeepTtl()
         => this with {ExpiresIn = null, ExpiresAt = null, KeepTtl = true};
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public SetCommand<T> WithSetIfNotExists()
+    public SetCommand<TRoutingInfo, TValue> WithSetIfNotExists()
         => this with {SetIfDoesNotExists = true, SetIfExists = false, SetIfEquals = null};
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public SetCommand<T> WithSetIfExists()
+    public SetCommand<TRoutingInfo, TValue> WithSetIfExists()
         => this with {SetIfDoesNotExists = false, SetIfExists = true, SetIfEquals = null};
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public SetCommand<T> WithSetIfEquals(string value)
+    public SetCommand<TRoutingInfo, TValue> WithSetIfEquals(string value)
         => this with {SetIfDoesNotExists = false, SetIfExists = false, SetIfEquals = value};
 
 
@@ -153,16 +169,19 @@ public readonly struct SetCommand<T> : IGlideCommand
         if (SetIfDoesNotExists)
             return client.CommandAsync(
                 ERequestType.Set,
+                RoutingInfo,
                 [Key.AsRedisCommandText(), client.Transform(Value), "NX".AsRedisCommandText(), ..ttlParameters]
             );
         if (SetIfExists)
             return client.CommandAsync(
                 ERequestType.Set,
+                RoutingInfo,
                 [Key.AsRedisCommandText(), client.Transform(Value), "XX".AsRedisCommandText(), ..ttlParameters]
             );
         if (SetIfEquals is not null)
             return client.CommandAsync(
                 ERequestType.Set,
+                RoutingInfo,
                 [
                     Key.AsRedisCommandText(),
                     client.Transform(Value),
@@ -173,6 +192,7 @@ public readonly struct SetCommand<T> : IGlideCommand
             );
         return client.CommandAsync(
             ERequestType.Set,
+            RoutingInfo,
             [Key.AsRedisCommandText(), client.Transform(Value), ..ttlParameters]
         );
     }

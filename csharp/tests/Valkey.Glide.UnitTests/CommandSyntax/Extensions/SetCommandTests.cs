@@ -4,6 +4,7 @@ using NSubstitute.Core;
 using Valkey.Glide.Commands.ExtensionMethods;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
+using Valkey.Glide.InterOp.Routing;
 using Valkey.Glide.TestCommon;
 
 namespace Valkey.Glide.UnitTests.CommandSyntax;
@@ -71,7 +72,7 @@ public class SetCommandTests
         glideSerializerCollection.RegisterDefaultSerializers();
         glideSerializerCollection.Seal();
         var glideClient = new GlideClient(nativeClient, glideSerializerCollection);
-        nativeClient.SendCommandAsync(Arg.Any<ERequestType>(), Arg.Any<string[]>())
+        nativeClient.SendCommandAsync(Arg.Any<ERequestType>(), Arg.Any<IRoutingInfo>(), Arg.Any<string[]>())
             .Returns(Task.FromResult(InterOp.Value.CreateNone()));
 
         // Act
@@ -117,8 +118,9 @@ public class SetCommandTests
 
         // Assert
         ICall? call = Assert.Single(nativeClient.ReceivedCalls());
+        Assert.True(call.GetArguments().Length == 3, "NativeClient call has changed. Tests need to be updated.");
         Assert.Equal(ERequestType.Set, call.GetArguments()[0]);
-        IEnumerable<string> parameters = (IEnumerable<string>)call.GetArguments()[1]!;
+        IEnumerable<string> parameters = (IEnumerable<string>)call.GetArguments()[2]!;
         string input = string.Join(" ", parameters);
         Assert.Equal(command, input);
     }

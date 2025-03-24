@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
+using Valkey.Glide.InterOp.Routing;
 
 namespace Valkey.Glide;
 
@@ -46,8 +47,9 @@ public sealed class GlideClient : IDisposable, IGlideClient
 
     [EditorBrowsable(EditorBrowsableState.Advanced)]
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public Task<InterOp.Value> CommandAsync(ERequestType requestType, params string[] args)
-        => _nativeClient.SendCommandAsync(requestType, args);
+    public Task<InterOp.Value> CommandAsync<TRoutingInfo>(ERequestType requestType, TRoutingInfo routingInfo, params string[] args)
+        where TRoutingInfo : IRoutingInfo
+        => _nativeClient.SendCommandAsync(requestType, routingInfo, args);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public string Transform<T>(T value) => _glideSerializerCollection.Transform(value);

@@ -2,6 +2,7 @@
 <#@ import namespace="System.Linq" #>
 using Valkey.Glide.Commands.Abstraction;
 using Valkey.Glide.InterOp.Native;
+using Valkey.Glide.InterOp.Routing;
 using Value = Valkey.Glide.InterOp.Value;
 
 namespace Valkey.Glide.Commands;
@@ -36,7 +37,7 @@ namespace Valkey.Glide.Commands;
         var templateArgNames = Enumerable.Range(0, t).Select(i => $"Arg{i + 1}").ToArray();
         var templateArgsWithNames = templateArgs.Zip(templateArgNames, (l, r) => (templateArg: l, name: r)).ToArray();
         var templateArgsCommaSeparated = string.Join(", ", templateArgs);
-        var fullTemplateArgs = string.Concat("<", templateArgsCommaSeparated, ">");
+        var fullTemplateArgs = string.Concat("<TRoutingInfo, ", templateArgsCommaSeparated, ">");
 #>
 
 /// <summary>
@@ -61,9 +62,10 @@ public static partial class CustomCommand
         }
 #>
     /// <returns>An instance of <see cref="CustomCommand{<#= templateArgsCommaSeparated #>}"/> initialized with the provided argument.</returns>
-    public static CustomCommand<#= fullTemplateArgs #> Create<#= fullTemplateArgs #>(<#=
+    public static CustomCommand<#= fullTemplateArgs #> Create<#= fullTemplateArgs #>(TRoutingInfo routingInfo, <#=
                 string.Join(", ", templateArgsWithNames.Select(t => string.Join(" ", t.templateArg, t.name.ToLower()))) #>)
-         => new CustomCommand<#= fullTemplateArgs #>()
+         where TRoutingInfo : IRoutingInfo
+         => new CustomCommand<#= fullTemplateArgs #>{RoutingInfo = routingInfo}
 <#
         for (var i = 0; i < templateArgNames.Length; i++)
         {
@@ -96,8 +98,9 @@ public static partial class CustomCommand
 /// <item>All values are handled as "values". If you want to issue command text, use the <see cref="Data.CommandText"/> struct</item>
 /// </list>
 /// </remarks>
-public readonly struct CustomCommand<#= fullTemplateArgs #> : IGlideCommand
+public readonly struct CustomCommand<#= fullTemplateArgs #> : IGlideCommand where TRoutingInfo : IRoutingInfo
 {
+    public required TRoutingInfo RoutingInfo { get; init; }
 <#
         foreach (var (templateArg, name) in templateArgsWithNames)
         {
@@ -127,7 +130,7 @@ public readonly struct CustomCommand<#= fullTemplateArgs #> : IGlideCommand
 <#
         }
 #>
-        return client.CommandAsync(ERequestType.CustomCommand, <#=
+        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, <#=
             string.Join(", ", templateArgNames.Select(s => $"client.Transform({s})")) #>);
     }
 }

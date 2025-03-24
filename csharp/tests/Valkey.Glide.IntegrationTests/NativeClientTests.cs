@@ -1,6 +1,7 @@
 using Valkey.Glide.IntegrationTests.Fixtures;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
+using Valkey.Glide.InterOp.Routing;
 using Value = Valkey.Glide.InterOp.Value;
 
 namespace Valkey.Glide.IntegrationTests;
@@ -21,7 +22,7 @@ public class NativeClientTests(ValkeyAspireFixture fixture) : IClassFixture<Valk
     public async Task CanSendGetCommandAsync()
     {
         using NativeClient nativeClient = new(fixture.ConnectionRequest);
-        Value result = await nativeClient.SendCommandAsync(ERequestType.Get, "test");
+        Value result = await nativeClient.SendCommandAsync(ERequestType.Get, new NoRouting(), "test");
         Assert.Equivalent(InterOp.EValueKind.None, result.Kind);
     }
 
@@ -38,9 +39,11 @@ public class NativeClientTests(ValkeyAspireFixture fixture) : IClassFixture<Valk
     {
         Assert.InRange(argsCount, 0, int.MaxValue);
         using NativeClient nativeClient = new(fixture.ConnectionRequest);
-        Value result = await nativeClient.SendCommandAsync(ERequestType.Get, new string('0', argsCount));
+        Value result =
+            await nativeClient.SendCommandAsync(ERequestType.Get, new NoRouting(), new string('0', argsCount));
         Assert.Equivalent(InterOp.EValueKind.None, result.Kind);
     }
+
     [Theory]
     [InlineData(NativeClient.SmallStringOptimizationArgs - 3)]
     [InlineData(NativeClient.SmallStringOptimizationArgs - 2)]
@@ -54,19 +57,19 @@ public class NativeClientTests(ValkeyAspireFixture fixture) : IClassFixture<Valk
     {
         Assert.InRange(argsCount, 2, int.MaxValue);
         using NativeClient nativeClient = new(fixture.ConnectionRequest);
-        Value result = await nativeClient.SendCommandAsync(ERequestType.Set, new string('0', argsCount), string.Concat("\"", new string('0', argsCount - 2), "\""));
+        Value result = await nativeClient.SendCommandAsync(ERequestType.Set, new NoRouting(),
+            new string('0', argsCount), string.Concat("\"", new string('0', argsCount - 2), "\""));
         Assert.Equivalent(InterOp.EValueKind.Okay, result.Kind);
     }
+
     [Fact]
     public async Task CanRunConcurrently()
     {
         using NativeClient nativeClient = new(fixture.ConnectionRequest);
-        await Parallel.ForAsync(0, 1000, new ParallelOptions
-        {
-            MaxDegreeOfParallelism = 1000,
-            TaskScheduler = TaskScheduler.Default,
-        }, async (_, _) => await nativeClient.SendCommandAsync(ERequestType.Get, "test")
-            .ConfigureAwait(false));
+        await Parallel.ForAsync(0, 1000,
+            new ParallelOptions {MaxDegreeOfParallelism = 1000, TaskScheduler = TaskScheduler.Default,}, async (_, _) =>
+                await nativeClient.SendCommandAsync(ERequestType.Get, new NoRouting(), "test")
+                    .ConfigureAwait(false));
     }
 
     [Fact]
@@ -79,5 +82,4 @@ public class NativeClientTests(ValkeyAspireFixture fixture) : IClassFixture<Valk
         nativeClient.Dispose();
         // Assert
     }
-
 }

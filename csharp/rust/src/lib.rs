@@ -3,11 +3,12 @@
 extern crate core;
 
 mod apihandle;
+mod buffering;
 mod data;
 mod helpers;
-mod buffering;
 
 use crate::apihandle::Handle;
+use crate::buffering::FFIBuffer;
 use crate::data::*;
 use glide_core::client::ConnectionError;
 use glide_core::request_type::RequestType;
@@ -17,7 +18,6 @@ use std::panic::catch_unwind;
 use std::ptr::null;
 use std::str::FromStr;
 use tokio::runtime::Builder;
-use crate::buffering::FFIBuffer;
 
 /// # Summary
 /// Special method to free the returned values.
@@ -254,10 +254,11 @@ pub extern "C-unwind" fn csharp_free_client_handle(in_client_ptr: *const c_void)
 ///                   The first arg contains the data of the parameter *in_callback_data*;
 ///                   the second arg indicates whether the third parameter contains the error or result;
 ///                   the third arg contains either the result and MUST be freed by the callback.
-/// ***in_callback_data*** The data to be passed in to *in_callback*
-/// ***in_request_type*** The type of command to issue
+/// ***in_callback_data*** The data to be passed in to *in_callback*.
+/// ***in_request_type*** The type of command to issue.
+/// ***in_routing_info*** Either nullptr or the routing info to use for the command.
 /// ***in_args*** A C-String array of arguments to be passed, with the size of `in_args_count` and zero terminated.
-/// ***in_args_count*** The number of arguments in *in_args*
+/// ***in_args_count*** The number of arguments in *in_args*.
 ///
 /// # Input Safety (in_...)
 /// The data passed in is considered "caller responsibility".
@@ -279,6 +280,7 @@ pub extern "C-unwind" fn csharp_command(
     in_callback: CommandCallback,
     in_callback_data: *mut c_void,
     in_request_type: RequestType,
+    in_routing_info: *const data::routing::RoutingInfo,
     // ToDo: Rework into parameter struct (understand how Command.arg(...) works first)
     //       handling the different input types.
     in_args: *const *const c_char,
@@ -324,21 +326,57 @@ pub extern "C-unwind" fn csharp_command(
 
     let ffi_handle = unsafe { Box::leak(Box::from_raw(in_client_ptr as *mut FFIHandle)) };
     let handle = ffi_handle.handle.clone();
+    let routing_info = if in_routing_info.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            match (*in_routing_info).to_redis() {
+                Ok(d) => d,
+                Err(e) => {
+                    logger_core::log_error(
+                        "csharp_ffi",
+                        format!(
+                            "Error while parsing route in string transformation: {:?}",
+                            e.to_string()
+                        ),
+                    );
+                    return match e {
+                        Utf8OrEmptyError::Utf8Error(e) => CommandResult::new_error(
+                            helpers::to_cstr_ptr_or_null(e.to_string().as_str()),
+                        ),
+                        Utf8OrEmptyError::Empty => {
+                            CommandResult::new_error(helpers::to_cstr_ptr_or_null(
+                                "Routing info incomplete, null value passed in string",
+                            ))
+                        }
+                    };
+                }
+            }
+        })
+    };
     ffi_handle.runtime.spawn(async move {
         logger_core::log_trace("csharp_ffi", "Entered command task with");
-        let data: redis::Value = match handle.command(cmd, args).await {
+        let data: redis::Value = match handle.command(cmd, args, routing_info).await {
             Ok(d) => d,
             Err(e) => {
-                logger_core::log_error("csharp_ffi", format!("Error handling command in task of csharp_command: {:?}", e.to_string()));
+                logger_core::log_error(
+                    "csharp_ffi",
+                    format!(
+                        "Error handling command in task of csharp_command: {:?}",
+                        e.to_string()
+                    ),
+                );
                 let value = Value::simple_string_with_null(e.to_string().as_str());
                 match catch_unwind(|| unsafe {
-                    logger_core::log_trace("csharp_ffi", "Calling command callback of csharp_command");
-                    callback(
-                        callback_data as *mut c_void,
-                        false as c_int,
-                        value,
+                    logger_core::log_trace(
+                        "csharp_ffi",
+                        "Calling command callback of csharp_command",
                     );
-                    logger_core::log_trace("csharp_ffi", "Called command callback of csharp_command");
+                    callback(callback_data as *mut c_void, false as c_int, value);
+                    logger_core::log_trace(
+                        "csharp_ffi",
+                        "Called command callback of csharp_command",
+                    );
                 }) {
                     Err(e) => logger_core::log_error(
                         "csharp_ffi",
@@ -359,9 +397,15 @@ pub extern "C-unwind" fn csharp_command(
             match Value::from_redis(&data, &mut buffer) {
                 Ok(data) => {
                     match catch_unwind(|| {
-                        logger_core::log_trace("csharp_ffi", "Calling command callback of csharp_command");
+                        logger_core::log_trace(
+                            "csharp_ffi",
+                            "Calling command callback of csharp_command",
+                        );
                         callback(callback_data as *mut c_void, true as c_int, data);
-                        logger_core::log_trace("csharp_ffi", "Called command callback of csharp_command");
+                        logger_core::log_trace(
+                            "csharp_ffi",
+                            "Called command callback of csharp_command",
+                        );
                     }) {
                         Err(e) => logger_core::log_error(
                             "csharp_ffi",
@@ -371,15 +415,27 @@ pub extern "C-unwind" fn csharp_command(
                     }
                 }
                 Err(e) => {
-                    logger_core::log_error("csharp_ffi", format!("Error transforming command result in task of csharp_command: {:?}", e.to_string()));
+                    logger_core::log_error(
+                        "csharp_ffi",
+                        format!(
+                            "Error transforming command result in task of csharp_command: {:?}",
+                            e.to_string()
+                        ),
+                    );
                     match catch_unwind(|| {
-                        logger_core::log_trace("csharp_ffi", "Calling command callback of csharp_command");
+                        logger_core::log_trace(
+                            "csharp_ffi",
+                            "Calling command callback of csharp_command",
+                        );
                         callback(
                             callback_data as *mut c_void,
                             false as c_int,
                             Value::simple_string_with_null(e.to_string().as_str()),
                         );
-                        logger_core::log_trace("csharp_ffi", "Called command callback of csharp_command");
+                        logger_core::log_trace(
+                            "csharp_ffi",
+                            "Called command callback of csharp_command",
+                        );
                     }) {
                         Err(e) => logger_core::log_error(
                             "csharp_ffi",

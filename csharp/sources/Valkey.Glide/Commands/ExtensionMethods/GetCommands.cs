@@ -1,5 +1,6 @@
 ﻿using Valkey.Glide.Exceptions;
 using Valkey.Glide.InterOp.Exceptions;
+using Valkey.Glide.InterOp.Routing;
 using Value = Valkey.Glide.InterOp.Value;
 
 namespace Valkey.Glide.Commands.ExtensionMethods;
@@ -27,7 +28,7 @@ public static class GetCommands
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        Value result = await new GetCommand().WithKey(key).ExecuteAsync(client);
+        Value result = await GetCommand.Create(key).ExecuteAsync(client);
         if (result.IsNone())
             return null;
         if (result.IsString(out string? text))

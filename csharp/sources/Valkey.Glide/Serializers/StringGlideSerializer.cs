@@ -7,5 +7,5 @@ namespace Valkey.Glide.Serializers;
 /// </summary>
 public class StringGlideSerializer : IGlideSerializer<string>
 {
-    public string ToValkey(string t) => t.AsRedisString();
+    public string ToValkey(string t) => t.AsRedisString(); // ToDo: Figure out whether this is actually needed (will be obsolete once Parameter struct is added anyways)
 }
