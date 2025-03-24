@@ -20,6 +20,7 @@ use redis::ScanStateRC;
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, RedisResult, Value};
 use std::ffi::CStr;
+use std::future::Future;
 use std::slice::from_raw_parts;
 use std::str;
 use std::sync::Arc;
@@ -136,6 +137,93 @@ pub struct ConnectionResponse {
     pub connection_error_message: *const c_char,
 }
 
+#[repr(C)]
+pub struct CommandError {
+    pub command_error_message: *const c_char,
+    pub command_error_type: RequestErrorType,
+}
+
+#[repr(C)]
+pub struct CommandResult {
+    pub response: *mut CommandResponse,
+    pub command_error: *mut CommandError,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn free_command_result(command_result_ptr: *mut CommandResult) {
+    // TODO: Check for memory leaks
+    if command_result_ptr.is_null() {
+        return;
+    }
+
+    // Take ownership of the CommandResult
+    let command_result = unsafe { Box::from_raw(command_result_ptr) };
+
+    // Free the response if it exists
+    if !command_result.response.is_null() {
+        let response = unsafe { &*command_result.response };
+
+        match response.response_type {
+            ResponseType::String => {
+                // Skip freeing string_value; ownership is delegated to Python
+            }
+            ResponseType::Array => {
+                // Free the array struct itself, but not the items in the array
+                if !response.array_value.is_null() {
+                    let len = response.array_value_len as usize;
+                    unsafe {
+                        drop(Vec::from_raw_parts(response.array_value, len, len));
+                    }
+                }
+            }
+            ResponseType::Map => {
+                // Free the map struct itself (map_key/map_value), but not the items in the map
+                if !response.map_key.is_null() {
+                    let len = response.array_value_len as usize;
+                    unsafe {
+                        drop(Vec::from_raw_parts(response.map_key, len, len));
+                    }
+                }
+                if !response.map_value.is_null() {
+                    let len = response.array_value_len as usize;
+                    unsafe {
+                        drop(Vec::from_raw_parts(response.map_value, len, len));
+                    }
+                }
+            }
+            ResponseType::Sets => {
+                // Free the sets struct itself, but not the items in the set
+                if !response.sets_value.is_null() {
+                    let len = response.sets_value_len as usize;
+                    unsafe {
+                        drop(Vec::from_raw_parts(response.sets_value, len, len));
+                    }
+                }
+            }
+            _ => {
+                // Free the full response for other types
+                unsafe {
+                    free_command_response(command_result.response);
+                }
+            }
+        }
+    }
+
+    // Free the command error if it exists
+    if !command_result.command_error.is_null() {
+        let command_error = unsafe { Box::from_raw(command_result.command_error) };
+        if !command_error.command_error_message.is_null() {
+            unsafe {
+                free_error_message(command_error.command_error_message as *mut c_char);
+            }
+        }
+        drop(command_error);
+    }
+
+    // Finally, free the CommandResult itself
+    drop(command_result);
+}
+
 /// A `GlideClient` adapter.
 pub struct ClientAdapter {
     runtime: Runtime,
@@ -143,15 +231,113 @@ pub struct ClientAdapter {
 }
 
 struct CommandExecutionCore {
-    success_callback: SuccessCallback,
-    failure_callback: FailureCallback,
     client: GlideClient,
+    client_type: ClientType,
+}
+
+impl ClientAdapter {
+    fn execute_command<Fut>(&self, channel: usize, request_future: Fut) -> *mut CommandResult
+    where
+        Fut: Future<Output = RedisResult<Value>> + std::marker::Send + Send + 'static,
+    {
+        match self.core.client_type {
+            ClientType::AsyncClient {
+                success_callback,
+                failure_callback,
+            } => {
+                // Spawn the request for async client
+                self.runtime.spawn(async move {
+                    let result = request_future.await;
+                    Self::handle_result(
+                        result,
+                        Some(success_callback),
+                        Some(failure_callback),
+                        channel,
+                    );
+                });
+                std::ptr::null_mut()
+            }
+            ClientType::SyncClient => {
+                // Block on the request for sync client
+                let result = self.runtime.block_on(async move { request_future.await });
+                Self::handle_result(result, None, None, channel)
+            }
+        }
+    }
+
+    fn handle_result(
+        result: RedisResult<Value>,
+        success_callback: Option<SuccessCallback>,
+        failure_callback: Option<FailureCallback>,
+        channel: usize,
+    ) -> *mut CommandResult {
+        match result {
+            Ok(value) => match valkey_value_to_command_response(value) {
+                Ok(command_response) => {
+                    if let Some(success_callback) = success_callback {
+                        unsafe {
+                            (success_callback)(channel, Box::into_raw(Box::new(command_response)));
+                        }
+                    } else {
+                        return Box::into_raw(Box::new(CommandResult {
+                            response: Box::into_raw(Box::new(command_response)),
+                            command_error: std::ptr::null_mut(),
+                        }));
+                    }
+                }
+                Err(err) => {
+                    if let Some(failure_callback) = failure_callback {
+                        Self::send_async_error(failure_callback, err, channel);
+                    } else {
+                        eprintln!("Error converting value to CommandResponse: {:?}", err);
+                        return create_error_result(err);
+                    }
+                }
+            },
+            Err(err) => {
+                if let Some(failure_callback) = failure_callback {
+                    Self::send_async_error(failure_callback, err, channel);
+                } else {
+                    eprintln!("Error executing command: {:?}", err);
+                    return create_error_result(err);
+                }
+            }
+        };
+        std::ptr::null_mut()
+    }
+
+    fn send_error(&self, err: RedisError, channel: usize) -> *mut CommandResult {
+        match self.core.client_type {
+            ClientType::AsyncClient {
+                success_callback: _,
+                failure_callback,
+            } => {
+                Self::send_async_error(failure_callback, err, channel);
+                std::ptr::null_mut()
+            }
+            ClientType::SyncClient => create_error_result(err),
+        }
+    }
+
+    fn send_async_error(failure_callback: FailureCallback, err: RedisError, channel: usize) {
+        let (c_err_str, error_type) = to_c_error(err);
+        unsafe { (failure_callback)(channel, c_err_str, error_type) };
+    }
+}
+
+#[repr(C)]
+#[derive(Clone)]
+pub enum ClientType {
+    AsyncClient {
+        success_callback: SuccessCallback,
+        failure_callback: FailureCallback,
+    },
+    SyncClient,
 }
 
 fn create_client_internal(
     connection_request_bytes: &[u8],
-    success_callback: SuccessCallback,
-    failure_callback: FailureCallback,
+    client_type: ClientType,
 ) -> Result<ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
@@ -169,9 +355,8 @@ fn create_client_internal(
         .block_on(GlideClient::new(ConnectionRequest::from(request), None))
         .map_err(|err| err.to_string())?;
     let core = Arc::new(CommandExecutionCore {
-        success_callback,
-        failure_callback,
         client,
+        client_type,
     });
     Ok(ClientAdapter { runtime, core })
 }
@@ -197,12 +382,12 @@ fn create_client_internal(
 pub unsafe extern "C" fn create_client(
     connection_request_bytes: *const u8,
     connection_request_len: usize,
-    success_callback: SuccessCallback,
-    failure_callback: FailureCallback,
+    client_type: *const ClientType,
 ) -> *const ConnectionResponse {
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
-    let response = match create_client_internal(request_bytes, success_callback, failure_callback) {
+    let client_type = unsafe { &*client_type };
+    let response = match create_client_internal(request_bytes, client_type.clone()) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
@@ -532,14 +717,13 @@ pub unsafe extern "C" fn command(
     args_len: *const c_ulong,
     route_bytes: *const u8,
     route_bytes_len: usize,
-) {
+) -> *mut CommandResult {
     let client_adapter = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
         Arc::increment_strong_count(client_adapter_ptr);
         Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
     };
-
-    let core = client_adapter.core.clone();
+    let client = client_adapter.core.client.clone();
 
     let arg_vec: Vec<&[u8]> = if !args.is_null() && !args_len.is_null() {
         unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) }
@@ -563,43 +747,33 @@ pub unsafe extern "C" fn command(
         Routes::default()
     };
 
-    client_adapter.runtime.spawn(async move {
-        let result = core
-            .client
-            .clone()
+    let general_command = move |mut client: GlideClient| async move {
+        client
             .send_command(&cmd, get_route(route, Some(&cmd)))
-            .await;
-        let value = match result {
-            Ok(value) => value,
-            Err(err) => {
-                let message = errors::error_message(&err);
-                let error_type = errors::error_type(&err);
+            .await
+    };
+    client_adapter.execute_command(channel, general_command(client))
+}
 
-                let c_err_str = CString::into_raw(
-                    CString::new(message).expect("Couldn't convert error message to CString"),
-                );
-                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
-                return;
-            }
-        };
+fn create_error_result(err: RedisError) -> *mut CommandResult {
+    let (c_err_str, error_type) = to_c_error(err);
+    Box::into_raw(Box::new(CommandResult {
+        response: std::ptr::null_mut(),
+        command_error: Box::into_raw(Box::new(CommandError {
+            command_error_message: c_err_str,
+            command_error_type: error_type,
+        })),
+    }))
+}
 
-        let result: RedisResult<CommandResponse> = valkey_value_to_command_response(value);
+fn to_c_error(err: RedisError) -> (*const c_char, RequestErrorType) {
+    let message = errors::error_message(&err);
+    let error_type = errors::error_type(&err);
 
-        unsafe {
-            match result {
-                Ok(message) => (core.success_callback)(channel, Box::into_raw(Box::new(message))),
-                Err(err) => {
-                    let message = errors::error_message(&err);
-                    let error_type = errors::error_type(&err);
-
-                    let c_err_str = CString::into_raw(
-                        CString::new(message).expect("Couldn't convert error message to CString"),
-                    );
-                    (core.failure_callback)(channel, c_err_str, error_type);
-                }
-            };
-        }
-    });
+    let c_err_str = CString::into_raw(
+        CString::new(message).expect("Couldn't convert error message to CString"),
+    );
+    (c_err_str, error_type)
 }
 
 fn get_route(route: Routes, cmd: Option<&Cmd>) -> Option<RoutingInfo> {
@@ -727,11 +901,9 @@ pub unsafe extern "C" fn request_cluster_scan(
     arg_count: c_ulong,
     args: *const usize,
     args_len: *const c_ulong,
-) {
+) -> *mut CommandResult {
     let client_adapter =
         unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
-    let core = client_adapter.core.clone();
-
     let c_str = unsafe { CStr::from_ptr(cursor.get_cursor()) };
     let temp_str = c_str.to_str().expect("Must be UTF-8");
     let cursor_id = temp_str.to_string();
@@ -764,30 +936,14 @@ pub unsafe extern "C" fn request_cluster_scan(
                 }
             }
             Err(e) => {
-                let redis_err = RedisError::from(e);
-                let message = errors::error_message(&redis_err);
-                let error_type = errors::error_type(&redis_err);
-
-                let c_err_str = CString::into_raw(
-                    CString::new(message).expect("Couldn't convert error message to CString"),
-                );
-                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
-                return;
+                return client_adapter.send_error(RedisError::from(e), channel);
             }
         };
 
         let converted_type = match str::from_utf8(object_type) {
             Ok(v) => ObjectType::from(v.to_string()),
             Err(e) => {
-                let redis_err = RedisError::from(e);
-                let message = errors::error_message(&redis_err);
-                let error_type = errors::error_type(&redis_err);
-
-                let c_err_str = CString::into_raw(
-                    CString::new(message).expect("Couldn't convert error message to CString"),
-                );
-                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
-                return;
+                return client_adapter.send_error(RedisError::from(e), channel);
             }
         };
 
@@ -810,45 +966,13 @@ pub unsafe extern "C" fn request_cluster_scan(
         Ok(existing_cursor) => existing_cursor,
         Err(_error) => ScanStateRC::new(),
     };
-    let core = client_adapter.core.clone();
-
-    client_adapter.runtime.spawn(async move {
-        let result = core
-            .client
-            .clone()
+    let client = client_adapter.core.client.clone();
+    let scan_command = move |mut client: GlideClient| async move {
+        client
             .cluster_scan(&scan_state_cursor, cluster_scan_args)
-            .await;
-        let value = match result {
-            Ok(value) => value,
-            Err(err) => {
-                let message = errors::error_message(&err);
-                let error_type = errors::error_type(&err);
-
-                let c_err_str = CString::into_raw(
-                    CString::new(message).expect("Couldn't convert error message to CString"),
-                );
-                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
-                return;
-            }
-        };
-
-        let result: RedisResult<CommandResponse> = valkey_value_to_command_response(value);
-
-        unsafe {
-            match result {
-                Ok(message) => (core.success_callback)(channel, Box::into_raw(Box::new(message))),
-                Err(err) => {
-                    let message = errors::error_message(&err);
-                    let error_type = errors::error_type(&err);
-
-                    let c_err_str = CString::into_raw(
-                        CString::new(message).expect("Couldn't convert error message to CString"),
-                    );
-                    (core.failure_callback)(channel, c_err_str, error_type);
-                }
-            };
-        }
-    });
+            .await
+    };
+    client_adapter.execute_command(channel, scan_command(client))
 }
 
 /// CGO method which allows the Go client to request an update to the connection password.
@@ -872,10 +996,9 @@ pub unsafe extern "C" fn update_connection_password(
     channel: usize,
     password: *const c_char,
     immediate_auth: bool,
-) {
+) -> *mut CommandResult {
     let client_adapter =
         unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
-    let core = client_adapter.core.clone();
 
     // argument conversion to be used in the async block
     let password = unsafe { CStr::from_ptr(password).to_str().unwrap() };
@@ -884,42 +1007,11 @@ pub unsafe extern "C" fn update_connection_password(
     } else {
         Some(password.to_string())
     };
-
-    client_adapter.runtime.spawn(async move {
-        let result = core
-            .client
-            .clone()
+    let client = client_adapter.core.client.clone();
+    let password_command = move |mut client: GlideClient| async move {
+        client
             .update_connection_password(password_option, immediate_auth)
-            .await;
-        let value = match result {
-            Ok(value) => value,
-            Err(err) => {
-                let message = errors::error_message(&err);
-                let error_type = errors::error_type(&err);
-
-                let c_err_str = CString::into_raw(
-                    CString::new(message).expect("Couldn't convert error message to CString"),
-                );
-                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
-                return;
-            }
-        };
-
-        let result: RedisResult<CommandResponse> = valkey_value_to_command_response(value);
-
-        unsafe {
-            match result {
-                Ok(message) => (core.success_callback)(channel, Box::into_raw(Box::new(message))),
-                Err(err) => {
-                    let message = errors::error_message(&err);
-                    let error_type = errors::error_type(&err);
-
-                    let c_err_str = CString::into_raw(
-                        CString::new(message).expect("Couldn't convert error message to CString"),
-                    );
-                    (core.failure_callback)(channel, c_err_str, error_type);
-                }
-            };
-        }
-    });
+            .await
+    };
+    client_adapter.execute_command(channel, password_command(client))
 }

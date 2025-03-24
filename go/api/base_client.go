@@ -95,12 +95,22 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 
 	byteCount := len(msg)
 	requestBytes := C.CBytes(msg)
+
+	var clientType C.ClientType
+	clientType.tag = C.AsyncClient
+	asyncBody := C.AsyncClient_Body{
+		success_callback: (C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
+		failure_callback: (C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
+	}
+	// Copy the asyncBody into the anon0 union field
+	anonPtr := unsafe.Pointer(&clientType.anon0[0]) // pointer to the start of the union
+	*(*C.AsyncClient_Body)(anonPtr) = asyncBody     // reinterpret and write
+	
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
-			(C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
-			(C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
+			&clientType,
 		),
 	)
 	defer C.free_connection_response(cResponse)
