@@ -69,12 +69,12 @@ extern "C" fn failure_callback(
 // TODO: Move RedisServer implementation from glide-core tests to a reusable library and replace this Server implementation.
 struct Server {
     process: Child,
-    pub(crate) port: u32,
+    pub(crate) port: u16,
 }
 
 impl Server {
     fn new() -> Self {
-        let port = Self::get_available_port() as u32;
+        let port = Self::get_available_port();
         let process = Self::start_server(port);
         Self { process, port }
     }
@@ -87,7 +87,7 @@ impl Server {
             .expect("Can't find available port")
     }
 
-    fn start_server(port: u32) -> Child {
+    fn start_server(port: u16) -> Child {
         let run_server = |engine_type: &str| {
             Command::new(engine_type)
                 .arg("--port")
@@ -121,13 +121,13 @@ impl Drop for Server {
     }
 }
 
-fn create_connection_request(port: u32) -> Vec<u8> {
+fn create_connection_request(port: u16) -> Vec<u8> {
     let host = "localhost";
     let mut request = ConnectionRequest::new();
     request.tls_mode = TlsMode::NoTls.into();
     let mut address_info = NodeAddress::new();
     address_info.host = host.into();
-    address_info.port = port;
+    address_info.port = port as u32;
     request.addresses.push(address_info);
     request.write_to_bytes().expect("Failed to serialize")
 }

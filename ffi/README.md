@@ -5,9 +5,9 @@
 The glide_ffi crate provides a C-compatible Foreign Function Interface (FFI) for interacting with `glide-core`. It serves as a bridge for internal wrappers written in other languages, such as Go, to integrate seamlessly with `glide-core`.
 
 ## Structure
-	•	src/lib.rs: Defines the FFI interface.
-	•	cbindgen.toml: Configuration for generating the C header file (lib.h).
-	•	Cargo.toml: Manages dependencies, including glide-core.
+• src/lib.rs: Defines the FFI interface.
+• cbindgen.toml: Configuration for generating the C header file (lib.h).
+• Cargo.toml: Manages dependencies, including glide-core.
 
 ## Building the Library
 
