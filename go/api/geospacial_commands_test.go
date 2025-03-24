@@ -46,3 +46,53 @@ func ExampleGlideClusterClient_GeoAdd() {
 	// Output:
 	// 2
 }
+
+func ExampleGlideClient_GeoHash() {
+	client := getExampleGlideClient()
+	key := uuid.New().String()
+	membersToCoordinates := map[string]options.GeospatialData{
+		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+		"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+	}
+
+	// Add the coordinates
+	_, err := client.GeoAdd(key, membersToCoordinates)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// Test getting geohash for multiple members
+	geoHashResults, err := client.GeoHash(key, []string{"Palermo", "Catania"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(geoHashResults)
+
+	// Output:
+	// [sqc8b49rny0 sqdtr74hyu0]
+}
+
+func ExampleGlideClusterClient_GeoHash() {
+	client := getExampleGlideClusterClient()
+	key := uuid.New().String()
+	membersToCoordinates := map[string]options.GeospatialData{
+		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+		"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+	}
+
+	// Add the coordinates
+	_, err := client.GeoAdd(key, membersToCoordinates)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// Test getting geohash for multiple members
+	geoHashResults, err := client.GeoHash(key, []string{"Palermo", "Catania"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(geoHashResults)
+
+	// Output:
+	// [sqc8b49rny0 sqdtr74hyu0]
+}
