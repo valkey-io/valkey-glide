@@ -41,7 +41,7 @@ runs:
         - name: Clean repository for musl on ARM64
           shell: bash
           env:
-            WORKSPACE: ${{ inputs.workspace }}
+              WORKSPACE: ${{ inputs.workspace }}
           run: |
               git config --global --add safe.directory "$WORKSPACE"
               git fetch origin ${{ github.sha }}
@@ -58,8 +58,8 @@ runs:
           shell: bash
           working-directory: ./node
           env:
-            NPM_AUTH_TOKEN: ${{ inputs.npm-auth-token }}
-            NPM_SCOPE: ${{ inputs.npm-scope }}
+              NPM_AUTH_TOKEN: ${{ inputs.npm-auth-token }}
+              NPM_SCOPE: ${{ inputs.npm-scope }}
           run: |
               npm config set registry https://registry.npmjs.org/
               npm config set '//registry.npmjs.org/:_authToken' "$NPM_AUTH_TOKEN"

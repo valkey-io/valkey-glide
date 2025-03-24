@@ -20,7 +20,7 @@ runs:
           working-directory: ${{ inputs.folder_path }}
           shell: bash
           env:
-            NAMED_OS: ${{ inputs.named_os }}
+              NAMED_OS: ${{ inputs.named_os }}
           run: |
               SED_FOR_MACOS=`if [[ "$NAMED_OS" == "darwin" ]]; then echo "''"; fi`
               sed -i $SED_FOR_MACOS "s|unknown|${{ env.RELEASE_VERSION }}|g" ./config.toml
