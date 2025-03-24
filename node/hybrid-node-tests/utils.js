@@ -47,6 +47,7 @@ async function checkWhichCommandAvailable() {
  */
 function startServer(serverCmd, port) {
     return new Promise((resolve, reject) => {
+        // nosemgrep
         const serverProcess = spawn(serverCmd, ["--port", port.toString()], {
             stdio: ["ignore", "pipe", "pipe"],
         });
