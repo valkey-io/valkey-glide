@@ -6672,6 +6672,24 @@ func (client *baseClient) GeoPos(key string, members []string) ([][]float64, err
 	return handle2DFloat64OrNullArrayResponse(result)
 }
 
+// Returns the distance between `member1` and `member2` saved in the
+// geospatial index stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member1 - The name of the first member.
+//	member2 - The name of the second member.
+//
+// Return value:
+//
+//	The distance between `member1` and `member2`. If one or both members do not exist,
+//	or if the key does not exist, returns `null`. The default
+//	unit is meters, see - [options.Meters]
+//
+// [valkey.io]: https://valkey.io/commands/geodist/
 func (client *baseClient) GeoDist(key string, member1 string, member2 string) (Result[float64], error) {
 	result, err := client.executeCommand(
 		C.GeoDist,
@@ -6684,6 +6702,24 @@ func (client *baseClient) GeoDist(key string, member1 string, member2 string) (R
 
 }
 
+// Returns the distance between `member1` and `member2` saved in the
+// geospatial index stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member1 - The name of the first member.
+//	member2 - The name of the second member.
+//	unit - The unit of distance measurement - see [options.GeoUnit].
+//
+// Return value:
+//
+//	The distance between `member1` and `member2`. If one or both members
+//	do not exist, or if the key does not exist, returns `null`.
+//
+// [valkey.io]: https://valkey.io/commands/geodist/
 func (client *baseClient) GeoDistWithUnit(
 	key string,
 	member1 string,

@@ -9169,7 +9169,7 @@ func (suite *GlideTestSuite) TestGeoDist() {
 		}
 
 		// assert null result when member index is missing
-		actual, err = client.GeoDist(key1, member1, member3)
+		actual, _ = client.GeoDist(key1, member1, member3)
 		assert.True(t, actual.IsNil())
 
 		// key exists but holds a non-ZSET value
