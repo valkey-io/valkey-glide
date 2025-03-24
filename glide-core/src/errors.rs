@@ -3,6 +3,7 @@
 use redis::RedisError;
 
 #[repr(C)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RequestErrorType {
     Unspecified = 0,
     ExecAbort = 1,
