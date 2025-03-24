@@ -299,3 +299,6 @@ The following arguments are accepted:
 * `host`: Valkey server host url
 * `port`: Valkey server port number
 * `tls`: Valkey TLS configured
+
+### Known issues
+* Conflict in netty and protobuf internal valkey glide dependencies with project dependencies using valkey glide. Issue link: https://github.com/valkey-io/valkey-glide/issues/3402. Workarounds mentioned in this issue: https://github.com/valkey-io/valkey-glide/issues/3367 
