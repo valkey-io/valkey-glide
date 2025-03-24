@@ -2,8 +2,7 @@
 
 using Valkey.Glide.Hosting;
 using Valkey.Glide.InterOp;
-
-using Xunit.Sdk;
+using Valkey.Glide.TestCommon;
 
 namespace Valkey.Glide.UnitTests;
 

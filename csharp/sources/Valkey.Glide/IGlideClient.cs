@@ -4,7 +4,6 @@ namespace Valkey.Glide;
 
 public interface IGlideClient
 {
-
     Task<InterOp.Value> CommandAsync(ERequestType requestType, params string[] args);
-    string Transform<T>(T arg);
+    string Transform<T>(T value);
 }

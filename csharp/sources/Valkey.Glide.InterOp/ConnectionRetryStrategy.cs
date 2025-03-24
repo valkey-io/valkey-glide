@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Valkey.Glide.InterOp;
+﻿namespace Valkey.Glide.InterOp;
 
 /// <summary>
 /// Describes the reconnection strategy the client should use.

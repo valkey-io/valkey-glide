@@ -1,4 +1,3 @@
-using OpenTelemetry.Logs;
 using Scalar.AspNetCore;
 using Valkey.Glide.Hosting;
 

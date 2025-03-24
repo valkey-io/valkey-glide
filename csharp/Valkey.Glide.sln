@@ -16,6 +16,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".files", ".files", "{4580A3
 		.gitignore = .gitignore
 		ReadMe.MD = ReadMe.MD
 		..\.github\workflows\csharp.yml = ..\.github\workflows\csharp.yml
+		DEVELOPER.MD = DEVELOPER.MD
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide.AppHost", "sources\Valkey.Glide.AppHost\Valkey.Glide.AppHost.csproj", "{C3817C29-23FC-451B-BF9C-A9453078DD1F}"
@@ -38,6 +39,26 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AspireSample.Worker", "samp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "csharp_benchmark", "..\benchmarks\csharp\csharp_benchmark.csproj", "{F9BFD252-FC3D-449B-A87B-C2E210A4326C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide.IntegrationTests", "tests\Valkey.Glide.IntegrationTests\Valkey.Glide.IntegrationTests.csproj", "{11F86E43-B18B-4F98-92D0-CCC91AC9EBB4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Valkey.Glide.TestCommon", "tests\Valkey.Glide.TestCommon\Valkey.Glide.TestCommon.csproj", "{2F9ECC78-B8DF-4BCD-BEA1-162F270F8261}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "rust", "rust", "{E5CB13C0-FECB-4CCE-B816-9B4B19CEA41D}"
+	ProjectSection(SolutionItems) = preProject
+		rust\Cargo.toml = rust\Cargo.toml
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomSerializers", "CustomSerializers\CustomSerializers.csproj", "{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{3985653A-9E37-4AC6-BBCB-B7A5DDC2744D}"
+	ProjectSection(SolutionItems) = preProject
+		rust\src\helpers.rs = rust\src\helpers.rs
+		rust\src\lib.rs = rust\src\lib.rs
+		rust\src\buffering.rs = rust\src\buffering.rs
+		rust\src\apihandle.rs = rust\src\apihandle.rs
+		rust\src\data.rs = rust\src\data.rs
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +76,10 @@ Global
 		{ECA90927-A0B1-4B07-8657-B07DC5C0F684} = {78899A43-0744-4364-9923-1803B78FCC5B}
 		{1ED4C38C-A2AB-479D-8671-0B17995F28C5} = {78899A43-0744-4364-9923-1803B78FCC5B}
 		{F9BFD252-FC3D-449B-A87B-C2E210A4326C} = {91D2A259-AC07-400F-A1CC-7E8EFD87DD60}
+		{11F86E43-B18B-4F98-92D0-CCC91AC9EBB4} = {2BBD3AEC-8CF9-4B96-B6DF-8AB46A8DE8DA}
+		{2F9ECC78-B8DF-4BCD-BEA1-162F270F8261} = {2BBD3AEC-8CF9-4B96-B6DF-8AB46A8DE8DA}
+		{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB} = {38BCDD5C-7D83-4EE2-BC43-12B97ED048D8}
+		{3985653A-9E37-4AC6-BBCB-B7A5DDC2744D} = {E5CB13C0-FECB-4CCE-B816-9B4B19CEA41D}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{13C75535-9649-49AB-837F-7A5910309DA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -97,5 +122,17 @@ Global
 		{F9BFD252-FC3D-449B-A87B-C2E210A4326C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F9BFD252-FC3D-449B-A87B-C2E210A4326C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F9BFD252-FC3D-449B-A87B-C2E210A4326C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{11F86E43-B18B-4F98-92D0-CCC91AC9EBB4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{11F86E43-B18B-4F98-92D0-CCC91AC9EBB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{11F86E43-B18B-4F98-92D0-CCC91AC9EBB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{11F86E43-B18B-4F98-92D0-CCC91AC9EBB4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2F9ECC78-B8DF-4BCD-BEA1-162F270F8261}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2F9ECC78-B8DF-4BCD-BEA1-162F270F8261}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2F9ECC78-B8DF-4BCD-BEA1-162F270F8261}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2F9ECC78-B8DF-4BCD-BEA1-162F270F8261}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

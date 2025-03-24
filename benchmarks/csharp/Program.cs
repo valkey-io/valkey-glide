@@ -5,10 +5,8 @@ using System.Diagnostics;
 using System.Text.Json;
 using CommandLine;
 using LinqStatistics;
-using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using Valkey.Glide;
-using Valkey.Glide.Commands;
 using Valkey.Glide.Commands.ExtensionMethods;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
@@ -274,7 +272,7 @@ public static class MainClass
             {
                 ConnectionConfigBuilder builder = new ConnectionConfigBuilder().WithAddress(host, port)
                     .WithTlsMode(useTLS ? ETlsMode.SecureTls : ETlsMode.NoTls);
-                GlideClient glide_client = new GlideClient(builder, new GlideTransformer());
+                GlideClient glide_client = new GlideClient(builder);
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await glide_client.GetAsync(key),
                         async (key, value) => await glide_client.SetAsync(key, value),

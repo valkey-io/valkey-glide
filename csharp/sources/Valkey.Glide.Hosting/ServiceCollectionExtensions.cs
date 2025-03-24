@@ -15,7 +15,7 @@ namespace Valkey.Glide.Hosting;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Configures and registers custom <see cref="IGlideTransformer{T}"/>'s for Valkey Glide within the service collection.
+    /// Configures and registers custom <see cref="IGlideSerializer{T}"/>'s for Valkey Glide within the service collection.
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
@@ -24,20 +24,17 @@ public static class ServiceCollectionExtensions
     /// Each registered configuration action will be applied
     /// sequentially.
     /// </item>
-    /// <item>
-    /// To override default <see cref="IGlideTransformer{T}"/>'s, use this call <b>AFTER</b> adding the client.
-    /// </item>
     /// </list>
     /// </remarks>
     /// <param name="services">The service collection to which the custom Glide transformers will be added.</param>
-    /// <param name="configure">An action to configure the GlideTransformerBuilder, allowing the registration of custom transformers.</param>
+    /// <param name="configure">An action to configure the GlideSerializerCollectionBuilder, allowing the registration of custom transformers.</param>
     /// <returns>The modified service collection with the custom Glide transformers registered.</returns>
     public static IServiceCollection ConfigureValkeyGlideTransformers(this IServiceCollection services,
-        Action<GlideTransformerBuilder> configure)
+        Action<GlideSerializerCollectionBuilder> configure)
     {
-        services.AddTransient<GlideTransformerBuilder>(_ =>
+        services.AddTransient<GlideSerializerCollectionBuilder>(_ =>
         {
-            GlideTransformerBuilder builder = new();
+            GlideSerializerCollectionBuilder builder = new();
             configure(builder);
             return builder;
         });
@@ -133,20 +130,23 @@ public static class ServiceCollectionExtensions
     }
 
     private static void AddGlideClient(this IServiceCollection services)
-        => services.AddScoped<IGlideClient, GlideClient>(
+        // ToDo: Settle on which lifetime would be the best for use
+        => services.AddTransient<IGlideClient, GlideClient>(
             serviceProvider =>
             {
-                IEnumerable<GlideTransformerBuilder> glideTransformerBuilders =
-                    serviceProvider.GetServices<GlideTransformerBuilder>();
-                GlideTransformer glideTransformer = new();
-                foreach (GlideTransformerBuilder glideTransformerBuilder in glideTransformerBuilders)
+                IEnumerable<GlideSerializerCollectionBuilder> glideTransformerBuilders =
+                    serviceProvider.GetServices<GlideSerializerCollectionBuilder>();
+                GlideSerializerCollection glideSerializerCollection = new();
+                glideSerializerCollection.RegisterDefaultSerializers();
+                foreach (GlideSerializerCollectionBuilder glideTransformerBuilder in glideTransformerBuilders)
                 {
-                    foreach (Action<GlideTransformer> action in glideTransformerBuilder.GetTransformers())
+                    foreach (Action<GlideSerializerCollection> action in glideTransformerBuilder.GetSerializers())
                     {
-                        action(glideTransformer);
+                        action(glideSerializerCollection);
                     }
                 }
+                glideSerializerCollection.Seal();
                 ConnectionRequest connectionRequest = serviceProvider.GetRequiredService<ConnectionRequest>();
-                return new GlideClient(connectionRequest, glideTransformer);
+                return new GlideClient(connectionRequest, glideSerializerCollection);
             });
 }

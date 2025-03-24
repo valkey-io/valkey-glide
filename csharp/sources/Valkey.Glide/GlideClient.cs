@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
 
@@ -6,22 +7,34 @@ namespace Valkey.Glide;
 
 public sealed class GlideClient : IDisposable, IGlideClient
 {
-    private readonly GlideTransformer _glideTransformer;
+    private readonly GlideSerializerCollection _glideSerializerCollection;
     private readonly INativeClient _nativeClient;
     private readonly bool          _ownsNativeClient;
 
-    public GlideClient(INativeClient nativeClient, GlideTransformer? glideTransformer = null)
+    public GlideClient(INativeClient nativeClient, GlideSerializerCollection? glideSerializerCollection = null)
     {
         _nativeClient     = nativeClient;
         _ownsNativeClient = false;
-        _glideTransformer = glideTransformer ?? new GlideTransformer().AddDefaultTransformers();
+        if (glideSerializerCollection is null)
+        {
+            glideSerializerCollection = new GlideSerializerCollection();
+            glideSerializerCollection.RegisterDefaultSerializers();
+            glideSerializerCollection.Seal();
+        }
+        _glideSerializerCollection = glideSerializerCollection;
     }
 
-    public GlideClient(InterOp.ConnectionRequest connectionRequest, GlideTransformer? glideTransformer = null)
+    public GlideClient(InterOp.ConnectionRequest connectionRequest, GlideSerializerCollection? glideSerializerCollection = null)
     {
         _nativeClient     = new NativeClient(connectionRequest);
         _ownsNativeClient = true;
-        _glideTransformer = glideTransformer ?? new GlideTransformer().AddDefaultTransformers();
+        if (glideSerializerCollection is null)
+        {
+            glideSerializerCollection = new GlideSerializerCollection();
+            glideSerializerCollection.RegisterDefaultSerializers();
+            glideSerializerCollection.Seal();
+        }
+        _glideSerializerCollection = glideSerializerCollection;
     }
 
     /// <inheritdoc />
@@ -32,13 +45,10 @@ public sealed class GlideClient : IDisposable, IGlideClient
     }
 
     [EditorBrowsable(EditorBrowsableState.Advanced)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public Task<InterOp.Value> CommandAsync(ERequestType requestType, params string[] args)
         => _nativeClient.SendCommandAsync(requestType, args);
 
-    public string Transform<T>(T arg)
-    {
-        if (arg is IHasGlideTransformer<T> hasGlideTransformer)
-            return hasGlideTransformer.GetGlideTransformer().ToValkeyString(arg);
-        return _glideTransformer.Transform(arg);
-    }
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    public string Transform<T>(T value) => _glideSerializerCollection.Transform(value);
 }

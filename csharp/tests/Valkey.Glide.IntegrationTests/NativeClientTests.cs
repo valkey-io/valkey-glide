@@ -1,10 +1,9 @@
+using Valkey.Glide.IntegrationTests.Fixtures;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
-using Valkey.Glide.UnitTests.Fixtures;
-
 using Value = Valkey.Glide.InterOp.Value;
 
-namespace Valkey.Glide.UnitTests;
+namespace Valkey.Glide.IntegrationTests;
 
 public class NativeClientTests(ValkeyAspireFixture fixture) : IClassFixture<ValkeyAspireFixture>
 {

@@ -132,7 +132,7 @@ namespace Valkey.Glide.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Cannot seal GlideTransformer as already sealed..
+        ///   Looks up a localized string similar to Cannot seal GlideSerializerCollection as already sealed..
         /// </summary>
         internal static string GlideTransformer_AlreadySealedError {
             get {
@@ -141,7 +141,7 @@ namespace Valkey.Glide.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Cannot transform values as GlideTransformer is not sealed..
+        ///   Looks up a localized string similar to Cannot transform values as GlideSerializerCollection is not sealed..
         /// </summary>
         internal static string GlideTransformer_NotSealedError {
             get {
@@ -150,7 +150,7 @@ namespace Valkey.Glide.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Cannot register transformers after the GlideTransformer was sealed..
+        ///   Looks up a localized string similar to Cannot register transformers after the GlideSerializerCollection was sealed..
         /// </summary>
         internal static string GlideTransformer_SealedError {
             get {

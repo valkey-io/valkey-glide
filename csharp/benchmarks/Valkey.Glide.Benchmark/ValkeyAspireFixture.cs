@@ -2,7 +2,6 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
 
 namespace Valkey.Glide.Benchmark;

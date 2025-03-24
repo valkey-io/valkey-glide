@@ -1,6 +1,4 @@
 ﻿<#@ template language="C#" #>
-<#@ import namespace="System.Text" #>
-<#@ import namespace="System.Collections.Generic" #>
 using Valkey.Glide.InterOp.Native;
 
 namespace Valkey.Glide;
@@ -8,4 +6,5 @@ namespace Valkey.Glide;
 public interface IGlideClient
 {
     Task<InterOp.Value> CommandAsync(ERequestType requestType, params string[] args);
+    string Transform<T>(T value);
 }

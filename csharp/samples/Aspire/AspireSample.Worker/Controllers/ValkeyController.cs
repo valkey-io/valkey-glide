@@ -2,7 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Valkey.Glide;
 using Valkey.Glide.Commands;
 using Valkey.Glide.Commands.ExtensionMethods;
-using Valkey.Glide.InterOp.Native;
+using Valkey.Glide.Data;
+using Valkey.Glide.InterOp;
 
 namespace AspireSample.Worker.Controllers;
 
@@ -21,5 +22,20 @@ public class ValkeyController(IGlideClient glideClient) : ControllerBase
     public async Task Set([FromRoute] string key, [FromQuery] string value)
     {
         await glideClient.SetAsync(key, value);
+    }
+
+    [HttpGet("set/builder/{key}")]
+    public async Task SetBuilder([FromRoute] string key, [FromQuery] string value, [FromQuery] TimeSpan? expiresIn = null)
+    {
+        SetCommand<string> command = SetCommand.Create(key, value);
+        if (expiresIn.HasValue)
+            command = command.WithExpiresIn(TimeSpan.FromSeconds(100));
+        await glideClient.ExecuteAsync(command);
+    }
+
+    [HttpGet("custom/set/{key}")]
+    public async Task CustomSet([FromRoute] string key, [FromQuery] string value)
+    {
+        _ = await glideClient.ExecuteAsync(CustomCommand.Create(new CommandText("SET"), new CommandText(key), value));
     }
 }

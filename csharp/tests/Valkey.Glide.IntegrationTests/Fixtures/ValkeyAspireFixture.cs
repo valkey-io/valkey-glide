@@ -3,7 +3,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Native;
 
-namespace Valkey.Glide.UnitTests.Fixtures;
+namespace Valkey.Glide.IntegrationTests.Fixtures;
 
 public sealed class ValkeyAspireFixture : IAsyncLifetime
 {

@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Valkey.Glide.InterOp.Exceptions;
+﻿namespace Valkey.Glide.InterOp.Exceptions;
 
 /// <summary>
 /// Represents the base exception class for errors that occur during Glide operations.

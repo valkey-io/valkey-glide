@@ -1,8 +1,7 @@
-﻿using Valkey.Glide.Commands;
-using Valkey.Glide.Commands.ExtensionMethods;
-using Valkey.Glide.UnitTests.Fixtures;
+﻿using Valkey.Glide.Commands.ExtensionMethods;
+using Valkey.Glide.IntegrationTests.Fixtures;
 
-namespace Valkey.Glide.UnitTests.Commands;
+namespace Valkey.Glide.IntegrationTests.Commands;
 
 public class GetCommandTests(ValkeyAspireFixture fixture) : IClassFixture<ValkeyAspireFixture>
 {

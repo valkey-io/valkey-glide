@@ -37,13 +37,13 @@
         <value>The set command failed to execute successful</value>
     </data>
     <data name="GlideTransformer_SealedError" xml:space="preserve">
-        <value>Cannot register transformers after the GlideTransformer was sealed.</value>
+        <value>Cannot register transformers after the GlideSerializerCollection was sealed.</value>
     </data>
     <data name="GlideTransformer_NotSealedError" xml:space="preserve">
-        <value>Cannot transform values as GlideTransformer is not sealed.</value>
+        <value>Cannot transform values as GlideSerializerCollection is not sealed.</value>
     </data>
     <data name="GlideTransformer_AlreadySealedError" xml:space="preserve">
-        <value>Cannot seal GlideTransformer as already sealed.</value>
+        <value>Cannot seal GlideSerializerCollection as already sealed.</value>
     </data>
     <data name="CustomCommand_ArgumentNotSet_0index" xml:space="preserve">
         <value>CustomCommand setup incomplete, Arg{0} not set.</value>

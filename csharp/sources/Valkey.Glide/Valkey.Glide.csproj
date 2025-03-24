@@ -35,6 +35,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Valkey.Glide.UnitTests" />
+    <InternalsVisibleTo Include="Valkey.Glide.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- MIT license -->
     <PackageReference Include="JetBrains.Annotations" Version="2024.3.0"/>
     <!-- MIT license -->

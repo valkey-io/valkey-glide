@@ -1,7 +1,4 @@
-﻿using System;
-using Valkey.Glide.InterOp.Native;
-
-namespace Valkey.Glide.InterOp;
+﻿namespace Valkey.Glide.InterOp;
 
 /// <summary>
 /// Represents the periodic topology check configuration for detecting changes in a cluster's topology.

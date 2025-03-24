@@ -1,7 +1,6 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Runtime.CompilerServices;
-using Valkey.Glide.Commands;
 using Valkey.Glide.Commands.Abstraction;
 
 namespace Valkey.Glide;

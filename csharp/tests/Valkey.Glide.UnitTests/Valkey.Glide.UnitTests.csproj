@@ -12,8 +12,6 @@
 
   <ItemGroup>
     <!-- MIT license -->
-    <PackageReference Include="Aspire.Hosting.Testing" Version="9.1.0"/>
-    <!-- MIT license -->
     <PackageReference Include="coverlet.collector" Version="6.0.4">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -39,8 +37,6 @@
   <ItemGroup>
     <Using Include="System.Net"/>
     <Using Include="Microsoft.Extensions.DependencyInjection"/>
-    <Using Include="Aspire.Hosting.ApplicationModel"/>
-    <Using Include="Aspire.Hosting.Testing"/>
     <Using Include="Xunit"/>
   </ItemGroup>
 
@@ -49,6 +45,7 @@
     <ProjectReference Include="..\..\sources\Valkey.Glide.Hosting\Valkey.Glide.Hosting.csproj"/>
     <ProjectReference Include="..\..\sources\Valkey.Glide.InterOp\Valkey.Glide.InterOp.csproj"/>
     <ProjectReference Include="..\..\sources\Valkey.Glide\Valkey.Glide.csproj"/>
+    <ProjectReference Include="..\Valkey.Glide.TestCommon\Valkey.Glide.TestCommon.csproj" />
   </ItemGroup>
 
 </Project>

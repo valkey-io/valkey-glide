@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Valkey.Glide.InterOp.Native;
-
-namespace Valkey.Glide.InterOp;
+﻿namespace Valkey.Glide.InterOp;
 
 public class ConnectionRequest(IReadOnlyCollection<Node> nodes)
 {

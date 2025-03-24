@@ -1,13 +1,35 @@
 ﻿<#@ template language="C#" #>
-<#@ import namespace="System.Text" #>
-<#@ import namespace="System.Collections.Generic" #>
 <#@ import namespace="System.Linq" #>
+using Valkey.Glide.Commands.Abstraction;
 using Valkey.Glide.InterOp.Native;
 using Value = Valkey.Glide.InterOp.Value;
 
 namespace Valkey.Glide.Commands;
 
 <#
+    var vocalCounts = new[]
+    {
+        "first",
+        "second",
+        "third",
+        "fourth",
+        "fifth",
+        "sixth",
+        "seventh",
+        "eighth",
+        "ninth",
+        "tenth",
+        "eleventh",
+        "twelfth",
+        "thirteenth",
+        "fourteenth",
+        "fifteenth",
+        "sixteenth",
+        "seventeenth",
+        "eighteenth",
+        "nineteenth",
+        "twentieth",
+    };
     for (var t = 1; t <= 20; t++)
     {
         var templateArgs = Enumerable.Range(0, t).Select(i => $"T{i + 1}").ToArray();
@@ -16,12 +38,71 @@ namespace Valkey.Glide.Commands;
         var templateArgsCommaSeparated = string.Join(", ", templateArgs);
         var fullTemplateArgs = string.Concat("<", templateArgsCommaSeparated, ">");
 #>
+
+/// <summary>
+/// Provides factory methods for creating instances of the CustomCommand structures.
+/// </summary>
+/// <remarks>
+/// This static class enables the creation of CustomCommand instances with varying numbers of generic arguments,
+/// facilitating a fluent and type-safe approach to defining and executing commands within the Glide framework.
+/// </remarks
+public static partial class CustomCommand
+{
+    /// <summary>
+    /// Creates a new instance of the <see cref="CustomCommand{<#= templateArgsCommaSeparated #>}"/> structure with the specified argument.
+    /// </summary>
+<#
+        for (var i = 0; i < templateArgNames.Length; i++)
+        {
+#>
+    /// <typeparam name="T<#= i + 1 #>">The type of the <#= vocalCounts[i] #> argument for the command.</typeparam>
+    /// <param name="Arg<#= i + 1 #>">The value of the <#= vocalCounts[i] #> argument to be passed to the command.</param>
+<#
+        }
+#>
+    /// <returns>An instance of <see cref="CustomCommand{<#= templateArgsCommaSeparated #>}"/> initialized with the provided argument.</returns>
+    public static CustomCommand<#= fullTemplateArgs #> Create<#= fullTemplateArgs #>(<#=
+                string.Join(", ", templateArgsWithNames.Select(t => string.Join(" ", t.templateArg, t.name.ToLower()))) #>)
+         => new CustomCommand<#= fullTemplateArgs #>()
+<#
+        for (var i = 0; i < templateArgNames.Length; i++)
+        {
+#>
+                .With<#= templateArgNames[i] #>(<#= templateArgNames[i].ToLower() #>)<#= i == (templateArgNames.Length - 1) ? ";" : "" #>
+<#
+        }
+#>
+}
+
+/// <summary>
+/// Represents a customizable command that can accept a specified number
+/// of generic arguments and implements the IGlideCommand interface.
+/// </summary>
+<#
+        for (var i = 0; i < templateArgNames.Length; i++)
+        {
+#>
+/// <typeparam name="T<#= i + 1 #>">The type of the <#= vocalCounts[i] #> argument for the command.</typeparam>
+<#
+        }
+#>
+/// <remarks>
+/// <list type="bullet">
+/// <item>
+/// Each instance of the CustomCommand struct is immutable, and the usage of `WithArg` methods ensures
+/// a fluent API for adding argument values while preserving immutability. It integrates with the IGlideCommand
+/// interface for executing tasks asynchronously within the Glide framework.
+/// </item>
+/// <item>All values are handled as "values". If you want to issue command text, use the <see cref="Data.CommandText"/> struct</item>
+/// </list>
+/// </remarks>
 public readonly struct CustomCommand<#= fullTemplateArgs #> : IGlideCommand
 {
 <#
         foreach (var (templateArg, name) in templateArgsWithNames)
         {
 #>
+
     private <#= templateArg #>? <#= name #> { get; init; }
     private bool <#= name #>Set { get; init; }
     public CustomCommand<#= fullTemplateArgs #> With<#= name #>(<#= templateArg #> arg)
@@ -46,7 +127,8 @@ public readonly struct CustomCommand<#= fullTemplateArgs #> : IGlideCommand
 <#
         }
 #>
-        return client.CommandAsync(ERequestType.CustomCommand, <#= string.Join(", ", templateArgNames.Select(s => $"client.Transform({s})")) #>);
+        return client.CommandAsync(ERequestType.CustomCommand, <#=
+            string.Join(", ", templateArgNames.Select(s => $"client.Transform({s})")) #>);
     }
 }
 <#
