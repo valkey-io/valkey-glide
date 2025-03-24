@@ -1997,7 +1997,7 @@ describe("GlideClusterClient", () => {
                 // Wait until the script starts running
                 while (timeout >= 0) {
                     try {
-                        await client1.ping(); 
+                        await client1.ping();
                     } catch (err) {
                         if (
                             (err as Error).message
@@ -2016,7 +2016,9 @@ describe("GlideClusterClient", () => {
                             promise = client2.invokeScript(longScript, {
                                 keys: ["{key}-" + uuidv4()],
                             });
-                            await new Promise((resolve) => setTimeout(resolve, 1000));
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 1000),
+                            );
                         }
                     }
 
