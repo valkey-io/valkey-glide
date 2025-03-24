@@ -15,7 +15,8 @@
     "license": "Apache-2.0",
     "dependencies": {
         "@valkey/valkey-glide": "file:../..",
-        "find-free-port": "^2.0.0"
+        "find-free-port": "^2.0.0",
+        "test-utils": "../../tests/TestUtilities"
     },
     "devDependencies": {
         "prettier": "^3.5"

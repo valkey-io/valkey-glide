@@ -15,7 +15,8 @@
     },
     "dependencies": {
         "@valkey/valkey-glide": "file:../..",
-        "find-free-ports": "^3.1.1"
+        "find-free-ports": "^3.1.1",
+        "test-utils": "../../tests/TestUtilities"
     },
     "devDependencies": {
         "prettier": "^3.5"
