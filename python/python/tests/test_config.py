@@ -10,6 +10,7 @@ from glide.config import (
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
     ReadFrom,
+    TlsAdvancedConfiguration,
 )
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
@@ -106,3 +107,27 @@ def test_connection_timeout_in_protobuf_request():
 
     assert isinstance(request, ConnectionRequest)
     assert request.connection_timeout == connection_timeout
+
+
+def test_tls__insecure_in_protobuf_request():
+    tls_conf = TlsAdvancedConfiguration(insecure=True)
+
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        use_tls=True,
+        advanced_config=AdvancedGlideClientConfiguration(tls_config=tls_conf),
+    )
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode is TlsMode.InsecureTls
+
+    config = GlideClusterClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        use_tls=True,
+        advanced_config=AdvancedGlideClusterClientConfiguration(tls_config=tls_conf),
+    )
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode is TlsMode.InsecureTls
