@@ -14,6 +14,10 @@ redis = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp"
 glide-core = { path = "../glide-core", features = ["proto"] }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 
+[dev-dependencies]
+rstest = "^0.23"
+serial_test = "3"
+
 [profile.release]
 lto = true
 debug = true
