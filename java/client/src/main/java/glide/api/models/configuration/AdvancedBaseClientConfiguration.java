@@ -20,4 +20,8 @@ public abstract class AdvancedBaseClientConfiguration {
      * pipeline.
      */
     @Builder.Default private final Integer connectionTimeout = 250;
+
+    @Builder.Default
+    private final TlsAdvancedConfiguration tlsAdvancedConfiguration =
+            TlsAdvancedConfiguration.builder().build();
 }

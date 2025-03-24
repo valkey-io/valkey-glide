@@ -15,7 +15,6 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ReadFrom;
-import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.connectors.handlers.ChannelHandler;
@@ -196,33 +195,27 @@ public class ConnectionManager {
 
         connectionRequestBuilder =
                 setupConnectionRequestBuilderAdvancedBaseConfiguration(
-                        connectionRequestBuilder,
-                        configuration.getAdvancedConfiguration(),
-                        configuration.getTlsAdvancedConfiguration());
+                        connectionRequestBuilder, configuration.getAdvancedConfiguration());
 
         return connectionRequestBuilder;
     }
 
     /**
      * Configures the {@link ConnectionRequest.Builder} with settings from the provided {@link
-     * AdvancedBaseClientConfiguration} and {@link TlsAdvancedConfiguration}.
+     * AdvancedBaseClientConfiguration}.
      *
      * @param connectionRequestBuilder The builder for the {@link ConnectionRequest}.
-     * @param configuration The advanced configuration settings.
-     * @param tlsConfiguration The advanced TLS configuration settings.
+     * @param advancedConfiguration The advanced configuration settings.
      * @return The updated {@link ConnectionRequest.Builder}.
      */
     private ConnectionRequest.Builder setupConnectionRequestBuilderAdvancedBaseConfiguration(
             ConnectionRequest.Builder connectionRequestBuilder,
-            AdvancedBaseClientConfiguration configuration,
-            TlsAdvancedConfiguration tlsConfiguration) {
+            AdvancedBaseClientConfiguration advancedConfiguration) {
 
-        if (configuration.getConnectionTimeout() != null) {
-            connectionRequestBuilder.setConnectionTimeout(configuration.getConnectionTimeout());
-        }
+        connectionRequestBuilder.setConnectionTimeout(advancedConfiguration.getConnectionTimeout());
 
         if (connectionRequestBuilder.getTlsMode() == TlsMode.SecureTls
-                && tlsConfiguration.isUseInsecureTLS()) {
+                && advancedConfiguration.getTlsAdvancedConfiguration().isUseInsecureTLS()) {
             connectionRequestBuilder.setTlsMode(TlsMode.InsecureTls);
         }
 
@@ -259,9 +252,7 @@ public class ConnectionManager {
 
         connectionRequestBuilder =
                 setupConnectionRequestBuilderAdvancedBaseConfiguration(
-                        connectionRequestBuilder,
-                        configuration.getAdvancedConfiguration(),
-                        configuration.getTlsAdvancedConfiguration());
+                        connectionRequestBuilder, configuration.getAdvancedConfiguration());
 
         return connectionRequestBuilder;
     }

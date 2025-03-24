@@ -2,6 +2,7 @@
 package glide.api.models.configuration;
 
 import glide.api.GlideClusterClient;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 
@@ -25,7 +26,6 @@ import lombok.experimental.SuperBuilder;
  *         .reconnectStrategy(reconnectionConfiguration)
  *         .inflightRequestsLimit(1000)
  *         .advancedConfiguration(AdvancedGlideClusterClientConfiguration.builder().connectionTimeout(500).build())
- *         .tlsAdvancedConfiguration(TlsAdvancedConfiguration.builder().useInsecureTLS(true).build())
  *         .build();
  * }</pre>
  */
@@ -37,8 +37,7 @@ public class GlideClusterClientConfiguration extends BaseClientConfiguration {
     private final ClusterSubscriptionConfiguration subscriptionConfiguration;
 
     /** Advanced configuration settings for the client. */
-    private final AdvancedGlideClusterClientConfiguration advancedConfiguration;
-
-    /** Advanced TLS configuration settings for the client. */
-    private final TlsAdvancedConfiguration tlsAdvancedConfiguration;
+    @Builder.Default
+    private final AdvancedGlideClusterClientConfiguration advancedConfiguration =
+            AdvancedGlideClusterClientConfiguration.builder().build();
 }
