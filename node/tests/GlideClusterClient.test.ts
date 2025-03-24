@@ -1964,13 +1964,12 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each(Array.from({ length: 1000 }, (_, i) => i + 1))(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "script kill unkillable test_%p",
-        async (i) => {
-            console.log(`Test: ${i}`);
+        async (protocol) => {
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
-                ProtocolVersion.RESP2,
+                protocol,
                 { requestTimeout: 10000 },
             );
             const client1 = await GlideClusterClient.createClient(config);
