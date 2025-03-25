@@ -112,10 +112,19 @@ jobs:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Build java client
+            - name: Build java client (linux)
+              if: ${{ matrix.host.OS == 'ubuntu' || matrix.host.OS == 'amazon-linux'}}
               working-directory: java
               run: |
                   sudo tcpdump -i lo -w fcall.pcap tcp port '(7001 or 7002 or 7003 or 7004 or 7005 or 7006)' &
+                  ./gradlew --continue build -x javadoc
+                  sudo pkill tcpdump
+
+            - name: Build java client (mac)
+              if: ${{ matrix.host.OS == 'macos' }}
+              working-directory: java
+              run: |
+                  sudo tcpdump -i lo0 -w fcall.pcap tcp port '(7001 or 7002 or 7003 or 7004 or 7005 or 7006)' &
                   ./gradlew --continue build -x javadoc
                   sudo pkill tcpdump
 
