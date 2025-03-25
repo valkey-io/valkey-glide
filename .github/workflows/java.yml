@@ -135,7 +135,7 @@ jobs:
               with:
                   name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
-                      java/dump.pcap
+                      java/fcall.pcap
                       java/client/build/reports/**
                       java/integTest/build/reports/**
                       utils/clusters/**
