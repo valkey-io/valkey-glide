@@ -1739,7 +1739,8 @@ public class CommandTests {
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
-        // Let replica sync with the primary node. We call the wait a few times to allow for wait to become 1L.
+        // Let replica sync with the primary node. We call the wait a few times to allow for wait to
+        // become 1L.
         int retries = 3;
         long result = 0;
         while (retries > 0) {
