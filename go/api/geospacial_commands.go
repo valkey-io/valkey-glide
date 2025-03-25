@@ -25,7 +25,6 @@ type GeoSpatialCommands interface {
 
 	GeoPos(key string, members []string) ([][]float64, error)
 
-
 	GeoDist(key string, member1 string, member2 string) (Result[float64], error)
 
 	GeoDistWithUnit(key string, member1 string, member2 string, unit options.GeoUnit) (Result[float64], error)
