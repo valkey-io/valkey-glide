@@ -6631,7 +6631,7 @@ func (client *baseClient) GeoAddWithOptions(
 // Returns value:
 //
 //	An array of GeoHash strings representing the positions of the specified members stored
-//	at key. If a member does not exist in the sorted set, a `null` value is returned
+//	at key. If a member does not exist in the sorted set, a `nil` value is returned
 //	for that member.
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
@@ -6670,4 +6670,67 @@ func (client *baseClient) GeoPos(key string, members []string) ([][]float64, err
 		return nil, err
 	}
 	return handle2DFloat64OrNullArrayResponse(result)
+}
+
+// Returns the distance between `member1` and `member2` saved in the
+// geospatial index stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member1 - The name of the first member.
+//	member2 - The name of the second member.
+//
+// Return value:
+//
+//	The distance between `member1` and `member2`. If one or both members do not exist,
+//	or if the key does not exist, returns `nil`. The default
+//	unit is meters, see - [options.Meters]
+//
+// [valkey.io]: https://valkey.io/commands/geodist/
+func (client *baseClient) GeoDist(key string, member1 string, member2 string) (Result[float64], error) {
+	result, err := client.executeCommand(
+		C.GeoDist,
+		[]string{key, member1, member2},
+	)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+}
+
+// Returns the distance between `member1` and `member2` saved in the
+// geospatial index stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member1 - The name of the first member.
+//	member2 - The name of the second member.
+//	unit - The unit of distance measurement - see [options.GeoUnit].
+//
+// Return value:
+//
+//	The distance between `member1` and `member2`. If one or both members
+//	do not exist, or if the key does not exist, returns `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/geodist/
+func (client *baseClient) GeoDistWithUnit(
+	key string,
+	member1 string,
+	member2 string,
+	unit options.GeoUnit,
+) (Result[float64], error) {
+	result, err := client.executeCommand(
+		C.GeoDist,
+		[]string{key, member1, member2, string(unit)},
+	)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
 }

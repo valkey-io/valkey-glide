@@ -197,3 +197,16 @@ const (
 	// Represents a stream data type
 	ObjectTypeStream ObjectType = "stream"
 )
+
+type GeoUnit string
+
+const (
+	// Represents distance in kilometers
+	GeoUnitKilometers GeoUnit = "km"
+	// Represents distance in meters
+	GeoUnitMeters GeoUnit = "m"
+	// Represents distance in miles
+	GeoUnitMiles GeoUnit = "mi"
+	// Represents distance in feet
+	GeoUnitFeet GeoUnit = "ft"
+)
