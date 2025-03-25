@@ -3188,16 +3188,11 @@ func (client *baseClient) PfCount(keys []string) (int64, error) {
 //
 //	If the HyperLogLog values is successfully merged  it returns "OK".
 //
-// Example:
-//
-//	result, err := client.PfMerge("hll3",[]string{"hll1", "hll2"})
-//	result: OK
-//
 // [valkey.io]: https://valkey.io/commands/pfmerge/
 func (client *baseClient) PfMerge(destination string, sourceKeys []string) (string, error) {
 	result, err := client.executeCommand(C.PfMerge, append([]string{destination}, sourceKeys...))
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
