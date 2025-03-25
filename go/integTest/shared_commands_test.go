@@ -9153,12 +9153,12 @@ func (suite *GlideTestSuite) TestGeoDist() {
 		// assert correct result with default metric
 		actual, err := client.GeoDist(key1, member1, member2)
 		assert.NoError(t, err)
-		assert.Greater(t, math.Abs(actual.Value()-expected), delta)
+		assert.LessOrEqual(t, float64(math.Abs(actual.Value()-expected)), float64(delta))
 
 		// assert correct result with manual metric specification kilometers
 		actualKM, err := client.GeoDistWithUnit(key1, member1, member2, options.GeoUnitKilometers)
 		assert.NoError(t, err)
-		assert.Greater(t, math.Abs(actualKM.Value()-expectedKM), delta)
+		assert.LessOrEqual(t, math.Abs(actualKM.Value()-expectedKM), delta)
 
 		// assert null result when member index is missing
 		actual, _ = client.GeoDist(key1, member1, member3)
