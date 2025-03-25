@@ -6,7 +6,7 @@ use logger_core::log_warn;
 use std::collections::HashSet;
 use std::time::Duration;
 
-#[cfg(feature = "socket-layer")]
+#[cfg(feature = "proto")]
 use crate::connection_request as protobuf;
 
 #[derive(Default)]
@@ -60,9 +60,11 @@ pub enum ReadFrom {
     Primary,
     PreferReplica,
     AZAffinity(String),
+    AZAffinityReplicasAndPrimary(String),
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Default)]
+#[repr(C)]
 pub enum TlsMode {
     #[default]
     NoTls,
@@ -70,13 +72,15 @@ pub enum TlsMode {
     SecureTls,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+#[repr(C)]
 pub struct ConnectionRetryStrategy {
     pub exponent_base: u32,
     pub factor: u32,
     pub number_of_retries: u32,
 }
 
-#[cfg(feature = "socket-layer")]
+#[cfg(feature = "proto")]
 fn chars_to_string_option(chars: &::protobuf::Chars) -> Option<String> {
     if chars.is_empty() {
         None
@@ -85,7 +89,7 @@ fn chars_to_string_option(chars: &::protobuf::Chars) -> Option<String> {
     }
 }
 
-#[cfg(feature = "socket-layer")]
+#[cfg(feature = "proto")]
 fn none_if_zero(value: u32) -> Option<u32> {
     if value == 0 {
         None
@@ -94,7 +98,7 @@ fn none_if_zero(value: u32) -> Option<u32> {
     }
 }
 
-#[cfg(feature = "socket-layer")]
+#[cfg(feature = "proto")]
 impl From<protobuf::ConnectionRequest> for ConnectionRequest {
     fn from(value: protobuf::ConnectionRequest) -> Self {
         let read_from = value.read_from.enum_value().ok().map(|val| match val {
@@ -115,6 +119,20 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                     ReadFrom::PreferReplica
                 }
             }
+            protobuf::ReadFrom::AZAffinityReplicasAndPrimary => {
+                if let Some(client_az) = chars_to_string_option(&value.client_az) {
+                    ReadFrom::AZAffinityReplicasAndPrimary(client_az)
+                } else {
+                    log_warn(
+                        "types",
+                        format!(
+                            "Failed to convert availability zone string: '{:?}'. Falling back to `ReadFrom::PreferReplica`",
+                            value.client_az
+                        ),
+                    );
+                    ReadFrom::PreferReplica
+                }
+            },
         });
 
         let client_name = chars_to_string_option(&value.client_name);
