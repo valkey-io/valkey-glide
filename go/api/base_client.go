@@ -2,7 +2,7 @@
 
 package api
 
-// #cgo LDFLAGS: -lglide_rs
+// #cgo LDFLAGS: -lglide_ffi
 // #cgo !windows LDFLAGS: -lm
 // #cgo darwin LDFLAGS: -framework Security
 // #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
@@ -296,6 +296,94 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 		stringLengths[i] = C.size_t(len(str))
 	}
 	return cStrings, stringLengths
+}
+
+func (client *baseClient) submitConnectionPasswordUpdate(password string, immediateAuth bool) (Result[string], error) {
+	// Create a channel to receive the result
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return CreateNilStringResult(), &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+
+	C.update_connection_password(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		C.CString(password),
+		C._Bool(immediateAuth),
+	)
+	client.mu.Unlock()
+
+	// Wait for response
+	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return CreateNilStringResult(), payload.error
+	}
+
+	return handleStringOrNilResponse(payload.value)
+}
+
+// Update the current connection with a new password.
+//
+// This method is useful in scenarios where the server password has changed or when utilizing
+// short-lived passwords for enhanced security. It allows the client to update its password to
+// reconnect upon disconnection without the need to recreate the client instance. This ensures
+// that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+// loss of in-flight commands.
+//
+// Note:
+//
+// This method updates the client's internal password configuration and does not perform
+// password rotation on the server side.
+//
+// Parameters:
+//
+//		password - The new password to update the connection with.
+//		immediateAuth - immediateAuth A boolean flag. If true, the client will
+//	    authenticate immediately with the new password against all connections, Using AUTH
+//	    command. If password supplied is an empty string, the client will not perform auth and a warning
+//	    will be returned. The default is `false`.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+func (client *baseClient) UpdateConnectionPassword(password string, immediateAuth bool) (Result[string], error) {
+	return client.submitConnectionPasswordUpdate(password, immediateAuth)
+}
+
+// Update the current connection by removing the password.
+//
+// This method is useful in scenarios where the server password has changed or when utilizing
+// short-lived passwords for enhanced security. It allows the client to update its password to
+// reconnect upon disconnection without the need to recreate the client instance. This ensures
+// that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+// loss of in-flight commands.
+//
+// Note:
+//
+// This method updates the client's internal password configuration and does not perform
+// password rotation on the server side.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+func (client *baseClient) ResetConnectionPassword() (Result[string], error) {
+	return client.submitConnectionPasswordUpdate("", false)
 }
 
 // Set the given key with the given value. The return value is a response from Valkey containing the string "OK".
@@ -6528,4 +6616,32 @@ func (client *baseClient) GeoAddWithOptions(
 		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
+}
+
+// Returns the GeoHash strings representing the positions of all the specified
+// `members` in the sorted set stored at the `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key -  The key of the sorted set.
+//	members - The array of members whose GeoHash strings are to be retrieved.
+//
+// Returns value:
+//
+//	An array of GeoHash strings representing the positions of the specified members stored
+//	at key. If a member does not exist in the sorted set, a `null` value is returned
+//	for that member.
+//
+// [valkey.io]: https://valkey.io/commands/geohash/
+func (client *baseClient) GeoHash(key string, members []string) ([]string, error) {
+	result, err := client.executeCommand(
+		C.GeoHash,
+		append([]string{key}, members...),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
 }
