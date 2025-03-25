@@ -142,3 +142,56 @@ func ExampleGlideClusterClient_GeoPos() {
 	// Output:
 	// [[13.361389338970184 38.1155563954963] [15.087267458438873 37.50266842333162]]
 }
+
+func ExampleGlideClient_GeoDist() {
+	client := getExampleGlideClient()
+	key := uuid.New().String()
+	member1 := "Palermo"
+	member2 := "Catania"
+	membersToCoordinates := map[string]options.GeospatialData{
+		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+		"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+	}
+
+	// Add the coordinates
+	_, err := client.GeoAdd(key, membersToCoordinates)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// Test getting geodist for multiple members
+	result, err := client.GeoDist(key, member1, member2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.Value())
+
+	// Output:
+	// 166274.1516
+}
+
+func ExampleGlideClusterClient_GeoDist() {
+	client := getExampleGlideClusterClient()
+	key := uuid.New().String()
+	member1 := "Palermo"
+	member2 := "Catania"
+	membersToCoordinates := map[string]options.GeospatialData{
+		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+		"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+	}
+
+	// Add the coordinates
+	_, err := client.GeoAdd(key, membersToCoordinates)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	// Test getting geodist for multiple members
+	result, err := client.GeoDist(key, member1, member2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.Value())
+
+	// Output:
+	// 166274.1516
+}
