@@ -6645,3 +6645,29 @@ func (client *baseClient) GeoHash(key string, members []string) ([]string, error
 	}
 	return handleStringArrayResponse(result)
 }
+
+// Returns the positions (longitude,latitude) of all the specified members of the
+// geospatial index represented by the sorted set at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	members - The members of the sorted set.
+//
+// Return value:
+//
+//	A 2D `array` which represent positions (longitude and latitude) corresponding to the given members.
+//	If a member does not exist, its position will be `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/geopos/
+func (client *baseClient) GeoPos(key string, members []string) ([][]float64, error) {
+	args := []string{key}
+	args = append(args, members...)
+	result, err := client.executeCommand(C.GeoPos, args)
+	if err != nil {
+		return nil, err
+	}
+	return handle2DFloat64OrNullArrayResponse(result)
+}

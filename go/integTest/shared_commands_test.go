@@ -9218,3 +9218,53 @@ func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
 		assert.Equal(suite.T(), value, result.Value())
 	})
 }
+
+func (suite *GlideTestSuite) TestGeoPos() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key1 := "{testKey}:1-" + uuid.New().String()
+		key2 := "{testKey}:2-" + uuid.New().String()
+
+		members := []string{"Palermo", "Catania"}
+		expected := [][]float64{
+			{13.36138933897018433, 38.11555639549629859},
+			{15.08726745843887329, 37.50266842333162032},
+		}
+
+		// Add locations
+		membersCoordinates := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+		}
+
+		result, err := client.GeoAdd(key1, membersCoordinates)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), result)
+
+		// Get positions and verify
+		actual, err := client.GeoPos(key1, members)
+		assert.NoError(t, err)
+
+		// Verify each coordinate with high precision
+		for i, coords := range actual {
+			assert.NotNil(t, coords)
+			assert.Equal(t, 2, len(coords))
+
+			// Check longitude
+			assert.InDelta(t, expected[i][0], coords[0], 1e-9,
+				"longitude mismatch for member %s", members[i])
+
+			// Check latitude
+			assert.InDelta(t, expected[i][1], coords[1], 1e-9,
+				"latitude mismatch for member %s", members[i])
+		}
+
+		// Test error case with wrong key type
+		_, err = client.Set(key2, "geopos")
+		assert.NoError(t, err)
+
+		_, err = client.GeoPos(key2, members)
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}

@@ -22,4 +22,6 @@ type GeoSpatialCommands interface {
 	) (int64, error)
 
 	GeoHash(key string, members []string) ([]string, error)
+
+	GeoPos(key string, members []string) ([][]float64, error)
 }
