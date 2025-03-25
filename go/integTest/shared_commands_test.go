@@ -9161,7 +9161,7 @@ func (suite *GlideTestSuite) TestGeoDist() {
 		}
 
 		// assert correct result with manual metric specification kilometers
-		actualKM, err := client.GeoDistWithUnit(key1, member1, member2, options.Kilometers)
+		actualKM, err := client.GeoDistWithUnit(key1, member1, member2, options.GeoUnitKilometers)
 		if err != nil {
 			t.Fatalf("Failed to get geo distance: %v", err)
 		}
