@@ -687,12 +687,9 @@ def wait_for_all_topology_views(
         ]
         logging.debug(f"Executing: {cmd_args}")
         retries = 80
-        print(f"Entering the loop with {retries} retries...")
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
-            print("Retrieved output first output!")
             if output is not None and output.count(f"{server.host}") == len(servers):
-                print("Server is ready!!")
                 # Server is ready, get the node's role
                 cmd_args = [
                     CLI_COMMAND,
@@ -704,11 +701,8 @@ def wait_for_all_topology_views(
                     "cluster",
                     "nodes",
                 ]
-                print("About to run cli_command")
                 cluster_slots_output = redis_cli_run_command(cmd_args)
-                print("Retrieved second output: " + cluster_slots_output)
                 node_info = parse_cluster_nodes(cluster_slots_output)
-                print("Retrieved node info: " + str(node_info))
                 if node_info:
                     server.set_primary(node_info["is_primary"])
                 logging.debug(f"Server {server} is ready!")
