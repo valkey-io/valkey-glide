@@ -2,6 +2,10 @@
 
 package api
 
+import (
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
+
 // Supports commands and transactions for the "List" group of commands for standalone and cluster clients.
 //
 // See [valkey.io] for details.
@@ -16,11 +20,11 @@ type ListCommands interface {
 
 	LPos(key string, element string) (Result[int64], error)
 
-	LPosWithOptions(key string, element string, options *LPosOptions) (Result[int64], error)
+	LPosWithOptions(key string, element string, options options.LPosOptions) (Result[int64], error)
 
 	LPosCount(key string, element string, count int64) ([]int64, error)
 
-	LPosCountWithOptions(key string, element string, count int64, options *LPosOptions) ([]int64, error)
+	LPosCountWithOptions(key string, element string, count int64, options options.LPosOptions) ([]int64, error)
 
 	RPush(key string, elements []string) (int64, error)
 
@@ -38,7 +42,7 @@ type ListCommands interface {
 
 	RPopCount(key string, count int64) ([]string, error)
 
-	LInsert(key string, insertPosition InsertPosition, pivot string, element string) (int64, error)
+	LInsert(key string, insertPosition options.InsertPosition, pivot string, element string) (int64, error)
 
 	BLPop(keys []string, timeoutSecs float64) ([]string, error)
 
@@ -48,28 +52,33 @@ type ListCommands interface {
 
 	LPushX(key string, elements []string) (int64, error)
 
-	LMPop(keys []string, listDirection ListDirection) (map[string][]string, error)
+	LMPop(keys []string, listDirection options.ListDirection) (map[string][]string, error)
 
-	LMPopCount(keys []string, listDirection ListDirection, count int64) (map[string][]string, error)
+	LMPopCount(keys []string, listDirection options.ListDirection, count int64) (map[string][]string, error)
 
-	BLMPop(keys []string, listDirection ListDirection, timeoutSecs float64) (map[string][]string, error)
+	BLMPop(keys []string, listDirection options.ListDirection, timeoutSecs float64) (map[string][]string, error)
 
 	BLMPopCount(
 		keys []string,
-		listDirection ListDirection,
+		listDirection options.ListDirection,
 		count int64,
 		timeoutSecs float64,
 	) (map[string][]string, error)
 
 	LSet(key string, index int64, element string) (string, error)
 
-	LMove(source string, destination string, whereFrom ListDirection, whereTo ListDirection) (Result[string], error)
+	LMove(
+		source string,
+		destination string,
+		whereFrom options.ListDirection,
+		whereTo options.ListDirection,
+	) (Result[string], error)
 
 	BLMove(
 		source string,
 		destination string,
-		whereFrom ListDirection,
-		whereTo ListDirection,
+		whereFrom options.ListDirection,
+		whereTo options.ListDirection,
 		timeoutSecs float64,
 	) (Result[string], error)
 }

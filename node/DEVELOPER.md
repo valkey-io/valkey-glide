@@ -56,6 +56,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
+**Valkey Server and CLI**
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
+
 #### Building and installation steps
 
 Before starting this step, make sure you've installed all software requirments.
@@ -98,12 +101,17 @@ Before starting this step, make sure you've installed all software requirments.
     Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
 
 4. Run tests:
+
     1. Ensure that you have installed server and valkey-cli on your host. You can download Valkey at the following link: [Valkey Download page](https://valkey.io/download/).
     2. Execute the following command from the node folder:
+
         ```bash
         npm run build # make sure we have a debug build compiled first
+        npm test-local # For testing on local. For skipping exported symbols validation test on local.
         npm test
+
         ```
+
 5. Integrating the built GLIDE package into your project:
    Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
@@ -185,14 +193,6 @@ After applying changes in client code you need to restart the shell.
 It has command history and bash-like search (`Ctrl+R`).
 
 Shell hangs on exit (`Ctrl+D`) if you don't close the clients. Use `Ctrl+C` to kill it and/or close clients before exit.
-
-### Submodules
-
-After pulling new changes, ensure that you update the submodules by running the following command:
-
-```bash
-git submodule update
-```
 
 ### Linters
 

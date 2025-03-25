@@ -11,8 +11,10 @@ import {
     GlideRecord,
     GlideString,
     HashDataType,
+    Score,
     ObjectType,
     SortedSetDataType,
+    ElementAndScore,
 } from "./BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "./GlideClient";
@@ -54,7 +56,7 @@ function toBuffersArray(args: GlideString[]) {
 }
 
 /**
- * @internal @test
+ * @test
  */
 export function parseInfoResponse(response: string): Record<string, string> {
     const lines = response.split("\n");
@@ -434,7 +436,6 @@ export function createHGet(
 }
 
 /**
- * @internal
  * This function converts an input from {@link HashDataType} or `Record` types to `HashDataType`.
  *
  * @param fieldsAndValues - field names and their values.
@@ -1443,7 +1444,7 @@ export function convertElementsAndScores(
  */
 export function createZAdd(
     key: GlideString,
-    membersAndScores: SortedSetDataType,
+    membersAndScores: ElementAndScore[] | Record<string, Score>,
     options?: ZAddOptions,
     incr = false,
 ): command_request.Command {
@@ -1477,7 +1478,20 @@ export function createZAdd(
         args.push("INCR");
     }
 
-    membersAndScores.forEach((p) => args.push(p.score.toString(), p.element));
+    if (Array.isArray(membersAndScores)) {
+        for (let i = 0, len = membersAndScores.length; i < len; i++) {
+            const item = membersAndScores[i];
+            args.push(item.score.toString(), item.element);
+        }
+    } else {
+        const members = Object.keys(membersAndScores);
+
+        for (let i = 0, len = members.length; i < len; i++) {
+            const member = members[i];
+            args.push(membersAndScores[member].toString(), member);
+        }
+    }
+
     return createCommand(RequestType.ZAdd, args);
 }
 

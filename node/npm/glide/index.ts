@@ -82,6 +82,7 @@ function initialize() {
         GlideClusterClient,
         GlideClientConfiguration,
         GlideJson,
+        JsonBatch,
         GlideFt,
         Field,
         TextField,
@@ -190,6 +191,8 @@ function initialize() {
         ReturnTypeAttribute,
         ReturnTypeJson,
         UniversalReturnTypeJson,
+        Score,
+        ElementAndScore,
     } = nativeBinding;
 
     module.exports = {
@@ -238,6 +241,7 @@ function initialize() {
         FtSearchReturnType,
         GlideRecord,
         GlideJson,
+        JsonBatch,
         GlideString,
         JsonGetOptions,
         JsonArrPopOptions,
@@ -338,6 +342,8 @@ function initialize() {
         ReturnTypeAttribute,
         ReturnTypeJson,
         UniversalReturnTypeJson,
+        Score,
+        ElementAndScore,
     };
 
     globalObject = Object.assign(global, nativeBinding);

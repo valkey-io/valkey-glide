@@ -216,25 +216,8 @@ mod cluster_async {
                 GlideOpenTelemetryTraceExporter::from_str("http://valid-url.com").unwrap(),
             )
             .build();
-        let result = std::panic::catch_unwind(|| {
-            GlideOpenTelemetry::initialise(glide_ot_config.clone());
-        });
-        assert!(result.is_err(), "Expected a panic but no panic occurred");
-
-        // Check the panic message
-        if let Err(err) = result {
-            let panic_msg = err
-                .downcast_ref::<String>()
-                .map(String::as_str)
-                .or_else(|| err.downcast_ref::<&str>().copied())
-                .unwrap_or("Unknown panic message");
-
-            assert!(
-                panic_msg.contains("not yet implemented: HTTP protocol is not implemented yet!"),
-                "Unexpected panic message: {}",
-                panic_msg
-            );
-        }
+        let result = GlideOpenTelemetry::initialise(glide_ot_config.clone());
+        assert!(result.is_ok(), "Expected Ok(()), but got Err: {:?}", result);
     }
 
     #[tokio::test]
@@ -284,6 +267,20 @@ mod cluster_async {
 
     #[tokio::test]
     async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_half_replicas() {
+        test_az_affinity_helper(StrategyVariant::AZAffinity).await;
+    }
+
+    #[tokio::test]
+    async fn test_routing_by_slot_to_replica_with_az_affinity_replicas_and_primary_strategy_to_half_replicas(
+    ) {
+        test_az_affinity_helper(StrategyVariant::AZAffinityReplicasAndPrimary).await;
+    }
+    enum StrategyVariant {
+        AZAffinity,
+        AZAffinityReplicasAndPrimary,
+    }
+
+    async fn test_az_affinity_helper(strategy_variant: StrategyVariant) {
         // Skip test if version is less then Valkey 8.0
         if crate::engine_version_less_than("8.0").await {
             return;
@@ -319,11 +316,18 @@ mod cluster_async {
                 .await
                 .unwrap();
         }
-
+        let strategy = match strategy_variant {
+            StrategyVariant::AZAffinity => {
+                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(az.clone())
+            }
+            StrategyVariant::AZAffinityReplicasAndPrimary => {
+                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(
+                    az.clone(),
+                )
+            }
+        };
         let mut client = ClusterClient::builder(cluster_addresses.clone())
-            .read_from(redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(
-                az.clone(),
-            ))
+            .read_from(strategy)
             .build()
             .unwrap()
             .get_async_connection(None)
@@ -379,7 +383,16 @@ mod cluster_async {
     }
 
     #[tokio::test]
-    async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_all_replicas() {
+    async fn test_az_affinity_strategy_to_all_replicas() {
+        test_all_replicas_helper(StrategyVariant::AZAffinity).await;
+    }
+
+    #[tokio::test]
+    async fn test_az_affinity_replicas_and_primary_to_all_replicas() {
+        test_all_replicas_helper(StrategyVariant::AZAffinityReplicasAndPrimary).await;
+    }
+
+    async fn test_all_replicas_helper(strategy_variant: StrategyVariant) {
         // Skip test if version is less then Valkey 8.0
         if crate::engine_version_less_than("8.0").await {
             return;
@@ -410,10 +423,19 @@ mod cluster_async {
             .await
             .unwrap();
 
+        // Strategy-specific client configuration
+        let strategy = match strategy_variant {
+            StrategyVariant::AZAffinity => {
+                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(az.clone())
+            }
+            StrategyVariant::AZAffinityReplicasAndPrimary => {
+                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(
+                    az.clone(),
+                )
+            }
+        };
         let mut client = ClusterClient::builder(cluster_addresses.clone())
-            .read_from(redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(
-                az.clone(),
-            ))
+            .read_from(strategy)
             .build()
             .unwrap()
             .get_async_connection(None)
@@ -462,6 +484,117 @@ mod cluster_async {
             replica_num,
             "Test failed: expected exactly '{}' entries with '{}' and '{}', found {}",
             replica_num,
+            get_cmdstat,
+            client_az,
+            matching_entries_count
+        );
+    }
+
+    #[tokio::test]
+    async fn test_az_affinity_replicas_and_primary_prefers_local_primary() {
+        // Skip test if version is less than Valkey 8.0
+        if crate::engine_version_less_than("8.0").await {
+            return;
+        }
+
+        let replica_num: u16 = 4;
+        let primaries_num: u16 = 3;
+        let primary_in_same_az: u16 = 1;
+
+        let cluster =
+            TestClusterContext::new((replica_num * primaries_num) + primaries_num, replica_num);
+        let client_az = "us-east-1a".to_string();
+        let other_az = "us-east-1b".to_string();
+
+        let mut connection = cluster.async_connection(None).await;
+        let cluster_addresses: Vec<_> = cluster
+            .cluster
+            .servers
+            .iter()
+            .map(|server| server.connection_info())
+            .collect();
+
+        // Set AZ for all nodes to a different AZ initially
+        let mut cmd = redis::cmd("CONFIG");
+        cmd.arg(&["SET", "availability-zone", &other_az.clone()]);
+
+        connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        // Set the client's AZ for one primary (the last one)
+        let mut cmd = redis::cmd("CONFIG");
+        cmd.arg(&["SET", "availability-zone", &client_az]);
+        connection
+            .route_command(
+                &cmd,
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    12182, // This should target the third primary
+                    SlotAddr::Master,
+                ))),
+            )
+            .await
+            .unwrap();
+
+        let mut client = ClusterClient::builder(cluster_addresses.clone())
+            .read_from(
+                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(
+                    client_az.clone(),
+                ),
+            )
+            .build()
+            .unwrap()
+            .get_async_connection(None)
+            .await
+            .unwrap();
+
+        // Perform read operations
+        let n = 100;
+        for _ in 0..n {
+            let mut cmd = redis::cmd("GET");
+            cmd.arg("foo"); // This key should hash to the third primary's slot
+            let _res: RedisResult<Value> = cmd.query_async(&mut client).await;
+        }
+
+        // Gather INFO
+        let mut cmd = redis::cmd("INFO");
+        cmd.arg("ALL");
+        let info = connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        let info_result: HashMap<String, String> =
+            redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
+        let get_cmdstat = "cmdstat_get:calls=".to_string();
+        let n_get_cmdstat = format!("cmdstat_get:calls={}", n);
+        let client_az2 = format!("availability-zone:{}", client_az);
+        let mut matching_entries_count: usize = 0;
+
+        for value in info_result.values() {
+            if value.contains(&get_cmdstat) {
+                if value.contains(&client_az) && value.contains(&n_get_cmdstat) {
+                    matching_entries_count += 1;
+                } else {
+                    panic!(
+                        "Invalid entry found: {}. Expected cmdstat_get:calls={} and availability_zone={}",
+                        value, n, client_az2);
+                }
+            }
+        }
+
+        assert_eq!(
+            (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
+            primary_in_same_az,
+            "Test failed: expected exactly '{}' entries with '{}' and '{}', found {}",
+            primary_in_same_az,
             get_cmdstat,
             client_az,
             matching_entries_count
@@ -3752,7 +3885,7 @@ mod cluster_async {
             |builder| {
                 builder
                     .retries(0)
-                    .periodic_connections_checks(Duration::from_secs(3))
+                    .periodic_connections_checks(Some(Duration::from_secs(3)))
             },
             false,
         );
@@ -3853,6 +3986,154 @@ mod cluster_async {
         .unwrap();
     }
 
+    // This test verifies that if a client's connection to a node is killed and its reconnection is blocked,
+    // commands from the same client to healthy nodes are not delayed.
+    //
+    // The test uses a cluster with 3 shards and disables periodic connection checks, also We set 3 retries, so on the
+    // request to the blocked node - (1) Identify disconnection, (2) Route to Random node, (3) ConnectionNotFoundForRoute.
+    // It uses two clients:
+    //  - A helper client (con_block) that executes a pipeline against shard 0. This pipeline kills
+    //    the main client's (con_tx) connection on shard 0 and blocks its reconnection using a DEBUG SLEEP command to block the engine.
+    //  - The main client connection (con_tx) which is used to send commands.
+    //
+    // The test workflow is as follows:
+    //  1. The helper client (con_block) kills con_tx's connection to shard 0 and blocks reconnection by blocking the engine.
+    //  2. The main client (con_tx) sends a request to shard 0, which should fail and trigger reconnection in the background.
+    //  3. The main client (con_tx) then sends a request wrapped by timeout to a healthy node (routed to slot 12182 - cluster keyslot foo), which should succeed.
+    //  4. After the blocking sleep expires and reconnection completes, the main client sends another request to shard 0,
+    //     which is expected to return "OK".
+    //
+    // This demonstrates that a reconnection process to one node does not prevent the same client from
+    // successfully communicating with healthy nodes.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_non_blocking_reconnection_with_transaction() {
+        use std::time::Duration;
+
+        // Create a cluster with 3 shards, no periodic checks, and a 250ms response timeout.
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3, // 3 shards
+            0,
+            |builder| {
+                builder
+                    .retries(2)
+                    .periodic_connections_checks(None)
+                    .response_timeout(Duration::from_millis(250)) // aligns with the default timeout in glide core
+            },
+            false,
+        );
+
+        block_on_all(async move {
+            // con_block will run the blocking transaction on shard 0.
+            let mut con_block = cluster.async_connection(None).await;
+            // con_tx will be used to trigger reconnection and send commands.
+            let mut con_tx = cluster.async_connection(None).await;
+            let keyslot_bar = 5061;
+
+            // STEP 1: Get the client ID for shard holding 'bar' key using con_tx.
+            let mut cmd_id = redis::cmd("CLIENT");
+            cmd_id.arg("ID");
+            let res = con_tx
+                .route_command(
+                    &cmd_id,
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                        Route::new(keyslot_bar, SlotAddr::Master),
+                    )),
+                )
+                .await;
+            let client_id = match res.unwrap() {
+                Value::Int(id) => id,
+                _ => panic!("Unexpected CLIENT ID response on shard 0"),
+            };
+
+            // STEP 2: Create an atomic transaction (pipeline) that:
+            //   - Kills the connection on shard 0 using the obtained client_id, and
+            //   - Blocks reconnection by executing a DEBUG SLEEP (3 seconds).
+            let mut pipe = redis::pipe();
+            pipe.atomic()
+                .cmd("CLIENT")
+                .arg("KILL")
+                .arg("ID")
+                .arg(client_id)
+                .arg("SKIPME")
+                .arg("NO")
+                .ignore()
+                .cmd("DEBUG")
+                .arg("SLEEP")
+                .arg(3)
+                .ignore();
+
+            // STEP 3: Spawn the transaction on shard 0 via con_block.
+            // Running it concurrently ensures the blocking (DEBUG SLEEP) does not stall the rest of the test.
+            tokio::spawn(async move {
+                _ = con_block
+                    .route_pipeline(
+                        &pipe,
+                        0,
+                        2,
+                        SingleNodeRoutingInfo::SpecificNode(Route::new(keyslot_bar, SlotAddr::Master)),
+                    )
+                    .await;
+            });
+
+            // STEP 4: Give a short delay to help ensure the pipeline has started.
+            tokio::time::sleep(Duration::from_secs(1)).await;
+
+            // STEP 5: Use con_tx to send a SET request to the blocked shard (shard 0)
+            // to trigger reconnection logic.
+            {
+                let mut trigger_set_cmd = redis::cmd("SET");
+                trigger_set_cmd.arg("bar").arg("123");
+                let trigger_res =
+                    trigger_set_cmd.query_async::<_, String>(&mut con_tx).await;
+                match trigger_res {
+                    Ok(_) => panic!("Unexpected success on SET to blocked shard; expected ConnectionNotFoundForRoute error"),
+                    Err(e) => {
+                        if !e.to_string().contains("ConnectionNotFoundForRoute") {
+                            panic!("Unexpected error on SET to blocked shard: {:?}", e);
+                        }
+                    }
+                }
+            }
+
+            // STEP 6: While reconnection is active (Due to the BEBUG SLEEP), send a SET request via con_tx to a healthy
+            // shard (routed to slot 12182 - cluster keyslot foo) to show that healthy requests are processed right away
+            {
+                let mut healthy_set_cmd = redis::cmd("SET");
+                healthy_set_cmd.arg("foo").arg("123");
+                let healthy_res =
+                    healthy_set_cmd.query_async::<_, String>(&mut con_tx).await;
+                match healthy_res {
+                    Ok(result) => {
+                        assert_eq!(
+                            result,
+                            "OK",
+                            "Healthy shard (slot 12182) did not return OK as expected"
+                        );
+                    }
+                    Err(e) => panic!("Route command to healthy shard returned error: {:?}", e),
+                }
+            }
+
+            // STEP 7: Ensure the pipeline task has completed.
+            tokio::time::sleep(Duration::from_secs(3)).await;
+
+            // STEP 8: Send another SET to shard 0 via con_tx and expect it to return "OK".
+            {
+                let mut final_set_cmd = redis::cmd("SET");
+                final_set_cmd.arg("bar").arg("123");
+                let final_res = final_set_cmd.query_async::<_, String>(&mut con_tx).await;
+                assert_eq!(
+                    final_res.unwrap(),
+                    "OK",
+                    "Final check: shard 0 did return OK as expected"
+                );
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_restore_resp3_pubsub_state_passive_disconnect() {
@@ -3880,7 +4161,7 @@ mod cluster_async {
                     .retries(3)
                     .use_protocol(ProtocolVersion::RESP3)
                     .pubsub_subscriptions(client_subscriptions.clone())
-                    .periodic_connections_checks(Duration::from_secs(1))
+                    .periodic_connections_checks(Some(Duration::from_secs(1)))
             },
             false,
         );
@@ -4057,7 +4338,7 @@ mod cluster_async {
             .use_protocol(ProtocolVersion::RESP3)
             .pubsub_subscriptions(client_subscriptions.clone())
             // periodic connection check is required to detect the disconnect from the last node
-            .periodic_connections_checks(Duration::from_secs(1))
+            .periodic_connections_checks(Some(Duration::from_secs(1)))
             // periodic topology check is required to detect topology change
             .periodic_topology_checks(Duration::from_secs(1))
             .slots_refresh_rate_limit(Duration::from_secs(0), 0)

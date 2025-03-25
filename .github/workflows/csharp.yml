@@ -75,6 +75,7 @@ jobs:
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
 
     test-csharp:
+        name: CSharp Tests - ${{ matrix.dotnet }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
         timeout-minutes: 35
         strategy:
@@ -88,10 +89,41 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
+
+            - name: Install Node on self-hosted runner
+              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+
+            - name: Install extra software on self-hosted runner
+              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y npm
+
+            # As per https://github.com/actions/setup-dotnet/issues/608, it is nice to have (but mandatory for mac runners)
+            - name: Create global.json
+              run: |
+                  cat << EOF > global.json
+                  {
+                     "sdk": {
+                         "rollForward": "latestFeature",
+                         "version": "${{ matrix.dotnet }}.0"
+                     }
+                  }
+                  EOF
+
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
                   dotnet-version: ${{ matrix.dotnet }}
+              env:
+                  DOTNET_INSTALL_DIR: ~/.dotnet
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -101,9 +133,16 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            # Older dotnet fails if sees a references to a newer one
+            - name: Patch project files
+              run: |
+                  SED_FOR_MACOS=`if [[ "${{ matrix.host.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+                  find {benchmarks,csharp} -name '*.csproj' | xargs \
+                      sed -i $SED_FOR_MACOS "s|<TargetFrameworks>.*</TargetFrameworks>|<TargetFrameworks>net${{ matrix.dotnet }}</TargetFrameworks>|g"
+
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
-              run: dotnet test --framework net${{ matrix.dotnet }} "-l:html;LogFileName=TestReport.html" --results-directory . -warnaserror
+              run: dotnet test --configuration Debug --framework net${{ matrix.dotnet }} --logger "html;LogFileName=TestReport.html" --logger "console;verbosity=detailed" --results-directory .
 
             - uses: ./.github/workflows/test-benchmark
               with:
@@ -160,8 +199,6 @@ jobs:
                   echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
@@ -175,6 +212,12 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            # Older dotnet fails if sees a references to a newer one
+            - name: Patch project files
+              run: |
+                  find {benchmarks,csharp} -name '*.csproj' | xargs \
+                      sed -i "s|<TargetFrameworks>.*</TargetFrameworks>|<TargetFrameworks>net${{ matrix.dotnet }}</TargetFrameworks>|g"
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
@@ -205,4 +248,6 @@ jobs:
 
             - name: Format
               working-directory: csharp
-              run: dotnet format --verify-no-changes --verbosity diagnostic
+              run: |
+                  dotnet format --verify-no-changes --verbosity diagnostic
+                  dotnet build --configuration Lint
