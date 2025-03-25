@@ -10,7 +10,7 @@ import {
     createLeakedOtelSpan,
     dropOtelSpan,
     getStatistics,
-    valueFromSplitPointer
+    valueFromSplitPointer,
 } from "glide-rs";
 import Long from "long";
 import * as net from "net";
@@ -261,7 +261,6 @@ import {
     connection_request,
     response,
 } from "./ProtobufMessage";
-const LongJS = require('long');
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -972,7 +971,7 @@ export class BaseClient {
         }
     }
 
-    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
+    private dropCommandSpan(spanPtr: number | ProtoLong | null | undefined) {
         if (spanPtr === null || spanPtr === undefined) return;
 
         if (typeof spanPtr === "number") {
