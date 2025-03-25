@@ -62,7 +62,7 @@ clean:
 	rm -f lib.h
 	rm -f benchmarks/benchmarks
 	rm -rf protobuf
-	rm -rf target
+	rm -rf $(GLIDE_FFI_FOLDER)/target
 	rm -rf reports
 
 

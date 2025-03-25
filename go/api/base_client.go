@@ -43,6 +43,7 @@ type BaseClient interface {
 	GenericBaseCommands
 	BitmapCommands
 	GeoSpatialCommands
+	GetStatistics() (map[string]string, error)
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -112,6 +113,23 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	}
 
 	return &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}, nil
+}
+
+// GetStatistics returns statistics about the client.
+//
+// Returns a map[string]string containing the statistics collected internally by GLIDE core.
+// The map includes metrics such as total connections and clients.
+//
+// Return value:
+//
+//	A map[string]string with statistics keys and their values.
+//	An error if the statistics collection fails.
+func (client *baseClient) GetStatistics() (map[string]string, error) {
+	result, err := client.getStatistics()
+	if err != nil {
+		return nil, err
+	}
+	return handleStringToStringMapResponse(result)
 }
 
 // Close terminates the client by closing all associated resources.
@@ -265,6 +283,41 @@ func (client *baseClient) executeCommandWithRoute(
 		argLengthsPtr,
 		routeBytesPtr,
 		routeBytesCount,
+	)
+	client.mu.Unlock()
+
+	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return nil, payload.error
+	}
+	return payload.value, nil
+}
+
+func (client *baseClient) getStatistics() (*C.struct_CommandResponse, error) {
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "getStatistics failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+	C.get_statistics(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
 	)
 	client.mu.Unlock()
 
