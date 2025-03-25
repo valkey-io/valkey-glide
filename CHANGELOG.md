@@ -20,6 +20,7 @@
 * Go: Add `GeoAdd` and the Geospatial interface ([#3366](https://github.com/valkey-io/valkey-glide/pull/3366))
 * Go: Add `FLUSHALL` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
 * Go: Add `FLUSHDB` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
+* Go: Add `PFMERGE` ([#3082](https://github.com/valkey-io/valkey-glide/pull/3082))
 * Go: Add password update api ([#3346](https://github.com/valkey-io/valkey-glide/pull/3346))
 * Go: Add `GeoHash` ([#3439](https://github.com/valkey-io/valkey-glide/pull/3439))
 * Go/Core: Move FFI to a dedicated folder for reusability ([#3372](https://github.com/valkey-io/valkey-glide/pull/3372))
