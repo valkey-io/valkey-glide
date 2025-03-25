@@ -198,6 +198,7 @@ where
         cmd: &'a crate::Pipeline,
         offset: usize,
         count: usize,
+        _retry_failed_commands: bool,
     ) -> RedisFuture<'a, Vec<Value>> {
         (async move {
             if self.pubsub {

@@ -582,8 +582,7 @@ impl MultiplexedConnection {
                 }
             }
         }
-        // TODO: remove this when `raise_on_error` flag will be added
-        let value = result.and_then(|v| v.extract_error())?;
+        let value = result?;
         match value {
             Value::Array(mut values) => {
                 values.drain(..offset);
@@ -716,6 +715,7 @@ impl ConnectionLike for MultiplexedConnection {
         cmd: &'a crate::Pipeline,
         offset: usize,
         count: usize,
+        _retry_failed_commands: bool,
     ) -> RedisFuture<'a, Vec<Value>> {
         (async move { self.send_packed_commands(cmd, offset, count).await }).boxed()
     }

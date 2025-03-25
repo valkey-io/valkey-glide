@@ -320,7 +320,9 @@ import lombok.NonNull;
 @Getter
 public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /** Command class to send a single request to Valkey. */
-    protected final Batch.Builder protobufTransaction = Batch.newBuilder().setIsAtomic(true);
+    // TODO: add support for timeout
+    protected final Batch.Builder protobufTransaction =
+            Batch.newBuilder().setIsAtomic(true).setRaiseOnError(true).setRetryFailedCommands(false);
 
     /**
      * Flag whether transaction commands may return binary data.<br>

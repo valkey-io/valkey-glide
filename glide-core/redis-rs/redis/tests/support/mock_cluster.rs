@@ -361,6 +361,7 @@ impl aio::ConnectionLike for MockConnection {
         _pipeline: &'a redis::Pipeline,
         _offset: usize,
         _count: usize,
+        _retry_failed_commands: bool,
     ) -> RedisFuture<'a, Vec<Value>> {
         Box::pin(future::ok(vec![]))
     }

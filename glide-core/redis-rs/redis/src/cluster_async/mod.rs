@@ -39,13 +39,14 @@ use crate::{
     },
     cmd,
     commands::cluster_scan::{cluster_scan, ClusterScanArgs, ScanStateRC},
+    types::ServerError,
     FromRedisValue, InfoDict,
 };
 use connections_container::{RefreshTaskNotifier, RefreshTaskState, RefreshTaskStatus};
 use dashmap::DashMap;
 use pipeline_routing::{
-    collect_and_send_pending_requests, map_pipeline_to_nodes, process_pipeline_responses,
-    route_for_pipeline, PipelineResponses,
+    collect_and_send_pending_requests, map_pipeline_to_nodes, process_and_retry_pipeline_responses,
+    route_for_pipeline, PipelineResponses, ResponsePoliciesMap,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -276,12 +277,14 @@ where
     }
 
     /// Send commands in `pipeline` to the given `route`. If `route` is [None], it will be computed from `pipeline`.
+    /// `retry_failed_commands` - If `true`, failed commands with retryable `RetryMethod` will be retried, this could result in re-ordering commands execution on the same slot.
     pub async fn route_pipeline<'a>(
         &'a mut self,
         pipeline: &'a crate::Pipeline,
         offset: usize,
         count: usize,
         route: SingleNodeRoutingInfo,
+        retry_failed_commands: bool,
     ) -> RedisResult<Vec<Value>> {
         let (sender, receiver) = oneshot::channel();
         self.0
@@ -292,6 +295,8 @@ where
                     count,
                     route: route.into(),
                     sub_pipeline: false,
+                    retry: 0,
+                    retry_failed_commands,
                 },
                 sender,
             })
@@ -614,6 +619,9 @@ enum CmdArg<C> {
         count: usize,
         route: InternalSingleNodeRouting<C>,
         sub_pipeline: bool,
+        retry: u32,
+        /// If `true`, failed commands with retryable `RetryMethod` will be retried, this could result in re-ordering commands execution on the same slot.
+        retry_failed_commands: bool,
     },
     ClusterScan {
         // struct containing the arguments for the cluster scan command - scan state cursor, match pattern, count and object type.
@@ -939,6 +947,7 @@ impl<C> Future for Request<C> {
                         return Next::Done.into();
                     }
                     OperationTarget::NotFound => {
+                        println!("Request error `{:?}` not found", err);
                         // TODO - this is essentially a repeat of the retirable error. probably can remove duplication.
                         let mut request = this.request.take().unwrap();
                         request.info.reset_routing();
@@ -958,7 +967,7 @@ impl<C> Future for Request<C> {
                         let mut request = this.request.take().unwrap();
                         request.info.set_redirect(
                             err.redirect_node()
-                                .map(|(node, _slot)| Redirect::Ask(node.to_string())),
+                                .map(|(node, _slot)| Redirect::Ask(node.to_string(), true)),
                         );
                         Next::Retry { request }.into()
                     }
@@ -1499,14 +1508,14 @@ where
         response_policy: Option<ResponsePolicy>,
     ) -> RedisResult<Value> {
         let extract_result = |response| match response {
-            Response::Single(value) => value,
+            Response::Single(value) => value.extract_error(),
             Response::Multiple(_) => unreachable!(),
             Response::ClusterScanResult(_, _) => unreachable!(),
         };
 
         let convert_result = |res: Result<RedisResult<Response>, _>| {
             res.map_err(|_| RedisError::from((ErrorKind::ResponseError, "request wasn't handled due to internal failure"))) // this happens only if the result sender is dropped before usage.
-            .and_then(|res| res.map(extract_result))
+            .and_then(|res| res.and_then(extract_result))
         };
 
         let get_receiver = |(_, receiver): (_, oneshot::Receiver<RedisResult<Response>>)| async {
@@ -2202,7 +2211,7 @@ where
     ) -> OperationResult {
         trace!("try_pipeline_request");
         let (address, mut conn) = conn.await.map_err(|err| (OperationTarget::NotFound, err))?;
-        conn.req_packed_commands(&pipeline, offset, count)
+        conn.req_packed_commands(&pipeline, offset, count, false)
             .await
             .map(Response::Multiple)
             .map_err(|err| (OperationTarget::Node { address }, err))
@@ -2217,6 +2226,8 @@ where
                 count,
                 route,
                 sub_pipeline,
+                retry,
+                retry_failed_commands,
             } => {
                 if pipeline.is_atomic() || sub_pipeline {
                     // If the pipeline is atomic (i.e., a transaction) or if the pipeline is already splitted into sub-pipelines (i.e., the pipeline is already routed to a specific node), we can send it as is, with no need to split it into sub-pipelines.
@@ -2229,7 +2240,13 @@ where
                     .await
                 } else {
                     // The pipeline is not atomic and not already splitted, we need to split it into sub-pipelines and send them separately.
-                    Self::handle_non_atomic_pipeline_request(pipeline, core).await
+                    Self::handle_non_atomic_pipeline_request(
+                        pipeline,
+                        core,
+                        retry,
+                        retry_failed_commands,
+                    )
+                    .await
                 }
             }
             CmdArg::ClusterScan {
@@ -2263,15 +2280,16 @@ where
     async fn handle_non_atomic_pipeline_request(
         pipeline: Arc<crate::Pipeline>,
         core: Core<C>,
+        retry: u32,
+        retry_failed_commands: bool,
     ) -> OperationResult {
         // Distribute pipeline commands across cluster nodes based on routing information.
         // Returns:
         // - pipelines_by_node: Map of node addresses to their pipeline contexts
-        // - response_policies: List of response aggregation policies for multi-node commands
-        let (pipelines_by_node, response_policies) =
+        // - response_policies: List of routing info and response aggregation policies for multi-node commands.
+        let (pipelines_by_node, mut response_policies) =
             map_pipeline_to_nodes(&pipeline, core.clone()).await?;
 
-        //TODO: move teh creation of `pipeline_responses` to pipeline_routing.rs
         // Initialize `PipelineResponses` to store responses for each pipeline command.
         // This will be used to store the responses from the different sub-pipelines to the pipeline commands.
         // A command can have one or more responses (e.g MultiNode commands).
@@ -2282,130 +2300,129 @@ where
         // Send the requests to each node and collect the responses
         // Returns a tuple containing:
         // - A vector of results for each sub-pipeline execution.
-        // - A vector of (address, indices) pairs indicating where each response should be placed.
-        let (responses, addresses_and_indices) =
-            collect_and_send_pending_requests(pipelines_by_node, core.clone()).await;
+        // - A vector of (address, indices, ignore) pairs indicating where each response should be placed, or if the response should be ignored.
+        let (responses, addresses_and_indices) = collect_and_send_pending_requests(
+            pipelines_by_node,
+            core.clone(),
+            retry,
+            retry_failed_commands,
+        )
+        .await;
 
-        // Process the responses and update the pipeline_responses
-        process_pipeline_responses(&mut pipeline_responses, responses, addresses_and_indices)?;
+        // Process the responses and update the pipeline_responses, retrying the commands if needed.
+        process_and_retry_pipeline_responses(
+            &mut pipeline_responses,
+            responses,
+            addresses_and_indices,
+            &pipeline,
+            core,
+            retry,
+            &mut response_policies,
+            retry_failed_commands,
+        )
+        .await?;
 
         // Process response policies after all tasks are complete and aggregate the relevant commands.
-        Self::aggregate_pipeline_multi_node_commands(&mut pipeline_responses, response_policies)
-            .await?;
-
-        // Collect final responses, ensuring no missing or invalid responses.
-        let final_responses: Result<Vec<Value>, (OperationTarget, RedisError)> = pipeline_responses
-            .into_iter()
-            .enumerate()
-            .map(|(index, mut value)| {
-                value.pop().map(|(response, _)| response).ok_or_else(|| {
-                    (
-                        OperationTarget::FanOut,
-                        RedisError::from((
-                            ErrorKind::ResponseError,
-                            "No response found for command: ",
-                            pipeline
-                                .get_command(index)
-                                .map_or("no command available".to_string(), |cmd| {
-                                    format!("{:?}", cmd)
-                                }),
-                        )),
-                    )
-                })
-            })
-            .collect();
-
-        Ok(Response::Multiple(final_responses?))
+        Ok(Response::Multiple(
+            Self::aggregate_pipeline_multi_node_commands(pipeline_responses, response_policies)
+                .await,
+        ))
     }
 
-    /// Aggregates pipeline responses for multi-node commands and updates the `pipeline_responses` vector.
+    /// Aggregates pipeline responses for multi-node commands and produces a final vector of responses.
     ///
     /// Pipeline commands with multi-node routing info, will be splitted into multiple pipelines, therefore, after executing each pipeline and storing the results in `pipeline_responses`,
     /// the multi-node commands will contain more than one response (one for each sub-pipeline that contained the command). This responses must be aggregated into a single response, based on the proper response policy.
     ///
-    /// This function processes the provided `response_policies`, which contain information about how responses from multiple nodes should be aggregated.
-    /// For each policy:
-    /// - It collects the multiple responses and their source node addresses from the corresponding entry in `pipeline_responses`.
-    /// - Uses the routing information and optional response policy to aggregate the responses into a single result.
+    /// This function processes the provided `response_policies`, which  is a sorted (by command index) vector containing, for each multi-node command:
+    /// - The index of the command in the pipeline.
+    /// - The routing information (`MultipleNodeRoutingInfo`) for that command.
+    /// - An optional `ResponsePolicy` specifying how to aggregate the responses (e.g., sum, all succeeded).
     ///
-    /// The aggregated result replaces the existing entries in `pipeline_responses` for the given command index, changing the multiple responses to the command into a single aggregated response.
+    /// For each command:
+    /// - If a response policy exists for that command, the function aggregates the multiple responses
+    ///   (collected from the sub-pipelines) into a single response using the provided routing info and response policy.
+    /// - If no response policy is provided, the function simply takes the last response (which is a single response, removing its node address).
     ///
-    /// After the execution of this function, all entries in `pipeline_responses` will contain a single response for each command.
+    /// The aggregated result replaces the multiple responses for each command, ensuring that every entry in
+    /// the final output vector corresponds to a single, aggregated response for the original pipeline command.
     ///
     /// # Arguments
-    /// * `pipeline_responses` - A mutable reference to a vector of vectors, where each inner vector contains tuples of responses and their corresponding node addresses.
-    /// * `response_policies` - A vector of tuples, each containing:
-    ///     - The index of the command in the pipeline that has a multi-node routing info.
-    ///     - The routing information for the command.
-    ///     - An optional response policy that dictates how the responses should be aggregated.
+    ///
+    /// * `pipeline_responses` - A vector of vectors, where each inner vector holds tuples of
+    ///   `(Value, String)`, representing the responses from the sub-pipelines along with their node addresses.
+    /// * `response_policies` - A `ResponsePoliciesMap` containing:
+    ///     - An entry of the index of the command in the pipeline with multi-node routing information.
+    ///     - The routing information (`MultipleNodeRoutingInfo`) for the command.
+    ///     - An optional `ResponsePolicy` that dictates how the responses should be aggregated.
+    ///
+    /// # Returns
+    ///
+    /// * `Vec<Value>` - A vector of aggregated responses, one for each command in the original pipeline.
     ///
     /// # Example
-    /// Suppose we have a pipeline with multiple commands that were split and executed on different nodes.
-    /// This function will aggregate the responses for commands that were split across multiple nodes.
-    ///
     /// ```rust,compile_fail
-    /// // Example pipeline with commands that might be split across nodes
-    ///
+    /// // Example pipeline responses for multi-node commands:
     /// let mut pipeline_responses = vec![
-    ///     vec![(Value::Int(1), "node1".to_string()), (Value::Int(2), "node2".to_string()), (Value::Int(3), "node3".to_string())], // represents `DBSIZE`
+    ///     vec![(Value::Int(1), "node1".to_string()), (Value::Int(2), "node2".to_string()), (Value::Int(3), "node3".to_string())], // represents `DBSIZE command split across nodes
     ///     vec![(Value::Int(3), "node3".to_string())],
-    ///     vec![(Value::SimpleString("PONG".to_string()), "node1".to_string()), (Value::SimpleString("PONG".to_string()), "node2".to_string()), (Value::SimpleString("PONG".to_string()), "node3".to_string())], // represents `PING`
-    /// ];
-    /// let response_policies = vec![
-    ///     (0, MultipleNodeRoutingInfo::AllNodes, Some(ResponsePolicy::Aggregate(AggregateOp::Sum))),
-    ///     (2, MultipleNodeRoutingInfo::AllNodes, Some(ResponsePolicy::AllSucceeded)),
+    ///     vec![(Value::SimpleString("PONG".to_string()), "node1".to_string()), (Value::SimpleString("PONG".to_string()), "node2".to_string()), (Value::SimpleString("PONG".to_string()), "node3".to_string())], // represents `PING` command split across nodes
     /// ];
     ///
-    /// // Aggregating the responses
-    /// aggregate_pipeline_multi_node_commands(&mut pipeline_responses, response_policies).await.unwrap();
+    /// let response_policies = HashMap::from([
+    ///     (0, (MultipleNodeRoutingInfo::AllNodes, Some(ResponsePolicy::Aggregate(AggregateOp::Sum)))),
+    ///     (2, (MultipleNodeRoutingInfo::AllNodes, Some(ResponsePolicy::AllSucceeded))),
+    /// ]);
     ///
-    /// // After aggregation, pipeline_responses will be updated with aggregated results
-    /// assert_eq!(pipeline_responses[0], vec![(Value::Int(6), "".to_string())]);
-    /// assert_eq!(pipeline_responses[1], vec![(Value::Int(3), "node3".to_string())]);
-    /// assert_eq!(pipeline_responses[2], vec![(Value::SimpleString("PONG".to_string()), "".to_string())]);
+    /// // Aggregation of responses
+    /// let final_responses = aggregate_pipeline_multi_node_commands(pipeline_responses, response_policies).await.unwrap();
+    ///
+    /// // After aggregation, each command has a single aggregated response:
+    /// assert_eq!(final_responses[0], Value::Int(6)); // Sum of 1+2+3
+    /// assert_eq!(final_responses[1], Value::Int(3));
+    /// assert_eq!(final_responses[2], Value::SimpleString("PONG".to_string()));
     /// ```
-    ///
-    /// This function is essential for handling multi-node commands in a Redis cluster, ensuring that responses from different nodes are correctly aggregated and processed.
     async fn aggregate_pipeline_multi_node_commands(
-        pipeline_responses: &mut PipelineResponses,
-        response_policies: Vec<(usize, MultipleNodeRoutingInfo, Option<ResponsePolicy>)>,
-    ) -> Result<(), (OperationTarget, RedisError)> {
-        // TODO: Try to have a single step of iterating through the PipelineResponses once.
-        // Responses without response policy would simply be inserted into a new results vector (removing their node address),
-        // and multi-node responses will be aggregated and then their address can be removed instead of storing "".to_string.
+        pipeline_responses: PipelineResponses,
+        response_policies: ResponsePoliciesMap,
+    ) -> Vec<Value> {
+        let mut final_responses = Vec::with_capacity(pipeline_responses.len());
 
-        // Go over the multi-node commands
-        for (index, routing_info, response_policy) in response_policies {
-            let response_receivers = pipeline_responses
-                .get(index)
-                .ok_or_else(|| {
-                    (
-                        OperationTarget::FanOut,
-                        RedisError::from((
-                            ErrorKind::ResponseError,
-                            "No response found for command at index: ",
-                            index.to_string(),
-                        )),
-                    )
-                })?
-                .iter()
-                .map(|(value, address)| {
-                    let (sender, receiver) = oneshot::channel();
-                    let _ = sender.send(Ok(Response::Single(value.clone())));
-                    (Some(address.clone()), receiver)
-                })
-                .collect();
-
-            let aggregated_response =
+        for (index, responses) in pipeline_responses.into_iter().enumerate() {
+            // If the first policy in the sorted vector matches the current command index, use it.
+            if let Some(&(ref routing_info, response_policy)) = response_policies.get(&index) {
+                // Use routing_info and response_policy for aggregation.
+                let receivers = responses
+                    .into_iter()
+                    .map(|(value, address)| {
+                        let (sender, receiver) = oneshot::channel();
+                        let _ = sender.send(Ok(Response::Single(value)));
+                        (Some(address), receiver)
+                    })
+                    .collect::<Vec<_>>();
+                let aggregated_response =
                 // TODO: Change aggregate_results function to accept vec of (result, address) instead of receivers
-                Self::aggregate_results(response_receivers, &routing_info, response_policy)
-                    .await
-                    .map_err(|err| (OperationTarget::FanOut, err))?;
-
-            // Safe to use [index] as the index is guaranteed to be valid
-            pipeline_responses[index] = vec![(aggregated_response, "".to_string())];
+                match Self::aggregate_results(receivers, routing_info, response_policy).await {
+                    Ok(value) => value,
+                    Err(err) => Value::ServerError(err.into())
+                };
+                final_responses.push(aggregated_response);
+                continue;
+            }
+            // If there's no policy for this index, simply take the last response.
+            let (value, _addr) = responses.into_iter().last().unwrap_or_else(|| {
+                (
+                    Value::ServerError(ServerError::ExtensionError {
+                        code: "NoResponse".to_string(),
+                        detail: Some(format!("No response found for command {}", index)),
+                    }),
+                    "".to_string(),
+                )
+            });
+            final_responses.push(value);
         }
-        Ok(())
+
+        final_responses
     }
 
     async fn get_connection(
@@ -2429,10 +2446,10 @@ where
                     ConnectionCheck::Found,
                 ),
             InternalSingleNodeRouting::Redirect {
-                redirect: Redirect::Ask(ask_addr),
+                redirect: Redirect::Ask(ask_addr, should_exec_asking),
                 ..
             } => {
-                asking = true;
+                asking = should_exec_asking;
                 core.conn_lock
                     .read()
                     .expect(MUTEX_READ_ERR)
@@ -2659,13 +2676,23 @@ where
         }
     }
 
-    async fn handle_loading_error(
+    async fn handle_loading_error_and_retry(
         core: Core<C>,
         info: RequestInfo<C>,
         address: String,
         retry: u32,
         retry_params: RetryParams,
     ) -> OperationResult {
+        Self::handle_loading_error(core.clone(), address, retry, retry_params).await;
+        Self::try_request(info, core).await
+    }
+
+    async fn handle_loading_error(
+        core: Core<C>,
+        address: String,
+        retry: u32,
+        retry_params: RetryParams,
+    ) {
         let is_primary = core
             .conn_lock
             .read()
@@ -2684,8 +2711,6 @@ where
             let sleep_duration = retry_params.wait_time_for_retry(retry);
             boxed_sleep(sleep_duration).await;
         }
-
-        Self::try_request(info, core).await
     }
 
     fn poll_complete(&mut self, cx: &mut task::Context<'_>) -> Poll<PollFlushAction> {
@@ -2736,7 +2761,7 @@ where
                 }
                 Next::RetryBusyLoadingError { request, address } => {
                     // TODO - do we also want to try and reconnect to replica if it is loading?
-                    let future = Self::handle_loading_error(
+                    let future = Self::handle_loading_error_and_retry(
                         self.inner.clone(),
                         request.info.clone(),
                         address,
@@ -3046,10 +3071,11 @@ where
         pipeline: &'a crate::Pipeline,
         offset: usize,
         count: usize,
+        retry_failed_commands: bool,
     ) -> RedisFuture<'a, Vec<Value>> {
         async move {
             let route = route_for_pipeline(pipeline)?;
-            self.route_pipeline(pipeline, offset, count, route.into())
+            self.route_pipeline(pipeline, offset, count, route.into(), retry_failed_commands)
                 .await
         }
         .boxed()
@@ -3117,6 +3143,8 @@ impl Connect for MultiplexedConnection {
 
 #[cfg(test)]
 mod pipeline_routing_tests {
+    use std::collections::HashMap;
+
     use futures::executor::block_on;
 
     use super::pipeline_routing::route_for_pipeline;
@@ -3127,7 +3155,9 @@ mod pipeline_routing_tests {
             AggregateOp, MultiSlotArgPattern, MultipleNodeRoutingInfo, ResponsePolicy, Route,
             SlotAddr,
         },
-        cmd, Value,
+        cmd,
+        types::{ServerError, ServerErrorKind},
+        Value,
     };
 
     #[test]
@@ -3148,7 +3178,7 @@ mod pipeline_routing_tests {
 
     #[test]
     fn test_numerical_response_aggregation_logic() {
-        let mut pipeline_responses: PipelineResponses = vec![
+        let pipeline_responses: PipelineResponses = vec![
             vec![
                 (Value::Int(3), "node1".to_string()),
                 (Value::Int(7), "node2".to_string()),
@@ -3163,51 +3193,45 @@ mod pipeline_routing_tests {
                 (Value::Int(11), "node2".to_string()),
             ],
         ];
-        let response_policies = vec![
+        let response_policies = HashMap::from([
             (
                 0,
-                MultipleNodeRoutingInfo::AllNodes,
-                Some(ResponsePolicy::Aggregate(AggregateOp::Sum)),
+                (
+                    MultipleNodeRoutingInfo::AllNodes,
+                    Some(ResponsePolicy::Aggregate(AggregateOp::Sum)),
+                ),
             ),
             (
                 2,
-                MultipleNodeRoutingInfo::AllMasters,
-                Some(ResponsePolicy::Aggregate(AggregateOp::Min)),
+                (
+                    MultipleNodeRoutingInfo::AllMasters,
+                    Some(ResponsePolicy::Aggregate(AggregateOp::Min)),
+                ),
             ),
-        ];
-        block_on(
+        ]);
+        let responses = block_on(
             ClusterConnInner::<MultiplexedConnection>::aggregate_pipeline_multi_node_commands(
-                &mut pipeline_responses,
+                pipeline_responses,
                 response_policies,
             ),
-        )
-        .expect("Aggregation failed");
+        );
 
         // Command 0 should be aggregated to 3 + 7 + 0 = 10.
         // Command 1 should remain unchanged.
         assert_eq!(
-            pipeline_responses[0],
-            vec![(Value::Int(10), "".to_string())],
-            "Expected command 0 aggregation to yield 10"
-        );
-        assert_eq!(
-            pipeline_responses[1],
-            vec![(
+            responses,
+            vec![
+                Value::Int(10),
                 Value::BulkString(b"unchanged".to_vec()),
-                "node3".to_string()
-            )],
-            "Expected command 1 to remain unchanged"
-        );
-        assert_eq!(
-            pipeline_responses[2],
-            vec![(Value::Int(5), "".to_string())],
-            "Expected command 2 aggregation to yield 5 as the minimum value"
+                Value::Int(5)
+            ],
+            "{responses:?}"
         );
     }
 
     #[test]
     fn test_combine_arrays_response_aggregation_logic() {
-        let mut pipeline_responses: PipelineResponses = vec![
+        let pipeline_responses: PipelineResponses = vec![
             vec![
                 (Value::Array(vec![Value::Int(1)]), "node1".to_string()),
                 (Value::Array(vec![Value::Int(2)]), "node2".to_string()),
@@ -3229,37 +3253,39 @@ mod pipeline_routing_tests {
                 ),
             ],
         ];
-        let response_policies = vec![
+        let response_policies = HashMap::from([
             (
                 0,
-                MultipleNodeRoutingInfo::AllNodes,
-                Some(ResponsePolicy::CombineArrays),
+                (
+                    MultipleNodeRoutingInfo::AllNodes,
+                    Some(ResponsePolicy::CombineArrays),
+                ),
             ),
             (
                 1,
-                MultipleNodeRoutingInfo::MultiSlot((
-                    vec![
-                        (Route::new(1, SlotAddr::Master), vec![0, 2]),
-                        (Route::new(2, SlotAddr::Master), vec![1, 3]),
-                    ],
-                    MultiSlotArgPattern::KeysOnly,
-                )),
-                Some(ResponsePolicy::CombineArrays),
+                (
+                    MultipleNodeRoutingInfo::MultiSlot((
+                        vec![
+                            (Route::new(1, SlotAddr::Master), vec![0, 2]),
+                            (Route::new(2, SlotAddr::Master), vec![1, 3]),
+                        ],
+                        MultiSlotArgPattern::KeysOnly,
+                    )),
+                    Some(ResponsePolicy::CombineArrays),
+                ),
             ),
-        ];
+        ]);
 
-        block_on(
+        let responses = block_on(
             ClusterConnInner::<MultiplexedConnection>::aggregate_pipeline_multi_node_commands(
-                &mut pipeline_responses,
+                pipeline_responses,
                 response_policies,
             ),
-        )
-        .expect("CombineArrays aggregation should succeed");
+        );
 
         let mut expected = Value::Array(vec![Value::Int(1), Value::Int(2)]);
         assert_eq!(
-            pipeline_responses[0],
-            vec![(expected, "".to_string())],
+            responses[0], expected,
             "Expected combined array to include all elements"
         );
         expected = Value::Array(vec![
@@ -3269,9 +3295,80 @@ mod pipeline_routing_tests {
             Value::BulkString("key4".into()),
         ]);
         assert_eq!(
-            pipeline_responses[1],
-            vec![(expected, "".to_string())],
+            responses[1], expected,
             "Expected combined array to include all elements"
+        );
+    }
+
+    #[test]
+    fn test_aggregate_pipeline_multi_node_commands_with_error_response() {
+        let pipeline_responses: PipelineResponses = vec![
+            vec![
+                (Value::Int(3), "node1".to_string()),
+                (Value::Int(7), "node2".to_string()),
+                (
+                    Value::ServerError(ServerError::KnownError {
+                        kind: ServerErrorKind::Moved,
+                        detail: Some("127.0.0.1".to_string()),
+                    }),
+                    "node3".to_string(),
+                ),
+            ],
+            vec![(
+                Value::BulkString(b"unchanged".to_vec()),
+                "node3".to_string(),
+            )],
+        ];
+        let mut response_policies = HashMap::new();
+        response_policies.insert(
+            0,
+            (
+                MultipleNodeRoutingInfo::AllNodes,
+                Some(ResponsePolicy::CombineArrays),
+            ),
+        );
+
+        let responses = block_on(
+            ClusterConnInner::<MultiplexedConnection>::aggregate_pipeline_multi_node_commands(
+                pipeline_responses,
+                response_policies,
+            ),
+        );
+
+        assert_eq!(
+            responses,
+            vec![
+                Value::ServerError(ServerError::KnownError {
+                    kind: ServerErrorKind::Moved,
+                    detail: Some("An error was signalled by the server: 127.0.0.1".to_string()),
+                }),
+                Value::BulkString(b"unchanged".to_vec()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_aggregate_pipeline_multi_node_commands_with_no_response_policies() {
+        let pipeline_responses: PipelineResponses =
+            vec![vec![(Value::Int(1), "node1".to_string())], vec![]];
+        let response_policies = HashMap::new();
+
+        let responses = block_on(
+            ClusterConnInner::<MultiplexedConnection>::aggregate_pipeline_multi_node_commands(
+                pipeline_responses,
+                response_policies,
+            ),
+        );
+
+        assert_eq!(
+            responses,
+            vec![
+                Value::Int(1),
+                Value::ServerError(ServerError::ExtensionError {
+                    code: "NoResponse".to_string(),
+                    detail: Some("No response found for command 1".to_string())
+                })
+            ]
         );
     }
 

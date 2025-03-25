@@ -275,6 +275,7 @@ impl AioConnectionLike for MockRedisConnection {
         cmd: &'a Pipeline,
         offset: usize,
         count: usize,
+        _retry_failed_commands: bool,
     ) -> RedisFuture<'a, Vec<Value>> {
         let packed_cmd = cmd.get_packed_pipeline();
         let response = <MockRedisConnection as ConnectionLike>::req_packed_commands(
