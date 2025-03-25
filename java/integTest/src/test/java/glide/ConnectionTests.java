@@ -324,4 +324,90 @@ public class ConnectionTests {
             }
         }
     }
+
+    @SneakyThrows
+    @Test
+    public void test_az_affinity_replicas_and_primary_routes_to_primary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
+
+        String az = "us-east-1a";
+        String otherAz = "us-east-1b";
+        int nGetCalls = 4;
+        String getCmdstat = String.format("cmdstat_get:calls=%d", nGetCalls);
+
+        // Create client for setting the configs
+        GlideClusterClient configSetClient =
+                GlideClusterClient.createClient(azClusterClientConfig().requestTimeout(2000).build()).get();
+
+        // Reset stats and set all nodes to other_az
+        assertEquals(configSetClient.configResetStat().get(), OK);
+        configSetClient.configSet(Map.of("availability-zone", otherAz), ALL_NODES).get();
+
+        // Set primary for slot 12182 to az
+        configSetClient
+                .configSet(
+                        Map.of("availability-zone", az),
+                        new RequestRoutingConfiguration.SlotIdRoute(12182, PRIMARY))
+                .get();
+
+        // Verify primary AZ
+        ClusterValue<Map<String, String>> primaryAzResult =
+                configSetClient
+                        .configGet(
+                                new String[] {"availability-zone"},
+                                new RequestRoutingConfiguration.SlotIdRoute(12182, PRIMARY))
+                        .get();
+        assertEquals(
+                az,
+                primaryAzResult.getSingleValue().get("availability-zone"),
+                "Primary for slot 12182 is not in the expected AZ " + az);
+
+        configSetClient.close();
+
+        // Create test client with AZ_AFFINITY_REPLICAS_AND_PRIMARY configuration
+        GlideClusterClient azTestClient =
+                GlideClusterClient.createClient(
+                                azClusterClientConfig()
+                                        .readFrom(ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY)
+                                        .clientAZ(az)
+                                        .requestTimeout(2000)
+                                        .build())
+                        .get();
+
+        // Execute GET commands
+        for (int i = 0; i < nGetCalls; i++) {
+            azTestClient.get("foo").get();
+        }
+
+        ClusterValue<String> infoResult =
+                azTestClient.info(new InfoOptions.Section[] {InfoOptions.Section.ALL}, ALL_NODES).get();
+        Map<String, String> infoData = infoResult.getMultiValue();
+
+        // Check that only the primary in the specified AZ handled all GET calls
+        long matchingEntries =
+                infoData.values().stream()
+                        .filter(
+                                value ->
+                                        value.contains(getCmdstat)
+                                                && value.contains(az)
+                                                && value.contains("role:master"))
+                        .count();
+        assertEquals(1, matchingEntries, "Exactly one primary in AZ should handle all calls");
+
+        // Verify total GET calls
+        long totalGetCalls =
+                infoData.values().stream()
+                        .filter(value -> value.contains("cmdstat_get:calls="))
+                        .mapToInt(
+                                value -> {
+                                    int startIndex =
+                                            value.indexOf("cmdstat_get:calls=") + "cmdstat_get:calls=".length();
+                                    int endIndex = value.indexOf(",", startIndex);
+                                    return Integer.parseInt(value.substring(startIndex, endIndex));
+                                })
+                        .sum();
+        assertEquals(nGetCalls, totalGetCalls, "Total GET calls mismatch");
+
+        azTestClient.close();
+    }
 }

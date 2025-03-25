@@ -74,6 +74,7 @@ jobs:
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
 
     test-node:
+        name: Node Tests - ${{ matrix.node }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-matrices]
         timeout-minutes: 25
@@ -85,6 +86,11 @@ jobs:
                 node: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
         steps:
             - uses: actions/checkout@v4
+
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
 
             - name: Setup Node
               uses: actions/setup-node@v4
@@ -246,7 +252,7 @@ jobs:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
         environment: AWS_ACTIONS
         name: Running Module Tests
-        runs-on: [self-hosted, linux, ARM64]
+        runs-on: [self-hosted, linux, ARM64, persistent]
         timeout-minutes: 15
 
         steps:
