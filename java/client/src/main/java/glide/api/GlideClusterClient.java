@@ -70,7 +70,7 @@ import glide.ffi.resolvers.ClusterScanCursorResolver;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -602,7 +602,7 @@ public class GlideClusterClient extends BaseClient
         } else {
             // each `Object` is a `Map<String, Object>[]` actually
             Map<String, Object> info = handleMapResponse(response);
-            Map<String, Map<String, Object>[]> data = new HashMap<>();
+            Map<String, Map<String, Object>[]> data = new LinkedHashMap<>();
             for (var nodeInfo : info.entrySet()) {
                 data.put(nodeInfo.getKey(), handleFunctionListResponse((Object[]) nodeInfo.getValue()));
             }
@@ -620,7 +620,7 @@ public class GlideClusterClient extends BaseClient
         } else {
             // each `Object` is a `Map<GlideString, Object>[]` actually
             Map<GlideString, Object> info = handleBinaryStringMapResponse(response);
-            Map<GlideString, Map<GlideString, Object>[]> data = new HashMap<>();
+            Map<GlideString, Map<GlideString, Object>[]> data = new LinkedHashMap<>();
             for (var nodeInfo : info.entrySet()) {
                 data.put(
                         nodeInfo.getKey(), handleFunctionListResponseBinary((Object[]) nodeInfo.getValue()));
