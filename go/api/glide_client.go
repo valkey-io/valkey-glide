@@ -314,3 +314,18 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 	}
 	return handleStringResponse(result)
 }
+
+// Rewrites the configuration file with the current configuration.
+//
+// Return value:
+//
+//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/config-rewrite/
+func (client *GlideClient) ConfigRewrite() (string, error) {
+	response, err := client.executeCommand(C.ConfigRewrite, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
