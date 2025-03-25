@@ -317,14 +317,20 @@ async fn send_command(
         Some(Ok(child_span)) => {
             child_span.end();
         }
-        Some(Err(_)) => {
-            println!(
-                "The child span `send command` for command was {:?} failed",
-                cmd
+        Some(Err(error_msg)) => {
+            log_error(
+                "OpenTelemetry error",
+                format!(
+                    "The child span `send command` for command {:?} was failed with error: {:?}",
+                    cmd, error_msg
+                ),
             );
         }
         None => {
-            // println!("No child span was created.");
+            log_info(
+                "OpenTelemetry",
+                "No span created - this is expected as we only sample part of requests for tracing",
+            );
         }
     }
     res

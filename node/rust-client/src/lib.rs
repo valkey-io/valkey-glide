@@ -14,7 +14,6 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
 use glide_core::start_socket_listener;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
-#[cfg(feature = "testing_utilities")]
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
 use napi::bindgen_prelude::Uint8Array;
