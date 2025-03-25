@@ -297,6 +297,7 @@ impl ConnectionLike for ConnectionManager {
         cmd: &'a crate::Pipeline,
         offset: usize,
         count: usize,
+        _retry_failed_commands: bool,
     ) -> RedisFuture<'a, Vec<Value>> {
         (async move { self.send_packed_commands(cmd, offset, count).await }).boxed()
     }

@@ -64,8 +64,9 @@ mod test_pipeline {
         panic!("Failed to find 2 keys in different slots after 1000 attempts");
     }
 
-    pub async fn assert_moved_err_occurred(
+    pub async fn assert_error_occurred(
         connection: &mut ClusterConnection,
+        error_type: &str,
         expected_count: usize,
     ) {
         // Build the INFO errorstats command.
@@ -81,24 +82,25 @@ mod test_pipeline {
             .await
             .expect("INFO errorstats command failed");
 
-        // Parse the output as a String.
         // Parse the INFO output.
         let info_result: HashMap<String, String> =
             redis::from_owned_redis_value(res).expect("Failed to parse INFO command result");
 
-        // Search for the "errorstat_MOVED" line.
-        let mut moved_count: Option<usize> = None;
+        // Search for the specified error type.
+        let mut error_count: Option<usize> = None;
+        let error_prefix = format!("errorstat_{}:count=", error_type);
+
         for info in info_result.values() {
             for line in info.lines() {
-                if line.starts_with("errorstat_MOVED:") {
-                    if let Some(count_str) = line.strip_prefix("errorstat_MOVED:count=") {
+                if line.starts_with(&error_prefix) {
+                    if let Some(count_str) = line.strip_prefix(&error_prefix) {
                         let count_val = count_str
                             .split(',')
                             .next()
                             .unwrap_or("0")
                             .parse::<usize>()
                             .unwrap_or(0);
-                        moved_count = Some(count_val + moved_count.unwrap_or(0));
+                        error_count = Some(count_val + error_count.unwrap_or(0));
                         break;
                     }
                 }
@@ -106,15 +108,13 @@ mod test_pipeline {
         }
 
         // Assert that the found count matches the expected count.
-        match moved_count {
-            Some(count) => {
-                assert_eq!(
-                    count, expected_count,
-                    "Expected errorstat_MOVED count {} but found {}",
-                    expected_count, count
-                );
-            }
-            None => panic!("errorstat_MOVED not found in INFO errorstats output"),
+        match error_count {
+            Some(count) => assert_eq!(
+                count, expected_count,
+                "Expected {} count {} but found {}",
+                error_type, expected_count, count
+            ),
+            None => panic!("{} not found in INFO errorstats output", error_type),
         }
     }
 
@@ -202,7 +202,13 @@ mod test_pipeline {
 
         // Execute the pipeline.
         let res = connection
-            .route_pipeline(&pipeline, 0, pipeline.len(), SingleNodeRoutingInfo::Random)
+            .route_pipeline(
+                &pipeline,
+                0,
+                pipeline.len(),
+                SingleNodeRoutingInfo::Random,
+                true,
+            )
             .await
             .expect("Failed to execute pipeline");
 
@@ -227,7 +233,7 @@ mod test_pipeline {
         assert!(
             bad_results
                 .iter()
-                .all(|r| matches!(r, Value::ServerError(_))),
+                .all(|r| matches!(r, Value::ServerError(err) if err.err_code().contains("ConnectionNotFound"))),
             "Expected server error responses for the bad key operations, but got: {:?}",
             bad_results
         );
@@ -270,7 +276,7 @@ mod test_pipeline {
 
         // Execute the pipeline.
         let result = connection
-            .route_pipeline(&pipeline, 0, 3, SingleNodeRoutingInfo::Random)
+            .route_pipeline(&pipeline, 0, 3, SingleNodeRoutingInfo::Random, true)
             .await
             .expect("Pipeline execution failed");
 
@@ -288,7 +294,7 @@ mod test_pipeline {
             moved_key, key2, key_slot, result
         );
 
-        assert_moved_err_occurred(&mut connection, 2).await;
+        assert_error_occurred(&mut connection, "MOVED", 2).await;
     }
 
     #[tokio::test]
@@ -322,7 +328,13 @@ mod test_pipeline {
 
         // Execute the pipeline.
         let result = connection
-            .route_pipeline(&pipeline, 0, pipeline.len(), SingleNodeRoutingInfo::Random)
+            .route_pipeline(
+                &pipeline,
+                0,
+                pipeline.len(),
+                SingleNodeRoutingInfo::Random,
+                true,
+            )
             .await
             .expect("Pipeline execution failed");
 
@@ -344,7 +356,7 @@ mod test_pipeline {
             result[1]
         );
 
-        assert_moved_err_occurred(&mut connection, 2).await;
+        assert_error_occurred(&mut connection, "MOVED", 2).await;
     }
 
     #[tokio::test]
@@ -377,7 +389,7 @@ mod test_pipeline {
 
         // Execute the pipeline.
         let result = connection
-            .route_pipeline(&pipeline, 3, 1, route)
+            .route_pipeline(&pipeline, 3, 1, route, true)
             .await
             .expect("Pipeline execution failed");
 
@@ -394,7 +406,7 @@ mod test_pipeline {
             moved_key, key_slot, result
         );
 
-        assert_moved_err_occurred(&mut connection, 2).await;
+        assert_error_occurred(&mut connection, "MOVED", 2).await;
     }
 
     #[tokio::test]
@@ -426,12 +438,14 @@ mod test_pipeline {
         pipeline.atomic().set(&moved_key, "value").get(&moved_key);
 
         // Execute the pipeline.
-        let result = connection.route_pipeline(&pipeline, 3, 1, route).await;
+        let result = connection
+            .route_pipeline(&pipeline, 3, 1, route, true)
+            .await;
 
         assert!(result.is_err());
         assert!(result.unwrap_err().kind() == ErrorKind::Moved);
 
-        assert_moved_err_occurred(&mut connection, 2).await;
+        assert_error_occurred(&mut connection, "MOVED", 2).await;
     }
 
     #[tokio::test]
@@ -472,7 +486,13 @@ mod test_pipeline {
 
             // Execute the pipeline.
             let result = connection
-                .route_pipeline(&pipeline, 0, pipeline.len(), SingleNodeRoutingInfo::Random)
+                .route_pipeline(
+                    &pipeline,
+                    0,
+                    pipeline.len(),
+                    SingleNodeRoutingInfo::Random,
+                    true,
+                )
                 .await
                 .expect("Pipeline execution failed");
 
@@ -524,7 +544,121 @@ mod test_pipeline {
                 );
             }
 
-            assert_moved_err_occurred(&mut connection, 4).await;
+            assert_error_occurred(&mut connection, "MOVED", 4).await;
+        }
+    }
+
+    /// Tests pipeline execution behavior in a  Cluster when encountering ASK and TRYAGAIN errors due to slot migration.
+    ///
+    /// - **ASK errors** are redirection errors and should always be rerouted to the correct node, regardless of the retry configuration.
+    /// - **TRYAGAIN errors** occur when a slot is in the process of being migrated, and the client attempts to execute multi-key commands with `ASKING`.
+    ///   - These errors are considered retryable and should be retried based on the retry configuration.
+    ///
+    /// The test verifies whether the pipeline correctly handles these errors under different retry settings.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_pipeline_with_ask_and_try_again_errors() {
+        // Create a test cluster with 3 masters and no replicas.
+        for retry in [false, true] {
+            let cluster = TestClusterContext::new_with_cluster_client_builder(
+                3,
+                0,
+                |builder| builder.retries(10),
+                false,
+            );
+            let mut connection = cluster.async_connection(None).await;
+            let mut stable_conn = cluster.async_connection(None).await;
+
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+
+            let migrated_key = generate_random_string(10);
+            let key_slot = get_slot(migrated_key.as_str().as_bytes());
+            let key = format!("{{{}}}:{}", migrated_key, generate_random_string(5));
+            let des_node = cluster.migrate_slot(key_slot, slot_distribution).await;
+
+            let stable_future = async {
+                // This future completes the slot migration, which resolves the `TryAgain` error.
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                let mut cluster_setslot_cmd = redis::cmd("CLUSTER");
+                cluster_setslot_cmd
+                    .arg("SETSLOT")
+                    .arg(key_slot)
+                    .arg("NODE")
+                    .arg(des_node);
+                let all_nodes = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
+                stable_conn
+                    .route_command(&cluster_setslot_cmd, all_nodes)
+                    .await
+                    .expect("Failed to move slot completely");
+            };
+
+            let future = async {
+                let mut pipeline = redis::pipe();
+                pipeline
+                    .get(&migrated_key)
+                    .set(&migrated_key, "value")
+                    .mget(&[&migrated_key, &key]);
+
+                // Execute the pipeline.
+                let result = connection
+                    .route_pipeline(&pipeline, 0, 3, SingleNodeRoutingInfo::Random, retry)
+                    .await
+                    .expect("Pipeline execution failed");
+                result
+            };
+
+            let ((), result) = tokio::join!(stable_future, future);
+
+            let expected = vec![Value::Nil, Value::Okay];
+
+            assert_eq!(
+                result[0..2],
+                expected,
+                "Pipeline result did not match expected output.\n\
+                 Keys chosen: ('{}', '{}')\n\
+                 key_slot: {}\n\
+                 Actual result: {:?}",
+                migrated_key,
+                key,
+                key_slot,
+                result
+            );
+
+            match retry {
+                true => {
+                    // When retry is enabled, TRYAGAIN errors should be retried, and `MGET` should return expected values.
+                    assert_eq!(
+                        result[2],
+                        Value::Array(vec![Value::BulkString(b"value".to_vec()), Value::Nil]),
+                        "Pipeline result did not match expected output.\n\
+                         Keys chosen: ('{}', '{}')\n\
+                         key_slot: {}\n\
+                         Actual result: {:?}",
+                        migrated_key,
+                        key,
+                        key_slot,
+                        result
+                    );
+                }
+                false => {
+                    // When retry is disabled, TRYAGAIN errors should not be retried, and the error should be present in the response.
+                    assert!(
+                        matches!(result[2], Value::ServerError(ref err) if err.kind() == ErrorKind::TryAgain),
+                        "Pipeline result did not match expected output.\n\
+                     Keys chosen: ('{}', '{}')\n\
+                     key_slot: {}\n\
+                     Actual result: {:?}",
+                        migrated_key,
+                        key,
+                        key_slot,
+                        result
+                    );
+                }
+            }
+
+            assert_error_occurred(&mut connection, "ASK", 3).await;
+            assert_error_occurred(&mut connection, "TRYAGAIN", 1).await;
         }
     }
 
@@ -551,7 +685,13 @@ mod test_pipeline {
 
         // Route the pipeline explicitly to replicas.
         let result = connection
-            .route_pipeline(&pipeline, 0, pipeline.len(), SingleNodeRoutingInfo::Random)
+            .route_pipeline(
+                &pipeline,
+                0,
+                pipeline.len(),
+                SingleNodeRoutingInfo::Random,
+                true,
+            )
             .await
             .expect("Pipeline execution failed");
 
@@ -641,7 +781,13 @@ mod test_pipeline {
 
         // Route the pipeline to replicas using round-robin
         let result = connection
-            .route_pipeline(&pipeline, 0, pipeline.len(), SingleNodeRoutingInfo::Random)
+            .route_pipeline(
+                &pipeline,
+                0,
+                pipeline.len(),
+                SingleNodeRoutingInfo::Random,
+                true,
+            )
             .await
             .expect("Pipeline execution failed");
 
@@ -770,7 +916,13 @@ mod test_pipeline {
 
         // Route the pipeline explicitly to replicas.
         let result = client
-            .route_pipeline(&pipeline, 0, pipeline.len(), SingleNodeRoutingInfo::Random)
+            .route_pipeline(
+                &pipeline,
+                0,
+                pipeline.len(),
+                SingleNodeRoutingInfo::Random,
+                true,
+            )
             .await
             .expect("Pipeline execution failed");
 

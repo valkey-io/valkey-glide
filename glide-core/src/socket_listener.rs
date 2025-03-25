@@ -386,11 +386,21 @@ async fn send_batch(
 
     match request.is_atomic {
         true => client
-            .send_transaction(&pipeline, routing, request.raise_on_error)
+            .send_transaction(
+                &pipeline,
+                routing,
+                Some(request.timeout),
+                request.raise_on_error,
+            )
             .await
             .map_err(|err| err.into()),
         false => client
-            .send_pipeline(&pipeline, request.raise_on_error)
+            .send_pipeline(
+                &pipeline,
+                request.raise_on_error,
+                Some(request.timeout),
+                request.retry_failed_commands,
+            )
             .await
             .map_err(|err| err.into()),
     }

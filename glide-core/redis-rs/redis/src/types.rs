@@ -298,7 +298,7 @@ impl From<RedisError> for ServerError {
                     ServerError::ExtensionError {
                         code: kind.to_string(),
                         detail: Some(format!(
-                            "Unhandled error kind: {:?} description {}",
+                            "Unhandled error kind: {:?} description: {}",
                             kind, desc
                         )),
                     }
@@ -314,7 +314,7 @@ impl From<RedisError> for ServerError {
                     ServerError::ExtensionError {
                         code: kind.to_string(),
                         detail: Some(format!(
-                            "Unhandled error kind: {:?} with description {} and detail {}",
+                            "Unhandled error kind: {:?} with description: {} and detail: {}",
                             kind, desc, detail
                         )),
                     }
@@ -897,7 +897,7 @@ impl fmt::Debug for RedisError {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash, Debug, Copy, Clone)]
 pub(crate) enum RetryMethod {
     Reconnect,
     ReconnectAndRetry,
@@ -1092,10 +1092,10 @@ impl RedisError {
     }
 
     /// Returns the redirect method for this error.    
-    pub(crate) fn redirect(&self) -> Option<Redirect> {
+    pub(crate) fn redirect(&self, should_exec_asking: bool) -> Option<Redirect> {
         let node = self.redirect_node()?;
         match self.kind() {
-            ErrorKind::Ask => Some(Redirect::Ask(node.0.to_string())),
+            ErrorKind::Ask => Some(Redirect::Ask(node.0.to_string(), should_exec_asking)),
             ErrorKind::Moved => Some(Redirect::Moved(node.0.to_string())),
             _ => None,
         }

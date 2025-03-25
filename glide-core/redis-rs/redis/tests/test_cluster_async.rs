@@ -972,8 +972,10 @@ mod cluster_async {
             pipeline: &'a redis::Pipeline,
             offset: usize,
             count: usize,
+            retry_failed_commands: bool,
         ) -> RedisFuture<'a, Vec<Value>> {
-            self.inner.req_packed_commands(pipeline, offset, count)
+            self.inner
+                .req_packed_commands(pipeline, offset, count, retry_failed_commands)
         }
 
         fn get_db(&self) -> i64 {
@@ -3986,6 +3988,7 @@ mod cluster_async {
                         0,
                         2,
                         SingleNodeRoutingInfo::SpecificNode(Route::new(keyslot_bar, SlotAddr::Master)),
+                        true,
                     )
                     .await;
             });

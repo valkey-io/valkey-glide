@@ -77,6 +77,7 @@ pub trait ConnectionLike {
         cmd: &'a crate::Pipeline,
         offset: usize,
         count: usize,
+        retry_failed_commands: bool,
     ) -> RedisFuture<'a, Vec<Value>>;
 
     /// Returns the database this connection is bound to.  Note that this

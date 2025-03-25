@@ -501,6 +501,8 @@ message Batch {
     bool is_atomic = 1;
     repeated Command commands = 2;
     bool raise_on_error = 3;
+    uint32 timeout = 4;
+    bool retry_failed_commands = 5;
 }
 
 message ClusterScan {
