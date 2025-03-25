@@ -93,3 +93,28 @@ func NewTransaction(client GlideClientCommands) *Transaction {
 
 // 	return &GlideClient{client}, nil
 // }
+
+func (client *baseClient) GetTx(key string) (interface{}, error) {
+	result, err := client.executor.ExecuteCommand(C.Get, []string{key})
+	if tx, ok := client.executor.(*Transaction); ok {
+		return tx, nil // Return transaction for chaining when inside a transaction
+	}
+	if err != nil {
+		return err, nil
+	}
+
+	return handleStringOrNilResponse(result)
+}
+
+func (client *baseClient) SetTx(key string, value string) (interface{}, error) {
+	//result, err := client.executor.ExecuteCommand(C.Set, []string{key, value})
+	if tx, ok := client.executor.(*Transaction); ok {
+		return tx, nil // Return transaction for chaining when inside a transaction
+	}
+	// if err != nil {
+	// 	return err, nil
+	// }
+	return nil, nil
+
+	//return handleStringResponse(result)
+}

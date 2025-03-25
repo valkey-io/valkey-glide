@@ -14,11 +14,13 @@ import (
 type StringCommands interface {
 	Set(key string, value string) (string, error)
 
+	SetTx(key string, value string) (interface{}, error)
+
 	SetWithOptions(key string, value string, options options.SetOptions) (Result[string], error)
 
 	Get(key string) (Result[string], error)
 
-	GetEx(key string) (Result[string], error)
+	GetTx(key string) (interface{}, error)
 
 	GetExWithOptions(key string, options options.GetExOptions) (Result[string], error)
 

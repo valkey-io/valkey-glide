@@ -78,6 +78,7 @@ type CommandExecutor interface {
 }
 
 func (client *baseClient) ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
+	fmt.Println("base client ExecuteCommand called")
 	return client.executeCommand(requestType, args)
 }
 
