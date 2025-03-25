@@ -165,9 +165,8 @@ tasks.withType(Test) {
 
 test {
     filter {
-//        excludeTestsMatching 'glide.PubSubTests'
-//        excludeTestsMatching 'glide.modules.*'
-        includeTestsMatching '*.fcall_readonly_function'
+        excludeTestsMatching 'glide.PubSubTests'
+        excludeTestsMatching 'glide.modules.*'
     }
 }
 
