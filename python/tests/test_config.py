@@ -1,5 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import pytest
+
 from glide.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -160,6 +162,14 @@ def test_tls__insecure_in_protobuf_request():
 
     config = GlideClientConfiguration(
         [NodeAddress("127.0.0.1")],
+        use_tls=False,
+        advanced_config=AdvancedGlideClientConfiguration(tls_config=tls_conf),
+    )
+    with pytest.raises(ValueError):
+        config._create_a_protobuf_conn_request()
+
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")],
         use_tls=True,
         advanced_config=AdvancedGlideClientConfiguration(tls_config=tls_conf),
     )
@@ -167,6 +177,14 @@ def test_tls__insecure_in_protobuf_request():
 
     assert isinstance(request, ConnectionRequest)
     assert request.tls_mode is TlsMode.InsecureTls
+
+    config = GlideClusterClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        use_tls=False,
+        advanced_config=AdvancedGlideClusterClientConfiguration(tls_config=tls_conf),
+    )
+    with pytest.raises(ValueError):
+        config._create_a_protobuf_conn_request(cluster_mode=True)
 
     config = GlideClusterClientConfiguration(
         [NodeAddress("127.0.0.1")],
