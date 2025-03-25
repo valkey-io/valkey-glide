@@ -1738,8 +1738,18 @@ public class CommandTests {
         String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
-        // let replica sync with the primary node
-        assertEquals(1L, clusterClient.wait(1L, 5000L).get());
+
+        // Let replica sync with the primary node. We call the wait a few times to allow for wait to become 1L.
+        int retries = 3;
+        long result = 0;
+        while (retries > 0) {
+            result = clusterClient.wait(1L, 5000L).get();
+            if (result == 1L) {
+                break;
+            }
+            retries -= 1;
+        }
+        assertEquals(1L, result);
 
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
