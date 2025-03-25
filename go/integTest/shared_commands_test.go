@@ -9152,22 +9152,13 @@ func (suite *GlideTestSuite) TestGeoDist() {
 
 		// assert correct result with default metric
 		actual, err := client.GeoDist(key1, member1, member2)
-		fmt.Println(actual.Value())
-		if err != nil {
-			t.Fatalf("Failed to get geo distance: %v", err)
-		}
-		if math.Abs(actual.Value()-expected) > delta {
-			t.Errorf("Expected distance %f, got %f", expected, actual.Value())
-		}
+		assert.NoError(t, err)
+		assert.Greater(t, math.Abs(actual.Value()-expected), delta)
 
 		// assert correct result with manual metric specification kilometers
 		actualKM, err := client.GeoDistWithUnit(key1, member1, member2, options.GeoUnitKilometers)
-		if err != nil {
-			t.Fatalf("Failed to get geo distance: %v", err)
-		}
-		if math.Abs(actualKM.Value()-expectedKM) > delta {
-			t.Errorf("Expected distance %f, got %f", expectedKM, actualKM.Value())
-		}
+		assert.NoError(t, err)
+		assert.Greater(t, math.Abs(actualKM.Value()-expectedKM), delta)
 
 		// assert null result when member index is missing
 		actual, _ = client.GeoDist(key1, member1, member3)
