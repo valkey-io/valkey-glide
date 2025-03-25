@@ -1808,6 +1808,7 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
     }
 
+    @Timeout(20)
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
