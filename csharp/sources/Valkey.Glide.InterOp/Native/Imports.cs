@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using Valkey.Glide.InterOp.Native.Routing;
 
 namespace Valkey.Glide.InterOp.Native;
 
