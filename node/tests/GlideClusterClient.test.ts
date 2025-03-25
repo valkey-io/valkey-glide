@@ -699,7 +699,8 @@ describe("GlideClusterClient", () => {
                     ),
                     advancedConfiguration: {
                         openTelemetryConfig: {
-                            collectorEndPoint: "https://valid-endpoint",
+                            tracesCollectorEndPoint: "https://valid-endpoint/v1/traces",
+                            metricsCollectorEndPoint: "https://valid-endpoint/v1/metrics",
                             spanFlushIntervalMs: 400,
                         },
                     },
@@ -724,7 +725,8 @@ describe("GlideClusterClient", () => {
                     ),
                     advancedConfiguration: {
                         openTelemetryConfig: {
-                            collectorEndPoint: "wrong.endpoint",
+                            tracesCollectorEndPoint: "wrong.endpoint",
+                            metricsCollectorEndPoint: "wrong.endpoint",
                             spanFlushIntervalMs: 400,
                         },
                     },
