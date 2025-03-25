@@ -3,14 +3,22 @@
  */
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
-import { ClusterTransaction, convertRecordToGlideRecord, GlideClient, GlideClusterClient, ProtocolVersion } from "..";
+import {
+    ClusterTransaction,
+    convertRecordToGlideRecord,
+    GlideClient,
+    GlideClusterClient,
+    ProtocolVersion,
+} from "..";
 import ValkeyCluster from "../../utils/TestUtils";
-import { flushAndCloseClient, getClientConfigurationOption, getServerVersion, parseEndpoints } from "./TestUtilities";
+import {
+    flushAndCloseClient,
+    getClientConfigurationOption,
+    getServerVersion,
+    parseEndpoints,
+} from "./TestUtilities";
 
 const TIMEOUT = 50000;
-
-// Helper function to delay execution
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 //cluster tests
 describe("OpenTelemetry GlideClusterClient", () => {
@@ -48,8 +56,9 @@ describe("OpenTelemetry GlideClusterClient", () => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
             }
+
             const startMemory = process.memoryUsage().heapUsed;
-            
+
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -65,8 +74,9 @@ describe("OpenTelemetry GlideClusterClient", () => {
             if (global.gc) {
                 global.gc();
             }
+
             const endMemory = process.memoryUsage().heapUsed;
-            
+
             console.log(`Memory before: ${startMemory}, after: ${endMemory}`);
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow 10% growth
         },
@@ -79,6 +89,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
             }
+
             const startMemory = process.memoryUsage().heapUsed;
 
             client = await GlideClusterClient.createClient(
@@ -97,8 +108,9 @@ describe("OpenTelemetry GlideClusterClient", () => {
             if (global.gc) {
                 global.gc();
             }
+
             const endMemory = process.memoryUsage().heapUsed;
-            
+
             console.log(`Memory before: ${startMemory}, after: ${endMemory}`);
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow 10% growth
         },
@@ -140,8 +152,9 @@ describe("OpenTelemetry GlideClient", () => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
             }
+
             const startMemory = process.memoryUsage().heapUsed;
-            
+
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -155,6 +168,7 @@ describe("OpenTelemetry GlideClient", () => {
             if (global.gc) {
                 global.gc(); // Run GC again to clean up
             }
+
             const endMemory = process.memoryUsage().heapUsed;
 
             console.log(`Memory before: ${startMemory}, after: ${endMemory}`);
@@ -169,8 +183,9 @@ describe("OpenTelemetry GlideClient", () => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
             }
+
             const startMemory = process.memoryUsage().heapUsed;
-            
+
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -182,7 +197,7 @@ describe("OpenTelemetry GlideClient", () => {
                 client.set("test_key2", "value2"),
                 client.get("test_key2"),
                 client.set("test_key3", "value3"),
-                client.get("test_key3")
+                client.get("test_key3"),
             ];
 
             await Promise.all(commands);
@@ -190,6 +205,7 @@ describe("OpenTelemetry GlideClient", () => {
             if (global.gc) {
                 global.gc(); // Run GC again to clean up
             }
+
             const endMemory = process.memoryUsage().heapUsed;
 
             console.log(`Memory before: ${startMemory}, after: ${endMemory}`);

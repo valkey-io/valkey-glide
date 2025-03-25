@@ -10,10 +10,17 @@ import {
     createLeakedOtelSpan,
     dropOtelSpan,
     getStatistics,
-    valueFromSplitPointer
+    valueFromSplitPointer,
 } from "glide-rs";
+import Long from "long";
 import * as net from "net";
-import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
+import {
+    Buffer,
+    BufferWriter,
+    Long as ProtoLong,
+    Reader,
+    Writer,
+} from "protobufjs";
 import {
     AggregationType,
     BaseScanOptions,
@@ -254,7 +261,6 @@ import {
     connection_request,
     response,
 } from "./ProtobufMessage";
-const LongJS = require('long');
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -480,14 +486,14 @@ export function convertRecordToGlideRecord<T>(
  * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
  */
 class PointerResponse {
-    pointer: number | Long | null;
+    pointer: number | ProtoLong | null;
     // As Javascript does not support 64-bit integers,
     // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
     high: number | undefined;
     low: number | undefined;
 
     constructor(
-        pointer: number | Long | null,
+        pointer: number | ProtoLong | null,
         high?: number | undefined,
         low?: number | undefined,
     ) {
@@ -924,11 +930,12 @@ export class BaseClient {
         }
     }
 
-    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
+    private dropCommandSpan(spanPtr: number | ProtoLong | null | undefined) {
         if (spanPtr === null || spanPtr === undefined) return;
+
         if (typeof spanPtr === "number") {
             return dropOtelSpan(BigInt(spanPtr)); // Convert number to BigInt
-        } else if (spanPtr instanceof LongJS) {
+        } else if (spanPtr instanceof Long) {
             return dropOtelSpan(BigInt(spanPtr.toString())); // Convert Long to BigInt via string
         }
     }
@@ -982,6 +989,7 @@ export class BaseClient {
         } else {
             resolve(null);
         }
+
         this.dropCommandSpan(message.spanCommand);
     }
 
@@ -1077,21 +1085,28 @@ export class BaseClient {
         const route = this.toProtobufRoute(options?.route);
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
-            
-            let commandObj = Array.isArray(command)? "Batch": (JSON.parse(JSON.stringify(command))).requestType;
+
+            const commandObj = Array.isArray(command)
+                ? "Batch"
+                : JSON.parse(JSON.stringify(command)).requestType;
             console.log(" The request is: ", commandObj);
-            //TODO: creates the span only if the otel config exits
-            let spanPtr = null;
-            if (Math.random() < 0.01) { // Only create spans for 1% of requests
-                let pair = createLeakedOtelSpan(commandObj);
-                spanPtr = new LongJS(pair[0], pair[1]);
-            }
+            //TODO: creates the span only if the otel config exits - https://github.com/valkey-io/valkey-glide/issues/3309
+            //TODO: Add a condition to create a span statistic,
+            // such as only 1% of the requests. This will be configurable - https://github.com/valkey-io/valkey-glide/issues/3452
+            const pair = createLeakedOtelSpan(commandObj);
+            const spanPtr = new Long(pair[0], pair[1]);
+
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
                 options?.decoder,
             ];
-            this.writeOrBufferCommandRequest(callbackIndex, command, route, spanPtr);
+            this.writeOrBufferCommandRequest(
+                callbackIndex,
+                command,
+                route,
+                spanPtr,
+            );
         });
     }
 
@@ -1153,7 +1168,7 @@ export class BaseClient {
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
-        spanCommand?: number | typeof LongJS | null,
+        spanCommand?: number | Long | null,
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({

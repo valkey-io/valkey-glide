@@ -11,7 +11,6 @@ use std::path::PathBuf;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
-use std::thread::panicking;
 use thiserror::Error;
 use url::Url;
 
@@ -305,10 +304,6 @@ impl GlideSpan {
     }
 }
 
-pub struct GlideSignal {
-    span: Option<GlideSpan>,
-}
-
 /// OpenTelemetry configuration object. Use `GlideOpenTelemetryConfigBuilder` to construct it:
 ///
 /// ```text
@@ -431,8 +426,6 @@ impl GlideOpenTelemetry {
 
 #[cfg(test)]
 mod tests {
-    use std::ptr::null;
-
     use super::*;
     const SPANS_JSON: &str = "/tmp/spans.json";
 
