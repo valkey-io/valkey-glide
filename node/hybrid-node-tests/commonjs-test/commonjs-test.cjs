@@ -67,7 +67,6 @@ async function main() {
     }
 }
 
-// Execute main if this file is run directly
 if (require.main === module) {
     main();
 }

@@ -6,7 +6,7 @@ const { exec, spawn } = require("child_process");
 const execAsync = util.promisify(exec);
 
 /**
- * Checks which Redis-compatible server is available
+ * Checks which Valkey-compatible server is available
  * @returns {Promise<string>} The server command to use
  */
 async function checkWhichCommandAvailable() {
