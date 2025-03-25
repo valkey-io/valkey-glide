@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use super::rotating_buffer::RotatingBuffer;
-use crate::client::Client;
+use crate::client::{none_if_zero, Client};
 use crate::cluster_scan_container::get_cluster_scan_cursor;
 use crate::command_request::{
     command, command_request, Batch, ClusterScan, Command, CommandRequest, Routes, SlotTypes,
@@ -389,7 +389,7 @@ async fn send_batch(
             .send_transaction(
                 &pipeline,
                 routing,
-                Some(request.timeout),
+                none_if_zero(request.timeout),
                 request.raise_on_error,
             )
             .await
@@ -398,7 +398,7 @@ async fn send_batch(
             .send_pipeline(
                 &pipeline,
                 request.raise_on_error,
-                Some(request.timeout),
+                none_if_zero(request.timeout),
                 request.retry_failed_commands,
             )
             .await
