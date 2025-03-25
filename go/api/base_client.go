@@ -6658,9 +6658,8 @@ func (client *baseClient) GeoHash(key string, members []string) ([]string, error
 //
 // Return value:
 //
-//	A 2D `array` which represent positions (longitude and latitude)
-//	corresponding to the given members. If a member does not exist, its position will be
-//	`null`.
+//	A 2D `array` which represent positions (longitude and latitude) corresponding to the given members.
+//	If a member does not exist, its position will be `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/geopos/
 func (client *baseClient) GeoPos(key string, members []string) ([][]float64, error) {
