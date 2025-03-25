@@ -595,8 +595,7 @@ fn process_pipeline_responses(
             }
             // If we received a receive error, we will create a ServerError and append it to the relevant indices
             Err(err) => {
-                let redis_err =
-                    RedisError::from(io::Error::new(io::ErrorKind::BrokenPipe, format!("")));
+                let redis_err = RedisError::from(io::Error::new(io::ErrorKind::BrokenPipe, ""));
                 (
                     ServerError::ExtensionError {
                         code: ("BrokenPipe".to_string()),
@@ -637,7 +636,6 @@ fn process_pipeline_responses(
 }
 
 /// Updates the retry map with the given retry method and error information.
-
 fn update_retry_map(
     retry_map: &mut RetryMap,
     retry_method: RetryMethod,
@@ -675,6 +673,7 @@ fn update_retry_map(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Processes the pipeline responses and handles errors by retrying the commands.
 ///
 /// This function serves as a loop that processes the pipeline responses and handles any errors
