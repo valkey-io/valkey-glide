@@ -307,7 +307,7 @@ func ExampleGlideClient_GeoSearchWithFullOptions() {
 	fmt.Println(result)
 
 	// Output:
-	// [{Palermo {13.361389338970184 38.1155563954963} 0 3479099956230698}]
+	// [{Palermo {38.1155563954963 13.361389338970184} 0 3479099956230698}]
 }
 
 func ExampleGlideClusterClient_GeoSearchWithFullOptions() {
@@ -331,7 +331,7 @@ func ExampleGlideClusterClient_GeoSearchWithFullOptions() {
 	fmt.Println(result)
 
 	// Output:
-	// [{Palermo {13.361389338970184 38.1155563954963} 0 3479099956230698}]
+	// [{Palermo {38.1155563954963 13.361389338970184} 0 3479099956230698}]
 }
 
 func ExampleGlideClient_GeoSearchWithInfoOptions() {
@@ -354,7 +354,7 @@ func ExampleGlideClient_GeoSearchWithInfoOptions() {
 	fmt.Println(result)
 
 	// Output:
-	// [{Palermo {13.361389338970184 38.1155563954963} 0 3479099956230698}]
+	// [{Palermo {38.1155563954963 13.361389338970184} 0 3479099956230698}]
 }
 
 func ExampleGlideClusterClient_GeoSearchWithInfoOptions() {
@@ -377,7 +377,7 @@ func ExampleGlideClusterClient_GeoSearchWithInfoOptions() {
 	fmt.Println(result)
 
 	// Output:
-	// [{Palermo {13.361389338970184 38.1155563954963} 0 3479099956230698}]
+	// [{Palermo {38.1155563954963 13.361389338970184} 0 3479099956230698}]
 }
 
 func ExampleGlideClient_GeoSearchStore() {
