@@ -315,6 +315,44 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 	return handleStringResponse(result)
 }
 
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *GlideClient) Lolwut() (string, error) {
+	result, err := client.executeCommand(C.Lolwut, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Parameters:
+//
+//	opts - The [LolwutOptions] type.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string, error) {
+	commandArgs, err := opts.ToArgs()
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	result, err := client.executeCommand(C.Lolwut, commandArgs)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
 //
 // Return value:

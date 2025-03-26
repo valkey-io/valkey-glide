@@ -200,3 +200,168 @@ func ExampleGlideClusterClient_BitFieldRO() {
 
 	// output: [{24 false}]
 }
+
+func ExampleGlideClient_BitOp() {
+	var client *GlideClient = getExampleGlideClient()
+
+	bitopkey1 := "{bitop_test}key1"
+	bitopkey2 := "{bitop_test}key2"
+	destKey := "{bitop_test}dest"
+
+	// Set initial values
+	client.Set(bitopkey1, "foobar")
+	client.Set(bitopkey2, "abcdef")
+
+	// Perform BITOP AND
+	result, err := client.BitOp(options.AND, destKey, []string{bitopkey1, bitopkey2})
+	if err != nil {
+		fmt.Println("BitOp AND failed:", err)
+	} else {
+		fmt.Println("BitOp AND Result:", result)
+	}
+
+	// Perform BITOP OR
+	result, err = client.BitOp(options.OR, destKey, []string{bitopkey1, bitopkey2})
+	if err != nil {
+		fmt.Println("BitOp OR failed:", err)
+	} else {
+		fmt.Println("BitOp OR Result:", result)
+	}
+
+	// Perform BITOP XOR
+	result, err = client.BitOp(options.XOR, destKey, []string{bitopkey1, bitopkey2})
+	if err != nil {
+		fmt.Println("BitOp XOR failed:", err)
+	} else {
+		fmt.Println("BitOp XOR Result:", result)
+	}
+
+	// Perform BITOP NOT (only one source key allowed)
+	result, err = client.BitOp(options.NOT, destKey, []string{bitopkey1})
+	if err != nil {
+		fmt.Println("BitOp NOT failed:", err)
+	} else {
+		fmt.Println("BitOp NOT Result:", result)
+	}
+
+	// Output:
+	// BitOp AND Result: 6
+	// BitOp OR Result: 6
+	// BitOp XOR Result: 6
+	// BitOp NOT Result: 6
+}
+
+func ExampleGlideClusterClient_BitOp() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	bitopkey1 := "{bitop_test}key1"
+	bitopkey2 := "{bitop_test}key2"
+	destKey := "{bitop_test}dest"
+
+	// Set initial values
+	client.Set(bitopkey1, "foobar")
+	client.Set(bitopkey2, "abcdef")
+
+	// Perform BITOP AND
+	result, err := client.BitOp(options.AND, destKey, []string{bitopkey1, bitopkey2})
+	if err != nil {
+		fmt.Println("BitOp AND failed:", err)
+	} else {
+		fmt.Println("BitOp AND Result:", result)
+	}
+
+	// Perform BITOP OR
+	result, err = client.BitOp(options.OR, destKey, []string{bitopkey1, bitopkey2})
+	if err != nil {
+		fmt.Println("BitOp OR failed:", err)
+	} else {
+		fmt.Println("BitOp OR Result:", result)
+	}
+
+	// Perform BITOP XOR
+	result, err = client.BitOp(options.XOR, destKey, []string{bitopkey1, bitopkey2})
+	if err != nil {
+		fmt.Println("BitOp XOR failed:", err)
+	} else {
+		fmt.Println("BitOp XOR Result:", result)
+	}
+
+	// Perform BITOP NOT (only one source key allowed)
+	result, err = client.BitOp(options.NOT, destKey, []string{bitopkey1})
+	if err != nil {
+		fmt.Println("BitOp NOT failed:", err)
+	} else {
+		fmt.Println("BitOp NOT Result:", result)
+	}
+
+	// Output:
+	// BitOp AND Result: 6
+	// BitOp OR Result: 6
+	// BitOp XOR Result: 6
+	// BitOp NOT Result: 6
+}
+
+func ExampleGlideClient_BitPos() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.SetBit("my_key", 7, 1)
+
+	result, err := client.BitPos("my_key", 1)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: 7
+}
+
+func ExampleGlideClusterClient_BitPos() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.SetBit("my_key", 7, 1)
+
+	result, err := client.BitPos("my_key", 1)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: 7
+}
+
+func ExampleGlideClient_BitPosWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.Set("my_key", "\x00\x01\x00")
+
+	options := options.NewBitPosOptions().
+		SetStart(0).
+		SetEnd(1)
+
+	result, err := client.BitPosWithOptions("my_key", 1, *options)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: 15
+}
+
+func ExampleGlideClusterClient_BitPosWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.Set("my_key", "\x00\x10\x00")
+
+	options := options.NewBitPosOptions().
+		SetStart(10).
+		SetEnd(14).
+		SetBitmapIndexType(options.BIT)
+
+	result, err := client.BitPosWithOptions("my_key", 1, *options)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: 11
+}
