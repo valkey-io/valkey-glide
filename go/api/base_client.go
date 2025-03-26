@@ -5740,6 +5740,54 @@ func (client *baseClient) XClaimJustIdWithOptions(
 	return handleStringArrayResponse(result)
 }
 
+// Returns the position of the first bit matching the given bit value.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	bit - The bit value to match. The value must be 0 or 1.
+//
+// Return value:
+//
+//	The position of the first occurrence matching bit in the binary value of
+//	the string held at key. If bit is not found, a -1 is returned.
+//
+// [valkey.io]: https://valkey.io/commands/bitpos/
+func (client *baseClient) BitPos(key string, bit int64) (int64, error) {
+	result, err := client.executeCommand(C.BitPos, []string{key, utils.IntToString(bit)})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns the position of the first bit matching the given bit value.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	bit - The bit value to match. The value must be 0 or 1.
+//	bitposOptions  - The [BitPosOptions] type.
+//
+// Return value:
+//
+//	The position of the first occurrence matching bit in the binary value of
+//	the string held at key. If bit is not found, a -1 is returned.
+//
+// [valkey.io]: https://valkey.io/commands/bitpos/
+func (client *baseClient) BitPosWithOptions(key string, bit int64, bitposOptions options.BitPosOptions) (int64, error) {
+	optionArgs, err := bitposOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	commandArgs := append([]string{key, utils.IntToString(bit)}, optionArgs...)
+	result, err := client.executeCommand(C.BitPos, commandArgs)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
 // Copies the value stored at the source to the destination key if the
 // destination key does not yet exist.
 //
