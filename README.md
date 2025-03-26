@@ -4,10 +4,10 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 ## Supported Engine Versions
 Valkey GLIDE is API-compatible with the following engine versions:
 
-| Engine Type           |  6.2  |  7.0  |  7.2  |  8.0  |
-|-----------------------|-------|-------|-------|-------|
-| Valkey                |   -   |   -   |   V   |   V   |
-| Redis                 |   V   |   V   |   V   |   -   |
+| Engine Type           |  6.2  |  7.0  |  7.1  |  7.2  |  8.0  |
+|-----------------------|-------|-------|-------|-------|-------|
+| Valkey                |   -   |   -   |   -   |   V   |   V   |
+| Redis                 |   V   |   V   |   V   |   V   |   -   |
 
 ## Current Status and upcoming releases
 In the current release, Valkey GLIDE is available for Python, Java and Node.js. Support for Go is currently in **public preview** and support for C# is **under active development**, with plans to include more programming languages in the future.
