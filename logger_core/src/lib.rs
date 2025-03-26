@@ -42,12 +42,12 @@ type FileReload = Handle<
 >;
 
 pub struct Reloads {
-    console_reload: RwLock<reload::Handle<InnerFiltered, Registry>>,
-    file_reload: RwLock<FileReload>,
+    pub console_reload: RwLock<reload::Handle<InnerFiltered, Registry>>,
+    pub file_reload: RwLock<FileReload>,
 }
 
 pub struct InitiateOnce {
-    init_once: OnceCell<Reloads>,
+    pub init_once: OnceCell<Reloads>,
 }
 
 pub static INITIATE_ONCE: InitiateOnce = InitiateOnce {
@@ -60,7 +60,7 @@ const ENV_GLIDE_LOG_DIR: &str = "GLIDE_LOG_DIR";
 /// Wraps [RollingFileAppender] to defer initialization until logging is required,
 /// allowing [init] to disable file logging on read-only filesystems.
 /// This is needed because [RollingFileAppender] tries to create the log directory on initialization.
-struct LazyRollingFileAppender {
+pub struct LazyRollingFileAppender {
     file_appender: OnceCell<RollingFileAppender>,
     rotation: Rotation,
     directory: PathBuf,
@@ -68,7 +68,17 @@ struct LazyRollingFileAppender {
 }
 
 impl LazyRollingFileAppender {
-    fn new(
+    pub fn stfu() -> LazyRollingFileAppender {
+        let dir = std::env::temp_dir();
+        let prefix = Path::new("stfu_");
+        LazyRollingFileAppender {
+            file_appender: OnceCell::new(),
+            rotation: Rotation::NEVER,
+            directory: dir.to_path_buf(),
+            filename_prefix: prefix.to_path_buf(),
+        }
+    }
+    pub fn new(
         rotation: Rotation,
         directory: impl AsRef<Path>,
         filename_prefix: impl AsRef<Path>,
