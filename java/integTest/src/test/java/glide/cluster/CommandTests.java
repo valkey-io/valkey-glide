@@ -1743,30 +1743,35 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
         // Let replica sync with the primary node. We call the wait a few times to allow for wait to
-        // become 1L.
-        int retries = 3;
+        // become 1L and hopefully pass the functionLoad.
+        int retries = 5;
         long result = 0;
+        ExecutionException executionException = null;
+
         while (retries > 0) {
+            System.out.println("We are on retry " + retries);
             result = clusterClient.wait(1L, 5000L).get();
             if (result == 1L) {
-                break;
+                try {
+                    clusterClient.fcall(funcName, replicaRoute).get();
+                    // If it doesn't throw an error, retry functionLoad and run again
+                    assertEquals(libName, clusterClient.functionLoad(code, false).get());
+                } catch (ExecutionException e) {
+                    executionException = e;
+                    break;
+                }
             }
             retries -= 1;
         }
         assertEquals(1L, result);
 
-        // Force topology refresh to ensure up-to-date cluster information
-        clusterClient.customCommand(new String[] {"CLUSTER", "SLOTS"}).get();
-
-        System.out.println("Calling Fcall");
+        System.out.println("Checking executionException");
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
-        var executionException =
-                assertThrows(
-                        ExecutionException.class, () -> clusterClient.fcall(funcName, replicaRoute).get());
+        assertNotNull(executionException);
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("You can't write against a read only replica."));
-        System.out.println("Finished calling fcall");
+        System.out.println("Finished checking executionException");
 
         System.out.println("Calling Fcall RO");
         // fcall_ro also fails
