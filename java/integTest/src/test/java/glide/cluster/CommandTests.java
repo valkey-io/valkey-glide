@@ -1758,6 +1758,7 @@ public class CommandTests {
         // Force topology refresh to ensure up-to-date cluster information
         clusterClient.customCommand(new String[] {"CLUSTER", "SLOTS"}).get();
 
+        System.out.println("Calling Fcall");
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
                 assertThrows(
@@ -1765,7 +1766,9 @@ public class CommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("You can't write against a read only replica."));
+        System.out.println("Finished calling fcall");
 
+        System.out.println("Calling Fcall RO");
         // fcall_ro also fails
         executionException =
                 assertThrows(
@@ -1774,7 +1777,9 @@ public class CommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("You can't write against a read only replica."));
+        System.out.println("Finished calling Fcall RO");
 
+        System.out.println("calling Fcall RO 2");
         // fcall_ro also fails to run it even on primary - another error
         executionException =
                 assertThrows(
@@ -1785,17 +1790,42 @@ public class CommandTests {
                 executionException
                         .getMessage()
                         .contains("Can not execute a script with write flag using *_ro command."));
+        System.out.println("Finished calling Fcall RO 2");
 
+        System.out.println("Testing RO flag");
         // create the same function, but with RO flag
         String funcNameRO = funcName + "_ro";
         code = generateLuaLibCode(libName, Map.of(funcNameRO, "return 42"), true);
+        System.out.println("Finished testing RO flag");
 
+        System.out.println("Loading function");
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
+        // Let replica sync with the primary node. We call the wait a few times to allow for wait to
+        // become 1L.
+        retries = 3;
+        result = 0;
+        while (retries > 0) {
+            result = clusterClient.wait(1L, 5000L).get();
+            if (result == 1L) {
+                break;
+            }
+            retries -= 1;
+        }
+        assertEquals(1L, result);
+        System.out.println("Finished loading function");
+
+        // Force topology refresh to ensure up-to-date cluster information
+        clusterClient.customCommand(new String[] {"CLUSTER", "SLOTS"}).get();
+
+        System.out.println("Calling last Fcall");
         // fcall should succeed now
         assertEquals(42L, clusterClient.fcall(funcNameRO, replicaRoute).get().getSingleValue());
+        System.out.println("Finished calling last Fcall");
 
+        System.out.println("Calling function delete");
         assertEquals(OK, clusterClient.functionDelete(libName).get());
+        System.out.println("Finished calling function delete");
     }
 
     @SneakyThrows
