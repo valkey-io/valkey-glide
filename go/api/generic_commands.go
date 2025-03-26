@@ -10,5 +10,5 @@ package api
 type GenericCommands interface {
 	CustomCommand(args []string) (interface{}, error)
 
-	RandomKey() (string, error)
+	RandomKey() (Result[string], error, error)
 }

@@ -322,10 +322,10 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 //	A random existing key name from the currently selected database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
-func (client *GlideClient) RandomKey() (string, error) {
+func (client *GlideClient) RandomKey() (Result[string],, error) {
 	result, err := client.executeCommand(C.RandomKey, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return CreateNilStringResult(), err
 	}
-	return handleStringResponse(result)
+	return handleStringOrNilResponse(result)
 }
