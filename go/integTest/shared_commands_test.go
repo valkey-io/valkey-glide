@@ -7635,6 +7635,116 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
 	})
 }
 
+func (suite *GlideTestSuite) TestBitOp_AND() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		bitopkey1 := "{bitop_test}" + uuid.New().String()
+		bitopkey2 := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(bitopkey1, "foobar")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(bitopkey2, "abcdef")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.AND, destKey, []string{bitopkey1, bitopkey2})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_OR() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{bitop_test}" + uuid.New().String()
+		key2 := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(key1, "foo")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(key2, "bar")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.OR, destKey, []string{key1, key2})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_XOR() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{bitop_test}" + uuid.New().String()
+		key2 := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(key1, "foo")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(key2, "bar")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.XOR, destKey, []string{key1, key2})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_NOT() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		srcKey := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(srcKey, "foobar")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.NOT, destKey, []string{srcKey})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_InvalidArguments() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		destKey := "{bitop_test}" + uuid.New().String()
+		key1 := "{bitop_test}" + uuid.New().String()
+		key2 := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(key1, "foo")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(key2, "bar")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.BitOp(options.AND, destKey, []string{key1})
+		assert.NotNil(suite.T(), err)
+
+		_, err = client.BitOp(options.OR, destKey, []string{key1})
+		assert.NotNil(suite.T(), err)
+
+		_, err = client.BitOp(options.XOR, destKey, []string{key1})
+		assert.NotNil(suite.T(), err)
+
+		_, err = client.BitOp(options.NOT, destKey, []string{key1, key2})
+		assert.NotNil(suite.T(), err)
+	})
+}
+
 func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// 1. Arrange the data
