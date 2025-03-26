@@ -1755,16 +1755,16 @@ public class CommandTests {
                 try {
                     System.out.println("We are going to fcall with " + foundFuncName);
                     clusterClient.fcall(foundFuncName, replicaRoute).get();
-                    // If it doesn't throw an error, retry functionLoad and run again
-                    foundFuncName = foundFuncName + "_retry_" + retries;
-                    code = generateLuaLibCode(libName, Map.of(foundFuncName, "return 42"), false);
-                    assertEquals(libName, clusterClient.functionLoad(code, false).get());
                 } catch (ExecutionException e) {
                     executionException = e;
                     if (e.getMessage().contains("You can't write against a read only replica.")) {
                         break;
                     }
                 }
+                // If it doesn't throw an error, or throws a wrong error, retry functionLoad and run again
+                foundFuncName = foundFuncName + "_retry_" + retries;
+                code = generateLuaLibCode(libName, Map.of(foundFuncName, "return 42"), false);
+                assertEquals(libName, clusterClient.functionLoad(code, false).get());
             }
             retries -= 1;
         }
@@ -1772,7 +1772,7 @@ public class CommandTests {
 
         String funcName = foundFuncName;
 
-        System.out.println("Checking executionException");
+        System.out.println("Checking executionException: " + executionException);
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         assertNotNull(executionException);
         assertInstanceOf(RequestException.class, executionException.getCause());
