@@ -1735,10 +1735,10 @@ public class CommandTests {
         // intentionally using a REPLICA route
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
-        String funcName = libName;
+        String foundFuncName = libName;
 
         // function $funcName returns a magic number
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
+        String code = generateLuaLibCode(libName, Map.of(foundFuncName, "return 42"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
@@ -1753,17 +1753,24 @@ public class CommandTests {
             result = clusterClient.wait(1L, 5000L).get();
             if (result == 1L) {
                 try {
-                    clusterClient.fcall(funcName, replicaRoute).get();
+                    System.out.println("We are going to fcall with " + foundFuncName);
+                    clusterClient.fcall(foundFuncName, replicaRoute).get();
                     // If it doesn't throw an error, retry functionLoad and run again
+                    foundFuncName = foundFuncName + "_retry_" + retries;
+                    code = generateLuaLibCode(libName, Map.of(foundFuncName, "return 42"), false);
                     assertEquals(libName, clusterClient.functionLoad(code, false).get());
                 } catch (ExecutionException e) {
                     executionException = e;
-                    break;
+                    if (e.getMessage().contains("You can't write against a read only replica.")) {
+                        break;
+                    }
                 }
             }
             retries -= 1;
         }
         assertEquals(1L, result);
+
+        String funcName = foundFuncName;
 
         System.out.println("Checking executionException");
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
