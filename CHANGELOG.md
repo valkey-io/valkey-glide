@@ -18,11 +18,16 @@
 * Go: Add Cluster Scan support ([#3295](https://github.com/valkey-io/valkey-glide/pull/3295))
 * Go: Fix unsafe precondition violation for the slice::from_raw_parts ([#3350](https://github.com/valkey-io/valkey-glide/issues/3350))
 * Go: Add `GeoAdd` and the Geospatial interface ([#3366](https://github.com/valkey-io/valkey-glide/pull/3366))
+* Go: Add `LOLWUT` ([#3355](https://github.com/valkey-io/valkey-glide/pull/3355))
+* Go: Add `BITPOS` ([#3407](https://github.com/valkey-io/valkey-glide/pull/3407))
 * Go: Add `FLUSHALL` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
 * Go: Add `FLUSHDB` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
 * Go: Add password update api ([#3346](https://github.com/valkey-io/valkey-glide/pull/3346))
+* Go: Add `BITOP` ([#3384](https://github.com/valkey-io/valkey-glide/pull/3384))
 * Go: Add `GeoHash` ([#3439](https://github.com/valkey-io/valkey-glide/pull/3439))
 * Go/Core: Move FFI to a dedicated folder for reusability ([#3372](https://github.com/valkey-io/valkey-glide/pull/3372))
+* Go: Add `GeoPos` ([#3409](https://github.com/valkey-io/valkey-glide/pull/3409))
+* Go: Add `GeoDist` ([#3446](https://github.com/valkey-io/valkey-glide/pull/3446))
 * Go: Add `Config Reset Stat` ([#3121](https://github.com/valkey-io/valkey-glide/pull/3121))
 
 #### Breaking Changes

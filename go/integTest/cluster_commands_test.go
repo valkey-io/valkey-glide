@@ -1100,6 +1100,70 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_ImmediateAuthWr
 	assert.NoError(suite.T(), err)
 }
 
+func (suite *GlideTestSuite) TestClusterLolwut() {
+	client := suite.defaultClusterClient()
+
+	result, err := client.Lolwut()
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+	assert.Contains(suite.T(), result, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+			Args:    &[]int{10, 20},
+		},
+		RouteOption: &options.RouteOption{Route: config.AllNodes},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.NoError(suite.T(), err)
+
+	assert.True(suite.T(), result.IsMultiValue())
+	multiValue := result.MultiValue()
+
+	for _, value := range multiValue {
+		assert.Contains(suite.T(), value, "Redis ver.")
+	}
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+		},
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.NoError(suite.T(), err)
+
+	assert.True(suite.T(), result.IsMultiValue())
+	multiValue := result.MultiValue()
+
+	for _, value := range multiValue {
+		assert.Contains(suite.T(), value, "Redis ver.")
+	}
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+		},
+		RouteOption: &options.RouteOption{Route: config.RandomRoute},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.NoError(suite.T(), err)
+
+	assert.True(suite.T(), result.IsSingleValue())
+	singleValue := result.SingleValue()
+	assert.Contains(suite.T(), singleValue, "Redis ver.")
+}
+
 func (suite *GlideTestSuite) TestConfigResetStatCluster() {
 	client := suite.defaultClusterClient()
 
