@@ -33,7 +33,7 @@ add_library(
 target_link_libraries(
     ${PROJECT_NAME}
     PRIVATE
-    ${Protobuf_LIBRARIES}
+    protobuf::libprotobuf
     glide_rs
     absl::log_internal_check_op
     dl
@@ -84,6 +84,13 @@ add_custom_target(prebuild
     COMMAND cargo build --release
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Building Rust library (glide_rs) with Cargo"
+)
+
+# Format.
+add_custom_target(format
+    COMMAND clang-format -i src/*.cc include/glide/*.h example/main.cc benchmarks/benchmark.cc
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Format source files"
 )
 
 add_subdirectory(tests)

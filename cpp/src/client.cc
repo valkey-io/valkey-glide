@@ -1,5 +1,9 @@
 #include <glide/client.h>
 
+#include <cstddef>
+#include <future>
+#include <iostream>
+
 #include "glide/glide_base.h"
 
 namespace glide {
@@ -7,7 +11,7 @@ namespace glide {
 /**
  * Constructs a Client with a const configuration.
  */
-Client::Client(const glide::Config &config) : config_(config) {}
+Client::Client(const Config &config) : config_(config) {}
 
 /**
  * Connects the client using the serialized configuration.
@@ -17,50 +21,124 @@ bool Client::connect() {
   if (!serialized_conf) {
     return false;
   }
-  connection_ = glide::create_client(serialized_conf.value().data(),
-                                     serialized_conf.value().size(), on_success,
-                                     on_failure);
+  connection_ = core::create_client(serialized_conf.value().data(),
+                                    serialized_conf.value().size(), on_success,
+                                    on_failure);
   return connection_->conn_ptr != nullptr;
 }
 
 /**
  * Sets a key-value pair in the client's configuration.
  */
-bool Client::set(const std::string &key, const std::string &value) {
-  return command_.set(*this, key, value);
-}
+std::future<bool> Client::set(const std::string &key,
+                              const std::string &value) {
+  std::vector<std::string> args = {key, value};
+  std::promise<bool> channel;
+  auto future = channel.get_future();
 
-bool Client::hset(const std::string &key,
-                  const std::map<std::string, std::string> &field_values) {
-  return command_.hset(*this, key, field_values);
-}
+  std::promise<Response> response_channel;
+  std::future<Response> response_future = response_channel.get_future();
+  this->exec_command(core::RequestType::Set, args, &response_channel);
 
-std::string Client::hget(const std::string &key, const std::string &field) {
-  return command_.hget(*this, key, field);
-}
+  // Get the response and set the result
+  Response r = response_future.get();
+  channel.set_value(r.error_type == std::nullopt);
 
-/**
- * Retrieves the value associated with the given key from the client's
- * configuration.
- */
-std::string Client::get(const std::string &key) {
-  return command_.get(*this, key);
+  return future;
 }
 
 /**
  * Retrieves the value associated with the given key from the client's
  * configuration.
  */
-std::string Client::getdel(const std::string &key) {
-  return command_.getdel(*this, key);
+std::future<std::string> Client::get(const std::string &key) {
+  std::vector<std::string> args = {key};
+  std::promise<std::string> channel;
+  auto future = channel.get_future();
+
+  std::promise<Response> response_channel;
+  std::future<Response> response_future = response_channel.get_future();
+  this->exec_command(core::RequestType::Get, args, &response_channel);
+
+  Response r = response_future.get();
+  channel.set_value(
+      std::string(r.value->string_value, r.value->string_value_len));
+
+  return future;
+}
+
+/**
+ * Retrieves the value associated with the given key from the client's
+ * configuration.
+ */
+std::future<std::string> Client::getdel(const std::string &key) {
+  std::vector<std::string> args = {key};
+  std::promise<std::string> channel;
+  auto future = channel.get_future();
+
+  std::promise<Response> response_channel;
+  std::future<Response> response_future = response_channel.get_future();
+  this->exec_command(core::RequestType::GetDel, args, &response_channel);
+
+  Response r = response_future.get();
+  channel.set_value(
+      std::string(r.value->string_value, r.value->string_value_len));
+
+  return future;
+}
+
+/**
+ * Sets multiple field-value pairs in a hash stored at the given key.
+ */
+std::future<bool> Client::hset(
+    const std::string &key,
+    const std::map<std::string, std::string> &field_values) {
+  std::vector<std::string> args = {key};
+  for (const auto &pair : field_values) {
+    args.push_back(pair.first);
+    args.push_back(pair.second);
+  }
+
+  std::promise<bool> channel;
+  auto future = channel.get_future();
+
+  std::promise<Response> response_channel;
+  std::future<Response> response_future = response_channel.get_future();
+  this->exec_command(core::RequestType::HSet, args, &response_channel);
+
+  Response r = response_future.get();
+  channel.set_value(r.value->bool_value);
+
+  return future;
+}
+
+/**
+ * Retrieves the value associated with a field in a hash stored at the given
+ * key.
+ */
+std::future<std::string> Client::hget(const std::string &key,
+                                      const std::string &field) {
+  std::vector<std::string> args = {key, field};
+  std::promise<std::string> channel;
+  auto future = channel.get_future();
+
+  std::promise<Response> response_channel;
+  std::future<Response> response_future = response_channel.get_future();
+  this->exec_command(core::RequestType::HGet, args, &response_channel);
+
+  Response r = response_future.get();
+  channel.set_value(
+      std::string(r.value->string_value, r.value->string_value_len));
+
+  return future;
 }
 
 /**
  * Executes a command with the given request type and arguments.
  */
-void Client::exec_command(glide::RequestType type,
+void Client::exec_command(core::RequestType type,
                           std::vector<std::string> &args,
-                          CommandResponseData &channel) {
+                          std::promise<Response> *channel) {
   // Prepare arguments.
   std::vector<uintptr_t> cmd_args;
   cmd_args.reserve(args.size());
@@ -72,9 +150,9 @@ void Client::exec_command(glide::RequestType type,
   };
 
   // Execute command.
-  uintptr_t channel_ptr = reinterpret_cast<uintptr_t>(&channel);
-  glide::command(connection_->conn_ptr, channel_ptr, type, cmd_args.size(),
-                 cmd_args.data(), cmd_args_len.data());
+  uintptr_t channel_ptr = reinterpret_cast<uintptr_t>(channel);
+  core::command(connection_->conn_ptr, channel_ptr, type, cmd_args.size(),
+                cmd_args.data(), cmd_args_len.data(), nullptr, 0);
 }
 
 /**
@@ -82,9 +160,9 @@ void Client::exec_command(glide::RequestType type,
  */
 Client::~Client() {
   if (connection_ && connection_->conn_ptr) {
-    glide::close_client(connection_->conn_ptr);
-    glide::free_connection_response(
-        const_cast<ConnectionResponse *>(connection_));
+    core::close_client(connection_->conn_ptr);
+    core::free_connection_response(
+        const_cast<core::ConnectionResponse *>(connection_));
   }
 }
 

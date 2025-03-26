@@ -1,117 +1,115 @@
 #include <glide/callback.h>
 
+#include <iostream>
+
 #include "glide/glide_base.h"
 
 namespace glide {
 
 /**
- * Sets the value of the CommandResponseData object.
+ * Sets the value of the Response object.
  */
-void CommandResponseData::set_value(const CommandResponse* new_value) {
-  std::lock_guard<std::mutex> lock(mtx_);
+void Response::set_value(const core::CommandResponse *new_value) {
   value = new_value;
-  is_ready = true;
-  cv_.notify_one();
 }
 
 /**
- * Sets the error information for the CommandResponseData object.
+ * Sets the error information for the Response object.
  */
-void CommandResponseData::set_error(const RequestErrorType type,
-                                    const char* message) {
-  std::lock_guard<std::mutex> lock(mtx_);
+void Response::set_error(const core::RequestErrorType type,
+                         const char *message) {
   error_type = type;
   error_message = message;
-  is_error = true;
-  is_ready = true;
-  cv_.notify_one();
 }
 
 /**
- * Waits for the response to be ready and returns the command response value.
+ * Default constructor for Response.
+ * Constructs an empty Response object.
  */
-const CommandResponse* CommandResponseData::wait() {
-  std::unique_lock<std::mutex> lock(mtx_);
-  cv_.wait(lock, [this]() { return is_ready; });
-  return value;
-}
+Response::Response() = default;
 
 /**
- * Default constructor for CommandResponseData.
- * Constructs an empty CommandResponseData object.
+ * Copy constructor for Response.
+ * Creates a new Response object as a copy of an existing one.
  */
-CommandResponseData::CommandResponseData() = default;
+Response::Response(const Response &other) noexcept { *this = other; }
 
 /**
- * Copy constructor for CommandResponseData.
- * Creates a new CommandResponseData object as a copy of an existing one.
+ * Copy assignment operator for Response.
+ * Assigns the values of another Response object to this object.
  */
-CommandResponseData::CommandResponseData(
-    const CommandResponseData& other) noexcept {
-  *this = other;
-}
-
-/**
- * Copy assignment operator for CommandResponseData.
- * Assigns the values of another CommandResponseData object to this object.
- */
-CommandResponseData& CommandResponseData::operator=(
-    const CommandResponseData& other) noexcept {
-  if (this == &other) {
-    return *this;
+Response &Response::operator=(const Response &other) noexcept {
+  if (this != &other) {
+    value = other.value;
+    error_message = other.error_message;
+    error_type = other.error_type;
   }
-  value = other.value;
-  error_message = other.error_message;
-  error_type = other.error_type;
-  is_error = other.is_error;
-  is_ready = other.is_ready;
   return *this;
 }
 
 /**
  * Move constructor.
  */
-CommandResponseData::CommandResponseData(CommandResponseData&& other) noexcept {
-  *this = other;
+Response::Response(Response &&other) noexcept {
+  value = other.value;
+  error_message = other.error_message;
+  error_type = other.error_type;
+  other.value = nullptr;
 }
 
 /**
- * Move assignment operator for CommandResponseData.
+ * Move assignment operator for Response.
  */
-CommandResponseData& CommandResponseData::operator=(
-    CommandResponseData&& other) noexcept {
-  *this = other;
+Response &Response::operator=(Response &&other) noexcept {
+  if (this != &other) {
+    value = other.value;
+    error_message = other.error_message;
+    error_type = other.error_type;
+    other.value = nullptr;
+  }
   return *this;
 }
 
+Response::Response(const core::CommandResponse *value) noexcept
+    : value(value) {}
+Response::Response(core::RequestErrorType type, const char *message) noexcept
+    : error_message(message), error_type(type) {}
+
 /**
- * Destructor for the CommandResponseData class.
+ * Destructor for the Response class.
  * This destructor is responsible for cleaning up and deallocating any
- * resources associated with the CommandResponseData object.
+ * resources associated with the Response object.
  */
-CommandResponseData::~CommandResponseData() {
+Response::~Response() {
   if (value) {
-    glide::free_command_response(const_cast<CommandResponse*>(value));
+    core::free_command_response(const_cast<core::CommandResponse *>(value));
   }
 }
 
 /**
  * Callback function called when a command is successfully executed.
+ * The callback pointer should be relased by the caller and not inside the
+ * function!
  */
-void on_success(uintptr_t ptr, const CommandResponse* message) {
-  CommandResponseData* db = reinterpret_cast<CommandResponseData*>(ptr);
-  if (db) {
-    db->set_value(message);
+void on_success(uintptr_t ptr, const core::CommandResponse *message) {
+  std::promise<Response> *cb_ptr =
+      reinterpret_cast<std::promise<Response> *>(ptr);
+  if (cb_ptr) {
+    cb_ptr->set_value(Response(message));
   }
 }
 
 /**
  * Callback function called when a command fails to execute.
+ * The callback pointer should be relased by the caller and not inside the
+ * function!
  */
-void on_failure(uintptr_t ptr, const char* message, RequestErrorType type) {
-  CommandResponseData* db = reinterpret_cast<CommandResponseData*>(ptr);
-  if (db) {
-    db->set_error(type, message);
+void on_failure(uintptr_t ptr, const char *message,
+                core::RequestErrorType type) {
+  std::promise<Response> *cb_ptr =
+      reinterpret_cast<std::promise<Response> *>(ptr);
+  if (cb_ptr) {
+    cb_ptr->set_value(Response(type, message));
   }
 }
 

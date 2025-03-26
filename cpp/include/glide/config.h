@@ -9,7 +9,6 @@
 #include <type_traits>
 #include <vector>
 
-
 namespace glide {
 
 /**

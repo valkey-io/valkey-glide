@@ -49,8 +49,8 @@ void run_test(std::string host, uint32_t port, std::string id,
     std::string key = "test-key-" + id + "-" + std::to_string(i);
     const std::string value = generate_random_value(value_size);
     threads.push_back(std::thread([key, value, &c]() {
-      assert(c.set(key, value));
-      assert(c.get(key) == value);
+      assert(c.set(key, value).get());
+      assert(c.get(key).get() == value);
     }));
   }
 

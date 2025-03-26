@@ -1,10 +1,11 @@
 #ifndef CALLBACK_HPP_
 #define CALLBACK_HPP_
 
-#include <condition_variable>
-#include <mutex>
+#include <future>
+#include <optional>
 
 #include "glide_base.h"
+
 namespace glide {
 
 /**
@@ -13,12 +14,12 @@ namespace glide {
  * mechanisms to set and retrieve the response or error information in a
  * thread-safe manner.
  */
-class CommandResponseData {
+class Response {
  public:
   /**
    * Holds the response value from a command.
    */
-  const CommandResponse* value;
+  const core::CommandResponse* value;
 
   /**
    * Holds the error message if an error occurs.
@@ -28,24 +29,14 @@ class CommandResponseData {
   /**
    * Holds the type of error if an error occurs.
    */
-  RequestErrorType error_type;
-
-  /**
-   * Indicates whether an error has occurred.
-   */
-  bool is_error = false;
-
-  /**
-   * Indicates whether the response is ready.
-   */
-  bool is_ready = false;
+  std::optional<core::RequestErrorType> error_type;
 
   /**
    * Sets the command response value and marks it as ready.
    *
    * @param new_value The new command response value.
    */
-  void set_value(const CommandResponse* new_value);
+  void set_value(const core::CommandResponse* new_value);
 
   /**
    * Sets the error type and message, and marks the response as an error.
@@ -53,20 +44,13 @@ class CommandResponseData {
    * @param type The type of the error.
    * @param message The error message.
    */
-  void set_error(const RequestErrorType type, const char* message);
-
-  /**
-   * Waits for the response to be ready and returns the command response value.
-   *
-   * @return The command response value.
-   */
-  const CommandResponse* wait();
+  void set_error(const core::RequestErrorType type, const char* message);
 
   /**
    * Default constructor for CommandResponseData.
    * Constructs an empty CommandResponseData object.
    */
-  CommandResponseData();
+  Response();
 
   /**
    * Copy constructor for CommandResponseData.
@@ -74,7 +58,7 @@ class CommandResponseData {
    *
    * @param other The source CommandResponseData object to copy from.
    */
-  CommandResponseData(const CommandResponseData& other) noexcept;
+  Response(const Response& other) noexcept;
 
   /**
    * Copy assignment operator for CommandResponseData.
@@ -84,7 +68,7 @@ class CommandResponseData {
    * @param other The source CommandResponseData object to copy from.
    * @return A reference to this object.
    */
-  CommandResponseData& operator=(const CommandResponseData& other) noexcept;
+  Response& operator=(const Response& other) noexcept;
 
   /**
    * Move constructor for CommandResponseData.
@@ -93,7 +77,7 @@ class CommandResponseData {
    *
    * @param other The source CommandResponseData object to move from.
    */
-  CommandResponseData(CommandResponseData&& other) noexcept;
+  Response(Response&& other) noexcept;
 
   /**
    * Move assignment operator for CommandResponseData.
@@ -103,19 +87,17 @@ class CommandResponseData {
    * @param other The source CommandResponseData object to move from.
    * @return A reference to this object.
    */
-  CommandResponseData& operator=(CommandResponseData&& other) noexcept;
+  Response& operator=(Response&& other) noexcept;
 
+  explicit Response(const core::CommandResponse* value) noexcept;
+
+  explicit Response(core::RequestErrorType type, const char* message) noexcept;
   /**
    * Destructor for the CommandResponseData class.
    * This destructor is responsible for cleaning up and deallocating any
    * resources associated with the CommandResponseData object.
    */
-  ~CommandResponseData();
-
- private:
-  // TODO: moving out as channel implementation.
-  std::mutex mtx_;
-  std::condition_variable cv_;
+  ~Response();
 };
 
 /**
@@ -123,7 +105,7 @@ class CommandResponseData {
  * @param ptr The pointer to the CommandResponseData object.
  * @param message The command response message.
  */
-void on_success(uintptr_t ptr, const CommandResponse* message);
+void on_success(uintptr_t ptr, const core::CommandResponse* message);
 
 /**
  * On failure callback.
@@ -131,7 +113,8 @@ void on_success(uintptr_t ptr, const CommandResponse* message);
  * @param message The error message.
  * @param type The type of the error.
  */
-void on_failure(uintptr_t ptr, const char* message, RequestErrorType type);
+void on_failure(uintptr_t ptr, const char* message,
+                core::RequestErrorType type);
 
 }  // namespace glide
 
