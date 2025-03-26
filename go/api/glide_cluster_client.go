@@ -545,6 +545,71 @@ func (client *GlideClusterClient) ScanWithOptions(
 	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
 
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *GlideClusterClient) Lolwut() (string, error) {
+	result, err := client.executeCommand(C.Lolwut, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Parameters:
+//
+//	lolwutOptions - The [LolwutOptions] type.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error) {
+	args, err := lolwutOptions.ToArgs()
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+
+	if lolwutOptions.RouteOption == nil || lolwutOptions.RouteOption.Route == nil {
+		response, err := client.executeCommand(C.Lolwut, args)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		data, err := handleStringResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterSingleValue[string](data), nil
+	}
+
+	route := lolwutOptions.RouteOption.Route
+	response, err := client.executeCommandWithRoute(C.Lolwut, args, route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+
+	if route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
+
 // Returns a random key.
 //
 // Return value:
