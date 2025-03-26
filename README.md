@@ -40,31 +40,6 @@ If you have any questions, feature requests, encounter issues, or need assistanc
 9. Any unusual aspects of your environment or deployment
 10. Log files
 
-## Known issues
-
-GLIDE has a native component as a Rust based library. Currently the native component is not compatible with certain older GLIBC based OS's.
-The most relevant one is Debian 11, which is the base of ubuntu 20, which some other distros are based on, like Mint and Pop!_OS 20 etc. As a result, the ones mentioned above are incompatible with GLIDE.
-
-Another OS which is known to be incompatible is Amazon Linux 2, which is the previous versions of what [AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) is running on (node 18, py <=11, java <= 17). Note that this is not affecting MUSL based distros, which are not based on GLIBC.
-
-For all the incompatible Linux distros listed, there's at least one newer and stable version available, and it is recommended to use them.
-
-| Incompatible Distro Version | Compatible Successor Version |
-|-----------------------------|------------------------------|
-| Debian 11                   | Debian 12 / 13               |
-| Ubuntu 20.04 LTS            | Ubuntu 22.04 LTS / 24.04 LTS |
-| Linux Mint 20               | Linux Mint 21 / 22           |
-| Pop!_OS 20.04 LTS           | Pop!_OS 22.04 LTS            |
-| Amazon Linux 2              | Amazon Linux 2023            |
-
-When running on incompatible systems, the client crashes with one of the following errors:
-```console
-/lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found
-/lib64/libm.so.6: version `GLIBC_2.29' not found
-```
-You can get the `GLIBC` version included in your OS by running `ldd --version`. `GLIBC` versions `2.26`, `2.27`, `2.30`, and `2.31` are not supported.
-We are working hard to resolve this issue. You can track our progress in issue [#3291](https://github.com/valkey-io/valkey-glide/issues/3291).
-
 ## Contributing
 
 GitHub is a platform for collaborative coding. If you're interested in writing code, we encourage you to contribute by submitting pull requests from forked copies of this repository. Additionally, please consider creating GitHub issues for reporting bugs and suggesting new features. Feel free to comment on issues that interest. For more info see [Contributing](./CONTRIBUTING.md).
