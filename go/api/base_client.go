@@ -6759,12 +6759,12 @@ func (client *baseClient) GeoDistWithUnit(
 //
 // Return value:
 //
-//	An array of arrays where each sub-array represents a single item in the following order:
+//	An array of [options.Location] containing the following information:
+//	 - The coordinates as a two item `array` of `float64`.
 //	 - The member (location) name.
 //	 - The distance from the center as a `float64`, in the same unit specified for
 //	   `searchBy`.
 //	 - The geohash of the location as a `int64`.
-//	 - The coordinates as a two item `array` of `float64`.
 //
 // [valkey.io]: https://valkey.io/commands/geosearch/
 func (client *baseClient) GeoSearchWithFullOptions(
@@ -6881,12 +6881,12 @@ func (client *baseClient) GeoSearchWithResultOptions(
 //
 // Return value:
 //
-//	An array of arrays where each sub-array represents a single item in the following order:
+//	An array of [options.Location] containing the following information:
+//	 - The coordinates as a two item `array` of `float64`.
 //	 - The member (location) name.
 //	 - The distance from the center as a `float64`, in the same unit specified for
 //	   `searchBy`.
 //	 - The geohash of the location as a `int64`.
-//	 - The coordinates as a two item `array` of `float64`.
 //
 // [valkey.io]: https://valkey.io/commands/geosearch/
 func (client *baseClient) GeoSearchWithInfoOptions(
