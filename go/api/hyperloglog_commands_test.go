@@ -66,8 +66,8 @@ func ExampleGlideClient_PfMerge() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
 	// Create source keys with some values
-	sourceKey1 := uuid.New().String()
-	sourceKey2 := uuid.New().String()
+	sourceKey1 := uuid.New().String() + "{group}"
+	sourceKey2 := uuid.New().String() + "{group}"
 
 	// Add values to source keys
 	_, err := client.PfAdd(sourceKey1, []string{"value1", "value2"})
@@ -83,7 +83,7 @@ func ExampleGlideClient_PfMerge() {
 	}
 
 	// Merge the source keys into a destination key
-	destKey := uuid.New().String()
+	destKey := uuid.New().String() + "{group}"
 	result, err := client.PfMerge(destKey, []string{sourceKey1, sourceKey2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -98,8 +98,8 @@ func ExampleGlideClusterClient_PfMerge() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
 	// Create source keys with some values
-	sourceKey1 := uuid.New().String()
-	sourceKey2 := uuid.New().String()
+	sourceKey1 := uuid.New().String() + "{group}"
+	sourceKey2 := uuid.New().String() + "{group}"
 
 	// Add values to source keys
 	_, err := client.PfAdd(sourceKey1, []string{"value1", "value2"})
@@ -115,7 +115,7 @@ func ExampleGlideClusterClient_PfMerge() {
 	}
 
 	// Merge the source keys into a destination key
-	destKey := uuid.New().String()
+	destKey := uuid.New().String() + "{group}"
 	result, err := client.PfMerge(destKey, []string{sourceKey1, sourceKey2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
