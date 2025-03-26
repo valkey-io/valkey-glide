@@ -7577,6 +7577,116 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
 	})
 }
 
+func (suite *GlideTestSuite) TestBitOp_AND() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		bitopkey1 := "{bitop_test}" + uuid.New().String()
+		bitopkey2 := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(bitopkey1, "foobar")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(bitopkey2, "abcdef")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.AND, destKey, []string{bitopkey1, bitopkey2})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_OR() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{bitop_test}" + uuid.New().String()
+		key2 := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(key1, "foo")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(key2, "bar")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.OR, destKey, []string{key1, key2})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_XOR() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{bitop_test}" + uuid.New().String()
+		key2 := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(key1, "foo")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(key2, "bar")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.XOR, destKey, []string{key1, key2})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_NOT() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		srcKey := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(srcKey, "foobar")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.NOT, destKey, []string{srcKey})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_InvalidArguments() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		destKey := "{bitop_test}" + uuid.New().String()
+		key1 := "{bitop_test}" + uuid.New().String()
+		key2 := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(key1, "foo")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(key2, "bar")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.BitOp(options.AND, destKey, []string{key1})
+		assert.NotNil(suite.T(), err)
+
+		_, err = client.BitOp(options.OR, destKey, []string{key1})
+		assert.NotNil(suite.T(), err)
+
+		_, err = client.BitOp(options.XOR, destKey, []string{key1})
+		assert.NotNil(suite.T(), err)
+
+		_, err = client.BitOp(options.NOT, destKey, []string{key1, key2})
+		assert.NotNil(suite.T(), err)
+	})
+}
+
 func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// 1. Arrange the data
@@ -8239,6 +8349,100 @@ func (suite *GlideTestSuite) TestBitField_MultipleOperations() {
 		assert.LessOrEqual(suite.T(), result[0].Value(), int64(10))
 		assert.Equal(suite.T(), int64(10), result[1].Value())
 		assert.Equal(suite.T(), int64(15), result[2].Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPos_ExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x10")
+		result, err := client.BitPos(key, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPos_NonExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		result, err := client.BitPos(key, 0)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_StartEnd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x01\x80")
+
+		opts := options.NewBitPosOptions().
+			SetStart(0).
+			SetEnd(1)
+
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(15), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_BitmapIndexType() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x02\x00")
+
+		opts := options.NewBitPosOptions().
+			SetStart(1).
+			SetEnd(2).
+			SetBitmapIndexType(options.BYTE)
+
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(14), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_BitIndexType() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x10\x00")
+
+		opts := options.NewBitPosOptions().
+			SetStart(10).
+			SetEnd(14).
+			SetBitmapIndexType(options.BIT)
+
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(11), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPos_FindBitZero() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\xFF\xF7")
+
+		result, err := client.BitPos(key, 0)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(12), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_NegativeEnd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x01\x80")
+
+		opts := options.NewBitPosOptions().
+			SetStart(0).
+			SetEnd(-2)
+
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(15), result)
 	})
 }
 
@@ -9129,6 +9333,50 @@ func (suite *GlideTestSuite) TestGeoAdd() {
 	})
 }
 
+func (suite *GlideTestSuite) TestGeoDist() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+		member1 := "Palermo"
+		member2 := "Catania"
+		member3 := "NonExisting"
+		expected := 166274.1516
+		expectedKM := 166.2742
+		delta := 1e-9
+
+		// adding locations
+		membersToCoordinates := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+		}
+		result, err := client.GeoAdd(key1, membersToCoordinates)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), result)
+
+		// assert correct result with default metric
+		actual, err := client.GeoDist(key1, member1, member2)
+		assert.NoError(t, err)
+		assert.LessOrEqual(t, float64(math.Abs(actual.Value()-expected)), float64(delta))
+
+		// assert correct result with manual metric specification kilometers
+		actualKM, err := client.GeoDistWithUnit(key1, member1, member2, options.GeoUnitKilometers)
+		assert.NoError(t, err)
+		assert.LessOrEqual(t, math.Abs(actualKM.Value()-expectedKM), delta)
+
+		// assert null result when member index is missing
+		actual, _ = client.GeoDist(key1, member1, member3)
+		assert.True(t, actual.IsNil())
+
+		// key exists but holds a non-ZSET value
+		_, err = client.Set(key2, "bar")
+		assert.NoError(t, err)
+		_, err = client.GeoDist(key2, member1, member2)
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestGeoAdd_InvalidArgs() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		t := suite.T()
@@ -9216,5 +9464,55 @@ func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
 		result, err := client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), value, result.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestGeoPos() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key1 := "{testKey}:1-" + uuid.New().String()
+		key2 := "{testKey}:2-" + uuid.New().String()
+
+		members := []string{"Palermo", "Catania"}
+		expected := [][]float64{
+			{13.36138933897018433, 38.11555639549629859},
+			{15.08726745843887329, 37.50266842333162032},
+		}
+
+		// Add locations
+		membersCoordinates := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+		}
+
+		result, err := client.GeoAdd(key1, membersCoordinates)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), result)
+
+		// Get positions and verify
+		actual, err := client.GeoPos(key1, members)
+		assert.NoError(t, err)
+
+		// Verify each coordinate with high precision
+		for i, coords := range actual {
+			assert.NotNil(t, coords)
+			assert.Equal(t, 2, len(coords))
+
+			// Check longitude
+			assert.InDelta(t, expected[i][0], coords[0], 1e-9,
+				"longitude mismatch for member %s", members[i])
+
+			// Check latitude
+			assert.InDelta(t, expected[i][1], coords[1], 1e-9,
+				"latitude mismatch for member %s", members[i])
+		}
+
+		// Test error case with wrong key type
+		_, err = client.Set(key2, "geopos")
+		assert.NoError(t, err)
+
+		_, err = client.GeoPos(key2, members)
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
 	})
 }
