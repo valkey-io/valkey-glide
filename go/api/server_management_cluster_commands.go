@@ -26,6 +26,10 @@ type ServerManagementClusterCommands interface {
 
 	FlushDBWithOptions(options options.FlushClusterOptions) (string, error)
 
+	Lolwut() (string, error)
+
+	LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error)
+
 	ConfigResetStat() (string, error)
 
 	ConfigResetStatWithOptions(routeOption options.RouteOption) (string, error)
