@@ -88,8 +88,6 @@ func pubSubCallback(kind C.uint32_t, cResponse *C.struct_CommandResponse) {
 	// Convert kind directly to PushKind enum value
 	pushKind := PushKind(kind)
 
-	fmt.Printf("Received pubsub callback with kind: %s\n", pushKind)
-
 	// Extract values from the CommandResponse
 	arrayValues, err := processCommandResponseArray(cResponse)
 	if err != nil {

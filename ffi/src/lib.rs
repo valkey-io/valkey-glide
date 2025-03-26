@@ -132,10 +132,7 @@ pub type FailureCallback = unsafe extern "C" fn(
 ///
 /// `kind` is an integer representing the PushKind enum value (0=Disconnection, 1=Other, 2=Invalidate, 3=Message, etc.)
 /// `data_ptr` is a pointer to the CommandResponse containing the push data
-pub type PubSubCallback = unsafe extern "C" fn(
-    kind: u32,
-    data_ptr: *const CommandResponse,
-) -> ();
+pub type PubSubCallback = unsafe extern "C" fn(kind: u32, data_ptr: *const CommandResponse) -> ();
 
 /// The connection response.
 ///
@@ -419,20 +416,17 @@ fn create_client_internal(
                 }
                 Some(push_msg) => {
                     //log_debug("push manager loop", format!("got PushInfo: {:?}", push_msg));
-                    dbg!("Push message data:", &push_msg.data);
-                    
+
                     // Convert the push_msg.data to a CommandResponse
-                    let data_response = match valkey_value_to_command_response(Value::Array(push_msg.data.clone())) {
-                        Ok(response) => {
-                            dbg!("Converted response:", &response);
-                            response
-                        },
-                        Err(e) => {
-                            dbg!("Conversion error:", &e);
-                            continue; // Skip this message if conversion fails
-                        }
-                    };
-                    
+                    let data_response =
+                        match valkey_value_to_command_response(Value::Array(push_msg.data.clone()))
+                        {
+                            Ok(response) => response,
+                            Err(_e) => {
+                                continue; // Skip this message if conversion fails
+                            }
+                        };
+
                     // Get the numeric value of the PushKind enum
                     let kind_value = match push_msg.kind {
                         redis::PushKind::Disconnection => 0,
@@ -448,15 +442,10 @@ fn create_client_internal(
                         redis::PushKind::PSubscribe => 10,
                         redis::PushKind::SSubscribe => 11,
                     };
-                    
-                    dbg!(&data_response);
 
                     // Call the pubsub callback with the push notification data
                     unsafe {
-                        pubsub_callback(
-                            kind_value,
-                            Box::into_raw(Box::new(data_response)),
-                        );
+                        pubsub_callback(kind_value, Box::into_raw(Box::new(data_response)));
                     }
                 }
             }
