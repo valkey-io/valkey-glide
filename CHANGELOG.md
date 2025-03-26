@@ -24,6 +24,8 @@
 * Go: Add `BITOP` ([#3384](https://github.com/valkey-io/valkey-glide/pull/3384))
 * Go: Add `GeoHash` ([#3439](https://github.com/valkey-io/valkey-glide/pull/3439))
 * Go/Core: Move FFI to a dedicated folder for reusability ([#3372](https://github.com/valkey-io/valkey-glide/pull/3372))
+* Go: Add `GeoPos` ([#3409](https://github.com/valkey-io/valkey-glide/pull/3409))
+* Go: Add `GeoDist` ([#3446](https://github.com/valkey-io/valkey-glide/pull/3446))
 
 #### Breaking Changes
 
