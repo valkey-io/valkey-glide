@@ -8,6 +8,14 @@ import (
 	"github.com/valkey-io/valkey-glide/go/utils"
 )
 
+// return type for the `GeoSearch` command
+type Location struct {
+	Name  string
+	Coord GeospatialData
+	Dist  float64
+	Hash  int64
+}
+
 // The interface representing origin of the search for the `GeoSearch` command
 type GeoSearchOrigin interface {
 	ToArgs() ([]string, error)

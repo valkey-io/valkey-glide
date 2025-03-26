@@ -6773,7 +6773,7 @@ func (client *baseClient) GeoSearchWithFullOptions(
 	searchByShape options.GeoSearchShape,
 	resultOptions options.GeoSearchResultOptions,
 	infoOptions options.GeoSearchInfoOptions,
-) ([]any, error) {
+) ([]options.Location, error) {
 	args := []string{key}
 	searchFromArgs, err := searchFrom.ToArgs()
 	if err != nil {
@@ -6799,7 +6799,7 @@ func (client *baseClient) GeoSearchWithFullOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleAnyArrayResponse(result)
+	return handleLocationArrayResponse(result)
 }
 
 // Returns the members of a sorted set populated with geospatial information using [GeoAdd],
@@ -6894,7 +6894,7 @@ func (client *baseClient) GeoSearchWithInfoOptions(
 	searchFrom options.GeoSearchOrigin,
 	searchByShape options.GeoSearchShape,
 	infoOptions options.GeoSearchInfoOptions,
-) ([]any, error) {
+) ([]options.Location, error) {
 	return client.GeoSearchWithFullOptions(
 		key,
 		searchFrom,

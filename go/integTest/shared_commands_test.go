@@ -9327,37 +9327,41 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 			"edge1":   {Longitude: 12.758489, Latitude: 38.788135},
 		}
 
-		expectedResults := []any{
-			[]any{
-				"Catania",
-				[]any{
-					56.4413,
-					int64(3479447370796909),
-					[]any{15.087267458438873, 37.50266842333162},
+		expectedResults := []options.Location{
+			{
+				Name: "Catania",
+				Dist: 56.4413,
+				Hash: int64(3479447370796909),
+				Coord: options.GeospatialData{
+					Longitude: 15.087267458438873,
+					Latitude:  37.50266842333162,
 				},
 			},
-			[]any{
-				"Palermo",
-				[]any{
-					190.4424,
-					int64(3479099956230698),
-					[]any{13.361389338970184, 38.1155563954963},
+			{
+				Name: "Palermo",
+				Dist: 190.4424,
+				Hash: int64(3479099956230698),
+				Coord: options.GeospatialData{
+					Longitude: 13.361389338970184,
+					Latitude:  38.1155563954963,
 				},
 			},
-			[]any{
-				"edge2",
-				[]any{
-					279.7403,
-					int64(3481342659049484),
-					[]any{17.241510450839996, 38.78813451624225},
+			{
+				Name: "edge2",
+				Dist: 279.7403,
+				Hash: int64(3481342659049484),
+				Coord: options.GeospatialData{
+					Longitude: 17.241510450839996,
+					Latitude:  38.78813451624225,
 				},
 			},
-			[]any{
-				"edge1",
-				[]any{
-					279.7405,
-					int64(3479273021651468),
-					[]any{12.75848776102066, 38.78813451624225},
+			{
+				Name: "edge1",
+				Dist: 279.7405,
+				Hash: int64(3479273021651468),
+				Coord: options.GeospatialData{
+					Longitude: 12.75848776102066,
+					Latitude:  38.78813451624225,
 				},
 			},
 		}
@@ -9402,10 +9406,19 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 
 		// Test search by box from member, with distance included
 		meters := float64(400 * 1000)
-		expectedResults2 := []any{
-			[]any{"edge2", []any{236529.1799}},
-			[]any{"Palermo", []any{166274.1516}},
-			[]any{"Catania", []any{0.0}},
+		expectedResults2 := []options.Location{
+			{
+				Name: "edge2",
+				Dist: 236529.1799,
+			},
+			{
+				Name: "Palermo",
+				Dist: 166274.1516,
+			},
+			{
+				Name: "Catania",
+				Dist: 0.0,
+			},
 		}
 		memberResults, err := client.GeoSearchWithFullOptions(
 			key1,
@@ -9427,9 +9440,9 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc).SetCount(2),
 			*options.NewGeoSearchInfoOptions().SetWithHash(true),
 		)
-		expectedResults3 := []any{
-			[]any{"Palermo", []any{int64(3479099956230698)}},
-			[]any{"edge1", []any{int64(3479273021651468)}},
+		expectedResults3 := []options.Location{
+			{Name: "Palermo", Hash: int64(3479099956230698)},
+			{Name: "edge1", Hash: int64(3479273021651468)},
 		}
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 2, len(feetResult))
@@ -9482,31 +9495,38 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 			*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithHash(true).SetWithCoord(true),
 		)
 		assert.NoError(suite.T(), err)
-		expectedKmResults := []any{
-			[]any{
-				"Catania",
-				[]any{
-					56.4413,
-					int64(3479447370796909),
-					[]any{15.087267458438873, 37.50266842333162},
+		expectedKmResults := []options.Location{
+			{
+				Name: "Catania",
+				Dist: 56.4413,
+				Hash: int64(3479447370796909),
+				Coord: options.GeospatialData{
+					Longitude: 15.087267458438873,
+					Latitude:  37.50266842333162,
 				},
 			},
-			[]any{
-				"Palermo",
-				[]any{
-					190.4424,
-					int64(3479099956230698),
-					[]any{13.361389338970184, 38.1155563954963},
+			{
+				Name: "Palermo",
+				Dist: 190.4424,
+				Hash: int64(3479099956230698),
+				Coord: options.GeospatialData{
+					Longitude: 13.361389338970184,
+					Latitude:  38.1155563954963,
 				},
 			},
 		}
 		assert.Equal(suite.T(), expectedKmResults, kmResults)
 
 		// Test search with ANY option
-		expectedAnyResults := []any{
-			[]any{
-				"Palermo",
-				[]any{190.4424, int64(3479099956230698), []any{13.361389338970184, 38.1155563954963}},
+		expectedAnyResults := []options.Location{
+			{
+				Name: "Palermo",
+				Dist: 190.4424,
+				Hash: int64(3479099956230698),
+				Coord: options.GeospatialData{
+					Longitude: 13.361389338970184,
+					Latitude:  38.1155563954963,
+				},
 			},
 		}
 		anyResult, err := client.GeoSearchWithFullOptions(

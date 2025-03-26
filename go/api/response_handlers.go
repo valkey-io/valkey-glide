@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/errors"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
@@ -306,6 +307,49 @@ func convertAnyArray(response *C.struct_CommandResponse, isNilable bool) ([]any,
 		slice = append(slice, res)
 	}
 	return slice, nil
+}
+
+func convertLocationArray(response *C.struct_CommandResponse) ([]options.Location, error) {
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice := make([]options.Location, 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		responseArray, err := parseArray(&v)
+		if err != nil {
+			return nil, err
+		}
+		location := options.Location{
+			Name: responseArray.([]interface{})[0].(string),
+		}
+
+		additionalData := responseArray.([]interface{})[1].([]interface{})
+		for _, value := range additionalData {
+			if v, ok := value.(float64); ok {
+				location.Dist = v
+			}
+			if v, ok := value.(int64); ok {
+				location.Hash = v
+			}
+			if coordArray, ok := value.([]interface{}); ok {
+				location.Coord = options.GeospatialData{
+					Longitude: coordArray[0].(float64),
+					Latitude:  coordArray[1].(float64),
+				}
+			}
+		}
+		slice = append(slice, location)
+	}
+
+	return slice, nil
+}
+
+func handleLocationArrayResponse(response *C.struct_CommandResponse) ([]options.Location, error) {
+	defer C.free_command_response(response)
+
+	return convertLocationArray(response)
 }
 
 func handleStringOrNilArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {

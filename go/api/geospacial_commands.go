@@ -40,7 +40,7 @@ type GeoSpatialCommands interface {
 		searchFrom options.GeoSearchOrigin,
 		searchByShape options.GeoSearchShape,
 		infoOptions options.GeoSearchInfoOptions,
-	) ([]any, error)
+	) ([]options.Location, error)
 
 	GeoSearchWithResultOptions(
 		key string,
@@ -55,7 +55,7 @@ type GeoSpatialCommands interface {
 		searchByShape options.GeoSearchShape,
 		resultOptions options.GeoSearchResultOptions,
 		infoOptions options.GeoSearchInfoOptions,
-	) ([]any, error)
+	) ([]options.Location, error)
 
 	GeoSearchStore(
 		destinationKey string,
