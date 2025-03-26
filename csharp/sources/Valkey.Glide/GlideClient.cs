@@ -52,5 +52,5 @@ public sealed class GlideClient : IDisposable, IGlideClient
         => _nativeClient.SendCommandAsync(requestType, routingInfo, args);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public string ToParameter<T>(T value) => _glideSerializerCollection.Transform(value);
+    public string ToParameter<T>(T value) => _glideSerializerCollection.ToParameter(value);
 }
