@@ -78,7 +78,6 @@ type CommandExecutor interface {
 }
 
 func (client *baseClient) ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
-	fmt.Println("base client ExecuteCommand called")
 	return client.executeCommand(requestType, args)
 }
 
@@ -130,7 +129,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	// Set executor after the client is created to avoid self-reference issues
 	client.executor = client
 
-	return client, nil
+	return &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}, nil
 }
 
 // Close terminates the client by closing all associated resources.

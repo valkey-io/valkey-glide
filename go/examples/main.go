@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/valkey-io/valkey-glide/go/api"
@@ -19,12 +20,33 @@ func main() {
 		log.Fatal("error connecting to database: ", err)
 	}
 
-	client.Set("apples", "oran\x00ges")
+	client.Set("keyEdric123", "Hello")
+	client.Set("keyEdric345", "Hello")
 
-	// Create Transcation
-	// tx := api.NewTransaction(client)
-	// getResult, _ := tx.Get("apples") // This adds the GET command to the transaction queue.
-	// fmt.Println(getResult)
+	//Create Transcation
+	tx := api.NewTransaction(client)
+	tx.Get("keyEdric123")
+	tx.Get("keyEdric345")
 
+	// This adds the GET command to the transaction queue.
+
+	//watchresult, _ := tx.Watch([]string{"keyEdric123"})
+	//fmt.Println(watchresult)
+
+	// Execute the transaction (MULTI + EXEC)
+
+	err = tx.Exec()
+	if err != nil {
+		log.Fatalf("Transaction failed: %v", err)
+	} else {
+		fmt.Println("Transaction executed successfully!")
+	}
+
+	// err = tx.Discard()
+	// if err != nil {
+	// 	log.Fatalf("Transaction failed: %v", err)
+	// } else {
+	// 	fmt.Println("Transaction successfully discarded!")
+	// }
 	client.Close()
 }

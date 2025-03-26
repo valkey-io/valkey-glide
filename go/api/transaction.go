@@ -11,6 +11,12 @@ import (
 	"fmt"
 )
 
+// BaseClient defines an interface for methods common to both [GlideClientCommands] and [GlideClusterClientCommands].
+type TransactionClient interface {
+	TransactionBaseCommands
+	// Close terminates the client by closing all associated resources.
+	Close()
+}
 type Transaction struct {
 	*baseClient // Embed baseClient to inherit all methods like Get
 	commands    []Cmder
@@ -45,20 +51,30 @@ func NewExecCommand() Cmder {
 // Override ExecuteCommand to queue commands in the transaction
 func (t *Transaction) ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
 	fmt.Println("Transaction ExecuteCommand called")
+	fmt.Println("ExecuteCommand Param: ", requestType, args)
+	fmt.Println("t.commands Before: ", t.commands)
 	t.commands = append(t.commands, &GenericCommand{name: requestType, args: args})
+	//fmt.Println("t.commands After: ", t.commands)
+
 	return nil, nil // Queue the command instead of executing immediately
 }
 
 // Exec executes all queued commands as a transaction
 func (t *Transaction) Exec() error {
 	// Add MULTI and EXEC to the command queue
-	t.commands = append([]Cmder{NewMultiCommand()}, t.commands...)
-	// t.commands = append(t.commands, &GenericCommand{C.Get, []string{"apples"}})
-	// t.commands = append(t.commands, NewExecCommand())
 
+	// t.commands = append(t.commands, &GenericCommand{C.Get, []string{"apples"}})
+	t.commands = append([]Cmder{NewMultiCommand()}, t.commands...)
+	t.commands = append(t.commands, NewExecCommand())
+
+	for i, cmd := range t.commands {
+		fmt.Println("CommandList:", i, cmd.Name(), cmd.Args())
+	}
 	// Execute all commands
-	for _, cmd := range t.commands {
-		_, err := t.baseClient.ExecuteCommand(cmd.Name(), cmd.Args()) // Use BaseClient for execution
+	for i, cmd := range t.commands {
+		fmt.Println("Exec Command:", i, cmd.Name(), cmd.Args())
+		result, err := t.baseClient.ExecuteCommand(cmd.Name(), cmd.Args()) // Use BaseClient for execution
+		fmt.Println(result)
 		if err != nil {
 			return fmt.Errorf("failed to execute command %s: %w", cmd.Name(), err)
 		}
@@ -94,27 +110,26 @@ func NewTransaction(client GlideClientCommands) *Transaction {
 // 	return &GlideClient{client}, nil
 // }
 
-func (client *baseClient) GetTx(key string) (interface{}, error) {
-	result, err := client.executor.ExecuteCommand(C.Get, []string{key})
-	if tx, ok := client.executor.(*Transaction); ok {
-		return tx, nil // Return transaction for chaining when inside a transaction
-	}
+func (client *baseClient) Watch(keys []string) (string, error) {
+	result, err := client.executeCommand(C.Watch, keys)
 	if err != nil {
-		return err, nil
+		return DefaultStringResponse, err
 	}
-
-	return handleStringOrNilResponse(result)
+	return handleStringResponse(result)
 }
 
-func (client *baseClient) SetTx(key string, value string) (interface{}, error) {
-	//result, err := client.executor.ExecuteCommand(C.Set, []string{key, value})
-	if tx, ok := client.executor.(*Transaction); ok {
-		return tx, nil // Return transaction for chaining when inside a transaction
-	}
-	// if err != nil {
-	// 	return err, nil
-	// }
-	return nil, nil
+// func (client *baseClient) Discard(keys []string) (string, error) {
+// 	result, err := client.executeCommand(C.Watch, keys)
+// 	if err != nil {
+// 		return DefaultStringResponse, err
+// 	}
+// 	return handleStringResponse(result)
+// }
 
-	//return handleStringResponse(result)
+func (t *Transaction) Discard() error {
+	if len(t.commands) > 0 {
+		t.commands = []Cmder{}
+		return nil
+	}
+	return fmt.Errorf("no command where queue")
 }
