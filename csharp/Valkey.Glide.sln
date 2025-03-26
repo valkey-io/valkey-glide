@@ -48,8 +48,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "rust", "rust", "{E5CB13C0-F
 		rust\Cargo.toml = rust\Cargo.toml
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomSerializers", "CustomSerializers\CustomSerializers.csproj", "{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{3985653A-9E37-4AC6-BBCB-B7A5DDC2744D}"
 	ProjectSection(SolutionItems) = preProject
 		rust\src\helpers.rs = rust\src\helpers.rs
@@ -58,6 +56,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{3985653A-9E3
 		rust\src\apihandle.rs = rust\src\apihandle.rs
 		rust\src\data.rs = rust\src\data.rs
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomSerializers", "samples\CustomSerializers\CustomSerializers.csproj", "{9AB07459-6C4E-4578-8EB5-124BF49CF5ED}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DotNetFrameworkSample", "samples\DotNetFrameworkSample\DotNetFrameworkSample.csproj", "{D1B63FCE-C192-4AAA-B053-9215E38FF676}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -78,8 +80,9 @@ Global
 		{F9BFD252-FC3D-449B-A87B-C2E210A4326C} = {91D2A259-AC07-400F-A1CC-7E8EFD87DD60}
 		{11F86E43-B18B-4F98-92D0-CCC91AC9EBB4} = {2BBD3AEC-8CF9-4B96-B6DF-8AB46A8DE8DA}
 		{2F9ECC78-B8DF-4BCD-BEA1-162F270F8261} = {2BBD3AEC-8CF9-4B96-B6DF-8AB46A8DE8DA}
-		{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB} = {38BCDD5C-7D83-4EE2-BC43-12B97ED048D8}
 		{3985653A-9E37-4AC6-BBCB-B7A5DDC2744D} = {E5CB13C0-FECB-4CCE-B816-9B4B19CEA41D}
+		{9AB07459-6C4E-4578-8EB5-124BF49CF5ED} = {38BCDD5C-7D83-4EE2-BC43-12B97ED048D8}
+		{D1B63FCE-C192-4AAA-B053-9215E38FF676} = {38BCDD5C-7D83-4EE2-BC43-12B97ED048D8}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{13C75535-9649-49AB-837F-7A5910309DA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -130,9 +133,13 @@ Global
 		{2F9ECC78-B8DF-4BCD-BEA1-162F270F8261}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2F9ECC78-B8DF-4BCD-BEA1-162F270F8261}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2F9ECC78-B8DF-4BCD-BEA1-162F270F8261}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D14F56F6-3C3A-48BC-8865-79BFDCB1CCBB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9AB07459-6C4E-4578-8EB5-124BF49CF5ED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9AB07459-6C4E-4578-8EB5-124BF49CF5ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9AB07459-6C4E-4578-8EB5-124BF49CF5ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9AB07459-6C4E-4578-8EB5-124BF49CF5ED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D1B63FCE-C192-4AAA-B053-9215E38FF676}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D1B63FCE-C192-4AAA-B053-9215E38FF676}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D1B63FCE-C192-4AAA-B053-9215E38FF676}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D1B63FCE-C192-4AAA-B053-9215E38FF676}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

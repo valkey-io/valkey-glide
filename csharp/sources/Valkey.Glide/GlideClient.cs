@@ -47,10 +47,10 @@ public sealed class GlideClient : IDisposable, IGlideClient
 
     [EditorBrowsable(EditorBrowsableState.Advanced)]
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public Task<InterOp.Value> CommandAsync<TRoutingInfo>(ERequestType requestType, TRoutingInfo routingInfo, params string[] args)
+    public Task<InterOp.Value> SendCommandAsync<TRoutingInfo>(ERequestType requestType, TRoutingInfo routingInfo, params string[] args)
         where TRoutingInfo : IRoutingInfo
         => _nativeClient.SendCommandAsync(requestType, routingInfo, args);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public string Transform<T>(T value) => _glideSerializerCollection.Transform(value);
+    public string ToParameter<T>(T value) => _glideSerializerCollection.Transform(value);
 }

@@ -84,7 +84,7 @@ public sealed class GlideSerializerCollectionTests
 
         // Act
         // Assert
-        Assert.Throws<InvalidOperationException>(() => glideSerializerCollection.Transform("test"));
+        Assert.Throws<InvalidOperationException>(() => glideSerializerCollection.ToParameter("test"));
     }
 
     [Fact]
@@ -99,6 +99,6 @@ public sealed class GlideSerializerCollectionTests
 
         // Act
         // Assert
-        Assert.Equal("foobar", glideSerializerCollection.Transform("test"));
+        Assert.Equal("foobar", glideSerializerCollection.ToParameter("test"));
     }
 }

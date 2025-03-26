@@ -59,7 +59,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1> : IGlideCommand where TRo
     {
         if (!Arg1Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 0));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1));
     }
 }
 
@@ -131,7 +131,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2> : IGlideCommand where
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 0));
         if (!Arg2Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 1));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2));
     }
 }
 
@@ -218,7 +218,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3> : IGlideCommand w
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 1));
         if (!Arg3Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 2));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3));
     }
 }
 
@@ -320,7 +320,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4> : IGlideComma
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 2));
         if (!Arg4Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 3));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4));
     }
 }
 
@@ -437,7 +437,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5> : IGlideC
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 3));
         if (!Arg5Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 4));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5));
     }
 }
 
@@ -569,7 +569,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6> : IGl
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 4));
         if (!Arg6Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 5));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6));
     }
 }
 
@@ -716,7 +716,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7> :
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 5));
         if (!Arg7Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 6));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7));
     }
 }
 
@@ -878,7 +878,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 6));
         if (!Arg8Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 7));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8));
     }
 }
 
@@ -1055,7 +1055,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 7));
         if (!Arg9Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 8));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9));
     }
 }
 
@@ -1247,7 +1247,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 8));
         if (!Arg10Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 9));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9), client.Transform(Arg10));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9), client.ToParameter(Arg10));
     }
 }
 
@@ -1454,7 +1454,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 9));
         if (!Arg11Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 10));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9), client.Transform(Arg10), client.Transform(Arg11));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9), client.ToParameter(Arg10), client.ToParameter(Arg11));
     }
 }
 
@@ -1676,7 +1676,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 10));
         if (!Arg12Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 11));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9), client.Transform(Arg10), client.Transform(Arg11), client.Transform(Arg12));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9), client.ToParameter(Arg10), client.ToParameter(Arg11), client.ToParameter(Arg12));
     }
 }
 
@@ -1913,7 +1913,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 11));
         if (!Arg13Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 12));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9), client.Transform(Arg10), client.Transform(Arg11), client.Transform(Arg12), client.Transform(Arg13));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9), client.ToParameter(Arg10), client.ToParameter(Arg11), client.ToParameter(Arg12), client.ToParameter(Arg13));
     }
 }
 
@@ -2165,7 +2165,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 12));
         if (!Arg14Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 13));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9), client.Transform(Arg10), client.Transform(Arg11), client.Transform(Arg12), client.Transform(Arg13), client.Transform(Arg14));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9), client.ToParameter(Arg10), client.ToParameter(Arg11), client.ToParameter(Arg12), client.ToParameter(Arg13), client.ToParameter(Arg14));
     }
 }
 
@@ -2432,7 +2432,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 13));
         if (!Arg15Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 14));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9), client.Transform(Arg10), client.Transform(Arg11), client.Transform(Arg12), client.Transform(Arg13), client.Transform(Arg14), client.Transform(Arg15));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9), client.ToParameter(Arg10), client.ToParameter(Arg11), client.ToParameter(Arg12), client.ToParameter(Arg13), client.ToParameter(Arg14), client.ToParameter(Arg15));
     }
 }
 
@@ -2714,7 +2714,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 14));
         if (!Arg16Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 15));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9), client.Transform(Arg10), client.Transform(Arg11), client.Transform(Arg12), client.Transform(Arg13), client.Transform(Arg14), client.Transform(Arg15), client.Transform(Arg16));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9), client.ToParameter(Arg10), client.ToParameter(Arg11), client.ToParameter(Arg12), client.ToParameter(Arg13), client.ToParameter(Arg14), client.ToParameter(Arg15), client.ToParameter(Arg16));
     }
 }
 
@@ -3011,7 +3011,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 15));
         if (!Arg17Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 16));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9), client.Transform(Arg10), client.Transform(Arg11), client.Transform(Arg12), client.Transform(Arg13), client.Transform(Arg14), client.Transform(Arg15), client.Transform(Arg16), client.Transform(Arg17));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9), client.ToParameter(Arg10), client.ToParameter(Arg11), client.ToParameter(Arg12), client.ToParameter(Arg13), client.ToParameter(Arg14), client.ToParameter(Arg15), client.ToParameter(Arg16), client.ToParameter(Arg17));
     }
 }
 
@@ -3323,7 +3323,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 16));
         if (!Arg18Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 17));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9), client.Transform(Arg10), client.Transform(Arg11), client.Transform(Arg12), client.Transform(Arg13), client.Transform(Arg14), client.Transform(Arg15), client.Transform(Arg16), client.Transform(Arg17), client.Transform(Arg18));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9), client.ToParameter(Arg10), client.ToParameter(Arg11), client.ToParameter(Arg12), client.ToParameter(Arg13), client.ToParameter(Arg14), client.ToParameter(Arg15), client.ToParameter(Arg16), client.ToParameter(Arg17), client.ToParameter(Arg18));
     }
 }
 
@@ -3650,7 +3650,7 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 17));
         if (!Arg19Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 18));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9), client.Transform(Arg10), client.Transform(Arg11), client.Transform(Arg12), client.Transform(Arg13), client.Transform(Arg14), client.Transform(Arg15), client.Transform(Arg16), client.Transform(Arg17), client.Transform(Arg18), client.Transform(Arg19));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9), client.ToParameter(Arg10), client.ToParameter(Arg11), client.ToParameter(Arg12), client.ToParameter(Arg13), client.ToParameter(Arg14), client.ToParameter(Arg15), client.ToParameter(Arg16), client.ToParameter(Arg17), client.ToParameter(Arg18), client.ToParameter(Arg19));
     }
 }
 
@@ -3992,6 +3992,6 @@ public readonly struct CustomCommand<TRoutingInfo, T1, T2, T3, T4, T5, T6, T7, T
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 18));
         if (!Arg20Set)
             throw new InvalidOperationException(string.Format(Properties.Language.CustomCommand_ArgumentNotSet_0index, 19));
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, client.Transform(Arg1), client.Transform(Arg2), client.Transform(Arg3), client.Transform(Arg4), client.Transform(Arg5), client.Transform(Arg6), client.Transform(Arg7), client.Transform(Arg8), client.Transform(Arg9), client.Transform(Arg10), client.Transform(Arg11), client.Transform(Arg12), client.Transform(Arg13), client.Transform(Arg14), client.Transform(Arg15), client.Transform(Arg16), client.Transform(Arg17), client.Transform(Arg18), client.Transform(Arg19), client.Transform(Arg20));
+        return client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, client.ToParameter(Arg1), client.ToParameter(Arg2), client.ToParameter(Arg3), client.ToParameter(Arg4), client.ToParameter(Arg5), client.ToParameter(Arg6), client.ToParameter(Arg7), client.ToParameter(Arg8), client.ToParameter(Arg9), client.ToParameter(Arg10), client.ToParameter(Arg11), client.ToParameter(Arg12), client.ToParameter(Arg13), client.ToParameter(Arg14), client.ToParameter(Arg15), client.ToParameter(Arg16), client.ToParameter(Arg17), client.ToParameter(Arg18), client.ToParameter(Arg19), client.ToParameter(Arg20));
     }
 }

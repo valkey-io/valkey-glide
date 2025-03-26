@@ -49,7 +49,7 @@ public readonly record struct GetCommand<TRoutingInfo>()
     {
         if (string.IsNullOrWhiteSpace(Key))
             throw new InvalidOperationException(Properties.Language.GetCommand_KeyNotSet);
-        return client.CommandAsync(
+        return client.SendCommandAsync(
             ERequestType.Get, RoutingInfo, Key.AsRedisCommandText());
     }
 }

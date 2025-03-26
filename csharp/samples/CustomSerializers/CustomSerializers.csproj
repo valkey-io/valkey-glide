@@ -12,6 +12,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\sources\Valkey.Glide.Hosting\Valkey.Glide.Hosting.csproj" />
+      <ProjectReference Include="..\..\sources\Valkey.Glide.Hosting\Valkey.Glide.Hosting.csproj" />
     </ItemGroup>
 </Project>

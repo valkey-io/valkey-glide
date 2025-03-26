@@ -167,33 +167,33 @@ public readonly struct SetCommand<TRoutingInfo, TValue>()
             throw new InvalidOperationException(Properties.Language.SetCommand_ValueNotSet);
 
         if (SetIfDoesNotExists)
-            return client.CommandAsync(
+            return client.SendCommandAsync(
                 ERequestType.Set,
                 RoutingInfo,
-                [Key.AsRedisCommandText(), client.Transform(Value), "NX".AsRedisCommandText(), ..ttlParameters]
+                [Key.AsRedisCommandText(), client.ToParameter(Value), "NX".AsRedisCommandText(), ..ttlParameters]
             );
         if (SetIfExists)
-            return client.CommandAsync(
+            return client.SendCommandAsync(
                 ERequestType.Set,
                 RoutingInfo,
-                [Key.AsRedisCommandText(), client.Transform(Value), "XX".AsRedisCommandText(), ..ttlParameters]
+                [Key.AsRedisCommandText(), client.ToParameter(Value), "XX".AsRedisCommandText(), ..ttlParameters]
             );
         if (SetIfEquals is not null)
-            return client.CommandAsync(
+            return client.SendCommandAsync(
                 ERequestType.Set,
                 RoutingInfo,
                 [
                     Key.AsRedisCommandText(),
-                    client.Transform(Value),
+                    client.ToParameter(Value),
                     "IFEQ".AsRedisCommandText(),
                     SetIfEquals.AsRedisString(),
                     ..ttlParameters
                 ]
             );
-        return client.CommandAsync(
+        return client.SendCommandAsync(
             ERequestType.Set,
             RoutingInfo,
-            [Key.AsRedisCommandText(), client.Transform(Value), ..ttlParameters]
+            [Key.AsRedisCommandText(), client.ToParameter(Value), ..ttlParameters]
         );
     }
 }

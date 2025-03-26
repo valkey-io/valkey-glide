@@ -14,10 +14,10 @@ namespace Valkey.Glide;
 /// <list type="number">
 /// <item>Registering transformers via the <see cref="RegisterSerializer{T}"/> method.</item>
 /// <item>Sealing the transformer using the <see cref="Seal"/> method, which makes it immutable and ready for execution.</item>
-/// <item>Applying transformations with <see cref="Transform{T}"/>, which delegates transformation logic to the registered transformers.</item>
+/// <item>Applying transformations with <see cref="ToParameter{T}"/>, which delegates transformation logic to the registered transformers.</item>
 /// </list>
 /// Once sealed, no further transformers can be registered. Attempting to register or modify the transformer after it has been sealed
-/// will result in an exception. Similarly, invoking <see cref="Transform{T}"/> on an unsealed transformer will also result in an exception.
+/// will result in an exception. Similarly, invoking <see cref="ToParameter{T}"/> on an unsealed transformer will also result in an exception.
 /// </remarks>
 public sealed class GlideSerializerCollection
 {
@@ -53,7 +53,7 @@ public sealed class GlideSerializerCollection
         }
     }
 
-    public string Transform<T>(T t)
+    public string ToParameter<T>(T t)
     {
         // ReSharper disable once InconsistentlySynchronizedField -- We do not need to lock on this. Inconsistencies are "ok"
         if (!_sealed)
