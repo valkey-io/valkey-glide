@@ -64,7 +64,6 @@ public static class Imports
         [In] nint is_enabled_callback,
         [In] nint new_spawn_callback,
         [In] nint record_callback,
-        [In] nint record_follows_from_callback,
         [In] nint event_callback,
         [In] nint enter_callback,
         [In] nint exit_callback

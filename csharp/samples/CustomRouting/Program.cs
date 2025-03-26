@@ -6,4 +6,5 @@ builder.Services.AddHostedService<Worker>();
 builder.Services.AddValkeyGlide("valkey");
 
 var host = builder.Build();
+host.AddGlideCoreLogging();
 host.Run();

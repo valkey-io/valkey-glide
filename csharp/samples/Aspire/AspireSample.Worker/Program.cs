@@ -15,6 +15,7 @@ public class Program
         builder.AddServiceDefaults();
 
         WebApplication app = builder.Build();
+        app.AddGlideCoreLogging();
         app.UseHttpsRedirection();
         app.UseAuthorization();
         app.MapOpenApi();

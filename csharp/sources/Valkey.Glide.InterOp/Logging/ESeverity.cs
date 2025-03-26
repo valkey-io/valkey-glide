@@ -1,4 +1,4 @@
-﻿namespace Valkey.Glide.InterOp.Native.Logging;
+﻿namespace Valkey.Glide.InterOp.Logging;
 
 public enum ESeverity
 {

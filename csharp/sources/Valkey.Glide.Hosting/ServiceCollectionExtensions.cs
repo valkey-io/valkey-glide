@@ -48,7 +48,7 @@ public static class ServiceCollectionExtensions
     /// <param name="resourceName">The name of the resource whose connection string is used to configure the connection.</param>
     /// <param name="loggingHarness">
     /// The logging harness implementation to use.
-    /// If no logging harness is passed, the default <see cref="LoggingHarness"/> will be created.
+    /// If no logging harness is passed, the default <see cref="StdOutLoggingHarness"/> will be created.
     /// </param>
     /// <returns>The modified service collection with Valkey Glide services registered.</returns>
     /// <exception cref="InvalidOperationException">
@@ -63,7 +63,7 @@ public static class ServiceCollectionExtensions
         // Ensure at least one logging harness implementation exists.
         if (loggingHarness is null)
         {
-            _ = new LoggingHarness();
+            _ = new StdOutLoggingHarness();
         }
         services.AddSingleton<ConnectionRequest>(
             serviceProvider =>
@@ -92,7 +92,7 @@ public static class ServiceCollectionExtensions
     /// <param name="configure">An action to configure the connection settings through the <see cref="ConnectionConfigBuilder"/>.</param>
     /// <param name="loggingHarness">
     /// The logging harness implementation to use.
-    /// If no logging harness is passed, the default <see cref="LoggingHarness"/> will be created.
+    /// If no logging harness is passed, the default <see cref="StdOutLoggingHarness"/> will be created.
     /// </param>
     /// <returns>The modified service collection with Valkey Glide services registered.</returns>
     /// <exception cref="ArgumentNullException">
@@ -117,7 +117,7 @@ public static class ServiceCollectionExtensions
     /// <param name="connectionRequest">The connection request containing configuration details for establishing the connection.</param>
     /// <param name="loggingHarness">
     /// The logging harness implementation to use.
-    /// If no logging harness is passed, the default <see cref="LoggingHarness"/> will be created.
+    /// If no logging harness is passed, the default <see cref="StdOutLoggingHarness"/> will be created.
     /// </param>
     /// <returns>The modified service collection with Valkey Glide services registered.</returns>
     /// <exception cref="ArgumentNullException">
@@ -132,7 +132,7 @@ public static class ServiceCollectionExtensions
         // Ensure at least one logging harness implementation exists.
         if (loggingHarness is null)
         {
-            _ = new LoggingHarness();
+            _ = new StdOutLoggingHarness();
         }
         services.AddSingleton(connectionRequest);
         AddGlideClient(services);

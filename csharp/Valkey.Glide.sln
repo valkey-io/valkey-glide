@@ -55,6 +55,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{3985653A-9E3
 		rust\src\buffering.rs = rust\src\buffering.rs
 		rust\src\apihandle.rs = rust\src\apihandle.rs
 		rust\src\data.rs = rust\src\data.rs
+		rust\src\logging.rs = rust\src\logging.rs
+		rust\src\routing.rs = rust\src\routing.rs
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomSerializers", "samples\CustomSerializers\CustomSerializers.csproj", "{9AB07459-6C4E-4578-8EB5-124BF49CF5ED}"

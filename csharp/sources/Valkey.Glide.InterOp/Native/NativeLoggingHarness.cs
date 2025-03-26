@@ -31,7 +31,6 @@ public abstract unsafe class NativeLoggingHarness
     private readonly IsEnabledCallback _isEnabledCallback;
     private readonly NewSpawnCallback _newSpawnCallback;
     private readonly RecordCallback _recordCallback;
-    private readonly RecordFollowsFromCallback _recordFollowsFromCallback;
     private readonly EventCallback _eventCallback;
     private readonly EnterCallback _enterCallback;
     private readonly ExitCallback _exitCallback;
@@ -39,7 +38,6 @@ public abstract unsafe class NativeLoggingHarness
     private readonly nint _isEnabledCallbackFptr;
     private readonly nint _newSpawnCallbackFptr;
     private readonly nint _recordCallbackFptr;
-    private readonly nint _recordFollowsFromCallbackFptr;
     private readonly nint _eventCallbackFptr;
     private readonly nint _enterCallbackFptr;
     private readonly nint _exitCallbackFptr;
@@ -76,14 +74,12 @@ public abstract unsafe class NativeLoggingHarness
         _isEnabledCallback = OnIsEnabledCallback;
         _newSpawnCallback = OnNewSpawnCallback;
         _recordCallback = OnRecordCallback;
-        _recordFollowsFromCallback = OnRecordFollowsFromCallback;
         _eventCallback = OnEventCallback;
         _enterCallback = OnEnterCallback;
         _exitCallback = OnExitCallback;
         _isEnabledCallbackFptr = Marshal.GetFunctionPointerForDelegate(_isEnabledCallback);
         _newSpawnCallbackFptr = Marshal.GetFunctionPointerForDelegate(_newSpawnCallback);
         _recordCallbackFptr = Marshal.GetFunctionPointerForDelegate(_recordCallback);
-        _recordFollowsFromCallbackFptr = Marshal.GetFunctionPointerForDelegate(_recordFollowsFromCallback);
         _eventCallbackFptr = Marshal.GetFunctionPointerForDelegate(_eventCallback);
         _enterCallbackFptr = Marshal.GetFunctionPointerForDelegate(_enterCallback);
         _exitCallbackFptr = Marshal.GetFunctionPointerForDelegate(_exitCallback);
@@ -93,7 +89,6 @@ public abstract unsafe class NativeLoggingHarness
             _isEnabledCallbackFptr,
             _newSpawnCallbackFptr,
             _recordCallbackFptr,
-            _recordFollowsFromCallbackFptr,
             _eventCallbackFptr,
             _enterCallbackFptr,
             _exitCallbackFptr);
@@ -121,6 +116,7 @@ public abstract unsafe class NativeLoggingHarness
             }
         }
     }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static T WithSelf<T>(nint data, Func<NativeLoggingHarness, T> action, T defaultValue = default)
     {
@@ -155,58 +151,68 @@ public abstract unsafe class NativeLoggingHarness
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     private static void OnEnterCallback(nint ref_data, ulong in_span_id)
-        => WithSelf(ref_data, self =>
-        {
-            self.OnEnter(in_span_id);
-        });
+        => WithSelf(ref_data, self => self.OnEnter(in_span_id));
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     private static void OnEventCallback(nint ref_data, byte* in_message, int in_message_length, Fields in_fields,
         EventData* in_event_data, SpanContext in_span_context)
         => WithSelf(ref_data, self =>
         {
-            var message = HelperMethods.HandleString(in_message, in_message_length);
-            self.OnEvent(message, in_fields, ref *in_event_data, in_span_context);
+            var message = HelperMethods.HandleString(in_message, in_message_length, false);
+            self.OnNativeEvent(message, ref in_fields, ref *in_event_data, in_span_context);
         });
 
-    [SuppressMessage("ReSharper", "InconsistentNaming")]
-    private static void OnRecordFollowsFromCallback(nint ref_data, ulong in_span_id, ulong in_follows_id)
-        => WithSelf(ref_data, self =>
-        {
-            self.OnRecordFollowsFrom(in_span_id, in_follows_id);
-        });
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     private static void OnRecordCallback(nint ref_data, byte* in_message, int in_message_length, Fields in_fields,
         ulong in_span_id)
         => WithSelf(ref_data, self =>
         {
-            var message = HelperMethods.HandleString(in_message, in_message_length);
-            self.OnRecord(message, in_fields, in_span_id);
+            var message = HelperMethods.HandleString(in_message, in_message_length, false);
+            self.OnNativeRecord(message, ref in_fields, in_span_id);
         });
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]
-    private static ulong OnNewSpawnCallback(nint ref_data, byte* in_message, int in_message_length, Fields in_fields,
-        EventData* in_event_data, SpanContext in_span_context)
+    private static void OnNewSpawnCallback(nint ref_data, byte* in_message, int in_message_length, Fields in_fields,
+        EventData* in_event_data, SpanContext in_span_context, ulong in_span_id)
         => WithSelf(ref_data, self =>
         {
-            var message = HelperMethods.HandleString(in_message, in_message_length);
-            return self.OnNewSpawn(message, in_fields, ref *in_event_data, in_span_context);
+            var message = HelperMethods.HandleString(in_message, in_message_length, false);
+            self.OnNativeNewSpawn(message, ref in_fields, ref *in_event_data, in_span_context, in_span_id);
         });
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     private static bool OnIsEnabledCallback(nint ref_data, EventData* in_event_data)
-        => WithSelf(ref_data, self =>
-        {
-            return self.OnIsEnabled(ref *in_event_data);
-        });
+        => WithSelf(ref_data, self => self.OnNativeIsEnabled(ref *in_event_data));
 
 
     protected abstract void OnExit(ulong inSpanId);
     protected abstract void OnEnter(ulong inSpanId);
-    protected abstract void OnEvent(string message, Fields inFields, ref EventData inEventData, SpanContext inSpanContext);
-    protected abstract void OnRecordFollowsFrom(ulong inSpanId, ulong inFollowsId);
-    protected abstract void OnRecord(string message, Fields inFields, ulong inSpanId);
-    protected abstract ulong OnNewSpawn(string message, Fields inFields, ref EventData inEventData, SpanContext inSpanContext);
-    protected abstract bool OnIsEnabled(ref EventData inEventData);
+
+    [SuppressMessage("ReSharper", "MemberCanBeProtected.Global")]
+    protected internal abstract void OnNativeEvent(
+        string message,
+        ref Fields inFields,
+        ref EventData inEventData,
+        SpanContext inSpanContext
+    );
+
+    [SuppressMessage("ReSharper", "MemberCanBeProtected.Global")]
+    protected internal abstract void OnNativeRecord(
+        string message,
+        ref Fields inFields,
+        ulong inSpanId
+    );
+
+    [SuppressMessage("ReSharper", "MemberCanBeProtected.Global")]
+    protected internal abstract void OnNativeNewSpawn(
+        string message,
+        ref Fields inFields,
+        ref EventData inEventData,
+        SpanContext inSpanContext,
+        ulong inSpanId
+    );
+
+    [SuppressMessage("ReSharper", "MemberCanBeProtected.Global")]
+    protected internal abstract bool OnNativeIsEnabled(ref EventData inEventData);
 }

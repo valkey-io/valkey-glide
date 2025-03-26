@@ -322,7 +322,6 @@ public static class MainClass
         _ = Parser.Default
             .ParseArguments<CommandLineOptions>(args).WithParsed(parsed => options = parsed);
 
-        NativeClient.Initialize(ELoggerLevel.Info, Path.GetFileNameWithoutExtension(options.ResultsFile));
         IEnumerable<(int concurrentTasks, int dataSize, int clientCount)> product = options.ConcurrentTasks
             .SelectMany(concurrentTasks => options.ClientCount.Select(clientCount => (concurrentTasks, options.DataSize, clientCount)))
             .Where(tuple => tuple.concurrentTasks >= tuple.clientCount);

@@ -8,4 +8,5 @@ builder.Services.AddValkeyGlide("valkey");
 builder.Services.ConfigureValkeyGlideTransformers(config => config.RegisterSerializer(new DateTimeGlideSerializer()));
 
 var host = builder.Build();
+host.AddGlideCoreLogging();
 host.Run();

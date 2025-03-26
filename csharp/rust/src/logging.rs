@@ -7,6 +7,7 @@ use std::ptr::null;
 use tracing_core::span::{Attributes, Id, Record};
 use tracing_core::{field, Event, Field, Level, Metadata};
 use tracing_subscriber::{Layer, Registry};
+use tracing_subscriber::layer::Context;
 
 #[repr(C)]
 pub struct KeyValuePair {
@@ -183,6 +184,7 @@ impl From<&Metadata<'_>> for EventData {
 }
 
 #[derive(Debug)]
+#[repr(C)]
 pub enum ESpanContextKind {
     /// The new span will be a root span.
     Root,
@@ -217,18 +219,14 @@ pub type NewSpawnCallback = unsafe extern "C-unwind" fn(
     in_fields: Fields,
     in_event_data: *const EventData,
     in_span_context: SpanContext,
-) -> c_ulonglong;
+    in_span_id: c_ulonglong,
+);
 pub type RecordCallback = unsafe extern "C-unwind" fn(
     ref_data: *mut c_void,
     in_message: *const c_char,
     in_message_length: c_int,
     in_fields: Fields,
     in_span_id: c_ulonglong,
-);
-pub type RecordFollowsFromCallback = unsafe extern "C-unwind" fn(
-    ref_data: *mut c_void,
-    in_span_id: c_ulonglong,
-    in_follows_id: c_ulonglong,
 );
 pub type EventCallback = unsafe extern "C-unwind" fn(
     ref_data: *mut c_void,
@@ -246,7 +244,6 @@ pub struct CallbackSubscriber {
     pub is_enabled_callback: IsEnabledCallback,
     pub new_spawn_callback: NewSpawnCallback,
     pub record_callback: RecordCallback,
-    pub record_follows_from_callback: RecordFollowsFromCallback,
     pub event_callback: EventCallback,
     pub enter_callback: EnterCallback,
     pub exit_callback: ExitCallback,
@@ -255,13 +252,14 @@ pub struct CallbackSubscriber {
 unsafe impl Send for CallbackSubscriber {}
 unsafe impl Sync for CallbackSubscriber {}
 
-impl tracing_core::Subscriber for CallbackSubscriber {
-    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+impl Layer<Registry> for CallbackSubscriber {
+
+    fn enabled(&self, metadata: &Metadata<'_>, _ctx: Context<'_, Registry>) -> bool {
         let event_data = EventData::from(metadata);
         unsafe { (self.is_enabled_callback)(self.data, &event_data) }
     }
 
-    fn new_span(&self, span: &Attributes<'_>) -> Id {
+    fn on_new_span(&self, span: &Attributes<'_>, id: &Id, _ctx: Context<'_, Registry>)  {
         let event_data = EventData::from(span.metadata());
         let mut visitor = CollectingVisitor::new();
         span.record(&mut visitor);
@@ -273,7 +271,7 @@ impl tracing_core::Subscriber for CallbackSubscriber {
                 (v.len() as c_int, helpers::to_cstr_ptr_or_null(v.as_str()))
             },
         );
-        Id::from_u64(unsafe {
+        unsafe {
             (self.new_spawn_callback)(
                 self.data,
                 message_ptr,
@@ -284,11 +282,12 @@ impl tracing_core::Subscriber for CallbackSubscriber {
                     kind: ESpanContextKind::Root,
                     parent_id: 0,
                 },
-            )
-        } as u64)
+                id.into_u64() as c_ulonglong,
+            );
+        };
     }
 
-    fn record(&self, span: &Id, values: &Record<'_>) {
+    fn on_record(&self, span: &Id, values: &Record<'_>, _ctx: Context<'_, Registry>) {
         let mut visitor = CollectingVisitor::new();
         values.record(&mut visitor);
         let fields = Fields::from(visitor.key_value_pairs.as_slice());
@@ -310,17 +309,7 @@ impl tracing_core::Subscriber for CallbackSubscriber {
         }
     }
 
-    fn record_follows_from(&self, span: &Id, follows: &Id) {
-        unsafe {
-            (self.record_follows_from_callback)(
-                self.data,
-                span.into_u64() as c_ulonglong,
-                follows.into_u64() as c_ulonglong,
-            )
-        }
-    }
-
-    fn event(&self, event: &Event<'_>) {
+    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, Registry>) {
         let mut visitor = CollectingVisitor::new();
         event.record(&mut visitor);
         let fields = Fields::from(visitor.key_value_pairs.as_slice());
@@ -344,7 +333,7 @@ impl tracing_core::Subscriber for CallbackSubscriber {
         }
     }
 
-    fn enter(&self, span: &Id) {
+    fn on_enter(&self, span: &Id, _ctx: Context<'_, Registry>) {
         unsafe {
             (self.enter_callback)(
                 self.data,
@@ -353,7 +342,7 @@ impl tracing_core::Subscriber for CallbackSubscriber {
         }
     }
 
-    fn exit(&self, span: &Id) {
+    fn on_exit(&self, span: &Id, _ctx: Context<'_, Registry>) {
         unsafe {
             (self.exit_callback)(
                 self.data,
@@ -361,9 +350,6 @@ impl tracing_core::Subscriber for CallbackSubscriber {
             )
         }
     }
-}
-impl Layer<Registry> for CallbackSubscriber {
-
 }
 
 pub struct CollectingVisitor {

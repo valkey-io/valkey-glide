@@ -38,7 +38,7 @@ public sealed class ValkeyAspireFixture : IAsyncLifetime
             throw;
         }
 
-        _ = new LoggingHarness();
+        _ = new StdOutLoggingHarness();
     }
 
     public InterOp.Node Node => new(Host, Port);

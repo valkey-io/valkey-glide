@@ -58,7 +58,6 @@ pub extern "C-unwind" fn csharp_set_logging_hooks(
     is_enabled_callback: logging::IsEnabledCallback,
     new_spawn_callback: logging::NewSpawnCallback,
     record_callback: logging::RecordCallback,
-    record_follows_from_callback: logging::RecordFollowsFromCallback,
     event_callback: logging::EventCallback,
     enter_callback: logging::EnterCallback,
     exit_callback: logging::ExitCallback,
@@ -82,13 +81,18 @@ pub extern "C-unwind" fn csharp_set_logging_hooks(
                 is_enabled_callback,
                 new_spawn_callback,
                 record_callback,
-                record_follows_from_callback,
                 event_callback,
                 enter_callback,
                 exit_callback,
             };
+            let targets_filter = filter::Targets::new()
+                .with_target("glide", LevelFilter::TRACE)
+                .with_target("redis", LevelFilter::TRACE)
+                .with_target("logger_core", LevelFilter::TRACE)
+                .with_target(std::env!("CARGO_PKG_NAME"), LevelFilter::TRACE);
             tracing_subscriber::registry()
                 .with(subscriber)
+                .with(targets_filter)
                 .init();
 
             let reloads: Reloads = Reloads {
