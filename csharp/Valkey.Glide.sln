@@ -61,6 +61,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomSerializers", "sample
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DotNetFrameworkSample", "samples\DotNetFrameworkSample\DotNetFrameworkSample.csproj", "{D1B63FCE-C192-4AAA-B053-9215E38FF676}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomRouting", "samples\CustomRouting\CustomRouting.csproj", "{A900A074-D296-4C6E-9E98-AC4F5C3701AE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,7 @@ Global
 		{3985653A-9E37-4AC6-BBCB-B7A5DDC2744D} = {E5CB13C0-FECB-4CCE-B816-9B4B19CEA41D}
 		{9AB07459-6C4E-4578-8EB5-124BF49CF5ED} = {38BCDD5C-7D83-4EE2-BC43-12B97ED048D8}
 		{D1B63FCE-C192-4AAA-B053-9215E38FF676} = {38BCDD5C-7D83-4EE2-BC43-12B97ED048D8}
+		{A900A074-D296-4C6E-9E98-AC4F5C3701AE} = {38BCDD5C-7D83-4EE2-BC43-12B97ED048D8}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{13C75535-9649-49AB-837F-7A5910309DA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -141,5 +144,9 @@ Global
 		{D1B63FCE-C192-4AAA-B053-9215E38FF676}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D1B63FCE-C192-4AAA-B053-9215E38FF676}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D1B63FCE-C192-4AAA-B053-9215E38FF676}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A900A074-D296-4C6E-9E98-AC4F5C3701AE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A900A074-D296-4C6E-9E98-AC4F5C3701AE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A900A074-D296-4C6E-9E98-AC4F5C3701AE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A900A074-D296-4C6E-9E98-AC4F5C3701AE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
