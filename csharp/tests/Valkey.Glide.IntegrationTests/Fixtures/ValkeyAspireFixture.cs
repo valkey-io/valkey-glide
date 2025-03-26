@@ -37,7 +37,8 @@ public sealed class ValkeyAspireFixture : IAsyncLifetime
             _distributedApplication = null;
             throw;
         }
-        NativeClient.Initialize(ELoggerLevel.Trace);
+
+        _ = new LoggingHarness();
     }
 
     public InterOp.Node Node => new(Host, Port);

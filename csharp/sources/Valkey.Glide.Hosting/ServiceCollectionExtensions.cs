@@ -46,8 +46,10 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to which the Valkey Glide services will be added.</param>
     /// <param name="resourceName">The name of the resource whose connection string is used to configure the connection.</param>
-    /// <param name="nativeLoggerLevel">The log-level of the native component</param>
-    /// <param name="nativeLogFilePath">The file-path to log to for the native component</param>
+    /// <param name="loggingHarness">
+    /// The logging harness implementation to use.
+    /// If no logging harness is passed, the default <see cref="LoggingHarness"/> will be created.
+    /// </param>
     /// <returns>The modified service collection with Valkey Glide services registered.</returns>
     /// <exception cref="InvalidOperationException">
     /// Thrown if the connection string for the specified resource name is not found or if the connection string is invalid.
@@ -55,11 +57,14 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddValkeyGlide(
         this IServiceCollection services,
         string resourceName,
-        ELoggerLevel nativeLoggerLevel = ELoggerLevel.Off,
-        string? nativeLogFilePath = null
+        NativeLoggingHarness? loggingHarness = null
     )
     {
-        NativeClient.Initialize(nativeLoggerLevel, nativeLogFilePath);
+        // Ensure at least one logging harness implementation exists.
+        if (loggingHarness is null)
+        {
+            _ = new LoggingHarness();
+        }
         services.AddSingleton<ConnectionRequest>(
             serviceProvider =>
             {
@@ -85,8 +90,10 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection where the Valkey Glide services will be added.</param>
     /// <param name="configure">An action to configure the connection settings through the <see cref="ConnectionConfigBuilder"/>.</param>
-    /// <param name="nativeLoggerLevel">The log-level of the native component</param>
-    /// <param name="nativeLogFilePath">The file-path to log to for the native component</param>
+    /// <param name="loggingHarness">
+    /// The logging harness implementation to use.
+    /// If no logging harness is passed, the default <see cref="LoggingHarness"/> will be created.
+    /// </param>
     /// <returns>The modified service collection with Valkey Glide services registered.</returns>
     /// <exception cref="ArgumentNullException">
     /// Thrown if the <paramref name="configure"/> parameter is null.
@@ -94,15 +101,13 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddValkeyGlide(
         this IServiceCollection services,
         Action<ConnectionConfigBuilder> configure,
-        ELoggerLevel nativeLoggerLevel = ELoggerLevel.Off,
-        string? nativeLogFilePath = null
+        NativeLoggingHarness? loggingHarness = null
     )
     {
-        NativeClient.Initialize(nativeLoggerLevel, nativeLogFilePath);
-        ConnectionConfigBuilder builder = new ConnectionConfigBuilder();
+        ConnectionConfigBuilder builder = new();
         configure(builder);
         ConnectionRequest config = builder.Build();
-        return AddValkeyGlide(services, config);
+        return AddValkeyGlide(services, config, loggingHarness);
     }
 
     /// <summary>
@@ -110,8 +115,10 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to which the Valkey Glide services will be added.</param>
     /// <param name="connectionRequest">The connection request containing configuration details for establishing the connection.</param>
-    /// <param name="nativeLoggerLevel">The log-level of the native component</param>
-    /// <param name="nativeLogFilePath">The file-path to log to for the native component</param>
+    /// <param name="loggingHarness">
+    /// The logging harness implementation to use.
+    /// If no logging harness is passed, the default <see cref="LoggingHarness"/> will be created.
+    /// </param>
     /// <returns>The modified service collection with Valkey Glide services registered.</returns>
     /// <exception cref="ArgumentNullException">
     /// Thrown if the <paramref name="services"/> or <paramref name="connectionRequest"/> is null.
@@ -119,11 +126,14 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddValkeyGlide(
         this IServiceCollection services,
         ConnectionRequest connectionRequest,
-        ELoggerLevel nativeLoggerLevel = ELoggerLevel.Off,
-        string? nativeLogFilePath = null
+        NativeLoggingHarness? loggingHarness = null
     )
     {
-        NativeClient.Initialize(nativeLoggerLevel, nativeLogFilePath);
+        // Ensure at least one logging harness implementation exists.
+        if (loggingHarness is null)
+        {
+            _ = new LoggingHarness();
+        }
         services.AddSingleton(connectionRequest);
         AddGlideClient(services);
         return services;

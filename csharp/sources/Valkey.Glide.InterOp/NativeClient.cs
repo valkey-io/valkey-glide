@@ -20,8 +20,6 @@ public sealed class NativeClient : IDisposable, INativeClient
     private static readonly CommandCallbackDelegate CommandCallbackDel = CommandCallback;
     private static readonly nint CommandCallbackFptr = Marshal.GetFunctionPointerForDelegate(CommandCallbackDel);
 
-    private static readonly SemaphoreSlim Semaphore = new(1, 1);
-    private static bool s_initialized;
     private nint? _handle;
 
     internal const int SmallStringOptimizationArgs = 20;
@@ -30,8 +28,6 @@ public sealed class NativeClient : IDisposable, INativeClient
 
     public unsafe NativeClient(ConnectionRequest request)
     {
-        if (!s_initialized)
-            throw new InvalidOperationException("API is not initialized");
         request.Validate();
 
         List<nint> strings = [];
@@ -139,40 +135,40 @@ public sealed class NativeClient : IDisposable, INativeClient
                         if (result.error_string is null)
                             throw new ParameterException("Unknown parameter exception");
                         throw new ParameterException(
-                            HandleString(result.error_string) ?? "Unknown parameter exception"
+                            HelperMethods.HandleString(result.error_string) ?? "Unknown parameter exception"
                         );
                     case ECreateClientHandleCode.ThreadCreationError:
                         if (result.error_string is null)
                             throw new ThreadCreationException("Unknown thread creation exception");
                         throw new ThreadCreationException(
-                            HandleString(result.error_string) ?? "Unknown thread creation exception"
+                            HelperMethods.HandleString(result.error_string) ?? "Unknown thread creation exception"
                         );
                     case ECreateClientHandleCode.ConnectionTimedOutError:
                         if (result.error_string is null)
                             throw new ConnectionToTimeOutException("Unknown connection timeout exception");
                         throw new ConnectionToTimeOutException(
-                            HandleString(result.error_string) ?? "Unknown connection timeout exception"
+                            HelperMethods.HandleString(result.error_string) ?? "Unknown connection timeout exception"
                         );
                     case ECreateClientHandleCode.ConnectionToFailedError:
                         if (result.error_string is null)
                             throw new ConnectionToFailedException("Unknown connection to failed exception");
                         throw new ConnectionToFailedException(
-                            HandleString(result.error_string) ?? "Unknown connection to failed exception"
+                            HelperMethods.HandleString(result.error_string) ?? "Unknown connection to failed exception"
                         );
                     case ECreateClientHandleCode.ConnectionToClusterFailed:
                         if (result.error_string is null)
                             throw new ConnectionToClusterException("Unknown connection to cluster exception");
                         throw new ConnectionToClusterException(
-                            HandleString(result.error_string) ?? "Unknown connection to cluster exception"
+                            HelperMethods.HandleString(result.error_string) ?? "Unknown connection to cluster exception"
                         );
                     case ECreateClientHandleCode.ConnectionIoError:
                         if (result.error_string is null)
                             throw new ConnectionIoException("Unknown io exception");
-                        throw new ConnectionIoException(HandleString(result.error_string) ?? "Unknown io exception");
+                        throw new ConnectionIoException(HelperMethods.HandleString(result.error_string) ?? "Unknown io exception");
                     default:
                         if (result.error_string is null)
                             throw new Exception("Unknown error");
-                        throw new Exception(HandleString(result.error_string));
+                        throw new Exception(HelperMethods.HandleString(result.error_string));
                 }
             }
         }
@@ -191,46 +187,6 @@ public sealed class NativeClient : IDisposable, INativeClient
             byte* ptr = MarshalUtf8String(input);
             strings.Add((nint)ptr);
             return ptr;
-        }
-    }
-
-    /// <summary>
-    /// Initializes the API.
-    /// </summary>
-    /// <remarks>
-    /// <list type="bullet">
-    /// <item>This method is safe to be called multiple times but will not have any effect on successive calls.</item>
-    /// <item>This method will lock until it is free. Do not use in a hot path!</item>
-    /// </list>
-    /// </remarks>
-    public static unsafe void Initialize(ELoggerLevel loggerLevel = ELoggerLevel.None, string? logFilePath = null)
-    {
-        Semaphore.Wait();
-        try
-        {
-            if (s_initialized)
-                return;
-            if (logFilePath is not null)
-            {
-                fixed (char* logFilePathPtr = logFilePath)
-                {
-                    InitResult result = Imports.system_init(loggerLevel, (byte*)logFilePathPtr);
-                    if (result.success == 0 /* is false */)
-                        throw new GlideException("Failed to initialize the API.");
-                }
-            }
-            else
-            {
-                InitResult result = Imports.system_init(loggerLevel, null);
-                if (result.success == 0 /* is false */)
-                    throw new GlideException("Failed to initialize the API.");
-            }
-
-            s_initialized = true;
-        }
-        finally
-        {
-            Semaphore.Release();
         }
     }
 
@@ -276,29 +232,6 @@ public sealed class NativeClient : IDisposable, INativeClient
         }
     }
 
-    private static unsafe string? HandleString(byte* resultErrorString, int? length = null, bool free = true)
-    {
-        if (resultErrorString is null)
-            return null;
-        try
-        {
-            int len = length ?? Strlen(resultErrorString);
-            return Encoding.UTF8.GetString(resultErrorString, len);
-        }
-        finally
-        {
-            if (free)
-                Imports.free_string(resultErrorString);
-        }
-    }
-
-    private static unsafe int Strlen(byte* input)
-    {
-        int i = 0;
-        for (; input[i] != 0; i++)
-            ;
-        return i;
-    }
 
     private delegate void CommandCallbackDelegate([In] nint data, [In] int success, [In] Native.Value payload);
 
@@ -422,7 +355,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                 if (result.success != 0 /* is true */)
                     return tcs.Task;
                 else
-                    throw new Exception(HandleString(result.error_string));
+                    throw new Exception(HelperMethods.HandleString(result.error_string));
             }
             finally
             {
@@ -473,7 +406,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                 case Native.EValueKind.Int:
                     return Value.CreateInteger(input.data.i);
                 case Native.EValueKind.BulkString:
-                    return Value.CreateString(HandleString(input.data.ptr, (int)input.length, false));
+                    return Value.CreateString(HelperMethods.HandleString(input.data.ptr, (int)input.length, false));
                 case Native.EValueKind.Array:
                     {
                         Value[] array = new Value[input.length];
@@ -486,7 +419,7 @@ public sealed class NativeClient : IDisposable, INativeClient
                         return Value.CreateArray(array);
                     }
                 case Native.EValueKind.SimpleString:
-                    return Value.CreateString(HandleString(input.data.ptr, (int)input.length, false));
+                    return Value.CreateString(HelperMethods.HandleString(input.data.ptr, (int)input.length, false));
                 case Native.EValueKind.Okay:
                     return Value.CreateOkay();
                 case Native.EValueKind.Map:
@@ -522,8 +455,8 @@ public sealed class NativeClient : IDisposable, INativeClient
                 case Native.EValueKind.VerbatimString:
                     {
                         StringPair* ptr = (StringPair*)input.data.ptr;
-                        string? key = HandleString(ptr->a_start, (int)(ptr->a_end - ptr->a_start), false);
-                        string? value = HandleString(ptr->a_start, (int)(ptr->a_end - ptr->a_start), false);
+                        string? key = HelperMethods.HandleString(ptr->a_start, (int)(ptr->a_end - ptr->a_start), false);
+                        string? value = HelperMethods.HandleString(ptr->a_start, (int)(ptr->a_end - ptr->a_start), false);
 
                         return Value.CreateFormatString(key, value);
                     }

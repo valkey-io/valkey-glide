@@ -43,40 +43,32 @@ public static class Imports
     public static extern unsafe void free_string([In] byte* handle);
 
     /// <summary>
-    /// Initializes essential parts of the system.
-    /// Supposed to be called once only.
+    /// Sets the provided callbacks for logging.
     /// </summary>
-    /// <param name="in_minimal_level">The minimum file log level</param>
-    /// <param name="in_file_name">The file name to log to</param>
     /// <remarks>
-    /// <para>
-    /// <b>Input Safety (in_...)</b>
-    /// The data passed in is considered "caller responsibility".
-    /// Any pointers hence will be left unreleased after leaving.
-    /// </para>
-    /// <para>
-    /// <b>Output Safety (out_... / return ...)</b>
-    /// The data returned is considered "caller responsibility".
-    /// The caller must release any non-null pointers.
-    /// </para>
-    /// <para>
-    /// <b>Reference Safety (ref_...)</b>
-    /// Any reference data is considered "caller owned".
-    /// </para>
-    /// <para>
-    /// <b>Freeing data allocated by the API</b>
-    /// To free data returned by the API, use the corresponding <c>free_...</c> methods of the API.
-    /// It is <i>not optional</i> to call them to free data allocated by the API!
-    /// </para>
+    /// The provided <paramref name="data"/> and callbacks cannot be freed once set!
+    /// Consecutive calls will hence leak!
+    ///
+    /// Always use <see cref="NativeLoggingHarness"/> to access this!
     /// </remarks>
+    /// <seealso cref="NativeLoggingHarness"/>
     [DllImport(
         "glide_rs",
-        EntryPoint = "csharp_system_init",
+        EntryPoint = "csharp_set_logging_hooks",
         CharSet = CharSet.Unicode,
         CallingConvention = CallingConvention.Cdecl,
         SetLastError = false
     )]
-    public static extern unsafe InitResult system_init([In] ELoggerLevel in_minimal_level, [In] byte* in_file_name);
+    internal static extern unsafe bool set_logging_hooks(
+        [In] nint data,
+        [In] nint is_enabled_callback,
+        [In] nint new_spawn_callback,
+        [In] nint record_callback,
+        [In] nint record_follows_from_callback,
+        [In] nint event_callback,
+        [In] nint enter_callback,
+        [In] nint exit_callback
+    );
 
 
     /// <summary>

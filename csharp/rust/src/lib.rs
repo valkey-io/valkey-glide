@@ -6,6 +6,8 @@ mod apihandle;
 mod buffering;
 mod data;
 mod helpers;
+mod logging;
+mod routing;
 
 use crate::apihandle::Handle;
 use crate::buffering::FFIBuffer;
@@ -17,7 +19,13 @@ use std::os::raw::c_char;
 use std::panic::catch_unwind;
 use std::ptr::null;
 use std::str::FromStr;
+use std::sync::RwLock;
+use logger_core::{create_directory_from_env, LazyRollingFileAppender, Reloads, INITIATE_ONCE};
 use tokio::runtime::Builder;
+use tracing_core::LevelFilter;
+use tracing_subscriber::{filter, reload, Layer};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 /// # Summary
 /// Special method to free the returned values.
@@ -39,82 +47,58 @@ pub unsafe extern "C-unwind" fn csharp_free_string(input: *const c_char) {
 }
 
 /// # Summary
-/// Initializes essential parts of the system.
-/// Supposed to be called once only.
+/// Sets the provided callbacks for logging.
 ///
-/// # Parameters
-/// - ***in_minimal_level*** The minimum file log level
-/// - ***in_file_name*** The file name to log to
-///
-/// # Input Safety (in_...)
-/// The data passed in is considered "caller responsibility".
-/// Any pointers hence will be left unreleased after leaving.
-///
-/// # Output Safety (out_... / return ...)
-/// The data returned is considered "caller responsibility".
-/// The caller must release any non-null pointers.
-///
-/// # Reference Safety (ref_...)
-/// Any reference data is considered "caller owned".
-///
-/// # Freeing data allocated by the API
-/// To free data returned by the API, use the corresponding `free_...` methods of the API.
-/// It is **not optional** to call them to free data allocated by the API!
+/// # Remarks
+/// The provided data and callbacks cannot be freed once set!
+/// Consecutive calls will hence leak!
 #[no_mangle]
-pub extern "C-unwind" fn csharp_system_init(
-    in_minimal_level: ELoggerLevel,
-    in_file_name: *const c_char,
-) -> InitResult {
-    logger_core::log_trace("csharp_ffi", "Entered csharp_system_init");
-    // ToDo: Rebuild into having a log-callback so that we can manage logging at the dotnet side
-    let file_name = match helpers::grab_str(in_file_name) {
-        Ok(d) => d,
-        Err(_) => {
-            return InitResult {
-                logger_level: ELoggerLevel::Off,
-                success: false as c_int,
-            }
-        }
-    };
-    let logger_level = match file_name {
-        None => logger_core::init(
-            match in_minimal_level {
-                ELoggerLevel::Error => Some(logger_core::Level::Error),
-                ELoggerLevel::Warn => Some(logger_core::Level::Warn),
-                ELoggerLevel::Info => Some(logger_core::Level::Info),
-                ELoggerLevel::Debug => Some(logger_core::Level::Debug),
-                ELoggerLevel::Trace => Some(logger_core::Level::Trace),
-                ELoggerLevel::Off => Some(logger_core::Level::Off),
-                ELoggerLevel::None => None,
-            },
-            None,
-        ),
-        Some(file_name) => logger_core::init(
-            match in_minimal_level {
-                ELoggerLevel::Error => Some(logger_core::Level::Error),
-                ELoggerLevel::Warn => Some(logger_core::Level::Warn),
-                ELoggerLevel::Info => Some(logger_core::Level::Info),
-                ELoggerLevel::Debug => Some(logger_core::Level::Debug),
-                ELoggerLevel::Trace => Some(logger_core::Level::Trace),
-                ELoggerLevel::Off => Some(logger_core::Level::Off),
-                ELoggerLevel::None => None,
-            },
-            Some(file_name.as_str()),
-        ),
+pub extern "C-unwind" fn csharp_set_logging_hooks(
+    data: *mut c_void,
+    is_enabled_callback: logging::IsEnabledCallback,
+    new_spawn_callback: logging::NewSpawnCallback,
+    record_callback: logging::RecordCallback,
+    record_follows_from_callback: logging::RecordFollowsFromCallback,
+    event_callback: logging::EventCallback,
+    enter_callback: logging::EnterCallback,
+    exit_callback: logging::ExitCallback,
+) {
+    if INITIATE_ONCE.init_once.get().is_none() {
+        INITIATE_ONCE.init_once.get_or_init(|| {
+            // ToDo: Rework result so this hacky way of shutting up things is no longer necessary
+
+            let stdout_fmt = tracing_subscriber::fmt::layer()
+                .with_filter(LevelFilter::OFF);
+            let file_appender = LazyRollingFileAppender::stfu();
+            let file_fmt = tracing_subscriber::fmt::layer()
+                .with_writer(file_appender)
+                .with_filter(LevelFilter::OFF);
+
+            let (_, stdout_reload) = reload::Layer::new(stdout_fmt);
+            let (_, file_reload) = reload::Layer::new(file_fmt);
+
+            let subscriber = logging::CallbackSubscriber {
+                data,
+                is_enabled_callback,
+                new_spawn_callback,
+                record_callback,
+                record_follows_from_callback,
+                event_callback,
+                enter_callback,
+                exit_callback,
+            };
+            tracing_subscriber::registry()
+                .with(subscriber)
+                .init();
+
+            let reloads: Reloads = Reloads {
+                console_reload: RwLock::new(stdout_reload),
+                file_reload: RwLock::new(file_reload),
+            };
+            reloads
+        });
     };
 
-    logger_core::log_trace("csharp_ffi", "Exiting csharp_system_init");
-    InitResult {
-        success: true as c_int,
-        logger_level: match logger_level {
-            logger_core::Level::Error => ELoggerLevel::Error,
-            logger_core::Level::Warn => ELoggerLevel::Warn,
-            logger_core::Level::Info => ELoggerLevel::Info,
-            logger_core::Level::Debug => ELoggerLevel::Debug,
-            logger_core::Level::Trace => ELoggerLevel::Trace,
-            logger_core::Level::Off => ELoggerLevel::Off,
-        },
-    }
 }
 
 /// # Summary
@@ -280,7 +264,7 @@ pub extern "C-unwind" fn csharp_command(
     in_callback: CommandCallback,
     in_callback_data: *mut c_void,
     in_request_type: RequestType,
-    in_routing_info: *const data::routing::RoutingInfo,
+    in_routing_info: *const routing::RoutingInfo,
     // ToDo: Rework into parameter struct (understand how Command.arg(...) works first)
     //       handling the different input types.
     in_args: *const *const c_char,
