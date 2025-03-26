@@ -5539,6 +5539,39 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 	return handleIntResponse(result)
 }
 
+// Perform a bitwise operation between multiple keys (containing string values) and store the result in the destination.
+//
+// Note:
+//
+// When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+//
+// Parameters:
+//
+//	bitwiseOperation - The bitwise operation to perform.
+//	destination      - The key that will store the resulting string.
+//	keys             - The list of keys to perform the bitwise operation on.
+//
+// Return value:
+//
+//	The size of the string stored in destination.
+//
+// [valkey.io]: https://valkey.io/commands/bitop/
+func (client *baseClient) BitOp(bitwiseOperation options.BitOpType, destination string, keys []string) (int64, error) {
+	bitOp, err := options.NewBitOp(bitwiseOperation, destination, keys)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args, err := bitOp.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	result, err := client.executeCommand(C.BitOp, args)
+	if err != nil {
+		return defaultIntResponse, &errors.RequestError{Msg: "Bitop command execution failed"}
+	}
+	return handleIntResponse(result)
+}
+
 // Counts the number of set bits (population counting) in a string stored at key. The
 // offsets start and end are zero-based indexes, with `0` being the first element of the
 // list, `1` being the next element and so on. These offsets can also be negative numbers
