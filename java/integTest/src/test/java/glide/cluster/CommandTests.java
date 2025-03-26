@@ -53,6 +53,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
 import glide.api.GlideClusterClient;
+import glide.api.logging.Logger;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
@@ -76,6 +77,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.ProtocolVersion;
+import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -97,6 +99,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -173,6 +177,31 @@ public class CommandTests {
                                                 commonClusterClientConfig()
                                                         .requestTimeout(7000)
                                                         .protocol(ProtocolVersion.RESP3)
+                                                        .build())
+                                        .get())));
+    }
+
+    @SneakyThrows
+    public static Stream<Arguments> getReadFromReplicaClients() {
+        return Stream.of(
+                Arguments.of(
+                        named(
+                                "RESP2",
+                                GlideClusterClient.createClient(
+                                                commonClusterClientConfig()
+                                                        .requestTimeout(7000)
+                                                        .protocol(ProtocolVersion.RESP2)
+                                                        .readFrom(ReadFrom.PREFER_REPLICA)
+                                                        .build())
+                                        .get())),
+                Arguments.of(
+                        named(
+                                "RESP3",
+                                GlideClusterClient.createClient(
+                                                commonClusterClientConfig()
+                                                        .requestTimeout(7000)
+                                                        .protocol(ProtocolVersion.RESP3)
+                                                        .readFrom(ReadFrom.PREFER_REPLICA)
                                                         .build())
                                         .get())));
     }
@@ -1725,13 +1754,16 @@ public class CommandTests {
     //    @RepeatedTest(500)
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getReadFromReplicaClients")
     public void fcall_readonly_function(GlideClusterClient clusterClient) {
         //        GlideClusterClient clusterClient =
         // GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+        Logger.setLoggerConfig(Logger.Level.DEBUG);
+
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "fcall_readonly_function_" + UUID.randomUUID().toString().replace("-", "_");
+
         // intentionally using a REPLICA route
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
@@ -1744,37 +1776,130 @@ public class CommandTests {
 
         // Let replica sync with the primary node. We call the wait a few times to allow for wait to
         // become 1L and hopefully pass the functionLoad.
-        int retries = 5;
-        long result = 0;
-        ExecutionException executionException = null;
+        //        int retries = 5;
+        //        long result = 0;
+        //        ExecutionException executionException = null;
+        //
+        //        while (retries > 0) {
+        //            System.out.println("We are on retry " + retries);
+        //            result = clusterClient.wait(1L, 5000L).get();
+        //            if (result == 1L) {
+        //                try {
+        //                    System.out.println("We are going to fcall again with " + foundFuncName);
+        //
+        //                    ClusterValue<String> data =
+        //                            clusterClient.info(new Section[] {REPLICATION},
+        // primaryRoute).get();
+        //                    String replicationInfo = data.getSingleValue();
+        //                    System.out.println("The single value is: " + replicationInfo);
+        //
+        //                    if (replicationInfo.contains("role:master")) {
+        //                        String ip = "";
+        //                        int port = 0;
+        //                        System.out.println("Contains role master");
+        //                        // Extract the port using regex or string parsing
+        //                        Pattern ipPattern =
+        // Pattern.compile("slave0:.*?ip=(\\d+\\.\\d+\\.\\d+\\.\\d+)");
+        //                        Pattern portPattern = Pattern.compile("slave0:.*?port=(\\d+)");
+        //                        Matcher ipMatcher = ipPattern.matcher(replicationInfo);
+        //                        Matcher portMatcher = portPattern.matcher(replicationInfo);
+        //
+        //                        if (ipMatcher.find()) {
+        //                            ip = ipMatcher.group(1);
+        //                            // Use the IP address as needed
+        //                            System.out.println("setting the ip to: " + ip);
+        //                        }
+        //
+        //                        if (portMatcher.find()) {
+        //                            port = Integer.parseInt(portMatcher.group(1));
+        //                            // Use the port value as needed
+        //                            System.out.println("setting the port to: " + port);
+        //                        }
+        //
+        //                        replicaRoute = new ByAddressRoute(ip, port);
+        //                    }
+        //
+        //                    ClusterValue<String> multiData = clusterClient.info(new Section[]
+        // {REPLICATION}).get();
+        //
+        //                    System.out.println("The multivalue is: ");
+        //                    for (String value : multiData.getMultiValue().values()) {
+        //                        System.out.println(value);
+        //                    }
+        //
+        //                    clusterClient.fcall(foundFuncName, replicaRoute).get();
+        //                } catch (ExecutionException e) {
+        //                    executionException = e;
+        //                    if (e.getMessage().contains("You can't write against a read only
+        // replica.")) {
+        //                        break;
+        //                    }
+        //
+        //                    // If the error is not a RequestException about a library name that
+        // already exists
+        //                    if (!(e.getCause() instanceof RequestException
+        //                            && e.getMessage().contains("already exists"))) {
+        //                        assertInstanceOf(RequestException.class, e.getCause());
+        //                    }
+        //                }
+        //                // If it doesn't throw an error, or throws a wrong error, retry functionLoad
+        // and run again
+        //                foundFuncName = foundFuncName + "_retry_" + retries;
+        //                // We have to clean up
+        //                clusterClient.functionDelete(libName).get();
+        //                code = generateLuaLibCode(libName, Map.of(foundFuncName, "return 42"), false);
+        //                assertEquals(libName, clusterClient.functionLoad(code, false).get());
+        //            }
+        //            retries -= 1;
+        //        }
 
+        int retries = 3;
+        long result = 0;
         while (retries > 0) {
-            System.out.println("We are on retry " + retries);
             result = clusterClient.wait(1L, 5000L).get();
             if (result == 1L) {
-                try {
-                    System.out.println("We are going to fcall with " + foundFuncName);
-                    clusterClient.fcall(foundFuncName, replicaRoute).get();
-                    // If it doesn't throw an error, retry functionLoad and run again
-                    foundFuncName = foundFuncName + "_retry_" + retries;
-                    code = generateLuaLibCode(libName, Map.of(foundFuncName, "return 42"), false);
-                    assertEquals(libName, clusterClient.functionLoad(code, false).get());
-                } catch (ExecutionException e) {
-                    executionException = e;
-                    if (e.getMessage().contains("You can't write against a read only replica.")) {
-                        break;
-                    }
-                }
+                break;
             }
             retries -= 1;
         }
         assertEquals(1L, result);
 
-        String funcName = foundFuncName;
+        // Quick check to ensure we are using a replica node
+        ClusterValue<String> data = clusterClient.info(new Section[] {REPLICATION}, replicaRoute).get();
+        String replicationInfo = data.getSingleValue();
+        System.out.println("The single value is: " + replicationInfo);
 
-        System.out.println("Checking executionException");
+        if (replicationInfo.contains("role:master")) {
+            String ip = "";
+            int port = 0;
+            System.out.println("Contains role master");
+            // Extract the port using regex or string parsing
+            Pattern portPattern = Pattern.compile("slave0:.*?port=(\\d+)");
+            Matcher portMatcher = portPattern.matcher(replicationInfo);
+
+            // Get substring for IP
+            int ipStart = replicationInfo.indexOf("ip=") + 3;
+            int ipEnd = replicationInfo.indexOf(",", ipStart);
+            if (ipStart > 3 && ipEnd > ipStart) {
+                ip = replicationInfo.substring(ipStart, ipEnd);
+                System.out.println("setting the ip to: " + ip);
+            }
+
+            if (portMatcher.find()) {
+                port = Integer.parseInt(portMatcher.group(1));
+                System.out.println("setting the port to: " + port);
+            }
+
+            replicaRoute = new ByAddressRoute(ip, port);
+        }
+
+        String funcName = libName;
+        Route finalReplicaRoute = replicaRoute;
+
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
-        assertNotNull(executionException);
+        var executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.fcall(funcName, finalReplicaRoute).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("You can't write against a read only replica."));
@@ -1785,7 +1910,7 @@ public class CommandTests {
         executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> clusterClient.fcallReadOnly(funcName, replicaRoute).get());
+                        () -> clusterClient.fcallReadOnly(funcName, finalReplicaRoute).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("You can't write against a read only replica."));
@@ -1838,6 +1963,8 @@ public class CommandTests {
         System.out.println("Calling function delete");
         assertEquals(OK, clusterClient.functionDelete(libName).get());
         System.out.println("Finished calling function delete");
+
+        Logger.setLoggerConfig(Logger.Level.WARN);
     }
 
     @SneakyThrows

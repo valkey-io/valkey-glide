@@ -116,13 +116,17 @@ jobs:
               if: ${{ matrix.host.OS == 'ubuntu' || matrix.host.OS == 'amazon-linux'}}
               working-directory: java
               run: |
+                  sudo tcpdump -i lo -w fcall.pcap tcp port '(7001 or 7002 or 7003 or 7004 or 7005 or 7006)' &
                   ./gradlew --continue build -x javadoc
+                  sudo pkill tcpdump
 
             - name: Build java client (mac)
               if: ${{ matrix.host.OS == 'macos' }}
               working-directory: java
               run: |
+                  sudo tcpdump -i lo0 -w fcall.pcap tcp port '(7001 or 7002 or 7003 or 7004 or 7005 or 7006)' &
                   ./gradlew --continue build -x javadoc
+                  sudo pkill tcpdump
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -140,6 +144,7 @@ jobs:
               with:
                   name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
+                      java/fcall.pcap
                       java/client/build/reports/**
                       java/integTest/build/reports/**
                       utils/clusters/**
