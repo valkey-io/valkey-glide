@@ -820,3 +820,11 @@ func (suite *GlideTestSuite) TestClientId() {
 	assert.Nil(suite.T(), err)
 	assert.Greater(suite.T(), result, int64(0))
 }
+
+func (suite *GlideTestSuite) TestLastSave() {
+	client := suite.defaultClient()
+	t := suite.T()
+	result, err := client.LastSave()
+	assert.Nil(t, err)
+	assert.Greater(t, result, int64(0))
+}
