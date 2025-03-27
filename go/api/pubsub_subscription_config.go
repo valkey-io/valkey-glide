@@ -202,10 +202,3 @@ func (config *ClusterSubscriptionConfig) WithSubscription(
 func (config *ClusterSubscriptionConfig) Validate() error {
 	return config.BaseSubscriptionConfig.Validate()
 }
-
-// Helper function to create a resolver for PubSub push messages
-func createPushResponseResolver() ResponseResolver {
-	return func(response any) (any, error) {
-		return response, nil
-	}
-}
