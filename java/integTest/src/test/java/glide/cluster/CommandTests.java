@@ -1739,7 +1739,7 @@ public class CommandTests {
         String foundFuncName = libName;
 
         // function $funcName returns a magic number
-        String code = generateLuaLibCode(libName, Map.of(foundFuncName, "return 42"), false);
+        String code = generateLuaLibCode(libName, Map.of(foundFuncName, "redis.call('SET', KEYS[1], 'value')"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
