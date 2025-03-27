@@ -1733,13 +1733,6 @@ public class CommandTests {
 
         String libName = "fcall_readonly_function_" + UUID.randomUUID().toString().replace("-", "_");
 
-        // Start clean
-        try {
-            clusterClient.functionDelete(libName).get();
-        } catch (ExecutionException err) {
-            // ignore
-        }
-
         // intentionally using a REPLICA route
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
@@ -1777,6 +1770,8 @@ public class CommandTests {
                 }
                 // If it doesn't throw an error, or throws a wrong error, retry functionLoad and run again
                 foundFuncName = foundFuncName + "_retry_" + retries;
+                // We have to clean up
+                clusterClient.functionDelete(libName).get();
                 code = generateLuaLibCode(libName, Map.of(foundFuncName, "return 42"), false);
                 assertEquals(libName, clusterClient.functionLoad(code, false).get());
             }
