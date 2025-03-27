@@ -1760,7 +1760,7 @@ public class CommandTests {
                 try {
                     System.out.println("We are going to fcall with " + foundFuncName);
                     clusterClient
-                            .fcall(foundFuncName, new String[] {"{key}1"}, new String[] {"val"}, replicaRoute)
+                            .fcall(foundFuncName, new String[] {"1"}, new String[] {"{key}1"}, replicaRoute)
                             .get();
                 } catch (ExecutionException e) {
                     executionException = e;
