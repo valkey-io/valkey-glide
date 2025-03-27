@@ -1759,7 +1759,9 @@ public class CommandTests {
             if (result == 1L) {
                 try {
                     System.out.println("We are going to fcall with " + foundFuncName);
-                    clusterClient.fcall(foundFuncName, replicaRoute).get();
+                    clusterClient
+                            .fcall(foundFuncName, new String[] {"{key}1"}, new String[] {"val"}, replicaRoute)
+                            .get();
                 } catch (ExecutionException e) {
                     executionException = e;
                     if (e.getMessage().contains("You can't write against a read only replica.")) {
