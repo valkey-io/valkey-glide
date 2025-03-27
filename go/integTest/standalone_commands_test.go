@@ -814,6 +814,13 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
 	assert.Contains(suite.T(), res, "Redis ver.")
 }
 
+func (suite *GlideTestSuite) TestClientId() {
+	client := suite.defaultClient()
+	result, err := client.ClientId()
+	assert.Nil(suite.T(), err)
+	assert.Greater(suite.T(), result, int64(0))
+}
+
 func (suite *GlideTestSuite) TestLastSave() {
 	client := suite.defaultClient()
 	t := suite.T()

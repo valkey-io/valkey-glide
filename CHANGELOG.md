@@ -28,6 +28,7 @@
 * Go/Core: Move FFI to a dedicated folder for reusability ([#3372](https://github.com/valkey-io/valkey-glide/pull/3372))
 * Go: Add `GeoPos` ([#3409](https://github.com/valkey-io/valkey-glide/pull/3409))
 * Go: Add `GeoDist` ([#3446](https://github.com/valkey-io/valkey-glide/pull/3446))
+* Go: Add `ClientId` ([#3077](https://github.com/valkey-io/valkey-glide/pull/3077))
 * Go: Add `LastSave` ([#3086](https://github.com/valkey-io/valkey-glide/pull/3086))
 
 #### Breaking Changes
