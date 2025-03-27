@@ -1760,6 +1760,10 @@ public class CommandTests {
                     if (e.getMessage().contains("You can't write against a read only replica.")) {
                         break;
                     }
+                } catch (RequestException e) {
+                    if (!e.getMessage().contains("already exists")) {
+                        throw e;
+                    }
                 }
                 // If it doesn't throw an error, or throws a wrong error, retry functionLoad and run again
                 foundFuncName = foundFuncName + "_retry_" + retries;
