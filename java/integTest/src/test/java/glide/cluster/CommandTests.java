@@ -1739,7 +1739,11 @@ public class CommandTests {
         String foundFuncName = libName;
 
         // function $funcName returns a magic number
-        String code = generateLuaLibCode(libName, Map.of(foundFuncName, "redis.call('SET', KEYS[1], 'value')"), false);
+        String code =
+                generateLuaLibCode(
+                        libName, Map.of(foundFuncName, "redis.call('SET', 'keys[1]', 'value')"), false);
+
+        System.out.println(code);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
@@ -1772,7 +1776,9 @@ public class CommandTests {
                 foundFuncName = foundFuncName + "_retry_" + retries;
                 // We have to clean up
                 clusterClient.functionDelete(libName).get();
-                code = generateLuaLibCode(libName, Map.of(foundFuncName, "return 42"), false);
+                code =
+                        generateLuaLibCode(
+                                libName, Map.of(foundFuncName, "redis.call('SET', '{key}1', 'value')"), false);
                 assertEquals(libName, clusterClient.functionLoad(code, false).get());
             }
             retries -= 1;
