@@ -525,7 +525,7 @@ impl Client {
                     Some(ResponsePolicy::AllSucceeded),
                 ));
                 let mut cmd = redis::cmd("AUTH");
-                if let Ok(Some(username)) = self.get_username().await {
+                if let Some(username) = self.get_username().await? {
                     cmd.arg(username);
                 }
                 cmd.arg(password);
@@ -540,7 +540,11 @@ impl Client {
             ClientWrapper::Cluster { client } => match client.get_username().await {
                 Ok(Value::SimpleString(username)) => Ok(Some(username)),
                 Ok(Value::Nil) => Ok(None),
-                Ok(other) => unreachable!("Expected SimpleString or Nil, got: {:?}", other),
+                Ok(other) => Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Unexpected type",
+                    format!("Expected SimpleString or Nil, got: {other:?}"),
+                ))),
                 Err(e) => Err(RedisError::from((
                     ErrorKind::ResponseError,
                     "Error getting username",
