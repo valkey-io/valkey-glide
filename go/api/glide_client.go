@@ -360,7 +360,7 @@ func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string,
 //	A random existing key name from the currently selected database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
-func (client *GlideClient) RandomKey() (Result[string],, error) {
+func (client *GlideClient) RandomKey() (Result[string], error) {
 	result, err := client.executeCommand(C.RandomKey, []string{})
 	if err != nil {
 		return CreateNilStringResult(), err
