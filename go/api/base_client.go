@@ -5512,6 +5512,39 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 	return handleIntResponse(result)
 }
 
+// Perform a bitwise operation between multiple keys (containing string values) and store the result in the destination.
+//
+// Note:
+//
+// When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+//
+// Parameters:
+//
+//	bitwiseOperation - The bitwise operation to perform.
+//	destination      - The key that will store the resulting string.
+//	keys             - The list of keys to perform the bitwise operation on.
+//
+// Return value:
+//
+//	The size of the string stored in destination.
+//
+// [valkey.io]: https://valkey.io/commands/bitop/
+func (client *baseClient) BitOp(bitwiseOperation options.BitOpType, destination string, keys []string) (int64, error) {
+	bitOp, err := options.NewBitOp(bitwiseOperation, destination, keys)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args, err := bitOp.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	result, err := client.executeCommand(C.BitOp, args)
+	if err != nil {
+		return defaultIntResponse, &errors.RequestError{Msg: "Bitop command execution failed"}
+	}
+	return handleIntResponse(result)
+}
+
 // Counts the number of set bits (population counting) in a string stored at key. The
 // offsets start and end are zero-based indexes, with `0` being the first element of the
 // list, `1` being the next element and so on. These offsets can also be negative numbers
@@ -5678,6 +5711,54 @@ func (client *baseClient) XClaimJustIdWithOptions(
 		return nil, err
 	}
 	return handleStringArrayResponse(result)
+}
+
+// Returns the position of the first bit matching the given bit value.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	bit - The bit value to match. The value must be 0 or 1.
+//
+// Return value:
+//
+//	The position of the first occurrence matching bit in the binary value of
+//	the string held at key. If bit is not found, a -1 is returned.
+//
+// [valkey.io]: https://valkey.io/commands/bitpos/
+func (client *baseClient) BitPos(key string, bit int64) (int64, error) {
+	result, err := client.executeCommand(C.BitPos, []string{key, utils.IntToString(bit)})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns the position of the first bit matching the given bit value.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	bit - The bit value to match. The value must be 0 or 1.
+//	bitposOptions  - The [BitPosOptions] type.
+//
+// Return value:
+//
+//	The position of the first occurrence matching bit in the binary value of
+//	the string held at key. If bit is not found, a -1 is returned.
+//
+// [valkey.io]: https://valkey.io/commands/bitpos/
+func (client *baseClient) BitPosWithOptions(key string, bit int64, bitposOptions options.BitPosOptions) (int64, error) {
+	optionArgs, err := bitposOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	commandArgs := append([]string{key, utils.IntToString(bit)}, optionArgs...)
+	result, err := client.executeCommand(C.BitPos, commandArgs)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
 }
 
 // Copies the value stored at the source to the destination key if the
