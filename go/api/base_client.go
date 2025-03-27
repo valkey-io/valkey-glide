@@ -6841,7 +6841,7 @@ func (client *baseClient) GeoDistWithUnit(
 // Return value:
 //
 //	An array of [options.Location] containing the following information:
-//	 - The coordinates as a two item `array` of `float64`.
+//	 - The coordinates as a [options.GeospatialData] object.
 //	 - The member (location) name.
 //	 - The distance from the center as a `float64`, in the same unit specified for
 //	   `searchByShape`.
@@ -6963,7 +6963,7 @@ func (client *baseClient) GeoSearchWithResultOptions(
 // Return value:
 //
 //	An array of [options.Location] containing the following information:
-//	 - The coordinates as a two item `array` of `float64`.
+//	 - The coordinates as a [options.GeospatialData] object.
 //	 - The member (location) name.
 //	 - The distance from the center as a `float64`, in the same unit specified for
 //	   `searchByShape`.
