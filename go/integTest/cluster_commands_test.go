@@ -1196,3 +1196,20 @@ func (suite *GlideTestSuite) TestClientIdWithOptionsCluster() {
 	assert.NoError(t, err)
 	assert.True(t, response.IsMultiValue())
 }
+
+func (suite *GlideTestSuite) TestLastSaveCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	response, err := client.LastSave()
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestLastSaveWithOptionCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	opts := options.RouteOption{Route: nil}
+	response, err := client.LastSaveWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
