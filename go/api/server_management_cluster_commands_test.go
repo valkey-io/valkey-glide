@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -189,6 +190,33 @@ func ExampleGlideClusterClient_LolwutWithOptions() {
 		fmt.Println("LOLWUT pattern generated successfully")
 	}
 	// Output: LOLWUT pattern generated successfully
+}
+
+func ExampleGlideClusterClient_LastSave() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	key := "key-" + uuid.NewString()
+	client.Set(key, "hello")
+	result, err := client.LastSave()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.IsSingleValue())
+
+	// Output: true
+}
+
+func ExampleGlideClusterClient_LastSaveWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	opts := options.RouteOption{Route: nil}
+	key := "key-" + uuid.NewString()
+	client.Set(key, "hello")
+	result, err := client.LastSaveWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.IsSingleValue())
+
+	// Output: true
 }
 
 func ExampleGlideClusterClient_ConfigResetStat() {
