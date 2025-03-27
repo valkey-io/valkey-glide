@@ -1732,6 +1732,14 @@ public class CommandTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "fcall_readonly_function_" + UUID.randomUUID().toString().replace("-", "_");
+
+        // Start clean
+        try {
+            clusterClient.functionDelete(libName).get();
+        } catch (ExecutionException err) {
+            // ignore
+        }
+
         // intentionally using a REPLICA route
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
@@ -1760,9 +1768,11 @@ public class CommandTests {
                     if (e.getMessage().contains("You can't write against a read only replica.")) {
                         break;
                     }
-                } catch (RequestException e) {
-                    if (!e.getMessage().contains("already exists")) {
-                        throw e;
+
+                    // If the error is not a RequestException about a library name that already exists
+                    if (!(e.getCause() instanceof RequestException
+                            && e.getMessage().contains("already exists"))) {
+                        assertInstanceOf(RequestException.class, e.getCause());
                     }
                 }
                 // If it doesn't throw an error, or throws a wrong error, retry functionLoad and run again
