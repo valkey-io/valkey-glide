@@ -833,3 +833,12 @@ func (suite *GlideTestSuite) TestConfigResetStat() {
 	client := suite.defaultClient()
 	suite.verifyOK(client.ConfigResetStat())
 }
+
+func (suite *GlideTestSuite) TestRandomKey() {
+	client := suite.defaultClient()
+	// Test 1: Check if Echo command return the message
+	t := suite.T()
+	result, err := client.RandomKey()
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+}

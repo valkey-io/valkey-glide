@@ -747,3 +747,40 @@ func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteO
 	}
 	return handleStringResponse(response)
 }
+
+// Returns a random key.
+//
+// Return value:
+//
+//	A random key from the database.
+//
+// [valkey.io]: https://valkey.io/commands/randomkey/
+func (client *GlideClusterClient) RandomKey() (string, error) {
+	result, err := client.executeCommand(C.RandomKey, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Returns a random key.
+//
+// Parameters:
+//
+//	 opts - specifies the routing configuration for the command.
+//
+//		 The client will route the command to the nodes defined by route,
+//		 and will return the first successful result.
+//
+// Return value:
+//
+//	A random key from the database.
+//
+// [valkey.io]: https://valkey.io/commands/randomkey/
+func (client *GlideClusterClient) RandomKeyWithRoute(opts options.RouteOption) (Result[string], error) {
+	result, err := client.executeCommandWithRoute(C.RandomKey, []string{}, opts.Route)
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
