@@ -6751,7 +6751,7 @@ func (client *baseClient) GeoDistWithUnit(
 //		- `MemberOrigin` to use the position of the given existing member in the sorted
 //	          set.
 //		- `CoordOrigin` to use the given longitude and latitude coordinates.
-//	searchBy - The query's shape options:
+//	searchByShape - The query's shape options:
 //		- `BYRADIUS` to search inside circular area according to given radius.
 //		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
 //	resultOptions - Optional inputs for sorting/limiting the results.
@@ -6763,7 +6763,7 @@ func (client *baseClient) GeoDistWithUnit(
 //	 - The coordinates as a two item `array` of `float64`.
 //	 - The member (location) name.
 //	 - The distance from the center as a `float64`, in the same unit specified for
-//	   `searchBy`.
+//	   `searchByShape`.
 //	 - The geohash of the location as a `int64`.
 //
 // [valkey.io]: https://valkey.io/commands/geosearch/
@@ -6818,10 +6818,10 @@ func (client *baseClient) GeoSearchWithFullOptions(
 //		- `MemberOrigin` to use the position of the given existing member in the sorted
 //	         set.
 //		- `CoordOrigin` to use the given longitude and latitude coordinates.
-//	searchBy - The query's shape options:
+//	searchByShape - The query's shape options:
 //		- `BYRADIUS` to search inside circular area according to given radius.
 //		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
-//	geoSearchResultOptions - Optional inputs for sorting/limiting the results.
+//	resultOptions - Optional inputs for sorting/limiting the results.
 //
 // Return value:
 //
@@ -6874,10 +6874,10 @@ func (client *baseClient) GeoSearchWithResultOptions(
 //		- `MemberOrigin` to use the position of the given existing member in the sorted
 //	         set.
 //		- `CoordOrigin` to use the given longitude and latitude coordinates.
-//	searchBy - The query's shape options:
+//	searchByShape - The query's shape options:
 //		- `BYRADIUS` to search inside circular area according to given radius.
 //		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
-//	geoSearchOptions - The optional inputs to request additional information.
+//	infoOptions - The optional inputs to request additional information.
 //
 // Return value:
 //
@@ -6885,7 +6885,7 @@ func (client *baseClient) GeoSearchWithResultOptions(
 //	 - The coordinates as a two item `array` of `float64`.
 //	 - The member (location) name.
 //	 - The distance from the center as a `float64`, in the same unit specified for
-//	   `searchBy`.
+//	   `searchByShape`.
 //	 - The geohash of the location as a `int64`.
 //
 // [valkey.io]: https://valkey.io/commands/geosearch/
@@ -6920,7 +6920,7 @@ func (client *baseClient) GeoSearchWithInfoOptions(
 //		- `MemberOrigin` to use the position of the given existing member in the sorted
 //	         set.
 //		- `CoordOrigin` to use the given longitude and latitude coordinates.
-//	searchBy - The query's shape options:
+//	searchByShape - The query's shape options:
 //		- `BYRADIUS` to search inside circular area according to given radius.
 //		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
 //
@@ -6951,7 +6951,7 @@ func (client *baseClient) GeoSearch(
 //
 //	Valkey 6.2.0 and above.
 //
-// Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
 //
 // See [valkey.io] for more details.
 //
@@ -6963,7 +6963,7 @@ func (client *baseClient) GeoSearch(
 //		 - `MemberOrigin` to use the position of the given existing member in the sorted
 //	          set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//	searchBy - The query's shape options:
+//	searchByShape - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
 //		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
 //	resultOptions - Optional inputs for sorting/limiting the results.
@@ -6980,7 +6980,7 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 	searchFrom options.GeoSearchOrigin,
 	searchByShape options.GeoSearchShape,
 	resultOptions options.GeoSearchResultOptions,
-	storeInfoOptions options.GeoSearchStoreInfoOptions,
+	infoOptions options.GeoSearchStoreInfoOptions,
 ) (int64, error) {
 	args := []string{destinationKey, sourceKey}
 	searchFromArgs, err := searchFrom.ToArgs()
@@ -6998,11 +6998,11 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 		return defaultIntResponse, err
 	}
 	args = append(args, resultOptionsArgs...)
-	storeInfoOptionsArgs, err := storeInfoOptions.ToArgs()
+	infoOptionsArgs, err := infoOptions.ToArgs()
 	if err != nil {
 		return defaultIntResponse, err
 	}
-	args = append(args, storeInfoOptionsArgs...)
+	args = append(args, infoOptionsArgs...)
 
 	result, err := client.executeCommand(C.GeoSearchStore, args)
 	if err != nil {
@@ -7020,7 +7020,7 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 //
 //	Valkey 6.2.0 and above.
 //
-// Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
 //
 // See [valkey.io] for more details.
 //
@@ -7032,7 +7032,7 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 //		 - `MemberOrigin` to use the position of the given existing member in the sorted
 //	          set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//	searchBy - The query's shape options:
+//	searchByShape - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
 //		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
 //
@@ -7066,7 +7066,7 @@ func (client *baseClient) GeoSearchStore(
 //
 //	Valkey 6.2.0 and above.
 //
-// Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
 //
 // See [valkey.io] for more details.
 //
@@ -7078,7 +7078,7 @@ func (client *baseClient) GeoSearchStore(
 //		 - `MemberOrigin` to use the position of the given existing member in the sorted
 //	          set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//	searchBy - The query's shape options:
+//	searchByShape - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
 //		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
 //	resultOptions - Optional inputs for sorting/limiting the results.
@@ -7114,7 +7114,7 @@ func (client *baseClient) GeoSearchStoreWithResultOptions(
 //
 //	Valkey 6.2.0 and above.
 //
-// Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
 //
 // See [valkey.io] for more details.
 //
@@ -7126,7 +7126,7 @@ func (client *baseClient) GeoSearchStoreWithResultOptions(
 //		 - `MemberOrigin` to use the position of the given existing member in the sorted
 //	          set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
-//	searchBy - The query's shape options:
+//	searchByShape - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
 //		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
 //	infoOptions - The optional inputs to request additional information.

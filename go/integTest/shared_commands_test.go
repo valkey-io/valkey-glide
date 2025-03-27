@@ -9376,7 +9376,7 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 			GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
 		}
 		searchShape := options.NewBoxSearchShape(400, 400, options.GeoUnitKilometers)
-		resultOpts := options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc)
+		resultOpts := options.NewGeoSearchResultOptions().SetSortOrder(options.ASC)
 
 		results, err := client.GeoSearchWithResultOptions(key1, &searchOrigin, *searchShape, *resultOpts)
 		assert.NoError(suite.T(), err)
@@ -9396,7 +9396,7 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 
 		// Test with count limiting result to 1
 		resultOptsWithCount := options.NewGeoSearchResultOptions().
-			SetSortOrder(options.SortOrderAsc).
+			SetSortOrder(options.ASC).
 			SetCount(1)
 
 		countResults, err := client.GeoSearchWithResultOptions(key1, &searchOrigin, *searchShape, *resultOptsWithCount)
@@ -9424,7 +9424,7 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 			key1,
 			&options.GeoMemberOrigin{Member: "Catania"},
 			*options.NewBoxSearchShape(meters, meters, options.GeoUnitMeters),
-			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderDesc),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.DESC),
 			*options.NewGeoSearchInfoOptions().SetWithDist(true),
 		)
 		assert.NoError(suite.T(), err)
@@ -9437,7 +9437,7 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 			key1,
 			&options.GeoMemberOrigin{Member: "Palermo"},
 			*feetShape,
-			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc).SetCount(2),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.ASC).SetCount(2),
 			*options.NewGeoSearchInfoOptions().SetWithHash(true),
 		)
 		expectedResults3 := []options.Location{
@@ -9455,7 +9455,7 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 			key1,
 			&options.GeoMemberOrigin{Member: "Catania"},
 			*options.NewCircleSearchShape(feetRadius, options.GeoUnitFeet),
-			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.ASC),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), []string{"Catania", "Palermo"}, feetResults)
@@ -9466,7 +9466,7 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 			key1,
 			&options.GeoMemberOrigin{Member: "Catania"},
 			*options.NewCircleSearchShape(float64(metersRadius), options.GeoUnitMeters),
-			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderDesc),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.DESC),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), []string{"Palermo", "Catania"}, metersResults)
@@ -9478,20 +9478,19 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
 			},
 			*options.NewCircleSearchShape(175, options.GeoUnitMiles),
-			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderDesc),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.DESC),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), []string{"edge1", "edge2", "Palermo", "Catania"}, milesResults)
 
 		// Test search by radius with kilometers units, with limited count and all options
-
 		kmResults, err := client.GeoSearchWithFullOptions(
 			key1,
 			&options.GeoCoordOrigin{
 				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
 			},
 			*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
-			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc).SetCount(2),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.ASC).SetCount(2),
 			*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithHash(true).SetWithCoord(true),
 		)
 		assert.NoError(suite.T(), err)
@@ -9535,7 +9534,7 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
 			},
 			*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
-			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc).SetCount(1).SetIsAny(true),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.ASC).SetCount(1).SetIsAny(true),
 			*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithHash(true).SetWithCoord(true),
 		)
 		assert.NoError(suite.T(), err)
@@ -9549,7 +9548,7 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
 			},
 			*smallShape,
-			*options.NewGeoSearchResultOptions().SetSortOrder(options.SortOrderAsc).SetCount(1),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.ASC).SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), emptyResults1)
@@ -9695,6 +9694,39 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		zRangeResultWithCount, err = client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), expectedMap3, zRangeResultWithCount)
+
+		// Test storing results of a search that returns 0 results
+		count, err = client.GeoSearchStore(
+			destinationKey,
+			sourceKey,
+			searchOrigin,
+			*options.NewCircleSearchShape(1, options.GeoUnitMeters),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), count)
+		zRangeResultZero, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64(map[string]float64{}), zRangeResultZero)
+
+		// Test storing results of a search with ANY option
+		count, err = client.GeoSearchStoreWithResultOptions(
+			destinationKey,
+			sourceKey,
+			searchOrigin,
+			*boxShape,
+			*options.NewGeoSearchResultOptions().SetIsAny(true),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), count)
+		zRangeResultANY, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		expectedANYResults := map[string]float64{
+			"Catania": 3479447370796909.0,
+			"Palermo": 3479099956230698.0,
+			"edge1":   3479273021651468.0,
+			"edge2":   3481342659049484.0,
+		}
+		assert.Equal(suite.T(), expectedANYResults, zRangeResultANY)
 
 		// member does not exist
 		nonExistingMemberOrigin := &options.GeoMemberOrigin{Member: "non-existing-member"}

@@ -96,7 +96,9 @@ func (o *GeoSearchShape) ToArgs() ([]string, error) {
 
 // Optional arguments for the `GeoSearch` command
 //
-// @see [valkey.io](https://valkey.io/commands/geosearch/)
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
 type GeoSearchInfoOptions struct {
 	WithDist  bool
 	WithCoord bool
@@ -114,7 +116,7 @@ func NewGeoSearchInfoOptions() *GeoSearchInfoOptions {
 
 // WITHDIST: GeoSearch also return the distance of the returned items from the specified center point.
 //
-//	The distance is returned in the same unit as specified for the `searchBy` argument.
+// The distance is returned in the same unit as specified for the `searchBy` argument.
 func (o *GeoSearchInfoOptions) SetWithDist(withDist bool) *GeoSearchInfoOptions {
 	o.WithDist = withDist
 	return o
@@ -137,28 +139,20 @@ func (o *GeoSearchInfoOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
 	if o.WithDist {
-		args = append(args, WithdistValkeyApi)
+		args = append(args, WithDistValkeyApi)
 	}
 	if o.WithCoord {
-		args = append(args, WithcoordValkeyApi)
+		args = append(args, WithCoordValkeyApi)
 	}
 	if o.WithHash {
-		args = append(args, WithhashValkeyApi)
+		args = append(args, WithHashValkeyApi)
 	}
 	return args, nil
 }
 
-type SortOrder string
-
-// Const value representing the sort order of nested results
-const (
-	SortOrderAsc  SortOrder = "ASC"
-	SortOrderDesc SortOrder = "DESC"
-)
-
 // Optional arguments for `GeoSearch` that contains up to 2 optional inputs
 type GeoSearchResultOptions struct {
-	sortOrder  SortOrder
+	sortOrder  OrderBy
 	count      int64
 	countIsSet bool
 	isAny      bool
@@ -176,7 +170,7 @@ func NewGeoSearchResultOptions() *GeoSearchResultOptions {
 // Optional argument for `GeoSearch` that sets the query's order to sort the results by:
 // - ASC: Sort returned items from the nearest to the farthest, relative to the center point.
 // - DESC: Sort returned items from the farthest to the nearest, relative to the center point.
-func (o *GeoSearchResultOptions) SetSortOrder(sortOrder SortOrder) *GeoSearchResultOptions {
+func (o *GeoSearchResultOptions) SetSortOrder(sortOrder OrderBy) *GeoSearchResultOptions {
 	o.sortOrder = sortOrder
 	return o
 }

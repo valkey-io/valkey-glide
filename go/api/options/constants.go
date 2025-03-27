@@ -214,9 +214,9 @@ const (
 
 // Valkey API keywords for the `GeoSearch` command
 const (
-	WithcoordValkeyApi = "WITHCOORD"
-	WithdistValkeyApi  = "WITHDIST"
-	WithhashValkeyApi  = "WITHHASH"
+	WithCoordValkeyApi = "WITHCOORD"
+	WithDistValkeyApi  = "WITHDIST"
+	WithHashValkeyApi  = "WITHHASH"
 )
 
 // The search origin API keyword for the `GeoCoordOrigin`
