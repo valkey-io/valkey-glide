@@ -367,3 +367,33 @@ func (client *GlideClient) ClientId() (int64, error) {
 	}
 	return handleIntResponse(result)
 }
+
+// Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
+//
+// Return value:
+//
+//	UNIX TIME of the last DB save executed with success.
+//
+// [valkey.io]: https://valkey.io/commands/lastsave/
+func (client *GlideClient) LastSave() (int64, error) {
+	response, err := client.executeCommand(C.LastSave, []string{})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(response)
+}
+
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
+//
+// Return value:
+//
+//	OK to confirm that the statistics were successfully reset.
+//
+// [valkey.io]: https://valkey.io/commands/config-resetstat/
+func (client *GlideClient) ConfigResetStat() (string, error) {
+	response, err := client.executeCommand(C.ConfigResetStat, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
