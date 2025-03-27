@@ -353,6 +353,21 @@ func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string,
 	return handleStringResponse(result)
 }
 
+// Gets the current connection id.
+//
+// Return value:
+//
+//	The id of the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-id/
+func (client *GlideClient) ClientId() (int64, error) {
+	result, err := client.executeCommand(C.ClientId, []string{})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
 // Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
 //
 // Return value:
