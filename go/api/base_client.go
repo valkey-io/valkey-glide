@@ -80,6 +80,8 @@ var globalMessageHandler *MessageHandler
 func pubSubCallback(kind C.uint32_t, cResponse *C.struct_CommandResponse) {
 	defer C.free_command_response(cResponse)
 
+	fmt.Printf("Received push message: %d\n", kind)
+
 	if globalMessageHandler == nil {
 		// No message handler registered
 		return
@@ -95,61 +97,15 @@ func pubSubCallback(kind C.uint32_t, cResponse *C.struct_CommandResponse) {
 	}
 
 	// Create a direct struct for the message handler
-	pushMsg := struct {
-		Kind   PushKind
-		Values []any
-	}{
-		Kind:   pushKind,
-		Values: arrayValues,
+	pushMsg := PushInfo{
+		Kind: pushKind,
+		Data: arrayValues,
 	}
 
 	// Process the push through the message handler
 	if globalMessageHandler != nil {
 		globalMessageHandler.Handle(pushMsg)
 	}
-}
-
-// Helper function to process a CommandResponse array into a Go slice
-func processCommandResponseArray(cResponse *C.struct_CommandResponse) ([]any, error) {
-	if cResponse.response_type != C.Array {
-		return nil, fmt.Errorf("expected array response type, got %d", cResponse.response_type)
-	}
-
-	arrayLen := int(cResponse.array_value_len)
-	arrayPtr := cResponse.array_value
-	result := make([]any, arrayLen)
-
-	// Iterate through the array elements
-	for i := 0; i < arrayLen; i++ {
-		element := unsafe.Pointer(uintptr(unsafe.Pointer(arrayPtr)) + uintptr(i)*unsafe.Sizeof(*arrayPtr))
-		elemPtr := (*C.struct_CommandResponse)(element)
-
-		// Convert element based on type
-		switch elemPtr.response_type {
-		case C.String:
-			strLen := int(elemPtr.string_value_len)
-			if strLen > 0 && elemPtr.string_value != nil {
-				bytes := C.GoBytes(unsafe.Pointer(elemPtr.string_value), C.int(strLen))
-				result[i] = bytes
-			} else {
-				result[i] = []byte{}
-			}
-		case C.Int:
-			result[i] = int64(elemPtr.int_value)
-		case C.Float:
-			result[i] = float64(elemPtr.float_value)
-		case C.Bool:
-			result[i] = bool(elemPtr.bool_value)
-		case C.Null:
-			result[i] = nil
-		default:
-			// For other types, we'd need more complex handling
-			// For simplicity, convert to string representation
-			result[i] = fmt.Sprintf("Unsupported type: %d", elemPtr.response_type)
-		}
-	}
-
-	return result, nil
 }
 
 type clientConfiguration interface {

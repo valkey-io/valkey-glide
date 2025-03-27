@@ -2,11 +2,15 @@
 
 package api
 
+// #include "../lib.h"
+import "C"
+
 import (
 	"errors"
 	"fmt"
 	"log"
 	"sync"
+	"unsafe"
 )
 
 var (
@@ -14,89 +18,6 @@ var (
 	ErrPubSubPushMissingKind   = errors.New("received invalid push: missing kind field")
 	ErrPubSubPushMissingValues = errors.New("received invalid push: missing values field")
 )
-
-// PushKind represents the type of push message received from the server
-type PushKind int
-
-// PushKind enum values - these match the numeric values from the Rust side
-const (
-	Disconnection PushKind = iota // 0
-	Other                         // 1
-	Invalidate                    // 2
-	Message                       // 3
-	PMessage                      // 4
-	SMessage                      // 5
-	Unsubscribe                   // 6
-	PUnsubscribe                  // 7
-	SUnsubscribe                  // 8
-	Subscribe                     // 9
-	PSubscribe                    // 10
-	SSubscribe                    // 11
-)
-
-// String returns the string representation of a PushKind
-func (kind PushKind) String() string {
-	switch kind {
-	case Disconnection:
-		return "Disconnection"
-	case Other:
-		return "Other"
-	case Invalidate:
-		return "Invalidate"
-	case Message:
-		return "Message"
-	case PMessage:
-		return "PMessage"
-	case SMessage:
-		return "SMessage"
-	case Unsubscribe:
-		return "Unsubscribe"
-	case PUnsubscribe:
-		return "PUnsubscribe"
-	case SUnsubscribe:
-		return "SUnsubscribe"
-	case Subscribe:
-		return "Subscribe"
-	case PSubscribe:
-		return "PSubscribe"
-	case SSubscribe:
-		return "SSubscribe"
-	default:
-		return fmt.Sprintf("Unknown(%d)", kind)
-	}
-}
-
-// PushKindFromString converts a string representation to a PushKind
-func PushKindFromString(s string) PushKind {
-	switch s {
-	case "Disconnection":
-		return Disconnection
-	case "Other":
-		return Other
-	case "Invalidate":
-		return Invalidate
-	case "Message":
-		return Message
-	case "PMessage":
-		return PMessage
-	case "SMessage":
-		return SMessage
-	case "Unsubscribe":
-		return Unsubscribe
-	case "PUnsubscribe":
-		return PUnsubscribe
-	case "SUnsubscribe":
-		return SUnsubscribe
-	case "Subscribe":
-		return Subscribe
-	case "PSubscribe":
-		return PSubscribe
-	case "SSubscribe":
-		return SSubscribe
-	default:
-		return Other
-	}
-}
 
 type MessageCallbackError struct {
 	cause error
@@ -131,8 +52,8 @@ func NewMessageHandler(callback MessageCallback, context any, resolver ResponseR
 }
 
 // Handle processes the incoming response and invokes the callback if available
-func (handler *MessageHandler) Handle(response any) error {
-	data, err := handler.resolver(response)
+func (handler *MessageHandler) Handle(pushInfo PushInfo) error {
+	data, err := handler.resolver(pushInfo)
 	if err != nil {
 		return err
 	}
@@ -381,4 +302,54 @@ func (queue *PubSubMessageQueue) UnregisterSignalChannel(ch chan struct{}) {
 			break
 		}
 	}
+}
+
+// Helper function to create a resolver for PubSub push messages
+func createPushResponseResolver() ResponseResolver {
+	return func(response any) (any, error) {
+		return response, nil
+	}
+}
+
+// Helper function to process a CommandResponse array into a Go slice
+func processCommandResponseArray(cResponse *C.struct_CommandResponse) ([]any, error) {
+	if cResponse.response_type != C.Array {
+		return nil, fmt.Errorf("expected array response type, got %d", cResponse.response_type)
+	}
+
+	arrayLen := int(cResponse.array_value_len)
+	arrayPtr := cResponse.array_value
+	result := make([]any, arrayLen)
+
+	// Iterate through the array elements
+	for i := 0; i < arrayLen; i++ {
+		element := unsafe.Pointer(uintptr(unsafe.Pointer(arrayPtr)) + uintptr(i)*unsafe.Sizeof(*arrayPtr))
+		elemPtr := (*C.struct_CommandResponse)(element)
+
+		// Convert element based on type
+		switch elemPtr.response_type {
+		case C.String:
+			strLen := int(elemPtr.string_value_len)
+			if strLen > 0 && elemPtr.string_value != nil {
+				bytes := C.GoBytes(unsafe.Pointer(elemPtr.string_value), C.int(strLen))
+				result[i] = bytes
+			} else {
+				result[i] = []byte{}
+			}
+		case C.Int:
+			result[i] = int64(elemPtr.int_value)
+		case C.Float:
+			result[i] = float64(elemPtr.float_value)
+		case C.Bool:
+			result[i] = bool(elemPtr.bool_value)
+		case C.Null:
+			result[i] = nil
+		default:
+			// For other types, we'd need more complex handling
+			// For simplicity, convert to string representation
+			result[i] = fmt.Sprintf("Unsupported type: %d", elemPtr.response_type)
+		}
+	}
+
+	return result, nil
 }
