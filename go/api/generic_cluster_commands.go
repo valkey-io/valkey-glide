@@ -26,5 +26,5 @@ type GenericClusterCommands interface {
 
 	RandomKey() (string, error)
 
-	RandomKeyWithRoute(opts options.RouteOption) (Result[string], error, error)
+	RandomKeyWithRoute(opts options.RouteOption) (Result[string], error)
 }
