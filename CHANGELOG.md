@@ -30,6 +30,7 @@
 * Go: Add `GeoDist` ([#3446](https://github.com/valkey-io/valkey-glide/pull/3446))
 * Go: Add `ClientId` ([#3077](https://github.com/valkey-io/valkey-glide/pull/3077))
 * Go: Add `LastSave` ([#3086](https://github.com/valkey-io/valkey-glide/pull/3086))
+* Go: Add `Config Reset Stat` ([#3121](https://github.com/valkey-io/valkey-glide/pull/3121))
 
 #### Breaking Changes
 

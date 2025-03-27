@@ -39,4 +39,6 @@ type ServerManagementCommands interface {
 	LolwutWithOptions(opts options.LolwutOptions) (string, error)
 
 	LastSave() (int64, error)
+
+	ConfigResetStat() (string, error)
 }

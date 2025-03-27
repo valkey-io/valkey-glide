@@ -828,3 +828,8 @@ func (suite *GlideTestSuite) TestLastSave() {
 	assert.Nil(t, err)
 	assert.Greater(t, result, int64(0))
 }
+
+func (suite *GlideTestSuite) TestConfigResetStat() {
+	client := suite.defaultClient()
+	suite.verifyOK(client.ConfigResetStat())
+}
