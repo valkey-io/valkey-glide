@@ -34,7 +34,7 @@
 * Go: Add `Config Reset Stat` ([#3121](https://github.com/valkey-io/valkey-glide/pull/3121))
 * Go: Add `GeoSearch` and `GeoSearchStore` ([#3385](https://github.com/valkey-io/valkey-glide/pull/3385))
 * Go: Add `Cluster Config Set & Get` ([#3274](https://github.com/valkey-io/valkey-glide/pull/3274))
-
+* Go: Add `Client Set & Get` ([#3302](https://github.com/valkey-io/valkey-glide/pull/3302))
 #### Breaking Changes
 
 #### Fixes
