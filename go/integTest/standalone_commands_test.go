@@ -834,6 +834,16 @@ func (suite *GlideTestSuite) TestConfigResetStat() {
 	suite.verifyOK(client.ConfigResetStat())
 }
 
+func (suite *GlideTestSuite) TestClientGetSetName() {
+	client := suite.defaultClient()
+	t := suite.T()
+
+	suite.verifyOK(client.ClientSetName("ConnectionName"))
+	result, err := client.ClientGetName()
+	assert.Nil(t, err)
+	assert.Equal(t, result, "ConnectionName")
+}
+
 func (suite *GlideTestSuite) TestMove() {
 	client := suite.defaultClient()
 	t := suite.T()
