@@ -42,9 +42,11 @@ runs:
 
         - name: Install Python software dependencies
           shell: bash
+          env:
+              OS: ${{ inputs.os }}
           run: |
               # Disregarding PEP 668 as it addresses package managers conflicts, which is not applicable in the CI scope.
-              INSTALL_FLAGS=`if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then echo "--break-system-packages"; else echo ""; fi`
+              INSTALL_FLAGS=`if [[ "$OS" =~ .*"macos".*  ]]; then echo "--break-system-packages"; else echo ""; fi`
               python3 -m ensurepip --upgrade || true
               python3 -m pip install --upgrade pip $INSTALL_FLAGS
               python3 -m pip install virtualenv mypy-protobuf $INSTALL_FLAGS
