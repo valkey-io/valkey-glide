@@ -525,9 +525,33 @@ impl Client {
                     Some(ResponsePolicy::AllSucceeded),
                 ));
                 let mut cmd = redis::cmd("AUTH");
+                if let Some(username) = self.get_username().await? {
+                    cmd.arg(username);
+                }
                 cmd.arg(password);
                 self.send_command(&cmd, Some(routing)).await
             }
+        }
+    }
+
+    /// Returns the username if one was configured during client creation. Otherwise, returns None.
+    async fn get_username(&mut self) -> RedisResult<Option<String>> {
+        match &mut self.internal_client {
+            ClientWrapper::Cluster { client } => match client.get_username().await {
+                Ok(Value::SimpleString(username)) => Ok(Some(username)),
+                Ok(Value::Nil) => Ok(None),
+                Ok(other) => Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Unexpected type",
+                    format!("Expected SimpleString or Nil, got: {other:?}"),
+                ))),
+                Err(e) => Err(RedisError::from((
+                    ErrorKind::ResponseError,
+                    "Error getting username",
+                    format!("Received error - {:?}.", e),
+                ))),
+            },
+            ClientWrapper::Standalone(client) => Ok(client.get_username()),
         }
     }
 }
