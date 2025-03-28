@@ -120,7 +120,8 @@ func PushKindFromString(s string) PushKind {
 	}
 }
 
+// PushInfo represents a message received from the server
 type PushInfo struct {
-	Kind PushKind
-	Data []any
+	Kind    PushKind
+	Message *PubSubMessage
 }
