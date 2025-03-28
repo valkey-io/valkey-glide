@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -145,6 +146,94 @@ func ExampleGlideClusterClient_FlushDBWithOptions() {
 	}
 
 	result, err := client.FlushDBWithOptions(flushOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleGlideClusterClient_Lolwut() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	result, err := client.Lolwut()
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+	} else {
+		if len(result) > 0 {
+			fmt.Println("LOLWUT pattern generated successfully")
+		}
+	}
+
+	// Output: LOLWUT pattern generated successfully
+}
+
+func ExampleGlideClusterClient_LolwutWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	randomRouteOptions := options.ClusterLolwutOptions{
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+			Args:    &[]int{10, 20},
+		},
+		RouteOption: &options.RouteOption{
+			Route: config.RandomRoute,
+		},
+	}
+
+	result, err := client.LolwutWithOptions(randomRouteOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	if len(result.SingleValue()) > 0 {
+		fmt.Println("LOLWUT pattern generated successfully")
+	}
+	// Output: LOLWUT pattern generated successfully
+}
+
+func ExampleGlideClusterClient_LastSave() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	key := "key-" + uuid.NewString()
+	client.Set(key, "hello")
+	result, err := client.LastSave()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.IsSingleValue())
+
+	// Output: true
+}
+
+func ExampleGlideClusterClient_LastSaveWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	opts := options.RouteOption{Route: nil}
+	key := "key-" + uuid.NewString()
+	client.Set(key, "hello")
+	result, err := client.LastSaveWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.IsSingleValue())
+
+	// Output: true
+}
+
+func ExampleGlideClusterClient_ConfigResetStat() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	result, err := client.ConfigResetStat()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleGlideClusterClient_ConfigResetStatWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	opts := options.RouteOption{Route: nil}
+	result, err := client.ConfigResetStatWithOptions(opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

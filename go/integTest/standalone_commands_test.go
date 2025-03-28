@@ -790,6 +790,50 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_ImmediateAuthWrongPass
 	assert.NoError(suite.T(), err)
 }
 
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersion() {
+	client := suite.defaultClient()
+	options := options.NewLolwutOptions(8)
+	res, err := client.LolwutWithOptions(*options)
+	assert.NoError(suite.T(), err)
+	assert.Contains(suite.T(), res, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
+	client := suite.defaultClient()
+	opts := options.NewLolwutOptions(8).SetArgs([]int{10, 20})
+	res, err := client.LolwutWithOptions(*opts)
+	assert.NoError(suite.T(), err)
+	assert.Contains(suite.T(), res, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
+	client := suite.defaultClient()
+	opts := options.NewLolwutOptions(6).SetArgs([]int{})
+	res, err := client.LolwutWithOptions(*opts)
+	assert.NoError(suite.T(), err)
+	assert.Contains(suite.T(), res, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestClientId() {
+	client := suite.defaultClient()
+	result, err := client.ClientId()
+	assert.Nil(suite.T(), err)
+	assert.Greater(suite.T(), result, int64(0))
+}
+
+func (suite *GlideTestSuite) TestLastSave() {
+	client := suite.defaultClient()
+	t := suite.T()
+	result, err := client.LastSave()
+	assert.Nil(t, err)
+	assert.Greater(t, result, int64(0))
+}
+
+func (suite *GlideTestSuite) TestConfigResetStat() {
+	client := suite.defaultClient()
+	suite.verifyOK(client.ConfigResetStat())
+}
+
 func (suite *GlideTestSuite) TestMove() {
 	client := suite.defaultClient()
 	t := suite.T()
