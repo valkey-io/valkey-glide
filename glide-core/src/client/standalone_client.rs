@@ -607,15 +607,20 @@ impl StandaloneClient {
     /// Update the password used to authenticate with the servers.
     /// If the password is `None`, the password will be removed.
     pub async fn update_connection_password(
-        &mut self,
-        password: Option<String>,
+        &self,
+        new_password: Option<String>,
     ) -> RedisResult<Value> {
-        self.get_connection(false)
-            .await
-            .get_connection()
-            .await?
-            .update_connection_password(password.clone())
-            .await
+        for node in self.inner.nodes.iter() {
+            node.update_connection_password(new_password.clone());
+        }
+
+        Ok(Value::Okay)
+    }
+
+    /// Retrieve the username used to authenticate with the server.
+    pub fn get_username(&self) -> Option<String> {
+        // All nodes in the client should have the same username configured, thus any connection would work here.
+        self.get_primary_connection().get_username()
     }
 }
 

@@ -544,3 +544,206 @@ func (client *GlideClusterClient) ScanWithOptions(
 	nextCursor, keys, err := handleScanResponse(response)
 	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *GlideClusterClient) Lolwut() (string, error) {
+	result, err := client.executeCommand(C.Lolwut, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Parameters:
+//
+//	lolwutOptions - The [LolwutOptions] type.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error) {
+	args, err := lolwutOptions.ToArgs()
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+
+	if lolwutOptions.RouteOption == nil || lolwutOptions.RouteOption.Route == nil {
+		response, err := client.executeCommand(C.Lolwut, args)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		data, err := handleStringResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterSingleValue[string](data), nil
+	}
+
+	route := lolwutOptions.RouteOption.Route
+	response, err := client.executeCommandWithRoute(C.Lolwut, args, route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+
+	if route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
+
+// Gets the current connection id.
+//
+// Return value:
+//
+//	The id of the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-id/
+func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
+	response, err := client.executeCommand(C.ClientId, []string{})
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	data, err := handleIntResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	return createClusterSingleValue[int64](data), nil
+}
+
+// Gets the current connection id.
+//
+// Parameters:
+//
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	The id of the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-id/
+func (client *GlideClusterClient) ClientIdWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
+	response, err := client.executeCommandWithRoute(C.ClientId, []string{}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	if opts.Route != nil &&
+		(opts.Route).IsMultiNode() {
+		data, err := handleStringIntMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[int64](), err
+		}
+		return createClusterMultiValue[int64](data), nil
+	}
+	data, err := handleIntResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	return createClusterSingleValue[int64](data), nil
+}
+
+// Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
+// The command is routed to a random node by default, which is safe for read-only commands.
+//
+// Return value:
+//
+//	UNIX TIME of the last DB save executed with success.
+//
+// [valkey.io]: https://valkey.io/commands/lastsave/
+func (client *GlideClusterClient) LastSave() (ClusterValue[int64], error) {
+	response, err := client.executeCommand(C.LastSave, []string{})
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	data, err := handleIntResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	return createClusterSingleValue[int64](data), nil
+}
+
+// Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	UNIX TIME of the last DB save executed with success.
+//
+// [valkey.io]: https://valkey.io/commands/lastsave/
+func (client *GlideClusterClient) LastSaveWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
+	response, err := client.executeCommandWithRoute(C.LastSave, []string{}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	if opts.Route != nil &&
+		(opts.Route).IsMultiNode() {
+		data, err := handleStringIntMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[int64](), err
+		}
+		return createClusterMultiValue[int64](data), nil
+	}
+	data, err := handleIntResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	return createClusterSingleValue[int64](data), nil
+}
+
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM
+//
+// Return value:
+//
+//	OK to confirm that the statistics were successfully reset.
+//
+// [valkey.io]: https://valkey.io/commands/config-resetstat/
+func (client *GlideClusterClient) ConfigResetStat() (string, error) {
+	response, err := client.executeCommand(C.ConfigResetStat, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	OK to confirm that the statistics were successfully reset.
+//
+// [valkey.io]: https://valkey.io/commands/config-resetstat/
+func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteOption) (string, error) {
+	response, err := client.executeCommandWithRoute(C.ConfigResetStat, []string{}, opts.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
