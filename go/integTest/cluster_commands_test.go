@@ -1283,3 +1283,39 @@ func (suite *GlideTestSuite) TestConfigSetGetWithOptions() {
 		assert.Contains(t, strings.ToLower(mapString), strings.ToLower("timeout"))
 	}
 }
+
+func (suite *GlideTestSuite) TestClientSetGetName() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	connectionName := "ConnectionName-" + uuid.NewString()
+	client.ClientSetName(connectionName)
+	response, err := client.ClientGetName()
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// ClientGetName with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	connectionName := "ConnectionName-" + uuid.NewString()
+	response, err := client.ClientSetNameWithOptions(connectionName, opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+	response, err = client.ClientGetNameWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// same sections with random route
+	connectionName = "ConnectionName-" + uuid.NewString()
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	response, err = client.ClientSetNameWithOptions(connectionName, opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+	response, err = client.ClientGetNameWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
