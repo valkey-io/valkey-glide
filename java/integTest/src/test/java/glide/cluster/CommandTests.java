@@ -1753,7 +1753,7 @@ public class CommandTests {
             result = clusterClient.wait(1L, 5000L).get();
             if (result == 1L) {
                 try {
-                    System.out.println("We are going to fcall readonly with " + foundFuncName);
+                    System.out.println("We are going to fcall again with " + foundFuncName);
                     clusterClient.fcall(foundFuncName, replicaRoute).get();
                 } catch (ExecutionException e) {
                     executionException = e;
