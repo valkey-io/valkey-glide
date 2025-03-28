@@ -5512,6 +5512,39 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 	return handleIntResponse(result)
 }
 
+// Perform a bitwise operation between multiple keys (containing string values) and store the result in the destination.
+//
+// Note:
+//
+// When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+//
+// Parameters:
+//
+//	bitwiseOperation - The bitwise operation to perform.
+//	destination      - The key that will store the resulting string.
+//	keys             - The list of keys to perform the bitwise operation on.
+//
+// Return value:
+//
+//	The size of the string stored in destination.
+//
+// [valkey.io]: https://valkey.io/commands/bitop/
+func (client *baseClient) BitOp(bitwiseOperation options.BitOpType, destination string, keys []string) (int64, error) {
+	bitOp, err := options.NewBitOp(bitwiseOperation, destination, keys)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args, err := bitOp.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	result, err := client.executeCommand(C.BitOp, args)
+	if err != nil {
+		return defaultIntResponse, &errors.RequestError{Msg: "Bitop command execution failed"}
+	}
+	return handleIntResponse(result)
+}
+
 // Counts the number of set bits (population counting) in a string stored at key. The
 // offsets start and end are zero-based indexes, with `0` being the first element of the
 // list, `1` being the next element and so on. These offsets can also be negative numbers
@@ -5678,6 +5711,54 @@ func (client *baseClient) XClaimJustIdWithOptions(
 		return nil, err
 	}
 	return handleStringArrayResponse(result)
+}
+
+// Returns the position of the first bit matching the given bit value.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	bit - The bit value to match. The value must be 0 or 1.
+//
+// Return value:
+//
+//	The position of the first occurrence matching bit in the binary value of
+//	the string held at key. If bit is not found, a -1 is returned.
+//
+// [valkey.io]: https://valkey.io/commands/bitpos/
+func (client *baseClient) BitPos(key string, bit int64) (int64, error) {
+	result, err := client.executeCommand(C.BitPos, []string{key, utils.IntToString(bit)})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns the position of the first bit matching the given bit value.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	bit - The bit value to match. The value must be 0 or 1.
+//	bitposOptions  - The [BitPosOptions] type.
+//
+// Return value:
+//
+//	The position of the first occurrence matching bit in the binary value of
+//	the string held at key. If bit is not found, a -1 is returned.
+//
+// [valkey.io]: https://valkey.io/commands/bitpos/
+func (client *baseClient) BitPosWithOptions(key string, bit int64, bitposOptions options.BitPosOptions) (int64, error) {
+	optionArgs, err := bitposOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	commandArgs := append([]string{key, utils.IntToString(bit)}, optionArgs...)
+	result, err := client.executeCommand(C.BitPos, commandArgs)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
 }
 
 // Copies the value stored at the source to the destination key if the
@@ -6631,7 +6712,7 @@ func (client *baseClient) GeoAddWithOptions(
 // Returns value:
 //
 //	An array of GeoHash strings representing the positions of the specified members stored
-//	at key. If a member does not exist in the sorted set, a `null` value is returned
+//	at key. If a member does not exist in the sorted set, a `nil` value is returned
 //	for that member.
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
@@ -6644,4 +6725,511 @@ func (client *baseClient) GeoHash(key string, members []string) ([]string, error
 		return nil, err
 	}
 	return handleStringArrayResponse(result)
+}
+
+// Returns the positions (longitude,latitude) of all the specified members of the
+// geospatial index represented by the sorted set at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	members - The members of the sorted set.
+//
+// Return value:
+//
+//	A 2D `array` which represent positions (longitude and latitude) corresponding to the given members.
+//	If a member does not exist, its position will be `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/geopos/
+func (client *baseClient) GeoPos(key string, members []string) ([][]float64, error) {
+	args := []string{key}
+	args = append(args, members...)
+	result, err := client.executeCommand(C.GeoPos, args)
+	if err != nil {
+		return nil, err
+	}
+	return handle2DFloat64OrNullArrayResponse(result)
+}
+
+// Returns the distance between `member1` and `member2` saved in the
+// geospatial index stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member1 - The name of the first member.
+//	member2 - The name of the second member.
+//
+// Return value:
+//
+//	The distance between `member1` and `member2`. If one or both members do not exist,
+//	or if the key does not exist, returns `nil`. The default
+//	unit is meters, see - [options.Meters]
+//
+// [valkey.io]: https://valkey.io/commands/geodist/
+func (client *baseClient) GeoDist(key string, member1 string, member2 string) (Result[float64], error) {
+	result, err := client.executeCommand(
+		C.GeoDist,
+		[]string{key, member1, member2},
+	)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+}
+
+// Returns the distance between `member1` and `member2` saved in the
+// geospatial index stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member1 - The name of the first member.
+//	member2 - The name of the second member.
+//	unit - The unit of distance measurement - see [options.GeoUnit].
+//
+// Return value:
+//
+//	The distance between `member1` and `member2`. If one or both members
+//	do not exist, or if the key does not exist, returns `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/geodist/
+func (client *baseClient) GeoDistWithUnit(
+	key string,
+	member1 string,
+	member2 string,
+	unit options.GeoUnit,
+) (Result[float64], error) {
+	result, err := client.executeCommand(
+		C.GeoDist,
+		[]string{key, member1, member2, string(unit)},
+	)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	An array of [options.Location] containing the following information:
+//	 - The coordinates as a [options.GeospatialData] object.
+//	 - The member (location) name.
+//	 - The distance from the center as a `float64`, in the same unit specified for
+//	   `searchByShape`.
+//	 - The geohash of the location as a `int64`.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearchWithFullOptions(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+	infoOptions options.GeoSearchInfoOptions,
+) ([]options.Location, error) {
+	args := []string{key}
+	searchFromArgs, err := searchFrom.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchFromArgs...)
+	searchByShapeArgs, err := searchByShape.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchByShapeArgs...)
+	infoOptionsArgs, err := infoOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, infoOptionsArgs...)
+	resultOptionsArgs, err := resultOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, resultOptionsArgs...)
+	result, err := client.executeCommand(C.GeoSearch, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleLocationArrayResponse(result)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//
+// Return value:
+//
+//	An array of matched member names.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearchWithResultOptions(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+) ([]string, error) {
+	args := []string{key}
+	searchFromArgs, err := searchFrom.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchFromArgs...)
+	searchByShapeArgs, err := searchByShape.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchByShapeArgs...)
+	resultOptionsArgs, err := resultOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, resultOptionsArgs...)
+
+	result, err := client.executeCommand(C.GeoSearch, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	An array of [options.Location] containing the following information:
+//	 - The coordinates as a [options.GeospatialData] object.
+//	 - The member (location) name.
+//	 - The distance from the center as a `float64`, in the same unit specified for
+//	   `searchByShape`.
+//	 - The geohash of the location as a `int64`.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearchWithInfoOptions(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	infoOptions options.GeoSearchInfoOptions,
+) ([]options.Location, error) {
+	return client.GeoSearchWithFullOptions(
+		key,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+		infoOptions,
+	)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//
+// Return value:
+//
+//	An array of matched member names.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearch(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+) ([]string, error) {
+	return client.GeoSearchWithResultOptions(
+		key,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+	)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStoreWithFullOptions(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+	infoOptions options.GeoSearchStoreInfoOptions,
+) (int64, error) {
+	args := []string{destinationKey, sourceKey}
+	searchFromArgs, err := searchFrom.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, searchFromArgs...)
+	searchByShapeArgs, err := searchByShape.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, searchByShapeArgs...)
+	resultOptionsArgs, err := resultOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, resultOptionsArgs...)
+	infoOptionsArgs, err := infoOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, infoOptionsArgs...)
+
+	result, err := client.executeCommand(C.GeoSearchStore, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStore(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+) (int64, error) {
+	return client.GeoSearchStoreWithFullOptions(
+		destinationKey,
+		sourceKey,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+		*options.NewGeoSearchStoreInfoOptions(),
+	)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStoreWithResultOptions(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+) (int64, error) {
+	return client.GeoSearchStoreWithFullOptions(
+		destinationKey,
+		sourceKey,
+		searchFrom,
+		searchByShape,
+		resultOptions,
+		*options.NewGeoSearchStoreInfoOptions(),
+	)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStoreWithInfoOptions(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	infoOptions options.GeoSearchStoreInfoOptions,
+) (int64, error) {
+	return client.GeoSearchStoreWithFullOptions(
+		destinationKey,
+		sourceKey,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+		infoOptions,
+	)
 }

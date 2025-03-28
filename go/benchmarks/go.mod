@@ -5,8 +5,8 @@ go 1.20
 replace github.com/valkey-io/valkey-glide/go => ../
 
 require (
+	github.com/redis/go-redis/v9 v9.5.5
 	github.com/valkey-io/valkey-glide/go v0.0.0
-	github.com/redis/go-redis/v9 v9.5.1
 )
 
 require (
