@@ -843,3 +843,13 @@ func (suite *GlideTestSuite) TestClientGetSetName() {
 	assert.Nil(t, err)
 	assert.Equal(t, result, "ConnectionName")
 }
+
+func (suite *GlideTestSuite) TestMove() {
+	client := suite.defaultClient()
+	t := suite.T()
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(key, "hello"))
+	result, err := client.Move(key, 2)
+	assert.Nil(t, err)
+	assert.True(suite.T(), result)
+}
