@@ -9,4 +9,6 @@ package api
 // [valkey.io]: https://valkey.io/commands/#generic
 type GenericCommands interface {
 	CustomCommand(args []string) (interface{}, error)
+
+	Move(key string, dbIndex int64) (bool, error)
 }
