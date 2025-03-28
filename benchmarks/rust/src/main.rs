@@ -10,7 +10,7 @@ static GLOBAL: Jemalloc = Jemalloc;
 use clap::Parser;
 use futures::{self, future::join_all, stream, StreamExt};
 use glide_core::client::{Client, ConnectionRequest, NodeAddress, TlsMode};
-use rand::{thread_rng, Rng};
+use rand::{distr::Alphanumeric, rng, Rng};
 use serde_json::Value;
 use std::{
     cmp::max,
@@ -210,8 +210,8 @@ fn calculate_latencies(values: &[Duration], prefix: &str) -> HashMap<String, Val
 }
 
 fn generate_random_string(length: usize) -> String {
-    rand::thread_rng()
-        .sample_iter(&rand::distributions::Alphanumeric)
+    rand::rng()
+        .sample_iter(Alphanumeric)
         .take(length)
         .map(char::from)
         .collect()
@@ -280,19 +280,19 @@ async fn perform_operation(
     data_size: usize,
 ) -> ChosenAction {
     let mut cmd = redis::Cmd::new();
-    let action = if rand::thread_rng().gen_bool(PROB_GET) {
-        if rand::thread_rng().gen_bool(PROB_GET_EXISTING_KEY) {
+    let action = if rand::rng().random_bool(PROB_GET) {
+        if rand::rng().random_bool(PROB_GET_EXISTING_KEY) {
             cmd.arg("GET")
-                .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)));
+                .arg(buffer.format(rng().random_range(0..SIZE_SET_KEYSPACE)));
             ChosenAction::GetExisting
         } else {
             cmd.arg("GET")
-                .arg(buffer.format(thread_rng().gen_range(SIZE_SET_KEYSPACE..SIZE_GET_KEYSPACE)));
+                .arg(buffer.format(rng().random_range(SIZE_SET_KEYSPACE..SIZE_GET_KEYSPACE)));
             ChosenAction::GetNonExisting
         }
     } else {
         cmd.arg("SET")
-            .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)))
+            .arg(buffer.format(rng().random_range(0..SIZE_SET_KEYSPACE)))
             .arg(generate_random_string(data_size));
         ChosenAction::Set
     };
