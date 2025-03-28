@@ -1739,11 +1739,7 @@ public class CommandTests {
         String foundFuncName = libName;
 
         // function $funcName returns a magic number
-        String code =
-                generateLuaLibCode(
-                        libName, Map.of(foundFuncName, "redis.call('SET', 'keys[1]', 'value')"), false);
-
-        System.out.println(code);
+        String code = generateLuaLibCode(libName, Map.of(foundFuncName, "return 42"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
@@ -1758,10 +1754,8 @@ public class CommandTests {
             result = clusterClient.wait(1L, 5000L).get();
             if (result == 1L) {
                 try {
-                    System.out.println("We are going to fcall with " + foundFuncName);
-                    clusterClient
-                            .fcall(foundFuncName, new String[] {"1"}, new String[] {"{key}1"}, replicaRoute)
-                            .get();
+                    System.out.println("We are going to fcall readonly with " + foundFuncName);
+                    clusterClient.fcallReadOnly(foundFuncName, replicaRoute).get();
                 } catch (ExecutionException e) {
                     executionException = e;
                     if (e.getMessage().contains("You can't write against a read only replica.")) {
@@ -1778,9 +1772,7 @@ public class CommandTests {
                 foundFuncName = foundFuncName + "_retry_" + retries;
                 // We have to clean up
                 clusterClient.functionDelete(libName).get();
-                code =
-                        generateLuaLibCode(
-                                libName, Map.of(foundFuncName, "redis.call('SET', '{key}1', 'value')"), false);
+                code = generateLuaLibCode(libName, Map.of(foundFuncName, "return 42"), false);
                 assertEquals(libName, clusterClient.functionLoad(code, false).get());
             }
             retries -= 1;

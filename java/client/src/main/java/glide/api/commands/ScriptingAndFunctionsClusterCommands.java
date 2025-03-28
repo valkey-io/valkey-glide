@@ -694,9 +694,6 @@ public interface ScriptingAndFunctionsClusterCommands {
      */
     CompletableFuture<ClusterValue<Object>> fcall(String function, String[] arguments, Route route);
 
-    CompletableFuture<ClusterValue<Object>> fcall(
-            String function, String[] keys, String[] arguments, Route route);
-
     /**
      * Invokes a previously loaded function.
      *

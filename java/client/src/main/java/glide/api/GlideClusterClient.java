@@ -861,22 +861,6 @@ public class GlideClusterClient extends BaseClient
                                 : ClusterValue.ofMultiValue(handleMapResponse(response)));
     }
 
-    public CompletableFuture<ClusterValue<Object>> fcall(
-            @NonNull String function,
-            @NonNull String[] keys,
-            @NonNull String[] arguments,
-            @NonNull Route route) {
-        String[] args = concatenateArrays(new String[] {function}, keys, arguments);
-        return commandManager.submitNewCommand(
-                FCall,
-                args,
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleObjectOrNullResponse(response))
-                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
-    }
-
     @Override
     public CompletableFuture<ClusterValue<Object>> fcall(
             @NonNull GlideString function, @NonNull GlideString[] arguments, @NonNull Route route) {
