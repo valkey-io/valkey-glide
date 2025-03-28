@@ -1528,16 +1528,15 @@ export async function transactionTest(
         "xpending(key9, groupName1)",
         [1, "0-2", "0-2", [[consumer.toString(), "1"]]],
     ]);
-    // TODO: uncomment once the flakiness in this test has been resolved
-    // baseTransaction.xpendingWithOptions(key9, groupName1, {
-    //     start: InfBoundary.NegativeInfinity,
-    //     end: InfBoundary.PositiveInfinity,
-    //     count: 10,
-    // });
-    // responseData.push([
-    //     "xpendingWithOptions(key9, groupName1, -, +, 10)",
-    //     [["0-2", consumer.toString(), 0, 1]],
-    // ]);
+    baseTransaction.xpendingWithOptions(key9, groupName1, {
+        start: InfBoundary.NegativeInfinity,
+        end: InfBoundary.PositiveInfinity,
+        count: 10,
+    });
+    responseData.push([
+        "xpendingWithOptions(key9, groupName1, -, +, 10)",
+        [["0-2", consumer.toString(), 0, 1]],
+    ]);
     baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
         'xclaim(key9, groupName1, consumer, 0, ["0-2"])',

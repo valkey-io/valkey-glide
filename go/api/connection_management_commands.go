@@ -16,6 +16,8 @@ type ConnectionManagementCommands interface {
 
 	Echo(message string) (Result[string], error)
 
+	ClientId() (int64, error)
+
 	ClientGetName() (string, error)
 
 	ClientSetName(connectionName string) (string, error)

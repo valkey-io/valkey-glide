@@ -65,6 +65,31 @@ func ExampleGlideClusterClient_EchoWithOptions() {
 	// Output: Hello World
 }
 
+func ExampleGlideClusterClient_ClientId() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	result, err := client.ClientId()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	assert := result.IsSingleValue()
+	fmt.Println(assert)
+
+	// Output: true
+}
+
+func ExampleGlideClusterClient_ClientIdWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	opts := options.RouteOption{Route: nil}
+	result, err := client.ClientIdWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	assert := result.IsSingleValue()
+	fmt.Println(assert)
+
+	// Output: true
+}
+
 func ExampleGlideClusterClient_ClientSetName() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	connectionName := "ConnectionName-" + uuid.NewString()
