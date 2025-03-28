@@ -73,39 +73,149 @@ func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorTyp
 	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
 }
 
-// Global message handler that will be set when a client is created with a PubSub subscription
-var globalMessageHandler *MessageHandler
+// Global message dispatcher for routing PubSub messages
+var (
+	globalDispatcher *MessageDispatcher
+	once             sync.Once
+)
+
+// GetManager returns the singleton state manager
+func GetDispatcher() *MessageDispatcher {
+	once.Do(func() {
+		globalDispatcher = NewMessageDispatcher()
+	})
+	return globalDispatcher
+}
 
 //export pubSubCallback
 func pubSubCallback(kind C.uint32_t, cResponse *C.struct_CommandResponse) {
 	defer C.free_command_response(cResponse)
 
-	fmt.Printf("Received push message: %d\n", kind)
-
-	if globalMessageHandler == nil {
-		// No message handler registered
-		return
-	}
-
 	// Convert kind directly to PushKind enum value
 	pushKind := PushKind(kind)
 
+	//fmt.Printf("Received pubsub callback: %s\n%+v\n", pushKind, cResponse)
+
+	// TODO: Refactor this out
 	// Extract values from the CommandResponse
 	arrayValues, err := processCommandResponseArray(cResponse)
 	if err != nil {
 		return
 	}
 
-	// Create a direct struct for the message handler
-	pushMsg := PushInfo{
-		Kind: pushKind,
-		Data: arrayValues,
+	// Convert the array values directly to a PubSubMessage based on the kind
+	var message *PubSubMessage
+
+	switch pushKind {
+	case Message, SMessage:
+		if len(arrayValues) < 2 {
+			return
+		}
+
+		channel, ok := toString(arrayValues[0])
+		if !ok {
+			return
+		}
+
+		msgContent, ok := toString(arrayValues[1])
+		if !ok {
+			return
+		}
+
+		message = NewPubSubMessage(msgContent, channel)
+
+	case PMessage:
+		if len(arrayValues) < 3 {
+			return
+		}
+
+		pattern, ok := toString(arrayValues[0])
+		if !ok {
+			return
+		}
+
+		channel, ok := toString(arrayValues[1])
+		if !ok {
+			return
+		}
+
+		msgContent, ok := toString(arrayValues[2])
+		if !ok {
+			return
+		}
+
+		message = NewPubSubMessageWithPattern(msgContent, channel, pattern)
+
+	case Subscribe, PSubscribe, SSubscribe, Unsubscribe, PUnsubscribe, SUnsubscribe:
+		if len(arrayValues) < 2 {
+			return
+		}
+		channel, ok := toString(arrayValues[0])
+		if !ok {
+			return
+		}
+		msgContent, ok := toString(arrayValues[1])
+		if !ok {
+			return
+		}
+		message = NewPubSubMessage(msgContent, channel)
+
+	default:
+		// log unsupported push kind
+
 	}
 
-	// Process the push through the message handler
-	if globalMessageHandler != nil {
-		globalMessageHandler.Handle(pushMsg)
+	// Create a PushInfo struct with the message
+	pushMsg := PushInfo{
+		Kind:    pushKind,
+		Message: message,
 	}
+
+	// Get the global message dispatcher and route the message
+	dispatcher := GetDispatcher()
+	dispatcher.DispatchMessage(pushMsg)
+}
+
+// Helper function to process a CommandResponse array into a Go slice
+func processCommandResponseArray(cResponse *C.struct_CommandResponse) ([]any, error) {
+	if typeErr := checkResponseType(cResponse, C.Array, false); typeErr != nil {
+		return nil, typeErr
+	}
+
+	arrayLen := int(cResponse.array_value_len)
+	arrayPtr := cResponse.array_value
+	result := make([]any, arrayLen)
+
+	// Iterate through the array elements
+	for i := 0; i < arrayLen; i++ {
+		element := unsafe.Pointer(uintptr(unsafe.Pointer(arrayPtr)) + uintptr(i)*unsafe.Sizeof(*arrayPtr))
+		elemPtr := (*C.struct_CommandResponse)(element)
+
+		// Convert element based on type
+		switch elemPtr.response_type {
+		case C.String:
+			strLen := int(elemPtr.string_value_len)
+			if strLen > 0 && elemPtr.string_value != nil {
+				bytes := C.GoBytes(unsafe.Pointer(elemPtr.string_value), C.int(strLen))
+				result[i] = bytes
+			} else {
+				result[i] = []byte{}
+			}
+		case C.Int:
+			result[i] = int64(elemPtr.int_value)
+		case C.Float:
+			result[i] = float64(elemPtr.float_value)
+		case C.Bool:
+			result[i] = bool(elemPtr.bool_value)
+		case C.Null:
+			result[i] = nil
+		default:
+			// For other types, we'd need more complex handling
+			// For simplicity, convert to string representation
+			result[i] = fmt.Sprintf("Unsupported type: %d", elemPtr.response_type)
+		}
+	}
+	return result, nil
 }
 
 type clientConfiguration interface {
@@ -116,14 +226,19 @@ type baseClient struct {
 	pending        map[unsafe.Pointer]struct{}
 	coreClient     unsafe.Pointer
 	mu             sync.Mutex
-	handler        *MessageHandler
 	messageHandler *MessageHandler
 }
 
 // SetMessageHandler assigns a message handler to the client for processing pub/sub messages
 func (client *baseClient) SetMessageHandler(handler *MessageHandler) {
 	client.messageHandler = handler
-	globalMessageHandler = handler // Set global handler for FFI callbacks
+
+	// Register the client with the message dispatcher
+	clientID := fmt.Sprintf("%p", client)
+	if clientID != "" && handler != nil {
+		dispatcher := GetDispatcher()
+		dispatcher.RegisterClient(clientID, handler)
+	}
 }
 
 // GetMessageHandler returns the currently assigned message handler
@@ -228,6 +343,13 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 func (client *baseClient) Close() {
 	client.mu.Lock()
 	defer client.mu.Unlock()
+
+	// Unregister from the message dispatcher
+	clientID := fmt.Sprintf("%p", client)
+	if clientID != "" {
+		dispatcher := GetDispatcher()
+		dispatcher.UnregisterClient(clientID)
+	}
 
 	if client.coreClient == nil {
 		return
@@ -6046,9 +6168,6 @@ func (client *baseClient) CopyWithOptions(
 //
 //	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
-//
-//	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
-//	fmt.Println(res) // map[key:[["field1", "entry1"]]
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(

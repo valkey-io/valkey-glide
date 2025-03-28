@@ -51,25 +51,11 @@ func (config *BaseSubscriptionConfig) toProtobuf() *protobuf.PubSubSubscriptions
 func (config *BaseSubscriptionConfig) WithCallback(callback MessageCallback, context any) *BaseSubscriptionConfig {
 	config.callback = callback
 	config.context = context
-
-	// Create a message handler for this callback
-	if callback != nil {
-		// Set up the global message handler to handle push messages from Rust
-		globalMessageHandler = NewMessageHandler(callback, context, createPushResponseResolver())
-	}
-
 	return config
 }
 
 func (config *BaseSubscriptionConfig) SetCallback(callback MessageCallback) *BaseSubscriptionConfig {
 	config.callback = callback
-
-	// Create a message handler for this callback
-	if callback != nil {
-		// Set up the global message handler to handle push messages from Rust
-		globalMessageHandler = NewMessageHandler(callback, nil, createPushResponseResolver())
-	}
-
 	return config
 }
 
