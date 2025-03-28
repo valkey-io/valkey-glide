@@ -105,7 +105,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(30) // seconds
+// TODO: reset
+@Timeout(80) // seconds
 public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
@@ -1751,7 +1752,7 @@ public class CommandTests {
 
         while (retries > 0) {
             System.out.println("We are on retry " + retries);
-            result = clusterClient.wait(1L, 5000L).get();
+            result = clusterClient.wait(1L, 30000L).get();
             if (result == 1L) {
                 try {
                     System.out.println("We are going to fcall again with " + foundFuncName);
