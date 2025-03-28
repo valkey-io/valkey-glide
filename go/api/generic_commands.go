@@ -14,6 +14,8 @@ import (
 type GenericCommands interface {
 	CustomCommand(args []string) (interface{}, error)
 
+	Move(key string, dbIndex int64) (bool, error)
+
 	Scan(cursor int64) (string, []string, error)
 
 	ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string,
