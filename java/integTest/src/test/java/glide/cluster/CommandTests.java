@@ -1735,6 +1735,7 @@ public class CommandTests {
 
         // intentionally using a REPLICA route
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
+        Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
         String foundFuncName = libName;
 
         // function $funcName returns a magic number
@@ -1754,6 +1755,11 @@ public class CommandTests {
             if (result == 1L) {
                 try {
                     System.out.println("We are going to fcall again with " + foundFuncName);
+
+                    ClusterValue<String> data =
+                            clusterClient.info(new Section[] {REPLICATION}, replicaRoute).get();
+                    System.out.println(data.getSingleValue());
+
                     clusterClient.fcall(foundFuncName, replicaRoute).get();
                 } catch (ExecutionException e) {
                     executionException = e;
@@ -1801,7 +1807,6 @@ public class CommandTests {
 
         System.out.println("calling Fcall RO 2");
         // fcall_ro also fails to run it even on primary - another error
-        Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
         executionException =
                 assertThrows(
                         ExecutionException.class,
