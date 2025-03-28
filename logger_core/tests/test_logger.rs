@@ -3,6 +3,7 @@
  */
 use test_env_helpers::*;
 
+
 #[cfg(test)]
 #[after_all]
 #[before_all]
@@ -43,7 +44,7 @@ mod tests {
 
     #[test]
     fn init_does_not_create_log_directory_when_console_init() {
-        init(Some(logger_core::Level::Trace), None);
+        init(Some(logger_core::Level::Trace), None, None);
         let dir_exists = Path::new(FILE_DIRECTORY).is_dir();
         assert!(!dir_exists);
     }
@@ -51,8 +52,8 @@ mod tests {
     #[test]
     fn log_to_console_works_after_multiple_inits_diff_log_level() {
         let identifier = generate_random_string(10);
-        init(Some(logger_core::Level::Trace), None);
-        init(Some(logger_core::Level::Debug), None);
+        init(Some(logger_core::Level::Trace), None, None);
+        init(Some(logger_core::Level::Debug), None, None);
         // you should see in the console something like '2023-07-07T06:57:54.446236Z DEBUG logger_core: e49NaJ5J41 - foo'
         log_debug(identifier.clone(), "foo");
         // make sure that something like '2023-07-07T06:57:54.446236Z DEBUG logger_core: e49NaJ5J41 - boo' does not appear
@@ -62,7 +63,7 @@ mod tests {
     #[test]
     fn log_to_console_does_not_create_log_directory_when_console_init() {
         let identifier = generate_random_string(10);
-        init(Some(logger_core::Level::Trace), None);
+        init(Some(logger_core::Level::Trace), None, None);
         // you should see in the console something like '2023-07-07T06:57:54.446236Z TRACE logger_core: e49NaJ5J41 - foo'
         log_trace(identifier.clone(), "foo");
         let dir_exists = Path::new(FILE_DIRECTORY).is_dir();
@@ -72,8 +73,8 @@ mod tests {
     #[test]
     fn log_to_file_works_after_multiple_inits() {
         let identifier = generate_random_string(10);
-        init(Some(logger_core::Level::Trace), Some(identifier.as_str()));
-        init(Some(logger_core::Level::Debug), Some(identifier.as_str()));
+        init(Some(logger_core::Level::Trace), Some(identifier.as_str()), None);
+        init(Some(logger_core::Level::Debug), Some(identifier.as_str()), None);
         log_debug(identifier.clone(), "foo");
         let contents = get_file_contents(identifier.as_str());
         assert!(
@@ -87,10 +88,10 @@ mod tests {
     #[test]
     fn log_to_file_works_after_console_init() {
         let identifier = generate_random_string(10);
-        init(Some(logger_core::Level::Trace), None);
-        init(Some(logger_core::Level::Trace), Some(identifier.as_str()));
+        init(Some(logger_core::Level::Trace), None, None);
+        init(Some(logger_core::Level::Trace), Some(identifier.as_str()), None);
         let identifier = generate_random_string(10);
-        init(Some(logger_core::Level::Debug), Some(identifier.as_str()));
+        init(Some(logger_core::Level::Debug), Some(identifier.as_str()), None);
         log_debug(identifier.clone(), "foo");
         log_trace(identifier.clone(), "boo");
         let contents = get_file_contents(identifier.as_str());
@@ -106,9 +107,9 @@ mod tests {
     #[test]
     fn log_to_file_disabled_after_console_init() {
         let identifier = generate_random_string(10);
-        init(Some(logger_core::Level::Trace), Some(identifier.as_str()));
+        init(Some(logger_core::Level::Trace), Some(identifier.as_str()), None);
         log_trace(identifier.clone(), "foo");
-        init(Some(logger_core::Level::Trace), None);
+        init(Some(logger_core::Level::Trace), None, None);
         log_trace(identifier.clone(), "boo");
         let contents = get_file_contents(identifier.as_str());
         assert!(

@@ -1,3 +1,5 @@
+mod ffi;
+
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
@@ -18,6 +20,7 @@ use tracing_subscriber::{
     Registry,
 };
 
+
 use tracing_subscriber::{
     self,
     filter::{self, LevelFilter},
@@ -25,6 +28,7 @@ use tracing_subscriber::{
     reload::{self, Handle},
 };
 
+use crate::ffi::CallbackSubscriber;
 use std::str::FromStr;
 
 // Layer-Filter pair determines whether a log will be collected
@@ -42,8 +46,8 @@ type FileReload = Handle<
 >;
 
 pub struct Reloads {
-    console_reload: RwLock<reload::Handle<InnerFiltered, Registry>>,
-    file_reload: RwLock<FileReload>,
+    console_reload: Option<RwLock<reload::Handle<InnerFiltered, Registry>>>,
+    file_reload: Option<RwLock<FileReload>>,
 }
 
 pub struct InitiateOnce {
@@ -133,19 +137,20 @@ pub fn create_directory_from_env(envname: &str) -> Option<String> {
     Some(dirpath)
 }
 
-// Initialize the global logger to error level on the first call only
-// In any of the calls to the function, including the first - resetting the existence loggers to the new setting
-// provided by using the global reloadable handle
-// The logger will save only logs of the given level or above.
-pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
+/// # Summary
+/// Initialize the global logger to error level on the first call only
+/// In any of the calls to the function, including the first - resetting the existence loggers to the new setting
+/// provided by using the global reloadable handle
+/// The logger will save only logs of the given level or above.
+///
+/// # Parameters
+/// - [minimal_level] The minimal log level to use
+/// - [file_name] The name of the file to log to or [None].
+/// - [subscriber] The callback subscriber or [None]. Note: If the callback subscriber is enabled, file-logging and std-logging will be disabled.
+pub fn init(minimal_level: Option<Level>, file_name: Option<&str>, subscriber: Option<CallbackSubscriber>) -> Level {
     let level = minimal_level.unwrap_or(Level::Warn);
     let level_filter = level.to_filter();
     let reloads = INITIATE_ONCE.init_once.get_or_init(|| {
-        let stdout_fmt = tracing_subscriber::fmt::layer()
-            .with_ansi(true)
-            .with_filter(LevelFilter::OFF);
-
-        let (stdout_layer, stdout_reload) = reload::Layer::new(stdout_fmt);
 
         // Check if the environment variable GLIDE_LOG is set
         let logs_dir =
@@ -155,11 +160,6 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
             logs_dir,
             file_name.unwrap_or("output.log"),
         );
-
-        let file_fmt = tracing_subscriber::fmt::layer()
-            .with_writer(file_appender)
-            .with_filter(LevelFilter::OFF);
-        let (file_layer, file_reload) = reload::Layer::new(file_fmt);
 
         // If user has set the environment variable "RUST_LOG" with a valid log verbosity, use it
         let log_level = if let Ok(level) = std::env::var("RUST_LOG") {
@@ -176,52 +176,84 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
             .with_target("logger_core", log_level)
             .with_target(std::env!("CARGO_PKG_NAME"), log_level);
 
-        tracing_subscriber::registry()
-            .with(stdout_layer)
-            .with(file_layer)
-            .with(targets_filter)
-            .init();
+        if let Some(subscriber) = subscriber {
+            let targets_filter = filter::Targets::new()
+                .with_target("glide", LevelFilter::TRACE)
+                .with_target("redis", LevelFilter::TRACE)
+                .with_target("logger_core", LevelFilter::TRACE)
+                .with_target(std::env!("CARGO_PKG_NAME"), LevelFilter::TRACE);
+            tracing_subscriber::registry()
+                .with(subscriber)
+                .with(targets_filter)
+                .init();
 
-        let reloads: Reloads = Reloads {
-            console_reload: RwLock::new(stdout_reload),
-            file_reload: RwLock::new(file_reload),
-        };
-        reloads
+            let reloads: Reloads = Reloads {
+                console_reload: None,
+                file_reload: None,
+            };
+            reloads
+        } else {
+            let stdout_fmt = tracing_subscriber::fmt::layer()
+                .with_ansi(true)
+                .with_filter(LevelFilter::OFF);
+
+            let (stdout_layer, stdout_reload) = reload::Layer::new(stdout_fmt);
+            let file_fmt = tracing_subscriber::fmt::layer()
+                .with_writer(file_appender)
+                .with_filter(LevelFilter::OFF);
+            let (file_layer, file_reload) = reload::Layer::new(file_fmt);
+
+            tracing_subscriber::registry()
+                .with(stdout_layer)
+                .with(file_layer)
+                .with(targets_filter)
+                .init();
+
+            let reloads: Reloads = Reloads {
+                console_reload: Some(RwLock::new(stdout_reload)),
+                file_reload: Some(RwLock::new(file_reload)),
+            };
+            reloads
+        }
     });
 
     match file_name {
         None => {
-            let _ = reloads
-                .console_reload
-                .write()
-                .expect("error reloading stdout")
-                .modify(|layer| (*layer.filter_mut() = level_filter));
-            let _ = reloads
-                .file_reload
-                .write()
-                .expect("error reloading file appender")
-                .modify(|layer| {
-                    *layer.filter_mut() = LevelFilter::OFF;
-                });
+            if let Some(console_reload) = &reloads.console_reload {
+                let _ = console_reload
+                    .write()
+                    .expect("error reloading stdout")
+                    .modify(|layer| (*layer.filter_mut() = level_filter));
+            }
+            if let Some(file_reload) = &reloads.file_reload {
+                let _ = file_reload
+                    .write()
+                    .expect("error reloading file appender")
+                    .modify(|layer| {
+                        *layer.filter_mut() = LevelFilter::OFF;
+                    });
+            }
         }
         Some(file) => {
-            // Check if the environment variable GLIDE_LOG is set
-            let logs_dir =
-                create_directory_from_env(ENV_GLIDE_LOG_DIR).unwrap_or(FILE_DIRECTORY.to_string());
-            let file_appender = LazyRollingFileAppender::new(Rotation::HOURLY, logs_dir, file);
-            let _ = reloads
-                .file_reload
-                .write()
-                .expect("error reloading file appender")
-                .modify(|layer| {
-                    *layer.filter_mut() = level_filter;
-                    *layer.inner_mut().writer_mut() = file_appender;
-                });
-            let _ = reloads
-                .console_reload
-                .write()
-                .expect("error reloading stdout")
-                .modify(|layer| (*layer.filter_mut() = LevelFilter::OFF));
+            if let Some(console_reload) = &reloads.console_reload {
+                let _ = console_reload
+                    .write()
+                    .expect("error reloading stdout")
+                    .modify(|layer| (*layer.filter_mut() = LevelFilter::OFF));
+            }
+            if let Some(file_reload) = &reloads.file_reload {
+                // Check if the environment variable GLIDE_LOG is set
+                let logs_dir =
+                    create_directory_from_env(ENV_GLIDE_LOG_DIR).unwrap_or(FILE_DIRECTORY.to_string());
+                let file_appender = LazyRollingFileAppender::new(Rotation::HOURLY, logs_dir, file);
+                let _ = file_reload
+                    .write()
+                    .expect("error reloading file appender")
+                    .modify(|layer| {
+                        *layer.filter_mut() = level_filter;
+                        *layer.inner_mut().writer_mut() = file_appender;
+                    });
+            }
         }
     };
     level
@@ -234,7 +266,7 @@ macro_rules! create_log {
             message: Message,
         ) {
             if INITIATE_ONCE.init_once.get().is_none() {
-                init(Some(Level::Warn), None);
+                init(Some(Level::Warn), None, None);
             };
             let message_ref = message.as_ref();
             let identifier_ref = log_identifier.as_ref();
