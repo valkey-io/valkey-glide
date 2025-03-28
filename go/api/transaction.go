@@ -9,14 +9,13 @@ import "C"
 
 import (
 	"fmt"
+	"unsafe"
+
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/errors"
+	"google.golang.org/protobuf/proto"
 )
 
-// BaseClient defines an interface for methods common to both [GlideClientCommands] and [GlideClusterClientCommands].
-type TransactionClient interface {
-	TransactionBaseCommands
-	// Close terminates the client by closing all associated resources.
-	Close()
-}
 type Transaction struct {
 	*baseClient // Embed baseClient to inherit all methods like Get
 	commands    []Cmder
@@ -51,35 +50,102 @@ func NewExecCommand() Cmder {
 // Override ExecuteCommand to queue commands in the transaction
 func (t *Transaction) ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
 	fmt.Println("Transaction ExecuteCommand called")
-	fmt.Println("ExecuteCommand Param: ", requestType, args)
-	fmt.Println("t.commands Before: ", t.commands)
 	t.commands = append(t.commands, &GenericCommand{name: requestType, args: args})
-	//fmt.Println("t.commands After: ", t.commands)
-
 	return nil, nil // Queue the command instead of executing immediately
 }
 
 // Exec executes all queued commands as a transaction
 func (t *Transaction) Exec() error {
 	// Add MULTI and EXEC to the command queue
-
+	//t.commands = append([]Cmder{NewMultiCommand()}, t.commands...)
 	// t.commands = append(t.commands, &GenericCommand{C.Get, []string{"apples"}})
-	t.commands = append([]Cmder{NewMultiCommand()}, t.commands...)
-	t.commands = append(t.commands, NewExecCommand())
+	// t.commands = append(t.commands, NewExecCommand())
 
-	for i, cmd := range t.commands {
-		fmt.Println("CommandList:", i, cmd.Name(), cmd.Args())
-	}
 	// Execute all commands
-	for i, cmd := range t.commands {
-		fmt.Println("Exec Command:", i, cmd.Name(), cmd.Args())
-		result, err := t.baseClient.ExecuteCommand(cmd.Name(), cmd.Args()) // Use BaseClient for execution
-		fmt.Println(result)
-		if err != nil {
-			return fmt.Errorf("failed to execute command %s: %w", cmd.Name(), err)
-		}
-	}
+	result, err := t.baseClient.executeTransactionCommandWithRoute(t.commands, nil) // Use BaseClient for execution
+	fmt.Println(result)
+	fmt.Println(err)
+	// for _, cmd := range t.commands {
+	// 	_, err := t.baseClient.executeTransactionCommandWithRoute(t.commands, nil) // Use BaseClient for execution
+	// 	if err != nil {
+	// 		return fmt.Errorf("failed to execute command %s: %w", cmd.Name(), err)
+	// 	}
+	// }
 	return nil
+}
+
+func (client *baseClient) executeTransactionCommandWithRoute(
+	commands []Cmder,
+	route config.Route,
+) (*C.struct_CommandResponse, error) {
+
+	var routeBytesPtr *C.uchar = nil
+	var routeBytesCount C.uintptr_t = 0
+	if route != nil {
+		routeProto, err := routeToProtobuf(route)
+		if err != nil {
+			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
+		}
+		msg, err := proto.Marshal(routeProto)
+		if err != nil {
+			return nil, err
+		}
+
+		routeBytesCount = C.uintptr_t(len(msg))
+		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+	}
+
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+	client.mu.Unlock()
+	for _, cmd := range commands {
+		var cArgsPtr *C.uintptr_t = nil
+		var argLengthsPtr *C.ulong = nil
+		if len(cmd.Args()) > 0 {
+			cArgs, argLengths := toCStrings(cmd.Args())
+			cArgsPtr = &cArgs[0]
+			argLengthsPtr = &argLengths[0]
+		}
+
+		C.command(
+			client.coreClient,
+			C.uintptr_t(pinnedChannelPtr),
+			uint32(cmd.Name()),
+			C.size_t(len(cmd.Args())),
+			cArgsPtr,
+			argLengthsPtr,
+			routeBytesPtr,
+			routeBytesCount,
+		)
+		payload := <-resultChannel
+		fmt.Println("payload: ", payload.value)
+	}
+
+	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return nil, payload.error
+	}
+	fmt.Println("payload1: ", payload.value)
+	return payload.value, nil
 }
 
 // NewTransaction creates a Transaction by embedding the BaseClient

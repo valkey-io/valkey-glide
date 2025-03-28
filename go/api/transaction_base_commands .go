@@ -8,7 +8,7 @@ package api
 //
 // [valkey.io]: https://valkey.io/commands/#transactions
 type TransactionBaseCommands interface {
-	Watch(keys string) (string, error)
+	Watch(keys []string) (string, error)
 
 	Exec() error
 
