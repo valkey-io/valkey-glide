@@ -1,6 +1,6 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-namespace Tests.Unit;
+namespace Valkey.Glide.IntegrationTests.Unit;
 
 public class GildeStringTests
 {

@@ -4,7 +4,7 @@ using System.Collections;
 using System.ComponentModel;
 using System.Text;
 
-namespace Glide;
+namespace Valkey.Glide;
 
 /// <summary>
 /// Fancy extensions for <see langword="string" /> and <see langword="byte[]" />, which help working with <see cref="GlideString" />.

@@ -3,11 +3,13 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-using static Glide.ConnectionConfiguration;
+using Valkey.Glide.IntegrationTests.Integration;
 
-[assembly: AssemblyFixture(typeof(Tests.Integration.TestConfiguration))]
+using static Valkey.Glide.ConnectionConfiguration;
 
-namespace Tests.Integration;
+[assembly: AssemblyFixture(typeof(TestConfiguration))]
+
+namespace Valkey.Glide.IntegrationTests.Integration;
 
 public class TestConfiguration : IDisposable
 {

@@ -6,13 +6,13 @@ using System.Text.Json;
 
 using CommandLine;
 
-using Glide;
-
 using LinqStatistics;
 
 using StackExchange.Redis;
 
-using static Glide.ConnectionConfiguration;
+using static Valkey.Glide.ConnectionConfiguration;
+
+namespace Valkey.Glide.CustomBenchmark;
 
 public static class MainClass
 {
