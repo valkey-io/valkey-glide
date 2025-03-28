@@ -197,3 +197,38 @@ const (
 	// Represents a stream data type
 	ObjectTypeStream ObjectType = "stream"
 )
+
+// The unit of measurement for the geospatial data
+type GeoUnit string
+
+const (
+	// Represents distance in kilometers
+	GeoUnitKilometers GeoUnit = "km"
+	// Represents distance in meters
+	GeoUnitMeters GeoUnit = "m"
+	// Represents distance in miles
+	GeoUnitMiles GeoUnit = "mi"
+	// Represents distance in feet
+	GeoUnitFeet GeoUnit = "ft"
+)
+
+// Valkey API keywords for the `GeoSearch` command
+const (
+	WithCoordValkeyApi = "WITHCOORD"
+	WithDistValkeyApi  = "WITHDIST"
+	WithHashValkeyApi  = "WITHHASH"
+)
+
+// The search origin API keyword for the `GeoCoordOrigin`
+const (
+	GeoCoordOriginAPIKeyword  = "FROMLONLAT"
+	GeoMemberOriginAPIKeyword = "FROMMEMBER"
+)
+
+// The shape of the search area for the `GeoSearch` command
+type SearchShape string
+
+const (
+	BYRADIUS SearchShape = "BYRADIUS"
+	BYBOX    SearchShape = "BYBOX"
+)
