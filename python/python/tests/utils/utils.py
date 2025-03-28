@@ -11,7 +11,8 @@ from glide.constants import (
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
-from glide.glide_client import TGlideClient
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.routes import AllNodes
 from packaging import version
 
 T = TypeVar("T")
@@ -83,7 +84,7 @@ async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> 
     global version_str
     if not version_str:
         info = parse_info_response(await client.info([InfoSection.SERVER]))
-        version_str = info.get("valkey_version") or info.get("redis_version")
+        version_str = info.get("valkey_version") or info.get("redis_version")  # type: ignore
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
@@ -373,3 +374,36 @@ def check_function_stats_response(
         b"LUA": {b"libraries_count": lib_count, b"functions_count": function_count}
     }
     assert expected == response.get(b"engines")
+
+
+async def set_new_acl_username_with_password(
+    client: TGlideClient, username: str, password: str
+):
+    """
+    Sets a new ACL user with the provided password
+    """
+    try:
+        if isinstance(client, GlideClient):
+            await client.custom_command(
+                ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"]
+            )
+        elif isinstance(client, GlideClusterClient):
+            await client.custom_command(
+                ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"],
+                route=AllNodes(),
+            )
+    except Exception as e:
+        raise RuntimeError(f"Failed to set ACL user: {e}")
+
+
+async def delete_acl_username_and_password(client: TGlideClient, username: str):
+    """
+    Deletes the username and its password from the ACL list
+    """
+    if isinstance(client, GlideClient):
+        return await client.custom_command(["ACL", "DELUSER", username])
+
+    elif isinstance(client, GlideClusterClient):
+        return await client.custom_command(
+            ["ACL", "DELUSER", username], route=AllNodes()
+        )

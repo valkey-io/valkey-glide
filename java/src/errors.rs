@@ -94,15 +94,14 @@ pub fn throw_java_exception(env: &mut JNIEnv, exception_type: ExceptionType, mes
                 .unwrap_or_else(|err| {
                     error!(
                         "Failed to create exception with string {}: {}",
-                        message,
-                        err.to_string()
+                        message, err
                     );
                 });
         }
         Err(err) => {
             error!(
                 "Failed to check if an exception is currently being thrown: {}",
-                err.to_string()
+                err
             );
         }
     }

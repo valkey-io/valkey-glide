@@ -100,7 +100,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1723,25 +1722,24 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
-    @Disabled("flaky test: re-enable once fixed")
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
     public void fcall_readonly_function(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
-        String libName = "fcall_readonly_function";
+        String libName = "fcall_readonly_function_" + UUID.randomUUID().toString().replace("-", "_");
         // intentionally using a REPLICA route
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
-        String funcName = "fcall_readonly_function";
+        String funcName = libName;
 
         // function $funcName returns a magic number
         String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
         // let replica sync with the primary node
-        assertEquals(1L, clusterClient.wait(1L, 4000L).get());
+        assertEquals(1L, clusterClient.wait(1L, 5000L).get());
 
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
@@ -1772,12 +1770,13 @@ public class CommandTests {
                         .contains("Can not execute a script with write flag using *_ro command."));
 
         // create the same function, but with RO flag
-        code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), true);
+        String funcNameRO = funcName + "_ro";
+        code = generateLuaLibCode(libName, Map.of(funcNameRO, "return 42"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
         // fcall should succeed now
-        assertEquals(42L, clusterClient.fcall(funcName, replicaRoute).get().getSingleValue());
+        assertEquals(42L, clusterClient.fcall(funcNameRO, replicaRoute).get().getSingleValue());
 
         assertEquals(OK, clusterClient.functionDelete(libName).get());
     }
@@ -3414,6 +3413,7 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
     }
 
+    @Timeout(20)
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
@@ -3436,8 +3436,33 @@ public class CommandTests {
 
                 Thread.sleep(1000);
 
-                boolean foundUnkillable = false;
+                // To prevent timeout issues, ensure script is actually running before trying to kill it
                 int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        clusterClient.ping().get(); // Dummy test command
+                    } catch (ExecutionException err) {
+                        if (err.getCause() instanceof RequestException) {
+
+                            // Check if the script is executing
+                            if (err.getMessage().toLowerCase().contains("valkey is busy running a script")) {
+                                break;
+                            }
+
+                            // Try rerunning the script if 2 seconds have passed and if the exception has not
+                            // changed to "busy running a script"
+                            if (timeout <= 2000
+                                    && err.getMessage().toLowerCase().contains("no scripts in execution right now")) {
+                                promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+                                Thread.sleep(1000);
+                            }
+                        }
+                    }
+                    timeout -= 500;
+                }
+
+                boolean foundUnkillable = false;
+                timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         // valkey kills a script with 5 sec delay
@@ -3450,6 +3475,15 @@ public class CommandTests {
                                 && execException.getMessage().toLowerCase().contains("unkillable")) {
                             foundUnkillable = true;
                             break;
+                        }
+
+                        if (execException.getCause() instanceof RequestException
+                                && execException
+                                        .getMessage()
+                                        .toLowerCase()
+                                        .contains("no scripts in execution right now")) {
+                            promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+                            Thread.sleep(1000);
                         }
                     }
                     Thread.sleep(500);

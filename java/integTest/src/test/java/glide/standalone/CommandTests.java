@@ -70,7 +70,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1700,11 +1699,11 @@ public class CommandTests {
         script.close();
     }
 
-    @Disabled("flaky test: re-enable once fixed")
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
     public void scriptKill(GlideClient regularClient) {
+
         // Verify that script_kill raises an error when no script is running
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> regularClient.scriptKill().get());
@@ -1715,27 +1714,76 @@ public class CommandTests {
                         .toLowerCase()
                         .contains("no scripts in execution right now"));
 
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
-
         // create and load a long-running script
-        Script script = new Script(createLongRunningLuaScript(5, true), true);
+        Script script = new Script(createLongRunningLuaScript(6, true), true);
 
         try (var testClient =
                 GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 testClient.invokeScript(script);
-
                 Thread.sleep(1000);
+
+                // Wait until script runs
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        regularClient.ping().get(); // Dummy test command
+                    } catch (ExecutionException err) {
+                        if (err.getCause() instanceof RequestException) {
+
+                            // Check if the script is executing
+                            if (err.getMessage().toLowerCase().contains("valkey is busy running a script")) {
+                                break;
+                            }
+
+                            // Try rerunning the script if 2 seconds have passed and if the exception has not
+                            // changed to "busy running a script"
+                            if (timeout <= 2000
+                                    && err.getMessage().toLowerCase().contains("no scripts in execution right now")) {
+                                testClient.invokeScript(script);
+                                Thread.sleep(1000);
+                            }
+                        }
+                    }
+                    timeout -= 500;
+                }
 
                 // Run script kill until it returns OK
                 boolean scriptKilled = false;
-                int timeout = 4000; // ms
+                timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         assertEquals(OK, regularClient.scriptKill().get());
                         scriptKilled = true;
                         break;
+                    } catch (ExecutionException exception) {
+                        // If 2s passed and exception still says "no scripts in execution right now",
+                        // rerun script.
+                        if (timeout <= 2000
+                                && exception.getCause() instanceof RequestException
+                                && exception
+                                        .getMessage()
+                                        .toLowerCase()
+                                        .contains("no scripts in execution right now")) {
+                            testClient.invokeScript(script);
+                            Thread.sleep(1000);
+
+                            // Wait until script runs
+                            int scriptTimeout = 2000; // ms
+                            while (scriptTimeout >= 0) {
+                                try {
+                                    regularClient.ping().get(); // Dummy test
+                                } catch (ExecutionException err) {
+                                    if (err.getCause() instanceof RequestException
+                                            && err.getMessage()
+                                                    .toLowerCase()
+                                                    .contains("valkey is busy running a script")) {
+                                        break;
+                                    }
+                                }
+                                scriptTimeout -= 500;
+                            }
+                        }
                     } catch (RequestException ignored) {
                     }
                     Thread.sleep(500);
@@ -1760,7 +1808,7 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
     }
 
-    @Disabled("flaky test: re-enable once fixed")
+    @Timeout(20)
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
@@ -1780,8 +1828,33 @@ public class CommandTests {
 
                 Thread.sleep(1000);
 
-                boolean foundUnkillable = false;
+                // To prevent timeout issues, ensure script is actually running before trying to kill it
                 int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        regularClient.ping().get(); // Dummy test command
+                    } catch (ExecutionException err) {
+                        if (err.getCause() instanceof RequestException) {
+
+                            // Check if the script is executing
+                            if (err.getMessage().toLowerCase().contains("valkey is busy running a script")) {
+                                break;
+                            }
+
+                            // Try rerunning the script if 2 seconds have passed and if the exception has not
+                            // changed to "busy running a script"
+                            if (timeout <= 2000
+                                    && err.getMessage().toLowerCase().contains("no scripts in execution right now")) {
+                                promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+                                Thread.sleep(1000);
+                            }
+                        }
+                    }
+                    timeout -= 500;
+                }
+
+                boolean foundUnkillable = false;
+                timeout = 4000;
                 while (timeout >= 0) {
                     try {
                         // valkey kills a script with 5 sec delay
@@ -1794,6 +1867,15 @@ public class CommandTests {
                                 && execException.getMessage().toLowerCase().contains("unkillable")) {
                             foundUnkillable = true;
                             break;
+                        }
+
+                        if (execException.getCause() instanceof RequestException
+                                && execException
+                                        .getMessage()
+                                        .toLowerCase()
+                                        .contains("no scripts in execution right now")) {
+                            promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+                            Thread.sleep(1000);
                         }
                     }
                     Thread.sleep(500);

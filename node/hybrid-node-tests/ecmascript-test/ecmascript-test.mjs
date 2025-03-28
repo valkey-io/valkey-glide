@@ -1,8 +1,8 @@
 /* eslint no-undef: off */
+import { GlideClient } from "@valkey/valkey-glide";
 import { spawn } from "child_process";
 import findFreePorts from "find-free-ports";
-import { GlideClient } from "@valkey/valkey-glide";
-import { checkWhichCommandAvailable } from "../../tests/TestUtilities";
+import { checkWhichCommandAvailable } from "../utils.js";
 
 const PORT_NUMBER = 4001;
 
