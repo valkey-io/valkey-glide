@@ -76,6 +76,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.ProtocolVersion;
+import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -105,8 +106,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-// TODO: reset
-@Timeout(80) // seconds
+@Timeout(30) // seconds
 public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
@@ -174,6 +174,31 @@ public class CommandTests {
                                                 commonClusterClientConfig()
                                                         .requestTimeout(7000)
                                                         .protocol(ProtocolVersion.RESP3)
+                                                        .build())
+                                        .get())));
+    }
+
+    @SneakyThrows
+    public static Stream<Arguments> getReadFromReplicaClients() {
+        return Stream.of(
+                Arguments.of(
+                        named(
+                                "RESP2",
+                                GlideClusterClient.createClient(
+                                                commonClusterClientConfig()
+                                                        .requestTimeout(7000)
+                                                        .protocol(ProtocolVersion.RESP2)
+                                                        .readFrom(ReadFrom.PREFER_REPLICA)
+                                                        .build())
+                                        .get())),
+                Arguments.of(
+                        named(
+                                "RESP3",
+                                GlideClusterClient.createClient(
+                                                commonClusterClientConfig()
+                                                        .requestTimeout(7000)
+                                                        .protocol(ProtocolVersion.RESP3)
+                                                        .readFrom(ReadFrom.PREFER_REPLICA)
                                                         .build())
                                         .get())));
     }
@@ -1726,7 +1751,7 @@ public class CommandTests {
     //    @RepeatedTest(500)
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getReadFromReplicaClients")
     public void fcall_readonly_function(GlideClusterClient clusterClient) {
         //        GlideClusterClient clusterClient =
         // GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -1752,7 +1777,7 @@ public class CommandTests {
 
         while (retries > 0) {
             System.out.println("We are on retry " + retries);
-            result = clusterClient.wait(1L, 30000L).get();
+            result = clusterClient.wait(1L, 5000L).get();
             if (result == 1L) {
                 try {
                     System.out.println("We are going to fcall again with " + foundFuncName);
