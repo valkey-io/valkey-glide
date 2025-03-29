@@ -109,7 +109,7 @@ func (client *baseClient) executeTransactionCommandWithRoute(
 		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
-	client.mu.Unlock()
+
 	for _, cmd := range commands {
 		var cArgsPtr *C.uintptr_t = nil
 		var argLengthsPtr *C.ulong = nil
@@ -129,10 +129,11 @@ func (client *baseClient) executeTransactionCommandWithRoute(
 			routeBytesPtr,
 			routeBytesCount,
 		)
+
 		payload := <-resultChannel
 		fmt.Println("payload: ", payload.value)
 	}
-
+	client.mu.Unlock()
 	payload := <-resultChannel
 
 	client.mu.Lock()
