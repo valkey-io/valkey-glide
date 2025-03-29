@@ -248,9 +248,9 @@ public static class MainClass
         return await Task.WhenAll(tasks);
     }
 
-    private static async Task RunWithParameters(int total_commands,
-        int data_size,
-        int num_of_concurrent_tasks,
+    private static async Task RunWithParameters(int totalCommands,
+        int dataSize,
+        int numOfConcurrentTasks,
         string clientsToRun,
         string host,
         int clientCount,
@@ -262,19 +262,19 @@ public static class MainClass
             {
                 StandaloneClientConfiguration config = new StandaloneClientConfigurationBuilder()
                     .WithAddress(host, PORT).WithTls(useTLS).Build();
-                BaseClient glide_client = GlideClient.CreateClient(config).Result;
+                BaseClient glideClient = GlideClient.CreateClient(config).GetAwaiter().GetResult();
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
-                    (async (key) => await glide_client.Get(key),
-                     async (key, value) => await glide_client.Set(key, value),
-                     () => glide_client.Dispose()));
+                    (async (key) => await glideClient.Get(key),
+                     async (key, value) => await glideClient.Set(key, value),
+                     () => glideClient.Dispose()));
             });
 
             await RunClients(
                 clients,
                 "glide",
-                total_commands,
-                data_size,
-                num_of_concurrent_tasks
+                totalCommands,
+                dataSize,
+                numOfConcurrentTasks
             );
         }
 
@@ -292,9 +292,9 @@ public static class MainClass
             await RunClients(
                 clients,
                 "StackExchange.Redis",
-                total_commands,
-                data_size,
-                num_of_concurrent_tasks
+                totalCommands,
+                dataSize,
+                numOfConcurrentTasks
             );
 
             foreach (ClientWrapper client in clients)
