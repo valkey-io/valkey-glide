@@ -1619,7 +1619,7 @@ the following restrictions:
 
 ----
 
-Package: async-trait:0.1.87
+Package: async-trait:0.1.88
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2764,59 +2764,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: byteorder:1.5.0
-
-The following copyrights and licenses were found in the source code of this package:
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-  --
-
-This is free and unencumbered software released into the public domain.
-
-Anyone is free to copy, modify, publish, use, compile, sell, or
-distribute this software, either in source code form or as a compiled
-binary, for any purpose, commercial or non-commercial, and by any
-means.
-
-In jurisdictions that recognize copyright laws, the author or authors
-of this software dedicate any and all copyright interest in the
-software to the public domain. We make this dedication for the benefit
-of the public at large and to the detriment of our heirs and
-successors. We intend this dedication to be an overt act of
-relinquishment in perpetuity of all present and future rights to this
-software under copyright law.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-For more information, please refer to <http://unlicense.org/>
-
-----
-
-Package: bytes:1.10.0
+Package: bytes:1.10.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -4519,7 +4467,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: deranged:0.3.11
+Package: deranged:0.4.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -10248,7 +10196,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: iana-time-zone:0.1.61
+Package: iana-time-zone:0.1.62
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12136,7 +12084,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libc:0.2.170
+Package: libc:0.2.171
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12619,7 +12567,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: log:0.4.26
+Package: log:0.4.27
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14831,7 +14779,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: once_cell:1.20.3
+Package: once_cell:1.21.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17375,7 +17323,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ppv-lite86:0.2.20
+Package: ppv-lite86:0.2.21
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17833,7 +17781,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: protobuf:3.7.1
+Package: protobuf:3.7.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17858,7 +17806,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: protobuf-support:3.7.1
+Package: protobuf-support:3.7.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19028,7 +18976,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: quote:1.0.39
+Package: quote:1.0.40
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20025,7 +19973,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ring:0.17.11
+Package: ring:0.17.14
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22627,7 +22575,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde:1.0.218
+Package: serde:1.0.219
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22856,7 +22804,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde_derive:1.0.218
+Package: serde_derive:1.0.219
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23934,7 +23882,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.99
+Package: syn:2.0.100
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25074,7 +25022,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time:0.3.37
+Package: time:0.3.41
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25303,7 +25251,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time-core:0.1.2
+Package: time-core:0.1.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25532,7 +25480,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time-macros:0.2.19
+Package: time-macros:0.2.22
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26259,7 +26207,7 @@ the following restrictions:
 
 ----
 
-Package: tokio:1.43.0
+Package: tokio:1.44.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26563,7 +26511,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tokio-util:0.7.13
+Package: tokio-util:0.7.14
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -30470,7 +30418,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-link:0.1.0
+Package: windows-link:0.1.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33218,7 +33166,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy:0.7.35
+Package: zerocopy:0.8.24
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33470,7 +33418,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.7.35
+Package: zerocopy-derive:0.8.24
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34639,7 +34587,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: google-api-core:2.24.1
+Package: google-api-core:2.24.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35471,7 +35419,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: googleapis-common-protos:1.69.0
+Package: googleapis-common-protos:1.69.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35704,7 +35652,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: iniconfig:2.0.0
+Package: iniconfig:2.1.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36854,7 +36802,7 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 
 ----
 
-Package: platformdirs:4.3.6
+Package: platformdirs:4.3.7
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36904,7 +36852,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: proto-plus:1.26.0
+Package: proto-plus:1.26.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37143,7 +37091,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: protobuf:5.29.3
+Package: protobuf:6.30.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37226,7 +37174,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: pyasn1-modules:0.4.1
+Package: pyasn1-modules:0.4.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37307,7 +37255,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyparsing:3.2.1
+Package: pyparsing:3.2.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -38411,7 +38359,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: types-protobuf:5.29.1.20250208
+Package: types-protobuf:5.29.1.20250315
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -38620,23 +38568,6 @@ The following copyrights and licenses were found in the source code of this pack
 ----
 
 Package: typing-extensions:4.8.0
-
-The following copyrights and licenses were found in the source code of this package:
-
-PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
-
-1. This LICENSE AGREEMENT is between the Python Software Foundation ("PSF"), and the Individual or Organization ("Licensee") accessing and otherwise using this software ("Python") in source or binary form and its associated documentation.
-2. Subject to the terms and conditions of this License Agreement, PSF hereby grants Licensee a nonexclusive, royalty-free, world-wide license to reproduce, analyze, test, perform and/or display publicly, prepare derivative works, distribute, and otherwise use Python alone or in any derivative version, provided, however, that PSF's License Agreement and PSF's notice of copyright, i.e., "Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006 Python Software Foundation; All Rights Reserved" are retained in Python alone or in any derivative version prepared by Licensee.
-3. In the event Licensee prepares a derivative work that is based on or incorporates Python or any part thereof, and wants to make the derivative work available to others as provided herein, then Licensee hereby agrees to include in any such work a brief summary of the changes made to Python.
-4. PSF is making Python available to Licensee on an "AS IS" basis. PSF MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR IMPLIED. BY WAY OF EXAMPLE, BUT NOT LIMITATION, PSF MAKES NO AND DISCLAIMS ANY REPRESENTATION OR WARRANTY OF MERCHANTABILITY OR FITNESS FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF PYTHON WILL NOT INFRINGE ANY THIRD PARTY RIGHTS.
-5. PSF SHALL NOT BE LIABLE TO LICENSEE OR ANY OTHER USERS OF PYTHON FOR ANY INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES OR LOSS AS A RESULT OF MODIFYING, DISTRIBUTING, OR OTHERWISE USING PYTHON, OR ANY DERIVATIVE THEREOF, EVEN IF ADVISED OF THE POSSIBILITY THEREOF.
-6. This License Agreement will automatically terminate upon a material breach of its terms and conditions.
-7. Nothing in this License Agreement shall be deemed to create any relationship of agency, partnership, or joint venture between PSF and Licensee. This License Agreement does not grant permission to use PSF trademarks or trade name in a trademark sense to endorse or promote products or services of Licensee, or any third party.
-8. By copying, installing or otherwise using Python, Licensee agrees to be bound by the terms and conditions of this License Agreement.
-
-----
-
-Package: typing-extensions:4.12.2
 
 The following copyrights and licenses were found in the source code of this package:
 
