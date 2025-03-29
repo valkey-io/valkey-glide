@@ -1671,7 +1671,7 @@ the following restrictions:
 
 ----
 
-Package: async-trait:0.1.87
+Package: async-trait:0.1.88
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2868,7 +2868,7 @@ For more information, please refer to <http://unlicense.org/>
 
 ----
 
-Package: bytes:1.10.0
+Package: bytes:1.10.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -4825,7 +4825,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: deranged:0.3.11
+Package: deranged:0.4.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -10554,7 +10554,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: iana-time-zone:0.1.61
+Package: iana-time-zone:0.1.62
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12213,7 +12213,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libc:0.2.170
+Package: libc:0.2.171
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12714,7 +12714,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: log:0.4.26
+Package: log:0.4.27
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13502,7 +13502,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: napi:2.16.16
+Package: napi:2.16.17
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13527,7 +13527,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: napi-build:2.1.5
+Package: napi-build:2.1.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -15026,7 +15026,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: once_cell:1.20.3
+Package: once_cell:1.21.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17341,7 +17341,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ppv-lite86:0.2.20
+Package: ppv-lite86:0.2.21
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17799,7 +17799,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: protobuf:3.7.1
+Package: protobuf:3.7.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17824,7 +17824,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: protobuf-support:3.7.1
+Package: protobuf-support:3.7.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17849,7 +17849,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: quote:1.0.39
+Package: quote:1.0.40
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19533,7 +19533,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ring:0.17.11
+Package: ring:0.17.14
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22364,7 +22364,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde:1.0.218
+Package: serde:1.0.219
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22593,7 +22593,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde_derive:1.0.218
+Package: serde_derive:1.0.219
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23671,7 +23671,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.99
+Package: syn:2.0.100
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25045,7 +25045,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time:0.3.37
+Package: time:0.3.41
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25274,7 +25274,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time-core:0.1.2
+Package: time-core:0.1.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25503,7 +25503,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time-macros:0.2.19
+Package: time-macros:0.2.22
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26230,7 +26230,7 @@ the following restrictions:
 
 ----
 
-Package: tokio:1.43.0
+Package: tokio:1.44.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26534,7 +26534,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tokio-util:0.7.13
+Package: tokio-util:0.7.14
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -30441,7 +30441,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-link:0.1.0
+Package: windows-link:0.1.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33189,7 +33189,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy:0.7.35
+Package: zerocopy:0.8.24
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33441,7 +33441,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.7.35
+Package: zerocopy-derive:0.8.24
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34549,7 +34549,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: mingo:6.5.3
+Package: mingo:6.5.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35312,7 +35312,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: @types:node:22.13.9
+Package: @types:node:22.13.14
 
 The following copyrights and licenses were found in the source code of this package:
 
