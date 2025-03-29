@@ -94,6 +94,9 @@ jobs:
             matrix:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         runs-on: ${{ matrix.host.RUNNER }}
+        container:
+            image: ${{ matrix.host.IMAGE || '' }}
+            options: ${{ matrix.host.CONTAINER_OPTIONS || '--user root'}}
         steps:
             - name: Setup self-hosted runner access
               run: |
@@ -105,7 +108,24 @@ jobs:
                   else
                     echo "No cleaning needed"
                   fi
-            - uses: actions/checkout@v4
+            # - name: Install Node.js 16 on amazon-linux
+            #   if: ${{ matrix.host.OS == 'amazon-linux' }}
+            #   run: |
+            #       yum update -y
+            #       curl -fsSL https://rpm.nodesource.com/setup_16.x | bash -
+            #       yum install -y nodejs
+            #       node --version
+            # - uses: actions/checkout@v3
+            - name: Manual Checkout
+              run: |
+                  yum update
+                  yum install -y git
+                  git clone --depth 1 \
+                      --branch ${{ github.ref_name }} \
+                      https://github.com/${{ github.repository }} .
+              env:
+                GIT_TERMINAL_PROMPT: 0
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             - uses: actions/setup-go@v5
               with:
                   go-version: "1.22"
