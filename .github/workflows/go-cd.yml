@@ -121,7 +121,7 @@ jobs:
                   yum install -y tar gzip
                   curl https://code.europa.eu/ecgalaxy/amazonlinux2-nodejs/-/package_files/53482/download --output node.tar.gz
                   tar -xvzf node.tar.gz
-                  echo "export PATH=$HOME/opt/nodejs/20.19.0/bin:$PATH" >> ~/.bashrc
+                  echo "export PATH=$GITHUB_WORKSPACE/opt/nodejs/20.19.0/bin:$PATH" >> ~/.bashrc
                   source ~/.bashrc
                   node --version
             - uses: actions/checkout@v3
