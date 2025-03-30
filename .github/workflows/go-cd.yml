@@ -115,17 +115,25 @@ jobs:
             #       curl -fsSL https://rpm.nodesource.com/setup_16.x | bash -
             #       yum install -y nodejs
             #       node --version
-            # - uses: actions/checkout@v3
-            - name: Manual Checkout
+            - name: Install ECGALAXY version of Node.js 20 on amazon-linux
+              if: ${{ matrix.host.OS == 'amazon-linux' }}
               run: |
-                  yum update
-                  yum install -y git
-                  git clone --depth 1 \
-                      --branch ${{ github.ref_name }} \
-                      https://github.com/${{ github.repository }} .
-              env:
-                GIT_TERMINAL_PROMPT: 0
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  curl https://code.europa.eu/ecgalaxy/amazonlinux2-nodejs/-/package_files/53482/download --output node.tar.gz
+                  tar -xvzf node.tar.gz
+                  echo "export PATH=$HOME/opt/nodejs/20.19.0/bin:$PATH" >> ~/.bashrc
+                  source ~/.bashrc
+                  node --version
+            - uses: actions/checkout@v3
+            # - name: Manual Checkout
+            #   run: |
+            #       yum update
+            #       yum install -y git
+            #       git clone --depth 1 \
+            #           --branch ${{ github.ref_name }} \
+            #           https://github.com/${{ github.repository }} .
+            #   env:
+            #     GIT_TERMINAL_PROMPT: 0
+            #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             - uses: actions/setup-go@v5
               with:
                   go-version: "1.22"
