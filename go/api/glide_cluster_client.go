@@ -11,6 +11,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/utils"
 )
 
 // GlideClusterClient interface compliance check.
@@ -275,6 +276,98 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 	return handleIntResponse(result)
 }
 
+// Deletes all the keys of all the existing databases.
+// The command will be routed to all primary nodes.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *GlideClusterClient) FlushAll() (string, error) {
+	result, err := client.executeCommand(C.FlushAll, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	flushOptions - The [FlushClusterOptions] type.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.FlushClusterOptions) (string, error) {
+	if flushOptions.RouteOption == nil || flushOptions.RouteOption.Route == nil {
+		result, err := client.executeCommand(C.FlushAll, flushOptions.ToArgs())
+		if err != nil {
+			return DefaultStringResponse, err
+		}
+		return handleStringResponse(result)
+	}
+	result, err := client.executeCommandWithRoute(C.FlushAll, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of the currently selected database.
+// The command will be routed to all primary nodes.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (client *GlideClusterClient) FlushDB() (string, error) {
+	result, err := client.executeCommand(C.FlushDB, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	flushOptions - The [FlushClusterOptions] type.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushClusterOptions) (string, error) {
+	if flushOptions.RouteOption == nil || flushOptions.RouteOption.Route == nil {
+		result, err := client.executeCommand(C.FlushDB, flushOptions.ToArgs())
+		if err != nil {
+			return DefaultStringResponse, err
+		}
+		return handleStringResponse(result)
+	}
+	result, err := client.executeCommandWithRoute(C.FlushDB, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Echo the provided message back.
 // The command will be routed a random node, unless `Route` in `echoOptions` is provided.
 //
@@ -451,4 +544,416 @@ func (client *GlideClusterClient) ScanWithOptions(
 
 	nextCursor, keys, err := handleScanResponse(response)
 	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
+}
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *GlideClusterClient) Lolwut() (string, error) {
+	result, err := client.executeCommand(C.Lolwut, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Parameters:
+//
+//	lolwutOptions - The [LolwutOptions] type.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error) {
+	args, err := lolwutOptions.ToArgs()
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+
+	if lolwutOptions.RouteOption == nil || lolwutOptions.RouteOption.Route == nil {
+		response, err := client.executeCommand(C.Lolwut, args)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		data, err := handleStringResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterSingleValue[string](data), nil
+	}
+
+	route := lolwutOptions.RouteOption.Route
+	response, err := client.executeCommandWithRoute(C.Lolwut, args, route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+
+	if route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
+
+// Gets the current connection id.
+//
+// Return value:
+//
+//	The id of the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-id/
+func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
+	response, err := client.executeCommand(C.ClientId, []string{})
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	data, err := handleIntResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	return createClusterSingleValue[int64](data), nil
+}
+
+// Gets the current connection id.
+//
+// Parameters:
+//
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	The id of the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-id/
+func (client *GlideClusterClient) ClientIdWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
+	response, err := client.executeCommandWithRoute(C.ClientId, []string{}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	if opts.Route != nil &&
+		(opts.Route).IsMultiNode() {
+		data, err := handleStringIntMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[int64](), err
+		}
+		return createClusterMultiValue[int64](data), nil
+	}
+	data, err := handleIntResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	return createClusterSingleValue[int64](data), nil
+}
+
+// Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
+// The command is routed to a random node by default, which is safe for read-only commands.
+//
+// Return value:
+//
+//	UNIX TIME of the last DB save executed with success.
+//
+// [valkey.io]: https://valkey.io/commands/lastsave/
+func (client *GlideClusterClient) LastSave() (ClusterValue[int64], error) {
+	response, err := client.executeCommand(C.LastSave, []string{})
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	data, err := handleIntResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	return createClusterSingleValue[int64](data), nil
+}
+
+// Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	UNIX TIME of the last DB save executed with success.
+//
+// [valkey.io]: https://valkey.io/commands/lastsave/
+func (client *GlideClusterClient) LastSaveWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
+	response, err := client.executeCommandWithRoute(C.LastSave, []string{}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	if opts.Route != nil &&
+		(opts.Route).IsMultiNode() {
+		data, err := handleStringIntMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[int64](), err
+		}
+		return createClusterMultiValue[int64](data), nil
+	}
+	data, err := handleIntResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[int64](), err
+	}
+	return createClusterSingleValue[int64](data), nil
+}
+
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM
+//
+// Return value:
+//
+//	OK to confirm that the statistics were successfully reset.
+//
+// [valkey.io]: https://valkey.io/commands/config-resetstat/
+func (client *GlideClusterClient) ConfigResetStat() (string, error) {
+	response, err := client.executeCommand(C.ConfigResetStat, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	OK to confirm that the statistics were successfully reset.
+//
+// [valkey.io]: https://valkey.io/commands/config-resetstat/
+func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteOption) (string, error) {
+	response, err := client.executeCommandWithRoute(C.ConfigResetStat, []string{}, opts.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Sets configuration parameters to the specified values.
+// Starting from server version 7, command supports multiple parameters.
+// The command will be sent to all nodes.
+//
+// Parameters:
+//
+//	parameters -  A map consisting of configuration parameters and their respective values to set.
+//
+// Return value:
+//
+//	OK if all configurations have been successfully set. Otherwise, raises an error.
+//
+// [valkey.io]: https://valkey.io/commands/config-set/
+func (client *GlideClusterClient) ConfigSet(
+	parameters map[string]string,
+) (string, error) {
+	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Sets configuration parameters to the specified values
+// Starting from server version 7, command supports multiple parameters.
+//
+// Parameters:
+//
+//	parameters -  A map consisting of configuration parameters and their respective values to set.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	OK if all configurations have been successfully set. Otherwise, raises an error.
+//
+// [valkey.io]: https://valkey.io/commands/config-set/
+func (client *GlideClusterClient) ConfigSetWithOptions(
+	parameters map[string]string, opts options.RouteOption,
+) (string, error) {
+	result, err := client.executeCommandWithRoute(C.ConfigSet, utils.MapToString(parameters), opts.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Get the values of configuration parameters.
+// Starting from server version 7, command supports multiple parameters.
+// The command will be sent to a random node.
+//
+// Parameters:
+//
+//	parameters -  An array of configuration parameter names to retrieve values for.
+//
+// Return value:
+//
+//	A map of values corresponding to the configuration parameters.
+//
+// [valkey.io]: https://valkey.io/commands/config-get/
+func (client *GlideClusterClient) ConfigGet(
+	parameters []string,
+) (ClusterValue[interface{}], error) {
+	res, err := client.executeCommand(C.ConfigGet, parameters)
+	if err != nil {
+		return createEmptyClusterValue[interface{}](), err
+	}
+	data, err := handleInterfaceResponse(res)
+	if err != nil {
+		return createEmptyClusterValue[interface{}](), err
+	}
+	return createClusterValue[interface{}](data), nil
+}
+
+// Get the values of configuration parameters.
+// Starting from server version 7, command supports multiple parameters.
+//
+// Parameters:
+//
+//	parameters - An array of configuration parameter names to retrieve values for.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	       command to the nodes defined by route.
+//
+// Return value:
+//
+//	A map of values corresponding to the configuration parameters.
+//
+// [valkey.io]: https://valkey.io/commands/config-get/
+func (client *GlideClusterClient) ConfigGetWithOptions(
+	parameters []string, opts options.RouteOption,
+) (ClusterValue[interface{}], error) {
+	res, err := client.executeCommandWithRoute(C.ConfigGet, parameters, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[interface{}](), err
+	}
+	data, err := handleInterfaceResponse(res)
+	if err != nil {
+		return createEmptyClusterValue[interface{}](), err
+	}
+	return createClusterValue[interface{}](data), nil
+}
+
+// Set the name of the current connection.
+//
+// Parameters:
+//
+//	connectionName - Connection name of the current connection.
+//
+// Return value:
+//
+//	OK - when connection name is set
+//
+// [valkey.io]: https://valkey.io/commands/client-setname/
+func (client *GlideClusterClient) ClientSetName(connectionName string) (ClusterValue[string], error) {
+	response, err := client.executeCommand(C.ClientSetName, []string{connectionName})
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
+
+// Set the name of the current connection.
+//
+// Parameters:
+//
+//	connectionName - Connection name of the current connection.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	OK - when connection name is set
+//
+// [valkey.io]: https://valkey.io/commands/client-setname/
+func (client *GlideClusterClient) ClientSetNameWithOptions(connectionName string, opts options.RouteOption) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(C.ClientSetName, []string{connectionName}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if opts.Route != nil &&
+		(opts.Route).IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
+
+// Gets the name of the current connection.
+//
+// Return value:
+//
+//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//
+// [valkey.io]: https://valkey.io/commands/client-getname/
+func (client *GlideClusterClient) ClientGetName() (ClusterValue[string], error) {
+	response, err := client.executeCommand(C.ClientGetName, []string{})
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
+
+// Gets the name of the current connection.
+//
+// Parameters:
+//
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//
+// [valkey.io]: https://valkey.io/commands/client-getname/
+func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOption) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(C.ClientGetName, []string{}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if opts.Route != nil &&
+		(opts.Route).IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
 }
