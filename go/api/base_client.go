@@ -94,7 +94,7 @@ func pubSubCallback(kind C.uint32_t, cResponse *C.struct_CommandResponse) {
 	// Convert kind directly to PushKind enum value
 	pushKind := PushKind(kind)
 
-	//fmt.Printf("Received pubsub callback: %s\n%+v\n", pushKind, cResponse)
+	// fmt.Printf("Pubsub Callback: %s\n", pushKind)
 
 	// TODO: Refactor this out
 	// Extract values from the CommandResponse
@@ -229,12 +229,16 @@ type baseClient struct {
 	messageHandler *MessageHandler
 }
 
+func (client *baseClient) GetClientID() string {
+	return fmt.Sprintf("%p", client)
+}
+
 // SetMessageHandler assigns a message handler to the client for processing pub/sub messages
 func (client *baseClient) SetMessageHandler(handler *MessageHandler) {
 	client.messageHandler = handler
 
 	// Register the client with the message dispatcher
-	clientID := fmt.Sprintf("%p", client)
+	clientID := client.GetClientID()
 	if clientID != "" && handler != nil {
 		dispatcher := GetDispatcher()
 		dispatcher.RegisterClient(clientID, handler)
