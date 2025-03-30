@@ -2,6 +2,7 @@ use glide_core::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
 use glide_ffi::*;
+use lazy_static::lazy_static;
 use protobuf::Message;
 use rstest::rstest;
 use std::collections::HashMap;
@@ -10,26 +11,35 @@ use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc,
+    Arc, RwLock,
 };
-use std::sync::{LazyLock, Mutex};
 use tokio::runtime::Runtime;
 use tokio::time::{sleep, Duration};
 
-static ASYNC_SUCCESS_COUNTER: LazyLock<Arc<AtomicUsize>> =
-    LazyLock::new(|| Arc::new(AtomicUsize::new(0)));
-static ASYNC_FAILURE_COUNTER: LazyLock<Arc<AtomicUsize>> =
-    LazyLock::new(|| Arc::new(AtomicUsize::new(0)));
-type StringResultMap = LazyLock<Mutex<HashMap<usize, Result<String, (String, RequestErrorType)>>>>;
-static ASYNC_RESULTS_MAP: StringResultMap = LazyLock::new(|| Mutex::new(HashMap::new()));
+pub(crate) struct AsyncMetrics {
+    pub success_count: AtomicUsize,
+    pub failure_count: AtomicUsize,
+    pub results: HashMap<usize, Result<String, (String, RequestErrorType)>>,
+}
+
+lazy_static! {
+    static ref ASYNC_METRICS: Arc<RwLock<AsyncMetrics>> = Arc::new(RwLock::new(AsyncMetrics {
+        success_count: AtomicUsize::new(0),
+        failure_count: AtomicUsize::new(0),
+        results: HashMap::new(),
+    }));
+}
+
+const ASYNC_WRITE_LOCK_ERR: &str = "Failed to aquire ASYNC_METRICS the write lock";
+const ASYNC_READ_LOCK_ERR: &str = "Failed to aquire ASYNC_METRICS the write lock";
 
 /// Success callback function for String responses for the async client
 extern "C" fn string_success_callback(index: usize, response_ptr: *const CommandResponse) {
-    let mut map = ASYNC_RESULTS_MAP
-        .lock()
-        .expect("Failed to aquire the results' lock");
-    map.insert(index, Ok(parse_string_res(response_ptr)));
-    ASYNC_SUCCESS_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let mut metrics = ASYNC_METRICS.write().expect(ASYNC_WRITE_LOCK_ERR);
+    metrics
+        .results
+        .insert(index, Ok(parse_string_res(response_ptr)));
+    metrics.success_count.fetch_add(1, Ordering::SeqCst);
 }
 
 /// Failure callback function for the async client
@@ -38,11 +48,11 @@ extern "C" fn failure_callback(
     err_msg_ptr: *const c_char,
     error_type: RequestErrorType,
 ) {
-    let mut map = ASYNC_RESULTS_MAP
-        .lock()
-        .expect("Failed to aquire the results' lock");
-    map.insert(index, Err((parse_error_msg(err_msg_ptr), error_type)));
-    ASYNC_FAILURE_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let mut metrics = ASYNC_METRICS.write().expect(ASYNC_WRITE_LOCK_ERR);
+    metrics
+        .results
+        .insert(index, Err((parse_error_msg(err_msg_ptr), error_type)));
+    metrics.failure_count.fetch_add(1, Ordering::SeqCst);
 }
 
 fn parse_string_res(response_ptr: *const CommandResponse) -> String {
@@ -169,7 +179,8 @@ fn execute_command(
         )
     };
     if command_res_ptr.is_null() {
-        // Async client is being used, let the async callback to be called
+        // If the returned CommandResult pointer is a null it means that the Async client is being used.
+        // We shall let the async callback to be called.
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             sleep(Duration::from_millis(1)).await;
@@ -186,8 +197,9 @@ fn get_sync_response(cmd_resp: *mut CommandResponse) -> String {
 }
 
 fn get_async_response(index: usize) -> String {
-    let map = ASYNC_RESULTS_MAP.lock().unwrap();
-    let result = map
+    let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
+    let result = metrics
+        .results
         .get(&index)
         .expect("Couldn't find the relevant idx in the map");
     assert!(result.is_ok());
@@ -204,8 +216,9 @@ fn get_sync_error(command_error: *mut CommandError) -> (String, RequestErrorType
 }
 
 fn get_async_error(index: usize) -> (String, RequestErrorType) {
-    let map = ASYNC_RESULTS_MAP.lock().unwrap();
-    let result = map
+    let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
+    let result = metrics
+        .results
         .get(&index)
         .expect("Couldn't find the relevant idx in the map");
     assert!(result.is_err());
@@ -214,7 +227,6 @@ fn get_async_error(index: usize) -> (String, RequestErrorType) {
 }
 
 #[rstest]
-#[serial_test::serial]
 fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) {
     let server = Server::new();
     let connection_request_bytes = create_connection_request(server.port);
@@ -252,7 +264,8 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
         );
         let ping_res = if async_client {
             assert!(good_res.is_none()); // result should be returned through callback
-            assert_eq!(ASYNC_SUCCESS_COUNTER.load(Ordering::SeqCst), 1);
+            let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
+            assert_eq!(metrics.success_count.load(Ordering::SeqCst), 1);
             get_async_response(good_cmd_idx)
         } else {
             assert!(good_res.is_some());
@@ -270,7 +283,8 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
         );
         let (err_msg, err_type) = if async_client {
             assert!(bad_res.is_none()); // result should be returned through callback
-            assert_eq!(ASYNC_FAILURE_COUNTER.load(Ordering::SeqCst), 1);
+            let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
+            assert_eq!(metrics.failure_count.load(Ordering::SeqCst), 1);
             get_async_error(bad_cmd_idx)
         } else {
             assert!(bad_res.is_some());

@@ -217,9 +217,7 @@ pub unsafe extern "C" fn free_command_result(command_result_ptr: *mut CommandRes
             if !command_error.command_error_message.is_null() {
                 free_error_message(command_error.command_error_message as *mut c_char);
             }
-            drop(command_error);
         }
-        drop(command_result);
     }
 }
 
@@ -359,7 +357,7 @@ impl ClientAdapter {
         }
     }
 
-    // Invokes the asynchronous failure callback with an error.
+    /// Invokes the asynchronous failure callback with an error.
     ///
     /// This function is used in async client flows to report command execution failures
     /// back to the calling language (e.g., Go) via a registered failure callback.
@@ -795,7 +793,7 @@ pub unsafe extern "C" fn command(
 
 /// Creates a heap-allocated `CommandResult` containing a `CommandError`.
 ///
-/// This function is used to construct an error response when a Redis command fails,
+/// This function is used to construct an error response when a Valkey command fails,
 /// intended to be returned through FFI to the calling language.
 ///
 /// The resulting `CommandResult` contains:
@@ -841,7 +839,7 @@ fn create_error_result(err: RedisError) -> *mut CommandResult {
 /// This function will panic if the error message cannot be converted into a `CString`.
 ///
 /// # Safety
-/// The returned C string must be freed using [`free_error_message`] after it is no longer needed.
+/// The returned C string must be freed using [`free_error_message`].
 fn to_c_error(err: RedisError) -> (*const c_char, RequestErrorType) {
     let message = errors::error_message(&err);
     let error_type = errors::error_type(&err);

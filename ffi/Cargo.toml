@@ -17,6 +17,7 @@ tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"]
 [dev-dependencies]
 rstest = "^0.23"
 serial_test = "3"
+lazy_static = "1"
 
 [profile.release]
 lto = true
