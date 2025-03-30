@@ -2,6 +2,7 @@
 
 use super::ConnectionLike;
 use super::{setup_connection, AsyncStream, RedisRuntime};
+use crate::cluster_async::PipelineRetryStrategy;
 use crate::cmd::{cmd, Cmd};
 use crate::connection::{
     resp2_is_pub_sub_state_cleared, resp3_is_pub_sub_state_cleared, ConnectionAddr, ConnectionInfo,
@@ -198,7 +199,7 @@ where
         cmd: &'a crate::Pipeline,
         offset: usize,
         count: usize,
-        _retry_failed_commands: bool,
+        _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>> {
         (async move {
             if self.pubsub {

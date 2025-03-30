@@ -3,7 +3,11 @@ mod support;
 
 mod test_pipeline {
 
-    use redis::{cluster_async::ClusterConnection, cluster_topology::get_slot, ErrorKind};
+    use redis::{
+        cluster_async::{ClusterConnection, PipelineRetryStrategy},
+        cluster_topology::get_slot,
+        ErrorKind,
+    };
     use std::collections::HashMap;
 
     use redis::{
@@ -47,7 +51,23 @@ mod test_pipeline {
                 return (key, key2);
             }
         }
-        panic!("Failed to find a good key after 1000 attempts");
+        panic!("Failed to 2 keys after 1000 attempts");
+    }
+
+    fn generate_2_keys_in_different_node(
+        nodes_and_slots: Vec<(&String, Vec<u16>)>,
+    ) -> (String, String) {
+        for _ in 0..1000 {
+            let key = generate_random_string(10);
+            let key2 = generate_random_string(10);
+            let slot = get_slot(key.as_str().as_bytes());
+            let slot2 = get_slot(key2.as_str().as_bytes());
+
+            if !is_in_same_node(slot, slot2, nodes_and_slots.clone()) {
+                return (key, key2);
+            }
+        }
+        panic!("Failed to 2 keys after 1000 attempts");
     }
 
     fn generate_2_keys_in_different_slots() -> (String, String) {
@@ -206,8 +226,8 @@ mod test_pipeline {
                 &pipeline,
                 0,
                 pipeline.len(),
-                SingleNodeRoutingInfo::Random,
-                true,
+                None,
+                Some(PipelineRetryStrategy::new(true, false)),
             )
             .await
             .expect("Failed to execute pipeline");
@@ -276,7 +296,13 @@ mod test_pipeline {
 
         // Execute the pipeline.
         let result = connection
-            .route_pipeline(&pipeline, 0, 3, SingleNodeRoutingInfo::Random, true)
+            .route_pipeline(
+                &pipeline,
+                0,
+                3,
+                None,
+                Some(PipelineRetryStrategy::new(true, false)),
+            )
             .await
             .expect("Pipeline execution failed");
 
@@ -332,8 +358,8 @@ mod test_pipeline {
                 &pipeline,
                 0,
                 pipeline.len(),
-                SingleNodeRoutingInfo::Random,
-                true,
+                None,
+                Some(PipelineRetryStrategy::new(true, false)),
             )
             .await
             .expect("Pipeline execution failed");
@@ -389,7 +415,13 @@ mod test_pipeline {
 
         // Execute the pipeline.
         let result = connection
-            .route_pipeline(&pipeline, 3, 1, route, true)
+            .route_pipeline(
+                &pipeline,
+                3,
+                1,
+                Some(route),
+                Some(PipelineRetryStrategy::new(true, false)),
+            )
             .await
             .expect("Pipeline execution failed");
 
@@ -439,13 +471,119 @@ mod test_pipeline {
 
         // Execute the pipeline.
         let result = connection
-            .route_pipeline(&pipeline, 3, 1, route, true)
+            .route_pipeline(
+                &pipeline,
+                3,
+                1,
+                Some(route),
+                Some(PipelineRetryStrategy::new(true, false)),
+            )
             .await;
 
         assert!(result.is_err());
         assert!(result.unwrap_err().kind() == ErrorKind::Moved);
 
         assert_error_occurred(&mut connection, "MOVED", 2).await;
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_pipeline_with_specific_route() {
+        // Create a test cluster with 3 masters and no replicas.
+        let cluster = TestClusterContext::new(3, 0);
+        let mut connection = cluster.async_connection(None).await;
+
+        // Get the current slot distribution.
+        let cluster_nodes = cluster.get_cluster_nodes().await;
+        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+
+        let nodes_and_slots = slot_distribution
+            .iter()
+            .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
+            .collect::<Vec<_>>();
+
+        // Pick a random key and compute its slot.
+        let (key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
+        let key_slot = get_slot(key.as_bytes());
+
+        // Define specific routing for the key's master node.
+        let route = SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
+
+        // Create a pipeline that sets and then retrieves the key.
+        let mut pipeline = redis::pipe();
+        pipeline.set(&key, "pipeline_value");
+        pipeline.get(&key);
+        pipeline.set(&key2, "pipeline_value2");
+        pipeline.get(&key2);
+
+        // Execute the pipeline using the specified route.
+        let result = connection
+            .route_pipeline(&pipeline, 0, pipeline.len(), Some(route), None)
+            .await
+            .expect("Pipeline execution failed");
+
+        // Verify the pipeline result.
+        let expected = vec![
+            Value::Okay,
+            Value::BulkString(b"pipeline_value".to_vec()),
+            Value::Okay,
+            Value::BulkString(b"pipeline_value2".to_vec()),
+        ];
+
+        assert_eq!(
+            result, expected,
+            "Pipeline result did not match expected output"
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_pipeline_with_wrong_route() {
+        // Create a test cluster with 3 masters and no replicas.
+        let cluster = TestClusterContext::new(3, 0);
+        let mut connection = cluster.async_connection(None).await;
+        // Get the current slot distribution.
+        let cluster_nodes = cluster.get_cluster_nodes().await;
+        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+
+        let nodes_and_slots = slot_distribution
+            .iter()
+            .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
+            .collect::<Vec<_>>();
+
+        let (key, key2) = generate_2_keys_in_different_node(nodes_and_slots);
+        let key_slot = get_slot(key.as_bytes());
+
+        // Define a routing that intentionally targets the wrong node.
+        let key_route = SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
+
+        // Create a pipeline that sets and then retrieves the key.
+        let mut pipeline = redis::pipe();
+        pipeline.set(&key, "pipeline_value");
+        pipeline.get(&key);
+        pipeline.set(&key2, "pipeline_value");
+        pipeline.get(&key2);
+
+        // Execute the pipeline using the wrong route.
+        let result = connection
+            .route_pipeline(&pipeline, 0, pipeline.len(), Some(key_route), None)
+            .await
+            .expect("Pipeline execution failed");
+
+        // The pipeline should not succeed as expected since the route is incorrect.
+        let expected = vec![Value::Okay, Value::BulkString(b"pipeline_value".to_vec())];
+        assert_eq!(
+            result[..2],
+            expected,
+            "Pipeline result did not match expected output {result:?}"
+        );
+        assert!(
+            result[2..].iter().all(|err| {
+                matches!(err, Value::ServerError(ref e) if e.kind() == ErrorKind::Moved)
+            }),
+            "Expected all server errors to be Moved errors, got: {:?}",
+            &result[2..]
+        );
     }
 
     #[tokio::test]
@@ -490,8 +628,8 @@ mod test_pipeline {
                     &pipeline,
                     0,
                     pipeline.len(),
-                    SingleNodeRoutingInfo::Random,
-                    true,
+                    None,
+                    Some(PipelineRetryStrategy::new(retries > 0, false)),
                 )
                 .await
                 .expect("Pipeline execution failed");
@@ -602,7 +740,13 @@ mod test_pipeline {
 
                 // Execute the pipeline.
                 let result = connection
-                    .route_pipeline(&pipeline, 0, 3, SingleNodeRoutingInfo::Random, retry)
+                    .route_pipeline(
+                        &pipeline,
+                        0,
+                        3,
+                        None,
+                        Some(PipelineRetryStrategy::new(retry, false)),
+                    )
                     .await
                     .expect("Pipeline execution failed");
                 result
@@ -689,8 +833,8 @@ mod test_pipeline {
                 &pipeline,
                 0,
                 pipeline.len(),
-                SingleNodeRoutingInfo::Random,
-                true,
+                None,
+                Some(PipelineRetryStrategy::new(true, false)),
             )
             .await
             .expect("Pipeline execution failed");
@@ -785,8 +929,8 @@ mod test_pipeline {
                 &pipeline,
                 0,
                 pipeline.len(),
-                SingleNodeRoutingInfo::Random,
-                true,
+                None,
+                Some(PipelineRetryStrategy::new(true, false)),
             )
             .await
             .expect("Pipeline execution failed");
@@ -920,8 +1064,8 @@ mod test_pipeline {
                 &pipeline,
                 0,
                 pipeline.len(),
-                SingleNodeRoutingInfo::Random,
-                true,
+                None,
+                Some(PipelineRetryStrategy::new(true, false)),
             )
             .await
             .expect("Pipeline execution failed");

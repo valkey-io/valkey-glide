@@ -26,6 +26,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use redis::cluster_async::PipelineRetryStrategy;
 use redis::{Cmd, ConnectionLike, ErrorKind, Pipeline, RedisError, RedisResult, Value};
 
 #[cfg(feature = "aio")]
@@ -275,7 +276,7 @@ impl AioConnectionLike for MockRedisConnection {
         cmd: &'a Pipeline,
         offset: usize,
         count: usize,
-        _retry_failed_commands: bool,
+        _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>> {
         let packed_cmd = cmd.get_packed_pipeline();
         let response = <MockRedisConnection as ConnectionLike>::req_packed_commands(

@@ -2,6 +2,7 @@ use super::{ConnectionLike, Runtime};
 use crate::aio::setup_connection;
 use crate::aio::DisconnectNotifier;
 use crate::client::GlideConnectionOptions;
+use crate::cluster_async::PipelineRetryStrategy;
 use crate::cmd::Cmd;
 #[cfg(feature = "tokio-comp")]
 use crate::parser::ValueCodec;
@@ -598,7 +599,7 @@ impl MultiplexedConnection {
         self.pipeline.set_push_manager(push_manager).await;
     }
 
-    /// For external visibilty (glide-core)
+    /// For external visibility (glide-core)
     pub fn get_availability_zone(&self) -> Option<String> {
         self.availability_zone.clone()
     }
@@ -715,7 +716,7 @@ impl ConnectionLike for MultiplexedConnection {
         cmd: &'a crate::Pipeline,
         offset: usize,
         count: usize,
-        _retry_failed_commands: bool,
+        _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>> {
         (async move { self.send_packed_commands(cmd, offset, count).await }).boxed()
     }

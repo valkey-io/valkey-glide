@@ -1240,6 +1240,11 @@ mod socket_listener {
 
         let commands = vec![
             CommandComponents {
+                args: vec!["FLUSHALL".to_string().into()],
+                args_pointer: false,
+                request_type: RequestType::CustomCommand.into(),
+            },
+            CommandComponents {
                 args: vec![key.clone().into(), "bar".to_string().into()],
                 args_pointer: true,
                 request_type: RequestType::Set.into(),
@@ -1275,6 +1280,7 @@ mod socket_listener {
             Some(&mut socket),
             CALLBACK_INDEX,
             Value::Array(vec![
+                Value::Okay,
                 Value::Okay,
                 Value::BulkString(vec![b'b', b'a', b'r']),
                 Value::Array(vec![Value::BulkString(vec![b'b', b'a', b'r']), Value::Nil]),

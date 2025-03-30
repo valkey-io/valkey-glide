@@ -23,6 +23,7 @@ macro_rules! async_assert_eq {
 #[cfg(test)]
 pub(crate) mod shared_client_tests {
     use glide_core::Telemetry;
+    use redis::cluster_async::PipelineRetryStrategy;
     use redis::{cluster_topology::get_slot, cmd};
     use std::collections::HashMap;
 
@@ -614,7 +615,13 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline, false, None, true)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy::new(true, false),
+                )
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -669,7 +676,13 @@ pub(crate) mod shared_client_tests {
 
             let res = test_basics
                 .client
-                .send_pipeline(&pipeline, raise_error, None, true)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    raise_error,
+                    None,
+                    PipelineRetryStrategy::new(true, false),
+                )
                 .await;
 
             match raise_error {
@@ -735,7 +748,13 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline, false, None, true)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy::new(true, false),
+                )
                 .await
                 .expect("Pipeline failed");
 
@@ -786,7 +805,13 @@ pub(crate) mod shared_client_tests {
 
             let res = test_basics
                 .client
-                .send_pipeline(&pipeline, false, None, true)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy::new(true, false),
+                )
                 .await;
             assert!(
                 res.is_err(),
@@ -824,7 +849,13 @@ pub(crate) mod shared_client_tests {
 
             let res = test_basics
                 .client
-                .send_pipeline(&pipeline, false, Some(3000), true)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    Some(3000),
+                    PipelineRetryStrategy::new(true, false),
+                )
                 .await
                 .expect("Pipeline failed");
 
@@ -913,7 +944,13 @@ pub(crate) mod shared_client_tests {
 
             let res = test_basics
                 .client
-                .send_pipeline(&pipeline, false, None, true)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy::new(true, false),
+                )
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -963,7 +1000,13 @@ pub(crate) mod shared_client_tests {
                 pipeline.lpush(&key, "value");
                 test_basics
                     .client
-                    .send_pipeline(&pipeline, false, None, true)
+                    .send_pipeline(
+                        &pipeline,
+                        None,
+                        false,
+                        None,
+                        PipelineRetryStrategy::new(true, false),
+                    )
                     .await
             };
 
@@ -1045,7 +1088,13 @@ pub(crate) mod shared_client_tests {
 
             let res = test_basics
                 .client
-                .send_pipeline(&pipeline, false, None, true)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy::new(true, false),
+                )
                 .await
                 .expect("Pipeline failed after killing all connections");
 
@@ -1078,7 +1127,13 @@ pub(crate) mod shared_client_tests {
             let pipeline = Pipeline::new();
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline, false, None, true)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy::new(true, false),
+                )
                 .await;
 
             assert!(result.is_err(), "Pipeline should fail with empty pipeline");
@@ -1117,7 +1172,13 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline, false, None, true)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy::new(true, false),
+                )
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -1152,7 +1213,13 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline, false, None, true)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy::new(true, false),
+                )
                 .await
                 .expect("Pipeline failed");
 
@@ -1193,7 +1260,13 @@ pub(crate) mod shared_client_tests {
             // Execute the pipeline.
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline, false, None, true)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy::new(true, false),
+                )
                 .await
                 .expect("Pipeline execution failed");
 

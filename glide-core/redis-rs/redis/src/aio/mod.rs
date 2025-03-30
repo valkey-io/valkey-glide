@@ -1,4 +1,5 @@
 //! Adds async IO support to redis.
+use crate::cluster_async::PipelineRetryStrategy;
 use crate::cmd::{cmd, Cmd};
 use crate::connection::{
     get_resp3_hello_command_error, PubSubSubscriptionKind, RedisConnectionInfo,
@@ -77,7 +78,7 @@ pub trait ConnectionLike {
         cmd: &'a crate::Pipeline,
         offset: usize,
         count: usize,
-        retry_failed_commands: bool,
+        pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>>;
 
     /// Returns the database this connection is bound to.  Note that this

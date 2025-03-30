@@ -227,17 +227,15 @@ impl ServerError {
 
     /// Appends the string representation of `other` to the existing `detail`.
     /// If no detail exists, it simply sets it to `other`’s string.
-    pub fn append_detail(&mut self, other: &ServerError) {
+    pub(crate) fn append_detail(&mut self, other: &ServerError) {
         // Convert the other error to a string representation.
-        let other_str = format!("{}", other);
         match self {
             ServerError::ExtensionError { detail, .. } | ServerError::KnownError { detail, .. } => {
                 if let Some(existing) = detail {
                     // Append with a separator.
-                    existing.push_str("; ");
-                    existing.push_str(&other_str);
+                    existing.push_str(format!("; {}", other).as_str());
                 } else {
-                    *detail = Some(other_str);
+                    *detail = Some(other.to_string());
                 }
             }
         };
@@ -297,10 +295,7 @@ impl From<RedisError> for ServerError {
                 } else {
                     ServerError::ExtensionError {
                         code: kind.to_string(),
-                        detail: Some(format!(
-                            "Unhandled error kind: {:?} description: {}",
-                            kind, desc
-                        )),
+                        detail: Some(desc.to_string()), // do we need the word description (check all places)
                     }
                 }
             }
@@ -313,15 +308,12 @@ impl From<RedisError> for ServerError {
                 } else {
                     ServerError::ExtensionError {
                         code: kind.to_string(),
-                        detail: Some(format!(
-                            "Unhandled error kind: {:?} with description: {} and detail: {}",
-                            kind, desc, detail
-                        )),
+                        detail: Some(format!("{} {}", desc, detail)),
                     }
                 }
             }
             ErrorRepr::IoError(io_err) => ServerError::ExtensionError {
-                code: "IOERROR".into(),
+                code: "IoError".into(),
                 detail: Some(io_err.to_string()),
             },
         }
@@ -1091,7 +1083,7 @@ impl RedisError {
         Some((addr, slot_id))
     }
 
-    /// Returns the redirect method for this error.    
+    /// Returns the redirect info for this error.    
     pub(crate) fn redirect(&self, should_exec_asking: bool) -> Option<Redirect> {
         let node = self.redirect_node()?;
         match self.kind() {

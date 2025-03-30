@@ -7,7 +7,7 @@ use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::{log_error, log_info, log_warn};
 use redis::aio::ConnectionLike;
-use redis::cluster_async::ClusterConnection;
+use redis::cluster_async::{ClusterConnection, PipelineRetryStrategy};
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
 };
@@ -435,10 +435,10 @@ impl Client {
                     ClientWrapper::Cluster { ref mut client } => match routing {
                         Some(RoutingInfo::SingleNode(route)) => {
                             client
-                                .route_pipeline(pipeline, offset, 1, route, true)
+                                .route_pipeline(pipeline, offset, 1, Some(route), None)
                                 .await
                         }
-                        _ => client.req_packed_commands(pipeline, offset, 1, true).await,
+                        _ => client.req_packed_commands(pipeline, offset, 1, None).await,
                     },
                 }?;
 
@@ -459,14 +459,22 @@ impl Client {
     /// Unlike a transaction, the commands are not executed atomically, and in cluster mode, the commands can be sent to different nodes.
     ///
     /// The `raise_on_error` parameter determines whether the pipeline should raise an error if any of the commands in the pipeline fail, or return the error as part of the response.
-    /// The `retry_failed_commands` parameter determines whether the pipeline should retry failed commands that are retryable, this can result on re-ordering of commands in the same slots.
-    /// Note that redirect errors will still be redirected, regardless of the value of `retry_failed_commands`.
+    /// - `pipeline_retry_strategy`: Configures the retry behavior for pipeline commands.
+    ///   - If `retry_server_error` is `true`, failed commands with a retriable `RetryMethod` will be retried,
+    ///     potentially causing reordering within the same slot.
+    ///     ⚠️ **Caution**: This may lead to commands being executed in a different order than originally sent,
+    ///     which could affect operations that rely on strict execution sequence.
+    ///   - If `retry_connection_error` is `true`, sub-pipeline requests will be retried on connection errors.
+    ///     ⚠️ **Caution**: Retrying after a connection error can lead to duplicate executions, as it is unclear
+    ///     which commands have already succeeded.
+    ///     TODO: add wiki link.
     pub fn send_pipeline<'a>(
         &'a mut self,
         pipeline: &'a redis::Pipeline,
+        routing: Option<RoutingInfo>,
         raise_on_error: bool,
         pipeline_timeout: Option<u32>,
-        retry_failed_commands: bool,
+        pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
         let command_count = pipeline.cmd_iter().count();
         if pipeline.is_empty() {
@@ -487,11 +495,24 @@ impl Client {
                         client.send_pipeline(pipeline, 0, command_count).await
                     }
 
-                    ClientWrapper::Cluster { ref mut client } => {
-                        client
-                            .req_packed_commands(pipeline, 0, command_count, retry_failed_commands)
-                            .await
-                    }
+                    ClientWrapper::Cluster { ref mut client } => match routing {
+                        Some(RoutingInfo::SingleNode(route)) => {
+                            // TODO: support `pipeline_retry_strategy` on routing to a single node
+                            client
+                                .route_pipeline(pipeline, 0, command_count, Some(route), None)
+                                .await
+                        }
+                        _ => {
+                            client
+                                .req_packed_commands(
+                                    pipeline,
+                                    0,
+                                    command_count,
+                                    Some(pipeline_retry_strategy),
+                                )
+                                .await
+                        }
+                    },
                 }?;
 
                 Self::convert_pipeline_values_to_expected_types(

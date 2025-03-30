@@ -277,15 +277,21 @@ where
     }
 
     /// Send commands in `pipeline` to the given `route`. If `route` is [None], it will be computed from `pipeline`.
-    /// `retry_failed_commands` - If `true`, failed commands with retryable `RetryMethod` will be retried, this could result in re-ordering commands execution on the same slot.
+    /// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.  
+    ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
+    ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+    ///     TODO: add wiki link.
     pub async fn route_pipeline<'a>(
         &'a mut self,
         pipeline: &'a crate::Pipeline,
         offset: usize,
         count: usize,
-        route: SingleNodeRoutingInfo,
-        retry_failed_commands: bool,
+        route: Option<SingleNodeRoutingInfo>,
+        pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisResult<Vec<Value>> {
+        // If route is specified in the case of pipeline (non-atomic batch)
+        // We will route the pipeline specifically to the defined route.
+        let sub_pipeline = route.is_some();
         let (sender, receiver) = oneshot::channel();
         self.0
             .send(Message {
@@ -294,9 +300,8 @@ where
                     offset,
                     count,
                     route: route.into(),
-                    sub_pipeline: false,
-                    retry: 0,
-                    retry_failed_commands,
+                    sub_pipeline,
+                    pipeline_retry_strategy: pipeline_retry_strategy.unwrap_or_default(),
                 },
                 sender,
             })
@@ -612,6 +617,48 @@ impl<C> From<SingleNodeRoutingInfo> for InternalSingleNodeRouting<C> {
     }
 }
 
+impl<C> From<Option<SingleNodeRoutingInfo>> for InternalSingleNodeRouting<C> {
+    fn from(value: Option<SingleNodeRoutingInfo>) -> Self {
+        match value {
+            Some(single) => single.into(),
+            None => InternalSingleNodeRouting::Random,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+/// Defines a retry strategy for pipeline requests, allowing control over retries in case of server or connection errors.
+///
+/// This strategy determines whether failed commands should be retried, which can impact execution order and potential side effects.
+///
+/// # Notes
+/// - Retrying on **server errors** may lead to reordering of commands within the same slot.
+/// - Retrying on **connection errors** is riskier, as it is unclear which commands have already succeeded. This can result in unintended behavior, such as executing an `INCR` command multiple times.
+///
+/// TODO: Add a link to the wiki with further details.
+pub struct PipelineRetryStrategy {
+    /// If `true`, failed commands with a retriable `RetryMethod` will be retried.
+    ///
+    /// # Effect
+    /// - Commands may be reordered within the same slot during retries.
+    retry_server_error: bool,
+    /// If `true`, sub-pipeline requests will be retried in case of connection errors.
+    ///
+    /// # Caution
+    /// - Since a connection error does not indicate which commands succeeded or failed, retrying may lead to duplicate executions.
+    /// - This is particularly risky for non-idempotent commands like `INCR`, which modify state irreversibly.
+    retry_connection_error: bool,
+}
+
+impl PipelineRetryStrategy {
+    /// Creates a new `PipelineRetryStrategy` with the specified flags for retrying server and connection errors.
+    pub fn new(retry_server_error: bool, retry_connection_error: bool) -> Self {
+        Self {
+            retry_server_error,
+            retry_connection_error,
+        }
+    }
+}
 #[derive(Clone)]
 enum CmdArg<C> {
     Cmd {
@@ -624,9 +671,10 @@ enum CmdArg<C> {
         count: usize,
         route: InternalSingleNodeRouting<C>,
         sub_pipeline: bool,
-        retry: u32,
-        /// If `true`, failed commands with retryable `RetryMethod` will be retried, this could result in re-ordering commands execution on the same slot.
-        retry_failed_commands: bool,
+        /// Configures retry behavior for pipeline commands.  
+        ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
+        ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+        pipeline_retry_strategy: PipelineRetryStrategy,
     },
     ClusterScan {
         // struct containing the arguments for the cluster scan command - scan state cursor, match pattern, count and object type.
@@ -953,7 +1001,6 @@ impl<C> Future for Request<C> {
                         return Next::Done.into();
                     }
                     OperationTarget::NotFound => {
-                        println!("Request error `{:?}` not found", err);
                         // TODO - this is essentially a repeat of the retirable error. probably can remove duplication.
                         let mut request = this.request.take().unwrap();
                         request.info.reset_routing();
@@ -1521,7 +1568,7 @@ where
 
         let convert_result = |res: Result<RedisResult<Response>, _>| {
             res.map_err(|_| RedisError::from((ErrorKind::ResponseError, "request wasn't handled due to internal failure"))) // this happens only if the result sender is dropped before usage.
-            .and_then(|res| res.and_then(extract_result))
+            .and_then(|res| res.map(extract_result)?)
         };
 
         let get_receiver = |(_, receiver): (_, oneshot::Receiver<RedisResult<Response>>)| async {
@@ -2217,7 +2264,7 @@ where
     ) -> OperationResult {
         trace!("try_pipeline_request");
         let (address, mut conn) = conn.await.map_err(|err| (OperationTarget::NotFound, err))?;
-        conn.req_packed_commands(&pipeline, offset, count, false)
+        conn.req_packed_commands(&pipeline, offset, count, None)
             .await
             .map(Response::Multiple)
             .map_err(|err| (OperationTarget::Node { address }, err))
@@ -2232,8 +2279,7 @@ where
                 count,
                 route,
                 sub_pipeline,
-                retry,
-                retry_failed_commands,
+                pipeline_retry_strategy,
             } => {
                 if pipeline.is_atomic() || sub_pipeline {
                     // If the pipeline is atomic (i.e., a transaction) or if the pipeline is already splitted into sub-pipelines (i.e., the pipeline is already routed to a specific node), we can send it as is, with no need to split it into sub-pipelines.
@@ -2249,8 +2295,8 @@ where
                     Self::handle_non_atomic_pipeline_request(
                         pipeline,
                         core,
-                        retry,
-                        retry_failed_commands,
+                        0,
+                        pipeline_retry_strategy,
                     )
                     .await
                 }
@@ -2297,44 +2343,35 @@ where
         pipeline: Arc<crate::Pipeline>,
         core: Core<C>,
         retry: u32,
-        retry_failed_commands: bool,
+        pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> OperationResult {
         // Distribute pipeline commands across cluster nodes based on routing information.
         // Returns:
         // - pipelines_by_node: Map of node addresses to their pipeline contexts
-        // - response_policies: List of routing info and response aggregation policies for multi-node commands.
+        // - response_policies: Map of routing info and response aggregation policies for multi-node commands (by command's index).
         let (pipelines_by_node, mut response_policies) =
             map_pipeline_to_nodes(&pipeline, core.clone()).await?;
-
-        // Initialize `PipelineResponses` to store responses for each pipeline command.
-        // This will be used to store the responses from the different sub-pipelines to the pipeline commands.
-        // A command can have one or more responses (e.g MultiNode commands).
-        // Each entry in `PipelineResponses` corresponds to a command in the original pipeline and contains
-        // a vector of tuples where each tuple holds a response to the command and the address of the node that provided it.
-        let mut pipeline_responses: PipelineResponses = vec![Vec::new(); pipeline.len()];
 
         // Send the requests to each node and collect the responses
         // Returns a tuple containing:
         // - A vector of results for each sub-pipeline execution.
-        // - A vector of (address, indices, ignore) pairs indicating where each response should be placed, or if the response should be ignored.
+        // - A vector of (address, indices, ignore) tuples indicating where each response should be placed, or if the response should be ignored (e.g. ASKING command).
         let (responses, addresses_and_indices) = collect_and_send_pending_requests(
             pipelines_by_node,
             core.clone(),
             retry,
-            retry_failed_commands,
+            pipeline_retry_strategy,
         )
         .await;
 
         // Process the responses and update the pipeline_responses, retrying the commands if needed.
-        process_and_retry_pipeline_responses(
-            &mut pipeline_responses,
+        let pipeline_responses = process_and_retry_pipeline_responses(
             responses,
             addresses_and_indices,
             &pipeline,
             core,
-            retry,
             &mut response_policies,
-            retry_failed_commands,
+            pipeline_retry_strategy,
         )
         .await?;
 
@@ -2423,19 +2460,30 @@ where
                     Err(err) => Value::ServerError(err.into())
                 };
                 final_responses.push(aggregated_response);
-                continue;
+            } else {
+                // If there's no policy for this index, use the first response if available.
+                if responses.len() == 1 {
+                    final_responses.push(responses.into_iter().next().unwrap().0);
+                } else {
+                    final_responses.push(Value::ServerError(ServerError::ExtensionError {
+                        code: if responses.is_empty() {
+                            "PipelineNoResponse".to_string()
+                        } else {
+                            "PipelineNotSingleResponse".to_string()
+                        },
+                        detail: Some(if responses.is_empty() {
+                            format!("No response found for command {}", index)
+                        } else {
+                            format!(
+                                "Expected exactly one response for command {}, got {}: {:?}",
+                                index,
+                                responses.len(),
+                                responses.iter().map(|(value, _)| value).collect::<Vec<_>>()
+                            )
+                        }),
+                    }));
+                }
             }
-            // If there's no policy for this index, simply take the last response.
-            let (value, _addr) = responses.into_iter().last().unwrap_or_else(|| {
-                (
-                    Value::ServerError(ServerError::ExtensionError {
-                        code: "NoResponse".to_string(),
-                        detail: Some(format!("No response found for command {}", index)),
-                    }),
-                    "".to_string(),
-                )
-            });
-            final_responses.push(value);
         }
 
         final_responses
@@ -3087,12 +3135,18 @@ where
         pipeline: &'a crate::Pipeline,
         offset: usize,
         count: usize,
-        retry_failed_commands: bool,
+        pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>> {
         async move {
             let route = route_for_pipeline(pipeline)?;
-            self.route_pipeline(pipeline, offset, count, route.into(), retry_failed_commands)
-                .await
+            self.route_pipeline(
+                pipeline,
+                offset,
+                count,
+                route.map(|r| Some(r).into()),
+                pipeline_retry_strategy,
+            )
+            .await
         }
         .boxed()
     }
@@ -3364,7 +3418,7 @@ mod pipeline_routing_tests {
     }
 
     #[test]
-    fn test_aggregate_pipeline_multi_node_commands_with_no_response_policies() {
+    fn test_aggregate_pipeline_multi_node_commands_with_no_response_for_command() {
         let pipeline_responses: PipelineResponses =
             vec![vec![(Value::Int(1), "node1".to_string())], vec![]];
         let response_policies = HashMap::new();
@@ -3381,8 +3435,41 @@ mod pipeline_routing_tests {
             vec![
                 Value::Int(1),
                 Value::ServerError(ServerError::ExtensionError {
-                    code: "NoResponse".to_string(),
+                    code: "PipelineNoResponse".to_string(),
                     detail: Some("No response found for command 1".to_string())
+                })
+            ]
+        );
+    }
+
+    #[test]
+    fn test_aggregate_pipeline_responses_with_multiple_responses_for_command() {
+        let pipeline_responses: PipelineResponses = vec![
+            vec![(Value::Int(1), "node1".to_string())],
+            vec![
+                (Value::Int(2), "node2".to_string()),
+                (Value::Int(3), "node3".to_string()),
+            ],
+        ];
+        let response_policies = HashMap::new();
+
+        let responses = block_on(
+            ClusterConnInner::<MultiplexedConnection>::aggregate_pipeline_multi_node_commands(
+                pipeline_responses,
+                response_policies,
+            ),
+        );
+
+        assert_eq!(
+            responses,
+            vec![
+                Value::Int(1),
+                Value::ServerError(ServerError::ExtensionError {
+                    code: "PipelineNotSingleResponse".to_string(),
+                    detail: Some(
+                        "Expected exactly one response for command 1, got 2: [int(2), int(3)]"
+                            .to_string()
+                    )
                 })
             ]
         );

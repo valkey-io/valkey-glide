@@ -15,6 +15,7 @@ use directories::BaseDirs;
 use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
 use once_cell::sync::Lazy;
 use protobuf::{Chars, Message};
+use redis::cluster_async::PipelineRetryStrategy;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
@@ -397,9 +398,13 @@ async fn send_batch(
         false => client
             .send_pipeline(
                 &pipeline,
+                routing,
                 request.raise_on_error,
                 none_if_zero(request.timeout),
-                request.retry_failed_commands,
+                PipelineRetryStrategy::new(
+                    request.retry_server_error,
+                    request.retry_connection_error,
+                ),
             )
             .await
             .map_err(|err| err.into()),

@@ -1140,7 +1140,8 @@ export class BaseClient {
                       commands: command,
                       // TODO: add support for timeout
                       raiseOnError: true,
-                      retryFailedCommands: false,
+                      retryServerError: false,
+                      retryConnectionError: false,
                   }),
                   route,
               })
