@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -58,7 +59,116 @@ func (suite *PubSubTestSuite) TestBasicPubSubWithGlideClient() {
 
 // TestMultipleSubscribersWithGlideClient tests message delivery to multiple subscribers
 func (suite *PubSubTestSuite) TestMultipleSubscribersWithGlideClient() {
-	// TODO: Implement this test
+	// Create a publisher client
+	publisher := suite.createDefaultClient("publisher")
+
+	// Create channels for message tracking
+	messages1 := make(chan *api.PubSubMessage, 10)
+	messages2 := make(chan *api.PubSubMessage, 10)
+
+	// Create subscriber clients with different channels
+	callback1 := func(message *api.PubSubMessage, ctx any) {
+		suite.T().Logf("Received message on client1: %s", message.Message)
+		messages1 <- message
+	}
+
+	callback2 := func(message *api.PubSubMessage, ctx any) {
+		suite.T().Logf("Received message on client2: %s", message.Message)
+		messages2 <- message
+	}
+
+	// Subscribe to different channels
+	subscriptionConfig1 := api.NewStandaloneSubscriptionConfig().
+		WithSubscription(api.ExactChannelMode, "test-channel-multi").
+		WithCallback(callback1, nil)
+
+	subscriptionConfig2 := api.NewStandaloneSubscriptionConfig().
+		WithSubscription(api.ExactChannelMode, "test-channel-multi").
+		WithCallback(callback2, nil)
+
+	suite.createClientWithSubscriptions("subscriber1", subscriptionConfig1)
+	suite.createClientWithSubscriptions("subscriber2", subscriptionConfig2)
+
+	// Give time for subscriptions to be established
+	time.Sleep(500 * time.Millisecond)
+
+	// Number of messages to send to each channel
+	const messageCount = 1
+
+	// Send messages to both channels
+	for i := 0; i < messageCount; i++ {
+		msg := fmt.Sprintf("Hello Subscribers - msg %d", i)
+
+		result1, err := publisher.CustomCommand([]string{"PUBLISH", "test-channel-multi", msg})
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), result1)
+		suite.T().Logf("Published message to channel")
+
+		// Small delay between messages to ensure ordering
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Wait for messages to be received with timeout
+	timeout := time.After(5 * time.Second)
+	received1 := make([]*api.PubSubMessage, 0, messageCount)
+	received2 := make([]*api.PubSubMessage, 0, messageCount)
+
+	// Wait for messageCount messages or timeout
+	waitForMessages := func(ch chan *api.PubSubMessage, received *[]*api.PubSubMessage) {
+		for len(*received) < messageCount {
+			select {
+			case msg := <-ch:
+				*received = append(*received, msg)
+			case <-timeout:
+				return // Exit on timeout
+			}
+		}
+	}
+
+	// Use wait groups to wait for both channels concurrently
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		waitForMessages(messages1, &received1)
+	}()
+
+	go func() {
+		defer wg.Done()
+		waitForMessages(messages2, &received2)
+	}()
+
+	// Wait for both to complete or timeout
+	wgDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(wgDone)
+	}()
+
+	select {
+	case <-wgDone:
+		// Both channels processed
+	case <-timeout:
+		// Timeout occurred (the individual waitForMessages functions will have stopped)
+	}
+
+	// Verify results
+	assert.Equal(suite.T(), messageCount, len(received1), "Client 1 should receive exactly %d messages", messageCount)
+	assert.Equal(suite.T(), messageCount, len(received2), "Client 2 should receive exactly %d messages", messageCount)
+
+	// Verify message content and order
+	for i := 0; i < messageCount; i++ {
+		if i < len(received1) {
+			expectedMsg1 := fmt.Sprintf("Hello Subscribers - msg %d", i)
+			assert.Equal(suite.T(), expectedMsg1, received1[i].Message, "Unexpected message for client 1")
+		}
+
+		if i < len(received2) {
+			expectedMsg2 := fmt.Sprintf("Hello Subscribers - msg %d", i)
+			assert.Equal(suite.T(), expectedMsg2, received2[i].Message, "Unexpected message for client 2")
+		}
+	}
 }
 
 // TestUnsubscribeWithGlideClient tests unsubscribe functionality

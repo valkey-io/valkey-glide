@@ -36,6 +36,9 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 	}
 	if config.subscriptionConfig != nil {
 		client.SetMessageHandler(NewMessageHandler(config.subscriptionConfig.callback, config.subscriptionConfig.context))
+		clientID := client.GetClientID()
+		dispatcher := GetDispatcher()
+		dispatcher.RegisterSubscriptionConfig(clientID, config.subscriptionConfig.GetBaseConfig())
 	}
 
 	return &GlideClient{client}, nil

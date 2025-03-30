@@ -58,11 +58,13 @@ func (suite *PubSubTestSuite) SetupSuite() {
 	}
 
 	cmd := []string{}
+
 	suite.tls = false
 	if *tls {
-		cmd = []string{"--tls"}
+		cmd = append(cmd, "--tls")
 		suite.tls = true
 	}
+
 	suite.T().Logf("TLS = %t", suite.tls)
 
 	// Note: code does not start standalone if cluster hosts are given and vice versa
@@ -78,11 +80,13 @@ func (suite *PubSubTestSuite) SetupSuite() {
 	}
 	if startServer {
 		// Start standalone instance
-		clusterManagerOutput := pubsubRunClusterManager(suite, append(cmd, "start", "-r", "3"), false)
+		startCmd := append(cmd, "start", "-r", "3")
+		clusterManagerOutput := pubsubRunClusterManager(suite, startCmd, false)
 		suite.standaloneHosts = pubsubExtractAddresses(suite, clusterManagerOutput)
 
-		// Start cluster
-		clusterManagerOutput = pubsubRunClusterManager(suite, append(cmd, "start", "--cluster-mode", "-r", "3"), false)
+		// Start cluster (with cluster-mode flag)
+		clusterCmd := append(cmd, "start", "--cluster-mode", "-r", "3")
+		clusterManagerOutput = pubsubRunClusterManager(suite, clusterCmd, false)
 		suite.clusterHosts = pubsubExtractAddresses(suite, clusterManagerOutput)
 	}
 

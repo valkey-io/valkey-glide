@@ -102,7 +102,7 @@ func pubsubGetServerVersion(suite PubSubServerVersionGetter) string {
 			return pubsubExtractServerVersion(suite, info)
 		}
 	}
-	
+
 	clusterHosts := suite.GetClusterHosts()
 	if len(clusterHosts) == 0 {
 		if err != nil {

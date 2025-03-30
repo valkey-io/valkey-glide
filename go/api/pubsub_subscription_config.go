@@ -68,6 +68,10 @@ func (config *BaseSubscriptionConfig) Validate() error {
 	return nil
 }
 
+type SubscriptionConfigAccessor interface {
+	GetBaseConfig() *BaseSubscriptionConfig
+}
+
 // *** StandaloneSubscriptionConfig ***
 
 type PubSubChannelMode int
@@ -129,6 +133,10 @@ func (config *StandaloneSubscriptionConfig) Validate() error {
 	return config.BaseSubscriptionConfig.Validate()
 }
 
+func (config *StandaloneSubscriptionConfig) GetBaseConfig() *BaseSubscriptionConfig {
+	return config.BaseSubscriptionConfig
+}
+
 // *** ClusterSubscriptionConfig ***
 
 type PubSubClusterChannelMode int
@@ -187,4 +195,8 @@ func (config *ClusterSubscriptionConfig) WithSubscription(
 
 func (config *ClusterSubscriptionConfig) Validate() error {
 	return config.BaseSubscriptionConfig.Validate()
+}
+
+func (config *ClusterSubscriptionConfig) GetBaseConfig() *BaseSubscriptionConfig {
+	return config.BaseSubscriptionConfig
 }

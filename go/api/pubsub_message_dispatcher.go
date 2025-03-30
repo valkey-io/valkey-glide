@@ -112,7 +112,6 @@ func (md *MessageDispatcher) RemovePatternSubscription(clientID string, pattern 
 // DispatchMessage routes a message to all subscribed clients
 func (md *MessageDispatcher) DispatchMessage(pushInfo PushInfo) {
 	var itemsToDispatch []dispatchItem
-
 	switch pushInfo.Kind {
 	case Message, SMessage:
 		md.mu.RLock()
@@ -129,7 +128,6 @@ func (md *MessageDispatcher) DispatchMessage(pushInfo PushInfo) {
 	case PMessage:
 		md.mu.RLock()
 		pattern := pushInfo.Message.Pattern.Value()
-
 		// Deliver to all clients subscribed to this pattern
 		if clients, ok := md.patternSubs[pattern]; ok {
 			for clientID := range clients {
@@ -140,41 +138,40 @@ func (md *MessageDispatcher) DispatchMessage(pushInfo PushInfo) {
 		}
 		md.mu.RUnlock()
 	case Subscribe, PSubscribe, SSubscribe:
-		// Handle subscription notifications
-		channel := pushInfo.Message.Channel
-
-		// Track subscriptions for all clients
-		for clientID := range md.clients {
-			switch pushInfo.Kind {
-			case Subscribe:
-				md.AddSubscription(clientID, channel)
-			case PSubscribe:
-				md.AddPatternSubscription(clientID, channel)
-			case SSubscribe:
-				md.AddSubscription(clientID, channel)
-			}
-		}
-
+		// Skip automatic subscription management here
+		// Subscriptions should be handled explicitly by calling AddSubscription/AddPatternSubscription
+		// directly for the specific client that is subscribing
 	case Unsubscribe, PUnsubscribe, SUnsubscribe:
-		// Handle unsubscription notifications
-		channel := pushInfo.Message.Channel
-
-		// Track unsubscriptions for all clients
-		for clientID := range md.clients {
-			switch pushInfo.Kind {
-			case Unsubscribe:
-				md.RemoveSubscription(clientID, channel)
-			case PUnsubscribe:
-				md.RemovePatternSubscription(clientID, channel)
-			case SUnsubscribe:
-				md.RemoveSubscription(clientID, channel)
-			}
-		}
+		// Skip automatic unsubscription management here
+		// Unsubscriptions should be handled explicitly by calling RemoveSubscription/RemovePatternSubscription
+		// directly for the specific client that is unsubscribing
 	}
 
 	// Dispatch the message to all clients
 	for _, item := range itemsToDispatch {
 		item.handler.handleMessage(item.message)
+	}
+}
+
+// RegisterSubscriptionConfig registers all subscriptions from a configuration for a client
+func (md *MessageDispatcher) RegisterSubscriptionConfig(clientID string, config *BaseSubscriptionConfig) {
+	if config == nil || config.subscriptions == nil {
+		return
+	}
+
+	// Iterate through all subscription types in the config
+	for modeKey, channels := range config.subscriptions {
+		mode := int(modeKey)
+		
+		// For each channel/pattern, add the appropriate subscription type
+		for _, channelOrPattern := range channels {
+			// ExactChannelMode is 0, PatternChannelMode is 1 (both in standalone and cluster configs)
+			if mode == 0 { // ExactChannelMode
+				md.AddSubscription(clientID, channelOrPattern)
+			} else { // Any pattern-based mode (PatternChannelMode or ShardedClusterChannelMode)
+				md.AddPatternSubscription(clientID, channelOrPattern)
+			}
+		}
 	}
 }
 
