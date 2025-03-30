@@ -118,7 +118,7 @@ jobs:
             - name: Install ECGALAXY version of Node.js 20 on amazon-linux
               if: ${{ matrix.host.OS == 'amazon-linux' }}
               run: |
-                  yum install -y tar
+                  yum install -y tar gzip
                   curl https://code.europa.eu/ecgalaxy/amazonlinux2-nodejs/-/package_files/53482/download --output node.tar.gz
                   tar -xvzf node.tar.gz
                   echo "export PATH=$HOME/opt/nodejs/20.19.0/bin:$PATH" >> ~/.bashrc
