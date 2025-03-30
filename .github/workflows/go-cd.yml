@@ -124,6 +124,7 @@ jobs:
                   echo "export PATH=$GITHUB_WORKSPACE/opt/nodejs/20.19.0/bin:$PATH" >> ~/.bashrc
                   source ~/.bashrc
                   node --version
+                  rm -f /__e/node20/bin/node
                   ln -s $GITHUB_WORKSPACE/opt/nodejs/20.19.0/bin/node /__e/node20/bin/node
             - uses: actions/checkout@v3
             # - name: Manual Checkout
