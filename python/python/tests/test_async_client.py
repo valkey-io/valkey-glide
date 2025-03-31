@@ -3,12 +3,13 @@
 
 from __future__ import annotations
 
-import asyncio
+# import asyncio
 import math
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
+import anyio
 import pytest
 from glide import ClosingError, RequestError, Script
 from glide.async_commands.bitmap import (
@@ -83,6 +84,7 @@ from glide.routes import (
     SlotKeyRoute,
     SlotType,
 )
+
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_function_list_response,
@@ -102,7 +104,7 @@ from tests.utils.utils import (
 )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestGlideClients:
     @pytest.mark.skip_if_version_below("7.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -148,7 +150,6 @@ class TestGlideClients:
         self, glide_client: TGlideClient, value_size
     ):
         num_of_concurrent_tasks = 100
-        running_tasks = set()
 
         async def exec_command(i):
             range_end = 1 if value_size > 100 else 100
@@ -157,11 +158,9 @@ class TestGlideClients:
                 assert await glide_client.set(str(i), value) == OK
                 assert await glide_client.get(str(i)) == value.encode()
 
-        for i in range(num_of_concurrent_tasks):
-            task = asyncio.create_task(exec_command(i))
-            running_tasks.add(task)
-            task.add_done_callback(running_tasks.discard)
-        await asyncio.gather(*(list(running_tasks)))
+        async with anyio.create_task_group() as tg:
+            for i in range(num_of_concurrent_tasks):
+                tg.start_soon(exec_command, i)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -340,7 +339,7 @@ class TestGlideClients:
 
         async def fail_to_connect_to_client():
             # try to connect with a small timeout connection
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
             with pytest.raises(ClosingError) as e:
                 await create_client(
                     request,
@@ -355,7 +354,7 @@ class TestGlideClients:
 
         async def connect_to_client():
             # Create a second client with a connection timeout of 7 seconds
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
             timeout_client = await create_client(
                 request,
                 cluster_mode,
@@ -369,14 +368,18 @@ class TestGlideClients:
             await timeout_client.close()
 
         # Run tests
-        await asyncio.gather(run_debug_sleep(), fail_to_connect_to_client())
-        await asyncio.gather(run_debug_sleep(), connect_to_client())
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(run_debug_sleep)
+            tg.start_soon(fail_to_connect_to_client)
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(run_debug_sleep)
+            tg.start_soon(connect_to_client)
 
         # Clean up the main client
         await client.close()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestCommands:
     @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -417,21 +420,20 @@ class TestCommands:
             inflight_requests_limit=inflight_requests_limit,
         )
 
-        tasks = []
-        for i in range(inflight_requests_limit + 1):
-            coro = test_client.blpop([key1], 0)
-            task = asyncio.create_task(coro)
-            tasks.append(task)
+        max_reached = anyio.Event()
 
-        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        async def _blpop():
+            try:
+                await test_client.blpop([key1], 0)
+            except RequestError as e:
+                if "maximum inflight requests" in str(e):
+                    max_reached.set()
 
-        for task in done:
-            with pytest.raises(RequestError) as e:
-                await task
-            assert "maximum inflight requests" in str(e)
-
-        for task in pending:
-            task.cancel()
+        async with anyio.create_task_group() as tg:
+            for _ in range(inflight_requests_limit + 1):
+                tg.start_soon(_blpop)
+            await max_reached.wait()
+            tg.cancel_scope.cancel()
 
         await test_client.close()
 
@@ -1353,8 +1355,9 @@ class TestCommands:
 
         # blpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(endless_blpop_call(), timeout=3)
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(3):
+                await endless_blpop_call()
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1434,8 +1437,9 @@ class TestCommands:
         async def endless_blmpop_call():
             await glide_client.blmpop([key3], ListDirection.LEFT, 0, 1)
 
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(endless_blmpop_call(), timeout=3)
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(3):
+                await endless_blmpop_call()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1526,8 +1530,9 @@ class TestCommands:
 
         # brpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(endless_brpop_call(), timeout=3)
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(3):
+                await endless_brpop_call()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1746,8 +1751,9 @@ class TestCommands:
                 0,
             )
 
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(endless_blmove_call(), timeout=3)
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(3):
+                await endless_blmove_call()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3951,8 +3957,9 @@ class TestCommands:
 
         # bzpopmin is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(endless_bzpopmin_call(), timeout=0.5)
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(0.5):
+                await endless_bzpopmin_call()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4010,8 +4017,9 @@ class TestCommands:
 
         # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(endless_bzpopmax_call(), timeout=0.5)
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(0.5):
+                await endless_bzpopmax_call()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4691,8 +4699,9 @@ class TestCommands:
 
         # bzmpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(endless_bzmpop_call(), timeout=0.5)
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(0.5):
+                await endless_bzmpop_call()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -5559,8 +5568,11 @@ class TestCommands:
 
         # when xread is called with a block timeout of 0, it should never timeout, but we wrap the test with a timeout
         # to avoid the test getting stuck forever.
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(endless_xread_call(), timeout=3)
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(3):
+                await endless_xread_call()
+
+        await test_client.close()
 
         # if count is non-positive, it is ignored
         assert await glide_client.xread(
@@ -6001,8 +6013,11 @@ class TestCommands:
 
         # when xreadgroup is called with a block timeout of 0, it should never timeout, but we wrap the test with a
         # timeout to avoid the test getting stuck forever.
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(endless_xreadgroup_call(), timeout=3)
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(3):
+                await endless_xreadgroup_call()
+
+        await test_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -8440,7 +8455,7 @@ class TestCommands:
 
         async def wait_and_function_stats():
             # it can take a few seconds for FCALL to register as running
-            await asyncio.sleep(3)
+            await anyio.sleep(3)
             result = await test_client2.function_stats()
             running_scripts = False
             for res in result.values():
@@ -8458,10 +8473,9 @@ class TestCommands:
 
             assert running_scripts
 
-        await asyncio.gather(
-            endless_fcall_route_call(),
-            wait_and_function_stats(),
-        )
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(endless_fcall_route_call)
+            tg.start_soon(wait_and_function_stats)
 
         await test_client.close()
         await test_client2.close()
@@ -8562,7 +8576,7 @@ class TestCommands:
 
         async def wait_and_function_kill():
             # it can take a few seconds for FCALL to register as running
-            await asyncio.sleep(3)
+            await anyio.sleep(3)
             timeout = 0
             while timeout <= 5:
                 # keep trying to kill until we get an "OK"
@@ -8575,12 +8589,11 @@ class TestCommands:
                     # a RequestError may occur if the function is not yet running
                     # sleep and try again
                     timeout += 0.5
-                    await asyncio.sleep(0.5)
+                    await anyio.sleep(0.5)
 
-        await asyncio.gather(
-            endless_fcall_route_call(),
-            wait_and_function_kill(),
-        )
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(endless_fcall_route_call)
+            tg.start_soon(wait_and_function_kill)
 
         # no functions running so we get notbusy error again
         with pytest.raises(RequestError) as e:
@@ -8614,7 +8627,7 @@ class TestCommands:
 
         async def wait_and_function_kill():
             # it can take a few seconds for FCALL to register as running
-            await asyncio.sleep(3)
+            await anyio.sleep(3)
             timeout = 0
             foundUnkillable = False
             while timeout <= 5:
@@ -8626,14 +8639,14 @@ class TestCommands:
                         foundUnkillable = True
                         break
                 timeout += 0.5
-                await asyncio.sleep(0.5)
+                await anyio.sleep(0.5)
             # expect an unkillable error
             assert foundUnkillable
 
-        await asyncio.gather(
-            endless_fcall_route_call(),
-            wait_and_function_kill(),
-        )
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(endless_fcall_route_call)
+            tg.start_soon(wait_and_function_kill)
+
         await test_client.close()
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -9550,6 +9563,7 @@ class TestCommands:
             await glide_client.lpos(non_list_key, "a")
 
 
+@pytest.mark.anyio
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -9754,7 +9768,7 @@ class TestCommandsUnitTests:
         assert is_single_response(None, None)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestClusterRoutes:
     async def cluster_route_custom_command_multi_nodes(
         self,
@@ -10333,7 +10347,7 @@ async def script_kill_tests(
         assert "Script killed by user" in str(e)
 
     async def wait_and_kill_script():
-        await asyncio.sleep(3)  # Give some time for the script to start
+        await anyio.sleep(3)  # Give some time for the script to start
         timeout = 0
         while timeout <= 5:
             # keep trying to kill until we get an "OK"
@@ -10351,13 +10365,12 @@ async def script_kill_tests(
                 # a RequestError may occur if the script is not yet running
                 # sleep and try again
                 timeout += 0.5
-                await asyncio.sleep(0.5)
+                await anyio.sleep(0.5)
 
     # Run the long script and kill it
-    await asyncio.gather(
-        run_long_script(),
-        wait_and_kill_script(),
-    )
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(run_long_script)
+        tg.start_soon(wait_and_kill_script)
 
     # Verify that script_kill raises an error when no script is running
     with pytest.raises(RequestError) as e:
@@ -10370,7 +10383,7 @@ async def script_kill_tests(
     await test_client.close()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestScripts:
     @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -10597,7 +10610,7 @@ class TestScripts:
             await test_client.invoke_script(writing_script, keys=[get_random_string(5)])
 
         async def attempt_kill_writing_script():
-            await asyncio.sleep(3)  # Give some time for the script to start
+            await anyio.sleep(3)  # Give some time for the script to start
             foundUnkillable = False
             while True:
                 try:
@@ -10606,15 +10619,14 @@ class TestScripts:
                     if "UNKILLABLE" in str(e):
                         foundUnkillable = True
                         break
-                    await asyncio.sleep(0.5)
+                    await anyio.sleep(0.5)
 
             assert foundUnkillable
 
         # Run the writing script and attempt to kill it
-        await asyncio.gather(
-            run_writing_script(),
-            attempt_kill_writing_script(),
-        )
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(run_writing_script)
+            tg.start_soon(attempt_kill_writing_script)
 
         await test_client.close()
         await test_client2.close()
