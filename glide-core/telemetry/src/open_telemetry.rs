@@ -9,13 +9,16 @@ use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use thiserror::Error;
 use url::Url;
 
 const SPAN_WRITE_LOCK_ERR: &str = "Failed to acquire span write lock";
 const SPAN_READ_LOCK_ERR: &str = "Failed to acquire span read lock";
 const TRACE_SCOPE: &str = "valkey_glide";
+
+// Metric names
+const TIMEOUT_ERROR_METRIC: &str = "glide.timeout_errors";
 
 /// Custom error type for OpenTelemetry errors in Glide
 #[derive(Debug, Error)]
@@ -313,6 +316,8 @@ fn build_exporter(
 #[derive(Clone)]
 pub struct GlideOpenTelemetry {}
 
+static TIMEOUT_COUNTER: Mutex<Option<opentelemetry::metrics::Counter<u64>>> = Mutex::new(None);
+
 /// Our interface to OpenTelemetry
 impl GlideOpenTelemetry {
     /// Initialise the open telemetry library with a file system exporter
@@ -397,6 +402,32 @@ impl GlideOpenTelemetry {
             global::set_meter_provider(meter_provider);
         }
 
+        // Create the meter and counter
+        let meter = global::meter(TRACE_SCOPE);
+        TIMEOUT_COUNTER
+            .lock()
+            .map_err(|_| GlideOTELError::Other("Failed to initialize timeout counter".to_string()))?
+            .replace(
+                meter
+                    .u64_counter(TIMEOUT_ERROR_METRIC)
+                    .with_description("Number of timeout errors encountered")
+                    .build(),
+            );
+
+        Ok(())
+    }
+
+    /// Record a timeout error
+    pub fn record_timeout_error() -> Result<(), GlideOTELError> {
+        TIMEOUT_COUNTER
+            .lock()
+            .map_err(|_| {
+                GlideOTELError::Other("Failed to acquire timeout counter lock".to_string())
+            })?
+            .as_mut()
+            .ok_or_else(|| GlideOTELError::Other("Timeout counter not initialized".to_string()))?
+            .add(1, &[]);
+        println!("Recorded timeout eror ------------------------");
         Ok(())
     }
 
@@ -533,6 +564,24 @@ mod tests {
                 .build();
             let _ = GlideOpenTelemetry::initialise(config);
             create_test_spans().await;
+        });
+    }
+
+    #[test]
+    fn test_record_timeout_error() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let config = GlideOpenTelemetryConfigBuilder::default()
+                .with_flush_interval(std::time::Duration::from_millis(100))
+                .with_trace_exporter(GlideOpenTelemetrySignalsExporter::Grpc(
+                    "grpc://test.com".to_string(),
+                ))
+                .build();
+            let _ = GlideOpenTelemetry::initialise(config);
+            GlideOpenTelemetry::record_timeout_error().unwrap();
         });
     }
 }

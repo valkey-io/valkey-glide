@@ -128,7 +128,7 @@ mod cluster_async {
         let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
             .with_flush_interval(std::time::Duration::from_millis(400))
             .with_trace_exporter(
-                GlideOpenTelemetryTraceExporter::from_str("http://valid-url.com").unwrap(),
+                GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
             )
             .build();
         let result = GlideOpenTelemetry::initialise(glide_ot_config.clone());
@@ -137,7 +137,7 @@ mod cluster_async {
 
     #[tokio::test]
     async fn test_async_open_telemetry_invalid_config() {
-        let result = GlideOpenTelemetryTraceExporter::from_str("invalid-protocol.com");
+        let result = GlideOpenTelemetrySignalsExporter::from_str("invalid-protocol.com");
         assert!(result.is_err(), "Expected `from_str` to return an error");
         assert_eq!(
             result.unwrap_err().kind(),
@@ -148,7 +148,7 @@ mod cluster_async {
 
     #[tokio::test]
     async fn test_async_open_telemetry_interval_config() {
-        let exporter = GlideOpenTelemetryTraceExporter::from_str("http://valid-url.com").unwrap();
+        let exporter = GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap();
         let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
             .with_flush_interval(std::time::Duration::from_millis(400))
             .with_trace_exporter(exporter.clone())
