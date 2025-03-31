@@ -29,6 +29,14 @@
 * Go: Add `GeoPos` ([#3409](https://github.com/valkey-io/valkey-glide/pull/3409))
 * Go: Add `GeoDist` ([#3446](https://github.com/valkey-io/valkey-glide/pull/3446))
 * Go: Add `ClientId` ([#3077](https://github.com/valkey-io/valkey-glide/pull/3077))
+* Go: Add `LastSave` ([#3086](https://github.com/valkey-io/valkey-glide/pull/3086))
+* Go: Add `Config Reset Stat` ([#3121](https://github.com/valkey-io/valkey-glide/pull/3121))
+* Go: Add `GeoSearch` and `GeoSearchStore` ([#3385](https://github.com/valkey-io/valkey-glide/pull/3385))
+* Go: Add `Cluster Config Set & Get` ([#3274](https://github.com/valkey-io/valkey-glide/pull/3274))
+* Go: Add `Client Set & Get` ([#3302](https://github.com/valkey-io/valkey-glide/pull/3302))* Go: Add `Move` ([#3369](https://github.com/valkey-io/valkey-glide/pull/3369))
+* Go: Add `Scan` ([#3378](https://github.com/valkey-io/valkey-glide/pull/3378))
+* Core/FFI/Go: Add Support for Async and Sync Client Types in FFI ([#3451](https://github.com/valkey-io/valkey-glide/pull/3451))
+* Core/FFI/Go: Add support for async and sync client types in FFI ([#3451](https://github.com/valkey-io/valkey-glide/pull/3451))
 
 #### Breaking Changes
 

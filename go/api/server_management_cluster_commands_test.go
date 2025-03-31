@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -51,7 +52,6 @@ func ExampleGlideClusterClient_InfoWithOptions() {
 
 func ExampleGlideClusterClient_TimeWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-
 	route := config.Route(config.RandomRoute)
 	opts := options.RouteOption{
 		Route: route,
@@ -68,7 +68,6 @@ func ExampleGlideClusterClient_TimeWithOptions() {
 
 func ExampleGlideClusterClient_DBSizeWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-
 	route := config.SimpleNodeRoute(config.RandomRoute)
 	opts := options.RouteOption{
 		Route: route,
@@ -77,7 +76,6 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-
 	fmt.Println(result)
 
 	// Output: 0
@@ -189,4 +187,112 @@ func ExampleGlideClusterClient_LolwutWithOptions() {
 		fmt.Println("LOLWUT pattern generated successfully")
 	}
 	// Output: LOLWUT pattern generated successfully
+}
+
+func ExampleGlideClusterClient_LastSave() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	key := "key-" + uuid.NewString()
+	client.Set(key, "hello")
+	result, err := client.LastSave()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.IsSingleValue())
+
+	// Output: true
+}
+
+func ExampleGlideClusterClient_LastSaveWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	opts := options.RouteOption{Route: nil}
+	key := "key-" + uuid.NewString()
+	client.Set(key, "hello")
+	result, err := client.LastSaveWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.IsSingleValue())
+
+	// Output: true
+}
+
+func ExampleGlideClusterClient_ConfigResetStat() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	result, err := client.ConfigResetStat()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleGlideClusterClient_ConfigResetStatWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	opts := options.RouteOption{Route: nil}
+	result, err := client.ConfigResetStatWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleGlideClusterClient_ConfigSet() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	configParam := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
+	result, err := client.ConfigSet(configParam)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClusterClient_ConfigSetWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	opts := options.RouteOption{Route: config.RandomRoute}
+	configParam := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
+	result, err := client.ConfigSetWithOptions(configParam, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClusterClient_ConfigGet() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	configParamSet := map[string]string{"timeout": "1000"}
+	client.ConfigSet(configParamSet)
+	configParamGet := []string{"timeout"}
+	result, err := client.ConfigGet(configParamGet)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.MultiValue())
+
+	// Output:
+	// map[timeout:1000]
+}
+
+func ExampleGlideClusterClient_ConfigGetWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	opts := options.RouteOption{Route: config.RandomRoute}
+	configParamSet := map[string]string{"timeout": "1000"}
+	client.ConfigSetWithOptions(configParamSet, opts)
+	configParamGet := []string{"timeout"}
+	result, err := client.ConfigGetWithOptions(configParamGet, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.MultiValue())
+
+	// Output:
+	// map[timeout:1000]
 }

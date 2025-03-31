@@ -29,4 +29,20 @@ type ServerManagementClusterCommands interface {
 	Lolwut() (string, error)
 
 	LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error)
+
+	LastSave() (ClusterValue[int64], error)
+
+	LastSaveWithOptions(routeOption options.RouteOption) (ClusterValue[int64], error)
+
+	ConfigResetStat() (string, error)
+
+	ConfigResetStatWithOptions(routeOption options.RouteOption) (string, error)
+
+	ConfigSet(parameters map[string]string) (string, error)
+
+	ConfigSetWithOptions(parameters map[string]string, routeOption options.RouteOption) (string, error)
+
+	ConfigGet(parameters []string) (ClusterValue[interface{}], error)
+
+	ConfigGetWithOptions(parameters []string, routeOption options.RouteOption) (ClusterValue[interface{}], error)
 }
