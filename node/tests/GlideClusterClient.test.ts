@@ -1994,6 +1994,39 @@ describe("GlideClusterClient", () => {
                 let timeout = 4000;
                 await new Promise((resolve) => setTimeout(resolve, 1000));
 
+                // Wait until the script starts running
+                while (timeout >= 0) {
+                    try {
+                        await client1.ping();
+                    } catch (err) {
+                        if (
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("valkey is busy running a script")
+                        ) {
+                            break;
+                        }
+
+                        if (
+                            timeout <= 2000 &&
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("no scripts in execution right now")
+                        ) {
+                            promise = client2.invokeScript(longScript, {
+                                keys: ["{key}-" + uuidv4()],
+                            });
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 1000),
+                            );
+                        }
+                    }
+
+                    timeout -= 500;
+                }
+
+                timeout = 4000;
+
                 while (timeout >= 0) {
                     try {
                         // keep trying to kill until we get an "OK"
@@ -2008,6 +2041,20 @@ describe("GlideClusterClient", () => {
                         ) {
                             foundUnkillable = true;
                             break;
+                        }
+
+                        if (
+                            timeout <= 2000 &&
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("no scripts in execution right now")
+                        ) {
+                            promise = client2.invokeScript(longScript, {
+                                keys: ["{key}-" + uuidv4()],
+                            });
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 2000),
+                            );
                         }
                     }
 

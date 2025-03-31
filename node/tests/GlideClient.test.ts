@@ -1493,8 +1493,7 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    // TODO: enable once flakiness is solved
-    it.skip.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "script kill unkillable test_%p",
         async (protocol) => {
             const config = getClientConfigurationOption(
@@ -1511,7 +1510,7 @@ describe("GlideClient", () => {
             );
 
             // Create a long-running script
-            const longScript = new Script(createLongRunningLuaScript(5, true));
+            const longScript = new Script(createLongRunningLuaScript(6, true));
             let promise = null;
 
             try {
@@ -1523,6 +1522,39 @@ describe("GlideClient", () => {
                 let foundUnkillable = false;
                 let timeout = 4000;
                 await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Wait until the script starts running
+                while (timeout >= 0) {
+                    try {
+                        await client1.ping();
+                    } catch (err) {
+                        if (
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("valkey is busy running a script")
+                        ) {
+                            break;
+                        }
+
+                        if (
+                            timeout <= 2000 &&
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("no scripts in execution right now")
+                        ) {
+                            promise = client2.invokeScript(longScript, {
+                                keys: ["{key}-" + uuidv4()],
+                            });
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 1000),
+                            );
+                        }
+                    }
+
+                    timeout -= 500;
+                }
+
+                timeout = 4000;
 
                 while (timeout >= 0) {
                     try {
@@ -1538,6 +1570,20 @@ describe("GlideClient", () => {
                         ) {
                             foundUnkillable = true;
                             break;
+                        }
+
+                        if (
+                            timeout <= 2000 &&
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("no scripts in execution right now")
+                        ) {
+                            promise = client2.invokeScript(longScript, {
+                                keys: ["{key}-" + uuidv4()],
+                            });
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 2000),
+                            );
                         }
                     }
 
