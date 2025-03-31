@@ -163,7 +163,7 @@ func SetupCoverage(t *testing.T) func() {
 	}
 
 	// Ensure coverage directory exists
-	if err := os.MkdirAll(coverageDir, 0755); err != nil {
+	if err := os.MkdirAll(coverageDir, 0o755); err != nil {
 		t.Fatalf("Failed to create coverage directory: %v", err)
 	}
 
