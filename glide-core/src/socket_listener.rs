@@ -29,6 +29,7 @@ use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use std::{env, str};
 use std::{io, thread};
+use telemetrylib::GlideOpenTelemetry;
 use telemetrylib::GlideSpan;
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
@@ -228,7 +229,16 @@ async fn write_result(
                 type_: match error_type(&err) {
                     RequestErrorType::Unspecified => response::RequestErrorType::Unspecified,
                     RequestErrorType::ExecAbort => response::RequestErrorType::ExecAbort,
-                    RequestErrorType::Timeout => response::RequestErrorType::Timeout,
+                    RequestErrorType::Timeout => {
+                        // Record timeout error metric
+                        if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                            log_error(
+                                "OpenTelemetry:timeout_error",
+                                format!("Failed to record timeout error: {}", e),
+                            );
+                        }
+                        response::RequestErrorType::Timeout
+                    }
                     RequestErrorType::Disconnect => response::RequestErrorType::Disconnect,
                 }
                 .into(),
