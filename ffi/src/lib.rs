@@ -20,6 +20,7 @@ use redis::ScanStateRC;
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, RedisResult, Value};
 use std::ffi::CStr;
+use std::future::Future;
 use std::slice::from_raw_parts;
 use std::str;
 use std::sync::Arc;
@@ -136,6 +137,111 @@ pub struct ConnectionResponse {
     pub connection_error_message: *const c_char,
 }
 
+/// Represents an error returned from a command execution.
+///
+/// This struct is returned as part of a [`CommandResult`] when a command fails in synchronous operations.
+/// It contains both the error type and a message explaining the cause.
+///
+/// # Fields
+///
+/// - `command_error_message`: A null-terminated C string describing the error.
+/// - `command_error_type`: An enum identifying the type of error. See [`RequestErrorType`] for details.
+///
+/// # Safety
+///
+/// The pointer `command_error_message` must remain valid and not be freed until after
+/// [`free_command_result`] or [`free_error_message`] is called.
+///
+#[repr(C)]
+pub struct CommandError {
+    pub command_error_message: *const c_char,
+    pub command_error_type: RequestErrorType,
+}
+
+/// Represents the result of executing a command, either a successful response or an error.
+///
+/// This is the  return type for FFI functions that execute commands synchronously (e.g. with a SyncClient).
+/// It is a tagged struct containing either a valid [`CommandResponse`] or a [`CommandError`].
+/// If `command_error` is non-null, then `response` is guaranteed to be null and vice versa.
+///
+/// # Fields
+///
+/// - `response`: A pointer to a [`CommandResponse`] if the command was successful. Null if there was an error.
+/// - `command_error`: A pointer to a [`CommandError`] if the command failed. Null if the command succeeded.
+///
+/// # Ownership
+///
+/// The returned pointer to `CommandResult` must be freed using [`free_command_result`] to avoid memory leaks.
+/// This will recursively free both the response or the error, depending on which is set.
+///
+/// # Safety
+///
+/// The caller must check which field is non-null before accessing its contents.
+/// Only one of the two fields (`response` or `command_error`) will be set.
+///
+#[repr(C)]
+pub struct CommandResult {
+    pub response: *mut CommandResponse,
+    pub command_error: *mut CommandError,
+}
+
+// Deallocates a `CommandResult`.
+///
+/// This function frees both the `CommandResult` itself and its internal components if preset.
+///
+/// # Behavior
+///
+/// - If the provided `command_result_ptr` is null, the function returns immediately.
+/// - If either `response` or `command_error` is non-null, they are deallocated accordingly.
+///
+/// # Safety
+///
+/// * `free_command_result` must only be called **once** for any given `CommandResult`.
+///   Calling it multiple times is undefined behavior and may lead to double-free errors.
+/// * The `command_result_ptr` must be a valid pointer returned by a function that creates a `CommandResult`.
+/// * The memory behind `command_result_ptr` must remain valid until this function is called.
+/// * If `command_error.command_error_message` is non-null, it must be a valid pointer obtained from Rust
+///   and must outlive the `CommandError` itself.
+#[no_mangle]
+pub unsafe extern "C" fn free_command_result(command_result_ptr: *mut CommandResult) {
+    if command_result_ptr.is_null() {
+        return;
+    }
+    unsafe {
+        let command_result = Box::from_raw(command_result_ptr);
+        if !command_result.response.is_null() {
+            free_command_response(command_result.response);
+        }
+        if !command_result.command_error.is_null() {
+            let command_error = Box::from_raw(command_result.command_error);
+            if !command_error.command_error_message.is_null() {
+                free_error_message(command_error.command_error_message as *mut c_char);
+            }
+        }
+    }
+}
+
+/// Specifies the type of client used to execute commands.
+///
+/// This enum distinguishes between synchronous and asynchronous client modes.
+/// It is passed from the calling language (e.g., Go or Python) to determine how
+/// command execution should be handled.
+///
+/// # Variants
+///
+/// - `AsyncClient`: Executes commands asynchronously. Includes callbacks for success and failure
+///   that will be invoked once the command completes.
+/// - `SyncClient`: Executes commands synchronously and returns a result directly.
+#[repr(C)]
+#[derive(Clone)]
+pub enum ClientType {
+    AsyncClient {
+        success_callback: SuccessCallback,
+        failure_callback: FailureCallback,
+    },
+    SyncClient,
+}
+
 /// A `GlideClient` adapter.
 pub struct ClientAdapter {
     runtime: Runtime,
@@ -143,15 +249,132 @@ pub struct ClientAdapter {
 }
 
 struct CommandExecutionCore {
-    success_callback: SuccessCallback,
-    failure_callback: FailureCallback,
     client: GlideClient,
+    client_type: ClientType,
+}
+
+impl ClientAdapter {
+    /// Executes a command and routes the result based on client type.
+    ///
+    /// For async clients, spawns the future and returns null immediately.
+    /// For sync clients, blocks on the future and returns a `CommandResult`.
+    fn execute_command<Fut>(&self, channel: usize, request_future: Fut) -> *mut CommandResult
+    where
+        Fut: Future<Output = RedisResult<Value>> + Send + 'static,
+    {
+        match self.core.client_type {
+            ClientType::AsyncClient {
+                success_callback,
+                failure_callback,
+            } => {
+                // Spawn the request for async client
+                self.runtime.spawn(async move {
+                    let result = request_future.await;
+                    Self::handle_result(
+                        result,
+                        Some(success_callback),
+                        Some(failure_callback),
+                        channel,
+                    );
+                });
+                std::ptr::null_mut()
+            }
+            ClientType::SyncClient => {
+                // Block on the request for sync client
+                let result = self.runtime.block_on(request_future);
+                Self::handle_result(result, None, None, channel)
+            }
+        }
+    }
+
+    /// Handles the result of a command and returns a `CommandResult`.
+    ///
+    /// For async clients, invokes the appropriate callback and returns null.
+    /// For sync clients, returns a `CommandResult`.
+    fn handle_result(
+        result: RedisResult<Value>,
+        success_callback: Option<SuccessCallback>,
+        failure_callback: Option<FailureCallback>,
+        channel: usize,
+    ) -> *mut CommandResult {
+        match result {
+            Ok(value) => match valkey_value_to_command_response(value) {
+                Ok(command_response) => {
+                    if let Some(success_callback) = success_callback {
+                        unsafe {
+                            (success_callback)(channel, Box::into_raw(Box::new(command_response)));
+                        }
+                    } else {
+                        return Box::into_raw(Box::new(CommandResult {
+                            response: Box::into_raw(Box::new(command_response)),
+                            command_error: std::ptr::null_mut(),
+                        }));
+                    }
+                }
+                Err(err) => {
+                    if let Some(failure_callback) = failure_callback {
+                        Self::send_async_error(failure_callback, err, channel);
+                    } else {
+                        eprintln!("Error converting value to CommandResponse: {:?}", err);
+                        return create_error_result(err);
+                    }
+                }
+            },
+            Err(err) => {
+                if let Some(failure_callback) = failure_callback {
+                    Self::send_async_error(failure_callback, err, channel);
+                } else {
+                    eprintln!("Error executing command: {:?}", err);
+                    return create_error_result(err);
+                }
+            }
+        };
+        std::ptr::null_mut()
+    }
+
+    /// Handles a Redis error by either invoking the failure callback (for async clients)
+    /// or returning a heap-allocated `CommandResult` (for sync clients).
+    ///
+    /// This method ensures consistent error handling logic across both client types.
+    ///
+    /// # Parameters
+    /// - `err`: The error to handle.
+    /// - `channel`: The channel ID associated with the request.
+    ///
+    /// # Returns
+    /// - For async clients: Returns a null pointer after invoking the failure callback.
+    /// - For sync clients: Returns a pointer to a `CommandResult` containing the error.
+    fn handle_error(&self, err: RedisError, channel: usize) -> *mut CommandResult {
+        match self.core.client_type {
+            ClientType::AsyncClient {
+                success_callback: _,
+                failure_callback,
+            } => {
+                Self::send_async_error(failure_callback, err, channel);
+                std::ptr::null_mut()
+            }
+            ClientType::SyncClient => create_error_result(err),
+        }
+    }
+
+    /// Invokes the asynchronous failure callback with an error.
+    ///
+    /// This function is used in async client flows to report command execution failures
+    /// back to the calling language (e.g., Go) via a registered failure callback.
+    ///
+    /// # Parameters
+    /// - `failure_callback`: The callback to invoke with the error.
+    /// - `err`: The `RedisError` to report.
+    /// - `channel`: An identifier used to correlate the error to the original request.
+    fn send_async_error(failure_callback: FailureCallback, err: RedisError, channel: usize) {
+        let (c_err_str, error_type) = to_c_error(err);
+        unsafe { (failure_callback)(channel, c_err_str, error_type) };
+    }
 }
 
 fn create_client_internal(
     connection_request_bytes: &[u8],
-    success_callback: SuccessCallback,
-    failure_callback: FailureCallback,
+    client_type: ClientType,
 ) -> Result<ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
@@ -169,9 +392,8 @@ fn create_client_internal(
         .block_on(GlideClient::new(ConnectionRequest::from(request), None))
         .map_err(|err| err.to_string())?;
     let core = Arc::new(CommandExecutionCore {
-        success_callback,
-        failure_callback,
         client,
+        client_type,
     });
     Ok(ClientAdapter { runtime, core })
 }
@@ -197,12 +419,12 @@ fn create_client_internal(
 pub unsafe extern "C" fn create_client(
     connection_request_bytes: *const u8,
     connection_request_len: usize,
-    success_callback: SuccessCallback,
-    failure_callback: FailureCallback,
+    client_type: *const ClientType,
 ) -> *const ConnectionResponse {
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
-    let response = match create_client_internal(request_bytes, success_callback, failure_callback) {
+    let client_type = unsafe { &*client_type };
+    let response = match create_client_internal(request_bytes, client_type.clone()) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
@@ -532,14 +754,12 @@ pub unsafe extern "C" fn command(
     args_len: *const c_ulong,
     route_bytes: *const u8,
     route_bytes_len: usize,
-) {
+) -> *mut CommandResult {
     let client_adapter = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
         Arc::increment_strong_count(client_adapter_ptr);
         Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
     };
-
-    let core = client_adapter.core.clone();
 
     let arg_vec: Vec<&[u8]> = if !args.is_null() && !args_len.is_null() {
         unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) }
@@ -563,43 +783,71 @@ pub unsafe extern "C" fn command(
         Routes::default()
     };
 
-    client_adapter.runtime.spawn(async move {
-        let result = core
-            .client
-            .clone()
+    let mut client = client_adapter.core.client.clone();
+    client_adapter.execute_command(channel, async move {
+        client
             .send_command(&cmd, get_route(route, Some(&cmd)))
-            .await;
-        let value = match result {
-            Ok(value) => value,
-            Err(err) => {
-                let message = errors::error_message(&err);
-                let error_type = errors::error_type(&err);
+            .await
+    })
+}
 
-                let c_err_str = CString::into_raw(
-                    CString::new(message).expect("Couldn't convert error message to CString"),
-                );
-                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
-                return;
-            }
-        };
+/// Creates a heap-allocated `CommandResult` containing a `CommandError`.
+///
+/// This function is used to construct an error response when a Valkey command fails,
+/// intended to be returned through FFI to the calling language.
+///
+/// The resulting `CommandResult` contains:
+/// - A null `response` pointer.
+/// - A valid `command_error` pointer with error details (message and type).
+///
+/// # Parameters
+/// - `err`: The `RedisError` to be converted into a `CommandError`.
+///
+/// # Returns
+/// A raw pointer to a `CommandResult`. This must be freed using [`free_error_message`]
+/// to avoid memory leaks.
+///
+/// # Safety
+/// The returned pointer must be passed back to Rust for cleanup. Failing to call
+/// [`free_command_result`] will result in a memory leak.
+fn create_error_result(err: RedisError) -> *mut CommandResult {
+    let (c_err_str, error_type) = to_c_error(err);
+    Box::into_raw(Box::new(CommandResult {
+        response: std::ptr::null_mut(),
+        command_error: Box::into_raw(Box::new(CommandError {
+            command_error_message: c_err_str,
+            command_error_type: error_type,
+        })),
+    }))
+}
 
-        let result: RedisResult<CommandResponse> = valkey_value_to_command_response(value);
+/// Converts a `RedisError` into a C-compatible error representation.
+///
+/// This helper function extracts the error message and error type,
+/// and returns a raw C string pointer (`*const c_char`) along with
+/// the corresponding [`RequestErrorType`].
+///
+/// # Parameters
+/// - `err`: The `RedisError` to convert.
+///
+/// # Returns
+/// A tuple containing:
+/// - A raw C string (`*const c_char`) containing the error message.
+/// - A `RequestErrorType` representing the kind of error.
+///
+/// # Panics
+/// This function will panic if the error message cannot be converted into a `CString`.
+///
+/// # Safety
+/// The returned C string must be freed using [`free_error_message`].
+fn to_c_error(err: RedisError) -> (*const c_char, RequestErrorType) {
+    let message = errors::error_message(&err);
+    let error_type = errors::error_type(&err);
 
-        unsafe {
-            match result {
-                Ok(message) => (core.success_callback)(channel, Box::into_raw(Box::new(message))),
-                Err(err) => {
-                    let message = errors::error_message(&err);
-                    let error_type = errors::error_type(&err);
-
-                    let c_err_str = CString::into_raw(
-                        CString::new(message).expect("Couldn't convert error message to CString"),
-                    );
-                    (core.failure_callback)(channel, c_err_str, error_type);
-                }
-            };
-        }
-    });
+    let c_err_str = CString::into_raw(
+        CString::new(message).expect("Couldn't convert error message to CString"),
+    );
+    (c_err_str, error_type)
 }
 
 fn get_route(route: Routes, cmd: Option<&Cmd>) -> Option<RoutingInfo> {
@@ -727,11 +975,9 @@ pub unsafe extern "C" fn request_cluster_scan(
     arg_count: c_ulong,
     args: *const usize,
     args_len: *const c_ulong,
-) {
+) -> *mut CommandResult {
     let client_adapter =
         unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
-    let core = client_adapter.core.clone();
-
     let c_str = unsafe { CStr::from_ptr(cursor.get_cursor()) };
     let temp_str = c_str.to_str().expect("Must be UTF-8");
     let cursor_id = temp_str.to_string();
@@ -764,30 +1010,14 @@ pub unsafe extern "C" fn request_cluster_scan(
                 }
             }
             Err(e) => {
-                let redis_err = RedisError::from(e);
-                let message = errors::error_message(&redis_err);
-                let error_type = errors::error_type(&redis_err);
-
-                let c_err_str = CString::into_raw(
-                    CString::new(message).expect("Couldn't convert error message to CString"),
-                );
-                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
-                return;
+                return client_adapter.handle_error(RedisError::from(e), channel);
             }
         };
 
         let converted_type = match str::from_utf8(object_type) {
             Ok(v) => ObjectType::from(v.to_string()),
             Err(e) => {
-                let redis_err = RedisError::from(e);
-                let message = errors::error_message(&redis_err);
-                let error_type = errors::error_type(&redis_err);
-
-                let c_err_str = CString::into_raw(
-                    CString::new(message).expect("Couldn't convert error message to CString"),
-                );
-                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
-                return;
+                return client_adapter.handle_error(RedisError::from(e), channel);
             }
         };
 
@@ -810,45 +1040,12 @@ pub unsafe extern "C" fn request_cluster_scan(
         Ok(existing_cursor) => existing_cursor,
         Err(_error) => ScanStateRC::new(),
     };
-    let core = client_adapter.core.clone();
-
-    client_adapter.runtime.spawn(async move {
-        let result = core
-            .client
-            .clone()
+    let mut client = client_adapter.core.client.clone();
+    client_adapter.execute_command(channel, async move {
+        client
             .cluster_scan(&scan_state_cursor, cluster_scan_args)
-            .await;
-        let value = match result {
-            Ok(value) => value,
-            Err(err) => {
-                let message = errors::error_message(&err);
-                let error_type = errors::error_type(&err);
-
-                let c_err_str = CString::into_raw(
-                    CString::new(message).expect("Couldn't convert error message to CString"),
-                );
-                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
-                return;
-            }
-        };
-
-        let result: RedisResult<CommandResponse> = valkey_value_to_command_response(value);
-
-        unsafe {
-            match result {
-                Ok(message) => (core.success_callback)(channel, Box::into_raw(Box::new(message))),
-                Err(err) => {
-                    let message = errors::error_message(&err);
-                    let error_type = errors::error_type(&err);
-
-                    let c_err_str = CString::into_raw(
-                        CString::new(message).expect("Couldn't convert error message to CString"),
-                    );
-                    (core.failure_callback)(channel, c_err_str, error_type);
-                }
-            };
-        }
-    });
+            .await
+    })
 }
 
 /// CGO method which allows the Go client to request an update to the connection password.
@@ -872,10 +1069,9 @@ pub unsafe extern "C" fn update_connection_password(
     channel: usize,
     password: *const c_char,
     immediate_auth: bool,
-) {
+) -> *mut CommandResult {
     let client_adapter =
         unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
-    let core = client_adapter.core.clone();
 
     // argument conversion to be used in the async block
     let password = unsafe { CStr::from_ptr(password).to_str().unwrap() };
@@ -884,42 +1080,10 @@ pub unsafe extern "C" fn update_connection_password(
     } else {
         Some(password.to_string())
     };
-
-    client_adapter.runtime.spawn(async move {
-        let result = core
-            .client
-            .clone()
+    let mut client = client_adapter.core.client.clone();
+    client_adapter.execute_command(channel, async move {
+        client
             .update_connection_password(password_option, immediate_auth)
-            .await;
-        let value = match result {
-            Ok(value) => value,
-            Err(err) => {
-                let message = errors::error_message(&err);
-                let error_type = errors::error_type(&err);
-
-                let c_err_str = CString::into_raw(
-                    CString::new(message).expect("Couldn't convert error message to CString"),
-                );
-                unsafe { (core.failure_callback)(channel, c_err_str, error_type) };
-                return;
-            }
-        };
-
-        let result: RedisResult<CommandResponse> = valkey_value_to_command_response(value);
-
-        unsafe {
-            match result {
-                Ok(message) => (core.success_callback)(channel, Box::into_raw(Box::new(message))),
-                Err(err) => {
-                    let message = errors::error_message(&err);
-                    let error_type = errors::error_type(&err);
-
-                    let c_err_str = CString::into_raw(
-                        CString::new(message).expect("Couldn't convert error message to CString"),
-                    );
-                    (core.failure_callback)(channel, c_err_str, error_type);
-                }
-            };
-        }
-    });
+            .await
+    })
 }
