@@ -5,7 +5,7 @@ mod types;
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_info, log_warn};
+use logger_core::{log_error, log_info, log_warn};
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
@@ -525,9 +525,33 @@ impl Client {
                     Some(ResponsePolicy::AllSucceeded),
                 ));
                 let mut cmd = redis::cmd("AUTH");
+                if let Some(username) = self.get_username().await? {
+                    cmd.arg(username);
+                }
                 cmd.arg(password);
                 self.send_command(&cmd, Some(routing)).await
             }
+        }
+    }
+
+    /// Returns the username if one was configured during client creation. Otherwise, returns None.
+    async fn get_username(&mut self) -> RedisResult<Option<String>> {
+        match &mut self.internal_client {
+            ClientWrapper::Cluster { client } => match client.get_username().await {
+                Ok(Value::SimpleString(username)) => Ok(Some(username)),
+                Ok(Value::Nil) => Ok(None),
+                Ok(other) => Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Unexpected type",
+                    format!("Expected SimpleString or Nil, got: {other:?}"),
+                ))),
+                Err(e) => Err(RedisError::from((
+                    ErrorKind::ResponseError,
+                    "Error getting username",
+                    format!("Received error - {:?}.", e),
+                ))),
+            },
+            ClientWrapper::Standalone(client) => Ok(client.get_username()),
         }
     }
 }
@@ -823,7 +847,12 @@ impl Client {
                 .with_trace_exporter(trace_exporter)
                 .build();
 
-            GlideOpenTelemetry::initialise(config);
+            let _ = GlideOpenTelemetry::initialise(config).map_err(|e| {
+                log_error(
+                    "OpenTelemetry initialization",
+                    format!("OpenTelemetry initialization failed: {}", e),
+                )
+            });
         };
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {

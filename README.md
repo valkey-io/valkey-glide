@@ -4,10 +4,10 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 ## Supported Engine Versions
 Valkey GLIDE is API-compatible with the following engine versions:
 
-| Engine Type           |  6.2  |  7.0  |  7.2  |  8.0  |
-|-----------------------|-------|-------|-------|-------|
-| Valkey                |   -   |   -   |   V   |   V   |
-| Redis                 |   V   |   V   |   V   |   -   |
+| Engine Type           |  6.2  |  7.0  |  7.1  |  7.2  |  8.0  |
+|-----------------------|-------|-------|-------|-------|-------|
+| Valkey                |   -   |   -   |   -   |   V   |   V   |
+| Redis                 |   V   |   V   |   V   |   V   |   -   |
 
 ## Current Status and upcoming releases
 In the current release, Valkey GLIDE is available for Python, Java and Node.js. Support for Go is currently in **public preview** and support for C# is **under active development**, with plans to include more programming languages in the future.
@@ -20,11 +20,30 @@ In the current release, Valkey GLIDE is available for Python, Java and Node.js. 
 - Public preview for GO support
 
 ## Getting Started
--   [Java](./java/README.md)
--   [Python](./python/README.md)
--   [Node](./node/README.md)
--   [Go](./go/README.md)
--   [Documentation](https://github.com/valkey-io/valkey-glide/wiki)
+
+**SDKs**
+- [Java](./java/README.md)
+- [Python](./python/README.md)
+- [Node](./node/README.md)
+- [Go](./go/README.md)
+
+**General Concepts:** 
+- [Custom Command](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
+- [Connection Management](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#connection-management)
+- [Multi-Slot Command Handling](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#multi-slot-command-handling)
+- [Inflight Request Limit](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#inflight-request-limit)
+- [PubSub Support](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#pubsub-support)
+- [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan)
+- [Dynamic Password Management](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#dynamic-password-management)
+- [Modules API](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#modules-api)
+
+**Migration Guides**
+- [Jedis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-Jedis)
+
+**Community**
+- [Contributors meeting](https://github.com/valkey-io/valkey-glide/wiki/Contributors-meeting)
+
+Looking for more? Check out the [Valkey Glide Wiki](https://github.com/valkey-io/valkey-glide/wiki).
 
 ## Getting Help
 If you have any questions, feature requests, encounter issues, or need assistance with this project, please don't hesitate to open a GitHub issue. Our community and contributors are here to help you. Before creating an issue, we recommend checking the [existing issues](https://github.com/valkey-io/valkey-glide/issues) to see if your question or problem has already been addressed. If not, feel free to create a new issue, and we'll do our best to assist you. Please provide as much detail as possible in your issue description, including:

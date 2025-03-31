@@ -100,6 +100,8 @@ tasks.register('startClusterForAz') {
     }
 }
 
+tasks.register('beforeTests') {}
+tasks.register('afterTests') {}
 tasks.register('startStandalone') {
     doLast {
         if (System.getProperty("standalone-endpoints") == null) {
@@ -119,15 +121,21 @@ tasks.register('startStandalone') {
     }
 }
 
-test.dependsOn 'stopAllBeforeTests'
+beforeTests.dependsOn 'stopAllBeforeTests'
 stopAllBeforeTests.finalizedBy 'clearDirs'
 clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
 clearDirs.finalizedBy 'startClusterForAz'
-test.finalizedBy 'stopAllAfterTests'
+afterTests.finalizedBy 'stopAllAfterTests'
 compileTestJava.dependsOn ':client:publishToMavenLocal'
 
 tasks.withType(Test) {
+    useJUnitPlatform()
+    if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
+        dependsOn 'beforeTests'
+        finalizedBy 'afterTests'
+    }
+
     doFirst {
         systemProperty 'test.server.standalone', standaloneHosts
         systemProperty 'test.server.cluster', clusterHosts
@@ -151,7 +159,14 @@ tasks.withType(Test) {
 
 test {
     filter {
+        excludeTestsMatching 'glide.PubSubTests'
         excludeTestsMatching 'glide.modules.*'
+    }
+}
+
+tasks.register('pubsubTest', Test) {
+    filter {
+        includeTestsMatching 'glide.PubSubTests'
     }
 }
 

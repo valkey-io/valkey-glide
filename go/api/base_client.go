@@ -2,12 +2,14 @@
 
 package api
 
-// #cgo LDFLAGS: -lglide_rs
+// #cgo LDFLAGS: -lglide_ffi
 // #cgo !windows LDFLAGS: -lm
 // #cgo darwin LDFLAGS: -framework Security
+// #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
 // #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
 // #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
 // #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
+// #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-apple-darwin
 // #include "../lib.h"
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
@@ -18,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"sync"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
@@ -39,6 +42,7 @@ type BaseClient interface {
 	HyperLogLogCommands
 	GenericBaseCommands
 	BitmapCommands
+	GeoSpatialCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -53,7 +57,7 @@ type payload struct {
 //export successCallback
 func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandResponse) {
 	response := cResponse
-	resultChannel := *(*chan payload)(channelPtr)
+	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
 	resultChannel <- payload{value: response, error: nil}
 }
 
@@ -61,16 +65,67 @@ func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandRespo
 func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
 	defer C.free_error_message(cErrorMessage)
 	msg := C.GoString(cErrorMessage)
-	resultChannel := *(*chan payload)(channelPtr)
+	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
 	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
 }
 
 type clientConfiguration interface {
-	toProtobuf() *protobuf.ConnectionRequest
+	toProtobuf() (*protobuf.ConnectionRequest, error)
 }
 
 type baseClient struct {
+	pending    map[unsafe.Pointer]struct{}
 	coreClient unsafe.Pointer
+	mu         sync.Mutex
+}
+
+// buildAsyncClientType safely initializes a C.ClientType with an AsyncClient_Body.
+//
+// It manually writes into the union field of the following C layout:
+//
+//	typedef struct ClientType {
+//	    ClientType_Tag tag;
+//	    union {
+//	        AsyncClient_Body async_client;
+//	    };
+//	};
+//
+// Since cgo doesn’t support C unions directly, this is exposed in Go as:
+//
+//	type _Ctype_ClientType struct {
+//	    tag   _Ctype_ClientType_Tag
+//	    _     [4]uint8       // padding/alignment
+//	    anon0 [16]uint8      // raw bytes of the union
+//	}
+//
+// This function verifies that AsyncClient_Body fits in the union's underlying memory (anon0),
+// and writes it using unsafe.Pointer.
+//
+// # Returns
+// A fully initialized C.ClientType struct, or an error if layout validation fails.
+func buildAsyncClientType(successCb C.SuccessCallback, failureCb C.FailureCallback) (C.ClientType, error) {
+	var clientType C.ClientType
+	clientType.tag = C.AsyncClient
+
+	asyncBody := C.AsyncClient_Body{
+		success_callback: successCb,
+		failure_callback: failureCb,
+	}
+
+	// Validate that AsyncClient_Body fits in the union's allocated memory.
+	if unsafe.Sizeof(C.AsyncClient_Body{}) > unsafe.Sizeof(clientType.anon0) {
+		return clientType, fmt.Errorf(
+			"internal client error: AsyncClient_Body size (%d bytes) exceeds union field size (%d bytes)",
+			unsafe.Sizeof(C.AsyncClient_Body{}),
+			unsafe.Sizeof(clientType.anon0),
+		)
+	}
+
+	// Write asyncBody into the union using unsafe casting.
+	anonPtr := unsafe.Pointer(&clientType.anon0[0])
+	*(*C.AsyncClient_Body)(anonPtr) = asyncBody
+
+	return clientType, nil
 }
 
 // Creates a connection by invoking the `create_client` function from Rust library via FFI.
@@ -78,7 +133,10 @@ type baseClient struct {
 // Once the connection is established, this function invokes `free_connection_response` exposed by rust library to free the
 // connection_response to avoid any memory leaks.
 func createClient(config clientConfiguration) (*baseClient, error) {
-	request := config.toProtobuf()
+	request, err := config.toProtobuf()
+	if err != nil {
+		return nil, err
+	}
 	msg, err := proto.Marshal(request)
 	if err != nil {
 		return nil, err
@@ -86,12 +144,20 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 
 	byteCount := len(msg)
 	requestBytes := C.CBytes(msg)
+
+	clientType, err := buildAsyncClientType(
+		(C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
+		(C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
+	)
+	if err != nil {
+		return nil, &errors.ClosingError{Msg: err.Error()}
+	}
+
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
-			(C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
-			(C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
+			&clientType,
 		),
 	)
 	defer C.free_connection_response(cResponse)
@@ -102,17 +168,28 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 		return nil, &errors.ConnectionError{Msg: message}
 	}
 
-	return &baseClient{cResponse.conn_ptr}, nil
+	return &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}, nil
 }
 
 // Close terminates the client by closing all associated resources.
 func (client *baseClient) Close() {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
 	if client.coreClient == nil {
 		return
 	}
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
+
+	// iterating the channel map while holding the lock guarantees those unsafe.Pointers is still valid
+	// because holding the lock guarantees the owner of the unsafe.Pointer hasn't exit.
+	for channelPtr := range client.pending {
+		resultChannel := *(*chan payload)(channelPtr)
+		resultChannel <- payload{value: nil, error: &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}}
+	}
+	client.pending = nil
 }
 
 func (client *baseClient) executeCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
@@ -198,9 +275,6 @@ func (client *baseClient) executeCommandWithRoute(
 	args []string,
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
-	if client.coreClient == nil {
-		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
-	}
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
@@ -208,9 +282,6 @@ func (client *baseClient) executeCommandWithRoute(
 		cArgsPtr = &cArgs[0]
 		argLengthsPtr = &argLengths[0]
 	}
-
-	resultChannel := make(chan payload)
-	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
 
 	var routeBytesPtr *C.uchar = nil
 	var routeBytesCount C.uintptr_t = 0
@@ -228,9 +299,23 @@ func (client *baseClient) executeCommandWithRoute(
 		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
 	}
 
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
 	C.command(
 		client.coreClient,
-		C.uintptr_t(resultChannelPtr),
+		C.uintptr_t(pinnedChannelPtr),
 		uint32(requestType),
 		C.size_t(len(args)),
 		cArgsPtr,
@@ -238,7 +323,16 @@ func (client *baseClient) executeCommandWithRoute(
 		routeBytesPtr,
 		routeBytesCount,
 	)
+	client.mu.Unlock()
+
 	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
 	if payload.error != nil {
 		return nil, payload.error
 	}
@@ -261,6 +355,94 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	return cStrings, stringLengths
 }
 
+func (client *baseClient) submitConnectionPasswordUpdate(password string, immediateAuth bool) (Result[string], error) {
+	// Create a channel to receive the result
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return CreateNilStringResult(), &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+
+	C.update_connection_password(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		C.CString(password),
+		C._Bool(immediateAuth),
+	)
+	client.mu.Unlock()
+
+	// Wait for response
+	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return CreateNilStringResult(), payload.error
+	}
+
+	return handleStringOrNilResponse(payload.value)
+}
+
+// Update the current connection with a new password.
+//
+// This method is useful in scenarios where the server password has changed or when utilizing
+// short-lived passwords for enhanced security. It allows the client to update its password to
+// reconnect upon disconnection without the need to recreate the client instance. This ensures
+// that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+// loss of in-flight commands.
+//
+// Note:
+//
+// This method updates the client's internal password configuration and does not perform
+// password rotation on the server side.
+//
+// Parameters:
+//
+//		password - The new password to update the connection with.
+//		immediateAuth - immediateAuth A boolean flag. If true, the client will
+//	    authenticate immediately with the new password against all connections, Using AUTH
+//	    command. If password supplied is an empty string, the client will not perform auth and a warning
+//	    will be returned. The default is `false`.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+func (client *baseClient) UpdateConnectionPassword(password string, immediateAuth bool) (Result[string], error) {
+	return client.submitConnectionPasswordUpdate(password, immediateAuth)
+}
+
+// Update the current connection by removing the password.
+//
+// This method is useful in scenarios where the server password has changed or when utilizing
+// short-lived passwords for enhanced security. It allows the client to update its password to
+// reconnect upon disconnection without the need to recreate the client instance. This ensures
+// that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+// loss of in-flight commands.
+//
+// Note:
+//
+// This method updates the client's internal password configuration and does not perform
+// password rotation on the server side.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+func (client *baseClient) ResetConnectionPassword() (Result[string], error) {
+	return client.submitConnectionPasswordUpdate("", false)
+}
+
 // Set the given key with the given value. The return value is a response from Valkey containing the string "OK".
 //
 // See [valkey.io] for details.
@@ -278,7 +460,7 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 func (client *baseClient) Set(key string, value string) (string, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -416,7 +598,7 @@ func (client *baseClient) GetExWithOptions(key string, options options.GetExOpti
 func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -671,7 +853,7 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
 	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -730,7 +912,7 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	result, err := client.executeCommand(C.LCS, []string{key1, key2})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -1101,7 +1283,7 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 func (client *baseClient) HScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.HScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1133,12 +1315,12 @@ func (client *baseClient) HScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.HScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1863,7 +2045,7 @@ func (client *baseClient) SUnion(keys []string) (map[string]struct{}, error) {
 func (client *baseClient) SScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.SScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1896,12 +2078,12 @@ func (client *baseClient) SScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.SScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -2014,7 +2196,7 @@ func (client *baseClient) LIndex(key string, index int64) (Result[string], error
 func (client *baseClient) LTrim(key string, start int64, end int64) (string, error) {
 	result, err := client.executeCommand(C.LTrim, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -2494,7 +2676,7 @@ func (client *baseClient) BLMPopCount(
 func (client *baseClient) LSet(key string, index int64, element string) (string, error) {
 	result, err := client.executeCommand(C.LSet, []string{key, utils.IntToString(index), element})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -3091,7 +3273,7 @@ func (client *baseClient) Unlink(keys []string) (int64, error) {
 func (client *baseClient) Type(key string) (string, error) {
 	result, err := client.executeCommand(C.Type, []string{key})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -3146,7 +3328,7 @@ func (client *baseClient) Touch(keys []string) (int64, error) {
 func (client *baseClient) Rename(key string, newKey string) (string, error) {
 	result, err := client.executeCommand(C.Rename, []string{key, newKey})
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -3576,7 +3758,7 @@ func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 	return handleStringDoubleMapResponse(result)
 }
 
-// Removes and returns up to `count` members with the lowest scores from the sorted set
+// Removes and returns multiple members with the lowest scores from the sorted set
 // stored at the specified `key`.
 //
 // see [valkey.io] for details.
@@ -3584,7 +3766,7 @@ func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 // Parameters:
 //
 //	key - The key of the sorted set.
-//	count - The number of members to remove.
+//	options - Pop options, see [options.ZPopOptions].
 //
 // Return value:
 //
@@ -4433,7 +4615,7 @@ func (client *baseClient) ZScore(key string, member string) (Result[float64], er
 func (client *baseClient) ZScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.ZScan, []string{key, cursor})
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -4464,12 +4646,12 @@ func (client *baseClient) ZScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(C.ZScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return defaultStringResponse, nil, err
+		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -4586,7 +4768,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 	args := append([]string{key, group, id}, optionArgs...)
 	result, err := client.executeCommand(C.XGroupCreate, args)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -4772,7 +4954,7 @@ func (client *baseClient) XGroupSetIdWithOptions(
 	args := append([]string{key, group, id}, optionArgs...)
 	result, err := client.executeCommand(C.XGroupSetId, args)
 	if err != nil {
-		return defaultStringResponse, err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -5387,6 +5569,39 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 	return handleIntResponse(result)
 }
 
+// Perform a bitwise operation between multiple keys (containing string values) and store the result in the destination.
+//
+// Note:
+//
+// When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+//
+// Parameters:
+//
+//	bitwiseOperation - The bitwise operation to perform.
+//	destination      - The key that will store the resulting string.
+//	keys             - The list of keys to perform the bitwise operation on.
+//
+// Return value:
+//
+//	The size of the string stored in destination.
+//
+// [valkey.io]: https://valkey.io/commands/bitop/
+func (client *baseClient) BitOp(bitwiseOperation options.BitOpType, destination string, keys []string) (int64, error) {
+	bitOp, err := options.NewBitOp(bitwiseOperation, destination, keys)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args, err := bitOp.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	result, err := client.executeCommand(C.BitOp, args)
+	if err != nil {
+		return defaultIntResponse, &errors.RequestError{Msg: "Bitop command execution failed"}
+	}
+	return handleIntResponse(result)
+}
+
 // Counts the number of set bits (population counting) in a string stored at key. The
 // offsets start and end are zero-based indexes, with `0` being the first element of the
 // list, `1` being the next element and so on. These offsets can also be negative numbers
@@ -5553,6 +5768,54 @@ func (client *baseClient) XClaimJustIdWithOptions(
 		return nil, err
 	}
 	return handleStringArrayResponse(result)
+}
+
+// Returns the position of the first bit matching the given bit value.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	bit - The bit value to match. The value must be 0 or 1.
+//
+// Return value:
+//
+//	The position of the first occurrence matching bit in the binary value of
+//	the string held at key. If bit is not found, a -1 is returned.
+//
+// [valkey.io]: https://valkey.io/commands/bitpos/
+func (client *baseClient) BitPos(key string, bit int64) (int64, error) {
+	result, err := client.executeCommand(C.BitPos, []string{key, utils.IntToString(bit)})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns the position of the first bit matching the given bit value.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	bit - The bit value to match. The value must be 0 or 1.
+//	bitposOptions  - The [BitPosOptions] type.
+//
+// Return value:
+//
+//	The position of the first occurrence matching bit in the binary value of
+//	the string held at key. If bit is not found, a -1 is returned.
+//
+// [valkey.io]: https://valkey.io/commands/bitpos/
+func (client *baseClient) BitPosWithOptions(key string, bit int64, bitposOptions options.BitPosOptions) (int64, error) {
+	optionArgs, err := bitposOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	commandArgs := append([]string{key, utils.IntToString(bit)}, optionArgs...)
+	result, err := client.executeCommand(C.BitPos, commandArgs)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
 }
 
 // Copies the value stored at the source to the destination key if the
@@ -6402,4 +6665,628 @@ func (client *baseClient) ZInterCardWithOptions(keys []string, options *options.
 		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
+}
+
+// Returns the number of elements in the sorted set at key with a value between min and max.
+//
+// Available for Valkey 6.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	rangeQuery - The range query to apply to the sorted set.
+//
+// Return value:
+//
+//	The number of elements in the sorted set at key with a value between min and max.
+//
+// [valkey.io]: https://valkey.io/commands/zlexcount/
+func (client *baseClient) ZLexCount(key string, rangeQuery *options.RangeByLex) (int64, error) {
+	args := []string{key}
+	args = append(args, rangeQuery.ToArgsLexCount()...)
+	result, err := client.executeCommand(C.ZLexCount, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Adds geospatial members with their positions to the specified sorted set stored at `key`.
+// If a member is already a part of the sorted set, its position is updated.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	membersToGeospatialData - A map of member names to their corresponding positions. See [options.GeospatialData].
+//	  The command will report an error when index coordinates are out of the specified range.
+//
+// Return value:
+//
+//	The number of elements added to the sorted set.
+//
+// [valkey.io]: https://valkey.io/commands/geoadd/
+func (client *baseClient) GeoAdd(key string, membersToGeospatialData map[string]options.GeospatialData) (int64, error) {
+	result, err := client.executeCommand(
+		C.GeoAdd,
+		append([]string{key}, options.MapGeoDataToArray(membersToGeospatialData)...),
+	)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Adds geospatial members with their positions to the specified sorted set stored at `key`.
+// If a member is already a part of the sorted set, its position is updated.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	membersToGeospatialData - A map of member names to their corresponding positions. See [options.GeospatialData].
+//	  The command will report an error when index coordinates are out of the specified range.
+//	geoAddOptions - The options for the GeoAdd command, see - [options.GeoAddOptions].
+//
+// Return value:
+//
+//	The number of elements added to the sorted set.
+//
+// [valkey.io]: https://valkey.io/commands/geoadd/
+func (client *baseClient) GeoAddWithOptions(
+	key string,
+	membersToGeospatialData map[string]options.GeospatialData,
+	geoAddOptions options.GeoAddOptions,
+) (int64, error) {
+	args := []string{key}
+	optionsArgs, err := geoAddOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, optionsArgs...)
+	args = append(args, options.MapGeoDataToArray(membersToGeospatialData)...)
+	result, err := client.executeCommand(C.GeoAdd, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns the GeoHash strings representing the positions of all the specified
+// `members` in the sorted set stored at the `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key -  The key of the sorted set.
+//	members - The array of members whose GeoHash strings are to be retrieved.
+//
+// Returns value:
+//
+//	An array of GeoHash strings representing the positions of the specified members stored
+//	at key. If a member does not exist in the sorted set, a `nil` value is returned
+//	for that member.
+//
+// [valkey.io]: https://valkey.io/commands/geohash/
+func (client *baseClient) GeoHash(key string, members []string) ([]string, error) {
+	result, err := client.executeCommand(
+		C.GeoHash,
+		append([]string{key}, members...),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the positions (longitude,latitude) of all the specified members of the
+// geospatial index represented by the sorted set at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	members - The members of the sorted set.
+//
+// Return value:
+//
+//	A 2D `array` which represent positions (longitude and latitude) corresponding to the given members.
+//	If a member does not exist, its position will be `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/geopos/
+func (client *baseClient) GeoPos(key string, members []string) ([][]float64, error) {
+	args := []string{key}
+	args = append(args, members...)
+	result, err := client.executeCommand(C.GeoPos, args)
+	if err != nil {
+		return nil, err
+	}
+	return handle2DFloat64OrNullArrayResponse(result)
+}
+
+// Returns the distance between `member1` and `member2` saved in the
+// geospatial index stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member1 - The name of the first member.
+//	member2 - The name of the second member.
+//
+// Return value:
+//
+//	The distance between `member1` and `member2`. If one or both members do not exist,
+//	or if the key does not exist, returns `nil`. The default
+//	unit is meters, see - [options.Meters]
+//
+// [valkey.io]: https://valkey.io/commands/geodist/
+func (client *baseClient) GeoDist(key string, member1 string, member2 string) (Result[float64], error) {
+	result, err := client.executeCommand(
+		C.GeoDist,
+		[]string{key, member1, member2},
+	)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+}
+
+// Returns the distance between `member1` and `member2` saved in the
+// geospatial index stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member1 - The name of the first member.
+//	member2 - The name of the second member.
+//	unit - The unit of distance measurement - see [options.GeoUnit].
+//
+// Return value:
+//
+//	The distance between `member1` and `member2`. If one or both members
+//	do not exist, or if the key does not exist, returns `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/geodist/
+func (client *baseClient) GeoDistWithUnit(
+	key string,
+	member1 string,
+	member2 string,
+	unit options.GeoUnit,
+) (Result[float64], error) {
+	result, err := client.executeCommand(
+		C.GeoDist,
+		[]string{key, member1, member2, string(unit)},
+	)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	An array of [options.Location] containing the following information:
+//	 - The coordinates as a [options.GeospatialData] object.
+//	 - The member (location) name.
+//	 - The distance from the center as a `float64`, in the same unit specified for
+//	   `searchByShape`.
+//	 - The geohash of the location as a `int64`.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearchWithFullOptions(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+	infoOptions options.GeoSearchInfoOptions,
+) ([]options.Location, error) {
+	args := []string{key}
+	searchFromArgs, err := searchFrom.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchFromArgs...)
+	searchByShapeArgs, err := searchByShape.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchByShapeArgs...)
+	infoOptionsArgs, err := infoOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, infoOptionsArgs...)
+	resultOptionsArgs, err := resultOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, resultOptionsArgs...)
+	result, err := client.executeCommand(C.GeoSearch, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleLocationArrayResponse(result)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//
+// Return value:
+//
+//	An array of matched member names.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearchWithResultOptions(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+) ([]string, error) {
+	args := []string{key}
+	searchFromArgs, err := searchFrom.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchFromArgs...)
+	searchByShapeArgs, err := searchByShape.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchByShapeArgs...)
+	resultOptionsArgs, err := resultOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, resultOptionsArgs...)
+
+	result, err := client.executeCommand(C.GeoSearch, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	An array of [options.Location] containing the following information:
+//	 - The coordinates as a [options.GeospatialData] object.
+//	 - The member (location) name.
+//	 - The distance from the center as a `float64`, in the same unit specified for
+//	   `searchByShape`.
+//	 - The geohash of the location as a `int64`.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearchWithInfoOptions(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	infoOptions options.GeoSearchInfoOptions,
+) ([]options.Location, error) {
+	return client.GeoSearchWithFullOptions(
+		key,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+		infoOptions,
+	)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//
+// Return value:
+//
+//	An array of matched member names.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearch(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+) ([]string, error) {
+	return client.GeoSearchWithResultOptions(
+		key,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+	)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStoreWithFullOptions(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+	infoOptions options.GeoSearchStoreInfoOptions,
+) (int64, error) {
+	args := []string{destinationKey, sourceKey}
+	searchFromArgs, err := searchFrom.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, searchFromArgs...)
+	searchByShapeArgs, err := searchByShape.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, searchByShapeArgs...)
+	resultOptionsArgs, err := resultOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, resultOptionsArgs...)
+	infoOptionsArgs, err := infoOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, infoOptionsArgs...)
+
+	result, err := client.executeCommand(C.GeoSearchStore, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStore(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+) (int64, error) {
+	return client.GeoSearchStoreWithFullOptions(
+		destinationKey,
+		sourceKey,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+		*options.NewGeoSearchStoreInfoOptions(),
+	)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStoreWithResultOptions(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+) (int64, error) {
+	return client.GeoSearchStoreWithFullOptions(
+		destinationKey,
+		sourceKey,
+		searchFrom,
+		searchByShape,
+		resultOptions,
+		*options.NewGeoSearchStoreInfoOptions(),
+	)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStoreWithInfoOptions(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	infoOptions options.GeoSearchStoreInfoOptions,
+) (int64, error) {
+	return client.GeoSearchStoreWithFullOptions(
+		destinationKey,
+		sourceKey,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+		infoOptions,
+	)
 }
