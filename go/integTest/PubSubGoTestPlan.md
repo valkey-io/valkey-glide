@@ -26,6 +26,11 @@ All basic functionality tests are now implemented in `pubsub_basic_test.go`:
 - [x] Test message delivery to multiple subscribers (`TestMultipleSubscribersWithGlideClient`)
 - [x] Test unsubscribe functionality (`TestUnsubscribeWithGlideClient`) - Currently skipped due to Rust implementation limitation
 - [x] Test message pattern matching with PSUBSCRIBE (`TestPatternSubscribeWithGlideClient`)
+- [ ] Test subscription with many channels (`TestExactSubscriptionManyChannels`)
+- [ ] Test pattern subscription with many channels (`TestPatternSubscriptionManyChannels`)
+- [ ] Test combined exact and pattern subscription (one client) (`TestCombinedSubscriptionsSingleClient`)
+- [ ] Test combined exact and pattern subscription (multiple clients) (`TestCombinedSubscriptionsMultipleClients`)
+- [ ] Test PubSub with binary data (`TestPubSubBinaryData`)
 
 #### Message Handler ✅
 Message handler functionality tested through the basic tests above:
@@ -33,6 +38,16 @@ Message handler functionality tested through the basic tests above:
 - [x] Test message handler with multiple channels 
 - [x] Test message handler with pattern subscriptions
 - [x] Test error handling in message handler
+- [ ] Test callback exception handling
+
+#### PubSub Commands Tests
+- [ ] Test PUBSUB CHANNELS command
+- [ ] Test PUBSUB NUMPAT command
+- [ ] Test PUBSUB NUMSUB command
+
+#### Transaction Tests (SKIPPED - Not Currently Supported) ⛔
+- [-] Test transaction with all types of messages (SKIP - transactions not supported)
+- [-] Test PubSub channels, patterns, and subscribers in transaction (SKIP - transactions not supported)
 
 #### Subscription Configuration
 - [-] Test connection handling during network interruptions (`TestSubscriptionReconnection`) - Created but skipped pending research on Java implementation behavior
@@ -51,12 +66,26 @@ Message handler functionality tested through the basic tests above:
 - [ ] Test message delivery to multiple subscribers
 - [ ] Test unsubscribe functionality
 - [ ] Test message pattern matching with PSUBSCRIBE
+- [ ] Test sharded subscription
+- [ ] Test sharded subscription with many channels
+- [ ] Test combined exact, pattern, and sharded subscription (one client)
+- [ ] Test combined exact, pattern, and sharded subscription (multiple clients)
+- [ ] Test three publishing clients with same channel name (sharded)
 
 #### Message Handler
 - [ ] Test message handler receives published messages
 - [ ] Test message handler with multiple channels
 - [ ] Test message handler with pattern subscriptions
 - [ ] Test error handling in message handler
+- [ ] Test callback exception handling
+
+#### Cluster-Specific PubSub Commands
+- [ ] Test PUBSUB SHARD CHANNELS command
+- [ ] Test PUBSUB SHARDNUMSUB command
+
+#### Transaction Tests (SKIPPED - Not Currently Supported) ⛔
+- [-] Test transaction with all types of messages (SKIP - transactions not supported)
+- [-] Test PubSub channels, patterns, and subscribers in transaction (SKIP - transactions not supported)
 
 #### Edge Cases
 - [ ] Test behavior with high message volume
@@ -69,6 +98,9 @@ Message handler functionality tested through the basic tests above:
 - [ ] UNSUBSCRIBE command is not fully implemented in the Rust core (lib.rs:574 "not yet implemented")
   - The `TestUnsubscribeWithGlideClient` test is currently skipped due to this limitation
   - Need to revisit once the Rust implementation is updated
+- [ ] Transactions are not currently supported in Go implementation
+  - Transaction-related tests are marked as skipped
+  - Need to track when transaction support is added to revisit these tests
 
 ## Future Refactoring Tasks
 
