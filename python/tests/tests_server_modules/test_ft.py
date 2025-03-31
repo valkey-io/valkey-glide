@@ -45,7 +45,7 @@ from glide.exceptions import RequestError
 from glide.glide_client import GlideClusterClient
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestFt:
     SearchResultField = Mapping[
         TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]

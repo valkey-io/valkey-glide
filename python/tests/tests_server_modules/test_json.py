@@ -37,7 +37,7 @@ def get_random_value(value_type="str"):
         return None
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestJson:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1691,10 +1691,13 @@ class TestJson:
             '"gamma"',
             JsonArrIndexOptions(start=0, end=2),
         )
-        assert result == [
-            0,
-            -1,
-        ]  # Only "gamma" at index 0 of level3[0] is found; gamma at index 2 of level3[1] is excluded as its not within the
+        assert (
+            result
+            == [
+                0,
+                -1,
+            ]
+        )  # Only "gamma" at index 0 of level3[0] is found; gamma at index 2 of level3[1] is excluded as its not within the
         # search range.
 
         # Check for passing start = 0, end = 0 in JSONPath syntax

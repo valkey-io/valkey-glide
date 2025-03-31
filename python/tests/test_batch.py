@@ -1000,9 +1000,8 @@ async def exec_batch(
         )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestBatch:
-
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_with_different_slots(
@@ -1640,6 +1639,6 @@ class TestBatch:
             assert isinstance(node_info, bytes)
             # Ensure the errorstats section indicates no errors reported for this test
             # It should only contain the header line.
-            assert (
-                node_info.strip() == b"# Errorstats"
-            ), f"Node {node_address.decode()} reported errors: {node_info.decode()}"
+            assert node_info.strip() == b"# Errorstats", (
+                f"Node {node_address.decode()} reported errors: {node_info.decode()}"
+            )

@@ -30,6 +30,8 @@ excluded_symbol_list = [
     "TRequest",  # Union
     # python/python/glide/glide_client.py
     "get_request_error_class",  # FunctionDef
+    "create_task",  # FunctionDef
+    "Future",  # ClassDef
     "BaseClient",  # ClassDef
     # python/python/glide/routes.py
     "to_protobuf_slot_type",  # FunctionDef
