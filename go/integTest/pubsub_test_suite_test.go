@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -148,67 +147,13 @@ func (suite *PubSubTestSuite) createDefaultClient(name string) api.GlideClientCo
 	return suite.createClient(name, config)
 }
 
-func (suite *PubSubTestSuite) createClientWithSubscriptions(name string, subscriptionConfig *api.StandaloneSubscriptionConfig) api.GlideClientCommands {
+func (suite *PubSubTestSuite) createClientWithSubscriptions(
+	name string,
+	subscriptionConfig *api.StandaloneSubscriptionConfig,
+) api.GlideClientCommands {
 	config := suite.defaultClientConfig().
 		WithSubscriptionConfig(subscriptionConfig)
 	return suite.createClient(name, config)
-}
-
-func (suite *PubSubTestSuite) defaultClusterClientConfig() *api.GlideClusterClientConfiguration {
-	return api.NewGlideClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
-		WithRequestTimeout(5000)
-}
-
-func (suite *PubSubTestSuite) createClusterClient(name string, config *api.GlideClusterClientConfiguration) api.GlideClusterClientCommands {
-	client, err := api.NewGlideClusterClient(config)
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), client)
-
-	suite.clusterClients[name] = client
-	return client
-}
-
-func (suite *PubSubTestSuite) createDefaultClusterClient(name string) api.GlideClusterClientCommands {
-	config := suite.defaultClusterClientConfig()
-	return suite.createClusterClient(name, config)
-}
-
-func (suite *PubSubTestSuite) createClusterClientWithSubscriptions(name string, subscriptionConfig *api.ClusterSubscriptionConfig) api.GlideClusterClientCommands {
-	config := suite.defaultClusterClientConfig().
-		WithSubscriptionConfig(subscriptionConfig)
-	return suite.createClusterClient(name, config)
-}
-
-// Helper methods for PubSub testing
-func (suite *PubSubTestSuite) waitForMessage(queue *api.PubSubMessageQueue, timeout time.Duration) *api.PubSubMessage {
-	messageCh := queue.WaitForMessage()
-	select {
-	case message := <-messageCh:
-		return message
-	case <-time.After(timeout):
-		return nil
-	}
-}
-
-func (suite *PubSubTestSuite) waitForMessages(queue *api.PubSubMessageQueue, count int, timeout time.Duration) []*api.PubSubMessage {
-	messages := make([]*api.PubSubMessage, 0, count)
-	deadline := time.Now().Add(timeout)
-
-	for len(messages) < count && time.Now().Before(deadline) {
-		remainingTime := deadline.Sub(time.Now())
-		if remainingTime <= 0 {
-			break
-		}
-
-		message := suite.waitForMessage(queue, remainingTime)
-		if message != nil {
-			messages = append(messages, message)
-		}
-	}
-
-	return messages
 }
 
 func TestPubSubTestSuite(t *testing.T) {

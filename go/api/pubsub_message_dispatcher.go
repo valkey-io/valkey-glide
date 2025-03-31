@@ -162,7 +162,7 @@ func (md *MessageDispatcher) RegisterSubscriptionConfig(clientID string, config 
 	// Iterate through all subscription types in the config
 	for modeKey, channels := range config.subscriptions {
 		mode := int(modeKey)
-		
+
 		// For each channel/pattern, add the appropriate subscription type
 		for _, channelOrPattern := range channels {
 			// ExactChannelMode is 0, PatternChannelMode is 1 (both in standalone and cluster configs)

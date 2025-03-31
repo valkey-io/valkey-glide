@@ -83,8 +83,8 @@ type PubSubMessageQueue struct {
 func NewPubSubMessageQueue() *PubSubMessageQueue {
 	return &PubSubMessageQueue{
 		messages:                make([]*PubSubMessage, 0),
-		waiters:                make([]chan *PubSubMessage, 0),
-		nextMessageReadyCh:     make(chan struct{}, 1),
+		waiters:                 make([]chan *PubSubMessage, 0),
+		nextMessageReadyCh:      make(chan struct{}, 1),
 		nextMessageReadySignals: make([]chan struct{}, 0),
 	}
 }
