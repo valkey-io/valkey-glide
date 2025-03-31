@@ -948,9 +948,8 @@ async def helper1(
     args.append(False)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestTransaction:
-
     async def exec_transaction(
         self,
         glide_client: TGlideClient,
