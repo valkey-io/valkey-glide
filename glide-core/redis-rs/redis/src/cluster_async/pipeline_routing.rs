@@ -1,18 +1,17 @@
 use crate::aio::ConnectionLike;
 use crate::cluster_async::ClusterConnInner;
 use crate::cluster_async::Connect;
+use crate::cluster_async::MUTEX_READ_ERR;
 use crate::cluster_routing::RoutingInfo;
 use crate::cluster_routing::SlotAddr;
-use crate::types::{RetryMethod, ServerError};
-use cluster_routing::RoutingInfo::{MultiNode, SingleNode};
-
-use crate::cluster_async::MUTEX_READ_ERR;
 use crate::cluster_routing::{
     command_for_multi_slot_indices, MultipleNodeRoutingInfo, ResponsePolicy, SingleNodeRoutingInfo,
 };
+use crate::types::{RetryMethod, ServerError};
 use crate::Pipeline;
 use crate::{cluster_routing, RedisResult, Value};
 use crate::{cluster_routing::Route, Cmd, ErrorKind, RedisError};
+use cluster_routing::RoutingInfo::{MultiNode, SingleNode};
 use futures::FutureExt;
 use rand::prelude::IteratorRandom;
 use std::collections::HashMap;
@@ -108,9 +107,7 @@ fn add_command_to_node_pipeline_map<C>(
     C: Clone,
 {
     if add_asking {
-        let mut asking_cmd = Cmd::new();
-        asking_cmd.arg("ASKING");
-        let asking_cmd = Arc::new(asking_cmd);
+        let asking_cmd = Arc::new(crate::cmd::cmd("ASKING"));
         pipeline_map
             .entry(address.clone())
             .or_insert_with(|| NodePipelineContext::new(connection.clone()))
@@ -145,12 +142,31 @@ fn add_command_to_node_pipeline_map<C>(
 pub(crate) async fn map_pipeline_to_nodes<C>(
     pipeline: &crate::Pipeline,
     core: Core<C>,
+    route: Option<InternalSingleNodeRouting<C>>,
 ) -> Result<(NodePipelineMap<C>, ResponsePoliciesMap), (OperationTarget, RedisError)>
 where
     C: Clone + ConnectionLike + Connect + Send + Sync + 'static,
 {
     let mut pipelines_per_node = NodePipelineMap::new();
     let mut response_policies = HashMap::new();
+
+    if route.is_some() {
+        // If we have a route, we will use it to route the commands to the given route, instead of finding the route for each command
+        let route = route.unwrap();
+
+        let (addr, conn) = ClusterConnInner::get_connection(route, core, None)
+            .await
+            .map_err(|err| (OperationTarget::NotFound, err))?;
+
+        let entry = pipelines_per_node
+            .entry(addr)
+            .or_insert_with(|| NodePipelineContext::new(conn));
+
+        for (index, cmd) in pipeline.cmd_iter().enumerate() {
+            entry.add_command(cmd.clone(), index, None, false);
+        }
+        return Ok((pipelines_per_node, response_policies));
+    }
 
     for (index, cmd) in pipeline.cmd_iter().enumerate() {
         match RoutingInfo::for_routable(cmd.as_ref())
@@ -414,10 +430,10 @@ where
                     count: context.pipeline.len(),
                     pipeline: context.pipeline.into(),
                     offset: 0,
-                    route: InternalSingleNodeRouting::Connection {
+                    route: Some(InternalSingleNodeRouting::Connection {
                         address: address.clone(),
                         conn: async { context.connection }.boxed().shared(),
-                    },
+                    }),
                     // mark it as a sub-pipeline mode
                     sub_pipeline: true,
                     pipeline_retry_strategy,
@@ -471,17 +487,28 @@ fn add_pipeline_result(
                 responses[inner_index] = (value, address);
             }
             None => {
+                // If we have no `inner_index`, we expect this command to be a single node command, and therefore, have a single response
+                // If the vector responses is empty, we add the value and address
+                // If the vector is not empty, we check if it's only response is a ServerError, if so, we override it with the new value and address, since that means we have retried the command (e.g. on `MOVED` or `ASK` errors)
                 if responses.is_empty() {
                     responses.push((value, address));
-                } else {
+                } else if let Value::ServerError(_) = responses[0].0 {
                     responses[0] = (value, address);
+                } else {
+                    return Err((
+                        OperationTarget::FanOut,
+                        RedisError::from((
+                            ErrorKind::ClientError,
+                            "Existing response is not a ServerError; cannot override.",
+                        )),
+                    ));
                 }
             }
         }
         Ok(())
     } else {
         Err((
-            OperationTarget::NotFound,
+            OperationTarget::FanOut,
             RedisError::from((
                 ErrorKind::ClientError,
                 "Index not found in pipeline responses",
@@ -541,7 +568,7 @@ fn process_pipeline_responses(
     for ((address, command_indices), response_result) in
         addresses_and_indices.into_iter().zip(responses)
     {
-        let (server_error, retry_method, is_connection_error) = match response_result {
+        let (server_error, retry_method) = match response_result {
             Ok(Ok(Response::Multiple(values))) => {
                 // Add each response to the pipeline_responses vector at the appropriate index
                 for ((index, inner_index, ignore), value) in command_indices.into_iter().zip(values)
@@ -557,7 +584,6 @@ fn process_pipeline_responses(
                             address.clone(),
                             error.clone(),
                             pipeline_retry_strategy,
-                            false,
                         );
                     }
                     if !ignore {
@@ -584,7 +610,6 @@ fn process_pipeline_responses(
                     )),
                 },
                 RetryMethod::NoRetry,
-                false,
             ),
             // If we received a cluster scan response for a pipeline, we will create a ServerError and append it to the relevant indices
             // We are not supposed to get in here, but it's better than using unreachable!()
@@ -594,13 +619,12 @@ fn process_pipeline_responses(
                     detail: (Some("Received a cluster scan result inside a pipeline.".to_string())),
                 },
                 RetryMethod::NoRetry,
-                false,
             ),
 
             // If we received a redis error, we will convert it to a ServerError and append it to the relevant indices
             Ok(Err(err)) => {
                 let retry_method = err.retry_method();
-                (err.into(), retry_method, false)
+                (err.into(), retry_method)
             }
             // If we received a receive (connection) error, we will create a ServerError and append it to the relevant indices.
             // If the pipeline retry strategy is set to retry connection errors, we will retry the commands, if not, we will trigger reconnection.
@@ -612,11 +636,10 @@ fn process_pipeline_responses(
                     ))),
                 },
                 if pipeline_retry_strategy.retry_connection_error {
-                    RetryMethod::RetryImmediately
+                    RetryMethod::ReconnectAndRetry
                 } else {
                     RetryMethod::Reconnect
                 },
-                true,
             ),
         };
 
@@ -630,7 +653,6 @@ fn process_pipeline_responses(
                 address.clone(),
                 server_error.clone(),
                 pipeline_retry_strategy,
-                is_connection_error,
             );
             if !ignore {
                 add_pipeline_result(
@@ -655,40 +677,39 @@ fn update_retry_map(
     address: String,
     error: ServerError,
     pipeline_retry_strategy: PipelineRetryStrategy,
-    is_connection_error: bool,
 ) {
     let (index, inner_index) = indices;
     match retry_method {
         RetryMethod::NoRetry => {
             // Do nothing
         }
-        RetryMethod::AskRedirect | RetryMethod::MovedRedirect | RetryMethod::Reconnect => {
+        RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
+            // If we the retry method is reconnect and the user has set the retry_connection_error flag to true,
+            // we will retry the commands, if not, we will trigger reconnection.
+            let effective_retry_method = if pipeline_retry_strategy.retry_connection_error {
+                RetryMethod::ReconnectAndRetry
+            } else {
+                retry_method
+            };
+
+            retry_map.entry(effective_retry_method).or_default().push((
+                (index, inner_index),
+                address,
+                error,
+            ));
+        }
+        RetryMethod::AskRedirect | RetryMethod::MovedRedirect => {
             // If the error is a redirect, we add it to the retry map regardless
             retry_map
                 .entry(retry_method)
                 .or_default()
                 .push(((index, inner_index), address, error));
         }
-        RetryMethod::ReconnectAndRetry
-        | RetryMethod::RetryImmediately
+        RetryMethod::RetryImmediately
         | RetryMethod::WaitAndRetry
         | RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica => {
             if pipeline_retry_strategy.retry_server_error {
                 // Only add to the retry map if retries for failed commands are enabled
-                retry_map.entry(retry_method).or_default().push((
-                    (index, inner_index),
-                    address,
-                    error,
-                ));
-            } else if matches!(retry_method, RetryMethod::ReconnectAndRetry) {
-                // We wont retry the command, but we will trigger reconnection
-                retry_map.entry(RetryMethod::Reconnect).or_default().push((
-                    (index, inner_index),
-                    address,
-                    error,
-                ));
-            } else if is_connection_error && pipeline_retry_strategy.retry_connection_error {
-                // If we received a connection error and the user configured to retry on connection errors, we will retry the commands
                 retry_map.entry(retry_method).or_default().push((
                     (index, inner_index),
                     address,

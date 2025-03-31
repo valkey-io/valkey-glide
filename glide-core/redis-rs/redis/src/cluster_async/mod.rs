@@ -289,9 +289,6 @@ where
         route: Option<SingleNodeRoutingInfo>,
         pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisResult<Vec<Value>> {
-        // If route is specified in the case of pipeline (non-atomic batch)
-        // We will route the pipeline specifically to the defined route.
-        let sub_pipeline = route.is_some();
         let (sender, receiver) = oneshot::channel();
         self.0
             .send(Message {
@@ -299,8 +296,8 @@ where
                     pipeline: Arc::new(pipeline.clone()),
                     offset,
                     count,
-                    route: route.into(),
-                    sub_pipeline,
+                    route: route.map(|r| Some(r).into()),
+                    sub_pipeline: false,
                     pipeline_retry_strategy: pipeline_retry_strategy.unwrap_or_default(),
                 },
                 sender,
@@ -641,13 +638,13 @@ pub struct PipelineRetryStrategy {
     ///
     /// # Effect
     /// - Commands may be reordered within the same slot during retries.
-    retry_server_error: bool,
+    pub retry_server_error: bool,
     /// If `true`, sub-pipeline requests will be retried in case of connection errors.
     ///
     /// # Caution
     /// - Since a connection error does not indicate which commands succeeded or failed, retrying may lead to duplicate executions.
     /// - This is particularly risky for non-idempotent commands like `INCR`, which modify state irreversibly.
-    retry_connection_error: bool,
+    pub retry_connection_error: bool,
 }
 
 impl PipelineRetryStrategy {
@@ -669,7 +666,7 @@ enum CmdArg<C> {
         pipeline: Arc<crate::Pipeline>,
         offset: usize,
         count: usize,
-        route: InternalSingleNodeRouting<C>,
+        route: Option<InternalSingleNodeRouting<C>>,
         sub_pipeline: bool,
         /// Configures retry behavior for pipeline commands.  
         ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
@@ -788,9 +785,11 @@ impl<C> RequestInfo<C> {
                 CmdArg::Pipeline { route, .. } => {
                     let redirect = InternalSingleNodeRouting::Redirect {
                         redirect,
-                        previous_routing: Box::new(std::mem::take(route)),
+                        previous_routing: Box::new(
+                            route.take().unwrap_or(InternalSingleNodeRouting::Random),
+                        ),
                     };
-                    *route = redirect;
+                    *route = Some(redirect);
                 }
                 // cluster_scan is sent as a normal command internally so we will not reach that point.
                 CmdArg::ClusterScan { .. } => {
@@ -828,7 +827,7 @@ impl<C> RequestInfo<C> {
                 }
             }
             CmdArg::Pipeline { route, .. } => {
-                fix_route(route);
+                fix_route(route.get_or_insert(InternalSingleNodeRouting::Random));
             }
             // cluster_scan is sent as a normal command internally so we will not reach that point.
             CmdArg::ClusterScan { .. } => {
@@ -2287,7 +2286,11 @@ where
                         pipeline,
                         offset,
                         count,
-                        Self::get_connection(route, core, None),
+                        Self::get_connection(
+                            route.unwrap_or(InternalSingleNodeRouting::Random),
+                            core,
+                            None,
+                        ),
                     )
                     .await
                 } else {
@@ -2297,6 +2300,7 @@ where
                         core,
                         0,
                         pipeline_retry_strategy,
+                        route,
                     )
                     .await
                 }
@@ -2344,13 +2348,14 @@ where
         core: Core<C>,
         retry: u32,
         pipeline_retry_strategy: PipelineRetryStrategy,
+        route: Option<InternalSingleNodeRouting<C>>,
     ) -> OperationResult {
         // Distribute pipeline commands across cluster nodes based on routing information.
         // Returns:
         // - pipelines_by_node: Map of node addresses to their pipeline contexts
         // - response_policies: Map of routing info and response aggregation policies for multi-node commands (by command's index).
         let (pipelines_by_node, mut response_policies) =
-            map_pipeline_to_nodes(&pipeline, core.clone()).await?;
+            map_pipeline_to_nodes(&pipeline, core.clone(), route).await?;
 
         // Send the requests to each node and collect the responses
         // Returns a tuple containing:
@@ -2441,7 +2446,7 @@ where
     ) -> Vec<Value> {
         let mut final_responses = Vec::with_capacity(pipeline_responses.len());
 
-        for (index, responses) in pipeline_responses.into_iter().enumerate() {
+        for (index, mut responses) in pipeline_responses.into_iter().enumerate() {
             // If the first policy in the sorted vector matches the current command index, use it.
             if let Some(&(ref routing_info, response_policy)) = response_policies.get(&index) {
                 // Use routing_info and response_policy for aggregation.
@@ -2463,24 +2468,15 @@ where
             } else {
                 // If there's no policy for this index, use the first response if available.
                 if responses.len() == 1 {
-                    final_responses.push(responses.into_iter().next().unwrap().0);
+                    final_responses.push(responses.pop().unwrap().0);
                 } else {
                     final_responses.push(Value::ServerError(ServerError::ExtensionError {
-                        code: if responses.is_empty() {
-                            "PipelineNoResponse".to_string()
-                        } else {
-                            "PipelineNotSingleResponse".to_string()
-                        },
-                        detail: Some(if responses.is_empty() {
-                            format!("No response found for command {}", index)
-                        } else {
-                            format!(
-                                "Expected exactly one response for command {}, got {}: {:?}",
-                                index,
-                                responses.len(),
-                                responses.iter().map(|(value, _)| value).collect::<Vec<_>>()
-                            )
-                        }),
+                        code: "PipelineResponseError".to_string(),
+                        detail: Some(format!(
+                            "Expected exactly one response for command {}, got {}",
+                            index,
+                            responses.len(),
+                        )),
                     }));
                 }
             }
@@ -3435,8 +3431,8 @@ mod pipeline_routing_tests {
             vec![
                 Value::Int(1),
                 Value::ServerError(ServerError::ExtensionError {
-                    code: "PipelineNoResponse".to_string(),
-                    detail: Some("No response found for command 1".to_string())
+                    code: "PipelineResponseError".to_string(),
+                    detail: Some("Expected exactly one response for command 1, got 0".to_string())
                 })
             ]
         );
@@ -3465,11 +3461,8 @@ mod pipeline_routing_tests {
             vec![
                 Value::Int(1),
                 Value::ServerError(ServerError::ExtensionError {
-                    code: "PipelineNotSingleResponse".to_string(),
-                    detail: Some(
-                        "Expected exactly one response for command 1, got 2: [int(2), int(3)]"
-                            .to_string()
-                    )
+                    code: "PipelineResponseError".to_string(),
+                    detail: Some("Expected exactly one response for command 1, got 2".to_string())
                 })
             ]
         );

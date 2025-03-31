@@ -620,7 +620,10 @@ pub(crate) mod shared_client_tests {
                     None,
                     false,
                     None,
-                    PipelineRetryStrategy::new(true, false),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
                 )
                 .await
                 .expect("Pipeline failed");
@@ -681,7 +684,10 @@ pub(crate) mod shared_client_tests {
                     None,
                     raise_error,
                     None,
-                    PipelineRetryStrategy::new(true, false),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
                 )
                 .await;
 
@@ -753,7 +759,10 @@ pub(crate) mod shared_client_tests {
                     None,
                     false,
                     None,
-                    PipelineRetryStrategy::new(true, false),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
                 )
                 .await
                 .expect("Pipeline failed");
@@ -810,7 +819,10 @@ pub(crate) mod shared_client_tests {
                     None,
                     false,
                     None,
-                    PipelineRetryStrategy::new(true, false),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
                 )
                 .await;
             assert!(
@@ -854,7 +866,10 @@ pub(crate) mod shared_client_tests {
                     None,
                     false,
                     Some(3000),
-                    PipelineRetryStrategy::new(true, false),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
                 )
                 .await
                 .expect("Pipeline failed");
@@ -949,7 +964,10 @@ pub(crate) mod shared_client_tests {
                     None,
                     false,
                     None,
-                    PipelineRetryStrategy::new(true, false),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
                 )
                 .await
                 .expect("Pipeline failed");
@@ -1005,7 +1023,10 @@ pub(crate) mod shared_client_tests {
                         None,
                         false,
                         None,
-                        PipelineRetryStrategy::new(true, false),
+                        PipelineRetryStrategy {
+                            retry_server_error: true,
+                            retry_connection_error: false,
+                        },
                     )
                     .await
             };
@@ -1093,7 +1114,10 @@ pub(crate) mod shared_client_tests {
                     None,
                     false,
                     None,
-                    PipelineRetryStrategy::new(true, false),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
                 )
                 .await
                 .expect("Pipeline failed after killing all connections");
@@ -1132,7 +1156,10 @@ pub(crate) mod shared_client_tests {
                     None,
                     false,
                     None,
-                    PipelineRetryStrategy::new(true, false),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
                 )
                 .await;
 
@@ -1177,7 +1204,10 @@ pub(crate) mod shared_client_tests {
                     None,
                     false,
                     None,
-                    PipelineRetryStrategy::new(true, false),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
                 )
                 .await
                 .expect("Pipeline failed");
@@ -1218,7 +1248,10 @@ pub(crate) mod shared_client_tests {
                     None,
                     false,
                     None,
-                    PipelineRetryStrategy::new(true, false),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
                 )
                 .await
                 .expect("Pipeline failed");
@@ -1265,7 +1298,10 @@ pub(crate) mod shared_client_tests {
                     None,
                     false,
                     None,
-                    PipelineRetryStrategy::new(true, false),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
                 )
                 .await
                 .expect("Pipeline execution failed");

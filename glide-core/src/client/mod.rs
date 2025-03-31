@@ -465,8 +465,7 @@ impl Client {
     ///     ⚠️ **Caution**: This may lead to commands being executed in a different order than originally sent,
     ///     which could affect operations that rely on strict execution sequence.
     ///   - If `retry_connection_error` is `true`, sub-pipeline requests will be retried on connection errors.
-    ///     ⚠️ **Caution**: Retrying after a connection error can lead to duplicate executions, as it is unclear
-    ///     which commands have already succeeded.
+    ///     ⚠️ **Caution**: Retrying after a connection error may result in duplicate executions, since the server might have already received and processed the request before the error occurred.
     ///     TODO: add wiki link.
     pub fn send_pipeline<'a>(
         &'a mut self,
@@ -497,9 +496,14 @@ impl Client {
 
                     ClientWrapper::Cluster { ref mut client } => match routing {
                         Some(RoutingInfo::SingleNode(route)) => {
-                            // TODO: support `pipeline_retry_strategy` on routing to a single node
                             client
-                                .route_pipeline(pipeline, 0, command_count, Some(route), None)
+                                .route_pipeline(
+                                    pipeline,
+                                    0,
+                                    command_count,
+                                    Some(route),
+                                    Some(pipeline_retry_strategy),
+                                )
                                 .await
                         }
                         _ => {

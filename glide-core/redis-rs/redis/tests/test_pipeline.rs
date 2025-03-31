@@ -227,7 +227,10 @@ mod test_pipeline {
                 0,
                 pipeline.len(),
                 None,
-                Some(PipelineRetryStrategy::new(true, false)),
+                Some(PipelineRetryStrategy {
+                    retry_server_error: true,
+                    retry_connection_error: false,
+                }),
             )
             .await
             .expect("Failed to execute pipeline");
@@ -301,7 +304,10 @@ mod test_pipeline {
                 0,
                 3,
                 None,
-                Some(PipelineRetryStrategy::new(true, false)),
+                Some(PipelineRetryStrategy {
+                    retry_server_error: true,
+                    retry_connection_error: false,
+                }),
             )
             .await
             .expect("Pipeline execution failed");
@@ -359,7 +365,10 @@ mod test_pipeline {
                 0,
                 pipeline.len(),
                 None,
-                Some(PipelineRetryStrategy::new(true, false)),
+                Some(PipelineRetryStrategy {
+                    retry_server_error: true,
+                    retry_connection_error: false,
+                }),
             )
             .await
             .expect("Pipeline execution failed");
@@ -420,7 +429,10 @@ mod test_pipeline {
                 3,
                 1,
                 Some(route),
-                Some(PipelineRetryStrategy::new(true, false)),
+                Some(PipelineRetryStrategy {
+                    retry_server_error: true,
+                    retry_connection_error: false,
+                }),
             )
             .await
             .expect("Pipeline execution failed");
@@ -476,7 +488,10 @@ mod test_pipeline {
                 3,
                 1,
                 Some(route),
-                Some(PipelineRetryStrategy::new(true, false)),
+                Some(PipelineRetryStrategy {
+                    retry_server_error: true,
+                    retry_connection_error: false,
+                }),
             )
             .await;
 
@@ -540,7 +555,12 @@ mod test_pipeline {
     #[serial_test::serial]
     async fn test_pipeline_with_wrong_route() {
         // Create a test cluster with 3 masters and no replicas.
-        let cluster = TestClusterContext::new(3, 0);
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(1),
+            false,
+        );
         let mut connection = cluster.async_connection(None).await;
         // Get the current slot distribution.
         let cluster_nodes = cluster.get_cluster_nodes().await;
@@ -561,7 +581,7 @@ mod test_pipeline {
         let mut pipeline = redis::pipe();
         pipeline.set(&key, "pipeline_value");
         pipeline.get(&key);
-        pipeline.set(&key2, "pipeline_value");
+        pipeline.set(&key2, "pipeline_value2");
         pipeline.get(&key2);
 
         // Execute the pipeline using the wrong route.
@@ -570,20 +590,20 @@ mod test_pipeline {
             .await
             .expect("Pipeline execution failed");
 
-        // The pipeline should not succeed as expected since the route is incorrect.
-        let expected = vec![Value::Okay, Value::BulkString(b"pipeline_value".to_vec())];
+        let expected = vec![
+            Value::Okay,
+            Value::BulkString(b"pipeline_value".to_vec()),
+            Value::Okay,
+            Value::BulkString(b"pipeline_value2".to_vec()),
+        ];
+
         assert_eq!(
-            result[..2],
-            expected,
+            result, expected,
             "Pipeline result did not match expected output {result:?}"
         );
-        assert!(
-            result[2..].iter().all(|err| {
-                matches!(err, Value::ServerError(ref e) if e.kind() == ErrorKind::Moved)
-            }),
-            "Expected all server errors to be Moved errors, got: {:?}",
-            &result[2..]
-        );
+
+        // Assert that the pipeline handled redirection.
+        assert_error_occurred(&mut connection, "MOVED", 2).await;
     }
 
     #[tokio::test]
@@ -629,7 +649,10 @@ mod test_pipeline {
                     0,
                     pipeline.len(),
                     None,
-                    Some(PipelineRetryStrategy::new(retries > 0, false)),
+                    Some(PipelineRetryStrategy {
+                        retry_server_error: retries > 0,
+                        retry_connection_error: false,
+                    }),
                 )
                 .await
                 .expect("Pipeline execution failed");
@@ -745,7 +768,10 @@ mod test_pipeline {
                         0,
                         3,
                         None,
-                        Some(PipelineRetryStrategy::new(retry, false)),
+                        Some(PipelineRetryStrategy {
+                            retry_server_error: retry,
+                            retry_connection_error: false,
+                        }),
                     )
                     .await
                     .expect("Pipeline execution failed");
@@ -834,7 +860,10 @@ mod test_pipeline {
                 0,
                 pipeline.len(),
                 None,
-                Some(PipelineRetryStrategy::new(true, false)),
+                Some(PipelineRetryStrategy {
+                    retry_server_error: true,
+                    retry_connection_error: false,
+                }),
             )
             .await
             .expect("Pipeline execution failed");
@@ -930,7 +959,10 @@ mod test_pipeline {
                 0,
                 pipeline.len(),
                 None,
-                Some(PipelineRetryStrategy::new(true, false)),
+                Some(PipelineRetryStrategy {
+                    retry_server_error: true,
+                    retry_connection_error: false,
+                }),
             )
             .await
             .expect("Pipeline execution failed");
@@ -1065,7 +1097,10 @@ mod test_pipeline {
                 0,
                 pipeline.len(),
                 None,
-                Some(PipelineRetryStrategy::new(true, false)),
+                Some(PipelineRetryStrategy {
+                    retry_server_error: true,
+                    retry_connection_error: false,
+                }),
             )
             .await
             .expect("Pipeline execution failed");

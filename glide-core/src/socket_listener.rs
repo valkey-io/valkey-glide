@@ -401,10 +401,10 @@ async fn send_batch(
                 routing,
                 request.raise_on_error,
                 none_if_zero(request.timeout),
-                PipelineRetryStrategy::new(
-                    request.retry_server_error,
-                    request.retry_connection_error,
-                ),
+                PipelineRetryStrategy {
+                    retry_server_error: request.retry_server_error,
+                    retry_connection_error: request.retry_connection_error,
+                },
             )
             .await
             .map_err(|err| err.into()),
