@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -151,4 +152,22 @@ func pubsubExtractServerVersion(suite TestSuiteInterface, output string) string 
 	}
 	suite.T().Fatalf("Can't read server version from INFO command output: %s", output)
 	return ""
+}
+
+// SetupCoverage configures code coverage for the PubSub test suite
+func SetupCoverage(t *testing.T) func() {
+	// Get coverage output directory from environment or use default
+	coverageDir := os.Getenv("COVERAGE_DIR")
+	if coverageDir == "" {
+		coverageDir = "coverage"
+	}
+
+	// Ensure coverage directory exists
+	if err := os.MkdirAll(coverageDir, 0755); err != nil {
+		t.Fatalf("Failed to create coverage directory: %v", err)
+	}
+
+	// Coverage will be written by the -coverprofile flag when running tests
+	// Return a no-op cleanup function since file handling is managed by the test runner
+	return func() {}
 }

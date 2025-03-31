@@ -23,6 +23,7 @@ type PubSubTestSuite struct {
 	serverVersion   string
 	clients         map[string]api.GlideClientCommands
 	clusterClients  map[string]api.GlideClusterClientCommands
+	coverageCleanup func()
 }
 
 // Implement PubSubServerVersionGetter interface
@@ -46,6 +47,9 @@ func (suite *PubSubTestSuite) GetTLS() bool {
 // )
 
 func (suite *PubSubTestSuite) SetupSuite() {
+	// Setup coverage reporting
+	suite.coverageCleanup = SetupCoverage(suite.T())
+
 	// Initialize the test suite directly instead of trying to reuse GlideTestSuite
 	// Stop cluster in case previous test run was interrupted or crashed and didn't stop.
 	// If an error occurs, we ignore it in case the servers actually were stopped before running this.
@@ -103,6 +107,11 @@ func (suite *PubSubTestSuite) SetupSuite() {
 }
 
 func (suite *PubSubTestSuite) TearDownSuite() {
+	// Cleanup coverage reporting
+	if suite.coverageCleanup != nil {
+		suite.coverageCleanup()
+	}
+
 	pubsubRunClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, false)
 }
 

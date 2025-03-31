@@ -32,8 +32,6 @@ func (e *MessageCallbackError) Cause() error {
 
 // *** Message Handler ***
 
-type ResponseResolver func(response any) (any, error)
-
 type MessageHandler struct {
 	callback MessageCallback
 	context  any
@@ -84,9 +82,10 @@ type PubSubMessageQueue struct {
 
 func NewPubSubMessageQueue() *PubSubMessageQueue {
 	return &PubSubMessageQueue{
-		messages:           make([]*PubSubMessage, 0),
-		waiters:            make([]chan *PubSubMessage, 0),
-		nextMessageReadyCh: make(chan struct{}, 1),
+		messages:                make([]*PubSubMessage, 0),
+		waiters:                make([]chan *PubSubMessage, 0),
+		nextMessageReadyCh:     make(chan struct{}, 1),
+		nextMessageReadySignals: make([]chan struct{}, 0),
 	}
 }
 
