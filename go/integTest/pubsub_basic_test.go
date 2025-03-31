@@ -68,12 +68,10 @@ func (suite *PubSubTestSuite) TestMultipleSubscribersWithGlideClient() {
 
 	// Create subscriber clients with different channels
 	callback1 := func(message *api.PubSubMessage, ctx any) {
-		suite.T().Logf("Received message on client1: %s", message.Message)
 		messages1 <- message
 	}
 
 	callback2 := func(message *api.PubSubMessage, ctx any) {
-		suite.T().Logf("Received message on client2: %s", message.Message)
 		messages2 <- message
 	}
 

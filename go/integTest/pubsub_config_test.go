@@ -3,7 +3,6 @@
 package integTest
 
 import (
-	"sync"
 	"time"
 
 	"github.com/stretchr/testify/assert"
