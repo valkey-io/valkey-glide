@@ -407,51 +407,67 @@ fn create_client_internal(
         ))
         .map_err(|err| err.to_string())?;
 
-    runtime.spawn(async move {
-        loop {
-            let result = push_rx.recv().await;
-            match result {
-                None => {
-                    //log_error("push manager loop", "got None from push manager");
-                    return;
-                }
-                Some(push_msg) => {
-                    //log_debug("push manager loop", format!("got PushInfo: {:?}", push_msg));
+    // Create a raw function pointer to check if it's null
+    let callback_ptr = pubsub_callback as *const ();
 
-                    // Convert the push_msg.data to a CommandResponse
-                    let data_response =
-                        match valkey_value_to_command_response(Value::Array(push_msg.data.clone()))
-                        {
-                            Ok(response) => response,
-                            Err(_e) => {
-                                continue; // Skip this message if conversion fails
-                            }
+    // Only spawn the push notification handler if we have a callback
+    if !callback_ptr.is_null() {
+        runtime.spawn(async move {
+            loop {
+                let result = push_rx.recv().await;
+                match result {
+                    None => {
+                        //log_error("push manager loop", "got None from push manager");
+                        return;
+                    }
+                    Some(push_msg) => {
+                        //log_debug("push manager loop", format!("got PushInfo: {:?}", push_msg));
+
+                        // Convert the push_msg.data to a CommandResponse
+                        let data_response =
+                            match valkey_value_to_command_response(Value::Array(push_msg.data.clone()))
+                            {
+                                Ok(response) => response,
+                                Err(_e) => {
+                                    continue; // Skip this message if conversion fails
+                                }
+                            };
+
+                        // Get the numeric value of the PushKind enum
+                        let kind_value = match push_msg.kind {
+                            redis::PushKind::Disconnection => 0,
+                            redis::PushKind::Other(_) => 1,
+                            redis::PushKind::Invalidate => 2,
+                            redis::PushKind::Message => 3,
+                            redis::PushKind::PMessage => 4,
+                            redis::PushKind::SMessage => 5,
+                            redis::PushKind::Unsubscribe => 6,
+                            redis::PushKind::PUnsubscribe => 7,
+                            redis::PushKind::SUnsubscribe => 8,
+                            redis::PushKind::Subscribe => 9,
+                            redis::PushKind::PSubscribe => 10,
+                            redis::PushKind::SSubscribe => 11,
                         };
 
-                    // Get the numeric value of the PushKind enum
-                    let kind_value = match push_msg.kind {
-                        redis::PushKind::Disconnection => 0,
-                        redis::PushKind::Other(_) => 1,
-                        redis::PushKind::Invalidate => 2,
-                        redis::PushKind::Message => 3,
-                        redis::PushKind::PMessage => 4,
-                        redis::PushKind::SMessage => 5,
-                        redis::PushKind::Unsubscribe => 6,
-                        redis::PushKind::PUnsubscribe => 7,
-                        redis::PushKind::SUnsubscribe => 8,
-                        redis::PushKind::Subscribe => 9,
-                        redis::PushKind::PSubscribe => 10,
-                        redis::PushKind::SSubscribe => 11,
-                    };
-
-                    // Call the pubsub callback with the push notification data
-                    unsafe {
-                        pubsub_callback(kind_value, Box::into_raw(Box::new(data_response)));
+                        // Call the pubsub callback with the push notification data
+                        unsafe {
+                            pubsub_callback(kind_value, Box::into_raw(Box::new(data_response)));
+                        }
                     }
                 }
             }
-        }
-    });
+        });
+    } else {
+        // For null callback, we still need to handle the channel to prevent infinite queue growth
+        runtime.spawn(async move {
+            loop {
+                if push_rx.recv().await.is_none() {
+                    return;
+                }
+                // Simply drop the PushInfo
+            }
+        });
+    }
 
     let core = Arc::new(CommandExecutionCore {
         client,
