@@ -40,6 +40,8 @@
 
 #### Breaking Changes
 
+* Java: Shadow netty dependencies. ([#3004](https://github.com/valkey-io/valkey-glide/pull/3004))
+
 #### Fixes
 
 #### Operational Enhancements
