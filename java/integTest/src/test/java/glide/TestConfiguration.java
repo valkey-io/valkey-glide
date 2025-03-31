@@ -8,8 +8,8 @@ import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.logging.Logger;
-import org.semver4j.Semver;
 import org.apache.commons.lang3.tuple.Pair;
+import org.semver4j.Semver;
 
 public final class TestConfiguration {
     public static final String[] STANDALONE_HOSTS =
