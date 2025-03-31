@@ -20,6 +20,7 @@ use redis::ScanStateRC;
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, RedisResult, Value};
 use std::ffi::CStr;
+use std::future::Future;
 use std::slice::from_raw_parts;
 use std::str;
 use std::sync::Arc;
@@ -482,18 +483,11 @@ pub unsafe extern "C" fn create_client(
     connection_request_len: usize,
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
-    // need to add a callback for pubsub
 ) -> *const ConnectionResponse {
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
     let client_type = unsafe { &*client_type };
-    let response = match create_client_internal(request_bytes, success_callback, failure_callback) {
-        request_bytes,
-        success_callback,
-        failure_callback,
-        pubsub_callback,
-    ) {
-        // add the callback for pubsub
+    let response = match create_client_internal(request_bytes, client_type.clone(), pubsub_callback) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
