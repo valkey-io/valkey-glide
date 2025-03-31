@@ -155,7 +155,7 @@ If needed, you can invoke `pytest` directly from the root `python/` directory fo
 ### Run all tests manually
 ```bash
 source .env/bin/activate
-pytest -v --asyncio-mode=auto
+pytest -v
 ```
 
 # Protobuf
