@@ -452,3 +452,52 @@ func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
 
 	return handleBoolResponse(result)
 }
+
+// Iterates incrementally over a database for matching keys.
+//
+// Parameters:
+//
+//	cursor - The cursor that points to the next iteration of results. A value of 0
+//			 indicates the start of the search.
+//
+// Return value:
+//
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
+	res, err := client.executeCommand(C.Scan, []string{utils.IntToString(cursor)})
+	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	return handleScanResponse(res)
+}
+
+// Iterates incrementally over a database for matching keys.
+//
+// Parameters:
+//
+//	 cursor - The cursor that points to the next iteration of results. A value of 0
+//				 indicates the start of the search.
+//	 scanOptions - Additional command parameters, see [ScanOptions] for more details.
+//
+// Return value:
+//
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string, error) {
+	optionArgs, err := scanOptions.ToArgs()
+	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	res, err := client.executeCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
+	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	return handleScanResponse(res)
+}
