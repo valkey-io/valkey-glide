@@ -1,24 +1,24 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- 
+
 package options
 
 import (
 	"github.com/valkey-io/valkey-glide/go/utils"
 )
- 
+
 const (
-	LCSIdxCommand         = "IDX"        
-	LCSMinMatchLenCommand = "MINMATCHLEN" 
-	LCSWithMatchLenCommand  = "WITHMATCHLEN" 
+	LCSIdxCommand          = "IDX"
+	LCSMinMatchLenCommand  = "MINMATCHLEN"
+	LCSWithMatchLenCommand = "WITHMATCHLEN"
 )
- 
+
 // Optional arguments to `Lcs` when using IDX.
 type LCSIdxOptions struct {
-	idx bool
+	idx          bool
 	minMatchLen  *int64
 	withMatchLen bool
 }
- 
+
 // NewLCSIdxOptions creates a new LCSIdxOptions.
 func NewLCSIdxOptions() *LCSIdxOptions {
 	return &LCSIdxOptions{
@@ -44,7 +44,7 @@ func (options *LCSIdxOptions) SetWithMatchLen(withMatchLen bool) *LCSIdxOptions 
 	options.withMatchLen = withMatchLen
 	return options
 }
- 
+
 func (opts *LCSIdxOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	if opts.idx {
@@ -56,6 +56,6 @@ func (opts *LCSIdxOptions) ToArgs() ([]string, error) {
 	if opts.withMatchLen {
 		args = append(args, LCSWithMatchLenCommand)
 	}
-	
+
 	return args, nil
 }
