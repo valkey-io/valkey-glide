@@ -26,7 +26,7 @@ object ClusterExample {
      *
      * @return An instance of <code>Future[GlideClusterClient]</code> connected to the specified nodes.
      */
-    private def createClient(nodesList: List[(String, Int)] = List(("localhost", 6379))): Future[GlideClusterClient] = {
+    private def createClient(nodesList: List[(String, Int)] = List(("localhost", 7000))): Future[GlideClusterClient] = {
         // Check `GlideClientConfiguration` for additional options.
         val config = GlideClusterClientConfiguration.builder()
             .addresses(nodesList.map((host, port) => NodeAddress.builder().host(host).port(port).build()).asJava)
@@ -67,7 +67,7 @@ object ClusterExample {
             _ = Logger.log(
                 Logger.Level.INFO,
                 "app",
-                "INFO REPLICATION responses from all nodes are=\n$infoReplResps",
+                s"INFO REPLICATION responses from all nodes are\n${infoReplResps.getMultiValue()}",
             )
         } yield ()
     }
