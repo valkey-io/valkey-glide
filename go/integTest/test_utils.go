@@ -28,7 +28,6 @@ func convertMapKeysAndValuesToLists(m map[string]string) ([]string, []string) {
 	return keys, values
 }
 
-// GenerateLuaLibCode generates a string of LUA library code for Redis functions
 func GenerateLuaLibCode(libName string, functions map[string]string, readonly bool) string {
 	var code strings.Builder
 
