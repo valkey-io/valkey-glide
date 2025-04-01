@@ -713,7 +713,7 @@ func ExampleGlideClient_LCSWithOptions() {
 	// LCS IDX with MINMATCHLEN = 4
 	optsWithMin := options.NewLCSIdxOptions()
 	optsWithMin.SetMinMatchLen(4)
-	result2, err := client.LCSWithOptions("my_key1", "my_key2", optsWithMin)
+	result2, err := client.LCSWithOptions("my_key1", "my_key2", *optsWithMin)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
