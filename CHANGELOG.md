@@ -42,6 +42,8 @@
 
 #### Fixes
 
+* Add support for Intel MAC (x86_64/amd64) ([#3482](https://github.com/valkey-io/valkey-glide/pull/3482))
+
 #### Operational Enhancements
 
 ## 1.3.0 (2025-02-14)

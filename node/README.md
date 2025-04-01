@@ -14,12 +14,13 @@ The release of Valkey GLIDE was tested on the following platforms:
 
 Linux:
 
-- Ubuntu 22.04.1 (x86_64 and aarch64)
+- Ubuntu 24.04.1 (x86_64 and aarch64)
 - Amazon Linux 2023 (AL2023) (x86_64)
 
 macOS:
 
 - macOS 14.7 (Apple silicon/aarch_64)
+- macOS 13.7 (x86_64/amd64)
 
 Alpine:
 
@@ -101,4 +102,4 @@ Currently, the package is tested on:
 | Operation systems | C lib                | Architecture      |
 | ----------------- | -------------------- | ----------------- |
 | `Linux`           | `glibc`, `musl libc` | `x86_64`, `arm64` |
-| `macOS`           | `Darwin`             | `arm64`           |
+| `macOS`           | `Darwin`             | `x86_64`, `arm64` |
