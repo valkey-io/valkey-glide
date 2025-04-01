@@ -861,6 +861,23 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	return handleStringResponse(result)
 }
 
+func (client *baseClient) LCSWithOptions(key1, key2 string, opts *options.LCSIdxOptions) (map[string]interface{}, error) {
+	optArgs, err := opts.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	response, err := client.executeCommand(C.LCS, append([]string{key1, key2}, optArgs...))
+	if err != nil {
+		return nil, err
+	}
+	data, err := handleStringToAnyMapResponse(response)
+	if err != nil {
+		return nil, err
+	}
+ 
+	return data, nil
+}
+
 // GetDel gets the value associated with the given key and deletes the key.
 //
 // Parameters:
