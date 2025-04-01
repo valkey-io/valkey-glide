@@ -48,5 +48,7 @@ type StringCommands interface {
 
 	LCS(key1 string, key2 string) (string, error)
 
+	LCSWithOptions(key1, key2 string, opts *options.LCSIdxOptions) (map[string]interface{}, error)
+
 	GetDel(key string) (Result[string], error)
 }
