@@ -41,4 +41,6 @@ type ServerManagementCommands interface {
 	LastSave() (int64, error)
 
 	ConfigResetStat() (string, error)
+
+	ConfigRewrite() (string, error)
 }
