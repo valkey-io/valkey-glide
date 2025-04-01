@@ -131,7 +131,7 @@ jobs:
                       go/protobuf/
 
     commit-auto-gen-files-with-tag:
-        if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish }}
+        if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish == true }}
         needs: [validate-release-version, create-binaries]
         runs-on: ubuntu-latest
         permissions:
