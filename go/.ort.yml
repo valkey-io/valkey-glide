@@ -26,5 +26,5 @@ excludes:
       reason: "DOCUMENTATION_OF"
       comment: "Developer documentation."
     - pattern: "rustbin/**"
-      reason: "BUILD_DEPENDENCY_OF"
+      reason: "BUILD_TOOL_OF"
       comment: "Rust binary files used for building only."
