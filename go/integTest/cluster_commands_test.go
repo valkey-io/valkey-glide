@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
 
@@ -1237,6 +1238,86 @@ func (suite *GlideTestSuite) TestConfigResetStatWithOptions() {
 	route = config.Route(config.AllPrimaries)
 	opts = options.RouteOption{Route: route}
 	suite.verifyOK(client.ConfigResetStatWithOptions(opts))
+}
+
+func (suite *GlideTestSuite) TestConfigSetGet() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	configParam := map[string]string{"timeout": "1000"}
+	suite.verifyOK(client.ConfigSet(configParam))
+	configGetParam := []string{"timeout"}
+	resp, err := client.ConfigGet(configGetParam)
+	assert.NoError(t, err)
+	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
+}
+
+func (suite *GlideTestSuite) TestConfigSetGetWithOptions() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	// ConfigResetStat with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	configParam := map[string]string{"timeout": "1000"}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	configGetParam := []string{"timeout"}
+	resp, err := client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
+
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	resp, err = client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
+
+	// default sections, multi node route
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	resp, err = client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.True(t, resp.IsMultiValue())
+	for _, messages := range resp.MultiValue() {
+		mapString := fmt.Sprint(messages)
+		assert.Contains(t, strings.ToLower(mapString), strings.ToLower("timeout"))
+	}
+}
+
+func (suite *GlideTestSuite) TestClientSetGetName() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	connectionName := "ConnectionName-" + uuid.NewString()
+	client.ClientSetName(connectionName)
+	response, err := client.ClientGetName()
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// ClientGetName with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	connectionName := "ConnectionName-" + uuid.NewString()
+	response, err := client.ClientSetNameWithOptions(connectionName, opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+	response, err = client.ClientGetNameWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// same sections with random route
+	connectionName = "ConnectionName-" + uuid.NewString()
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	response, err = client.ClientSetNameWithOptions(connectionName, opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+	response, err = client.ClientGetNameWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
 }
 
 func (suite *GlideTestSuite) TestConfigRewriteCluster() {
