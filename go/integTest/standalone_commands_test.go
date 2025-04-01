@@ -885,3 +885,22 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 	assert.GreaterOrEqual(t, len(resCursor), 1)
 	assert.GreaterOrEqual(t, len(resCollection), 1)
 }
+
+func (suite *GlideTestSuite) TestConfigRewrite() {
+	client := suite.defaultClient()
+	t := suite.T()
+	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
+	response, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	lines := strings.Split(response, "\n")
+	var configFile string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "config_file:") {
+			configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+			break
+		}
+	}
+	if len(configFile) > 0 {
+		suite.verifyOK(client.ConfigRewrite())
+	}
+}
