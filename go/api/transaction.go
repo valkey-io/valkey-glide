@@ -59,19 +59,27 @@ func (t *Transaction) Exec() error {
 	// Add MULTI and EXEC to the command queue
 	//t.commands = append([]Cmder{NewMultiCommand()}, t.commands...)
 	// t.commands = append(t.commands, &GenericCommand{C.Get, []string{"apples"}})
-	// t.commands = append(t.commands, NewExecCommand())
+	//t.commands = append(t.commands, NewExecCommand())
 
 	// Execute all commands
-	result, err := t.baseClient.executeTransactionCommandWithRoute(t.commands, nil) // Use BaseClient for execution
-	fmt.Println(result)
-	fmt.Println(err)
+	//result, err := t.baseClient.ExecuteCommand(cmd.Name(), cmd.Args()) // Use BaseClient for execution
+	result, _ := t.baseClient.executeTransactionCommand(t.commands) // Use BaseClient for execution
+	fmt.Println(handleStringResponse(result))
+	// fmt.Println("Final:", result)
+	// fmt.Println(err)
 	// for _, cmd := range t.commands {
-	// 	_, err := t.baseClient.executeTransactionCommandWithRoute(t.commands, nil) // Use BaseClient for execution
+	// 	result, err := t.baseClient.ExecuteCommand(cmd.Name(), cmd.Args())
+	// 	fmt.Println(result) // Use BaseClient for execution
+	// 	//_, err := t.baseClient.executeTransactionCommandWithRoute(t.commands, nil) // Use BaseClient for execution
 	// 	if err != nil {
 	// 		return fmt.Errorf("failed to execute command %s: %w", cmd.Name(), err)
 	// 	}
 	// }
 	return nil
+}
+
+func (client *baseClient) executeTransactionCommand(commands []Cmder) (*C.struct_CommandResponse, error) {
+	return client.executeTransactionCommandWithRoute(commands, nil)
 }
 
 func (client *baseClient) executeTransactionCommandWithRoute(
@@ -96,7 +104,7 @@ func (client *baseClient) executeTransactionCommandWithRoute(
 	}
 
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
-	resultChannel := make(chan payload, 1)
+	resultChannel := make(chan []payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
 
 	pinner := pinner{}
@@ -129,13 +137,10 @@ func (client *baseClient) executeTransactionCommandWithRoute(
 			routeBytesPtr,
 			routeBytesCount,
 		)
-
-		payload := <-resultChannel
-		fmt.Println("payload: ", payload.value)
 	}
 	client.mu.Unlock()
 	payload := <-resultChannel
-
+	fmt.Println("Done2", payload)
 	client.mu.Lock()
 	if client.pending != nil {
 		delete(client.pending, resultChannelPtr)
