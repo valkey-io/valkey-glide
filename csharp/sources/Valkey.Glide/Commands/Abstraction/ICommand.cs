@@ -4,7 +4,10 @@ using Valkey.Glide.InterOp;
 
 namespace Valkey.Glide.Commands.Abstraction;
 
-public interface IGlideCommand
+public interface IGlideCommand<TResult>
 {
-    Task<Value> ExecuteAsync(IGlideClient client, CancellationToken cancellationToken = default);
+    Task<TResult> ExecuteAsync(
+        IGlideClient client,
+        CancellationToken cancellationToken = default
+    );
 }

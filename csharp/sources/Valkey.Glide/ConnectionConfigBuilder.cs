@@ -201,8 +201,7 @@ public sealed class ConnectionConfigBuilder
     /// </summary>
     /// <returns>A fully constructed <see cref="ConnectionRequest"/> containing the configuration details provided.</returns>
     public ConnectionRequest Build()
-    {
-        return new ConnectionRequest(_addresses)
+        => new(_addresses)
         {
             ReplicationStrategy            = _readFrom,
             ClientName                     = _clientName,
@@ -220,7 +219,6 @@ public sealed class ConnectionConfigBuilder
             OpenTelemetryEndpoint          = _otelEndpoint,
             OpenTelemetrySpanFlushInterval = _otelSpanFlushInterval,
         };
-    }
 
     /// <summary>
     /// Defines an implicit conversion from <see cref="ConnectionConfigBuilder"/>

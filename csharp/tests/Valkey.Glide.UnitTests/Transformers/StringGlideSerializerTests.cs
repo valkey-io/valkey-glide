@@ -16,7 +16,7 @@ public sealed class StringGlideSerializerTests
         const string expected = "\"test\"";
 
         // Act
-        string result = _sut.ToValkey(input);
+        var result = _sut.ToValkey(input);
 
         // Assert
         Assert.Equal(expected, result);

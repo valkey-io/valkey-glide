@@ -95,7 +95,7 @@ public class SetCommandTests
                 Type[] types = args.Skip(2 /* key and value */)
                     .Select(e => e.GetType())
                     .ToArray();
-                MethodInfo? methodInfo = typeof(SetCommands)
+                var methodInfo = typeof(SetCommands)
                     .GetMethods()
                     .Where(methodInfo => methodInfo.Name == method)
                     .Single(methodInfo => methodInfo.GetParameters().Skip(3)
@@ -117,11 +117,11 @@ public class SetCommandTests
         );
 
         // Assert
-        ICall? call = Assert.Single(nativeClient.ReceivedCalls());
+        var call = Assert.Single(nativeClient.ReceivedCalls());
         Assert.True(call.GetArguments().Length == 3, "NativeClient call has changed. Tests need to be updated.");
         Assert.Equal(ERequestType.Set, call.GetArguments()[0]);
         IEnumerable<string> parameters = (IEnumerable<string>)call.GetArguments()[2]!;
-        string input = string.Join(" ", parameters);
+        var input = string.Join(" ", parameters);
         Assert.Equal(command, input);
     }
 }

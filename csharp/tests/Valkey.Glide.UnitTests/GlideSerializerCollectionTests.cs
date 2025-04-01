@@ -37,7 +37,7 @@ public sealed class GlideSerializerCollectionTests
         Assert.Empty(glideSerializerCollection.DebugGetTransformers());
 
         glideSerializerCollection.RegisterSerializer(transformer1);
-        object transformer = Assert.Single(glideSerializerCollection.DebugGetTransformers());
+        var transformer = Assert.Single(glideSerializerCollection.DebugGetTransformers());
         Assert.Equal(transformer1, transformer);
 
         glideSerializerCollection.RegisterSerializer(transformer2);

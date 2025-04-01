@@ -1,6 +1,7 @@
 ﻿using Valkey.Glide.Exceptions;
 using Valkey.Glide.InterOp;
 using Valkey.Glide.InterOp.Routing;
+using Valkey.Glide.ResponseHandlers;
 
 namespace Valkey.Glide.Commands.ExtensionMethods;
 
@@ -22,7 +23,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .ExecuteAsync(client);
         if (result.IsOk())
@@ -41,11 +42,11 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -61,7 +62,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .ExecuteAsync(client);
@@ -79,12 +80,12 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -100,7 +101,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .ExecuteAsync(client);
@@ -118,12 +119,12 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -140,7 +141,7 @@ public static class SetCommands
         string comparisonValue)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .ExecuteAsync(client);
@@ -160,12 +161,12 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -183,7 +184,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithExpiresIn(expiration)
             .ExecuteAsync(client);
@@ -203,12 +204,12 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithExpiresIn(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -226,7 +227,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresIn(expiration)
@@ -247,13 +248,13 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresIn(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -271,7 +272,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresIn(expiration)
@@ -292,13 +293,13 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresIn(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -317,7 +318,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresIn(expiration)
@@ -339,13 +340,13 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresIn(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -364,7 +365,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithExpiresAt(expiration)
             .ExecuteAsync(client);
@@ -384,12 +385,12 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithExpiresAt(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -407,7 +408,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresAt(expiration)
@@ -428,13 +429,13 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithExpiresAt(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -452,7 +453,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresAt(expiration)
@@ -473,13 +474,13 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithExpiresAt(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -498,7 +499,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresAt(expiration)
@@ -520,13 +521,13 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithExpiresAt(expiration)
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -543,7 +544,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithKeepTtl()
             .ExecuteAsync(client);
@@ -561,12 +562,12 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithKeepTtl()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -582,7 +583,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithKeepTtl()
@@ -602,13 +603,13 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfNotExists()
             .WithKeepTtl()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -624,7 +625,7 @@ public static class SetCommands
         T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithKeepTtl()
@@ -644,13 +645,13 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfExists()
             .WithKeepTtl()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;
@@ -668,7 +669,7 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithKeepTtl()
@@ -689,13 +690,13 @@ public static class SetCommands
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        Value result = await new SetCommand<NoRouting, T> {RoutingInfo = new NoRouting()}.WithKey(key)
+        var result = await new SetCommand<NoRouting, T, ValueGlideResponseHandler, Value> {RoutingInfo = new NoRouting()}.WithKey(key)
             .WithValue(value)
             .WithSetIfEquals(comparisonValue)
             .WithKeepTtl()
             .WithGet()
             .ExecuteAsync(client);
-        if (result.IsString(out string? text))
+        if (result.IsString(out var text))
             return text;
         if (result.IsNone())
             return null;

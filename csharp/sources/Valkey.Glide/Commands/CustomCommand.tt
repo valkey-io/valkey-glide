@@ -3,7 +3,7 @@
 using Valkey.Glide.Commands.Abstraction;
 using Valkey.Glide.InterOp.Native;
 using Valkey.Glide.InterOp.Routing;
-using Value = Valkey.Glide.InterOp.Value;
+using Valkey.Glide.ResponseHandlers;
 
 namespace Valkey.Glide.Commands;
 
@@ -37,7 +37,7 @@ namespace Valkey.Glide.Commands;
         var templateArgNames = Enumerable.Range(0, t).Select(i => $"Arg{i + 1}").ToArray();
         var templateArgsWithNames = templateArgs.Zip(templateArgNames, (l, r) => (templateArg: l, name: r)).ToArray();
         var templateArgsCommaSeparated = string.Join(", ", templateArgs);
-        var fullTemplateArgs = string.Concat("<TRoutingInfo, ", templateArgsCommaSeparated, ">");
+        var fullTemplateArgs = string.Concat("<TRoutingInfo, TResponseHandler, TResult, ", templateArgsCommaSeparated, ">");
 #>
 
 /// <summary>
@@ -65,6 +65,7 @@ public static partial class CustomCommand
     public static CustomCommand<#= fullTemplateArgs #> Create<#= fullTemplateArgs #>(TRoutingInfo routingInfo, <#=
                 string.Join(", ", templateArgsWithNames.Select(t => string.Join(" ", t.templateArg, t.name.ToLower()))) #>)
          where TRoutingInfo : IRoutingInfo
+         where TResponseHandler : IResponseHandler<TResult>, new()
          => new CustomCommand<#= fullTemplateArgs #>{RoutingInfo = routingInfo}
 <#
         for (var i = 0; i < templateArgNames.Length; i++)
@@ -98,7 +99,9 @@ public static partial class CustomCommand
 /// <item>All values are handled as "values". If you want to issue command text, use the <see cref="Data.CommandText"/> struct</item>
 /// </list>
 /// </remarks>
-public readonly struct CustomCommand<#= fullTemplateArgs #> : IGlideCommand where TRoutingInfo : IRoutingInfo
+public readonly struct CustomCommand<#= fullTemplateArgs #> : IGlideCommand<TResult>
+    where TRoutingInfo : IRoutingInfo
+    where TResponseHandler : IResponseHandler<TResult>, new()
 {
     public required TRoutingInfo RoutingInfo { get; init; }
 <#
@@ -118,7 +121,7 @@ public readonly struct CustomCommand<#= fullTemplateArgs #> : IGlideCommand wher
         }
 #>
 
-    Task<Value> IGlideCommand.ExecuteAsync(IGlideClient client, CancellationToken cancellationToken = default)
+    async Task<TResult> IGlideCommand<TResult>.ExecuteAsync(IGlideClient client, CancellationToken cancellationToken = default)
     {
 <#
         for (var i = 0; i < templateArgNames.Length; i++)
@@ -130,8 +133,10 @@ public readonly struct CustomCommand<#= fullTemplateArgs #> : IGlideCommand wher
 <#
         }
 #>
-        return client.CommandAsync(ERequestType.CustomCommand, RoutingInfo, <#=
-            string.Join(", ", templateArgNames.Select(s => $"client.Transform({s})")) #>);
+        var result = await client.SendCommandAsync(ERequestType.CustomCommand, RoutingInfo, <#=
+            string.Join(", ", templateArgNames.Select(s => $"client.ToParameter({s})")) #>)
+            .ConfigureAwait(false);
+        return await new TResponseHandler().HandleAsync(client, result, cancellationToken).ConfigureAwait(false);
     }
 }
 <#

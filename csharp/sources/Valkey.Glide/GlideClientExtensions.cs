@@ -22,7 +22,9 @@ public static class GlideClientExtensions
     /// <param name="command">The command to be executed.</param>
     /// <returns>A task representing the asynchronous operation, containing the result of the command execution as a <see cref="Valkey.Glide.InterOp.Value"/>.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static Task<InterOp.Value> ExecuteAsync<TCommand>(this IGlideClient glideClient, TCommand command)
-        where TCommand : IGlideCommand
+    public static Task<TResult> ExecuteAsync<TResult>(
+        this IGlideClient glideClient,
+        IGlideCommand<TResult> command
+    )
         => command.ExecuteAsync(glideClient);
 }
