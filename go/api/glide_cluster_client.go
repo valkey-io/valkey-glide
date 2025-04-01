@@ -887,7 +887,10 @@ func (client *GlideClusterClient) ClientSetName(connectionName string) (ClusterV
 //	OK - when connection name is set
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
-func (client *GlideClusterClient) ClientSetNameWithOptions(connectionName string, opts options.RouteOption) (ClusterValue[string], error) {
+func (client *GlideClusterClient) ClientSetNameWithOptions(
+	connectionName string,
+	opts options.RouteOption,
+) (ClusterValue[string], error) {
 	response, err := client.executeCommandWithRoute(C.ClientSetName, []string{connectionName}, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err

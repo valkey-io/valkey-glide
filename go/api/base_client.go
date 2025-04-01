@@ -931,7 +931,7 @@ func (client *baseClient) LCSWithOptions(key1, key2 string, opts *options.LCSIdx
 	if err != nil {
 		return nil, err
 	}
- 
+
 	return data, nil
 }
 
