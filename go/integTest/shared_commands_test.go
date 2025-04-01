@@ -615,16 +615,16 @@ func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 		assert.Len(suite.T(), matches, 2)
 
 		// Match the exact structure returned by the function
-        expectedMatches := []interface{}{
-            []interface{}{
-                []interface{}{int64(4), int64(7)}, 
-                []interface{}{int64(5), int64(8)}
-            },
-            []interface{}{
-                []interface{}{int64(2), int64(3)}, 
-                []interface{}{int64(0), int64(1)}
-            },
-        }
+		expectedMatches := []interface{}{
+			[]interface{}{
+				[]interface{}{int64(4), int64(7)},
+				[]interface{}{int64(5), int64(8)},
+			},
+			[]interface{}{
+				[]interface{}{int64(2), int64(3)},
+				[]interface{}{int64(0), int64(1)},
+			},
+		}
 		assert.Equal(suite.T(), expectedMatches, matches)
 	})
 }
@@ -652,8 +652,8 @@ func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
 		assert.Len(suite.T(), matches, 1)
 
 		expectedMatch := []any{
-			[]interface{}{int64(4), int64(7)}, 
-			[]interface{}{int64(5), int64(8)}
+			[]interface{}{int64(4), int64(7)},
+			[]interface{}{int64(5), int64(8)},
 		}
 		assert.Equal(suite.T(), expectedMatch, matches[0])
 	})
@@ -683,9 +683,9 @@ func (suite *GlideTestSuite) TestLCS_WithMatchLengthOption() {
 		assert.Len(suite.T(), matches, 1)
 
 		expectedMatch := []any{
-			[]interface{}{int64(4), int64(7)}, 
-			[]interface{}{int64(5), int64(8)}, 
-			int64(4)
+			[]interface{}{int64(4), int64(7)},
+			[]interface{}{int64(5), int64(8)},
+			int64(4),
 		}
 		assert.Equal(suite.T(), expectedMatch, matches[0])
 	})
