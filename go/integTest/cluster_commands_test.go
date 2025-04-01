@@ -1320,9 +1320,18 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	assert.True(t, response.IsSingleValue())
 }
 
+func (suite *GlideTestSuite) TestClusterRandomKey() {
+	client := suite.defaultClusterClient()
+	// Test 1: Check if the command return random key
+	t := suite.T()
+	result, err := client.RandomKey()
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+}
+
 func (suite *GlideTestSuite) TestRandomKeyWithRoute() {
 	client := suite.defaultClusterClient()
-	// Test 1: Check if Echo command return the message
+	// Test 1: Check if the command return random key
 	t := suite.T()
 	route := config.Route(config.RandomRoute)
 	options := options.RouteOption{Route: route}

@@ -888,7 +888,7 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 
 func (suite *GlideTestSuite) TestRandomKey() {
 	client := suite.defaultClient()
-	// Test 1: Check if Echo command return the message
+	// Test 1: Check if the command return random key
 	t := suite.T()
 	result, err := client.RandomKey()
 	assert.Nil(t, err)

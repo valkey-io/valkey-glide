@@ -24,7 +24,7 @@ type GenericClusterCommands interface {
 		opts options.ClusterScanOptions,
 	) (options.ClusterScanCursor, []string, error)
 
-	RandomKey() (string, error)
+	RandomKey() (Result[string], error)
 
 	RandomKeyWithRoute(opts options.RouteOption) (Result[string], error)
 }

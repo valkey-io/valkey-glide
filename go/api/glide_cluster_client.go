@@ -965,12 +965,12 @@ func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOpt
 //	A random key from the database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
-func (client *GlideClusterClient) RandomKey() (string, error) {
+func (client *GlideClusterClient) RandomKey() (Result[string], error) {
 	result, err := client.executeCommand(C.RandomKey, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return CreateNilStringResult, err
 	}
-	return handleStringResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 // Returns a random key.
