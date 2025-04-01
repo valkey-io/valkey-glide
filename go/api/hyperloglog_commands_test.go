@@ -61,3 +61,67 @@ func ExampleGlideClusterClient_PfCount() {
 	// 1
 	// 3
 }
+
+func ExampleGlideClient_PfMerge() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	// Create source keys with some values
+	sourceKey1 := uuid.New().String() + "{group}"
+	sourceKey2 := uuid.New().String() + "{group}"
+
+	// Add values to source keys
+	_, err := client.PfAdd(sourceKey1, []string{"value1", "value2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	_, err = client.PfAdd(sourceKey2, []string{"value2", "value3", "value4"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Merge the source keys into a destination key
+	destKey := uuid.New().String() + "{group}"
+	result, err := client.PfMerge(destKey, []string{sourceKey1, sourceKey2})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+	// Output: OK
+}
+
+func ExampleGlideClusterClient_PfMerge() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	// Create source keys with some values
+	sourceKey1 := uuid.New().String() + "{group}"
+	sourceKey2 := uuid.New().String() + "{group}"
+
+	// Add values to source keys
+	_, err := client.PfAdd(sourceKey1, []string{"value1", "value2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	_, err = client.PfAdd(sourceKey2, []string{"value2", "value3", "value4"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Merge the source keys into a destination key
+	destKey := uuid.New().String() + "{group}"
+	result, err := client.PfMerge(destKey, []string{sourceKey1, sourceKey2})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+	// Output: OK
+}

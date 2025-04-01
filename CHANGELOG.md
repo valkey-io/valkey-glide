@@ -22,6 +22,7 @@
 * Go: Add `BITPOS` ([#3407](https://github.com/valkey-io/valkey-glide/pull/3407))
 * Go: Add `FLUSHALL` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
 * Go: Add `FLUSHDB` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
+* Go: Add `PFMERGE` ([#3082](https://github.com/valkey-io/valkey-glide/pull/3082))
 * Go: Add password update api ([#3346](https://github.com/valkey-io/valkey-glide/pull/3346))
 * Go: Add `BITOP` ([#3384](https://github.com/valkey-io/valkey-glide/pull/3384))
 * Go: Add `GeoHash` ([#3439](https://github.com/valkey-io/valkey-glide/pull/3439))
