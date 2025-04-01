@@ -3228,6 +3228,33 @@ func (client *baseClient) PfCount(keys []string) (int64, error) {
 	return handleIntResponse(result)
 }
 
+// PfMerge merges multiple HyperLogLog values into a unique value.
+// If the destination variable exists, it is treated as one of the source HyperLogLog data sets,
+// otherwise a new HyperLogLog is created.
+//
+// Note:
+//
+//	When in cluster mode, `sourceKeys` and `destination` must map to the same hash slot.
+//
+// Parameters:
+//
+//	destination - The key of the destination HyperLogLog where the merged data sets will be stored.
+//	sourceKeys - An array of sourceKeys of the HyperLogLog structures to be merged.
+//
+// Return value:
+//
+//	If the HyperLogLog values is successfully merged  it returns "OK".
+//
+// [valkey.io]: https://valkey.io/commands/pfmerge/
+func (client *baseClient) PfMerge(destination string, sourceKeys []string) (string, error) {
+	result, err := client.executeCommand(C.PfMerge, append([]string{destination}, sourceKeys...))
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+
+	return handleStringResponse(result)
+}
+
 // Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
 // This command, similar to Del However, this command does not block the server
 //
