@@ -632,7 +632,7 @@ func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 
 func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0")
-	
+
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		_, err := client.Set("{lcs}key1", "ohmytext")
 		assert.Nil(suite.T(), err)
