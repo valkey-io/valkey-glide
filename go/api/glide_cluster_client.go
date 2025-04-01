@@ -968,7 +968,7 @@ func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOpt
 func (client *GlideClusterClient) RandomKey() (Result[string], error) {
 	result, err := client.executeCommand(C.RandomKey, []string{})
 	if err != nil {
-		return CreateNilStringResult, err
+		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
 }
