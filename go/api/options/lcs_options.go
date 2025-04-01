@@ -10,6 +10,7 @@ const (
 	LCSIdxCommand          = "IDX"
 	LCSMinMatchLenCommand  = "MINMATCHLEN"
 	LCSWithMatchLenCommand = "WITHMATCHLEN"
+	LCSLenCommand          = "LEN"
 )
 
 // Optional arguments to `Lcs` when using IDX.
