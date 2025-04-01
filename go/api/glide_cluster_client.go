@@ -958,6 +958,42 @@ func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOpt
 	return createClusterSingleValue[string](data), nil
 }
 
+// Rewrites the configuration file with the current configuration.
+// The command will be routed a random node.
+//
+// Return value:
+//
+//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/config-rewrite/
+func (client *GlideClusterClient) ConfigRewrite() (string, error) {
+	response, err := client.executeCommand(C.ConfigRewrite, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Rewrites the configuration file with the current configuration.
+//
+// Parameters:
+//
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/config-rewrite/
+func (client *GlideClusterClient) ConfigRewriteWithOptions(opts options.RouteOption) (string, error) {
+	response, err := client.executeCommandWithRoute(C.ConfigRewrite, []string{}, opts.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
 // Returns a random key.
 //
 // Return value:
