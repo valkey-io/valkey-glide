@@ -7317,3 +7317,35 @@ func (client *baseClient) GeoSearchStoreWithInfoOptions(
 		infoOptions,
 	)
 }
+
+// Loads a library to Valkey.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	libraryCode - The source code that implements the library.
+//	replace - Whether the given library should overwrite a library with the same name if it
+//	already exists.
+//
+// Return value:
+//
+//	The library name that was loaded.
+//
+// [valkey.io]: https://valkey.io/commands/function-load/
+func (client *baseClient) FunctionLoad(libraryCode string, replace bool) (string, error) {
+	args := []string{}
+	if replace {
+		args = append(args, options.ReplaceKeyword)
+	}
+	args = append(args, libraryCode)
+	result, err := client.executeCommand(C.FunctionLoad, args)
+	if err != nil {
+		return "", err
+	}
+	return handleStringResponse(result)
+}
