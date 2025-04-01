@@ -918,6 +918,33 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	return handleStringResponse(result)
 }
 
+// Returns the longest common subsequence between strings stored at key1 and key2.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// Note:
+//
+//	In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+//	will be split across these slots and executed separately for each. This means the command
+//	is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+//	call will return the first encountered error, even though some requests may have succeeded
+//	while others did not. If this behavior impacts your application logic, consider splitting
+//	the request into sub-requests per slot to ensure atomicity.
+//
+// Parameters:
+//
+//	key1 - The key that stores the first string.
+//	key2 - The key that stores the second string.
+//	opts - The [LCSIdxOptions] type.
+//
+// Return value:
+//
+//	The longest common subsequence between the 2 strings.
+//	An empty string is returned if the keys do not exist or have no common subsequences.
+//
+// [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCSWithOptions(key1, key2 string, opts *options.LCSIdxOptions) (map[string]interface{}, error) {
 	optArgs, err := opts.ToArgs()
 	if err != nil {

@@ -689,8 +689,8 @@ func ExampleGlideClient_LCSWithOptions() {
 
 	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
 	// Output:
-	// Basic LCS result: map[len:3 matches:[[0 1 0 1] [6 7 4 5]] direction:none]
-	// With MinMatchLen 4: map[len:0 matches:[] direction:none]
+	// Basic LCS result: map[len:3 matches:[[0 1 0 1] [6 7 4 5]]]
+	// With MinMatchLen 4: map[len:0 matches:[]]
 }
 
 func ExampleGlideClusterClient_LCSWithOptions() {
@@ -712,5 +712,5 @@ func ExampleGlideClusterClient_LCSWithOptions() {
 
 	// LCS is only available in 7.0 and above. It will fail in any release < 7.0
 	// Output:
-	// Full result with both options: map[len:3 matches:[[0 1 0 1 2] [6 7 4 5 2]] direction:none]
+	// Full result with both options: map[len:3 matches:[[0 1 0 1 2] [6 7 4 5 2]]]
 }
