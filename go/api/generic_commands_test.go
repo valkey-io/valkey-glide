@@ -69,3 +69,16 @@ func ExampleGlideClient_ScanWithOptions() {
 	// Cursor: 0
 	// Collection: [key1]
 }
+
+func ExampleGlideClient_RandomKey() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	key := uuid.New().String()
+	client.Set(key, "Hello")
+	result, err := client.RandomKey()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(result.Value()) > 0)
+
+	// Output: true
+}

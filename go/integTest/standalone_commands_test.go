@@ -904,3 +904,12 @@ func (suite *GlideTestSuite) TestConfigRewrite() {
 		suite.verifyOK(client.ConfigRewrite())
 	}
 }
+
+func (suite *GlideTestSuite) TestRandomKey() {
+	client := suite.defaultClient()
+	// Test 1: Check if the command return random key
+	t := suite.T()
+	result, err := client.RandomKey()
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+}
