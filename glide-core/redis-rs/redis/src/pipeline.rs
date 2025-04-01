@@ -358,3 +358,37 @@ macro_rules! implement_pipeline_commands {
 }
 
 implement_pipeline_commands!(Pipeline);
+
+#[derive(Debug, Clone, Copy, Default)]
+/// Defines a retry strategy for pipeline requests, allowing control over retries in case of server or connection errors.
+///
+/// This strategy determines whether failed commands should be retried, which can impact execution order and potential side effects.
+///
+/// # Notes
+/// - Retrying on **server errors** may lead to reordering of commands within the same slot.
+/// - Retrying on **connection errors** is riskier, as it is unclear which commands have already succeeded. This can result in unintended behavior, such as executing an `INCR` command multiple times.
+///
+/// TODO: Add a link to the wiki with further details.
+pub struct PipelineRetryStrategy {
+    /// If `true`, failed commands with a retriable `RetryMethod` will be retried.
+    ///
+    /// # Effect
+    /// - Commands may be reordered within the same slot during retries.
+    pub retry_server_error: bool,
+    /// If `true`, sub-pipeline requests will be retried in case of connection errors.
+    ///
+    /// # Caution
+    /// - Since a connection error does not indicate which commands succeeded or failed, retrying may lead to duplicate executions.
+    /// - This is particularly risky for non-idempotent commands like `INCR`, which modify state irreversibly.
+    pub retry_connection_error: bool,
+}
+
+impl PipelineRetryStrategy {
+    /// Creates a new `PipelineRetryStrategy` with the specified flags for retrying server and connection errors.
+    pub fn new(retry_server_error: bool, retry_connection_error: bool) -> Self {
+        Self {
+            retry_server_error,
+            retry_connection_error,
+        }
+    }
+}

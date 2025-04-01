@@ -2,10 +2,10 @@ use super::{ConnectionLike, Runtime};
 use crate::aio::setup_connection;
 use crate::aio::DisconnectNotifier;
 use crate::client::GlideConnectionOptions;
-use crate::cluster_async::PipelineRetryStrategy;
 use crate::cmd::Cmd;
 #[cfg(feature = "tokio-comp")]
 use crate::parser::ValueCodec;
+use crate::pipeline::PipelineRetryStrategy;
 use crate::push_manager::PushManager;
 use crate::types::{RedisError, RedisFuture, RedisResult, Value};
 use crate::{cmd, ConnectionInfo, ProtocolVersion, PushKind};

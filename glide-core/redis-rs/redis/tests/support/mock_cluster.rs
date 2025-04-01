@@ -1,7 +1,6 @@
 use redis::{
     cluster::{self, ClusterClient, ClusterClientBuilder},
-    cluster_async::PipelineRetryStrategy,
-    ErrorKind, FromRedisValue, GlideConnectionOptions, RedisError,
+    ErrorKind, FromRedisValue, GlideConnectionOptions, PipelineRetryStrategy, RedisError,
 };
 
 use std::{

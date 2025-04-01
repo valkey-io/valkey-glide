@@ -25,17 +25,16 @@ mod cluster_async {
     use redis::{
         aio::{ConnectionLike, MultiplexedConnection},
         cluster::ClusterClient,
-        cluster_async::{
-            testing::MANAGEMENT_CONN_NAME, ClusterConnection, Connect, PipelineRetryStrategy,
-        },
+        cluster_async::{testing::MANAGEMENT_CONN_NAME, ClusterConnection, Connect},
         cluster_routing::{
             MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         },
         cluster_topology::{get_slot, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES},
         cmd, from_owned_redis_value, parse_redis_value, AsyncCommands, Cmd, ErrorKind,
-        FromRedisValue, GlideConnectionOptions, InfoDict, IntoConnectionInfo, ProtocolVersion,
-        PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind, PushInfo, PushKind,
-        RedisError, RedisFuture, RedisResult, Script, Value,
+        FromRedisValue, GlideConnectionOptions, InfoDict, IntoConnectionInfo,
+        PipelineRetryStrategy, ProtocolVersion, PubSubChannelOrPattern, PubSubSubscriptionInfo,
+        PubSubSubscriptionKind, PushInfo, PushKind, RedisError, RedisFuture, RedisResult, Script,
+        Value,
     };
 
     use crate::support::*;

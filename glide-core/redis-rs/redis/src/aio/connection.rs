@@ -2,7 +2,6 @@
 
 use super::ConnectionLike;
 use super::{setup_connection, AsyncStream, RedisRuntime};
-use crate::cluster_async::PipelineRetryStrategy;
 use crate::cmd::{cmd, Cmd};
 use crate::connection::{
     resp2_is_pub_sub_state_cleared, resp3_is_pub_sub_state_cleared, ConnectionAddr, ConnectionInfo,
@@ -10,6 +9,7 @@ use crate::connection::{
 };
 #[cfg(feature = "tokio-comp")]
 use crate::parser::ValueCodec;
+use crate::pipeline::PipelineRetryStrategy;
 use crate::types::{ErrorKind, FromRedisValue, RedisError, RedisFuture, RedisResult, Value};
 use crate::{from_owned_redis_value, ProtocolVersion, ToRedisArgs};
 use ::tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};

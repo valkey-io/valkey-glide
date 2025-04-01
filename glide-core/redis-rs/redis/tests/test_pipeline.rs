@@ -3,11 +3,7 @@ mod support;
 
 mod test_pipeline {
 
-    use redis::{
-        cluster_async::{ClusterConnection, PipelineRetryStrategy},
-        cluster_topology::get_slot,
-        ErrorKind,
-    };
+    use redis::{cluster_async::ClusterConnection, cluster_topology::get_slot, ErrorKind};
     use std::collections::HashMap;
 
     use redis::{
@@ -15,6 +11,7 @@ mod test_pipeline {
         cluster_routing::{
             MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         },
+        PipelineRetryStrategy,
         cmd, Pipeline, Value,
     };
 

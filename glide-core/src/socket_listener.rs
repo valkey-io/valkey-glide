@@ -15,12 +15,13 @@ use directories::BaseDirs;
 use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
 use once_cell::sync::Lazy;
 use protobuf::{Chars, Message};
-use redis::cluster_async::PipelineRetryStrategy;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::{ClusterScanArgs, Cmd, PushInfo, RedisError, ScanStateRC, Value};
+use redis::{
+    ClusterScanArgs, Cmd, PipelineRetryStrategy, PushInfo, RedisError, ScanStateRC, Value,
+};
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::ptr::from_mut;

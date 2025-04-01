@@ -1,7 +1,7 @@
 use super::RedisFuture;
 use crate::client::GlideConnectionOptions;
-use crate::cluster_async::PipelineRetryStrategy;
 use crate::cmd::Cmd;
+use crate::pipeline::PipelineRetryStrategy;
 use crate::push_manager::PushManager;
 use crate::types::{RedisError, RedisResult, Value};
 use crate::{

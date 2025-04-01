@@ -7,14 +7,14 @@ use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::{log_error, log_info, log_warn};
 use redis::aio::ConnectionLike;
-use redis::cluster_async::{ClusterConnection, PipelineRetryStrategy};
+use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{
-    ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PushInfo, RedisError, RedisResult,
-    ScanStateRC, Value,
+    ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy, PushInfo, RedisError,
+    RedisResult, ScanStateRC, Value,
 };
 pub use standalone_client::StandaloneClient;
 use std::io;

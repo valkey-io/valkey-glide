@@ -1,9 +1,9 @@
 //! Adds async IO support to redis.
-use crate::cluster_async::PipelineRetryStrategy;
 use crate::cmd::{cmd, Cmd};
 use crate::connection::{
     get_resp3_hello_command_error, PubSubSubscriptionKind, RedisConnectionInfo,
 };
+use crate::pipeline::PipelineRetryStrategy;
 use crate::types::{
     ErrorKind, FromRedisValue, InfoDict, ProtocolVersion, RedisError, RedisFuture, RedisResult,
     Value,
