@@ -596,6 +596,8 @@ func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		_, err := client.Set("{lcs}key1", "ohmytext")
 		assert.Nil(suite.T(), err)
@@ -614,7 +616,6 @@ func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 		matches := lcsIdxResult["matches"].([]any)
 		assert.Len(suite.T(), matches, 2)
 
-		// Match the exact structure returned by the function
 		expectedMatches := []interface{}{
 			[]interface{}{
 				[]interface{}{int64(4), int64(7)},
@@ -630,6 +631,8 @@ func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 }
 
 func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		_, err := client.Set("{lcs}key1", "ohmytext")
 		assert.Nil(suite.T(), err)
@@ -660,6 +663,8 @@ func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
 }
 
 func (suite *GlideTestSuite) TestLCS_WithMatchLengthOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		_, err := client.Set("{lcs}key1", "ohmytext")
 		assert.Nil(suite.T(), err)
