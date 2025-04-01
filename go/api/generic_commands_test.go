@@ -8,8 +8,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/valkey-io/valkey-glide/go/api/options"
-
-	"github.com/google/uuid"
 )
 
 func ExampleGlideClient_CustomCommand() {
