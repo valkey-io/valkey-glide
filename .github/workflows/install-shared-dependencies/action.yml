@@ -39,6 +39,7 @@ runs:
           run: |
               brew update
               brew install openssl coreutils
+              sudo sysctl net.inet.tcp.fin_timeout=5000
 
         - name: Install software dependencies for Ubuntu GNU
           shell: bash
