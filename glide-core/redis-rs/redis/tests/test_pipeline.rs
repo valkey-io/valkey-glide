@@ -11,8 +11,7 @@ mod test_pipeline {
         cluster_routing::{
             MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         },
-        PipelineRetryStrategy,
-        cmd, Pipeline, Value,
+        cmd, Pipeline, PipelineRetryStrategy, Value,
     };
 
     use crate::support::*;
