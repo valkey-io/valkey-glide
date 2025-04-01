@@ -20,8 +20,11 @@ func main() {
 		log.Fatal("error connecting to database: ", err)
 	}
 
-	client.Set("keyEdric123", "Hello")
-	client.Set("keyEdric345", "Hello")
+	resultSet, _ := client.Set("keyEdric123", "Hello")
+	fmt.Println(resultSet)
+
+	resultSet, _ = client.Set("keyEdric345", "world")
+	fmt.Println(resultSet)
 
 	//Create Transcation
 	tx := api.NewTransaction(client)
