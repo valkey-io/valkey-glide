@@ -288,6 +288,12 @@ func convertStringArray(response *C.struct_CommandResponse, isNilable bool) ([]s
 	return slice, nil
 }
 
+func handleAnyResponse(response *C.struct_CommandResponse) (any, error) {
+	defer C.free_command_response(response)
+
+	return parseInterface(response)
+}
+
 func convertAnyArray(response *C.struct_CommandResponse, isNilable bool) ([]any, error) {
 	typeErr := checkResponseType(response, C.Array, isNilable)
 	if typeErr != nil {

@@ -1439,3 +1439,143 @@ func (suite *GlideTestSuite) TestRandomKeyWithRoute() {
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
+
+func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test with single node route
+	libName := "mylib1c_single"
+	funcName := "myfunc1c_single"
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, true)
+
+	// Flush all functions with SYNC option and single node route
+	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load function with single node route
+	result, err = client.FunctionLoadWithRoute(code, false, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Test FCALL with single node route
+	functionResult, err := client.FCallWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test FCALL_RO with single node route
+	functionResult, err = client.FCallReadOnlyWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test with all primaries route
+	libName = "mylib1c_all"
+	funcName = "myfunc1c_all"
+	functions = map[string]string{
+		funcName: "return args[1]",
+	}
+	code = GenerateLuaLibCode(libName, functions, true)
+
+	// Flush all functions with SYNC option and all primaries route
+	route = options.RouteOption{Route: config.AllPrimaries}
+	result, err = client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load function with all primaries route
+	result, err = client.FunctionLoadWithRoute(code, false, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Test FCALL with all primaries route
+	functionResult, err = client.FCallWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test FCALL_RO with all primaries route
+	functionResult, err = client.FCallReadOnlyWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Flush all functions with SYNC option
+	result, err := client.FunctionFlushSync()
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Create function that returns first argument
+	libName := "mylib1c"
+	funcName := "myfunc1c"
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, true)
+
+	// Load function
+	result, err = client.FunctionLoad(code, false)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Test FCALL
+	functionResult, err := client.FCallWithArgs(funcName, []string{"one", "two"})
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test FCALL_RO
+	functionResult, err = client.FCallReadOnlyWithArgs(funcName, []string{"one", "two"})
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+}
