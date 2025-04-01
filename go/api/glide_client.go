@@ -398,6 +398,110 @@ func (client *GlideClient) ConfigResetStat() (string, error) {
 	return handleStringResponse(response)
 }
 
+// Gets the name of the current connection.
+//
+// Return value:
+//
+//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//
+// [valkey.io]: https://valkey.io/commands/client-getname/
+func (client *GlideClient) ClientGetName() (string, error) {
+	result, err := client.executeCommand(C.ClientGetName, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Set the name of the current connection.
+//
+// Parameters:
+//
+//	connectionName - Connection name of the current connection.
+//
+// Return value:
+//
+//	OK - when connection name is set
+//
+// [valkey.io]: https://valkey.io/commands/client-setname/
+func (client *GlideClient) ClientSetName(connectionName string) (string, error) {
+	result, err := client.executeCommand(C.ClientSetName, []string{connectionName})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Move key from the currently selected database to the database specified by dbIndex.
+//
+// Parameters:
+//
+//	key - The key to move.
+//	dbIndex -  The index of the database to move key to.
+//
+// Return value:
+//
+//	Returns "OK".
+//
+// [valkey.io]: https://valkey.io/commands/move/
+func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
+	result, err := client.executeCommand(C.Move, []string{key, utils.IntToString(dbIndex)})
+	if err != nil {
+		return defaultBoolResponse, err
+	}
+
+	return handleBoolResponse(result)
+}
+
+// Iterates incrementally over a database for matching keys.
+//
+// Parameters:
+//
+//	cursor - The cursor that points to the next iteration of results. A value of 0
+//			 indicates the start of the search.
+//
+// Return value:
+//
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
+	res, err := client.executeCommand(C.Scan, []string{utils.IntToString(cursor)})
+	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	return handleScanResponse(res)
+}
+
+// Iterates incrementally over a database for matching keys.
+//
+// Parameters:
+//
+//	 cursor - The cursor that points to the next iteration of results. A value of 0
+//				 indicates the start of the search.
+//	 scanOptions - Additional command parameters, see [ScanOptions] for more details.
+//
+// Return value:
+//
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string, error) {
+	optionArgs, err := scanOptions.ToArgs()
+	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	res, err := client.executeCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
+	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	return handleScanResponse(res)
+}
+
 // Rewrites the configuration file with the current configuration.
 //
 // Return value:

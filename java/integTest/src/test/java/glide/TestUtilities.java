@@ -5,6 +5,7 @@ import static glide.TestConfiguration.AZ_CLUSTER_HOSTS;
 import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestConfiguration.TLS;
+import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -451,5 +452,85 @@ public class TestUtilities {
             return infoResponseMap.get(REDIS_VERSION_KEY);
         }
         return null;
+    }
+
+    /**
+     * Delete an ACL user and assert it was deleted.
+     *
+     * @param client Glide client to be used for running the ACL DELUSER command.
+     * @param username The username of the ACL user to be deleted.
+     */
+    @SneakyThrows
+    public static void deleteAclUser(GlideClient client, String username) {
+        try {
+            assertEquals(1L, client.customCommand(new String[] {"ACL", "DELUSER", username}).get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Set an ACL user and a password for it.
+     *
+     * @param client Glide client to be used for running the ACL SETUSER command.
+     * @param username The username of the ACL user to be registered.
+     * @param password The password of the ACL user to be registered.
+     */
+    @SneakyThrows
+    public static void setNewAclUserPassword(GlideClient client, String username, String password) {
+        try {
+            assertEquals(
+                    OK,
+                    client
+                            .customCommand(
+                                    new String[] {
+                                        "ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all",
+                                    })
+                            .get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Delete an ACL user and assert it was deleted.
+     *
+     * @param client Glide client to be used for running the ACL DELUSER command.
+     * @param username The username of the ACL user to be deleted.
+     */
+    @SneakyThrows
+    public static void deleteAclUser(GlideClusterClient client, String username) {
+        try {
+            assertEquals(
+                    1L,
+                    client.customCommand(new String[] {"ACL", "DELUSER", username}).get().getSingleValue());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Set an ACL user and a password for it.
+     *
+     * @param client Glide client to be used for running the ACL SETUSER command.
+     * @param username The username of the ACL user to be registered.
+     * @param password The password of the ACL user to be registered.
+     */
+    @SneakyThrows
+    public static void setNewAclUserPassword(
+            GlideClusterClient client, String username, String password) {
+        try {
+            assertEquals(
+                    OK,
+                    client
+                            .customCommand(
+                                    new String[] {
+                                        "ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all",
+                                    })
+                            .get()
+                            .getSingleValue());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }
