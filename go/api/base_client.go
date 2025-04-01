@@ -7346,7 +7346,7 @@ func (client *baseClient) FunctionLoad(libraryCode string, replace bool) (string
 	args = append(args, libraryCode)
 	result, err := client.executeCommand(C.FunctionLoad, args)
 	if err != nil {
-		return "", err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -7367,7 +7367,7 @@ func (client *baseClient) FunctionLoad(libraryCode string, replace bool) (string
 func (client *baseClient) FunctionFlush() (string, error) {
 	result, err := client.executeCommand(C.FunctionFlush, []string{})
 	if err != nil {
-		return "", err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -7388,7 +7388,7 @@ func (client *baseClient) FunctionFlush() (string, error) {
 func (client *baseClient) FunctionFlushSync() (string, error) {
 	result, err := client.executeCommand(C.FunctionFlush, []string{string(options.SYNC)})
 	if err != nil {
-		return "", err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -7409,7 +7409,7 @@ func (client *baseClient) FunctionFlushSync() (string, error) {
 func (client *baseClient) FunctionFlushAsync() (string, error) {
 	result, err := client.executeCommand(C.FunctionFlush, []string{string(options.ASYNC)})
 	if err != nil {
-		return "", err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }

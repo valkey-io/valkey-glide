@@ -3,7 +3,7 @@
 package api
 
 // Supports commands and transactions for the "Scripting and Function" group for a standalone
-// client.
+// or cluster client.
 //
 // See [valkey.io] for details.
 //

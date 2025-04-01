@@ -40,6 +40,7 @@
 * Core/FFI/Go: Add support for async and sync client types in FFI ([#3451](https://github.com/valkey-io/valkey-glide/pull/3451))
 * Go: Add `Config Rewrite` ([#3156](https://github.com/valkey-io/valkey-glide/pull/3156))
 * Go: Add `Random Key` ([#3358](https://github.com/valkey-io/valkey-glide/pull/3358))
+* Go: Add Function Load, Function Flush, FCall and FCall_RO ([#3474](https://github.com/valkey-io/valkey-glide/pull/3474))
 
 #### Breaking Changes
 

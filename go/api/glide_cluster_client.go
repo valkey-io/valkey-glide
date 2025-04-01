@@ -1068,7 +1068,7 @@ func (client *GlideClusterClient) FunctionLoadWithRoute(
 	args = append(args, libraryCode)
 	result, err := client.executeCommandWithRoute(C.FunctionLoad, args, route.Route)
 	if err != nil {
-		return "", err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -1089,7 +1089,7 @@ func (client *GlideClusterClient) FunctionLoadWithRoute(
 func (client *GlideClusterClient) FunctionFlushWithRoute(route options.RouteOption) (string, error) {
 	result, err := client.executeCommandWithRoute(C.FunctionFlush, []string{}, route.Route)
 	if err != nil {
-		return "", err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -1110,7 +1110,7 @@ func (client *GlideClusterClient) FunctionFlushWithRoute(route options.RouteOpti
 func (client *GlideClusterClient) FunctionFlushSyncWithRoute(route options.RouteOption) (string, error) {
 	result, err := client.executeCommandWithRoute(C.FunctionFlush, []string{string(options.SYNC)}, route.Route)
 	if err != nil {
-		return "", err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -1131,7 +1131,7 @@ func (client *GlideClusterClient) FunctionFlushSyncWithRoute(route options.Route
 func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(route options.RouteOption) (string, error) {
 	result, err := client.executeCommandWithRoute(C.FunctionFlush, []string{string(options.ASYNC)}, route.Route)
 	if err != nil {
-		return "", err
+		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
