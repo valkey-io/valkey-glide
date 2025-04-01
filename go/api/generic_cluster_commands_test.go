@@ -5,6 +5,7 @@ package api
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -211,4 +212,33 @@ func ExampleGlideClusterClient_ScanWithOptions_type() {
 	fmt.Println(allKeys)
 
 	// Output: [someKey]
+}
+
+func ExampleGlideClusterClient_RandomKey() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	key := uuid.New().String()
+	client.Set(key, "Hello")
+	result, err := client.RandomKey()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(len(result.Value()) > 0)
+
+	// Output: true
+}
+
+func ExampleGlideClusterClient_RandomKeyWithRoute() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	options := options.RouteOption{Route: nil}
+	key := uuid.New().String()
+	client.Set(key, "Hello")
+	result, err := client.RandomKeyWithRoute(options)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(len(result.Value()) > 0)
+
+	// Output: true
 }
