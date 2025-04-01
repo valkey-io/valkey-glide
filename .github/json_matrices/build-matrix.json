@@ -6,6 +6,7 @@
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-gnu",
         "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
+        "run": "always",
         "languages": ["python", "node", "java", "go", "dotnet"]
     },
     {
@@ -33,8 +34,8 @@
         "ARCH": "x64",
         "TARGET": "x86_64-apple-darwin",
         "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
-		"run": "always",
-		"languages": ["python", "node", "java", "go", "dotnet"]
+        "languages": [],
+        "comment": "Tests for all clients (CI) are skipped for that platform due to instability, but CD pipelines still run on it. See PR #3482 for details."
     },
     {
         "OS": "ubuntu",
