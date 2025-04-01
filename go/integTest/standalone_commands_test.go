@@ -834,6 +834,58 @@ func (suite *GlideTestSuite) TestConfigResetStat() {
 	suite.verifyOK(client.ConfigResetStat())
 }
 
+func (suite *GlideTestSuite) TestClientGetSetName() {
+	client := suite.defaultClient()
+	t := suite.T()
+
+	suite.verifyOK(client.ClientSetName("ConnectionName"))
+	result, err := client.ClientGetName()
+	assert.Nil(t, err)
+	assert.Equal(t, result, "ConnectionName")
+}
+
+func (suite *GlideTestSuite) TestMove() {
+	client := suite.defaultClient()
+	t := suite.T()
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(key, "hello"))
+	result, err := client.Move(key, 2)
+	assert.Nil(t, err)
+	assert.True(suite.T(), result)
+}
+
+func (suite *GlideTestSuite) TestScan() {
+	client := suite.defaultClient()
+	t := suite.T()
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(key, "Hello"))
+	resCursor, resCollection, err := client.Scan(0)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(resCursor), 1)
+	assert.GreaterOrEqual(t, len(resCollection), 1)
+}
+
+func (suite *GlideTestSuite) TestScanWithOption() {
+	client := suite.defaultClient()
+	t := suite.T()
+
+	// Test TestScanWithOption SetCount
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(key, "Hello"))
+	opts := options.NewScanOptions().SetCount(10)
+	resCursor, resCollection, err := client.ScanWithOptions(0, *opts)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(resCursor), 1)
+	assert.GreaterOrEqual(t, len(resCollection), 1)
+
+	// Test TestScanWithOption SetType
+	opts = options.NewScanOptions().SetType(options.ObjectTypeString)
+	resCursor, resCollection, err = client.ScanWithOptions(0, *opts)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(resCursor), 1)
+	assert.GreaterOrEqual(t, len(resCollection), 1)
+}
+
 func (suite *GlideTestSuite) TestRandomKey() {
 	client := suite.defaultClient()
 	// Test 1: Check if Echo command return the message
