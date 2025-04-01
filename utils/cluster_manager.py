@@ -497,6 +497,15 @@ def create_servers(
             )
             continue
         if not wait_for_server(server, cluster_folder, tls):
+            # Write netstat output to a file for debugging
+            try:
+                netstat_output = subprocess.check_output(['netstat', '-nopat'], text=True)
+                netstat_file = f"netstat_output.txt"
+                with open(netstat_file, 'w') as f:
+                    f.write(netstat_output)
+                logging.debug(f"Netstat output written to {netstat_file}")
+            except Exception as e:
+                logging.error(f"Failed to write netstat output: {e}")
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
                 f"See {node_folder}/server.log for more information"
