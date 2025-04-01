@@ -516,3 +516,18 @@ func (client *GlideClient) ConfigRewrite() (string, error) {
 	}
 	return handleStringResponse(response)
 }
+
+// Returns a random existing key name from the currently selected database.
+//
+// Return value:
+//
+//	A random existing key name from the currently selected database.
+//
+// [valkey.io]: https://valkey.io/commands/randomkey/
+func (client *GlideClient) RandomKey() (Result[string], error) {
+	result, err := client.executeCommand(C.RandomKey, []string{})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
