@@ -38,6 +38,7 @@
 * Go: Add `Scan` ([#3378](https://github.com/valkey-io/valkey-glide/pull/3378))
 * Core/FFI/Go: Add Support for Async and Sync Client Types in FFI ([#3451](https://github.com/valkey-io/valkey-glide/pull/3451))
 * Core/FFI/Go: Add support for async and sync client types in FFI ([#3451](https://github.com/valkey-io/valkey-glide/pull/3451))
+* Go: Add `Config Rewrite` ([#3156](https://github.com/valkey-io/valkey-glide/pull/3156))
 
 #### Breaking Changes
 
