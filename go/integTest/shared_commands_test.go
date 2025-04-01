@@ -595,6 +595,26 @@ func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 	})
 }
 
+func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}" + uuid.New().String()
+		key2 := "{key}" + uuid.New().String()
+
+		res, err := client.LCSLen(key1, key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res)
+
+		suite.verifyOK(client.Set(key1, "ohmytext"))
+		suite.verifyOK(client.Set(key2, "mynewtext"))
+
+		res, err = client.LCSLen(key1, key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(6), res)
+	})
+}
+
 func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 
@@ -606,7 +626,7 @@ func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 		assert.Nil(suite.T(), err)
 
 		opts := options.NewLCSIdxOptions()
-		lcsIdxResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", opts)
+		lcsIdxResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
 
 		assert.Nil(suite.T(), err)
 		assert.NotNil(suite.T(), lcsIdxResult)
@@ -644,7 +664,7 @@ func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
 		minMatchLen := int64(4)
 		opts.SetMinMatchLen(minMatchLen)
 
-		lcsIdxMinMatchResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", opts)
+		lcsIdxMinMatchResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
 
 		assert.Nil(suite.T(), err)
 		assert.NotNil(suite.T(), lcsIdxMinMatchResult)
@@ -677,7 +697,7 @@ func (suite *GlideTestSuite) TestLCS_WithMatchLengthOption() {
 		opts.SetMinMatchLen(minMatchLen)
 		opts.SetWithMatchLen(true)
 
-		lcsIdxFullOptionsResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", opts)
+		lcsIdxFullOptionsResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
 
 		assert.Nil(suite.T(), err)
 		assert.NotNil(suite.T(), lcsIdxFullOptionsResult)
