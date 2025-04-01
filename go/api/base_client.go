@@ -14,9 +14,11 @@ package api
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
 // void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
+// void pubSubCallback(uint32_t kind, struct CommandResponse *message);
 import "C"
 
 import (
+	goErr "errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -43,6 +45,7 @@ type BaseClient interface {
 	GenericBaseCommands
 	BitmapCommands
 	GeoSpatialCommands
+	PubSubCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -69,14 +72,181 @@ func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorTyp
 	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
 }
 
+// Global message dispatcher for routing PubSub messages
+var (
+	globalDispatcher *MessageDispatcher
+	once             sync.Once
+)
+
+// GetManager returns the singleton state manager
+func GetDispatcher() *MessageDispatcher {
+	once.Do(func() {
+		globalDispatcher = NewMessageDispatcher()
+	})
+	return globalDispatcher
+}
+
+//export pubSubCallback
+func pubSubCallback(kind C.uint32_t, cResponse *C.struct_CommandResponse) {
+	defer C.free_command_response(cResponse)
+
+	// Convert kind directly to PushKind enum value
+	pushKind := PushKind(kind)
+
+	// fmt.Printf("Pubsub Callback: %s\n", pushKind)
+
+	// TODO: Refactor this out
+	// Extract values from the CommandResponse
+	arrayValues, err := processCommandResponseArray(cResponse)
+	if err != nil {
+		return
+	}
+
+	// Convert the array values directly to a PubSubMessage based on the kind
+	var message *PubSubMessage
+
+	switch pushKind {
+	case Message, SMessage:
+		if len(arrayValues) < 2 {
+			return
+		}
+
+		channel, ok := toString(arrayValues[0])
+		if !ok {
+			return
+		}
+
+		msgContent, ok := toString(arrayValues[1])
+		if !ok {
+			return
+		}
+
+		message = NewPubSubMessage(msgContent, channel)
+
+	case PMessage:
+		if len(arrayValues) < 3 {
+			return
+		}
+
+		pattern, ok := toString(arrayValues[0])
+		if !ok {
+			return
+		}
+
+		channel, ok := toString(arrayValues[1])
+		if !ok {
+			return
+		}
+
+		msgContent, ok := toString(arrayValues[2])
+		if !ok {
+			return
+		}
+
+		message = NewPubSubMessageWithPattern(msgContent, channel, pattern)
+
+	case Subscribe, PSubscribe, SSubscribe, Unsubscribe, PUnsubscribe, SUnsubscribe:
+		if len(arrayValues) < 2 {
+			return
+		}
+		channel, ok := toString(arrayValues[0])
+		if !ok {
+			return
+		}
+		msgContent, ok := toString(arrayValues[1])
+		if !ok {
+			return
+		}
+		message = NewPubSubMessage(msgContent, channel)
+
+	default:
+		// log unsupported push kind
+
+	}
+
+	// Create a PushInfo struct with the message
+	pushMsg := PushInfo{
+		Kind:    pushKind,
+		Message: message,
+	}
+
+	// Get the global message dispatcher and route the message
+	dispatcher := GetDispatcher()
+	dispatcher.DispatchMessage(pushMsg)
+}
+
+// Helper function to process a CommandResponse array into a Go slice
+func processCommandResponseArray(cResponse *C.struct_CommandResponse) ([]any, error) {
+	if typeErr := checkResponseType(cResponse, C.Array, false); typeErr != nil {
+		return nil, typeErr
+	}
+
+	arrayLen := int(cResponse.array_value_len)
+	arrayPtr := cResponse.array_value
+	result := make([]any, arrayLen)
+
+	// Iterate through the array elements
+	for i := 0; i < arrayLen; i++ {
+		element := unsafe.Pointer(uintptr(unsafe.Pointer(arrayPtr)) + uintptr(i)*unsafe.Sizeof(*arrayPtr))
+		elemPtr := (*C.struct_CommandResponse)(element)
+
+		// Convert element based on type
+		switch elemPtr.response_type {
+		case C.String:
+			strLen := int(elemPtr.string_value_len)
+			if strLen > 0 && elemPtr.string_value != nil {
+				bytes := C.GoBytes(unsafe.Pointer(elemPtr.string_value), C.int(strLen))
+				result[i] = bytes
+			} else {
+				result[i] = []byte{}
+			}
+		case C.Int:
+			result[i] = int64(elemPtr.int_value)
+		case C.Float:
+			result[i] = float64(elemPtr.float_value)
+		case C.Bool:
+			result[i] = bool(elemPtr.bool_value)
+		case C.Null:
+			result[i] = nil
+		default:
+			// For other types, we'd need more complex handling
+			// For simplicity, convert to string representation
+			result[i] = fmt.Sprintf("Unsupported type: %d", elemPtr.response_type)
+		}
+	}
+	return result, nil
+}
+
 type clientConfiguration interface {
 	toProtobuf() (*protobuf.ConnectionRequest, error)
 }
 
 type baseClient struct {
-	pending    map[unsafe.Pointer]struct{}
-	coreClient unsafe.Pointer
-	mu         sync.Mutex
+	pending        map[unsafe.Pointer]struct{}
+	coreClient     unsafe.Pointer
+	mu             sync.Mutex
+	messageHandler *MessageHandler
+}
+
+func (client *baseClient) GetClientID() string {
+	return fmt.Sprintf("%p", client)
+}
+
+// SetMessageHandler assigns a message handler to the client for processing pub/sub messages
+func (client *baseClient) SetMessageHandler(handler *MessageHandler) {
+	client.messageHandler = handler
+
+	// Register the client with the message dispatcher
+	clientID := client.GetClientID()
+	if clientID != "" && handler != nil {
+		dispatcher := GetDispatcher()
+		dispatcher.RegisterClient(clientID, handler)
+	}
+}
+
+// GetMessageHandler returns the currently assigned message handler
+func (client *baseClient) GetMessageHandler() *MessageHandler {
+	return client.messageHandler
 }
 
 // buildAsyncClientType safely initializes a C.ClientType with an AsyncClient_Body.
@@ -158,6 +328,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
 			&clientType,
+			(C.PubSubCallback)(unsafe.Pointer(C.pubSubCallback)),
 		),
 	)
 	defer C.free_connection_response(cResponse)
@@ -175,6 +346,13 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 func (client *baseClient) Close() {
 	client.mu.Lock()
 	defer client.mu.Unlock()
+
+	// Unregister from the message dispatcher
+	clientID := fmt.Sprintf("%p", client)
+	if clientID != "" {
+		dispatcher := GetDispatcher()
+		dispatcher.UnregisterClient(clientID)
+	}
 
 	if client.coreClient == nil {
 		return
@@ -5926,9 +6104,6 @@ func (client *baseClient) CopyWithOptions(
 //	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
-//	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
-//	fmt.Println(res) // map[key:[["field1", "entry1"]]
-//
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(
 	key string,
@@ -7316,4 +7491,137 @@ func (client *baseClient) GeoSearchStoreWithInfoOptions(
 		*options.NewGeoSearchResultOptions(),
 		infoOptions,
 	)
+}
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *baseClient) Publish(channel string, message string) (int64, error) {
+	if message == "" || channel == "" {
+		return 0, goErr.New("both message and channel are required for Publish command")
+	}
+
+	args := []string{channel, message}
+	result, err := client.executeCommand(C.Publish, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// PubSubChannels lists the currently active channels.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannels() ([]string, error) {
+	// args := []string{"CHANNELS"}
+	// result, err := client.executeCommand(C.PubSubChannels, args)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// return handleStringArrayResponse(result)
+	return nil, nil
+}
+
+// PubSubChannelsWithPattern lists the currently active channels matching the specified pattern.
+//
+// Pattern can be any glob-style pattern:
+// - h?llo matches hello, hallo and hxllo
+// - h*llo matches hllo and heeeello
+// - h[ae]llo matches hello and hallo, but not hillo
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
+	// if pattern == "" {
+	// 	return nil, errors.New("pattern is required for PubSubChannelsWithPattern command")
+	// }
+
+	// args := []string{"CHANNELS", pattern}
+	// result, err := client.executeCommand(C.PubSubChannels, args)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// return handleStringArrayResponse(result)
+	return nil, nil
+}
+
+// PubSubNumPat returns the number of patterns that are subscribed to by clients.
+//
+// This returns the total number of unique patterns that all clients are subscribed to,
+// not the count of clients subscribed to patterns.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numpat
+func (client *baseClient) PubSubNumPat() (int64, error) {
+	// args := []string{"NUMPAT"}
+	// result, err := client.executeCommand(C.PubSubNumPat, args)
+	// if err != nil {
+	// 	return 0, err
+	// }
+
+	// return handleIntResponse(result)
+	return 0, nil
+}
+
+// PubSubNumSub returns the number of subscribers for the specified channels.
+//
+// The count only includes clients subscribed to exact channels, not pattern subscriptions.
+// If no channels are specified, an empty map is returned.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single map.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numsub
+func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, error) {
+	if len(channels) == 0 {
+		// If no channels specified, just return an empty map
+		return make(map[string]int64), nil
+	}
+
+	args := append([]string{"NUMSUB"}, channels...)
+	_, err := client.executeCommand(C.PubSubNumSub, args) // TODO: return result
+	if err != nil {
+		return nil, err
+	}
+
+	// NUMSUB returns a flat array of channel, count pairs
+	// flatArray := utils.ReadStringArray(result)
+	resultMap := make(map[string]int64)
+
+	// Process pairs of channel name and subscriber count
+	// for i := 0; i < len(flatArray); i += 2 {
+	// 	if i+1 < len(flatArray) {
+	// 		channel := flatArray[i]
+	// 		count, err := utils.StringToInt64(flatArray[i+1])
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 		resultMap[channel] = count
+	// 	}
+	// }
+
+	return resultMap, nil
 }

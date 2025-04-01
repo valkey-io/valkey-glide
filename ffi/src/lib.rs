@@ -126,6 +126,15 @@ pub type FailureCallback = unsafe extern "C" fn(
     error_type: RequestErrorType,
 ) -> ();
 
+/// PubSub callback that is called when a push notification is received.
+///
+/// The PubSub callback needs to handle the push notification synchronously, since the data will be dropped by Rust once the callback returns.
+/// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
+///
+/// `kind` is an integer representing the PushKind enum value (0=Disconnection, 1=Other, 2=Invalidate, 3=Message, etc.)
+/// `data_ptr` is a pointer to the CommandResponse containing the push data
+pub type PubSubCallback = unsafe extern "C" fn(kind: u32, data_ptr: *const CommandResponse) -> ();
+
 /// The connection response.
 ///
 /// It contains either a connection or an error. It is represented as a struct instead of a union for ease of use in the wrapper language.
@@ -375,7 +384,10 @@ impl ClientAdapter {
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
+    pubsub_callback: PubSubCallback,
 ) -> Result<ClientAdapter, String> {
+    let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
+
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
     // TODO: optimize this using multiple threads instead of a single worker thread (e.g. by pinning each go thread to a rust thread)
@@ -389,8 +401,74 @@ fn create_client_internal(
             errors::error_message(&redis_error)
         })?;
     let client = runtime
-        .block_on(GlideClient::new(ConnectionRequest::from(request), None))
+        .block_on(GlideClient::new(
+            ConnectionRequest::from(request),
+            Some(push_tx),
+        ))
         .map_err(|err| err.to_string())?;
+
+    // Create a raw function pointer to check if it's null
+    let callback_ptr = pubsub_callback as *const ();
+
+    // Only spawn the push notification handler if we have a callback
+    if !callback_ptr.is_null() {
+        runtime.spawn(async move {
+            loop {
+                let result = push_rx.recv().await;
+                match result {
+                    None => {
+                        //log_error("push manager loop", "got None from push manager");
+                        return;
+                    }
+                    Some(push_msg) => {
+                        //log_debug("push manager loop", format!("got PushInfo: {:?}", push_msg));
+
+                        // Convert the push_msg.data to a CommandResponse
+                        let data_response =
+                            match valkey_value_to_command_response(Value::Array(push_msg.data.clone()))
+                            {
+                                Ok(response) => response,
+                                Err(_e) => {
+                                    continue; // Skip this message if conversion fails
+                                }
+                            };
+
+                        // Get the numeric value of the PushKind enum
+                        let kind_value = match push_msg.kind {
+                            redis::PushKind::Disconnection => 0,
+                            redis::PushKind::Other(_) => 1,
+                            redis::PushKind::Invalidate => 2,
+                            redis::PushKind::Message => 3,
+                            redis::PushKind::PMessage => 4,
+                            redis::PushKind::SMessage => 5,
+                            redis::PushKind::Unsubscribe => 6,
+                            redis::PushKind::PUnsubscribe => 7,
+                            redis::PushKind::SUnsubscribe => 8,
+                            redis::PushKind::Subscribe => 9,
+                            redis::PushKind::PSubscribe => 10,
+                            redis::PushKind::SSubscribe => 11,
+                        };
+
+                        // Call the pubsub callback with the push notification data
+                        unsafe {
+                            pubsub_callback(kind_value, Box::into_raw(Box::new(data_response)));
+                        }
+                    }
+                }
+            }
+        });
+    } else {
+        // For null callback, we still need to handle the channel to prevent infinite queue growth
+        runtime.spawn(async move {
+            loop {
+                if push_rx.recv().await.is_none() {
+                    return;
+                }
+                // Simply drop the PushInfo
+            }
+        });
+    }
+
     let core = Arc::new(CommandExecutionCore {
         client,
         client_type,
@@ -420,11 +498,12 @@ pub unsafe extern "C" fn create_client(
     connection_request_bytes: *const u8,
     connection_request_len: usize,
     client_type: *const ClientType,
+    pubsub_callback: PubSubCallback,
 ) -> *const ConnectionResponse {
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
     let client_type = unsafe { &*client_type };
-    let response = match create_client_internal(request_bytes, client_type.clone()) {
+    let response = match create_client_internal(request_bytes, client_type.clone(), pubsub_callback) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
