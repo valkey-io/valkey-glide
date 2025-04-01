@@ -14,7 +14,7 @@ jobs:
             - name: check
               run: |
                   sysctl -a | egrep fin_timeout
-                  sysctl net.inet.tcp.fin_timeout=5000
+                  sudo sysctl net.inet.tcp.fin_timeout=5000
                   sysctl -a | egrep fin_timeout
 
     run-mac-14:
@@ -25,5 +25,5 @@ jobs:
             - name: check
               run: |
                   sysctl -a | egrep fin_timeout
-                  sysctl net.inet.tcp.fin_timeout=5000
+                  sudo sysctl net.inet.tcp.fin_timeout=5000
                   sysctl -a | egrep fin_timeout
