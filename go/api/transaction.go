@@ -83,75 +83,69 @@ func (client *baseClient) executeTransactionCommand(commands []Cmder) (*C.struct
 }
 
 func (client *baseClient) executeTransactionCommandWithRoute(
-	commands []Cmder,
+	cmds []Cmder,
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
 
+	if len(cmds) == 0 {
+		return nil, &errors.RequestError{Msg: "Transaction must contain at least one command"}
+	}
+
+	// Convert Go []Cmder to C.Cmder array
+	cCmders := make([]C.Cmder, len(cmds))
+	argPtrs := make([]*C.char, 0)
+
+	for i, cmd := range cmds {
+		// Convert command arguments to C strings
+		cArgs := make([]*C.char, len(cmd.Args()))
+		for j, arg := range cmd.Args() {
+			cArgs[j] = C.CString(arg)
+			argPtrs = append(argPtrs, cArgs[j]) // Keep track for cleanup
+		}
+
+		cCmders[i] = C.Cmder{
+			request_type: C.uint32_t(cmd.Name()),
+			args_count:   C.uintptr_t(len(cmd.Args())),
+			args:         (**C.char)(unsafe.Pointer(&cArgs[0])),
+		}
+	}
+
+	// Construct Transaction
+	transaction := C.Transaction{
+		cmd_count: C.uintptr_t(len(cmds)),
+		commands:  (*C.Cmder)(unsafe.Pointer(&cCmders[0])),
+	}
+
+	// Convert route to protobuf if provided
 	var routeBytesPtr *C.uchar = nil
-	var routeBytesCount C.uintptr_t = 0
+	var routeBytesCount C.size_t = 0
 	if route != nil {
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
-			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
+			return nil, fmt.Errorf("Failed to convert route to protobuf: %v", err)
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
 			return nil, err
 		}
 
-		routeBytesCount = C.uintptr_t(len(msg))
+		routeBytesCount = C.size_t(len(msg))
 		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
 	}
 
-	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
-	resultChannel := make(chan []payload, 1)
-	resultChannelPtr := unsafe.Pointer(&resultChannel)
+	// Call Rust FFI function with route parameter
+	resp := C.execute_transaction(client.coreClient, 0, &transaction, routeBytesPtr, routeBytesCount)
 
-	pinner := pinner{}
-	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
-	defer pinner.Unpin()
-
-	client.mu.Lock()
-	if client.coreClient == nil {
-		client.mu.Unlock()
-		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
+	// Free C strings
+	for _, ptr := range argPtrs {
+		C.free(unsafe.Pointer(ptr))
 	}
-	client.pending[resultChannelPtr] = struct{}{}
 
-	for _, cmd := range commands {
-		var cArgsPtr *C.uintptr_t = nil
-		var argLengthsPtr *C.ulong = nil
-		if len(cmd.Args()) > 0 {
-			cArgs, argLengths := toCStrings(cmd.Args())
-			cArgsPtr = &cArgs[0]
-			argLengthsPtr = &argLengths[0]
-		}
+	if resp == nil {
+		return nil, &errors.RequestError{Msg: "Transaction execution failed"}
+	}
 
-		C.command(
-			client.coreClient,
-			C.uintptr_t(pinnedChannelPtr),
-			uint32(cmd.Name()),
-			C.size_t(len(cmd.Args())),
-			cArgsPtr,
-			argLengthsPtr,
-			routeBytesPtr,
-			routeBytesCount,
-		)
-	}
-	client.mu.Unlock()
-	payload := <-resultChannel
-	fmt.Println("Done2", payload)
-	client.mu.Lock()
-	if client.pending != nil {
-		delete(client.pending, resultChannelPtr)
-	}
-	client.mu.Unlock()
-
-	if payload.error != nil {
-		return nil, payload.error
-	}
-	fmt.Println("payload1: ", payload.value)
-	return payload.value, nil
+	return resp, nil
 }
 
 // NewTransaction creates a Transaction by embedding the BaseClient

@@ -1087,3 +1087,72 @@ pub unsafe extern "C" fn update_connection_password(
             .await
     })
 }
+
+#[repr(C)]
+pub struct Cmder {
+    request_type: RequestType, // Equivalent to Go's C.RequestType
+    args_count: c_ulong,
+    args: *const *const c_char, // Array of C strings
+}
+
+#[repr(C)]
+pub struct Transaction {
+    cmd_count: c_ulong,
+    commands: *const Cmder,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn execute_transaction(
+    client_adapter_ptr: *const c_void,
+    channel: usize,
+    transaction: *const Transaction, // Receive transaction struct
+    route_bytes: *const u8,          // New: Route data
+    route_bytes_len: usize,
+) -> *mut CommandResult {
+    if transaction.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let client_adapter = unsafe {
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    let transaction = unsafe { &*transaction };
+    let mut pipeline = redis::Pipeline::with_capacity(transaction.cmd_count as usize);
+    pipeline.atomic();
+
+    for i in 0..transaction.cmd_count {
+        let cmder = unsafe { &*transaction.commands.add(i as usize) };
+
+        let mut cmd = cmder
+            .request_type
+            .get_command()
+            .expect("Invalid command type");
+
+        for j in 0..cmder.args_count {
+            let arg_ptr = unsafe { *cmder.args.add(j as usize) };
+            let arg_str = unsafe { CStr::from_ptr(arg_ptr) }
+                .to_str()
+                .expect("Invalid UTF-8");
+            cmd.arg(arg_str);
+        }
+
+        pipeline.add_command(cmd);
+    }
+
+    // Handle route parsing
+    let route = if !route_bytes.is_null() {
+        let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
+        Routes::parse_from_bytes(r_bytes).unwrap()
+    } else {
+        Routes::default()
+    };
+
+    let mut client = client_adapter.core.client.clone();
+    client_adapter.execute_command(channel, async move {
+        client
+            .send_transaction(&pipeline, Some(get_route(route, None)))
+            .await
+    })
+}
