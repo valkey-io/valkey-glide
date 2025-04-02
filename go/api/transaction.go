@@ -104,7 +104,7 @@ func (client *baseClient) executeTransactionCommandWithRoute(
 		}
 
 		cCmders[i] = C.Cmder{
-			request_type: C.uint32_t(cmd.Name()),
+			request_type: uint32(cmd.Name()),
 			args_count:   C.uintptr_t(len(cmd.Args())),
 			args:         (**C.char)(unsafe.Pointer(&cArgs[0])),
 		}
@@ -134,8 +134,9 @@ func (client *baseClient) executeTransactionCommandWithRoute(
 	}
 
 	// Call Rust FFI function with route parameter
+	fmt.Println("Before C.execute_transaction")
 	resp := C.execute_transaction(client.coreClient, 0, &transaction, routeBytesPtr, routeBytesCount)
-
+	fmt.Println("Before C.execute_transaction", resp)
 	// Free C strings
 	for _, ptr := range argPtrs {
 		C.free(unsafe.Pointer(ptr))
@@ -145,7 +146,7 @@ func (client *baseClient) executeTransactionCommandWithRoute(
 		return nil, &errors.RequestError{Msg: "Transaction execution failed"}
 	}
 
-	return resp, nil
+	return nil, nil
 }
 
 // NewTransaction creates a Transaction by embedding the BaseClient
