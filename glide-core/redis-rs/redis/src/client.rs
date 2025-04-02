@@ -563,6 +563,11 @@ impl Client {
             .await
             .map(|connection| connection.into_monitor())
     }
+
+    /// Updates the password in connection_info.
+    pub fn update_password(&mut self, password: Option<String>) {
+        self.connection_info.redis.password = password;
+    }
 }
 
 #[cfg(feature = "aio")]
