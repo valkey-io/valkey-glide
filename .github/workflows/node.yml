@@ -146,7 +146,8 @@ jobs:
                       node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
-                      netstat_output.txt
+                      **/netstat_output.txt
+                      ./netstat_output.txt
 
     lint-rust:
         timeout-minutes: 15
