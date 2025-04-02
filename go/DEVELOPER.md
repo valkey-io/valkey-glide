@@ -140,10 +140,7 @@ Before starting this step, make sure you've installed all software requirements.
 6. Install Go development tools with:
 
     ```bash
-    # For go1.22:
     make install-dev-tools
-    # For go1.20:
-    make install-dev-tools-go1.20
     ```
 
 ### Test
@@ -207,10 +204,7 @@ Development on the Go wrapper may involve changes in either the Go or Rust code.
 Run from the main `/go` folder
 
 ```bash
-# For go1.22:
 make install-dev-tools
-# For go1.22:
-make install-dev-tools-go1.22
 
 make lint
 ```

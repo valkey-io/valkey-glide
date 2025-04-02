@@ -110,7 +110,7 @@ jobs:
             - name: Install & build & test
               working-directory: go
               run: |
-                  make install-tools-go${{ matrix.go }} build
+                  make install-tools build
                   make -k unit-test integ-test
 
             - name: Run Example Tests
@@ -141,7 +141,7 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Set up Go ${{ matrix.go }}
+            - name: Set up Go
               uses: actions/setup-go@v5
               with:
                   go-version: "1.22"
@@ -216,7 +216,7 @@ jobs:
             - name: Install & build & test
               working-directory: go
               run: |
-                  make install-tools-go${{ matrix.go }} build
+                  make install-tools build
                   make -k unit-test integ-test
 
             - name: Upload test reports
@@ -245,13 +245,13 @@ jobs:
             - name: Set up Go
               uses: actions/setup-go@v5
               with:
-                  go-version: "1.20"
+                  go-version: "1.22"
                   cache-dependency-path: go/go.sum
 
             - name: Build and test
               working-directory: ./go
               run: |
-                  make install-tools-go1.20 build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
 
             - name: Upload test reports
               if: always()
