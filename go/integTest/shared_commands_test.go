@@ -595,6 +595,127 @@ func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 	})
 }
 
+func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}" + uuid.New().String()
+		key2 := "{key}" + uuid.New().String()
+
+		res, err := client.LCSLen(key1, key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res)
+
+		suite.verifyOK(client.Set(key1, "ohmytext"))
+		suite.verifyOK(client.Set(key2, "mynewtext"))
+
+		res, err = client.LCSLen(key1, key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(6), res)
+	})
+}
+
+func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		_, err := client.Set("{lcs}key1", "ohmytext")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.Set("{lcs}key2", "mynewtext")
+		assert.Nil(suite.T(), err)
+
+		opts := options.NewLCSIdxOptions()
+		lcsIdxResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), lcsIdxResult)
+
+		assert.Equal(suite.T(), int64(6), lcsIdxResult["len"])
+
+		matches := lcsIdxResult["matches"].([]any)
+		assert.Len(suite.T(), matches, 2)
+
+		expectedMatches := []interface{}{
+			[]interface{}{
+				[]interface{}{int64(4), int64(7)},
+				[]interface{}{int64(5), int64(8)},
+			},
+			[]interface{}{
+				[]interface{}{int64(2), int64(3)},
+				[]interface{}{int64(0), int64(1)},
+			},
+		}
+		assert.Equal(suite.T(), expectedMatches, matches)
+	})
+}
+
+func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		_, err := client.Set("{lcs}key1", "ohmytext")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.Set("{lcs}key2", "mynewtext")
+		assert.Nil(suite.T(), err)
+
+		opts := options.NewLCSIdxOptions()
+		minMatchLen := int64(4)
+		opts.SetMinMatchLen(minMatchLen)
+
+		lcsIdxMinMatchResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), lcsIdxMinMatchResult)
+
+		assert.Equal(suite.T(), int64(6), lcsIdxMinMatchResult["len"])
+
+		matches := lcsIdxMinMatchResult["matches"].([]any)
+		assert.Len(suite.T(), matches, 1)
+
+		expectedMatch := []any{
+			[]interface{}{int64(4), int64(7)},
+			[]interface{}{int64(5), int64(8)},
+		}
+		assert.Equal(suite.T(), expectedMatch, matches[0])
+	})
+}
+
+func (suite *GlideTestSuite) TestLCS_WithMatchLengthOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		_, err := client.Set("{lcs}key1", "ohmytext")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.Set("{lcs}key2", "mynewtext")
+		assert.Nil(suite.T(), err)
+
+		opts := options.NewLCSIdxOptions()
+		minMatchLen := int64(4)
+		opts.SetMinMatchLen(minMatchLen)
+		opts.SetWithMatchLen(true)
+
+		lcsIdxFullOptionsResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), lcsIdxFullOptionsResult)
+
+		assert.Equal(suite.T(), int64(6), lcsIdxFullOptionsResult["len"])
+
+		matches := lcsIdxFullOptionsResult["matches"].([]any)
+		assert.Len(suite.T(), matches, 1)
+
+		expectedMatch := []any{
+			[]interface{}{int64(4), int64(7)},
+			[]interface{}{int64(5), int64(8)},
+			int64(4),
+		}
+		assert.Equal(suite.T(), expectedMatch, matches[0])
+	})
+}
+
 func (suite *GlideTestSuite) TestGetDel_ExistingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
