@@ -1081,6 +1081,11 @@ func (client *GlideClusterClient) FunctionLoadWithRoute(
 //
 // See [valkey.io] for more details.
 //
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
 // Return value:
 //
 //	`OK`
@@ -1102,6 +1107,11 @@ func (client *GlideClusterClient) FunctionFlushWithRoute(route options.RouteOpti
 //
 // See [valkey.io] for more details.
 //
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
 // Return value:
 //
 //	`OK`
@@ -1122,6 +1132,11 @@ func (client *GlideClusterClient) FunctionFlushSyncWithRoute(route options.Route
 //	Valkey 7.0 and above.
 //
 // See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
 //
 // Return value:
 //
