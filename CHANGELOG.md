@@ -3,7 +3,8 @@
 #### Breaking Changes
 
 #### Fixes
-
+* Core: Fix update the update_connection_password feature to use the configured username 
+when using ACL. ([#3510](https://github.com/valkey-io/valkey-glide/pull/3510))
 * Go: Fix data race on the coreClient with `sync.Mutex` and a channel map ([#3292](https://github.com/valkey-io/valkey-glide/pull/3292))
 * Go: Fix channel passing from Go to Rust by using `runtime.Pinner` or `cgo.Handle` ([#3270](https://github.com/valkey-io/valkey-glide/pull/3270))
 
