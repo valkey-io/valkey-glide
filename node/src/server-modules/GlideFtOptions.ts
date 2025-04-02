@@ -2,8 +2,8 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { SortOrder } from "src/Commands";
 import { GlideRecord, GlideString } from "../BaseClient";
+import { SortOrder } from "../Commands";
 import { GlideFt } from "./GlideFt"; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 interface BaseField {
