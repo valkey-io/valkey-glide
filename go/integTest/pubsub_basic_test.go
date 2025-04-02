@@ -37,7 +37,7 @@ func (suite *PubSubTestSuite) TestBasicPubSubWithGlideClient() {
 
 	// Publish a message
 	testMessage := "hello world"
-	result, err := publisher.CustomCommand([]string{"PUBLISH", "test-channel", testMessage})
+	result, err := publisher.Publish(testMessage, "test-channel")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), result)
 
@@ -97,7 +97,7 @@ func (suite *PubSubTestSuite) TestMultipleSubscribersWithGlideClient() {
 	for i := 0; i < messageCount; i++ {
 		msg := fmt.Sprintf("Hello Subscribers - msg %d", i)
 
-		result1, err := publisher.CustomCommand([]string{"PUBLISH", "test-channel-multi", msg})
+		result1, err := publisher.Publish(msg, "test-channel-multi")
 		assert.Nil(suite.T(), err)
 		assert.NotNil(suite.T(), result1)
 		suite.T().Logf("Published message to channel")
@@ -193,7 +193,7 @@ func (suite *PubSubTestSuite) TestUnsubscribeWithGlideClient() {
 
 	// Publish a message and verify it's received
 	testMessage := "message before unsubscribe"
-	_, err := publisher.CustomCommand([]string{"PUBLISH", "test-channel-unsub", testMessage})
+	_, err := publisher.Publish(testMessage, "test-channel-unsub")
 	assert.Nil(suite.T(), err)
 
 	// Wait for the message to be received
@@ -214,7 +214,7 @@ func (suite *PubSubTestSuite) TestUnsubscribeWithGlideClient() {
 
 	// Publish another message
 	testMessage2 := "message after unsubscribe"
-	_, err = publisher.CustomCommand([]string{"PUBLISH", "test-channel-unsub", testMessage2})
+	_, err = publisher.Publish(testMessage2, "test-channel-unsub")
 	assert.Nil(suite.T(), err)
 
 	// Verify the message is not received (timeout expected)
@@ -251,14 +251,14 @@ func (suite *PubSubTestSuite) TestPatternSubscribeWithGlideClient() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Publish messages to channels matching the pattern
-	_, err := publisher.CustomCommand([]string{"PUBLISH", "test-pattern-1", "message to pattern 1"})
+	_, err := publisher.Publish("message to pattern 1", "test-pattern-1")
 	assert.Nil(suite.T(), err)
 
-	_, err = publisher.CustomCommand([]string{"PUBLISH", "test-pattern-2", "message to pattern 2"})
+	_, err = publisher.Publish("message to pattern 2", "test-pattern-2")
 	assert.Nil(suite.T(), err)
 
 	// Publish a message to a non-matching channel
-	_, err = publisher.CustomCommand([]string{"PUBLISH", "other-channel", "should not receive"})
+	_, err = publisher.Publish("should not receive", "other-channel")
 	assert.Nil(suite.T(), err)
 
 	// Wait for the expected messages or timeout
