@@ -15,6 +15,9 @@ const skippedListForExports: string[] = [
     "BaseClient",
     "convertFieldsAndValuesToHashDataType",
     "parseInfoResponse",
+    "command_request",
+    "connection_request",
+    "response",
 ];
 
 const glideRsKeyWords: string[] = [
