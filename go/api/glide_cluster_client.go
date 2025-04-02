@@ -1163,6 +1163,8 @@ func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(route options.Rout
 // Parameters:
 //
 //	function - The function name.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
 //
 // Return value:
 //
@@ -1204,6 +1206,8 @@ func (client *GlideClusterClient) FCallWithRoute(function string, route options.
 // Parameters:
 //
 //	function - The function name.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
 //
 // Return value:
 //
