@@ -2,9 +2,8 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { it } from "@jest/globals";
+import { describe, it } from "@jest/globals";
 import * as f from "fs/promises";
-import { describe } from "test";
 import * as ts from "typescript";
 import * as glideApi from "../"; //ESM convention,
 
