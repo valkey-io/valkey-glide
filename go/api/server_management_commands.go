@@ -33,4 +33,14 @@ type ServerManagementCommands interface {
 	FlushDB() (string, error)
 
 	FlushDBWithOptions(mode options.FlushMode) (string, error)
+
+	Lolwut() (string, error)
+
+	LolwutWithOptions(opts options.LolwutOptions) (string, error)
+
+	LastSave() (int64, error)
+
+	ConfigResetStat() (string, error)
+
+	ConfigRewrite() (string, error)
 }

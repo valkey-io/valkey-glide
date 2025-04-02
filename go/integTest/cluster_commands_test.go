@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
 
@@ -1098,4 +1099,323 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_ImmediateAuthWr
 	// Cleanup: Reset password
 	_, err = adminClient.CustomCommand([]string{"CONFIG", "SET", "requirepass", ""})
 	assert.NoError(suite.T(), err)
+}
+
+func (suite *GlideTestSuite) TestClusterLolwut() {
+	client := suite.defaultClusterClient()
+
+	result, err := client.Lolwut()
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+	assert.Contains(suite.T(), result, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+			Args:    &[]int{10, 20},
+		},
+		RouteOption: &options.RouteOption{Route: config.AllNodes},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.NoError(suite.T(), err)
+
+	assert.True(suite.T(), result.IsMultiValue())
+	multiValue := result.MultiValue()
+
+	for _, value := range multiValue {
+		assert.Contains(suite.T(), value, "Redis ver.")
+	}
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+		},
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.NoError(suite.T(), err)
+
+	assert.True(suite.T(), result.IsMultiValue())
+	multiValue := result.MultiValue()
+
+	for _, value := range multiValue {
+		assert.Contains(suite.T(), value, "Redis ver.")
+	}
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+		},
+		RouteOption: &options.RouteOption{Route: config.RandomRoute},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.NoError(suite.T(), err)
+
+	assert.True(suite.T(), result.IsSingleValue())
+	singleValue := result.SingleValue()
+	assert.Contains(suite.T(), singleValue, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestClientIdCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	response, err := client.ClientId()
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestClientIdWithOptionsCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// ClientId with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	response, err := client.ClientIdWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	response, err = client.ClientIdWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// default sections, multi node route
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	response, err = client.ClientIdWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsMultiValue())
+}
+
+func (suite *GlideTestSuite) TestLastSaveCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	response, err := client.LastSave()
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestLastSaveWithOptionCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	opts := options.RouteOption{Route: nil}
+	response, err := client.LastSaveWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestConfigResetStatCluster() {
+	client := suite.defaultClusterClient()
+
+	// ConfigResetStat with option or with multiple options without route
+	suite.verifyOK(client.ConfigResetStat())
+}
+
+func (suite *GlideTestSuite) TestConfigResetStatWithOptions() {
+	client := suite.defaultClusterClient()
+
+	// ConfigResetStat with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	suite.verifyOK(client.ConfigResetStatWithOptions(opts))
+
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigResetStatWithOptions(opts))
+
+	// default sections, multi node route
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigResetStatWithOptions(opts))
+}
+
+func (suite *GlideTestSuite) TestConfigSetGet() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	configParam := map[string]string{"timeout": "1000"}
+	suite.verifyOK(client.ConfigSet(configParam))
+	configGetParam := []string{"timeout"}
+	resp, err := client.ConfigGet(configGetParam)
+	assert.NoError(t, err)
+	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
+}
+
+func (suite *GlideTestSuite) TestConfigSetGetWithOptions() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	// ConfigResetStat with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	configParam := map[string]string{"timeout": "1000"}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	configGetParam := []string{"timeout"}
+	resp, err := client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
+
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	resp, err = client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
+
+	// default sections, multi node route
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	resp, err = client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.True(t, resp.IsMultiValue())
+	for _, messages := range resp.MultiValue() {
+		mapString := fmt.Sprint(messages)
+		assert.Contains(t, strings.ToLower(mapString), strings.ToLower("timeout"))
+	}
+}
+
+func (suite *GlideTestSuite) TestClientSetGetName() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	connectionName := "ConnectionName-" + uuid.NewString()
+	client.ClientSetName(connectionName)
+	response, err := client.ClientGetName()
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// ClientGetName with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	connectionName := "ConnectionName-" + uuid.NewString()
+	response, err := client.ClientSetNameWithOptions(connectionName, opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+	response, err = client.ClientGetNameWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// same sections with random route
+	connectionName = "ConnectionName-" + uuid.NewString()
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	response, err = client.ClientSetNameWithOptions(connectionName, opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+	response, err = client.ClientGetNameWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestConfigRewriteCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+	}
+	res, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range res.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	sections := []options.Section{options.Server}
+
+	// info with option or with multiple options without route
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: nil,
+	}
+	response, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range response.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+			break
+		}
+	}
+
+	// same sections with random route
+	opts = options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: &options.RouteOption{Route: config.RandomRoute},
+	}
+	response, err = client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	lines := strings.Split(response.SingleValue(), "\n")
+	var configFile string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "config_file:") {
+			configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+			break
+		}
+	}
+	if len(configFile) > 0 {
+		responseRewrite, err := client.ConfigRewrite()
+		assert.NoError(t, err)
+		assert.Equal(t, "OK", responseRewrite)
+	}
+
+	// default sections, multi node route
+	opts = options.ClusterInfoOptions{
+		InfoOptions: nil,
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	}
+	response, err = client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range response.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+			break
+		}
+	}
 }
