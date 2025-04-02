@@ -502,7 +502,7 @@ def create_servers(
             netstat_file = f"netstat_output.txt"
             with open(netstat_file, 'w') as f:
                 f.write(netstat_output)
-            logging.debug(f"Netstat output written to {netstat_file}")
+            logging.warn(f"Netstat output written to {netstat_file}")
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
                 f"See {node_folder}/server.log for more information"
