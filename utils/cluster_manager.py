@@ -499,7 +499,7 @@ def create_servers(
         if not wait_for_server(server, cluster_folder, tls):
             # Write netstat output to a file for debugging
             try:
-                netstat_output = subprocess.check_output(['netstat', '-nopat'], text=True)
+                netstat_output = subprocess.check_output(['netstat', '-npat'], text=True)
                 netstat_file = f"netstat_output.txt"
                 with open(netstat_file, 'w') as f:
                     f.write(netstat_output)
