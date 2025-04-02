@@ -34,66 +34,48 @@ internal class ResponseHandler
         return TraverseValue(value);
     }
 
-    private static object? TraverseValue(GlideValue value)
+    private static GlideString CreateString(GlideValue value)
     {
-#pragma warning disable IDE0022 // Use expression body for method
-        switch (value.Type)
-        {
-            case ValueType.Null: return null;
-            case ValueType.Int: return (long)value.Value;
-            case ValueType.Float: return (double)value.Value;
-            case ValueType.Bool: return value.Value != 0;
-            case ValueType.BulkString:
-            case ValueType.String:
-                {
-                    byte[] bytes = new byte[value.Size];
-                    Marshal.Copy(new IntPtr((long)value.Value), bytes, 0, (int)value.Size);
-                    return new GlideString(bytes);
-                }
-            case ValueType.Array:
-                {
-                    object?[] values = new object?[value.Size];
-                    IntPtr ptr = new((long)value.Value);
-                    for (int i = 0; i < values.Length; i++)
-                    {
-                        values[i] = HandleResponse(ptr);
-                        ptr += Marshal.SizeOf<GlideValue>();
-                    }
-
-                    return values;
-                }
-            case ValueType.Map:
-                {
-                    object?[] values = new object?[value.Size];
-                    IntPtr ptr = new((long)value.Value);
-                    for (int i = 0; i < values.Length; i++)
-                    {
-                        values[i] = HandleResponse(ptr);
-                        ptr += Marshal.SizeOf<GlideValue>();
-                    }
-
-                    Dictionary<GlideString, object?> res = [];
-                    for (int i = 0; i < values.Length; i += 2)
-                    {
-                        res[(GlideString)values[i]!] = values[i + 1];
-                    }
-                    return res;
-                }
-            case ValueType.Set:
-                {
-                    object?[] values = new object?[value.Size];
-                    IntPtr ptr = new((long)value.Value);
-                    for (int i = 0; i < values.Length; i++)
-                    {
-                        values[i] = HandleResponse(ptr);
-                        ptr += Marshal.SizeOf<GlideValue>();
-                    }
-                    return values.ToHashSet();
-                }
-            case ValueType.OK: return new GlideString("OK");
-            default:
-                throw new NotImplementedException();
-        }
-#pragma warning restore IDE0022 // Use expression body for method
+        byte[] bytes = new byte[value.Size];
+        Marshal.Copy(new IntPtr((long)value.Value), bytes, 0, (int)value.Size);
+        return new GlideString(bytes);
     }
+
+    private static object?[] CreateArray(GlideValue value)
+    {
+        object?[] values = new object?[value.Size];
+        IntPtr ptr = new((long)value.Value);
+        for (int i = 0; i < values.Length; i++)
+        {
+            values[i] = HandleResponse(ptr);
+            ptr += Marshal.SizeOf<GlideValue>();
+        }
+
+        return values;
+    }
+
+    private static Dictionary<GlideString, object?> CreateMap(GlideValue value)
+    {
+        object?[] values = CreateArray(value);
+        Dictionary<GlideString, object?> res = [];
+        for (int i = 0; i < values.Length; i += 2)
+        {
+            res[(GlideString)values[i]!] = values[i + 1];
+        }
+        return res;
+    }
+
+    private static object? TraverseValue(GlideValue value) => value.Type switch
+    {
+        ValueType.Null => null,
+        ValueType.Int => (long)value.Value,
+        ValueType.Float => (double)value.Value,
+        ValueType.Bool => value.Value != 0,
+        ValueType.BulkString or ValueType.String => CreateString(value),
+        ValueType.Array => CreateArray(value),
+        ValueType.Map => CreateMap(value),
+        ValueType.Set => CreateArray(value).ToHashSet(),
+        ValueType.OK => new GlideString("OK"),
+        _ => throw new NotImplementedException(),
+    };
 }

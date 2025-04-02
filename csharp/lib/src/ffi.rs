@@ -322,7 +322,7 @@ pub(crate) fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*const T, usize) {
     vec.shrink_to_fit();
     let vec_ptr = vec.as_ptr();
     let len = vec.len();
-    let _ = Box::into_raw(Box::new(vec));
+    std::mem::forget(vec);
     (vec_ptr, len)
 }
 
@@ -459,7 +459,7 @@ impl ResponseValue {
                     )
                 };
                 for val in vec {
-                    val.free_memory();
+                    unsafe { val.free_memory() };
                 }
             }
             ValueType::String | ValueType::BulkString => {
