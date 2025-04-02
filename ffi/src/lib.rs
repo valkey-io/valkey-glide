@@ -15,10 +15,10 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::ObjectType;
 use redis::ScanStateRC;
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, RedisResult, Value};
+use redis::{ObjectType, PushInfo};
 use std::ffi::CStr;
 use std::future::Future;
 use std::slice::from_raw_parts;
@@ -31,6 +31,7 @@ use std::{
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
+use tokio::sync::mpsc::UnboundedSender;
 
 /// The struct represents the response of the command.
 ///
@@ -131,9 +132,14 @@ pub type FailureCallback = unsafe extern "C" fn(
 /// The PubSub callback needs to handle the push notification synchronously, since the data will be dropped by Rust once the callback returns.
 /// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
 ///
+/// `client_ptr` is a pointer to the client that the push message is intended for.
 /// `kind` is an integer representing the PushKind enum value (0=Disconnection, 1=Other, 2=Invalidate, 3=Message, etc.)
 /// `data_ptr` is a pointer to the CommandResponse containing the push data
-pub type PubSubCallback = unsafe extern "C" fn(kind: u32, data_ptr: *const CommandResponse) -> ();
+pub type PubSubCallback = unsafe extern "C" fn(
+    client_ptr: *const c_void,
+    kind: u32,
+    data_ptr: *const CommandResponse,
+) -> ();
 
 /// The connection response.
 ///
@@ -252,8 +258,9 @@ pub enum ClientType {
 }
 
 /// A `GlideClient` adapter.
+#[derive(Clone)]
 pub struct ClientAdapter {
-    runtime: Runtime,
+    runtime: Arc<Runtime>,
     core: Arc<CommandExecutionCore>,
 }
 
@@ -384,10 +391,8 @@ impl ClientAdapter {
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
-    pubsub_callback: PubSubCallback,
+    push_tx: UnboundedSender<PushInfo>,
 ) -> Result<ClientAdapter, String> {
-    let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
-
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
     // TODO: optimize this using multiple threads instead of a single worker thread (e.g. by pinning each go thread to a rust thread)
@@ -400,6 +405,10 @@ fn create_client_internal(
             let redis_error = err.into();
             errors::error_message(&redis_error)
         })?;
+
+    // Wrap the runtime in an Arc so it can be shared
+    let runtime = Arc::new(runtime);
+
     let client = runtime
         .block_on(GlideClient::new(
             ConnectionRequest::from(request),
@@ -407,73 +416,54 @@ fn create_client_internal(
         ))
         .map_err(|err| err.to_string())?;
 
-    // Create a raw function pointer to check if it's null
-    let callback_ptr = pubsub_callback as *const ();
+    // Create the client adapter that will be returned and used as conn_ptr
+    let core = Arc::new(CommandExecutionCore {
+        client: client.clone(),
+        client_type: client_type.clone(),
+    });
+    let client_adapter = ClientAdapter {
+        runtime: runtime.clone(),
+        core,
+    };
 
     // Only spawn the push notification handler if we have a callback
-    if !callback_ptr.is_null() {
-        runtime.spawn(async move {
-            loop {
-                let result = push_rx.recv().await;
-                match result {
-                    None => {
-                        //log_error("push manager loop", "got None from push manager");
-                        return;
-                    }
-                    Some(push_msg) => {
-                        //log_debug("push manager loop", format!("got PushInfo: {:?}", push_msg));
+    // if !callback_ptr.is_null() {
+    //     // CRITICAL: First create the actual client Arc that will be returned as conn_ptr
+    //     let client_arc = Arc::new(client_adapter);
+    //     // Get a pointer to this client that will be returned to the caller
+    //     let client_ptr = Arc::into_raw(client_arc.clone()) as *const c_void;
+    //     // Create an atomic reference to this pointer for the pubsub handler
+    //     let atomic_client_ptr = Arc::new(AtomicPtr::new(client_ptr as *mut c_void));
 
-                        // Convert the push_msg.data to a CommandResponse
-                        let data_response =
-                            match valkey_value_to_command_response(Value::Array(push_msg.data.clone()))
-                            {
-                                Ok(response) => response,
-                                Err(_e) => {
-                                    continue; // Skip this message if conversion fails
-                                }
-                            };
+    //     // Clone for the runtime
+    //     let runtime_clone = runtime.clone();
 
-                        // Get the numeric value of the PushKind enum
-                        let kind_value = match push_msg.kind {
-                            redis::PushKind::Disconnection => 0,
-                            redis::PushKind::Other(_) => 1,
-                            redis::PushKind::Invalidate => 2,
-                            redis::PushKind::Message => 3,
-                            redis::PushKind::PMessage => 4,
-                            redis::PushKind::SMessage => 5,
-                            redis::PushKind::Unsubscribe => 6,
-                            redis::PushKind::PUnsubscribe => 7,
-                            redis::PushKind::SUnsubscribe => 8,
-                            redis::PushKind::Subscribe => 9,
-                            redis::PushKind::PSubscribe => 10,
-                            redis::PushKind::SSubscribe => 11,
-                        };
+    //     // Return the already created client adapter
+    //     // We need to get the raw client adapter from the Arc without dropping it
+    //     unsafe {
+    //         let client_adapter_ptr = Arc::into_raw(client_arc);
+    //         // Get a clone without creating a new pointer
+    //         let client_adapter_clone = (*client_adapter_ptr).clone();
+    //         // Put the Arc back so we don't leak memory
+    //         let _ = Arc::from_raw(client_adapter_ptr);
+    //         Ok(client_adapter_clone)
+    //     }
+    // } else {
+    //     // For null callback, we still need to handle the channel to prevent infinite queue growth
+    //     runtime.spawn(async move {
+    //         loop {
+    //             if push_rx.recv().await.is_none() {
+    //                 return;
+    //             }
+    //             // Simply drop the PushInfo
+    //         }
+    //     });
 
-                        // Call the pubsub callback with the push notification data
-                        unsafe {
-                            pubsub_callback(kind_value, Box::into_raw(Box::new(data_response)));
-                        }
-                    }
-                }
-            }
-        });
-    } else {
-        // For null callback, we still need to handle the channel to prevent infinite queue growth
-        runtime.spawn(async move {
-            loop {
-                if push_rx.recv().await.is_none() {
-                    return;
-                }
-                // Simply drop the PushInfo
-            }
-        });
-    }
+    // Regular path when no pubsub callback is needed
+    // Ok(client_adapter)
+    // }
 
-    let core = Arc::new(CommandExecutionCore {
-        client,
-        client_type,
-    });
-    Ok(ClientAdapter { runtime, core })
+    Ok(client_adapter)
 }
 
 /// Creates a new `ClientAdapter` with a new `GlideClient` configured using a Protobuf `ConnectionRequest`.
@@ -500,20 +490,76 @@ pub unsafe extern "C" fn create_client(
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
 ) -> *const ConnectionResponse {
+    let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
+
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
     let client_type = unsafe { &*client_type };
-    let response = match create_client_internal(request_bytes, client_type.clone(), pubsub_callback) {
+    let response = match create_client_internal(request_bytes, client_type.clone(), push_tx) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
                 CString::new(err).expect("Couldn't convert error message to CString"),
             ),
         },
-        Ok(client) => ConnectionResponse {
-            conn_ptr: Arc::into_raw(Arc::new(client)) as *const c_void,
-            connection_error_message: std::ptr::null(),
-        },
+        Ok(client) => {
+            let client_ptr = Arc::into_raw(Arc::new(client.clone())) as *const c_void;
+
+            client.runtime.spawn(async move {
+                loop {
+                    let result = push_rx.recv().await;
+                    match result {
+                        None => {
+                            //log_error("push manager loop", "got None from push manager");
+                            return;
+                        }
+                        Some(push_msg) => {
+                            //log_debug("push manager loop", format!("got PushInfo: {:?}", push_msg));
+
+                            // Convert the push_msg.data to a CommandResponse
+                            let data_response = match valkey_value_to_command_response(
+                                Value::Array(push_msg.data.clone()),
+                            ) {
+                                Ok(response) => response,
+                                Err(_e) => {
+                                    continue; // Skip this message if conversion fails
+                                }
+                            };
+
+                            // Get the numeric value of the PushKind enum
+                            let kind_value = match push_msg.kind {
+                                redis::PushKind::Disconnection => 0,
+                                redis::PushKind::Other(_) => 1,
+                                redis::PushKind::Invalidate => 2,
+                                redis::PushKind::Message => 3,
+                                redis::PushKind::PMessage => 4,
+                                redis::PushKind::SMessage => 5,
+                                redis::PushKind::Unsubscribe => 6,
+                                redis::PushKind::PUnsubscribe => 7,
+                                redis::PushKind::SUnsubscribe => 8,
+                                redis::PushKind::Subscribe => 9,
+                                redis::PushKind::PSubscribe => 10,
+                                redis::PushKind::SSubscribe => 11,
+                            };
+
+                            // Call the pubsub callback with the push notification data
+                            unsafe {
+                                pubsub_callback(
+                                    Arc::into_raw(client_arc) as *const c_void,
+                                    kind_value,
+                                    Box::into_raw(Box::new(data_response)),
+                                );
+                            }
+                        }
+                    }
+                }
+            });
+
+            ConnectionResponse {
+                conn_ptr: client_ptr,
+                connection_error_message: std::ptr::null(),
+            }
+        }
     };
     Box::into_raw(Box::new(response))
 }
