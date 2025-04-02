@@ -14,7 +14,7 @@ package api
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
 // void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
-// void pubSubCallback(uint32_t kind, struct CommandResponse *message);
+// void pubSubCallback(void *clientPtr, uint32_t kind, struct CommandResponse *message);
 import "C"
 
 import (
@@ -47,6 +47,7 @@ type BaseClient interface {
 	GeoSpatialCommands
 	ScriptingAndFunctionBaseCommands
 	PubSubCommands
+	PubSubFramework
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -87,25 +88,50 @@ func GetDispatcher() *MessageDispatcher {
 	return globalDispatcher
 }
 
+// Registry to track clients by their pointer address
+var (
+	clientRegistry   = make(map[uintptr]*baseClient)
+	clientRegistryMu sync.RWMutex
+)
+
+// RegisterClient registers a client in the registry using its pointer value
+func RegisterClient(client *baseClient, ptrValue uintptr) {
+	clientRegistryMu.Lock()
+	defer clientRegistryMu.Unlock()
+	clientRegistry[ptrValue] = client
+}
+
+// UnregisterClient removes a client from the registry
+func UnregisterClient(ptrValue uintptr) {
+	clientRegistryMu.Lock()
+	defer clientRegistryMu.Unlock()
+	delete(clientRegistry, ptrValue)
+}
+
+// GetClientByPtr gets a client from the registry by its pointer value
+func GetClientByPtr(ptrValue uintptr) *baseClient {
+	clientRegistryMu.RLock()
+	defer clientRegistryMu.RUnlock()
+	return clientRegistry[ptrValue]
+}
+
 //export pubSubCallback
-func pubSubCallback(kind C.uint32_t, cResponse *C.struct_CommandResponse) {
+func pubSubCallback(clientPtr unsafe.Pointer, kind C.uint32_t, cResponse *C.struct_CommandResponse) {
 	defer C.free_command_response(cResponse)
-
-	// Convert kind directly to PushKind enum value
-	pushKind := PushKind(kind)
-
-	// fmt.Printf("Pubsub Callback: %s\n", pushKind)
 
 	// TODO: Refactor this out
 	// Extract values from the CommandResponse
 	arrayValues, err := processCommandResponseArray(cResponse)
 	if err != nil {
+		fmt.Printf("Error processing pubsub notification: %v\n", err)
 		return
 	}
 
-	// Convert the array values directly to a PubSubMessage based on the kind
+	// Convert the kind to a PubSub event type
+	pushKind := PushKind(kind)
 	var message *PubSubMessage
 
+	// Process different types of push messages
 	switch pushKind {
 	case Message, SMessage:
 		if len(arrayValues) < 2 {
@@ -166,14 +192,31 @@ func pubSubCallback(kind C.uint32_t, cResponse *C.struct_CommandResponse) {
 	}
 
 	// Create a PushInfo struct with the message
-	pushMsg := PushInfo{
-		Kind:    pushKind,
-		Message: message,
-	}
 
 	// Get the global message dispatcher and route the message
-	dispatcher := GetDispatcher()
-	dispatcher.DispatchMessage(pushMsg)
+	// dispatcher := GetDispatcher()
+	// dispatcher.DispatchMessage(pushMsg)
+
+	// Instead of using global dispatcher, use the client pointer
+	if clientPtr != nil {
+		// Look up the client in our registry using the pointer address
+		ptrValue := uintptr(clientPtr)
+		client := GetClientByPtr(ptrValue)
+
+		if client != nil {
+			// If the client has a message handler, use it
+			if handler := client.GetMessageHandler(); handler != nil {
+				// Create PushInfo and pass it to the handler
+				pushMsg := PushInfo{
+					Kind:    pushKind,
+					Message: message,
+				}
+				handler.Handle(pushMsg)
+			}
+		} else {
+			fmt.Printf("Client not found for pointer: %v\n", ptrValue)
+		}
+	}
 }
 
 // Helper function to process a CommandResponse array into a Go slice
@@ -323,7 +366,6 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, &errors.ClosingError{Msg: err.Error()}
 	}
-
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
 			(*C.uchar)(requestBytes),
@@ -333,14 +375,20 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 		),
 	)
 	defer C.free_connection_response(cResponse)
-
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
 		return nil, &errors.ConnectionError{Msg: message}
 	}
 
-	return &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}, nil
+	client := &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}
+
+	// Register the client in our registry using the pointer value from C
+	RegisterClient(client, uintptr(cResponse.conn_ptr))
+
+	fmt.Printf("Client created successfully: %p - %p\n", &client, client.coreClient)
+
+	return client, nil
 }
 
 // Close terminates the client by closing all associated resources.
@@ -358,6 +406,8 @@ func (client *baseClient) Close() {
 	if client.coreClient == nil {
 		return
 	}
+
+	UnregisterClient(uintptr(client.coreClient))
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
