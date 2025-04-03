@@ -90,7 +90,7 @@ fn chars_to_string_option(chars: &::protobuf::Chars) -> Option<String> {
 }
 
 #[cfg(feature = "proto")]
-fn none_if_zero(value: u32) -> Option<u32> {
+pub(crate) fn none_if_zero(value: u32) -> Option<u32> {
     if value == 0 {
         None
     } else {
