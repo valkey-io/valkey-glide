@@ -818,6 +818,84 @@ impl TestClusterContext {
         destination_route
     }
 
+    /// Migrates a specific slot from its current node to a new destination node in the cluster.
+    ///
+    /// This function identifies the current owner of the slot, selects a new node as the destination,
+    /// and updates the slot state accordingly by setting it to `MIGRATING` on the source node
+    /// and `IMPORTING` on the destination node.
+    ///
+    /// This is helpful for testing `ASK` error.
+    pub async fn migrate_slot(
+        &self,
+        slot_to_migrate: u16,
+        slot_distribution: Vec<(String, String, String, Vec<Vec<u16>>)>,
+    ) -> String {
+        let mut cluster_conn = self.async_connection(None).await;
+
+        // Identify the current node responsible for the slot.
+        let current_node = slot_distribution
+            .iter()
+            .find(|&(_, _, _, slots)| {
+                slots.iter().any(|slot_range| {
+                    slot_range[0] <= slot_to_migrate && slot_to_migrate <= slot_range[1]
+                })
+            })
+            .expect("No node found owning the given slot");
+
+        let current_node_id = &current_node.0;
+        let current_host = &current_node.1;
+        let current_port: u16 = current_node.2.parse().expect("Invalid port format");
+
+        // Select a different node as the destination.
+        let destination_node = slot_distribution
+            .iter()
+            .find(|node| node.0 != *current_node_id)
+            .expect("No destination node found in the distribution");
+
+        let dest_port: u16 = destination_node.2.parse().expect("Invalid port format");
+        let dest_host = destination_node.1.clone();
+        let dest_node_id = &destination_node.0;
+
+        // Set slot to MIGRATING on the source node.
+        let mut migrating_cmd = cmd("CLUSTER");
+        migrating_cmd
+            .arg("SETSLOT")
+            .arg(slot_to_migrate)
+            .arg("MIGRATING")
+            .arg(dest_node_id.clone());
+
+        let current_route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+            host: current_host.clone(),
+            port: current_port,
+        });
+
+        if let Err(e) = cluster_conn
+            .route_command(&migrating_cmd, current_route)
+            .await
+        {
+            panic!("Failed to set slot to MIGRATING: {}", e);
+        }
+
+        // Set slot to IMPORTING on the destination node.
+        let mut importing_cmd = cmd("CLUSTER");
+        importing_cmd
+            .arg("SETSLOT")
+            .arg(slot_to_migrate)
+            .arg("IMPORTING")
+            .arg(current_node_id.clone());
+
+        let dest_route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+            host: dest_host.clone(),
+            port: dest_port,
+        });
+
+        if let Err(e) = cluster_conn.route_command(&importing_cmd, dest_route).await {
+            panic!("Failed to set slot to IMPORTING: {}", e);
+        }
+
+        dest_node_id.to_string()
+    }
+
     pub async fn get_masters(&self, cluster_nodes: &str) -> Vec<Vec<String>> {
         let mut masters = vec![];
         for line in cluster_nodes.lines() {
