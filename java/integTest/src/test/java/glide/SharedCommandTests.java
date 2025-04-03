@@ -14762,6 +14762,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    @Timeout(20)
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -14853,8 +14854,13 @@ public class SharedCommandTests {
         final Set<Object> secondResultAllKeys = new HashSet<>();
         final Set<Object> secondResultAllValues = new HashSet<>();
         boolean isFirstLoop = true;
+        int count = 0;
         do {
-            System.out.println("Result: " + resultCursor);
+            // Print result and unix time
+            count++;
+            client.set("We are on iteration: ", Integer.toString(count)).get();
+            long unixTime = System.currentTimeMillis() / 1000L;
+            //            System.out.println(unixTime + ": result: " + resultCursor);
             client.set("i am setting invalid key: first zscan", "val").get();
             client.set("line number:", "14859").get();
             client.set("current cursor:", resultCursor.toString()).get();
@@ -14877,6 +14883,10 @@ public class SharedCommandTests {
             client.set("i am setting invalid key: second zscan", "val").get();
             client.set("line number:", "14877").get();
             client.set("current cursor:", resultCursor.toString()).get();
+
+            unixTime = System.currentTimeMillis() / 1000L;
+            //            System.out.println(unixTime + ": result: " + resultCursor);
+
             Object[] secondResult = client.zscan(key1, resultCursor).get();
             GlideString newResultCursor = gs(secondResult[resultCursorIndex].toString());
             assertNotEquals(resultCursor, newResultCursor);

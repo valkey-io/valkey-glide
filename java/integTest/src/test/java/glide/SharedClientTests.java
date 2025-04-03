@@ -151,7 +151,7 @@ public class SharedClientTests {
         BaseClient testClient;
         String keyName = "nonexistkeylist" + RandomString.make(4);
 
-        if (!clusterMode) {
+        if (clusterMode) {
             testClient =
                     GlideClient.createClient(
                                     commonClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
@@ -164,9 +164,10 @@ public class SharedClientTests {
         }
 
         // exercise
+        System.out.println("I'm using timeout of 0");
         List<CompletableFuture<String[]>> responses = new ArrayList<>();
         for (int i = 0; i < inflightRequestsLimit + 1; i++) {
-            responses.add(testClient.blpop(new String[] {keyName}, 5));
+            responses.add(testClient.blpop(new String[] {keyName}, 0));
         }
 
         // verify
@@ -184,10 +185,26 @@ public class SharedClientTests {
             assertTrue(e.getCause().getMessage().contains("maximum inflight requests"));
         }
 
+        BaseClient cleanupClient;
+        if (clusterMode) {
+            cleanupClient =
+                    GlideClient.createClient(
+                                    commonClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
+                            .get();
+        } else {
+            cleanupClient =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
+                            .get();
+        }
+
+        for (int i = 0; i < inflightRequestsLimit; i++) {
+            cleanupClient.lpush(keyName, new String[] {"val"}).get();
+        }
+
+        cleanupClient.close();
         testClient.close();
 
-        // Allow time for cleanup and restore log level.\
-        Thread.sleep(1000);
         Logger.setLoggerConfig(originalValue);
     }
 }
