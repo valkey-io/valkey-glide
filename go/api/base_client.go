@@ -54,6 +54,12 @@ type BaseClient interface {
 
 const OK = "OK"
 
+// Registry to track clients by their pointer address
+var (
+	clientRegistry   = make(map[uintptr]*baseClient)
+	clientRegistryMu sync.RWMutex
+)
+
 type payload struct {
 	value *C.struct_CommandResponse
 	error error
@@ -73,12 +79,6 @@ func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorTyp
 	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
 	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
 }
-
-// Registry to track clients by their pointer address
-var (
-	clientRegistry   = make(map[uintptr]*baseClient)
-	clientRegistryMu sync.RWMutex
-)
 
 // RegisterClient registers a client in the registry using its pointer value
 func RegisterClient(client *baseClient, ptrValue uintptr) {
