@@ -940,6 +940,74 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	return handleStringResponse(result)
 }
 
+// Returns the longest common subsequence between strings stored at key1 and key2.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// Note:
+//
+//	When in cluster mode, `key1` and `key2` must map to the same hash slot.
+//
+// Parameters:
+//
+//	key1 - The key that stores the first string.
+//	key2 - The key that stores the second string.
+//
+// Return value:
+//
+//	The total length of all the longest common subsequences the 2 strings.
+//
+// [valkey.io]: https://valkey.io/commands/lcs/
+func (client *baseClient) LCSLen(key1, key2 string) (int64, error) {
+	result, err := client.executeCommand(C.LCS, []string{key1, key2, options.LCSLenCommand})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// Returns the longest common subsequence between strings stored at key1 and key2.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// Note:
+//
+//	When in cluster mode, `key1` and `key2` must map to the same hash slot.
+//
+// Parameters:
+//
+//	key1 - The key that stores the first string.
+//	key2 - The key that stores the second string.
+//	opts - The [LCSIdxOptions] type.
+//
+// Return value:
+//
+//	A Map containing the indices of the longest common subsequence between the 2 strings
+//	and the total length of all the longest common subsequences. The resulting map contains
+//	two keys, "matches" and "len":
+//	  - "len" is mapped to the total length of the all longest common subsequences between
+//	     the 2 strings.
+//	  - "matches" is mapped to a array that stores pairs of indices that represent the location
+//	     of the common subsequences in the strings held by key1 and key2.
+//
+// [valkey.io]: https://valkey.io/commands/lcs/
+func (client *baseClient) LCSWithOptions(key1, key2 string, opts options.LCSIdxOptions) (map[string]interface{}, error) {
+	optArgs, err := opts.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	response, err := client.executeCommand(C.LCS, append([]string{key1, key2}, optArgs...))
+	if err != nil {
+		return nil, err
+	}
+	return handleStringToAnyMapResponse(response)
+}
+
 // GetDel gets the value associated with the given key and deletes the key.
 //
 // Parameters:
