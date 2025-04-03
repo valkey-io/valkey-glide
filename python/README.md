@@ -14,7 +14,7 @@ The release of Valkey GLIDE was tested on the following platforms:
 
 Linux:
 
--   Ubuntu 24.04.1 (x86_64 and aarch64)
+-   Ubuntu 22.04.1 (x86_64 and aarch64)
 -   Amazon Linux 2023 (AL2023) (x86_64)
 
 macOS:
