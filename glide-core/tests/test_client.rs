@@ -23,7 +23,6 @@ macro_rules! async_assert_eq {
 #[cfg(test)]
 pub(crate) mod shared_client_tests {
     use glide_core::Telemetry;
-    use redis::cluster_async::PipelineRetryStrategy;
     use redis::{cluster_topology::get_slot, cmd};
     use std::collections::HashMap;
 
@@ -32,7 +31,7 @@ pub(crate) mod shared_client_tests {
     use redis::cluster_routing::{SingleNodeRoutingInfo, SlotAddr};
     use redis::{
         cluster_routing::{MultipleNodeRoutingInfo, Route, RoutingInfo},
-        FromRedisValue, InfoDict, Pipeline, RedisConnectionInfo, Value,
+        FromRedisValue, InfoDict, Pipeline, PipelineRetryStrategy, RedisConnectionInfo, Value,
     };
     use rstest::rstest;
     use utilities::cluster::*;
