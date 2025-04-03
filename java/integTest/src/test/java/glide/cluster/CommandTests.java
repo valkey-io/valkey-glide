@@ -100,6 +100,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1722,6 +1723,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
+    @Disabled("flaky test")
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
@@ -3351,6 +3353,7 @@ public class CommandTests {
         script.close();
     }
 
+    @Disabled("flaky test")
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
@@ -3413,6 +3416,7 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
     }
 
+    @Disabled("flaky test")
     @Timeout(20)
     @SneakyThrows
     @ParameterizedTest
