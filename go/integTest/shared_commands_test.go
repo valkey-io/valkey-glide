@@ -595,6 +595,127 @@ func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 	})
 }
 
+func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}" + uuid.New().String()
+		key2 := "{key}" + uuid.New().String()
+
+		res, err := client.LCSLen(key1, key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res)
+
+		suite.verifyOK(client.Set(key1, "ohmytext"))
+		suite.verifyOK(client.Set(key2, "mynewtext"))
+
+		res, err = client.LCSLen(key1, key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(6), res)
+	})
+}
+
+func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		_, err := client.Set("{lcs}key1", "ohmytext")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.Set("{lcs}key2", "mynewtext")
+		assert.Nil(suite.T(), err)
+
+		opts := options.NewLCSIdxOptions()
+		lcsIdxResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), lcsIdxResult)
+
+		assert.Equal(suite.T(), int64(6), lcsIdxResult["len"])
+
+		matches := lcsIdxResult["matches"].([]any)
+		assert.Len(suite.T(), matches, 2)
+
+		expectedMatches := []interface{}{
+			[]interface{}{
+				[]interface{}{int64(4), int64(7)},
+				[]interface{}{int64(5), int64(8)},
+			},
+			[]interface{}{
+				[]interface{}{int64(2), int64(3)},
+				[]interface{}{int64(0), int64(1)},
+			},
+		}
+		assert.Equal(suite.T(), expectedMatches, matches)
+	})
+}
+
+func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		_, err := client.Set("{lcs}key1", "ohmytext")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.Set("{lcs}key2", "mynewtext")
+		assert.Nil(suite.T(), err)
+
+		opts := options.NewLCSIdxOptions()
+		minMatchLen := int64(4)
+		opts.SetMinMatchLen(minMatchLen)
+
+		lcsIdxMinMatchResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), lcsIdxMinMatchResult)
+
+		assert.Equal(suite.T(), int64(6), lcsIdxMinMatchResult["len"])
+
+		matches := lcsIdxMinMatchResult["matches"].([]any)
+		assert.Len(suite.T(), matches, 1)
+
+		expectedMatch := []any{
+			[]interface{}{int64(4), int64(7)},
+			[]interface{}{int64(5), int64(8)},
+		}
+		assert.Equal(suite.T(), expectedMatch, matches[0])
+	})
+}
+
+func (suite *GlideTestSuite) TestLCS_WithMatchLengthOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		_, err := client.Set("{lcs}key1", "ohmytext")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.Set("{lcs}key2", "mynewtext")
+		assert.Nil(suite.T(), err)
+
+		opts := options.NewLCSIdxOptions()
+		minMatchLen := int64(4)
+		opts.SetMinMatchLen(minMatchLen)
+		opts.SetWithMatchLen(true)
+
+		lcsIdxFullOptionsResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), lcsIdxFullOptionsResult)
+
+		assert.Equal(suite.T(), int64(6), lcsIdxFullOptionsResult["len"])
+
+		matches := lcsIdxFullOptionsResult["matches"].([]any)
+		assert.Len(suite.T(), matches, 1)
+
+		expectedMatch := []any{
+			[]interface{}{int64(4), int64(7)},
+			[]interface{}{int64(5), int64(8)},
+			int64(4),
+		}
+		assert.Equal(suite.T(), expectedMatch, matches[0])
+	})
+}
+
 func (suite *GlideTestSuite) TestGetDel_ExistingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
@@ -3816,6 +3937,64 @@ func (suite *GlideTestSuite) TestPfCount_NoExistingKeys() {
 		resCount, err := client.PfCount([]string{key1, key2})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), resCount)
+	})
+}
+
+func (suite *GlideTestSuite) TestPfMerge() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		source1 := uuid.New().String() + "{group}"
+		source2 := uuid.New().String() + "{group}"
+		destination := uuid.New().String() + "{group}"
+
+		res, err := client.PfAdd(source1, []string{"a", "b", "c"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res)
+
+		res, err = client.PfAdd(source2, []string{"c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res)
+
+		result, err := client.PfMerge(destination, []string{source1, source2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		count, err := client.PfCount([]string{destination})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), count)
+	})
+}
+
+func (suite *GlideTestSuite) TestPfMerge_SingleSource() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		source := uuid.New().String() + "{group}"
+		destination := uuid.New().String() + "{group}"
+
+		res, err := client.PfAdd(source, []string{"a", "b", "c"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res)
+
+		result, err := client.PfMerge(destination, []string{source})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		count, err := client.PfCount([]string{destination})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), count)
+	})
+}
+
+func (suite *GlideTestSuite) TestPfMerge_NonExistentSource() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		nonExistentKey := uuid.New().String() + "{group}"
+		destination := uuid.New().String() + "{group}"
+
+		result, err := client.PfMerge(destination, []string{nonExistentKey})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		count, err := client.PfCount([]string{destination})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), count)
 	})
 }
 
@@ -7577,6 +7756,116 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
 	})
 }
 
+func (suite *GlideTestSuite) TestBitOp_AND() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		bitopkey1 := "{bitop_test}" + uuid.New().String()
+		bitopkey2 := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(bitopkey1, "foobar")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(bitopkey2, "abcdef")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.AND, destKey, []string{bitopkey1, bitopkey2})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_OR() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{bitop_test}" + uuid.New().String()
+		key2 := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(key1, "foo")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(key2, "bar")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.OR, destKey, []string{key1, key2})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_XOR() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{bitop_test}" + uuid.New().String()
+		key2 := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(key1, "foo")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(key2, "bar")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.XOR, destKey, []string{key1, key2})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_NOT() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		srcKey := "{bitop_test}" + uuid.New().String()
+		destKey := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(srcKey, "foobar")
+		assert.NoError(suite.T(), err)
+
+		result, err := client.BitOp(options.NOT, destKey, []string{srcKey})
+		assert.NoError(suite.T(), err)
+		assert.GreaterOrEqual(suite.T(), result, int64(0))
+
+		bitResult, err := client.Get(destKey)
+		assert.NoError(suite.T(), err)
+		assert.NotEmpty(suite.T(), bitResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitOp_InvalidArguments() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		destKey := "{bitop_test}" + uuid.New().String()
+		key1 := "{bitop_test}" + uuid.New().String()
+		key2 := "{bitop_test}" + uuid.New().String()
+
+		_, err := client.Set(key1, "foo")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.Set(key2, "bar")
+		assert.NoError(suite.T(), err)
+
+		_, err = client.BitOp(options.AND, destKey, []string{key1})
+		assert.NotNil(suite.T(), err)
+
+		_, err = client.BitOp(options.OR, destKey, []string{key1})
+		assert.NotNil(suite.T(), err)
+
+		_, err = client.BitOp(options.XOR, destKey, []string{key1})
+		assert.NotNil(suite.T(), err)
+
+		_, err = client.BitOp(options.NOT, destKey, []string{key1, key2})
+		assert.NotNil(suite.T(), err)
+	})
+}
+
 func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// 1. Arrange the data
@@ -8239,6 +8528,100 @@ func (suite *GlideTestSuite) TestBitField_MultipleOperations() {
 		assert.LessOrEqual(suite.T(), result[0].Value(), int64(10))
 		assert.Equal(suite.T(), int64(10), result[1].Value())
 		assert.Equal(suite.T(), int64(15), result[2].Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPos_ExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x10")
+		result, err := client.BitPos(key, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPos_NonExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		result, err := client.BitPos(key, 0)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_StartEnd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x01\x80")
+
+		opts := options.NewBitPosOptions().
+			SetStart(0).
+			SetEnd(1)
+
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(15), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_BitmapIndexType() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x02\x00")
+
+		opts := options.NewBitPosOptions().
+			SetStart(1).
+			SetEnd(2).
+			SetBitmapIndexType(options.BYTE)
+
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(14), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_BitIndexType() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x10\x00")
+
+		opts := options.NewBitPosOptions().
+			SetStart(10).
+			SetEnd(14).
+			SetBitmapIndexType(options.BIT)
+
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(11), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPos_FindBitZero() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\xFF\xF7")
+
+		result, err := client.BitPos(key, 0)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(12), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestBitPosWithOptions_NegativeEnd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.Set(key, "\x00\x01\x80")
+
+		opts := options.NewBitPosOptions().
+			SetStart(0).
+			SetEnd(-2)
+
+		result, err := client.BitPosWithOptions(key, 1, *opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(15), result)
 	})
 }
 
@@ -9129,6 +9512,50 @@ func (suite *GlideTestSuite) TestGeoAdd() {
 	})
 }
 
+func (suite *GlideTestSuite) TestGeoDist() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+		member1 := "Palermo"
+		member2 := "Catania"
+		member3 := "NonExisting"
+		expected := 166274.1516
+		expectedKM := 166.2742
+		delta := 1e-9
+
+		// adding locations
+		membersToCoordinates := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+		}
+		result, err := client.GeoAdd(key1, membersToCoordinates)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), result)
+
+		// assert correct result with default metric
+		actual, err := client.GeoDist(key1, member1, member2)
+		assert.NoError(t, err)
+		assert.LessOrEqual(t, float64(math.Abs(actual.Value()-expected)), float64(delta))
+
+		// assert correct result with manual metric specification kilometers
+		actualKM, err := client.GeoDistWithUnit(key1, member1, member2, options.GeoUnitKilometers)
+		assert.NoError(t, err)
+		assert.LessOrEqual(t, math.Abs(actualKM.Value()-expectedKM), delta)
+
+		// assert null result when member index is missing
+		actual, _ = client.GeoDist(key1, member1, member3)
+		assert.True(t, actual.IsNil())
+
+		// key exists but holds a non-ZSET value
+		_, err = client.Set(key2, "bar")
+		assert.NoError(t, err)
+		_, err = client.GeoDist(key2, member1, member2)
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestGeoAdd_InvalidArgs() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		t := suite.T()
@@ -9166,5 +9593,535 @@ func (suite *GlideTestSuite) TestGeoAdd_InvalidArgs() {
 		})
 		assert.Error(t, err)
 		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestGeoHash() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		t := suite.T()
+
+		// Add some locations to the geo index
+		membersToCoordinates := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+		}
+
+		// Add the coordinates
+		result, err := client.GeoAdd(key1, membersToCoordinates)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), result)
+
+		// Test getting geohash for multiple members
+		geoHashResults, err := client.GeoHash(key1, []string{"Palermo", "Catania"})
+		fmt.Println(geoHashResults)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, len(geoHashResults))
+		assert.Equal(t, geoHashResults[0], "sqc8b49rny0")
+		assert.Equal(t, geoHashResults[1], "sqdtr74hyu0")
+
+		// Test getting geohash for empty members
+		geoHashResults, err = client.GeoHash(key1, []string{})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(geoHashResults))
+
+		// Test with wrong key type
+		wrongKey := "{testKey}:3-" + uuid.New().String()
+		_, err = client.Set(wrongKey, "value")
+		assert.NoError(t, err)
+		_, err = client.GeoHash(wrongKey, []string{"Palermo"})
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := suite.GenerateLargeUuid()
+		value := suite.GenerateLargeUuid()
+		suite.verifyOK(client.Set(key, value))
+		result, err := client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), value, result.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestGeoPos() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key1 := "{testKey}:1-" + uuid.New().String()
+		key2 := "{testKey}:2-" + uuid.New().String()
+
+		members := []string{"Palermo", "Catania"}
+		expected := [][]float64{
+			{13.36138933897018433, 38.11555639549629859},
+			{15.08726745843887329, 37.50266842333162032},
+		}
+
+		// Add locations
+		membersCoordinates := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+		}
+
+		result, err := client.GeoAdd(key1, membersCoordinates)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), result)
+
+		// Get positions and verify
+		actual, err := client.GeoPos(key1, members)
+		assert.NoError(t, err)
+
+		// Verify each coordinate with high precision
+		for i, coords := range actual {
+			assert.NotNil(t, coords)
+			assert.Equal(t, 2, len(coords))
+
+			// Check longitude
+			assert.InDelta(t, expected[i][0], coords[0], 1e-9,
+				"longitude mismatch for member %s", members[i])
+
+			// Check latitude
+			assert.InDelta(t, expected[i][1], coords[1], 1e-9,
+				"latitude mismatch for member %s", members[i])
+		}
+
+		// Test error case with wrong key type
+		_, err = client.Set(key2, "geopos")
+		assert.NoError(t, err)
+
+		_, err = client.GeoPos(key2, members)
+		assert.Error(t, err)
+		assert.IsType(t, &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestGeoSearch() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.New().String()
+		key2 := "{key}-2-" + uuid.New().String()
+
+		// Setup test data
+		members := []string{"Catania", "Palermo", "edge2", "edge1"}
+		membersToCoordinates := map[string]options.GeospatialData{
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"edge2":   {Longitude: 17.241510, Latitude: 38.788135},
+			"edge1":   {Longitude: 12.758489, Latitude: 38.788135},
+		}
+
+		expectedResults := []options.Location{
+			{
+				Name: "Catania",
+				Dist: 56.4413,
+				Hash: int64(3479447370796909),
+				Coord: options.GeospatialData{
+					Longitude: 15.087267458438873,
+					Latitude:  37.50266842333162,
+				},
+			},
+			{
+				Name: "Palermo",
+				Dist: 190.4424,
+				Hash: int64(3479099956230698),
+				Coord: options.GeospatialData{
+					Longitude: 13.361389338970184,
+					Latitude:  38.1155563954963,
+				},
+			},
+			{
+				Name: "edge2",
+				Dist: 279.7403,
+				Hash: int64(3481342659049484),
+				Coord: options.GeospatialData{
+					Longitude: 17.241510450839996,
+					Latitude:  38.78813451624225,
+				},
+			},
+			{
+				Name: "edge1",
+				Dist: 279.7405,
+				Hash: int64(3479273021651468),
+				Coord: options.GeospatialData{
+					Longitude: 12.75848776102066,
+					Latitude:  38.78813451624225,
+				},
+			},
+		}
+
+		// Add geospatial data
+		result, err := client.GeoAdd(key1, membersToCoordinates)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), result)
+
+		// Test search by box, unit: km, from a geospatial data point
+		searchOrigin := options.GeoCoordOrigin{
+			GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+		}
+		searchShape := options.NewBoxSearchShape(400, 400, options.GeoUnitKilometers)
+		resultOpts := options.NewGeoSearchResultOptions().SetSortOrder(options.ASC)
+
+		results, err := client.GeoSearchWithResultOptions(key1, &searchOrigin, *searchShape, *resultOpts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), members, results)
+
+		// Search with all options (WITHDIST, WITHHASH, WITHCOORD)
+		searchOpts := options.NewGeoSearchInfoOptions().
+			SetWithDist(true).
+			SetWithHash(true).
+			SetWithCoord(true)
+
+		fullResults, err := client.GeoSearchWithFullOptions(key1, &searchOrigin, *searchShape, *resultOpts, *searchOpts)
+		assert.NoError(suite.T(), err)
+		// Verify structure of results - exact values may vary slightly due to floating-point precision
+		assert.Equal(suite.T(), 4, len(fullResults))
+		assert.Equal(suite.T(), expectedResults, fullResults)
+
+		// Test with count limiting result to 1
+		resultOptsWithCount := options.NewGeoSearchResultOptions().
+			SetSortOrder(options.ASC).
+			SetCount(1)
+
+		countResults, err := client.GeoSearchWithResultOptions(key1, &searchOrigin, *searchShape, *resultOptsWithCount)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 1, len(countResults))
+		assert.Equal(suite.T(), "Catania", countResults[0])
+
+		// Test search by box from member, with distance included
+		meters := float64(400 * 1000)
+		expectedResults2 := []options.Location{
+			{
+				Name: "edge2",
+				Dist: 236529.1799,
+			},
+			{
+				Name: "Palermo",
+				Dist: 166274.1516,
+			},
+			{
+				Name: "Catania",
+				Dist: 0.0,
+			},
+		}
+		memberResults, err := client.GeoSearchWithFullOptions(
+			key1,
+			&options.GeoMemberOrigin{Member: "Catania"},
+			*options.NewBoxSearchShape(meters, meters, options.GeoUnitMeters),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.DESC),
+			*options.NewGeoSearchInfoOptions().SetWithDist(true),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expectedResults2, memberResults)
+
+		// Test search by box, unit: feet, from a member, with limited ANY count to 2, with hash
+		feetValue := 400 * 3280.8399
+		feetShape := options.NewBoxSearchShape(feetValue, feetValue, options.GeoUnitFeet)
+		feetResult, err := client.GeoSearchWithFullOptions(
+			key1,
+			&options.GeoMemberOrigin{Member: "Palermo"},
+			*feetShape,
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.ASC).SetCount(2),
+			*options.NewGeoSearchInfoOptions().SetWithHash(true),
+		)
+		expectedResults3 := []options.Location{
+			{Name: "Palermo", Hash: int64(3479099956230698)},
+			{Name: "edge1", Hash: int64(3479273021651468)},
+		}
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 2, len(feetResult))
+		assert.Equal(suite.T(), expectedResults3, feetResult)
+
+		// Test search by radius with feet units from member
+		feetRadius := 200 * 3280.8399
+
+		feetResults, err := client.GeoSearchWithResultOptions(
+			key1,
+			&options.GeoMemberOrigin{Member: "Catania"},
+			*options.NewCircleSearchShape(feetRadius, options.GeoUnitFeet),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.ASC),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{"Catania", "Palermo"}, feetResults)
+
+		// Test search by radius with meters units from member
+		metersRadius := 200 * 1000
+		metersResults, err := client.GeoSearchWithResultOptions(
+			key1,
+			&options.GeoMemberOrigin{Member: "Catania"},
+			*options.NewCircleSearchShape(float64(metersRadius), options.GeoUnitMeters),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.DESC),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{"Palermo", "Catania"}, metersResults)
+
+		// Test search by radius with miles units from geospatial data
+		milesResults, err := client.GeoSearchWithResultOptions(
+			key1,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*options.NewCircleSearchShape(175, options.GeoUnitMiles),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.DESC),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{"edge1", "edge2", "Palermo", "Catania"}, milesResults)
+
+		// Test search by radius with kilometers units, with limited count and all options
+		kmResults, err := client.GeoSearchWithFullOptions(
+			key1,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.ASC).SetCount(2),
+			*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithHash(true).SetWithCoord(true),
+		)
+		assert.NoError(suite.T(), err)
+		expectedKmResults := []options.Location{
+			{
+				Name: "Catania",
+				Dist: 56.4413,
+				Hash: int64(3479447370796909),
+				Coord: options.GeospatialData{
+					Longitude: 15.087267458438873,
+					Latitude:  37.50266842333162,
+				},
+			},
+			{
+				Name: "Palermo",
+				Dist: 190.4424,
+				Hash: int64(3479099956230698),
+				Coord: options.GeospatialData{
+					Longitude: 13.361389338970184,
+					Latitude:  38.1155563954963,
+				},
+			},
+		}
+		assert.Equal(suite.T(), expectedKmResults, kmResults)
+
+		// Test search with ANY option
+		expectedAnyResults := []options.Location{
+			{
+				Name: "Palermo",
+				Dist: 190.4424,
+				Hash: int64(3479099956230698),
+				Coord: options.GeospatialData{
+					Longitude: 13.361389338970184,
+					Latitude:  38.1155563954963,
+				},
+			},
+		}
+		anyResult, err := client.GeoSearchWithFullOptions(
+			key1,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.ASC).SetCount(1).SetIsAny(true),
+			*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithHash(true).SetWithCoord(true),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expectedAnyResults, anyResult)
+
+		// Test empty results - small area
+		smallShape := options.NewBoxSearchShape(50, 50, options.GeoUnitMeters)
+		emptyResults1, err := client.GeoSearchWithResultOptions(
+			key1,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*smallShape,
+			*options.NewGeoSearchResultOptions().SetSortOrder(options.ASC).SetCount(1),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), emptyResults1)
+
+		// Test empty results - very small radius
+		tinyShape := options.NewCircleSearchShape(5, options.GeoUnitMeters)
+		emptyResults2, err := client.GeoSearchWithResultOptions(
+			key1,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*tinyShape,
+			*resultOpts,
+		)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), emptyResults2)
+
+		// Test non-existing member error
+		nonExistingMemberOrigin := &options.GeoMemberOrigin{Member: "non-existing-member"}
+		_, err = client.GeoSearchWithResultOptions(
+			key1,
+			nonExistingMemberOrigin,
+			*options.NewCircleSearchShape(100, options.GeoUnitMeters),
+			*resultOpts,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// Test wrong key type error
+		_, err = client.Set(key2, "nonZSETvalue")
+		assert.NoError(suite.T(), err)
+		_, err = client.GeoSearchWithResultOptions(
+			key2,
+			&options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+			},
+			*options.NewCircleSearchShape(100, options.GeoUnitMeters),
+			*resultOpts,
+		)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestGeoSearchStore() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		sourceKey := "{key}-1-" + uuid.New().String()
+		destinationKey := "{key}-2-" + uuid.New().String()
+		key3 := "{key}-3-" + uuid.New().String()
+
+		membersToCoordinates := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+			"edge2":   {Longitude: 17.241510, Latitude: 38.788135},
+			"edge1":   {Longitude: 12.758489, Latitude: 38.788135},
+		}
+		// Expected results maps
+		expectedMap := map[string]float64{
+			"Catania": 3479447370796909.0,
+			"Palermo": 3479099956230698.0,
+			"edge2":   3481342659049484.0,
+			"edge1":   3479273021651468.0,
+		}
+		expectedMap2 := map[string]float64{
+			"Catania": 56.4412578701582,
+			"Palermo": 190.44242984775784,
+			"edge2":   279.7403417843143,
+			"edge1":   279.7404521356343,
+		}
+		expectedMap3 := map[string]float64{
+			"Catania": 3479447370796909.0,
+			"Palermo": 3479099956230698.0,
+		}
+		// Add geospatial data
+		result, err := client.GeoAdd(sourceKey, membersToCoordinates)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), result)
+
+		// Test storing results of a box search, from a geospatial data point
+		searchOrigin := &options.GeoCoordOrigin{
+			GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
+		}
+		boxShape := options.NewBoxSearchShape(400, 400, options.GeoUnitKilometers)
+
+		count, err := client.GeoSearchStore(destinationKey, sourceKey, searchOrigin, *boxShape)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), count)
+
+		// Verify stored results
+		zRangeResult, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expectedMap, zRangeResult)
+
+		// Test storing results of a box search, unit: kilometers, from a geospatial data point, with distance
+		count, err = client.GeoSearchStoreWithInfoOptions(
+			destinationKey,
+			sourceKey,
+			searchOrigin,
+			*boxShape,
+			*options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), count)
+
+		// Verify stored results with distance
+		zRangeResultWithDist, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expectedMap2, zRangeResultWithDist)
+
+		// Test storing results of a box search, unit: kilometers, from a geospatial data point, with count
+		count, err = client.GeoSearchStoreWithResultOptions(
+			destinationKey,
+			sourceKey,
+			searchOrigin,
+			*boxShape,
+			*options.NewGeoSearchResultOptions().SetCount(2),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), count)
+
+		// Verify stored results with count
+		zRangeResultWithCount, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[string]float64{"Catania": 3479447370796909, "Palermo": 3479099956230698},
+			zRangeResultWithCount,
+		)
+
+		// Test storing results of a radius search, unit: feet, from a member
+		feetValue := 200 * 3280.8399
+		count, err = client.GeoSearchStoreWithResultOptions(
+			destinationKey,
+			sourceKey,
+			&options.GeoMemberOrigin{Member: "Catania"},
+			*options.NewCircleSearchShape(feetValue, options.GeoUnitFeet),
+			*options.NewGeoSearchResultOptions().SetCount(2),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), count)
+
+		// Verify stored results with count
+		zRangeResultWithCount, err = client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), expectedMap3, zRangeResultWithCount)
+
+		// Test storing results of a search that returns 0 results
+		count, err = client.GeoSearchStore(
+			destinationKey,
+			sourceKey,
+			searchOrigin,
+			*options.NewCircleSearchShape(1, options.GeoUnitMeters),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), count)
+		zRangeResultZero, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]float64(map[string]float64{}), zRangeResultZero)
+
+		// Test storing results of a search with ANY option
+		count, err = client.GeoSearchStoreWithResultOptions(
+			destinationKey,
+			sourceKey,
+			searchOrigin,
+			*boxShape,
+			*options.NewGeoSearchResultOptions().SetIsAny(true),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), count)
+		zRangeResultANY, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		expectedANYResults := map[string]float64{
+			"Catania": 3479447370796909.0,
+			"Palermo": 3479099956230698.0,
+			"edge1":   3479273021651468.0,
+			"edge2":   3481342659049484.0,
+		}
+		assert.Equal(suite.T(), expectedANYResults, zRangeResultANY)
+
+		// member does not exist
+		nonExistingMemberOrigin := &options.GeoMemberOrigin{Member: "non-existing-member"}
+		_, err = client.GeoSearchStore(destinationKey, sourceKey, nonExistingMemberOrigin, *boxShape)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+		// key exists but holds a non-ZSET value
+		_, err = client.Set(key3, "nonZSETvalue")
+		assert.NoError(suite.T(), err)
+		_, err = client.GeoSearchStore(destinationKey, key3, searchOrigin, *boxShape)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
 	})
 }
