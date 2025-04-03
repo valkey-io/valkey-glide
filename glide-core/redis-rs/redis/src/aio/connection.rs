@@ -9,6 +9,7 @@ use crate::connection::{
 };
 #[cfg(feature = "tokio-comp")]
 use crate::parser::ValueCodec;
+use crate::pipeline::PipelineRetryStrategy;
 use crate::types::{ErrorKind, FromRedisValue, RedisError, RedisFuture, RedisResult, Value};
 use crate::{from_owned_redis_value, ProtocolVersion, ToRedisArgs};
 use ::tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
@@ -198,6 +199,7 @@ where
         cmd: &'a crate::Pipeline,
         offset: usize,
         count: usize,
+        _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>> {
         (async move {
             if self.pubsub {

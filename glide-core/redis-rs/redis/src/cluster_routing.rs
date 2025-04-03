@@ -16,7 +16,8 @@ use std::sync::{RwLock, RwLockWriteGuard};
 #[derive(Clone)]
 pub(crate) enum Redirect {
     Moved(String),
-    Ask(String),
+    /// (addr, should_exec_asking) - if `should_exec_asking` is true,  the `ASKING` command would be executed as part of `get_connection`.
+    Ask(String, bool),
 }
 
 /// Logical bitwise aggregating operators.
