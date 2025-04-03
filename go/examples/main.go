@@ -23,13 +23,15 @@ func main() {
 	resultSet, _ := client.Set("keyEdric123", "Hello")
 	fmt.Println(resultSet)
 
-	resultSet, _ = client.Set("keyEdric345", "world")
-	fmt.Println(resultSet)
+	// resultSet, _ = client.Set("keyEdric345", "world")
+	// fmt.Println(resultSet)
 
 	//Create Transcation
 	tx := api.NewTransaction(client)
 	tx.Get("keyEdric123")
 	tx.Get("keyEdric345")
+	//tx.Get("key1")
+	//tx.Set("keyEd567", "Again")
 
 	// This adds the GET command to the transaction queue.
 

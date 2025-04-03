@@ -1,6 +1,13 @@
 package api
 
-// #cgo LDFLAGS: -L../target/release -lglide_rs
+// #cgo LDFLAGS: -lglide_ffi
+// #cgo !windows LDFLAGS: -lm
+// #cgo darwin LDFLAGS: -framework Security
+// #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
+// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
+// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
+// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
+// #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-apple-darwin
 // #include "../lib.h"
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
@@ -62,91 +69,107 @@ func (t *Transaction) Exec() error {
 	//t.commands = append(t.commands, NewExecCommand())
 
 	// Execute all commands
-	//result, err := t.baseClient.ExecuteCommand(cmd.Name(), cmd.Args()) // Use BaseClient for execution
 	result, _ := t.baseClient.executeTransactionCommand(t.commands) // Use BaseClient for execution
-	fmt.Println(handleStringResponse(result))
-	// fmt.Println("Final:", result)
-	// fmt.Println(err)
-	// for _, cmd := range t.commands {
-	// 	result, err := t.baseClient.ExecuteCommand(cmd.Name(), cmd.Args())
-	// 	fmt.Println(result) // Use BaseClient for execution
-	// 	//_, err := t.baseClient.executeTransactionCommandWithRoute(t.commands, nil) // Use BaseClient for execution
-	// 	if err != nil {
-	// 		return fmt.Errorf("failed to execute command %s: %w", cmd.Name(), err)
-	// 	}
-	// }
+	fmt.Println(handleAnyArrayResponse(result))
 	return nil
 }
 
-func (client *baseClient) executeTransactionCommand(commands []Cmder) (*C.struct_CommandResponse, error) {
-	return client.executeTransactionCommandWithRoute(commands, nil)
+func (client *baseClient) executeTransactionCommand(commands []Cmder) (*C.CommandResponse, error) {
+	return client.ExecuteTransaction(commands, nil)
 }
 
-func (client *baseClient) executeTransactionCommandWithRoute(
-	cmds []Cmder,
-	route config.Route,
-) (*C.struct_CommandResponse, error) {
-
+func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (*C.struct_CommandResponse, error) {
 	if len(cmds) == 0 {
 		return nil, &errors.RequestError{Msg: "Transaction must contain at least one command"}
 	}
 
 	// Convert Go []Cmder to C.Cmder array
-	cCmders := make([]C.Cmder, len(cmds))
-	argPtrs := make([]*C.char, 0)
+	cCmdersArray := C.malloc(C.size_t(len(cmds)) * C.size_t(unsafe.Sizeof(C.Cmder{})))
+	defer C.free(cCmdersArray)
+
+	cCmders := (*[1 << 30]C.Cmder)(cCmdersArray)[:len(cmds):len(cmds)]
+
+	argPtrs := []*C.char{} // Track allocated memory for cleanup
 
 	for i, cmd := range cmds {
-		// Convert command arguments to C strings
-		cArgs := make([]*C.char, len(cmd.Args()))
+		cArgsArray := C.malloc(C.size_t(len(cmd.Args())) * C.size_t(unsafe.Sizeof(uintptr(0))))
+		defer C.free(cArgsArray)
+
+		cArgs := (*[1 << 30]*C.char)(cArgsArray)[:len(cmd.Args()):len(cmd.Args())]
+
 		for j, arg := range cmd.Args() {
 			cArgs[j] = C.CString(arg)
-			argPtrs = append(argPtrs, cArgs[j]) // Keep track for cleanup
+			argPtrs = append(argPtrs, cArgs[j])
 		}
 
 		cCmders[i] = C.Cmder{
-			request_type: uint32(cmd.Name()),
+			request_type: C.enum_RequestType(cmd.Name()),
 			args_count:   C.uintptr_t(len(cmd.Args())),
 			args:         (**C.char)(unsafe.Pointer(&cArgs[0])),
 		}
 	}
 
-	// Construct Transaction
 	transaction := C.Transaction{
 		cmd_count: C.uintptr_t(len(cmds)),
-		commands:  (*C.Cmder)(unsafe.Pointer(&cCmders[0])),
+		commands:  (*C.Cmder)(unsafe.Pointer(cCmdersArray)),
 	}
 
-	// Convert route to protobuf if provided
 	var routeBytesPtr *C.uchar = nil
-	var routeBytesCount C.size_t = 0
+	var routeBytesCount C.uintptr_t = 0
+
 	if route != nil {
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to convert route to protobuf: %v", err)
+			return nil, &errors.RequestError{Msg: "Failed to convert route to protobuf"}
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
 			return nil, err
 		}
-
-		routeBytesCount = C.size_t(len(msg))
+		routeBytesCount = C.uintptr_t(len(msg))
 		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+		defer C.free(unsafe.Pointer(routeBytesPtr))
 	}
 
-	// Call Rust FFI function with route parameter
-	fmt.Println("Before C.execute_transaction")
-	resp := C.execute_transaction(client.coreClient, 0, &transaction, routeBytesPtr, routeBytesCount)
-	fmt.Println("Before C.execute_transaction", resp)
-	// Free C strings
-	for _, ptr := range argPtrs {
-		C.free(unsafe.Pointer(ptr))
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "Transaction failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+
+	fmt.Println("Before execute_transaction")
+	C.execute_transaction(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		&transaction,
+		routeBytesPtr,
+		routeBytesCount,
+	)
+	fmt.Println("After execute_transaction")
+
+	client.mu.Unlock()
+
+	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return nil, payload.error
 	}
 
-	if resp == nil {
-		return nil, &errors.RequestError{Msg: "Transaction execution failed"}
-	}
-
-	return nil, nil
+	return payload.value, nil
 }
 
 // NewTransaction creates a Transaction by embedding the BaseClient
@@ -167,16 +190,6 @@ func NewTransaction(client GlideClientCommands) *Transaction {
 	return tx
 }
 
-// // NewGlideClient creates a [GlideClientCommands] in standalone mode using the given [GlideClientConfiguration].
-// func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, error) {
-// 	client, err := createClient(config)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return &GlideClient{client}, nil
-// }
-
 func (client *baseClient) Watch(keys []string) (string, error) {
 	result, err := client.executeCommand(C.Watch, keys)
 	if err != nil {
@@ -184,14 +197,6 @@ func (client *baseClient) Watch(keys []string) (string, error) {
 	}
 	return handleStringResponse(result)
 }
-
-// func (client *baseClient) Discard(keys []string) (string, error) {
-// 	result, err := client.executeCommand(C.Watch, keys)
-// 	if err != nil {
-// 		return DefaultStringResponse, err
-// 	}
-// 	return handleStringResponse(result)
-// }
 
 func (t *Transaction) Discard() error {
 	if len(t.commands) > 0 {
