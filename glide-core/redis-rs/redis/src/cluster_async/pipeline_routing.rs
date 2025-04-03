@@ -165,77 +165,78 @@ where
         for (index, cmd) in pipeline.cmd_iter().enumerate() {
             entry.add_command(cmd.clone(), index, None, false);
         }
-        return Ok((pipelines_per_node, response_policies));
-    }
-
-    for (index, cmd) in pipeline.cmd_iter().enumerate() {
-        match RoutingInfo::for_routable(cmd.as_ref())
-            .unwrap_or(SingleNode(SingleNodeRoutingInfo::Random))
-        {
-            SingleNode(route) => {
-                handle_pipeline_single_node_routing(
-                    &mut pipelines_per_node,
-                    cmd.clone(),
-                    route.into(),
-                    core.clone(),
-                    index,
-                )
-                .await?;
-            }
-            MultiNode((multi_node_routing, response_policy)) => {
-                //save the routing info and response policy, so we will be able to aggregate the results later
-                response_policies
-                    .entry(index)
-                    .or_insert((multi_node_routing.clone(), response_policy));
-                match multi_node_routing {
-                    MultipleNodeRoutingInfo::AllNodes | MultipleNodeRoutingInfo::AllMasters => {
-                        let connections: Vec<_> = {
-                            let lock = core.conn_lock.read().expect(MUTEX_READ_ERR);
-                            if matches!(multi_node_routing, MultipleNodeRoutingInfo::AllNodes) {
-                                lock.all_node_connections().collect()
-                            } else {
-                                lock.all_primary_connections().collect()
-                            }
-                        };
-
-                        if connections.is_empty() {
-                            let error_message = if matches!(
-                                multi_node_routing,
-                                MultipleNodeRoutingInfo::AllNodes
-                            ) {
-                                "No available connections to any nodes"
-                            } else {
-                                "No available connections to primary nodes"
+    } else {
+        for (index, cmd) in pipeline.cmd_iter().enumerate() {
+            match RoutingInfo::for_routable(cmd.as_ref())
+                .unwrap_or(SingleNode(SingleNodeRoutingInfo::Random))
+            {
+                SingleNode(route) => {
+                    handle_pipeline_single_node_routing(
+                        &mut pipelines_per_node,
+                        cmd.clone(),
+                        route.into(),
+                        core.clone(),
+                        index,
+                    )
+                    .await?;
+                }
+                MultiNode((multi_node_routing, response_policy)) => {
+                    //save the routing info and response policy, so we will be able to aggregate the results later
+                    response_policies
+                        .entry(index)
+                        .or_insert((multi_node_routing.clone(), response_policy));
+                    match multi_node_routing {
+                        MultipleNodeRoutingInfo::AllNodes | MultipleNodeRoutingInfo::AllMasters => {
+                            let connections: Vec<_> = {
+                                let lock = core.conn_lock.read().expect(MUTEX_READ_ERR);
+                                if matches!(multi_node_routing, MultipleNodeRoutingInfo::AllNodes) {
+                                    lock.all_node_connections().collect()
+                                } else {
+                                    lock.all_primary_connections().collect()
+                                }
                             };
-                            return Err((
-                                OperationTarget::NotFound,
-                                RedisError::from((
-                                    ErrorKind::AllConnectionsUnavailable,
-                                    error_message,
-                                )),
-                            ));
+
+                            if connections.is_empty() {
+                                let error_message = if matches!(
+                                    multi_node_routing,
+                                    MultipleNodeRoutingInfo::AllNodes
+                                ) {
+                                    "No available connections to any nodes"
+                                } else {
+                                    "No available connections to primary nodes"
+                                };
+                                return Err((
+                                    OperationTarget::NotFound,
+                                    RedisError::from((
+                                        ErrorKind::AllConnectionsUnavailable,
+                                        error_message,
+                                    )),
+                                ));
+                            }
+                            for (inner_index, (address, conn)) in
+                                connections.into_iter().enumerate()
+                            {
+                                add_command_to_node_pipeline_map(
+                                    &mut pipelines_per_node,
+                                    address,
+                                    conn.await,
+                                    cmd.clone(),
+                                    index,
+                                    Some(inner_index),
+                                    false,
+                                );
+                            }
                         }
-                        for (inner_index, (address, conn)) in connections.into_iter().enumerate() {
-                            add_command_to_node_pipeline_map(
+                        MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
+                            handle_pipeline_multi_slot_routing(
                                 &mut pipelines_per_node,
-                                address,
-                                conn.await,
+                                core.clone(),
                                 cmd.clone(),
                                 index,
-                                Some(inner_index),
-                                false,
-                            );
+                                slots,
+                            )
+                            .await?;
                         }
-                    }
-                    MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
-                        handle_pipeline_multi_slot_routing(
-                            &mut pipelines_per_node,
-                            core.clone(),
-                            cmd.clone(),
-                            index,
-                            slots,
-                        )
-                        .await?;
                     }
                 }
             }
@@ -496,7 +497,7 @@ fn add_pipeline_result(
                     responses[0] = (value, address);
                 } else {
                     return Err((
-                        OperationTarget::FanOut,
+                        OperationTarget::FatalError,
                         RedisError::from((
                             ErrorKind::ClientError,
                             "Existing response is not a ServerError; cannot override.",
@@ -508,7 +509,7 @@ fn add_pipeline_result(
         Ok(())
     } else {
         Err((
-            OperationTarget::FanOut,
+            OperationTarget::FatalError,
             RedisError::from((
                 ErrorKind::ClientError,
                 "Index not found in pipeline responses",

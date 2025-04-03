@@ -1,7 +1,8 @@
 #![cfg(feature = "cluster-async")]
 mod support;
 
-mod test_pipeline {
+// TODO: add connection kill with retry
+mod test_cluster_pipeline {
 
     use redis::{cluster_async::ClusterConnection, cluster_topology::get_slot, ErrorKind};
     use std::collections::HashMap;
@@ -260,241 +261,157 @@ mod test_pipeline {
 
     #[tokio::test]
     #[serial_test::serial]
-    async fn test_pipeline_with_moved_error_with_retries() {
-        // Create a test cluster with 3 masters and no replicas.
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3,
-            0,
-            |builder| builder.retries(1),
-            false,
-        );
-        let mut connection = cluster.async_connection(None).await;
-
-        // Get the current slot distribution.
-        let cluster_nodes = cluster.get_cluster_nodes().await;
-        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
-
-        let nodes_and_slots = slot_distribution
-            .iter()
-            .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
-            .collect::<Vec<_>>();
-
-        let (moved_key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
-        let key_slot = get_slot(moved_key.as_str().as_bytes());
-
-        cluster
-            .move_specific_slot(key_slot, slot_distribution)
-            .await;
-
-        // Create a pipeline with several commands.
-        let mut pipeline = redis::pipe();
-        pipeline
-            .incr(&key2, 5)
-            .set(&moved_key, "value")
-            .get(&moved_key);
-
-        // Execute the pipeline.
-        let result = connection
-            .route_pipeline(
-                &pipeline,
-                0,
+    async fn test_pipeline_with_moved_error() {
+        for retries in [1, 0] {
+            // Create a test cluster with 3 masters and no replicas.
+            let cluster = TestClusterContext::new_with_cluster_client_builder(
                 3,
-                None,
-                Some(PipelineRetryStrategy {
-                    retry_server_error: true,
-                    retry_connection_error: false,
-                }),
-            )
-            .await
-            .expect("Pipeline execution failed");
-
-        let expected = vec![
-            Value::Int(5),
-            Value::Okay,
-            Value::BulkString(b"value".to_vec()),
-        ];
-        assert_eq!(
-            result, expected,
-            "Pipeline result did not match expected output.\n\
-             Keys chosen: ('{}', '{}')\n\
-             key_slot: {}\n\
-             Actual result: {:?}",
-            moved_key, key2, key_slot, result
-        );
-
-        assert_error_occurred(&mut connection, "MOVED", 2).await;
-    }
-
-    #[tokio::test]
-    #[serial_test::serial]
-    async fn test_pipeline_return_moved_error_with_zero_retries() {
-        // Create a test cluster with 3 masters and no replicas.
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3,
-            0,
-            |builder| builder.retries(0),
-            false,
-        );
-        let mut connection = cluster.async_connection(None).await;
-
-        // Get the current slot distribution.
-        let cluster_nodes = cluster.get_cluster_nodes().await;
-        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
-
-        let key = generate_random_string(10);
-        let key2 = generate_random_string(10);
-        let slot_to_move = get_slot(key.as_str().as_bytes());
-
-        // Move the slot of `key` to a different node.
-        cluster
-            .move_specific_slot(slot_to_move, slot_distribution)
-            .await;
-
-        // Create a pipeline with several commands.
-        let mut pipeline = redis::pipe();
-        pipeline.set(&key, "value").get(&key).set(&key2, "value2");
-
-        // Execute the pipeline.
-        let result = connection
-            .route_pipeline(
-                &pipeline,
                 0,
-                pipeline.len(),
-                None,
-                Some(PipelineRetryStrategy {
-                    retry_server_error: true,
-                    retry_connection_error: false,
-                }),
-            )
-            .await
-            .expect("Pipeline execution failed");
+                |builder| builder.retries(retries),
+                false,
+            );
+            let mut connection = cluster.async_connection(None).await;
 
-        assert!(
-            result[2] == Value::Okay,
-            "Expected the SET command to succeed, but got {:?}",
-            result[2]
-        );
+            // Get the current slot distribution.
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
 
-        assert!(
-            matches!(result[0], Value::ServerError(ref err) if err.kind() == ErrorKind::Moved),
-            "Expected a server error response for the SET command, but got {:?}",
-            result[0]
-        );
+            let nodes_and_slots = slot_distribution
+                .iter()
+                .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
+                .collect::<Vec<_>>();
 
-        assert!(
-            matches!(result[1], Value::ServerError(ref err) if err.kind() == ErrorKind::Moved),
-            "Expected a server error response for the GET command, but got {:?}",
-            result[1]
-        );
+            let (moved_key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
+            let key_slot = get_slot(moved_key.as_str().as_bytes());
 
-        assert_error_occurred(&mut connection, "MOVED", 2).await;
+            cluster
+                .move_specific_slot(key_slot, slot_distribution)
+                .await;
+
+            // Create a pipeline with several commands.
+            let mut pipeline = redis::pipe();
+            pipeline
+                .incr(&key2, 5)
+                .set(&moved_key, "value")
+                .get(&moved_key);
+
+            // Execute the pipeline.
+            let result = connection
+                .route_pipeline(
+                    &pipeline,
+                    0,
+                    3,
+                    None,
+                    Some(PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    }),
+                )
+                .await
+                .expect("Pipeline execution failed");
+
+            if retries > 0 {
+                let expected = vec![
+                    Value::Int(5),
+                    Value::Okay,
+                    Value::BulkString(b"value".to_vec()),
+                ];
+                assert_eq!(
+                    result, expected,
+                    "Pipeline result did not match expected output.\n\
+                     Keys chosen: ('{}', '{}')\n\
+                     key_slot: {}\n\
+                     Actual result: {:?}",
+                    moved_key, key2, key_slot, result
+                );
+            } else {
+                assert!(
+                    matches!(result[0], Value::Int(5)),
+                    "Expected a successful INCR result, but got {:?}",
+                    result[0]
+                );
+
+                assert!(
+                    matches!(result[1], Value::ServerError(ref err) if err.kind() == ErrorKind::Moved),
+                    "Expected a server error response for the SET command, but got {:?}",
+                    result[1]
+                );
+
+                assert!(
+                    matches!(result[2], Value::ServerError(ref err) if err.kind() == ErrorKind::Moved),
+                    "Expected a server error response for the GET command, but got {:?}",
+                    result[2]
+                );
+            }
+
+            assert_error_occurred(&mut connection, "MOVED", 2).await;
+        }
     }
 
     #[tokio::test]
     #[serial_test::serial]
     async fn test_transaction_with_moved_error_with_retries() {
-        // Create a test cluster with 3 masters and no replicas.
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3,
-            0,
-            |builder| builder.retries(1),
-            false,
-        );
-        let mut connection = cluster.async_connection(None).await;
-
-        // Get the current slot distribution.
-        let cluster_nodes = cluster.get_cluster_nodes().await;
-        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
-
-        let moved_key = generate_random_string(10);
-        let key_slot = get_slot(moved_key.as_str().as_bytes());
-        let route = SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
-
-        cluster
-            .move_specific_slot(key_slot, slot_distribution)
-            .await;
-
-        // Create a pipeline with several commands.
-        let mut pipeline = redis::pipe();
-        pipeline.atomic().set(&moved_key, "value").get(&moved_key);
-
-        // Execute the pipeline.
-        let result = connection
-            .route_pipeline(
-                &pipeline,
+        for retries in [1, 0] {
+            // Create a test cluster with 3 masters and no replicas.
+            let cluster = TestClusterContext::new_with_cluster_client_builder(
                 3,
-                1,
-                Some(route),
-                Some(PipelineRetryStrategy {
-                    retry_server_error: true,
-                    retry_connection_error: false,
-                }),
-            )
-            .await
-            .expect("Pipeline execution failed");
+                0,
+                |builder| builder.retries(retries),
+                false,
+            );
+            let mut connection = cluster.async_connection(None).await;
 
-        let expected = vec![Value::Array(vec![
-            Value::Okay,
-            Value::BulkString(b"value".to_vec()),
-        ])];
-        assert_eq!(
-            result, expected,
-            "Pipeline result did not match expected output.\n\
-             Keys chosen: ('{}')\n\
-             key_slot: {}\n\
-             Actual result: {:?}",
-            moved_key, key_slot, result
-        );
+            // Get the current slot distribution.
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
 
-        assert_error_occurred(&mut connection, "MOVED", 2).await;
-    }
+            let moved_key = generate_random_string(10);
+            let key_slot = get_slot(moved_key.as_str().as_bytes());
+            let route = SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
 
-    #[tokio::test]
-    #[serial_test::serial]
-    async fn test_transaction_with_moved_error_with_no_retries() {
-        // Create a test cluster with 3 masters and no replicas.
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3,
-            0,
-            |builder| builder.retries(0),
-            false,
-        );
-        let mut connection = cluster.async_connection(None).await;
+            cluster
+                .move_specific_slot(key_slot, slot_distribution)
+                .await;
 
-        // Get the current slot distribution.
-        let cluster_nodes = cluster.get_cluster_nodes().await;
-        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+            // Create a pipeline with several commands.
+            let mut pipeline = redis::pipe();
+            pipeline.atomic().set(&moved_key, "value").get(&moved_key);
 
-        let moved_key = generate_random_string(10);
-        let key_slot = get_slot(moved_key.as_str().as_bytes());
-        let route = SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
+            // Execute the pipeline.
+            let result = connection
+                .route_pipeline(
+                    &pipeline,
+                    3,
+                    1,
+                    Some(route),
+                    Some(PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    }),
+                )
+                .await;
 
-        cluster
-            .move_specific_slot(key_slot, slot_distribution)
-            .await;
-
-        // Create a pipeline with several commands.
-        let mut pipeline = redis::pipe();
-        pipeline.atomic().set(&moved_key, "value").get(&moved_key);
-
-        // Execute the pipeline.
-        let result = connection
-            .route_pipeline(
-                &pipeline,
-                3,
-                1,
-                Some(route),
-                Some(PipelineRetryStrategy {
-                    retry_server_error: true,
-                    retry_connection_error: false,
-                }),
-            )
-            .await;
-
-        assert!(result.is_err());
-        assert!(result.unwrap_err().kind() == ErrorKind::Moved);
-
-        assert_error_occurred(&mut connection, "MOVED", 2).await;
+            if retries == 1 {
+                let expected = vec![Value::Array(vec![
+                    Value::Okay,
+                    Value::BulkString(b"value".to_vec()),
+                ])];
+                assert!(result.is_ok());
+                let response = result.unwrap();
+                assert_eq!(
+                    response, expected,
+                    "Pipeline result did not match expected output.\n\
+                        Keys chosen: ('{}')\n\
+                        key_slot: {}\n\
+                        Actual result: {:?}",
+                    moved_key, key_slot, response
+                );
+            } else {
+                assert!(result.is_err());
+                assert!(result.unwrap_err().kind() == ErrorKind::Moved);
+            }
+            assert_error_occurred(&mut connection, "MOVED", 2).await;
+        }
     }
 
     #[tokio::test]
@@ -557,49 +474,96 @@ mod test_pipeline {
             |builder| builder.retries(1),
             false,
         );
-        let mut connection = cluster.async_connection(None).await;
-        // Get the current slot distribution.
-        let cluster_nodes = cluster.get_cluster_nodes().await;
-        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+        for atomic in [true, false] {
+            let mut connection = cluster.async_connection(None).await;
+            // Get the current slot distribution.
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
 
-        let nodes_and_slots = slot_distribution
-            .iter()
-            .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
-            .collect::<Vec<_>>();
+            let nodes_and_slots = slot_distribution
+                .iter()
+                .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
+                .collect::<Vec<_>>();
 
-        let (key, key2) = generate_2_keys_in_different_node(nodes_and_slots);
-        let key_slot = get_slot(key.as_bytes());
+            let (key, mut key2) = generate_2_keys_in_different_node(nodes_and_slots);
+            let different_node_slot = get_slot(key2.as_bytes());
+            if atomic {
+                key2 = format!("{{{}}}:{}", key, generate_random_string(5));
+            }
+            let key_slot = get_slot(key.as_bytes());
 
-        // Define a routing that intentionally targets the wrong node.
-        let key_route = SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
+            // Define a routing that intentionally targets the wrong node.
+            let wrong_slot = if atomic {
+                different_node_slot
+            } else {
+                key_slot
+            };
+            let route =
+                SingleNodeRoutingInfo::SpecificNode(Route::new(wrong_slot, SlotAddr::Master));
 
-        // Create a pipeline that sets and then retrieves the key.
-        let mut pipeline = redis::pipe();
-        pipeline.set(&key, "pipeline_value");
-        pipeline.get(&key);
-        pipeline.set(&key2, "pipeline_value2");
-        pipeline.get(&key2);
+            // Create a pipeline that sets and then retrieves the key.
+            let mut pipeline = redis::pipe();
+            if atomic {
+                pipeline.atomic();
+            }
+            pipeline.set(&key, "pipeline_value");
+            pipeline.get(&key);
+            pipeline.set(&key2, "pipeline_value2");
+            pipeline.get(&key2);
 
-        // Execute the pipeline using the wrong route.
-        let result = connection
-            .route_pipeline(&pipeline, 0, pipeline.len(), Some(key_route), None)
-            .await
-            .expect("Pipeline execution failed");
+            let (offset, count) = match atomic {
+                false => (0, 4),
+                true => (5, 1),
+            };
 
-        let expected = vec![
-            Value::Okay,
-            Value::BulkString(b"pipeline_value".to_vec()),
-            Value::Okay,
-            Value::BulkString(b"pipeline_value2".to_vec()),
-        ];
+            // Execute the pipeline using the wrong route.
+            let result = connection
+                .route_pipeline(&pipeline, offset, count, Some(route), None)
+                .await
+                .expect("Pipeline execution failed");
 
-        assert_eq!(
-            result, expected,
-            "Pipeline result did not match expected output {result:?}"
-        );
+            let inner = vec![
+                Value::Okay,
+                Value::BulkString(b"pipeline_value".to_vec()),
+                Value::Okay,
+                Value::BulkString(b"pipeline_value2".to_vec()),
+            ];
 
-        // Assert that the pipeline handled redirection.
-        assert_error_occurred(&mut connection, "MOVED", 2).await;
+            let expected = if atomic {
+                vec![Value::Array(inner)]
+            } else {
+                inner
+            };
+
+            assert_eq!(
+                result, expected,
+                "Pipeline result did not match expected output {result:?}"
+            );
+
+            let moved_count = match atomic {
+                true => 4,
+                false => 2,
+            };
+
+            assert_error_occurred(&mut connection, "MOVED", moved_count).await;
+
+            // Assert that the pipeline handled redirection.
+            let mut reset_cmd = cmd("CONFIG");
+            reset_cmd.arg("RESETSTAT");
+            let reset = connection
+                .route_command(
+                    &reset_cmd,
+                    RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+                )
+                .await
+                .expect("Failed to reset stats");
+            let map_res = match reset {
+                Value::Map(map) => map.into_iter().map(|x| x.1).collect::<Vec<_>>(),
+                _ => unreachable!(),
+            };
+
+            assert!(map_res.iter().all(|res| *res == Value::Okay));
+        }
     }
 
     #[tokio::test]

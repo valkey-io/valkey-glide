@@ -671,6 +671,7 @@ pub(crate) enum OperationTarget {
     Node { address: String },
     FanOut,
     NotFound,
+    FatalError,
 }
 type OperationResult = Result<Response, (OperationTarget, RedisError)>;
 
@@ -794,7 +795,10 @@ impl<C> RequestInfo<C> {
                 }
             }
             CmdArg::Pipeline { route, .. } => {
-                fix_route(route.get_or_insert(InternalSingleNodeRouting::Random));
+                if route.is_some() {
+                    let route = route.as_mut().unwrap();
+                    fix_route(route);
+                }
             }
             // cluster_scan is sent as a normal command internally so we will not reach that point.
             CmdArg::ClusterScan { .. } => {
@@ -976,6 +980,11 @@ impl<C> Future for Request<C> {
                             moved_redirect: None,
                         }
                         .into();
+                    }
+                    OperationTarget::FatalError => {
+                        trace!("Fatal error encountered: {:?}", err);
+                        self.respond(Err(err));
+                        return Next::Done.into();
                     }
                 };
 
