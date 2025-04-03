@@ -548,7 +548,6 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                         }
                     }
                     command_request::Command::Batch(batch) => {
-                        //ToDo: handle Batch command
                         match get_route(request.route.0, None) {
                             Ok(routes) => {
                                 let otel_command_span =
