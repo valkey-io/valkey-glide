@@ -95,23 +95,19 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - uses: Swatinem/rust-cache@v2
+            - uses: actions/cache@v4
               with:
-                  cache-on-failure: true
-                  cache-all-crates: true
-                  workspaces: glide-core
-                  shared-key: ${{ matrix.host.TARGET }}-glide-core
+                  path: glide-core/target
+                  key: ${{ matrix.host.TARGET }}-glide-core/target
 
             - name: Run tests
               working-directory: ./glide-core
               run: cargo test --all-features --release -- --test-threads=1 # TODO remove the concurrency limit after we fix test flakyness.
 
-            - uses: Swatinem/rust-cache@v2
+            - uses: actions/cache@v4
               with:
-                  cache-on-failure: true
-                  cache-all-crates: true
-                  workspaces: glide-core
-                  shared-key: ${{ matrix.host.TARGET }}-logger_core
+                  path: glide-core/target
+                  key: ${{ matrix.host.TARGET }}-logger_core/target
 
             - name: Run logger tests
               working-directory: ./logger_core
@@ -122,6 +118,11 @@ jobs:
               run: |
                   cargo check --benches --all-features
                   cargo check --no-default-features
+
+            - uses: actions/cache@v4
+              with:
+                  path: glide-core/target
+                  key: ${{ matrix.host.TARGET }}-benchmarks/rust/target
 
             - uses: ./.github/workflows/test-benchmark
               with:
