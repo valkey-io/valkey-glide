@@ -94,18 +94,6 @@ jobs:
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
 
-            - name: Install Node on self-hosted runner
-              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 20
-
-            - name: Install extra software on self-hosted runner
-              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y npm
-
             # As per https://github.com/actions/setup-dotnet/issues/608, it is nice to have (but mandatory for mac runners)
             - name: Create global.json
               run: |
