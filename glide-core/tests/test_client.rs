@@ -31,7 +31,7 @@ pub(crate) mod shared_client_tests {
     use redis::cluster_routing::{SingleNodeRoutingInfo, SlotAddr};
     use redis::{
         cluster_routing::{MultipleNodeRoutingInfo, Route, RoutingInfo},
-        FromRedisValue, InfoDict, Pipeline, RedisConnectionInfo, Value,
+        FromRedisValue, InfoDict, Pipeline, PipelineRetryStrategy, RedisConnectionInfo, Value,
     };
     use rstest::rstest;
     use utilities::cluster::*;
@@ -148,7 +148,7 @@ pub(crate) mod shared_client_tests {
             for _ in 0..4 {
                 let _ = test_basics
                     .client
-                    .send_transaction(&pipe, None)
+                    .send_transaction(&pipe, None, None, false)
                     .await
                     .unwrap();
             }
@@ -497,7 +497,10 @@ pub(crate) mod shared_client_tests {
             let mut pipeline = redis::pipe();
             pipeline.atomic();
             pipeline.cmd("GET").arg("foo");
-            let result = test_basics.client.send_transaction(&pipeline, None).await;
+            let result = test_basics
+                .client
+                .send_transaction(&pipeline, None, None, false)
+                .await;
             assert!(result.is_err(), "Received {:?}", result);
             let err = result.unwrap_err();
             assert!(err.is_timeout(), "{err}");
@@ -611,7 +614,16 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
+                )
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -638,7 +650,10 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_pipeline_return_error(#[values(false, true)] use_cluster: bool) {
+    fn test_pipeline_return_error(
+        #[values(false, true)] use_cluster: bool,
+        #[values(false, true)] raise_error: bool,
+    ) {
         use redis::ErrorKind;
 
         block_on_all(async move {
@@ -661,16 +676,48 @@ pub(crate) mod shared_client_tests {
             let mut pipeline = Pipeline::new();
             pipeline.set(&key, &value).get(&key).llen(&key).get(&key2);
 
-            let res = test_basics.client.send_pipeline(&pipeline).await;
-            assert!(res.is_err(), "Pipeline should fail with wrong type error");
-            let err = res.unwrap_err();
+            let res = test_basics
+                .client
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    raise_error,
+                    None,
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
+                )
+                .await;
 
-            assert_eq!(
-                err.kind(),
-                ErrorKind::ExtensionError,
-                "Pipeline should fail with response error"
-            );
-            assert!(err.to_string().contains("WRONGTYPE"), "{err:?}");
+            match raise_error {
+                false => {
+                    let res = match res {
+                        Ok(Value::Array(arr)) => arr,
+                        _ => panic!("Expected an array response, got: {:?}", res),
+                    };
+                    assert_eq!(
+                        &res[..2],
+                        &[Value::Okay, Value::BulkString(value.as_bytes().to_vec()),],
+                        "Pipeline result: {:?}",
+                        res
+                    );
+
+                    assert!(
+                        matches!(res[2], Value::ServerError(ref err) if err.err_code().contains("WRONGTYPE"))
+                    );
+                }
+                true => {
+                    assert!(res.is_err(), "Pipeline should fail with wrong type error");
+                    let err = res.unwrap_err();
+                    assert_eq!(
+                        err.kind(),
+                        ErrorKind::ExtensionError,
+                        "Pipeline should fail with response error"
+                    );
+                    assert!(err.to_string().contains("WRONGTYPE"), "{err:?}");
+                }
+            }
         });
     }
 
@@ -706,7 +753,16 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
+                )
                 .await
                 .expect("Pipeline failed");
 
@@ -716,15 +772,15 @@ pub(crate) mod shared_client_tests {
             // - BLPOP returns null (because of timeout)
             // - GET returns null (key2 was never set)
             assert_eq!(
-            result,
-            Value::Array(vec![
-                Value::Okay,
-                Value::BulkString(b"value1".to_vec()),
-                Value::Nil,
-                Value::Nil,
-            ]),
-            "Pipeline with blocking command should return null for BLPOP and GET on a non-existent key {result:?}"
-        );
+                result,
+                Value::Array(vec![
+                    Value::Okay,
+                    Value::BulkString(b"value1".to_vec()),
+                    Value::Nil,
+                    Value::Nil,
+                ]),
+                "Pipeline with blocking command should return null for BLPOP and GET on a non-existent key {result:?}"
+            );
         });
     }
 
@@ -755,13 +811,114 @@ pub(crate) mod shared_client_tests {
                 .blpop(&key2, 2.0)
                 .get(&key2);
 
-            let res = test_basics.client.send_pipeline(&pipeline).await;
+            let res = test_basics
+                .client
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
+                )
+                .await;
             assert!(
                 res.is_err(),
                 "Pipeline should fail with blocking command taking too long"
             );
             let err = res.unwrap_err();
             assert!(err.is_timeout(), "Pipeline should fail with timeout error");
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_timeout(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    request_timeout: Some(1000),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Generate random keys.
+            let (key, key2) = (generate_random_string(10), generate_random_string(10));
+
+            let mut pipeline = Pipeline::new();
+            pipeline
+                .set(&key, "value1")
+                .get(&key)
+                .blpop(&key2, 2.0)
+                .get(&key2);
+
+            let res = test_basics
+                .client
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    Some(3000),
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
+                )
+                .await
+                .expect("Pipeline failed");
+
+            assert_eq!(
+                res,
+                Value::Array(vec![
+                    Value::Okay,
+                    Value::BulkString(b"value1".to_vec()),
+                    Value::Nil,
+                    Value::Nil,
+                ]),
+                "Pipeline result: {res:?}"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_transaction_timeout(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    request_timeout: Some(1000),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Generate random keys.
+            let key = generate_random_string(10);
+
+            let mut transaction = redis::pipe();
+            transaction.atomic();
+            transaction.blpop(&key, 2.0).get(&key);
+
+            let res = test_basics
+                .client
+                .send_transaction(&transaction, None, Some(3000), true)
+                .await
+                .expect("Transaction failed");
+
+            assert_eq!(
+                res,
+                Value::Array(vec![Value::Nil, Value::Nil,]),
+                "Transaction result: {res:?}"
+            );
         });
     }
 
@@ -801,7 +958,16 @@ pub(crate) mod shared_client_tests {
 
             let res = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
+                )
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -814,6 +980,100 @@ pub(crate) mod shared_client_tests {
                 ]),
                 "Pipeline result: {res:?}"
             );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_parallel_pipeline_and_kill_connection(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let key = generate_random_string(10);
+            let configuration = TestConfiguration {
+                shared_server: true,
+                request_timeout: Some(3000),
+                ..Default::default()
+            };
+            let mut test_basics = setup_test_basics(use_cluster, configuration.clone()).await;
+
+            let mut client_for_kill = match test_basics.server {
+                BackingServer::Cluster(cluster) => {
+                    create_cluster_client(cluster.as_ref(), configuration).await
+                }
+                BackingServer::Standalone(standalone) => {
+                    create_client(&BackingServer::Standalone(standalone), configuration).await
+                }
+            };
+
+            let pipeline_future = async {
+                let mut pipeline = Pipeline::new();
+                pipeline.blpop(&key, 2.0);
+                pipeline.lpush(&key, "value");
+                pipeline.lpush(&key, "value");
+                pipeline.lpush(&key, "value");
+                pipeline.lpush(&key, "value");
+                pipeline.lpush(&key, "value");
+                pipeline.lpush(&key, "value");
+                pipeline.lpush(&key, "value");
+                test_basics
+                    .client
+                    .send_pipeline(
+                        &pipeline,
+                        None,
+                        false,
+                        None,
+                        PipelineRetryStrategy {
+                            retry_server_error: true,
+                            retry_connection_error: false,
+                        },
+                    )
+                    .await
+            };
+
+            let kill_future = async {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+                kill_connection_for_route(
+                    &mut client_for_kill,
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                        get_slot(key.as_bytes()),
+                        SlotAddr::Master,
+                    ))),
+                )
+                .await;
+            };
+
+            // Run both tasks concurrently.
+            let (pipeline_result, _) = tokio::join!(pipeline_future, kill_future);
+
+            match use_cluster {
+                true => {
+                    assert!(
+                        pipeline_result.is_ok(),
+                        "Pipeline failed: {pipeline_result:?}"
+                    );
+                    let result = match pipeline_result.unwrap() {
+                        Value::Array(res) => res,
+                        _ => panic!("Expected an array of values"),
+                    };
+
+                    assert!(
+                        result.iter().all(|r| matches!(r, Value::ServerError(e) if e.err_code().contains("BrokenPipe"))
+                            ),
+                        "Not all responses are ServerError: {result:?}"
+                    );
+                }
+                false => {
+                    assert!(
+                        pipeline_result.is_err(),
+                        "Pipeline should have failed: {pipeline_result:?}"
+                    );
+                    assert!(pipeline_result
+                        .unwrap_err()
+                        .to_string()
+                        .contains("FatalReceiveError"),);
+                }
+            }
         });
     }
 
@@ -848,7 +1108,16 @@ pub(crate) mod shared_client_tests {
 
             let res = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
+                )
                 .await
                 .expect("Pipeline failed after killing all connections");
 
@@ -864,7 +1133,38 @@ pub(crate) mod shared_client_tests {
             );
         });
     }
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_empty_pipeline(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
 
+            let pipeline = Pipeline::new();
+            let result = test_basics
+                .client
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
+                )
+                .await;
+
+            assert!(result.is_err(), "Pipeline should fail with empty pipeline");
+        });
+    }
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -898,7 +1198,16 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
+                )
                 .await
                 .expect("Pipeline failed");
             assert_eq!(
@@ -933,7 +1242,16 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
+                )
                 .await
                 .expect("Pipeline failed");
 
@@ -974,7 +1292,16 @@ pub(crate) mod shared_client_tests {
             // Execute the pipeline.
             let result = test_basics
                 .client
-                .send_pipeline(&pipeline)
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    false,
+                    None,
+                    PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    },
+                )
                 .await
                 .expect("Pipeline execution failed");
 
@@ -1107,7 +1434,10 @@ pub(crate) mod shared_client_tests {
             pipeline.cmd("INCRBYFLOAT").arg(&key).arg("0.5");
             pipeline.del(&key);
 
-            let result = test_basics.client.send_transaction(&pipeline, None).await;
+            let result = test_basics
+                .client
+                .send_transaction(&pipeline, None, None, false)
+                .await;
             assert_eq!(
                 result,
                 Ok(Value::Array(vec![

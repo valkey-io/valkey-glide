@@ -1,6 +1,7 @@
 use super::RedisFuture;
 use crate::client::GlideConnectionOptions;
 use crate::cmd::Cmd;
+use crate::pipeline::PipelineRetryStrategy;
 use crate::push_manager::PushManager;
 use crate::types::{RedisError, RedisResult, Value};
 use crate::{
@@ -297,6 +298,7 @@ impl ConnectionLike for ConnectionManager {
         cmd: &'a crate::Pipeline,
         offset: usize,
         count: usize,
+        _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>> {
         (async move { self.send_packed_commands(cmd, offset, count).await }).boxed()
     }

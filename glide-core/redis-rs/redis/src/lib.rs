@@ -375,7 +375,7 @@ pub use crate::connection::{
     PubSubSubscriptionKind, RedisConnectionInfo, TlsMode,
 };
 pub use crate::parser::{parse_redis_value, Parser};
-pub use crate::pipeline::Pipeline;
+pub use crate::pipeline::{Pipeline, PipelineRetryStrategy};
 pub use push_manager::{PushInfo, PushManager};
 
 #[cfg(feature = "script")]

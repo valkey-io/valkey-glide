@@ -5,6 +5,7 @@ use crate::client::GlideConnectionOptions;
 use crate::cmd::Cmd;
 #[cfg(feature = "tokio-comp")]
 use crate::parser::ValueCodec;
+use crate::pipeline::PipelineRetryStrategy;
 use crate::push_manager::PushManager;
 use crate::types::{RedisError, RedisFuture, RedisResult, Value};
 use crate::{cmd, ConnectionInfo, ProtocolVersion, PushKind};
@@ -582,8 +583,7 @@ impl MultiplexedConnection {
                 }
             }
         }
-        // TODO: remove this when `raise_on_error` flag will be added
-        let value = result.and_then(|v| v.extract_error())?;
+        let value = result?;
         match value {
             Value::Array(mut values) => {
                 values.drain(..offset);
@@ -599,7 +599,7 @@ impl MultiplexedConnection {
         self.pipeline.set_push_manager(push_manager).await;
     }
 
-    /// For external visibilty (glide-core)
+    /// For external visibility (glide-core)
     pub fn get_availability_zone(&self) -> Option<String> {
         self.availability_zone.clone()
     }
@@ -716,6 +716,7 @@ impl ConnectionLike for MultiplexedConnection {
         cmd: &'a crate::Pipeline,
         offset: usize,
         count: usize,
+        _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>> {
         (async move { self.send_packed_commands(cmd, offset, count).await }).boxed()
     }

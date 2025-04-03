@@ -711,7 +711,7 @@ where
                 let (addr, conn) = if let Some(redirected) = redirected.take() {
                     let (addr, is_asking) = match redirected {
                         Redirect::Moved(addr) => (addr, false),
-                        Redirect::Ask(addr) => (addr, true),
+                        Redirect::Ask(addr, should_exec_asking) => (addr, should_exec_asking),
                     };
                     let conn = self.get_connection_by_addr(&mut connections, &addr)?;
                     if is_asking {
@@ -752,7 +752,7 @@ where
                         RetryMethod::AskRedirect => {
                             redirected = err
                                 .redirect_node()
-                                .map(|(node, _slot)| Redirect::Ask(node.to_string()));
+                                .map(|(node, _slot)| Redirect::Ask(node.to_string(), true));
                         }
                         RetryMethod::MovedRedirect => {
                             // Refresh slots.
