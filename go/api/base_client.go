@@ -74,20 +74,6 @@ func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorTyp
 	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
 }
 
-// Global message dispatcher for routing PubSub messages
-var (
-	globalDispatcher *MessageDispatcher
-	once             sync.Once
-)
-
-// GetManager returns the singleton state manager
-func GetDispatcher() *MessageDispatcher {
-	once.Do(func() {
-		globalDispatcher = NewMessageDispatcher()
-	})
-	return globalDispatcher
-}
-
 // Registry to track clients by their pointer address
 var (
 	clientRegistry   = make(map[uintptr]*baseClient)
@@ -138,12 +124,12 @@ func pubSubCallback(clientPtr unsafe.Pointer, kind C.uint32_t, cResponse *C.stru
 			return
 		}
 
-		channel, ok := toString(arrayValues[0])
+		channel, ok := utils.ToString(arrayValues[0])
 		if !ok {
 			return
 		}
 
-		msgContent, ok := toString(arrayValues[1])
+		msgContent, ok := utils.ToString(arrayValues[1])
 		if !ok {
 			return
 		}
@@ -155,17 +141,17 @@ func pubSubCallback(clientPtr unsafe.Pointer, kind C.uint32_t, cResponse *C.stru
 			return
 		}
 
-		pattern, ok := toString(arrayValues[0])
+		pattern, ok := utils.ToString(arrayValues[0])
 		if !ok {
 			return
 		}
 
-		channel, ok := toString(arrayValues[1])
+		channel, ok := utils.ToString(arrayValues[1])
 		if !ok {
 			return
 		}
 
-		msgContent, ok := toString(arrayValues[2])
+		msgContent, ok := utils.ToString(arrayValues[2])
 		if !ok {
 			return
 		}
@@ -176,11 +162,11 @@ func pubSubCallback(clientPtr unsafe.Pointer, kind C.uint32_t, cResponse *C.stru
 		if len(arrayValues) < 2 {
 			return
 		}
-		channel, ok := toString(arrayValues[0])
+		channel, ok := utils.ToString(arrayValues[0])
 		if !ok {
 			return
 		}
-		msgContent, ok := toString(arrayValues[1])
+		msgContent, ok := utils.ToString(arrayValues[1])
 		if !ok {
 			return
 		}
@@ -272,13 +258,6 @@ func (client *baseClient) GetClientID() string {
 // SetMessageHandler assigns a message handler to the client for processing pub/sub messages
 func (client *baseClient) SetMessageHandler(handler *MessageHandler) {
 	client.messageHandler = handler
-
-	// Register the client with the message dispatcher
-	clientID := client.GetClientID()
-	if clientID != "" && handler != nil {
-		dispatcher := GetDispatcher()
-		dispatcher.RegisterClient(clientID, handler)
-	}
 }
 
 // GetMessageHandler returns the currently assigned message handler
@@ -388,13 +367,6 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 func (client *baseClient) Close() {
 	client.mu.Lock()
 	defer client.mu.Unlock()
-
-	// Unregister from the message dispatcher
-	clientID := fmt.Sprintf("%p", client)
-	if clientID != "" {
-		dispatcher := GetDispatcher()
-		dispatcher.UnregisterClient(clientID)
-	}
 
 	if client.coreClient == nil {
 		return
