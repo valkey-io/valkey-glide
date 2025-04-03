@@ -20,6 +20,7 @@ func main() {
 		log.Fatal("error connecting to database: ", err)
 	}
 
+	//Non transaction
 	resultSet, _ := client.Set("keyEdric123", "Hello")
 	fmt.Println(resultSet)
 
@@ -27,25 +28,15 @@ func main() {
 	// fmt.Println(resultSet)
 
 	//Create Transcation
-	tx := api.NewTransaction(client)
-	tx.Get("keyEdric123")
-	tx.Get("keyEdric345")
-	//tx.Get("key1")
-	//tx.Set("keyEd567", "Again")
-
-	// This adds the GET command to the transaction queue.
-
-	//watchresult, _ := tx.Watch([]string{"keyEdric123"})
-	//fmt.Println(watchresult)
-
-	// Execute the transaction (MULTI + EXEC)
-
-	err = tx.Exec()
-	if err != nil {
-		log.Fatalf("Transaction failed: %v", err)
-	} else {
-		fmt.Println("Transaction executed successfully!")
-	}
+	// tx := api.NewTransaction(client).Set("key1", "value").Set("key2", "value")
+	// // This adds the GET command to the transaction queue.
+	// // Execute the transaction (MULTI + EXEC)
+	// err = tx.Exec()
+	// if err != nil {
+	// 	log.Fatalf("Transaction failed: %v", err)
+	// } else {
+	// 	fmt.Println("Transaction executed successfully!")
+	// }
 
 	// err = tx.Discard()
 	// if err != nil {

@@ -205,3 +205,22 @@ func (t *Transaction) Discard() error {
 	}
 	return fmt.Errorf("no command where queue")
 }
+
+// func (client *Transaction) Set(key string, value string) interface{} {
+// 	fmt.Println("Transaction Set!")
+// 	_, err := client.ExecuteCommand(C.Set, []string{key, value})
+// 	if err != nil {
+// 		return nil
+// 	}
+
+// 	return client
+// }
+
+// func (client *Transaction) Get(key string) interface{} {
+// 	_, err := client.ExecuteCommand(C.Get, []string{key})
+
+// 	if err != nil {
+// 		return nil
+// 	}
+// 	return client
+// }

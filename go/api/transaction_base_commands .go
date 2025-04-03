@@ -13,4 +13,8 @@ type TransactionBaseCommands interface {
 	Exec() error
 
 	Discard() error
+
+	// Get(key string) interface{}
+
+	// Set(key string, value string) interface{}
 }

@@ -484,6 +484,18 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 	return handleStringResponse(result)
 }
 
+// func (client *baseClient) Set(key string, value string) interface{} {
+// 	result, err := client.executor.ExecuteCommand(C.Set, []string{key, value})
+// 	if tx, ok := client.executor.(*Transaction); ok {
+// 		return tx // Return transaction for chaining when inside a transaction
+// 	}
+// 	if err != nil {
+// 		return nil
+// 	}
+
+// 	return handleStringResponse(result)
+// }
+
 // SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
 // passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [OnlyIfExists] or
 // [OnlyIfDoesNotExist] conditions, api.CreateNilStringResult() is returned. If [SetOptions#ReturnOldValue] is
@@ -541,6 +553,11 @@ func (client *baseClient) Get(key string) (Result[string], error) {
 
 	if result == nil {
 		return CreateNilStringResult(), err
+	}
+
+	//If inside transaction
+	if _, ok := client.executor.(*Transaction); ok {
+		return CreateNilStringResult(), nil // Return transaction for chaining when inside a transaction
 	}
 
 	return handleStringOrNilResponse(result)
