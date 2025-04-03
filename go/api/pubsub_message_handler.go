@@ -52,14 +52,11 @@ func (handler *MessageHandler) Handle(pushInfo PushInfo) error {
 	// Process based on kind
 	switch pushInfo.Kind {
 	case Disconnection:
-		// log.Println("disconnect notification", "Transport disconnected, messages might be lost")
-
+		// Do nothing on disconnection
 	case Message, SMessage, PMessage:
 		return handler.handleMessage(pushInfo.Message)
-
 	case Subscribe, PSubscribe, SSubscribe, Unsubscribe, PUnsubscribe, SUnsubscribe:
-		// log.Println("subscribe/unsubscribe notification", "Subscription updates are not supported")
-
+		// These are subscription-related messages, we can ignore them for now
 	default:
 		log.Printf("unknown notification message: '%s'\n", pushInfo.Kind.String())
 	}
