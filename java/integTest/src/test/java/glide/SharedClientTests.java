@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
-import glide.api.logging.Logger;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
 import java.util.List;
@@ -144,10 +143,6 @@ public class SharedClientTests {
     @MethodSource("inflightRequestsLimitSizeAndClusterMode")
     public void inflight_requests_limit(boolean clusterMode, int inflightRequestsLimit) {
 
-        // Remove warnings for this test due to abundance of timeouts in blpop
-        Logger.Level originalValue = Logger.getLoggerLevel();
-        Logger.setLoggerConfig(Logger.Level.ERROR);
-
         BaseClient testClient;
         String keyName = "nonexistkeylist" + RandomString.make(4);
 
@@ -204,7 +199,5 @@ public class SharedClientTests {
 
         cleanupClient.close();
         testClient.close();
-
-        Logger.setLoggerConfig(originalValue);
     }
 }

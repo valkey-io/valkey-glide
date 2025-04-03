@@ -114,12 +114,7 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              run: |
-                  sudo tcpdump -i lo -w dump.pcap tcp port 6379 &
-                  ./gradlew --continue build -x javadoc
-                  sudo pkill tcpdump
-                  tcpdump -r dump.pcap
-                  rm dump.pcap
+              run: ./gradlew --continue build -x javadoc
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -137,7 +132,6 @@ jobs:
               with:
                   name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
-                      sudo pkill tcpdump
                       java/client/build/reports/**
                       java/integTest/build/reports/**
                       utils/clusters/**
