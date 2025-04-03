@@ -835,8 +835,8 @@ impl Client {
             inflight_requests_limit.try_into().unwrap(),
         ));
 
-        if let Some(endpoint_str) = &request.otel_endpoint {
-            let trace_exporter = GlideOpenTelemetryTraceExporter::from_str(endpoint_str.as_str())
+        if let Some(endpoint_str) = &request.otel_traces_endpoint {
+            let trace_exporter = GlideOpenTelemetrySignalsExporter::from_str(endpoint_str.as_str())
                 .map_err(ConnectionError::IoError)?;
             let config = GlideOpenTelemetryConfigBuilder::default()
                 .with_flush_interval(std::time::Duration::from_millis(
