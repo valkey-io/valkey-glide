@@ -3,13 +3,13 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
 
-using Glide.Commands;
-using Glide.Internals;
+using Valkey.Glide.Commands;
+using Valkey.Glide.Internals;
 
-using static Glide.ConnectionConfiguration;
-using static Glide.Route;
+using static Valkey.Glide.ConnectionConfiguration;
+using static Valkey.Glide.Route;
 
-namespace Glide;
+namespace Valkey.Glide;
 
 public abstract class BaseClient : IDisposable, IStringBaseCommands
 {

@@ -2,7 +2,7 @@
 
 using System.Runtime.InteropServices;
 
-namespace Glide;
+namespace Valkey.Glide;
 
 public abstract class ConnectionConfiguration
 {

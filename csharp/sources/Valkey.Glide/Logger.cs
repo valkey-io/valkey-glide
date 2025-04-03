@@ -4,8 +4,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-
-namespace Glide;
+namespace Valkey.Glide;
 
 // TODO - use a bindings generator to create this enum.
 public enum Level
