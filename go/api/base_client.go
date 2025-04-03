@@ -43,6 +43,7 @@ type BaseClient interface {
 	GenericBaseCommands
 	BitmapCommands
 	GeoSpatialCommands
+	ScriptingAndFunctionBaseCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -7384,4 +7385,229 @@ func (client *baseClient) GeoSearchStoreWithInfoOptions(
 		*options.NewGeoSearchResultOptions(),
 		infoOptions,
 	)
+}
+
+// Loads a library to Valkey.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	libraryCode - The source code that implements the library.
+//	replace - Whether the given library should overwrite a library with the same name if it
+//	already exists.
+//
+// Return value:
+//
+//	The library name that was loaded.
+//
+// [valkey.io]: https://valkey.io/commands/function-load/
+func (client *baseClient) FunctionLoad(libraryCode string, replace bool) (string, error) {
+	args := []string{}
+	if replace {
+		args = append(args, options.ReplaceKeyword)
+	}
+	args = append(args, libraryCode)
+	result, err := client.executeCommand(C.FunctionLoad, args)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all function libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-flush/
+func (client *baseClient) FunctionFlush() (string, error) {
+	result, err := client.executeCommand(C.FunctionFlush, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all function libraries in synchronous mode.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-flush/
+func (client *baseClient) FunctionFlushSync() (string, error) {
+	result, err := client.executeCommand(C.FunctionFlush, []string{string(options.SYNC)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all function libraries in asynchronous mode.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-flush/
+func (client *baseClient) FunctionFlushAsync() (string, error) {
+	result, err := client.executeCommand(C.FunctionFlush, []string{string(options.ASYNC)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Invokes a previously loaded function.
+// The command will be routed to a primary random node.
+// To route to a replica please refer to [FCallReadOnly].
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall/
+func (client *baseClient) FCall(function string) (any, error) {
+	result, err := client.executeCommand(C.FCall, []string{function, utils.IntToString(0)})
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
+}
+
+// Invokes a previously loaded read-only function.
+// This command is routed depending on the client's {@link ReadFrom} strategy.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall_ro/
+func (client *baseClient) FCallReadOnly(function string) (any, error) {
+	result, err := client.executeCommand(C.FCallReadOnly, []string{function, utils.IntToString(0)})
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
+}
+
+// Invokes a previously loaded function.
+// This command is routed to primary nodes only.
+// To route to a replica please refer to [FCallReadOnly].
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//	keys - An `array` of keys accessed by the function. To ensure the correct
+//	   execution of functions, both in standalone and clustered deployments, all names of keys
+//	   that a function accesses must be explicitly provided as `keys`.
+//	arguments - An `array` of `function` arguments. `arguments` should not represent names of keys.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall/
+func (client *baseClient) FCallWithKeysAndArgs(
+	function string,
+	keys []string,
+	args []string,
+) (any, error) {
+	cmdArgs := []string{function, utils.IntToString(int64(len(keys)))}
+	cmdArgs = append(cmdArgs, keys...)
+	cmdArgs = append(cmdArgs, args...)
+	result, err := client.executeCommand(C.FCall, cmdArgs)
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
+}
+
+// Invokes a previously loaded read-only function.
+// This command is routed depending on the client's {@link ReadFrom} strategy.
+//
+// Note: When in cluster mode, all `keys` must map to the same hash slot.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//	keys - An `array` of keys accessed by the function. To ensure the correct
+//	   execution of functions, both in standalone and clustered deployments, all names of keys
+//	   that a function accesses must be explicitly provided as `keys`.
+//	arguments - An `array` of `function` arguments. `arguments` should not represent names of keys.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall_ro/
+func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
+	function string,
+	keys []string,
+	args []string,
+) (any, error) {
+	cmdArgs := []string{function, utils.IntToString(int64(len(keys)))}
+	cmdArgs = append(cmdArgs, keys...)
+	cmdArgs = append(cmdArgs, args...)
+	result, err := client.executeCommand(C.FCallReadOnly, cmdArgs)
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
 }
