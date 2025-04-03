@@ -9,18 +9,18 @@ import {
     Decoder,
     GlideClient,
     GlideClusterClient,
+    GlideClusterClientConfiguration,
     GlideString,
     ObjectType,
     ProtocolVersion,
-    GlideClusterClientConfiguration,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
-    parseEndpoints,
     waitForClusterReady as isClusterReadyWithExpectedNodeCount,
+    parseEndpoints,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
