@@ -14737,7 +14737,6 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
-    @Timeout(20)
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")

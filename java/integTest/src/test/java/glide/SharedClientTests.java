@@ -142,7 +142,6 @@ public class SharedClientTests {
     @ParameterizedTest()
     @MethodSource("inflightRequestsLimitSizeAndClusterMode")
     public void inflight_requests_limit(boolean clusterMode, int inflightRequestsLimit) {
-
         BaseClient testClient;
         String keyName = "nonexistkeylist" + RandomString.make(4);
 
@@ -159,7 +158,6 @@ public class SharedClientTests {
         }
 
         // exercise
-        System.out.println("I'm using timeout of 0");
         List<CompletableFuture<String[]>> responses = new ArrayList<>();
         for (int i = 0; i < inflightRequestsLimit + 1; i++) {
             responses.add(testClient.blpop(new String[] {keyName}, 0));
