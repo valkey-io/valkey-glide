@@ -1,8 +1,8 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using static Glide.Route;
+using static Valkey.Glide.Route;
 
-namespace Tests.Integration;
+namespace Valkey.Glide.IntegrationTests;
 
 public class ClusterClientTests
 {
