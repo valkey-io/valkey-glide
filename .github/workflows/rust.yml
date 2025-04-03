@@ -98,12 +98,20 @@ jobs:
             - uses: Swatinem/rust-cache@v2
               with:
                   cache-on-failure: true
+                  cache-all-crates: true
                   workspaces: glide-core
                   shared-key: ${{ matrix.host.TARGET }}-glide-core
 
             - name: Run tests
               working-directory: ./glide-core
               run: cargo test --all-features --release -- --test-threads=1 # TODO remove the concurrency limit after we fix test flakyness.
+
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  cache-on-failure: true
+                  cache-all-crates: true
+                  workspaces: glide-core
+                  shared-key: ${{ matrix.host.TARGET }}-logger_core
 
             - name: Run logger tests
               working-directory: ./logger_core

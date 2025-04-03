@@ -23,6 +23,7 @@ runs:
         - uses: Swatinem/rust-cache@v2
           with:
               cache-on-failure: true
+              cache-all-crates: true
               workspaces: ${{ inputs.cargo-toml-folder }}
               # this action should be used on the most common runner only
               shared-key: x86_64-unknown-linux-gnu-${{ inputs.cargo-toml-folder }}
