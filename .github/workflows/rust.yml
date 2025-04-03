@@ -10,6 +10,7 @@ on:
             - logger_core/**
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
+            - ffi/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -23,6 +24,7 @@ on:
             - logger_core/**
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
+            - ffi/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -97,9 +99,13 @@ jobs:
 
             - uses: Swatinem/rust-cache@v2
 
-            - name: Run tests
+            - name: Run glide-core tests
               working-directory: ./glide-core
-              run: cargo test --all-features --release -- --test-threads=1 # TODO remove the concurrency limit after we fix test flakyness.
+              run: cargo test --all-features --release
+
+            - name: Run glide-ffi tests
+              working-directory: ./ffi
+              run: cargo test
 
             - name: Run logger tests
               working-directory: ./logger_core
@@ -126,6 +132,12 @@ jobs:
                   cargo-toml-folder: ./glide-core
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-core
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: ./ffi
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint glide-ffi
 
             - uses: ./.github/workflows/lint-rust
               with:

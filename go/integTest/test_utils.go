@@ -2,6 +2,8 @@
 
 package integTest
 
+import "strings"
+
 // check if sliceA is a subset of sliceB
 func isSubset[T comparable](sliceA []T, sliceB []T) bool {
 	setB := make(map[T]struct{})
@@ -24,4 +26,29 @@ func convertMapKeysAndValuesToLists(m map[string]string) ([]string, []string) {
 		values = append(values, value)
 	}
 	return keys, values
+}
+
+func GenerateLuaLibCode(libName string, functions map[string]string, readonly bool) string {
+	var code strings.Builder
+
+	// Write header
+	code.WriteString("#!lua name=")
+	code.WriteString(libName)
+	code.WriteString("\n")
+
+	// Write each function
+	for name, function := range functions {
+		code.WriteString("redis.register_function{ function_name = '")
+		code.WriteString(name)
+		code.WriteString("', callback = function(keys, args) ")
+		code.WriteString(function)
+		code.WriteString(" end")
+
+		if readonly {
+			code.WriteString(", flags = { 'no-writes' }")
+		}
+		code.WriteString(" }\n")
+	}
+
+	return code.String()
 }
