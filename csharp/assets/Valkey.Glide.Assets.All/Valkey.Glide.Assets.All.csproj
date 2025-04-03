@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- These are individual for each asset project -->
+    <TargetFrameworks>netstandard2.0;net8.0;net6.0</TargetFrameworks>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <IsPackable>True</IsPackable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IncludeSymbols>false</IncludeSymbols>
+    <PackageId>Valkey.Glide.Assets.All</PackageId>
+    <Configurations>Release;Debug</Configurations>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)../../props/version.props"/>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Valkey.Glide.Assets.Linux64Gnu\Valkey.Glide.Assets.Linux64Gnu.csproj" />
+    <ProjectReference Include="..\Valkey.Glide.Assets.Linux64Musl\Valkey.Glide.Assets.Linux64Musl.csproj" />
+    <ProjectReference Include="..\Valkey.Glide.Assets.LinuxArm64Gnu\Valkey.Glide.Assets.LinuxArm64Gnu.csproj" />
+    <ProjectReference Include="..\Valkey.Glide.Assets.LinuxArm64Musl\Valkey.Glide.Assets.LinuxArm64Musl.csproj" />
+    <ProjectReference Include="..\Valkey.Glide.Assets.MacOSArm64\Valkey.Glide.Assets.MacOSArm64.csproj" />
+    <ProjectReference Include="..\Valkey.Glide.Assets.Win32\Valkey.Glide.Assets.Win32.csproj" />
+    <ProjectReference Include="..\Valkey.Glide.Assets.Win64\Valkey.Glide.Assets.Win64.csproj" />
+  </ItemGroup>
+
+</Project>
