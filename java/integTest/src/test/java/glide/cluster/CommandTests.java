@@ -100,6 +100,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -107,6 +108,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(30) // seconds
 public class CommandTests {
+
+    private static int testCount = 0;
 
     private static final String INITIAL_VALUE = "VALUE";
 
@@ -2867,11 +2870,18 @@ public class CommandTests {
         assertEquals(expectedData.keySet(), keys);
     }
 
+    @RepeatedTest(700)
     @Timeout(20)
-    @ParameterizedTest
-    @MethodSource("getClients")
+    //    @ParameterizedTest
+    //    @MethodSource("getClients")
     @SneakyThrows
-    public void test_cluster_scan_with_match(GlideClusterClient clusterClient) {
+    public void test_cluster_scan_with_match() {
+        GlideClusterClient clusterClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(7000).build())
+                        .get();
+
+        clusterClient.set("We are on iteration:", Integer.toString(testCount++));
+
         assertEquals(OK, clusterClient.flushall().get());
         String key = "key:" + UUID.randomUUID();
         Map<String, String> expectedData = new LinkedHashMap<>();
