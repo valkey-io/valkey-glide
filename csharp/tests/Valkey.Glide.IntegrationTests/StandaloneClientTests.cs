@@ -1,5 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.InterOp;
+
 namespace Valkey.Glide.IntegrationTests;
 
 public class StandaloneClientTests
@@ -42,30 +44,30 @@ public class StandaloneClientTests
     public void CanConnectWithDifferentParameters()
     {
         _ = new GlideClient(TestConfiguration.DefaultClientConfig()
-            .WithClientName("GLIDE").Build());
+            .WithClientName("GLIDE"));
 
         _ = new GlideClient(TestConfiguration.DefaultClientConfig()
-            .WithTls(false).Build());
+            .WithTlsMode(ETlsMode.NoTls));
 
         _ = new GlideClient(TestConfiguration.DefaultClientConfig()
-            .WithConnectionTimeout(2000).Build());
+            .WithConnectionTimeout(TimeSpan.FromMilliseconds(2000)));
 
         _ = new GlideClient(TestConfiguration.DefaultClientConfig()
-            .WithRequestTimeout(2000).Build());
+            .WithRequestTimeout(TimeSpan.FromMilliseconds(2000)));
 
         _ = new GlideClient(TestConfiguration.DefaultClientConfig()
-            .WithDataBaseId(4).Build());
+            .WithDatabaseId(4));
 
         _ = new GlideClient(TestConfiguration.DefaultClientConfig()
-            .WithConnectionRetryStrategy(1, 2, 3).Build());
+            .WithConnectionRetryStrategy(1, 2, 3));
 
         _ = new GlideClient(TestConfiguration.DefaultClientConfig()
-            .WithAuthentication("default", "").Build());
+            .WithAuthentication("default", ""));
 
         _ = new GlideClient(TestConfiguration.DefaultClientConfig()
-            .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2).Build());
+            .WithProtocol(EProtocolVersion.Resp2));
 
         _ = new GlideClient(TestConfiguration.DefaultClientConfig()
-            .WithReadFrom(new ConnectionConfiguration.ReadFrom(ConnectionConfiguration.ReadFromStrategy.Primary)).Build());
+            .WithReplicationStrategy(ReplicationStrategy.Primary()));
     }
 }

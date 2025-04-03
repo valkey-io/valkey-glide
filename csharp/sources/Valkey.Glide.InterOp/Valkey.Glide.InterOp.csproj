@@ -1,0 +1,87 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+
+  <!-- Regions in this file will be replaced by prop includes in a future PR -->
+
+  <!-- Region: Version -->
+  <PropertyGroup>
+    <VersionPrefix>0.1.0.8</VersionPrefix>
+  </PropertyGroup>
+  <!-- EndRegion: Version -->
+
+  <!-- Region: Common -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>12.0</LangVersion>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <NuGetAudit>false</NuGetAudit>
+    <WarningLevel>0</WarningLevel>
+    <Configurations>Lint;Release;Debug</Configurations>
+    <IsPackable>True</IsPackable>
+    <Platforms>AnyCPU;x64;x86</Platforms>
+  </PropertyGroup>
+
+  <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Lint'">
+    <LangVersion>12.0</LangVersion>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <NuGetAudit>true</NuGetAudit>
+    <WarningLevel>4</WarningLevel>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- Workaround for https://github.com/dotnet/roslyn/issues/41640 -->
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS1587</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Valkey.Glide.UnitTests" />
+    <InternalsVisibleTo Include="Valkey.Glide.IntegrationTests" />
+  </ItemGroup>
+  <!-- EndRegion: Common -->
+
+  <ItemGroup>
+    <!-- ToDo: Clean up for proper packing
+               Right now only the hosts corresponding platform will be included,
+               which is fine for local testing,
+               but for the final NuGet,
+               we should include either _all_ assets or _none_
+               This could be done by appending ourself to the pack target and changing the project references then eg. -->
+
+    <!-- Windows -->
+    <ProjectReference Condition="'$(OS)|$(Platform)' == 'Windows_NT|x64'"
+                      Include="..\Valkey.Glide.InterOp.Assets.Win64\Valkey.Glide.InterOp.Assets.Win64.csproj"/>
+    <ProjectReference Condition="'$(OS)|$(Platform)' == 'Windows_NT|x86'"
+                      Include="..\Valkey.Glide.InterOp.Assets.Win32\Valkey.Glide.InterOp.Assets.Win32.csproj"/>
+    <ProjectReference Condition="'$(OS)|$(Platform)' == 'Windows_NT|AnyCPU'"
+                      Include="..\Valkey.Glide.InterOp.Assets.Win64\Valkey.Glide.InterOp.Assets.Win64.csproj"/>
+    <ProjectReference Condition="'$(OS)|$(Platform)' == 'Windows_NT|AnyCPU'"
+                      Include="..\Valkey.Glide.InterOp.Assets.Win32\Valkey.Glide.InterOp.Assets.Win32.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Native\Parameter\Parameter.cs" />
+    <Compile Remove="Native\Parameter\KeyParameterPair.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Native\Parameter\" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>Valkey.Glide.InterOp</RootNamespace>
+    <AssemblyName>Valkey.Glide.InterOp</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+</Project>

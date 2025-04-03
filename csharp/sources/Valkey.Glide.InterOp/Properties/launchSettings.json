@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Valkey.Glide.InterOp": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}

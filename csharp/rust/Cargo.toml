@@ -16,6 +16,9 @@ redis = { path = "../../glide-core/redis-rs/redis", features = ["aio", "tokio-co
 glide-core = { path = "../../glide-core" }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 logger_core = {path = "../../logger_core"}
+tracing-subscriber = "0.3.17"
+tracing-core = "0.1.30"
+file-rotate = "0.7.1"
 
 [profile.release]
 lto = true
