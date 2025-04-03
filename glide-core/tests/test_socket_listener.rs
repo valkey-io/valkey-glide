@@ -301,7 +301,7 @@ mod socket_listener {
         let mut batch = Batch::new();
         batch.commands.reserve(commands_components.len());
         batch.is_atomic = is_atomic;
-        batch.raise_on_error = raise_on_error;
+        batch.raise_on_error = Some(raise_on_error);
 
         for components in commands_components {
             batch.commands.push(get_command(components));
