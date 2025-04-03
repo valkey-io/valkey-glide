@@ -84,7 +84,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `GlideClusterClient test transecion_%p`,
+        `GlideClusterClient test transaction_%p`,
         async (protocol) => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
@@ -113,6 +113,29 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
             console.log(`Memory before: ${startMemory}, after: ${endMemory}`);
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow 10% growth
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClusterClient test span transaction_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const transaction = new ClusterTransaction();
+
+            transaction.set("test_key", "foo");
+            transaction.objectRefcount("test_key");
+
+            const response = await client.exec(transaction);
+            expect(response).not.toBeNull();
+
+            if (response != null) {
+                expect(response.length).toEqual(2);
+                expect(response[0]).toEqual("OK"); // transaction.set(key, "foo");
+                expect(response[1]).toBeGreaterThanOrEqual(1); // transaction.objectRefcount(key);
+            }
         },
         TIMEOUT,
     );

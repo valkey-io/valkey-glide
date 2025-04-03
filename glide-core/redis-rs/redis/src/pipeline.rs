@@ -1,5 +1,7 @@
 #![macro_use]
 
+use telemetrylib::GlideSpan;
+
 use crate::cmd::{cmd, cmd_len, Cmd};
 use crate::connection::ConnectionLike;
 use crate::types::{
@@ -13,6 +15,8 @@ pub struct Pipeline {
     commands: Vec<Arc<Cmd>>,
     transaction_mode: bool,
     ignored_commands: HashSet<usize>,
+    /// The OpenTelemtry span command, to measure the lifetime of the pipeline.
+    span_command_otel: Option<GlideSpan>,
 }
 
 /// A pipeline allows you to send multiple commands in one go to the
@@ -49,7 +53,19 @@ impl Pipeline {
             commands: Vec::with_capacity(capacity),
             transaction_mode: false,
             ignored_commands: HashSet::new(),
+            span_command_otel: None,
         }
+    }
+
+    /// Set the pipeline span
+    pub fn set_pipeline_span(&mut self, span: Option<GlideSpan>) {
+        self.span_command_otel = span;
+    }
+
+    /// Return this command span
+    #[inline]
+    pub fn span(&self) -> Option<GlideSpan> {
+        self.span_command_otel.clone()
     }
 
     /// This enables atomic mode.  In atomic mode the whole pipeline is

@@ -276,7 +276,7 @@ impl GlideSpan {
     }
 
     /// Add child span to this span and return it
-    pub fn add_span(&self, name: &str) -> Result<GlideSpan, TraceError> {
+    pub fn add_span(&self, name: &str) -> Result<GlideSpan, opentelemetry::trace::TraceError> {
         let inner_span = self.inner.add_span(name).map_err(|err| {
             TraceError::from(format!("Failed to create child span '{}': {}", name, err))
         })?;
@@ -549,5 +549,21 @@ mod tests {
         span.add_reference();
         assert_eq!(span.get_reference_count(), 2);
         drop(span);
+    }
+
+    #[test]
+    fn test_span_transaction() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let config = GlideOpenTelemetryConfigBuilder::default()
+                .with_flush_interval(std::time::Duration::from_millis(100))
+                .with_trace_exporter(GlideOpenTelemetryTraceExporter::File(PathBuf::from("/tmp")))
+                .build();
+            let _ = GlideOpenTelemetry::initialise(config);
+            create_test_spans().await;
+        });
     }
 }

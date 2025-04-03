@@ -1089,7 +1089,6 @@ export class BaseClient {
             const commandObj = Array.isArray(command)
                 ? "Batch"
                 : JSON.parse(JSON.stringify(command)).requestType;
-            console.log(" The request is: ", commandObj);
             //TODO: creates the span only if the otel config exits - https://github.com/valkey-io/valkey-glide/issues/3309
             //TODO: Add a condition to create a span statistic,
             // such as only 1% of the requests. This will be configurable - https://github.com/valkey-io/valkey-glide/issues/3452

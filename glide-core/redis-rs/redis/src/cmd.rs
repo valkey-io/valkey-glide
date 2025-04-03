@@ -371,11 +371,8 @@ impl Cmd {
     ///
     /// A span is used by an OpenTelemetry backend to track the lifetime of the command
     #[inline]
-    pub fn with_span_by_ptr(&mut self, span_ptr: u64) -> &mut Cmd {
-        unsafe {
-            Arc::increment_strong_count(span_ptr as *const GlideSpan);
-            self.span = Some((*Arc::from_raw(span_ptr as *const GlideSpan)).clone());
-        }
+    pub fn set_span(&mut self, span: Option<GlideSpan>) -> &mut Cmd {
+        self.span = span;
         self
     }
 

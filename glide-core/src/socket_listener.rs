@@ -26,9 +26,10 @@ use std::cell::Cell;
 use std::collections::HashSet;
 use std::ptr::from_mut;
 use std::rc::Rc;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::{env, str};
 use std::{io, thread};
+use telemetrylib::GlideSpan;
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
@@ -326,12 +327,7 @@ async fn send_command(
                 ),
             );
         }
-        None => {
-            log_info(
-                "OpenTelemetry",
-                "No span created - this is expected as we only sample part of requests for tracing",
-            );
-        }
+        None => {}
     }
     res
 }
@@ -397,8 +393,11 @@ async fn send_batch(
     request: Batch,
     client: &mut Client,
     routing: Option<RoutingInfo>,
+    span_command: Option<GlideSpan>,
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
+    pipeline.set_pipeline_span(span_command);
+    let child_span = pipeline.span().map(|span| span.add_span("send_command"));
     if request.is_atomic {
         pipeline.atomic();
     }
@@ -406,7 +405,7 @@ async fn send_batch(
         pipeline.add_command(get_redis_command(&command)?);
     }
 
-    match request.is_atomic {
+    let res = match request.is_atomic {
         true => client
             .send_transaction(
                 &pipeline,
@@ -429,7 +428,23 @@ async fn send_batch(
             )
             .await
             .map_err(|err| err.into()),
+    };
+    match child_span {
+        Some(Ok(child_span)) => {
+            child_span.end();
+        }
+        Some(Err(error_msg)) => {
+            log_error(
+                "OpenTelemetry error",
+                format!(
+                    "The child span was failed to create with error: {:?}",
+                    error_msg
+                ),
+            );
+        }
+        None => {}
     }
+    res
 }
 
 fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageResult<SlotAddr> {
@@ -518,16 +533,14 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
             true => match request.command {
                 Some(action) => match action {
                     command_request::Command::ClusterScan(cluster_scan_command) => {
-                        //ToDo: handle scan command
+                        //ToDo: handle scan command - https://github.com/valkey-io/valkey-glide/issues/3506
                         cluster_scan(cluster_scan_command, client).await
                     }
                     command_request::Command::SingleCommand(command) => {
                         match get_redis_command(&command) {
                             Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
                                 Ok(routes) => {
-                                    if let Some(span_command) = request.span_command {
-                                        cmd.with_span_by_ptr(span_command);
-                                    }
+                                    cmd.set_span(get_unsafe_span_from_ptr(request.span_command));
                                     send_command(cmd, client, routes).await
                                 }
                                 Err(e) => Err(e),
@@ -536,9 +549,11 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                         }
                     }
                     command_request::Command::Batch(batch) => {
-                        //ToDo: handle Batch command
                         match get_route(request.route.0, None) {
-                            Ok(routes) => send_batch(batch, &mut client, routes).await,
+                            Ok(routes) => {
+                                let span_command = get_unsafe_span_from_ptr(request.span_command);
+                                send_batch(batch, &mut client, routes, span_command).await
+                            }
                             Err(e) => Err(e),
                         }
                     }
@@ -617,6 +632,14 @@ async fn handle_requests(
     }
     // Yield to ensure that the subtasks aren't starved.
     task::yield_now().await;
+}
+
+fn get_unsafe_span_from_ptr(span_command: Option<u64>) -> Option<GlideSpan> {
+    span_command.map(|span_command| unsafe {
+        Arc::increment_strong_count(span_command as *const GlideSpan);
+        let span = (*Arc::from_raw(span_command as *const GlideSpan)).clone();
+        span
+    })
 }
 
 pub fn close_socket(socket_path: &String) {
