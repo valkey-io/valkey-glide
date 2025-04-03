@@ -1,0 +1,46 @@
+<!--
+  Contains common msbuild configuration to use for all Valkey.Glide* projects (except assets)
+  -->
+<Project>
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net6.0</TargetFrameworks>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <LangVersion>12.0</LangVersion>
+        <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+        <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+        <EnableNETAnalyzers>false</EnableNETAnalyzers>
+        <NuGetAudit>false</NuGetAudit>
+        <WarningLevel>0</WarningLevel>
+        <Configurations>Lint;Release;Debug</Configurations>
+        <IsPackable>True</IsPackable>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <!-- https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.architecture?view=netstandard-2.0 -->
+        <Architecture>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)</Architecture>
+    </PropertyGroup>
+
+    <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Lint'">
+        <LangVersion>12.0</LangVersion>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+        <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <NuGetAudit>true</NuGetAudit>
+        <WarningLevel>4</WarningLevel>
+        <AnalysisLevel>latest</AnalysisLevel>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <!-- Workaround for https://github.com/dotnet/roslyn/issues/41640 -->
+    <PropertyGroup>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);CS1591;CS1573;CS1587</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Valkey.Glide.UnitTests" />
+        <InternalsVisibleTo Include="Valkey.Glide.IntegrationTests" />
+    </ItemGroup>
+</Project>
