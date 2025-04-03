@@ -1,8 +1,8 @@
-﻿use crate::data::{StringPair, Value};
-use crate::helpers;
+﻿use crate::helpers;
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
 use std::ptr::null;
+use crate::value::{StringPair, Value};
 
 /// # Summary
 /// This struct is an optimization technique used to reduce the general number of allocations

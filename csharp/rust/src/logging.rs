@@ -1,6 +1,6 @@
 ﻿use crate::helpers;
 use std::ffi::{c_int, c_ulonglong, c_void};
-use std::fmt::{Debug, Pointer};
+use std::fmt::{Debug};
 use std::mem::forget;
 use std::os::raw::c_char;
 use std::ptr::null;
@@ -17,7 +17,7 @@ pub struct KeyValuePair {
     pub value_length: c_int,
 }
 
-enum ESeverity {
+pub enum ESeverity {
     /// The "trace" level.
     ///
     /// Designates very low priority, often extremely verbose, information.

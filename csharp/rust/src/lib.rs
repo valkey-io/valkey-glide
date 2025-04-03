@@ -8,30 +8,35 @@ mod data;
 mod helpers;
 mod logging;
 mod routing;
+mod value;
+mod conreq;
+mod parameter;
 
 use crate::apihandle::Handle;
 use crate::buffering::FFIBuffer;
+use crate::conreq::ConnectionRequest;
 use crate::data::*;
+use crate::value::Value;
 use glide_core::client::ConnectionError;
 use glide_core::request_type::RequestType;
+use logger_core::{LazyRollingFileAppender, Reloads, INITIATE_ONCE};
 use std::ffi::{c_int, c_void, CString};
 use std::os::raw::c_char;
 use std::panic::catch_unwind;
 use std::ptr::null;
 use std::str::FromStr;
 use std::sync::RwLock;
-use logger_core::{create_directory_from_env, LazyRollingFileAppender, Reloads, INITIATE_ONCE};
 use tokio::runtime::Builder;
 use tracing_core::LevelFilter;
-use tracing_subscriber::{filter, reload, Layer};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{filter, reload, Layer};
 
 /// # Summary
 /// Special method to free the returned values.
 /// MUST be used!
 #[no_mangle]
-pub unsafe extern "C-unwind" fn csharp_free_value(mut input: Value) {
+pub unsafe extern "C-unwind" fn csharp_free_value(_input: Value) {
     // We use this just to make the pattern more "future-proof".
     // Right now, no freeing is done here
 }
@@ -273,6 +278,7 @@ pub extern "C-unwind" fn csharp_command(
     //       handling the different input types.
     in_args: *const *const c_char,
     in_args_count: c_int,
+    // ToDo: Pass in ActivityContext and connect C# OTEL with Rust OTEL
 ) -> CommandResult {
     logger_core::log_trace("csharp_ffi", "Entered csharp_command");
     if in_client_ptr.is_null() {
