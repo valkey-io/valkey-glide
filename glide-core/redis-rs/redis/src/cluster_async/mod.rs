@@ -155,10 +155,11 @@ where
     ///
     /// # Arguments
     ///
-    /// * `scan_state_rc` - A reference to the scan state, For initiating new scan send [`ScanStateRC::new()`],
-    ///   for each subsequent iteration use the returned [`ScanStateRC`].
-    /// * `cluster_scan_args` - A [`ClusterScanArgs`] struct containing the arguments for the cluster scan command - match pattern, count,
-    ///    object type and the allow_non_covered_slots flag.
+    /// * `scan_state_rc` - A reference to the scan state. For initiating a new scan, send [`ScanStateRC::new()`].
+    ///   For each subsequent iteration, use the returned [`ScanStateRC`].
+    /// * `cluster_scan_args` - A [`ClusterScanArgs`] struct containing the arguments for the cluster scan command:
+    ///   match pattern, count, object type, and the `allow_non_covered_slots` flag.
+
     ///
     /// # Returns
     ///
