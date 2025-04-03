@@ -297,6 +297,7 @@ class BaseClient(CoreCommands):
             transaction_commands.append(command)
         request.batch.commands.extend(transaction_commands)
         request.batch.is_atomic = True
+        # TODO: add support for timeout, raise on error and retry strategy
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 

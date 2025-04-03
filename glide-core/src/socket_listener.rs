@@ -19,7 +19,9 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::{ClusterScanArgs, Cmd, PushInfo, RedisError, ScanStateRC, Value};
+use redis::{
+    ClusterScanArgs, Cmd, PipelineRetryStrategy, PushInfo, RedisError, ScanStateRC, Value,
+};
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::ptr::from_mut;
@@ -386,11 +388,25 @@ async fn send_batch(
 
     match request.is_atomic {
         true => client
-            .send_transaction(&pipeline, routing)
+            .send_transaction(
+                &pipeline,
+                routing,
+                request.timeout,
+                request.raise_on_error.unwrap_or_default(),
+            )
             .await
             .map_err(|err| err.into()),
         false => client
-            .send_pipeline(&pipeline)
+            .send_pipeline(
+                &pipeline,
+                routing,
+                request.raise_on_error.unwrap_or_default(),
+                request.timeout,
+                PipelineRetryStrategy {
+                    retry_server_error: request.retry_server_error.unwrap_or_default(),
+                    retry_connection_error: request.retry_connection_error.unwrap_or_default(),
+                },
+            )
             .await
             .map_err(|err| err.into()),
     }

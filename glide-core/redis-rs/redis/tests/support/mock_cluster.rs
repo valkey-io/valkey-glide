@@ -1,6 +1,6 @@
 use redis::{
     cluster::{self, ClusterClient, ClusterClientBuilder},
-    ErrorKind, FromRedisValue, GlideConnectionOptions, RedisError,
+    ErrorKind, FromRedisValue, GlideConnectionOptions, PipelineRetryStrategy, RedisError,
 };
 
 use std::{
@@ -361,6 +361,7 @@ impl aio::ConnectionLike for MockConnection {
         _pipeline: &'a redis::Pipeline,
         _offset: usize,
         _count: usize,
+        _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>> {
         Box::pin(future::ok(vec![]))
     }

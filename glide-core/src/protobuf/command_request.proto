@@ -500,6 +500,10 @@ message ScriptInvocation {
 message Batch {
     bool is_atomic = 1;
     repeated Command commands = 2;
+    optional bool raise_on_error = 3;
+    optional uint32 timeout = 4;
+    optional bool retry_server_error = 5;
+    optional bool retry_connection_error = 6;
 }
 
 message ClusterScan {
