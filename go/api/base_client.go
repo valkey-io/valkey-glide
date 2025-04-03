@@ -191,13 +191,6 @@ func pubSubCallback(clientPtr unsafe.Pointer, kind C.uint32_t, cResponse *C.stru
 
 	}
 
-	// Create a PushInfo struct with the message
-
-	// Get the global message dispatcher and route the message
-	// dispatcher := GetDispatcher()
-	// dispatcher.DispatchMessage(pushMsg)
-
-	// Instead of using global dispatcher, use the client pointer
 	if clientPtr != nil {
 		// Look up the client in our registry using the pointer address
 		ptrValue := uintptr(clientPtr)
@@ -366,6 +359,8 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, &errors.ClosingError{Msg: err.Error()}
 	}
+	client := &baseClient{pending: make(map[unsafe.Pointer]struct{})}
+
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
 			(*C.uchar)(requestBytes),
@@ -381,12 +376,10 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 		return nil, &errors.ConnectionError{Msg: message}
 	}
 
-	client := &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}
+	client.coreClient = cResponse.conn_ptr
 
 	// Register the client in our registry using the pointer value from C
 	RegisterClient(client, uintptr(cResponse.conn_ptr))
-
-	fmt.Printf("Client created successfully: %p - %p\n", &client, client.coreClient)
 
 	return client, nil
 }
@@ -7849,7 +7842,7 @@ func (client *baseClient) Publish(channel string, message string) (int64, error)
 	if message == "" || channel == "" {
 		return 0, goErr.New("both message and channel are required for Publish command")
 	}
-
+	fmt.Printf("Publishing message to channel '%s': %s\n", channel, message)
 	args := []string{channel, message}
 	result, err := client.executeCommand(C.Publish, args)
 	if err != nil {

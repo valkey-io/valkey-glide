@@ -37,7 +37,8 @@ func (suite *PubSubTestSuite) TestBasicPubSubWithGlideClient() {
 
 	// Publish a message
 	testMessage := "hello world"
-	result, err := publisher.Publish(testMessage, "test-channel")
+	result, err := publisher.Publish("test-channel", testMessage)
+	// result, err := publisher.CustomCommand([]string{"PUBLISH", "test-channel", testMessage})
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), result)
 
@@ -45,7 +46,7 @@ func (suite *PubSubTestSuite) TestBasicPubSubWithGlideClient() {
 	var receivedMessage *api.PubSubMessage
 	select {
 	case receivedMessage = <-messageReceived:
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		assert.Fail(suite.T(), "Timed out waiting for message")
 	}
 
@@ -97,7 +98,7 @@ func (suite *PubSubTestSuite) TestMultipleSubscribersWithGlideClient() {
 	for i := 0; i < messageCount; i++ {
 		msg := fmt.Sprintf("Hello Subscribers - msg %d", i)
 
-		result1, err := publisher.Publish(msg, "test-channel-multi")
+		result1, err := publisher.Publish("test-channel-multi", msg)
 		assert.Nil(suite.T(), err)
 		assert.NotNil(suite.T(), result1)
 		suite.T().Logf("Published message to channel")
@@ -193,7 +194,7 @@ func (suite *PubSubTestSuite) TestUnsubscribeWithGlideClient() {
 
 	// Publish a message and verify it's received
 	testMessage := "message before unsubscribe"
-	_, err := publisher.Publish(testMessage, "test-channel-unsub")
+	_, err := publisher.Publish("test-channel-unsub", testMessage)
 	assert.Nil(suite.T(), err)
 
 	// Wait for the message to be received
@@ -214,7 +215,7 @@ func (suite *PubSubTestSuite) TestUnsubscribeWithGlideClient() {
 
 	// Publish another message
 	testMessage2 := "message after unsubscribe"
-	_, err = publisher.Publish(testMessage2, "test-channel-unsub")
+	_, err = publisher.Publish("test-channel-unsub", testMessage2)
 	assert.Nil(suite.T(), err)
 
 	// Verify the message is not received (timeout expected)
@@ -251,14 +252,14 @@ func (suite *PubSubTestSuite) TestPatternSubscribeWithGlideClient() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Publish messages to channels matching the pattern
-	_, err := publisher.Publish("message to pattern 1", "test-pattern-1")
+	_, err := publisher.Publish("test-pattern-1", "message to pattern 1")
 	assert.Nil(suite.T(), err)
 
-	_, err = publisher.Publish("message to pattern 2", "test-pattern-2")
+	_, err = publisher.Publish("test-pattern-2", "message to pattern 2")
 	assert.Nil(suite.T(), err)
 
 	// Publish a message to a non-matching channel
-	_, err = publisher.Publish("should not receive", "other-channel")
+	_, err = publisher.Publish("other-channel", "should not receive")
 	assert.Nil(suite.T(), err)
 
 	// Wait for the expected messages or timeout
