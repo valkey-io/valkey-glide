@@ -159,7 +159,6 @@ where
     ///   For each subsequent iteration, use the returned [`ScanStateRC`].
     /// * `cluster_scan_args` - A [`ClusterScanArgs`] struct containing the arguments for the cluster scan command:
     ///   match pattern, count, object type, and the `allow_non_covered_slots` flag.
-
     ///
     /// # Returns
     ///

@@ -1138,10 +1138,7 @@ export class BaseClient {
                   batch: command_request.Batch.create({
                       isAtomic: true,
                       commands: command,
-                      // TODO: add support for timeout
-                      raiseOnError: true,
-                      retryServerError: false,
-                      retryConnectionError: false,
+                      // TODO: add support for timeout, raiseOnError and retryStrategy
                   }),
                   route,
               })
