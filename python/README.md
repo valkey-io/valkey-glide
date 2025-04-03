@@ -17,6 +17,8 @@ Linux:
 -   Ubuntu 22.04.5 (x86_64/amd64 and arm64/aarch64)
 -   Amazon Linux 2023 (AL2023) (x86_64)
 
+**Note: Currently Alpine Linux / MUSL is NOT supported.**
+
 macOS:
 
 -   macOS 14.7 (Apple silicon/aarch_64)
