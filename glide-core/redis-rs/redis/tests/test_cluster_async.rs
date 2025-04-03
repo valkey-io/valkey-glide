@@ -31,9 +31,10 @@ mod cluster_async {
         },
         cluster_topology::{get_slot, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES},
         cmd, from_owned_redis_value, parse_redis_value, AsyncCommands, Cmd, ErrorKind,
-        FromRedisValue, GlideConnectionOptions, InfoDict, IntoConnectionInfo, ProtocolVersion,
-        PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind, PushInfo, PushKind,
-        RedisError, RedisFuture, RedisResult, Script, Value,
+        FromRedisValue, GlideConnectionOptions, InfoDict, IntoConnectionInfo,
+        PipelineRetryStrategy, ProtocolVersion, PubSubChannelOrPattern, PubSubSubscriptionInfo,
+        PubSubSubscriptionKind, PushInfo, PushKind, RedisError, RedisFuture, RedisResult, Script,
+        Value,
     };
 
     use crate::support::*;
@@ -972,8 +973,10 @@ mod cluster_async {
             pipeline: &'a redis::Pipeline,
             offset: usize,
             count: usize,
+            pipeline_retry_strategy: Option<PipelineRetryStrategy>,
         ) -> RedisFuture<'a, Vec<Value>> {
-            self.inner.req_packed_commands(pipeline, offset, count)
+            self.inner
+                .req_packed_commands(pipeline, offset, count, pipeline_retry_strategy)
         }
 
         fn get_db(&self) -> i64 {
@@ -3985,7 +3988,8 @@ mod cluster_async {
                         &pipe,
                         0,
                         2,
-                        SingleNodeRoutingInfo::SpecificNode(Route::new(keyslot_bar, SlotAddr::Master)),
+                        Some(SingleNodeRoutingInfo::SpecificNode(Route::new(keyslot_bar, SlotAddr::Master))),
+                        None,
                     )
                     .await;
             });
