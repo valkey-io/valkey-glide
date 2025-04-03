@@ -1,10 +1,6 @@
 name: Setup musl on Linux
 
 inputs:
-    workspace:
-        description: "github workspace"
-        required: true
-        type: string
     npm-scope:
         description: "npm scope"
         required: true
@@ -40,10 +36,8 @@ runs:
         # here we just making sure we getting the clean repo
         - name: Clean repository for musl on ARM64
           shell: bash
-          env:
-              WORKSPACE: ${{ inputs.workspace }}
           run: |
-              git config --global --add safe.directory "$WORKSPACE"
+              git config --global --add safe.directory $GITHUB_WORKSPACE
               git fetch origin ${{ github.sha }}
               git checkout ${{ github.sha }}
               git clean -xdf
