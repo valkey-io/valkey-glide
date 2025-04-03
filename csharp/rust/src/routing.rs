@@ -23,6 +23,12 @@ impl RoutingInfo {
                     redis::cluster_routing::SingleNodeRoutingInfo::SpecificNode(route),
                 )
             }
+            ERoutingInfo::SingleSpecificKeyedNode => {
+                let route = self.value.keyed_specific_node.to_redis()?;
+                redis::cluster_routing::RoutingInfo::SingleNode(
+                    redis::cluster_routing::SingleNodeRoutingInfo::SpecificNode(route),
+                )
+            }
             ERoutingInfo::SingleByAddress => {
                 let address = self.value.by_address.to_redis()?;
                 redis::cluster_routing::RoutingInfo::SingleNode(address)
@@ -48,8 +54,10 @@ pub enum ERoutingInfo {
     SingleRandom,
     /// Route to any *primary* node
     SingleRandomPrimary,
-    /// Route to the node that matches the [Route]
+    /// Route to the node that matches the [Slot]
     SingleSpecificNode,
+    /// Route to the node that matches the [Slot]
+    SingleSpecificKeyedNode,
     /// Route to the node with the given address.
     SingleByAddress,
 
@@ -99,14 +107,14 @@ pub enum RouteSlotAddress {
     ReplicaRequired,
 }
 #[repr(C)]
-pub struct Route {
-    /// DNS hostname of the node
+pub struct Slot {
+    /// slot number
     pub slot: c_ushort,
     /// port of the node
     pub slot_addr: RouteSlotAddress,
 }
 
-impl Route {
+impl Slot {
     pub(crate) fn to_redis(&self) -> redis::cluster_routing::Route {
         redis::cluster_routing::Route::new(
             self.slot,
@@ -120,6 +128,36 @@ impl Route {
                 }
             },
         )
+    }
+}
+#[repr(C)]
+pub struct KeyedSlot {
+    /// DNS hostname of the node
+    pub slot: *const c_char,
+    // Length of the slot
+    pub slot_length: c_uint,
+    /// port of the node
+    pub slot_addr: RouteSlotAddress,
+}
+
+
+impl KeyedSlot {
+    pub(crate) fn to_redis(&self) -> Result<redis::cluster_routing::Route, Utf8OrEmptyError> {
+        let slot = helpers::grab_str_not_null(self.slot)?;
+        let slot = redis::cluster_topology::get_slot(slot.as_bytes());
+
+        Ok(redis::cluster_routing::Route::new(
+            slot,
+            match self.slot_addr {
+                RouteSlotAddress::Master => redis::cluster_routing::SlotAddr::Master,
+                RouteSlotAddress::ReplicaOptional => {
+                    redis::cluster_routing::SlotAddr::ReplicaOptional
+                }
+                RouteSlotAddress::ReplicaRequired => {
+                    redis::cluster_routing::SlotAddr::ReplicaRequired
+                }
+            },
+        ))
     }
 }
 
@@ -160,7 +198,7 @@ impl RoutingInfoMultiSlot {
 
 #[repr(C)]
 pub struct RoutingInfoMultiSlotPair {
-    pub route: Route,
+    pub route: Slot,
     pub something: *const c_longlong,
     pub something_length: c_uint,
 }
@@ -277,7 +315,10 @@ pub union RoutingInfoUnion {
     pub by_address: std::mem::ManuallyDrop<RoutingInfoByAddress>,
 
     /// Set if ERoutingInfo is SpecificNode
-    pub specific_node: std::mem::ManuallyDrop<Route>,
+    pub specific_node: std::mem::ManuallyDrop<Slot>,
+
+    /// Set if ERoutingInfo is SpecificNode
+    pub keyed_specific_node: std::mem::ManuallyDrop<KeyedSlot>,
 
     /// Set if ERoutingInfo is MultiAllNodes or MultiAllMasters
     pub multi: std::mem::ManuallyDrop<ERoutingInfoMultiResponsePolicy>,

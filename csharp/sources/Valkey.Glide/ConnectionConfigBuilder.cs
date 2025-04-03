@@ -79,7 +79,7 @@ public sealed class ConnectionConfigBuilder
     /// <param name="username">The username to use for authentication.</param>
     /// <param name="password">The password to use for authentication.</param>
     /// <returns>The <see langword="this"/> reference.</returns>
-    public ConnectionConfigBuilder WithAuth(string? username, string? password)
+    public ConnectionConfigBuilder WithAuthentication(string? username, string? password)
     {
         if (string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password)
             || !string.IsNullOrWhiteSpace(username) && string.IsNullOrWhiteSpace(password))
@@ -157,6 +157,27 @@ public sealed class ConnectionConfigBuilder
     public ConnectionConfigBuilder WithConnectionRetryStrategy(ConnectionRetryStrategy? connectionRetryStrategy)
     {
         _connectionRetryStrategy = connectionRetryStrategy;
+        return this;
+    }
+
+    /// <summary>
+    /// Configures the connection retry strategy for handling reconnection attempts.
+    /// </summary>
+    /// <param name="factor">The multiplier that will be applied to the waiting time between each retry.</param>
+    /// <param name="exponentialBase">The exponent base configured for the strategy.</param>
+    /// <param name="numberOfRetries">Number of retry attempts that the client should perform when disconnected from the server.</param>
+    /// <param name="connectionRetryStrategy">
+    /// An instance of <see cref="ConnectionRetryStrategy"/> specifying the retry behavior, including exponential backoff and retry limits.
+    /// </param>
+    /// <returns>The <see langword="this"/> reference.</returns>
+    public ConnectionConfigBuilder WithConnectionRetryStrategy(uint factor, uint exponentialBase, uint numberOfRetries)
+    {
+        _connectionRetryStrategy = new ConnectionRetryStrategy
+        {
+            Factor = factor,
+            ExponentialBase = exponentialBase,
+            NumberOfRetries = numberOfRetries,
+        };
         return this;
     }
 

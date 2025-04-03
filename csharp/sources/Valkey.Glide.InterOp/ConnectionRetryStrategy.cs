@@ -26,7 +26,9 @@ public struct ConnectionRetryStrategy
     public uint ExponentialBase { get; set; }
 
     // ToDo: Figure out if this should actually be named MaxAttemptImpact or something like that or if it is really
-    //       the number of maximum attempts to perform. In both cases: the documentation is missleading.
+    //       the number of maximum attempts to perform.
+    //       In both cases: the documentation is misleading.
+    //       (Update ConnectionConfigBuilder accordingly)
     /// <summary>
     /// Number of retry attempts that the client should perform when disconnected from the server.
     /// </summary>

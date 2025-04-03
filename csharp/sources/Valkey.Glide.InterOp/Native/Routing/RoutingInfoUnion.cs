@@ -15,7 +15,11 @@ public struct RoutingInfoUnion
 
     /// Set if ERoutingInfo is SpecificNode
     [FieldOffset(0)]
-    public Route specific_node;
+    public Slot specific_node;
+
+    /// Set if ERoutingInfo is keyed SpecificNode
+    [FieldOffset(0)]
+    public KeyedSlot keyed_specific_node;
 
     /// Set if ERoutingInfo is MultiAllNodes or MultiAllMasters
     [FieldOffset(0)]

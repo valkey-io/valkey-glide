@@ -7,9 +7,11 @@ namespace Valkey.Glide.InterOp.Native.Routing;
 [EditorBrowsable(EditorBrowsableState.Advanced)]
 [SuppressMessage("ReSharper", "InconsistentNaming")]
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-public unsafe struct RoutingInfoMultiSlotPair
+public struct Slot
 {
-    public Slot route;
-    public long* something;
-    public uint something_length;
+    /// DNS hostname of the node
+    public ushort slot;
+
+    /// port of the node
+    public RouteSlotAddress slot_addr;
 }

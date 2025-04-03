@@ -12,7 +12,7 @@ namespace Valkey.Glide.InterOp.Routing;
 /// (e.g., only keys, key-value pairs, etc).
 /// </summary>
 /// <param name="responsePolicy"></param>
-public sealed class MultiMultiSlot(EResponsePolicy responsePolicy, EArgPattern argPattern, (Route route, List<long> something)[] routes) : IRoutingInfo
+public sealed class MultiMultiSlot(EResponsePolicy responsePolicy, EArgPattern argPattern, (Slot route, List<long> something)[] routes) : IRoutingInfo
 {
     // ToDo: Add documentation for responsePolicy
     public unsafe RoutingInfo? ToNative(MarshalString marshalString, MarshalBytes marshalBytes)

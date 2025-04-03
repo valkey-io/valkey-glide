@@ -11,6 +11,9 @@ public enum ERoutingInfo
     /// Route to the node that matches the [Route]
     SingleSpecificNode,
 
+    /// Route to the node that matches the [Route]
+    SingleSpecificKeyedNode,
+
     /// Route to the node with the given address.
     SingleByAddress,
 

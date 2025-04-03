@@ -1,5 +1,6 @@
-﻿using System.ComponentModel;
-using Valkey.Glide.InterOp.Native;
+﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
+using System.ComponentModel;
 using Valkey.Glide.InterOp.Native.Routing;
 
 namespace Valkey.Glide.InterOp.Routing;
@@ -9,17 +10,18 @@ namespace Valkey.Glide.InterOp.Routing;
 /// </summary>
 /// <param name="slot"></param>
 /// <param name="slotAddress"></param>
-public sealed class SingleSpecificNode(ushort slot, ESlotAddress slotAddress) : IRoutingInfo
+public sealed unsafe class SingleSpecificKeyedNode(string slot, ESlotAddress slotAddress) : IRoutingInfo
 {
     // ToDo: Fill in documentation for slot and slotAddress
     public RoutingInfo? ToNative(MarshalString marshalString, MarshalBytes marshalBytes) => new RoutingInfo
     {
-        kind = ERoutingInfo.SingleSpecificNode,
+        kind = ERoutingInfo.SingleSpecificKeyedNode,
         value = new RoutingInfoUnion
         {
-            specific_node = new Slot
+            keyed_specific_node = new KeyedSlot
             {
-                slot = 0,
+                slot = marshalString(slot),
+                slot_length = (uint)slot.Length,
                 slot_addr = slotAddress switch
                 {
                     ESlotAddress.Master => RouteSlotAddress.Master,
