@@ -36,7 +36,7 @@ public static class MainClass
         public string Host { get; set; } = "localhost";
 
         [Option('p', "port", Required = false, HelpText = "What port to target")]
-        public int Port { get; set; } = 6379;
+        public ushort Port { get; set; } = 6379;
 
         [Option('C', "clientCount", Required = false, HelpText = "Number of clients to run concurrently", Default = new[] { 1 })]
         public IEnumerable<int> ClientCount { get; set; } = [];
@@ -51,9 +51,9 @@ public static class MainClass
         public bool Minimal { get; set; } = false;
     }
 
-    private static string GetAddress(string host, int port) => $"{host}:{port}";
+    private static string GetAddress(string host, ushort port) => $"{host}:{port}";
 
-    private static string GetAddressForStackExchangeRedis(string host, int port, bool useTLS) => $"{GetAddress(host, port)},ssl={useTLS}";
+    private static string GetAddressForStackExchangeRedis(string host, ushort port, bool useTLS) => $"{GetAddress(host, port)},ssl={useTLS}";
 
     private const double PROB_GET = 0.8;
 
@@ -259,7 +259,7 @@ public static class MainClass
         int num_of_concurrent_tasks,
         string clientsToRun,
         string host,
-        int port,
+        ushort port,
         int clientCount,
         bool useTLS,
         bool isCluster)
@@ -269,16 +269,16 @@ public static class MainClass
             ClientWrapper[] clients = await CreateClients(clientCount, () =>
             {
                 BaseClient glideClient;
-                if (isCluster)
+                if (!isCluster)
                 {
                     StandaloneClientConfiguration config = new StandaloneClientConfigurationBuilder()
-                        .WithAddress(host, (ushort)port).WithTls(useTLS).Build();
+                        .WithAddress(host, port).WithTls(useTLS).Build();
                     glideClient = new GlideClient(config);
                 }
                 else
                 {
                     ClusterClientConfiguration config = new ClusterClientConfigurationBuilder()
-                        .WithAddress(host, (ushort)port).WithTls(useTLS).Build();
+                        .WithAddress(host, port).WithTls(useTLS).Build();
                     glideClient = new GlideClusterClient(config);
                 }
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
