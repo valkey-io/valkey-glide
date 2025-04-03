@@ -22,6 +22,8 @@ namespace Valkey.Glide.InterOp;
     Justification = "We need to keep the references alive.")]
 public abstract unsafe class NativeLoggingHarness
 {
+    public static NativeLoggingHarness? Instance => s_instance;
+
     private static readonly object Lock = new();
     private static bool s_wasCreated;
 
@@ -68,9 +70,9 @@ public abstract unsafe class NativeLoggingHarness
             if (s_wasCreated)
                 throw new InvalidOperationException("Cannot create multiple logging harnesses.");
             s_wasCreated = true;
+            s_instance = this;
         }
 
-        s_instance = this;
         _isEnabledCallback = OnIsEnabledCallback;
         _newSpawnCallback = OnNewSpawnCallback;
         _recordCallback = OnRecordCallback;

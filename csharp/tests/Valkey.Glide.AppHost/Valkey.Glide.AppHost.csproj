@@ -11,6 +11,8 @@
         <UserSecretsId>3ff786a0-6398-4ee7-b5b1-085efc63e359</UserSecretsId>
         <GenerateDocumentationFile>False</GenerateDocumentationFile>
         <IsPackable>False</IsPackable>
+        <Configurations>Release;Debug</Configurations>
+        <Platforms>x64;AnyCPU</Platforms>
     </PropertyGroup>
 
     <ItemGroup>

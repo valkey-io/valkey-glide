@@ -5,6 +5,8 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UserSecretsId>dotnet-CustomSerializers-bccfc623-77e5-421f-bc8a-a48e977c06bc</UserSecretsId>
+        <Configurations>Release;Debug</Configurations>
+        <Platforms>x64;AnyCPU</Platforms>
     </PropertyGroup>
 
     <ItemGroup>

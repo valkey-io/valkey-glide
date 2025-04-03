@@ -50,6 +50,12 @@ sudo apt-get install dotnet6  # Linux
 
 Visit https://rustup.rs/ and follow the instructions.
 
+#### Dependencies installation Windows X64
+After following the instructions at https://rustup.rs, add the 32Bit target to your system:
+```bash
+rustup target add i686-pc-windows-msvc
+```
+
 ### Dependencies installation for Ubuntu
 
 ```bash

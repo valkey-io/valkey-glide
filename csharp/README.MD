@@ -20,12 +20,15 @@ The C# client contains the following parts:
 
 1. The Rust component of the C# client resides in the `rust` directory and facilitates communication with the [GLIDE core Rust library](../glide-core/README.md).
 2. The C# interop layer, located in `sources/Valkey.Glide.InterOp`, acts as a bridge, converting Rust's asynchronous API into the .NET asynchronous API.
-3. The main C# client implementation can be found in `sources/Valkey.Glide`; it is responsible for managing commands and other non-interop specific operations.
-4. A library supporting dependency injection is available at `sources/Valkey.Glide.Hosting`.
-5. Integration and unit tests for the C# client are contained within the `tests` directory.
-6. A dedicated benchmarking tool, aimed at assessing and comparing the performance of Valkey GLIDE with other .NET clients, is located in `<repo root>/benchmarks/csharp`.
+3. The native, shared libraries, located in `sources/Valkey.Glide.InterOp.Assets.*`.
+4. The main C# client implementation can be found in `sources/Valkey.Glide`; it is responsible for managing commands and other non-interop specific operations.
+5. A library supporting dependency injection is available at `sources/Valkey.Glide.Hosting`.
+6. Integration and unit tests for the C# client are contained within the `tests` directory.
+7. A dedicated benchmarking tool, aimed at assessing and comparing the performance of Valkey GLIDE with other .NET clients, is located in `<repo root>/benchmarks/csharp`.
 
 ## Roadmap
+
+See https://github.com/valkey-io/valkey-glide/issues/216
 
 1. Hit 1.0 Stable
     - Have every operator implemented
@@ -321,7 +324,7 @@ no additional parsing needed, support.
 | [SDIFF](https://valkey.io/commands/sdiff/)                                                 | ❌      | ❌             |
 | [SDIFFSTORE](https://valkey.io/commands/sdiffstore/)                                       | ❌      | ❌             |
 | [SELECT](https://valkey.io/commands/select/)                                               | ❌      | ❌             |
-| [SET](https://valkey.io/commands/set/)                                                     | 🔁      | 🔁             |
+| [SET](https://valkey.io/commands/set/)                                                     | ✅      | 🔁            |
 | [SETBIT](https://valkey.io/commands/setbit/)                                               | ❌      | ❌             |
 | [SETEX](https://valkey.io/commands/setex/)                                                 | ❌      | ❌             |
 | [SETNX](https://valkey.io/commands/setnx/)                                                 | ❌      | ❌             |
@@ -428,7 +431,7 @@ no additional parsing needed, support.
 
 ### Connection String
 
-The Hosting library supports connection-string based building.
+The Hosting library supports connection-string-based building.
 The format is as follows:
 `KEY1=VALUE;KEY2=VALUE;KEYn=VALUE`
 
@@ -442,4 +445,4 @@ The following configuration options are available for ConnectionStrings:
 | `protocol`   | `resp2` or `resp3`                                                                                                                  |
 | `tls`        | - `yes` or `true` or `secure`: Sets TLS to Secure<br/> -`no` or `false`: Sets TLS to No TLS<br/> - `insecure`: Sets TLS to Insecure |
 
-Additionally, the connection string may also just be host:port (eg. `localhost:1234`).
+Additionally, the connection string may also just be host:port (e.g. `localhost:1234`).

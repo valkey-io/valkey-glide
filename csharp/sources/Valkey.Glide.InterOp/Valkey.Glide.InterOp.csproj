@@ -1,85 +1,32 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <Import Project="$(MSBuildThisFileDirectory)../../props/version.props"/>
+  <Import Project="$(MSBuildThisFileDirectory)../../props/common.props"/>
+
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <RootNamespace>Valkey.Glide.InterOp</RootNamespace>
     <AssemblyName>Valkey.Glide.InterOp</AssemblyName>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <LangVersion>12.0</LangVersion>
-    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
-    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
-    <EnableNETAnalyzers>false</EnableNETAnalyzers>
-    <NuGetAudit>false</NuGetAudit>
-    <WarningLevel>0</WarningLevel>
-    <Configurations>Debug;Release;Lint</Configurations>
-    <IsPackable>True</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <IsPackable>True</IsPackable>
   </PropertyGroup>
-
-  <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Lint'">
-    <LangVersion>12.0</LangVersion>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
-    <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <NuGetAudit>true</NuGetAudit>
-    <WarningLevel>4</WarningLevel>
-    <AnalysisLevel>latest</AnalysisLevel>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-  </PropertyGroup>
-
-  <!-- Workaround for https://github.com/dotnet/roslyn/issues/41640 -->
-  <PropertyGroup>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591;CS1573;CS1587</NoWarn>
-  </PropertyGroup>
-
-  <Target Name="PreClean" BeforeTargets="Clean">
-    <!-- ToDo: Build for all platforms -->
-    <Exec Command="cargo clean"
-          EnvironmentVariables="CARGO_TERM_COLOR=always"
-          ConsoleToMSBuild="true"
-          WorkingDirectory="$(SolutionDir)/rust">
-      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec"/>
-    </Exec>
-  </Target>
-
-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <!-- ToDo: Build for all platforms -->
-    <Exec Condition="'$(Configuration)' == 'Debug'"
-          Command="cargo build"
-          EnvironmentVariables="CARGO_TERM_COLOR=always"
-          ConsoleToMSBuild="true"
-          WorkingDirectory="$(SolutionDir)/rust">
-      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec"/>
-    </Exec>
-    <Exec Condition="'$(Configuration)' == 'Release'"
-          Command="cargo build --release"
-          EnvironmentVariables="CARGO_TERM_COLOR=always"
-          ConsoleToMSBuild="true"
-          WorkingDirectory="$(SolutionDir)/rust">
-      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec"/>
-    </Exec>
-  </Target>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Valkey.Glide.UnitTests" />
-    <InternalsVisibleTo Include="Valkey.Glide.IntegrationTests" />
-  </ItemGroup>
+    <!-- ToDo: Clean up for proper packing
+               Right now only the hosts corresponding platform will be included,
+               which is fine for local testing,
+               but for the final NuGet,
+               we should include either _all_ assets or _none_
+               This could be done by appending ourself to the pack target and changing the project references then eg. -->
 
-  <ItemGroup Condition="'$(Configuration)' != 'Lint'">
-    <!-- ToDo: put at correct, prefix folder -->
-    <Content Include="$(SolutionDir)/rust/target/$(Configuration)/glide_rs.dll" Condition="'$(OS)' == 'Windows_NT'">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="$(SolutionDir)/rust/target/$(Configuration)/glide_rs.pdb" Condition="'$(OS)' == 'Windows_NT'">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="$(SolutionDir)/rust/target/$(Configuration)/glide_rs.sh" Condition="'$(OS)' != 'Windows_NT'">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!-- Windows -->
+    <ProjectReference Condition="'$(OS)|$(Platform)' == 'Windows_NT|x64'"
+                      Include="..\Valkey.Glide.InterOp.Assets.Win64\Valkey.Glide.InterOp.Assets.Win64.csproj"/>
+    <ProjectReference Condition="'$(OS)|$(Platform)' == 'Windows_NT|x86'"
+                      Include="..\Valkey.Glide.InterOp.Assets.Win32\Valkey.Glide.InterOp.Assets.Win32.csproj"/>
+    <ProjectReference Condition="'$(OS)|$(Platform)' == 'Windows_NT|AnyCPU'"
+                      Include="..\Valkey.Glide.InterOp.Assets.Win64\Valkey.Glide.InterOp.Assets.Win64.csproj"/>
+    <ProjectReference Condition="'$(OS)|$(Platform)' == 'Windows_NT|AnyCPU'"
+                      Include="..\Valkey.Glide.InterOp.Assets.Win32\Valkey.Glide.InterOp.Assets.Win32.csproj"/>
   </ItemGroup>
 
 </Project>

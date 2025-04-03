@@ -1,0 +1,8 @@
+<!--
+  Contains the VersionPrefix to use for all Valkey.Glide* projects
+  -->
+<Project>
+    <PropertyGroup>
+        <VersionPrefix>0.1.0.8</VersionPrefix>
+    </PropertyGroup>
+</Project>

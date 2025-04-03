@@ -17,6 +17,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Configurations>Release;Debug</Configurations>
+    <Platforms>x64;AnyCPU</Platforms>
   </PropertyGroup>
 
   <!-- Workaround for https://github.com/dotnet/roslyn/issues/41640 -->

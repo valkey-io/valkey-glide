@@ -11,23 +11,25 @@ public sealed class ValkeyAspireFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        IDistributedApplicationTestingBuilder appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Valkey_Glide_AppHost>();
+        IDistributedApplicationTestingBuilder appHost =
+            await DistributedApplicationTestingBuilder.CreateAsync<Projects.Valkey_Glide_AppHost>();
         _distributedApplication = await appHost.BuildAsync();
         await _distributedApplication.StartAsync();
         try
         {
-            ResourceEvent resourceEvent = await _distributedApplication.ResourceNotifications.WaitForResourceHealthyAsync(
-                "cache",
-                WaitBehavior.StopOnResourceUnavailable
-            );
+            ResourceEvent resourceEvent =
+                await _distributedApplication.ResourceNotifications.WaitForResourceHealthyAsync(
+                    "cache",
+                    WaitBehavior.StopOnResourceUnavailable
+                );
             if (resourceEvent.Snapshot.HealthStatus is not HealthStatus.Healthy)
                 throw new Exception("Cache is not healthy, aspire initialization failed.");
             UrlSnapshot? url = resourceEvent.Snapshot.Urls.FirstOrDefault();
             if (url is null)
                 throw new Exception("Cache has no URL, aspire initialization failed.");
             Uri uri = new Uri(url.Url);
-            Port     = (ushort) uri.Port;
-            Host     = uri.Host;
+            Port = (ushort)uri.Port;
+            Host = uri.Host;
             IsSecure = uri.Scheme == "https";
         }
         catch
@@ -38,7 +40,8 @@ public sealed class ValkeyAspireFixture : IAsyncLifetime
             throw;
         }
 
-        _ = new StdOutLoggingHarness();
+        if (NativeLoggingHarness.Instance is not null)
+            _ = new StdOutLoggingHarness();
     }
 
     public InterOp.Node Node => new(Host, Port);
@@ -48,10 +51,7 @@ public sealed class ValkeyAspireFixture : IAsyncLifetime
     public string Host { get; private set; } = string.Empty;
 
     public InterOp.ConnectionRequest ConnectionRequest
-        => new InterOp.ConnectionRequest([Node])
-        {
-            TlsMode = IsSecure ? InterOp.ETlsMode.SecureTls : null,
-        };
+        => new InterOp.ConnectionRequest([Node]) {TlsMode = IsSecure ? InterOp.ETlsMode.SecureTls : null,};
 
     public async Task DisposeAsync()
     {

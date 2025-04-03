@@ -7,6 +7,8 @@
         <Nullable>enable</Nullable>
         <GenerateDocumentationFile>False</GenerateDocumentationFile>
         <IsPackable>False</IsPackable>
+        <Configurations>Release;Debug</Configurations>
+        <Platforms>x64;AnyCPU</Platforms>
     </PropertyGroup>
 
     <ItemGroup>
@@ -15,9 +17,9 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\sources\Valkey.Glide.AppHost\Valkey.Glide.AppHost.csproj" />
       <ProjectReference Include="..\..\sources\Valkey.Glide.InterOp\Valkey.Glide.InterOp.csproj" />
       <ProjectReference Include="..\..\sources\Valkey.Glide\Valkey.Glide.csproj" />
+      <ProjectReference Include="..\..\tests\Valkey.Glide.AppHost\Valkey.Glide.AppHost.csproj" />
     </ItemGroup>
 
 </Project>
