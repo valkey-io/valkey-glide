@@ -19,4 +19,4 @@ logger_core = {path = "../../logger_core"}
 
 [profile.release]
 lto = true
-debug = true
+strip = "symbols"

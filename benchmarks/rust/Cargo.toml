@@ -22,5 +22,5 @@ statistical = "1.0.0"
 tikv-jemallocator = "0.5.4"
 
 [profile.release]
-debug = true
 lto = true
+strip = "symbols"

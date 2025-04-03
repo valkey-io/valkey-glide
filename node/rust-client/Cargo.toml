@@ -29,7 +29,7 @@ napi-build = "2.0.1"
 
 [profile.release]
 lto = true
-debug = true
+strip = "symbols"
 
 [features]
 testing_utilities = ["num-bigint"]
