@@ -78,10 +78,11 @@ func (handler *MessageHandler) handleMessage(message *PubSubMessage) error {
 
 		handler.callback(message, handler.context)
 		return nil
+	} else {
+		handler.queue.Push(message)
+		return nil
 	}
 
-	handler.queue.Push(message)
-	return nil
 }
 
 func (handler *MessageHandler) GetQueue() *PubSubMessageQueue {

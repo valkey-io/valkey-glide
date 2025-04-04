@@ -21,8 +21,3 @@ type PubSubClusterCommands interface {
 	PubSubShardChannelsWithPattern(pattern string) ([]string, error)
 	PubSubShardNumSub(channels []string) (map[string]int64, error)
 }
-
-type PubSubFramework interface {
-	SetMessageHandler(handler *MessageHandler)
-	GetMessageHandler() *MessageHandler
-}
