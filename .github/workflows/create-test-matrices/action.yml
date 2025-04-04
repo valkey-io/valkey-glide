@@ -103,7 +103,7 @@ runs:
                   exit 1
               fi
               LANGS=${{ steps.create-lang-version-matrix.outputs.version-matrix }}
-              echo ${{ fromJson(LANGS) }}
+              echo ${{ fromJson($LANGS) }}
               if [[ (-z $LANGS || "$LANGS" == "[]") && $LANGUAGE_NAME != "rust" ]]; then
                   echo "Language matrix is empty!"
                   exit 1
