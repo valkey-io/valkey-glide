@@ -83,7 +83,7 @@ runs:
               echo 'Select language (framework/SDK) versions to run tests on'
               if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "push" || "$RUN_FULL_MATRIX" == "false" ]]; then
                   echo 'Pick language versions listed in 'always-run-versions' only - on PR, push or manually triggered job which does not require full matrix'
-                  jq -c '[.[] | select(.language == "$LANGUAGE_NAME") | .["always-run-versions"]][0] // []' < .github/json_matrices/supported-languages-versions.json | awk '{ printf "version-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
+                  jq -c "[.[] | select(.language == \"$LANGUAGE_NAME\") | .[\"always-run-versions\"]][0] // []" < .github/json_matrices/supported-languages-versions.json | awk '{ printf "version-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
               else
                   echo 'Pick language versions listed in 'versions' - on cron (schedule) or if manually triggered job requires a full matrix'
                   jq -c "[.[] | select(.language == \"$LANGUAGE_NAME\") | .versions][0]" < .github/json_matrices/supported-languages-versions.json | awk '{ printf "version-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
