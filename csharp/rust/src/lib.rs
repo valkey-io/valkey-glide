@@ -1,284 +1,472 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-mod ffi;
-use ffi::{create_connection_request, create_route, ConnectionConfig, RouteInfo};
-use glide_core::{client::Client as GlideClient, request_type::RequestType};
-use redis::{RedisResult, Value};
-use std::{
-    ffi::{c_char, c_void, CStr},
-    slice::from_raw_parts,
-    sync::Arc,
-};
-use tokio::runtime::{Builder, Runtime};
+extern crate core;
 
-#[repr(C)]
-pub enum Level {
-    Error = 0,
-    Warn = 1,
-    Info = 2,
-    Debug = 3,
-    Trace = 4,
-    Off = 5,
+mod apihandle;
+mod buffering;
+mod data;
+mod helpers;
+mod routing;
+mod value;
+mod conreq;
+mod logging;
+
+use crate::apihandle::Handle;
+use crate::buffering::FFIBuffer;
+use crate::conreq::ConnectionRequest;
+use crate::data::*;
+use glide_core::client::ConnectionError;
+use glide_core::request_type::RequestType;
+use std::ffi::{c_int, c_void, CString};
+use std::os::raw::c_char;
+use std::panic::catch_unwind;
+use std::ptr::null;
+use std::str::FromStr;
+use logger_core::Level::{Error, Trace};
+use tokio::runtime::Builder;
+use crate::logging::{ELoggerLevel, InitResult};
+use crate::value::Value;
+
+/// # Summary
+/// Special method to free the returned values.
+/// MUST be used!
+#[no_mangle]
+pub unsafe extern "C-unwind" fn csharp_free_value(_input: Value) {
+    // We use this just to make the pattern more "future-proof".
+    // Right now, no freeing is done here
+}
+/// # Summary
+/// Special method to free the returned strings.
+/// MUST be used instead of calling c-free!
+#[no_mangle]
+pub unsafe extern "C-unwind" fn csharp_free_string(input: *const c_char) {
+    logger_core::log(Trace, "csharp_ffi", "Entered csharp_free_string");
+    let str = CString::from_raw(input as *mut c_char);
+    drop(str);
+    logger_core::log(Trace, "csharp_ffi", "Exiting csharp_free_string");
 }
 
-// TODO define `SuccessCallback` and `FailureCallback` types
-
-pub struct Client {
-    runtime: Runtime,
-    core: Arc<CommandExecutionCore>,
-}
-
-struct CommandExecutionCore {
-    client: GlideClient,
-    success_callback: unsafe extern "C" fn(usize, i32, *const c_char) -> (),
-    failure_callback: unsafe extern "C" fn(usize) -> (), // TODO - add specific error codes
-}
-
-/// # Safety
+/// # Summary
+/// Initializes essential parts of the system.
+/// Supposed to be called once only.
 ///
-/// * `config` must be a valid [`ConnectionConfig`] pointer. See the safety documentation of [`create_connection_request`].
-unsafe fn create_client_internal(
-    config: *const ConnectionConfig,
-    success_callback: unsafe extern "C" fn(usize, i32, *const c_char) -> (),
-    failure_callback: unsafe extern "C" fn(usize) -> (),
-) -> RedisResult<Client> {
-    let request = unsafe { create_connection_request(config) };
-    let runtime = Builder::new_multi_thread()
+/// # Parameters
+/// - ***in_minimal_level*** The minimum file log level
+/// - ***in_file_name*** The file name to log to
+///
+/// # Input Safety (in_...)
+/// The data passed in is considered "caller responsibility".
+/// Any pointers hence will be left unreleased after leaving.
+///
+/// # Output Safety (out_... / return ...)
+/// The data returned is considered "caller responsibility".
+/// The caller must release any non-null pointers.
+///
+/// # Reference Safety (ref_...)
+/// Any reference data is considered "caller owned".
+///
+/// # Freeing data allocated by the API
+/// To free data returned by the API, use the corresponding `free_...` methods of the API.
+/// It is **not optional** to call them to free data allocated by the API!
+#[no_mangle]
+pub extern "C-unwind" fn csharp_system_init(
+    in_minimal_level: ELoggerLevel,
+    in_file_name: *const c_char,
+) -> InitResult {
+    logger_core::log(Trace, "csharp_ffi", "Entered csharp_system_init");
+    // ToDo: Rebuild into having a log-callback so that we can manage logging at the dotnet side
+    let file_name = match helpers::grab_str(in_file_name) {
+        Ok(d) => d,
+        Err(_) => {
+            return InitResult {
+                logger_level: ELoggerLevel::Off,
+                success: false as c_int,
+            }
+        }
+    };
+    let logger_level = match file_name {
+        None => logger_core::init(
+            match in_minimal_level {
+                ELoggerLevel::Error => Some(logger_core::Level::Error),
+                ELoggerLevel::Warn => Some(logger_core::Level::Warn),
+                ELoggerLevel::Info => Some(logger_core::Level::Info),
+                ELoggerLevel::Debug => Some(logger_core::Level::Debug),
+                ELoggerLevel::Trace => Some(logger_core::Level::Trace),
+                ELoggerLevel::Off => Some(logger_core::Level::Off),
+                ELoggerLevel::None => None,
+            },
+            None,
+        ),
+        Some(file_name) => logger_core::init(
+            match in_minimal_level {
+                ELoggerLevel::Error => Some(logger_core::Level::Error),
+                ELoggerLevel::Warn => Some(logger_core::Level::Warn),
+                ELoggerLevel::Info => Some(logger_core::Level::Info),
+                ELoggerLevel::Debug => Some(logger_core::Level::Debug),
+                ELoggerLevel::Trace => Some(logger_core::Level::Trace),
+                ELoggerLevel::Off => Some(logger_core::Level::Off),
+                ELoggerLevel::None => None,
+            },
+            Some(file_name.as_str()),
+        ),
+    };
+
+    logger_core::log(Trace, "csharp_ffi", "Exiting csharp_system_init");
+    InitResult {
+        success: true as c_int,
+        logger_level: match logger_level {
+            logger_core::Level::Error => ELoggerLevel::Error,
+            logger_core::Level::Warn => ELoggerLevel::Warn,
+            logger_core::Level::Info => ELoggerLevel::Info,
+            logger_core::Level::Debug => ELoggerLevel::Debug,
+            logger_core::Level::Trace => ELoggerLevel::Trace,
+            logger_core::Level::Off => ELoggerLevel::Off,
+        },
+    }
+}
+
+/// # Summary
+/// Creates a new client to the given address.
+///
+/// # Input Safety (in_...)
+/// The data passed in is considered "caller responsibility".
+/// Any pointers hence will be left unreleased after leaving.
+///
+/// # Output Safety (out_... / return ...)
+/// The data returned is considered "caller responsibility".
+/// The caller must release any non-null pointers.
+///
+/// # Reference Safety (ref_...)
+/// Any reference data is considered "caller owned".
+///
+/// # Freeing data allocated by the API
+/// To free data returned by the API, use the corresponding `free_...` methods of the API.
+/// It is **not optional** to call them to free data allocated by the API!
+#[no_mangle]
+pub extern "C-unwind" fn csharp_create_client_handle(
+    in_connection_request: ConnectionRequest,
+) -> CreateClientHandleResult {
+    let request = match in_connection_request.to_redis() {
+        Ok(d) => d,
+        Err(e) => match e {
+            Utf8OrEmptyError::Utf8Error(e) => {
+                return CreateClientHandleResult {
+                    result: ECreateClientHandleCode::ParameterError,
+                    client_handle: null(),
+                    error_string: match CString::from_str(e.to_string().as_str()) {
+                        Ok(d) => d.into_raw(),
+                        Err(_) => null(),
+                    },
+                }
+            }
+            Utf8OrEmptyError::Empty => {
+                return CreateClientHandleResult {
+                    result: ECreateClientHandleCode::ParameterError,
+                    client_handle: null(),
+                    error_string: match CString::from_str("Null value passed for host") {
+                        Ok(d) => d.into_raw(),
+                        Err(_) => null(),
+                    },
+                }
+            }
+        },
+    };
+
+    let runtime = match Builder::new_multi_thread()
         .enable_all()
         .thread_name("GLIDE C# thread")
-        .build()?;
-    let _runtime_handle = runtime.enter();
-    let client = runtime.block_on(GlideClient::new(request, None)).unwrap(); // TODO - handle errors.
-    let core = Arc::new(CommandExecutionCore {
-        success_callback,
-        failure_callback,
-        client,
-    });
-    Ok(Client { runtime, core })
-}
-
-/// Creates a new client with the given configuration.
-/// The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns.
-/// All callbacks should be offloaded to separate threads in order not to exhaust the client's thread pool.
-///
-/// # Safety
-///
-/// * `config` must be a valid [`ConnectionConfig`] pointer. See the safety documentation of [`create_client_internal`].
-#[allow(rustdoc::private_intra_doc_links)]
-#[no_mangle]
-pub unsafe extern "C" fn create_client(
-    config: *const ConnectionConfig,
-    success_callback: unsafe extern "C" fn(usize, i32, *const c_char) -> (),
-    failure_callback: unsafe extern "C" fn(usize) -> (),
-) -> *const c_void {
-    match unsafe { create_client_internal(config, success_callback, failure_callback) } {
-        Err(_) => std::ptr::null(), // TODO - log errors
-        Ok(client) => Arc::into_raw(Arc::new(client)) as *const c_void,
-    }
-}
-
-/// Closes the given client, deallocating it from the heap.
-/// This function should only be called once per pointer created by [`create_client`].
-/// After calling this function the `client_ptr` is not in a valid state.
-///
-/// # Safety
-///
-/// * `client_ptr` must not be `null`.
-/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`std::boxed::Box::from_raw`].
-#[no_mangle]
-pub extern "C" fn close_client(client_ptr: *const c_void) {
-    assert!(!client_ptr.is_null());
-    // This will bring the strong count down to 0 once all client requests are done.
-    unsafe { Arc::decrement_strong_count(client_ptr as *const Client) };
-}
-
-/// Converts a double pointer to a vec.
-///
-/// # Safety
-///
-/// * `data` and `data_len` must not be `null`.
-/// * `data` must point to `len` consecutive string pointers.
-/// * `data_len` must point to `len` consecutive string lengths.
-/// * `data`, `data_len` and also each pointer stored in `data` must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`].
-///   See the safety documentation of [`from_raw_parts`].
-/// * The caller is responsible of freeing the allocated memory.
-unsafe fn convert_double_pointer_to_vec<'a>(
-    data: *const *const c_void,
-    len: u32,
-    data_len: *const u32,
-) -> Vec<&'a [u8]> {
-    let string_ptrs = unsafe { from_raw_parts(data, len as usize) };
-    let string_lengths = unsafe { from_raw_parts(data_len, len as usize) };
-    let mut result = Vec::<&[u8]>::with_capacity(string_ptrs.len());
-    for (i, &str_ptr) in string_ptrs.iter().enumerate() {
-        let slice = unsafe { from_raw_parts(str_ptr as *const u8, string_lengths[i] as usize) };
-        result.push(slice);
-    }
-    result
-}
-
-fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*const T, usize) {
-    vec.shrink_to_fit();
-    let vec_ptr = vec.as_ptr();
-    let len = vec.len();
-    // TODO use `Box::into_raw`
-    std::mem::forget(vec);
-    (vec_ptr, len)
-}
-
-/// Execute a command.
-/// Expects that arguments will be kept valid until the callback is called.
-///
-/// # Safety
-/// * `client_ptr` must not be `null`.
-/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`std::boxed::Box::from_raw`].
-/// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
-/// * `key` and `value` must not be `null`.
-/// * `key` and `value` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
-/// * `key` and `value` must be kept valid until the callback is called.
-/// * `route_info` could be `null`, but if it is not `null`, it must be a valid [`RouteInfo`] pointer. See the safety documentation of [`create_route`].
-#[allow(rustdoc::private_intra_doc_links)]
-#[no_mangle]
-pub unsafe extern "C" fn command(
-    client_ptr: *const c_void,
-    callback_index: usize,
-    request_type: RequestType,
-    args: *const *mut c_char,
-    arg_count: u32,
-    args_len: *const u32,
-    route_info: *const RouteInfo,
-) {
-    let client = unsafe {
-        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
-        Arc::increment_strong_count(client_ptr);
-        Arc::from_raw(client_ptr as *mut Client)
-    };
-    let core = client.core.clone();
-
-    let arg_vec =
-        unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) };
-
-    // Create the command outside of the task to ensure that the command arguments passed are still valid
-    let Some(mut cmd) = request_type.get_command() else {
-        unsafe {
-            (core.failure_callback)(callback_index); // TODO - report errors
-            return;
+        .build()
+    {
+        Ok(d) => d,
+        Err(e) => {
+            return CreateClientHandleResult {
+                result: ECreateClientHandleCode::ThreadCreationError,
+                client_handle: null(),
+                error_string: match CString::from_str(e.to_string().as_str()) {
+                    Ok(d) => d.into_raw(),
+                    Err(_) => null(),
+                },
+            }
         }
     };
-    for command_arg in arg_vec {
-        cmd.arg(command_arg);
-    }
-
-    let route = create_route(route_info, &cmd);
-
-    client.runtime.spawn(async move {
-        let result = core.client.clone().send_command(&cmd, route).await;
-        unsafe {
-            match result {
-                Ok(Value::SimpleString(text)) => {
-                    let (vec_ptr, len) = convert_vec_to_pointer(text.into_bytes());
-                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
-                }
-                Ok(Value::BulkString(text)) => {
-                    let (vec_ptr, len) = convert_vec_to_pointer(text);
-                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
-                }
-                Ok(Value::VerbatimString { format: _, text }) => {
-                    let (vec_ptr, len) = convert_vec_to_pointer(text.into_bytes());
-                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
-                }
-                Ok(Value::Okay) => {
-                    let (vec_ptr, len) = convert_vec_to_pointer(String::from("OK").into_bytes());
-                    (core.success_callback)(callback_index, len as i32, vec_ptr as *const c_char)
-                }
-                Ok(Value::Nil) => (core.success_callback)(callback_index, 0, std::ptr::null()),
-                Err(err) => {
-                    dbg!(err); // TODO - report errors
-                    (core.failure_callback)(callback_index)
-                }
-                Ok(value) => {
-                    dbg!(value); // TODO - handle other response types
-                    (core.failure_callback)(callback_index)
-                }
-            };
+    let handle: Handle;
+    {
+        let _runtime_handle = runtime.enter();
+        handle = match runtime.block_on(Handle::create(request)) {
+            Ok(d) => d,
+            Err(e) => {
+                let str = e.to_string();
+                return CreateClientHandleResult {
+                    result: match e {
+                        // ToDo: Improve error return codes even further to get more fine control at dotnet side
+                        ConnectionError::Standalone(_) => {
+                            ECreateClientHandleCode::ConnectionToFailedError
+                        }
+                        ConnectionError::Cluster(_) => {
+                            ECreateClientHandleCode::ConnectionToClusterFailed
+                        }
+                        ConnectionError::Timeout => {
+                            ECreateClientHandleCode::ConnectionTimedOutError
+                        }
+                        ConnectionError::IoError(_) => ECreateClientHandleCode::ConnectionIoError,
+                    },
+                    client_handle: null(),
+                    error_string: match CString::from_str(str.as_str()) {
+                        Ok(d) => d.into_raw(),
+                        Err(_) => null(),
+                    },
+                };
+            }
         };
-    });
-}
-
-impl From<logger_core::Level> for Level {
-    fn from(level: logger_core::Level) -> Self {
-        match level {
-            logger_core::Level::Error => Level::Error,
-            logger_core::Level::Warn => Level::Warn,
-            logger_core::Level::Info => Level::Info,
-            logger_core::Level::Debug => Level::Debug,
-            logger_core::Level::Trace => Level::Trace,
-            logger_core::Level::Off => Level::Off,
-        }
+    }
+    CreateClientHandleResult {
+        result: ECreateClientHandleCode::Success,
+        client_handle: Box::into_raw(Box::new(FFIHandle { runtime, handle })) as *const c_void,
+        error_string: null(),
     }
 }
 
-impl From<Level> for logger_core::Level {
-    fn from(level: Level) -> logger_core::Level {
-        match level {
-            Level::Error => logger_core::Level::Error,
-            Level::Warn => logger_core::Level::Warn,
-            Level::Info => logger_core::Level::Info,
-            Level::Debug => logger_core::Level::Debug,
-            Level::Trace => logger_core::Level::Trace,
-            Level::Off => logger_core::Level::Off,
-        }
-    }
-}
-
-/// Unsafe function because creating string from pointer.
+/// # Summary
+/// Frees the previously created client_handle, making it unusable.
 ///
-/// # Safety
+/// # Input Safety (in_...)
+/// The data passed in is considered "caller responsibility".
+/// Any pointers hence will be left unreleased after leaving.
 ///
-/// * `message` and `log_identifier` must not be `null`.
-/// * `message` and `log_identifier` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
+/// # Output Safety (out_... / return ...)
+/// The data returned is considered "caller responsibility".
+/// The caller must release any non-null pointers.
+///
+/// # Reference Safety (ref_...)
+/// Any reference data is considered "caller owned".
+///
+/// # Freeing data allocated by the API
+/// To free data returned by the API, use the corresponding `free_...` methods of the API.
+/// It is **not optional** to call them to free data allocated by the API!
 #[no_mangle]
-#[allow(improper_ctypes_definitions)]
-pub unsafe extern "C" fn log(
-    log_level: Level,
-    log_identifier: *const c_char,
-    message: *const c_char,
-) {
-    unsafe {
-        logger_core::log(
-            log_level.into(),
-            CStr::from_ptr(log_identifier)
-                .to_str()
-                .expect("Can not read log_identifier argument."),
-            CStr::from_ptr(message)
-                .to_str()
-                .expect("Can not read message argument."),
+pub extern "C-unwind" fn csharp_free_client_handle(in_client_ptr: *const c_void) {
+    logger_core::log(Trace, "csharp_ffi", "Entered csharp_free_client_handle");
+    let client_ptr = unsafe { Box::from_raw(in_client_ptr as *mut FFIHandle) };
+    let _runtime_handle = client_ptr.runtime.enter();
+    drop(client_ptr);
+    logger_core::log(Trace, "csharp_ffi", "Exiting csharp_free_client_handle");
+}
+
+/// # Summary
+/// Method to invoke a command.
+///
+/// # Params
+/// ***in_client_ptr*** An active client handle
+/// ***in_callback*** A callback method with the signature:
+///                   `void Callback(void * in_data, int out_success, const Value value)`.
+///                   The first arg contains the data of the parameter *in_callback_data*;
+///                   the second arg indicates whether the third parameter contains the error or result;
+///                   the third arg contains either the result and MUST be freed by the callback.
+/// ***in_callback_data*** The data to be passed in to *in_callback*.
+/// ***in_request_type*** The type of command to issue.
+/// ***in_routing_info*** Either nullptr or the routing info to use for the command.
+/// ***in_args*** A C-String array of arguments to be passed, with the size of `in_args_count` and zero terminated.
+/// ***in_args_count*** The number of arguments in *in_args*.
+///
+/// # Input Safety (in_...)
+/// The data passed in is considered "caller responsibility".
+/// Any pointers hence will be left unreleased after leaving.
+///
+/// # Output Safety (out_... / return ...)
+/// The data returned is considered "caller responsibility".
+/// The caller must release any non-null pointers.
+///
+/// # Reference Safety (ref_...)
+/// Any reference data is considered "caller owned".
+///
+/// # Freeing data allocated by the API
+/// To free data returned by the API, use the corresponding `free_...` methods of the API.
+/// It is **not optional** to call them to free data allocated by the API!
+#[no_mangle]
+pub extern "C-unwind" fn csharp_command(
+    in_client_ptr: *const c_void,
+    in_callback: CommandCallback,
+    in_callback_data: *mut c_void,
+    in_request_type: RequestType,
+    in_routing_info: *const routing::RoutingInfo,
+    // ToDo: Rework into parameter struct (understand how Command.arg(...) works first)
+    //       handling the different input types.
+    in_args: *const *const c_char,
+    in_args_count: c_int,
+    // ToDo: Pass in ActivityContext and connect C# OTEL with Rust OTEL
+) -> CommandResult {
+    logger_core::log(Trace, "csharp_ffi", "Entered csharp_command");
+    if in_client_ptr.is_null() {
+        logger_core::log(Error, 
+            "csharp_ffi",
+            "Error in csharp_command called with null handle",
         );
+        return CommandResult::new_error(helpers::to_cstr_ptr_or_null("Null handle passed"));
     }
+    let args = match helpers::grab_vec_str(in_args, in_args_count as usize) {
+        Ok(d) => d,
+        Err(e) => {
+            logger_core::log(Error, 
+                "csharp_ffi",
+                format!("Error in string transformation: {:?}", e.to_string()),
+            );
+            return match e {
+                Utf8OrEmptyError::Utf8Error(e) => {
+                    CommandResult::new_error(helpers::to_cstr_ptr_or_null(e.to_string().as_str()))
+                }
+                Utf8OrEmptyError::Empty => CommandResult::new_error(helpers::to_cstr_ptr_or_null(
+                    "Null value passed for host",
+                )),
+            };
+        }
+    };
+    let cmd = match in_request_type.get_command() {
+        None => {
+            logger_core::log(Error, 
+                "csharp_ffi",
+                "Error in csharp_command called with unknown request type",
+            );
+            return CommandResult::new_error(helpers::to_cstr_ptr_or_null("Unknown request type"));
+        }
+        Some(d) => d,
+    };
+    let callback = in_callback;
+    let callback_data = in_callback_data as usize;
+
+    let ffi_handle = unsafe { Box::leak(Box::from_raw(in_client_ptr as *mut FFIHandle)) };
+    let handle = ffi_handle.handle.clone();
+    let routing_info = if in_routing_info.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            match (*in_routing_info).to_redis() {
+                Ok(d) => d,
+                Err(e) => {
+                    logger_core::log(Error, 
+                        "csharp_ffi",
+                        format!(
+                            "Error while parsing route in string transformation: {:?}",
+                            e.to_string()
+                        ),
+                    );
+                    return match e {
+                        Utf8OrEmptyError::Utf8Error(e) => CommandResult::new_error(
+                            helpers::to_cstr_ptr_or_null(e.to_string().as_str()),
+                        ),
+                        Utf8OrEmptyError::Empty => {
+                            CommandResult::new_error(helpers::to_cstr_ptr_or_null(
+                                "Routing info incomplete, null value passed in string",
+                            ))
+                        }
+                    };
+                }
+            }
+        })
+    };
+    ffi_handle.runtime.spawn(async move {
+        logger_core::log(Trace, "csharp_ffi", "Entered command task with");
+        let data: redis::Value = match handle.command(cmd, args, routing_info).await {
+            Ok(d) => d,
+            Err(e) => {
+                logger_core::log(Error, 
+                    "csharp_ffi",
+                    format!(
+                        "Error handling command in task of csharp_command: {:?}",
+                        e.to_string()
+                    ),
+                );
+                let value = Value::simple_string_with_null(e.to_string().as_str());
+                match catch_unwind(|| unsafe {
+                    logger_core::log(Trace, 
+                        "csharp_ffi",
+                        "Calling command callback of csharp_command",
+                    );
+                    callback(callback_data as *mut c_void, false as c_int, value);
+                    logger_core::log(Trace, 
+                        "csharp_ffi",
+                        "Called command callback of csharp_command",
+                    );
+                }) {
+                    Err(e) => logger_core::log(Error, 
+                        "csharp_ffi",
+                        format!("Exception in C# callback: {:?}", e),
+                    ),
+                    _ => {}
+                };
+                return;
+            }
+        };
+        unsafe {
+            let mut buffer = FFIBuffer::new();
+
+            // "Simulation" run
+            _ = Value::from_redis(&data, &mut buffer);
+            buffer.switch_mode();
+
+            match Value::from_redis(&data, &mut buffer) {
+                Ok(data) => {
+                    match catch_unwind(|| {
+                        logger_core::log(Trace, 
+                            "csharp_ffi",
+                            "Calling command callback of csharp_command",
+                        );
+                        callback(callback_data as *mut c_void, true as c_int, data);
+                        logger_core::log(Trace, 
+                            "csharp_ffi",
+                            "Called command callback of csharp_command",
+                        );
+                    }) {
+                        Err(e) => logger_core::log(Error, 
+                            "csharp_ffi",
+                            format!("Exception in C# callback: {:?}", e),
+                        ),
+                        _ => {}
+                    }
+                }
+                Err(e) => {
+                    logger_core::log(Error, 
+                        "csharp_ffi",
+                        format!(
+                            "Error transforming command result in task of csharp_command: {:?}",
+                            e.to_string()
+                        ),
+                    );
+                    match catch_unwind(|| {
+                        logger_core::log(Trace, 
+                            "csharp_ffi",
+                            "Calling command callback of csharp_command",
+                        );
+                        callback(
+                            callback_data as *mut c_void,
+                            false as c_int,
+                            Value::simple_string_with_null(e.to_string().as_str()),
+                        );
+                        logger_core::log(Trace, 
+                            "csharp_ffi",
+                            "Called command callback of csharp_command",
+                        );
+                    }) {
+                        Err(e) => logger_core::log(Error, 
+                            "csharp_ffi",
+                            format!("Exception in C# callback: {:?}", e),
+                        ),
+                        _ => {}
+                    };
+                }
+            }
+        }
+
+        logger_core::log(Trace, "csharp_ffi", "Exiting tokio spawn from csharp_command");
+    });
+
+    logger_core::log(Trace, "csharp_ffi", "Exiting csharp_command");
+    CommandResult::new_success()
 }
 
-/// Unsafe function because creating string from pointer.
-///
-/// # Safety
-///
-/// * `file_name` must not be `null`.
-/// * `file_name` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
-#[no_mangle]
-#[allow(improper_ctypes_definitions)]
-pub unsafe extern "C" fn init(level: Option<Level>, file_name: *const c_char) -> Level {
-    let file_name_as_str;
-    unsafe {
-        file_name_as_str = if file_name.is_null() {
-            None
-        } else {
-            Some(
-                CStr::from_ptr(file_name)
-                    .to_str()
-                    .expect("Can not read string argument."),
-            )
-        };
-
-        let logger_level = logger_core::init(level.map(|level| level.into()), file_name_as_str);
-        logger_level.into()
-    }
+#[cfg(test)]
+mod tests {
+    #[allow(dead_code)]
+    const HOST: &str = "localhost";
+    #[allow(dead_code)]
+    const PORT: u16 = 49493;
 }

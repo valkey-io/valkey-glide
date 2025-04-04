@@ -1,6 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using static Valkey.Glide.Route;
+
+using Valkey.Glide.InterOp.Routing;
 
 namespace Valkey.Glide.IntegrationTests;
 
@@ -14,7 +15,7 @@ public class ClusterClientTests
         SortedSet<string> ports = [];
         foreach (int i in Enumerable.Range(0, 100))
         {
-            string res = ((await client.CustomCommand(["info", "server"], Route.Random))! as GlideString)!;
+            string res = ((await client.CustomCommand(["info", "server"], new SingleRandom()))! as GlideString)!;
             foreach (string line in res!.Split("\r\n"))
             {
                 if (line.Contains("tcp_port"))
@@ -36,19 +37,19 @@ public class ClusterClientTests
     {
         GlideClusterClient client = TestConfiguration.DefaultClusterClient();
 
-        string res = (await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Primary))! as GlideString)!;
+        string res = (await client.CustomCommand(["info", "replication"], new SingleSpecificKeyedNode("abc", ESlotAddress.Master))! as GlideString)!;
         Assert.Contains("role:master", res);
 
-        res = (await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Replica))! as GlideString)!;
+        res = (await client.CustomCommand(["info", "replication"], new SingleSpecificKeyedNode("abc", ESlotAddress.ReplicaRequired))! as GlideString)!;
         Assert.Contains("role:slave", res);
 
-        res = (await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Primary))! as GlideString)!;
+        res = (await client.CustomCommand(["info", "replication"], new SingleSpecificNode(42, ESlotAddress.Master))! as GlideString)!;
         Assert.Contains("role:master", res);
 
-        res = (await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Replica))! as GlideString)!;
+        res = (await client.CustomCommand(["info", "replication"], new SingleSpecificNode(42, ESlotAddress.ReplicaRequired))! as GlideString)!;
         Assert.Contains("role:slave", res);
 
-        res = (await client.CustomCommand(["info", "replication"], new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port))! as GlideString)!;
+        res = (await client.CustomCommand(["info", "replication"], new SingleByAddress(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port))! as GlideString)!;
         Assert.Contains("# Replication", res);
     }
 

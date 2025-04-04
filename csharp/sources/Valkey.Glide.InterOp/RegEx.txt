@@ -1,0 +1,6 @@
+﻿Transform callbacks (requires to manually add void):
+    pub type (.+?) \= unsafe extern \"C\-unwind\" fn\((.+?)\)(?: -> ([a-zA-Z_]+))?
+    public unsafe delegate $3 $1($2)
+Parameter Transform (No "Replace All" support, use by case):
+    ([a-zA-Z_]+)\w*\:\w*(.+?)([,\n;)])
+    $2 $1$3

@@ -5,8 +5,6 @@ using System.Runtime.InteropServices;
 
 using Valkey.Glide.IntegrationTests;
 
-using static Valkey.Glide.ConnectionConfiguration;
-
 [assembly: AssemblyFixture(typeof(TestConfiguration))]
 
 namespace Valkey.Glide.IntegrationTests;
@@ -19,17 +17,19 @@ public class TestConfiguration : IDisposable
     public static List<(string host, ushort port)> CLUSTER_HOSTS { get; internal set; } = [];
     public static Version SERVER_VERSION { get; internal set; } = new();
 
-    public static StandaloneClientConfigurationBuilder DefaultClientConfig() =>
-        new StandaloneClientConfigurationBuilder()
-            .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port);
+    public static ConnectionConfigBuilder DefaultClientConfig() =>
+        new ConnectionConfigBuilder()
+            .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port)
+            .WithClusterMode(false);
 
-    public static ClusterClientConfigurationBuilder DefaultClusterClientConfig() =>
-        new ClusterClientConfigurationBuilder()
+    public static ConnectionConfigBuilder DefaultClusterClientConfig() =>
+        new ConnectionConfigBuilder()
             .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
-            .WithRequestTimeout(10000);
+            .WithRequestTimeout(TimeSpan.FromMilliseconds(10000))
+            .WithClusterMode(true);
 
-    public static GlideClient DefaultStandaloneClient() => new(DefaultClientConfig().Build());
-    public static GlideClusterClient DefaultClusterClient() => new(DefaultClusterClientConfig().Build());
+    public static GlideClient DefaultStandaloneClient() => new(DefaultClientConfig());
+    public static GlideClusterClient DefaultClusterClient() => new(DefaultClusterClientConfig());
 
     private static TheoryData<BaseClient> s_testClients = [];
 

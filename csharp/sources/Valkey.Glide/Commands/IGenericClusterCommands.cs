@@ -1,5 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.InterOp.Routing;
+
 namespace Valkey.Glide.Commands;
 
 public interface IGenericClusterCommands
@@ -26,5 +28,5 @@ public interface IGenericClusterCommands
     /// <param name="args">A list including the command name and arguments for the custom command.</param>
     /// <param name="route">Specifies the routing configuration for the command. The client will route the command to the nodes defined by <c>route</c>.</param>
     /// <returns>The returning value depends on the executed command.</returns>
-    Task<object?> CustomCommand(GlideString[] args, Route? route = null);
+    Task<object?> CustomCommand(GlideString[] args, IRoutingInfo? route = null);
 }
