@@ -56,6 +56,7 @@ run-name:
 
 env:
     CARGO_TERM_COLOR: always
+    BASE_GO_VERSION: "1.22"
 
 jobs:
     get-matrices:
@@ -120,7 +121,7 @@ jobs:
                   make -k example-test
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.go == '1.22' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.go == env.BASE_GO_VERSION }}
               with:
                   language-flag: -go
 
@@ -144,7 +145,7 @@ jobs:
             - name: Set up Go
               uses: actions/setup-go@v5
               with:
-                  go-version: "1.22"
+                  go-version: ${{ env.BASE_GO_VERSION }}
                   cache-dependency-path: go/go.sum
 
             - name: Install protoc
@@ -245,7 +246,7 @@ jobs:
             - name: Set up Go
               uses: actions/setup-go@v5
               with:
-                  go-version: "1.22"
+                  go-version: ${{ env.BASE_GO_VERSION }}
                   cache-dependency-path: go/go.sum
 
             - name: Build and test
