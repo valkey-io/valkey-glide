@@ -4,21 +4,15 @@ package glide.connectors.resources;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketChannel;
 import lombok.Getter;
-import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Abstract base class that provides the EventLoopGroup and DomainSocketChannel to be used by the
  * Netty protocol.
  */
 @Getter
+@RequiredArgsConstructor
 public abstract class ThreadPoolResource {
-    private EventLoopGroup eventLoopGroup;
-    private Class<? extends DomainSocketChannel> domainSocketChannelClass;
-
-    public ThreadPoolResource(
-            @NonNull EventLoopGroup eventLoopGroup,
-            @NonNull Class<? extends DomainSocketChannel> domainSocketChannelClass) {
-        this.eventLoopGroup = eventLoopGroup;
-        this.domainSocketChannelClass = domainSocketChannelClass;
-    }
+    private final EventLoopGroup eventLoopGroup;
+    private final Class<? extends DomainSocketChannel> domainSocketChannelClass;
 }
