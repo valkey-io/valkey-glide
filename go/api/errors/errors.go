@@ -48,12 +48,12 @@ type ClosingError struct {
 
 func (e *ClosingError) Error() string { return e.Msg }
 
-// PubSubConfigError is a client error that occurs when there is an issue with PubSub configuration.
-type PubSubConfigError struct {
+// ConfigurationError is a client error that occurs when there is an issue with PubSub configuration.
+type ConfigurationError struct {
 	Msg string
 }
 
-func (e *PubSubConfigError) Error() string { return e.Msg }
+func (e *ConfigurationError) Error() string { return e.Msg }
 
 // GoError converts a C error type to a corresponding Go error.
 func GoError(cErrorType uint32, errorMessage string) error {
