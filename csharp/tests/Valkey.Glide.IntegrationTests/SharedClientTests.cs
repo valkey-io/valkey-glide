@@ -14,11 +14,7 @@ public class SharedClientTests
     public TestConfiguration Config { get; }
 
     [Theory(DisableDiscoveryEnumeration = true, Skip = "Flaky on MacOS", SkipWhen = nameof(TestConfiguration.IsMacOs), SkipType = typeof(TestConfiguration))]
-#if NET8_0_OR_GREATER
-    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-#else
     [MemberData("TestClients", MemberType = typeof(TestConfiguration))]
-#endif
     public async Task HandleVeryLargeInput(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
@@ -36,11 +32,7 @@ public class SharedClientTests
     // so it's being kept.
     [Theory(DisableDiscoveryEnumeration = true, Skip = "Flaky on MacOS", SkipWhen = nameof(TestConfiguration.IsMacOs), SkipType = typeof(TestConfiguration))]
     [Trait("duration", "long")]
-#if NET8_0_OR_GREATER
-    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-#else
     [MemberData("TestClients", MemberType = typeof(TestConfiguration))]
-#endif
     public void ConcurrentOperationsWork(BaseClient client)
     {
         List<Task> operations = new();

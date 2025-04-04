@@ -25,20 +25,12 @@ public class SharedCommandTests
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
-#if NET8_0_OR_GREATER
-    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-#else
     [MemberData("TestClients", MemberType = typeof(TestConfiguration))]
-#endif
     public async Task GetReturnsLastSet(BaseClient client) =>
         await GetAndSetRandomValues(client);
 
     [Theory(DisableDiscoveryEnumeration = true)]
-#if NET8_0_OR_GREATER
-    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-#else
     [MemberData("TestClients", MemberType = typeof(TestConfiguration))]
-#endif
     public async Task GetAndSetCanHandleNonASCIIUnicode(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
@@ -47,20 +39,12 @@ public class SharedCommandTests
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
-#if NET8_0_OR_GREATER
-    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-#else
     [MemberData("TestClients", MemberType = typeof(TestConfiguration))]
-#endif
     public async Task GetReturnsNull(BaseClient client) =>
         Assert.Null(await client.Get(Guid.NewGuid().ToString()));
 
     [Theory(DisableDiscoveryEnumeration = true)]
-#if NET8_0_OR_GREATER
-    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-#else
     [MemberData("TestClients", MemberType = typeof(TestConfiguration))]
-#endif
     public async Task GetReturnsEmptyString(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
