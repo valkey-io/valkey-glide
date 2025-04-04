@@ -89,22 +89,21 @@ runs:
                   jq -c "[.[] | select(.language == \"$LANGUAGE_NAME\") | .versions][0]" < .github/json_matrices/supported-languages-versions.json | awk '{ printf "version-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
               fi
 
-        - name: Validate no empty matrices
+        - name: Validate no empty/incorrect matrices
           shell: bash
           run: |
-              ENGINES=${{ steps.load-engine-matrix.outputs.engine-matrix }}
-              if [[ -z $ENGINES || "$ENGINES" == "[]" ]]; then
+              ENGINES=`jq length <<< ${{ steps.load-engine-matrix.outputs.engine-matrix }}`
+              if [[ $ENGINES == 0 ]]; then
                   echo "Engine matrix is empty!"
                   exit 1
               fi
-              HOSTS=${{ steps.load-host-matrix.outputs.host-matrix }}
-              if [[ -z $HOSTS || "$HOSTS" == "[]" ]]; then
+              HOSTS=`jq length <<< ${{ steps.load-host-matrix.outputs.host-matrix }}`
+              if [[ $HOSTS == 0 ]]; then
                   echo "Host matrix is empty!"
                   exit 1
               fi
-              LANGS=${{ steps.create-lang-version-matrix.outputs.version-matrix }}
-              echo ${{ fromJson($LANGS) }}
-              if [[ (-z $LANGS || "$LANGS" == "[]") && $LANGUAGE_NAME != "rust" ]]; then
+              LANGS=`jq length <<< ${{ steps.create-lang-version-matrix.outputs.version-matrix }}`
+              if [[ $LANGS == 0 && $LANGUAGE_NAME != "rust" ]]; then
                   echo "Language matrix is empty!"
                   exit 1
               fi
