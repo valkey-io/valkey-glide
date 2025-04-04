@@ -80,6 +80,7 @@ jobs:
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
 
     test-python:
+        name: Python Tests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
         timeout-minutes: 35
@@ -91,6 +92,11 @@ jobs:
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         steps:
             - uses: actions/checkout@v4
+
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
 
             - name: Set up Python
               uses: actions/setup-python@v5
@@ -120,12 +126,12 @@ jobs:
                   pytest -v --asyncio-mode=auto --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.12' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}
               with:
                   language-flag: -python
 
             - name: Type check with mypy
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.12' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}
               working-directory: ./python
               run: |
                   # The type check should run inside the virtual env to get
@@ -149,6 +155,7 @@ jobs:
 
     # run pubsub tests in another job - they take too much time
     test-pubsub-python:
+        name: Python PubSubTests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
         timeout-minutes: 35
@@ -160,6 +167,11 @@ jobs:
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         steps:
             - uses: actions/checkout@v4
+
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
 
             - name: Set up Python
               uses: actions/setup-python@v5
@@ -327,7 +339,6 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4

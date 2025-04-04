@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
 
@@ -1098,4 +1099,483 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_ImmediateAuthWr
 	// Cleanup: Reset password
 	_, err = adminClient.CustomCommand([]string{"CONFIG", "SET", "requirepass", ""})
 	assert.NoError(suite.T(), err)
+}
+
+func (suite *GlideTestSuite) TestClusterLolwut() {
+	client := suite.defaultClusterClient()
+
+	result, err := client.Lolwut()
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), result)
+	assert.Contains(suite.T(), result, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+			Args:    &[]int{10, 20},
+		},
+		RouteOption: &options.RouteOption{Route: config.AllNodes},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.NoError(suite.T(), err)
+
+	assert.True(suite.T(), result.IsMultiValue())
+	multiValue := result.MultiValue()
+
+	for _, value := range multiValue {
+		assert.Contains(suite.T(), value, "Redis ver.")
+	}
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+		},
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.NoError(suite.T(), err)
+
+	assert.True(suite.T(), result.IsMultiValue())
+	multiValue := result.MultiValue()
+
+	for _, value := range multiValue {
+		assert.Contains(suite.T(), value, "Redis ver.")
+	}
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
+	client := suite.defaultClusterClient()
+	options := options.ClusterLolwutOptions{
+		LolwutOptions: &options.LolwutOptions{
+			Version: 6,
+		},
+		RouteOption: &options.RouteOption{Route: config.RandomRoute},
+	}
+	result, err := client.LolwutWithOptions(options)
+	assert.NoError(suite.T(), err)
+
+	assert.True(suite.T(), result.IsSingleValue())
+	singleValue := result.SingleValue()
+	assert.Contains(suite.T(), singleValue, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestClientIdCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	response, err := client.ClientId()
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestClientIdWithOptionsCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// ClientId with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	response, err := client.ClientIdWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	response, err = client.ClientIdWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// default sections, multi node route
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	response, err = client.ClientIdWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsMultiValue())
+}
+
+func (suite *GlideTestSuite) TestLastSaveCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	response, err := client.LastSave()
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestLastSaveWithOptionCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	opts := options.RouteOption{Route: nil}
+	response, err := client.LastSaveWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestConfigResetStatCluster() {
+	client := suite.defaultClusterClient()
+
+	// ConfigResetStat with option or with multiple options without route
+	suite.verifyOK(client.ConfigResetStat())
+}
+
+func (suite *GlideTestSuite) TestConfigResetStatWithOptions() {
+	client := suite.defaultClusterClient()
+
+	// ConfigResetStat with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	suite.verifyOK(client.ConfigResetStatWithOptions(opts))
+
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigResetStatWithOptions(opts))
+
+	// default sections, multi node route
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigResetStatWithOptions(opts))
+}
+
+func (suite *GlideTestSuite) TestConfigSetGet() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	configParam := map[string]string{"timeout": "1000"}
+	suite.verifyOK(client.ConfigSet(configParam))
+	configGetParam := []string{"timeout"}
+	resp, err := client.ConfigGet(configGetParam)
+	assert.NoError(t, err)
+	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
+}
+
+func (suite *GlideTestSuite) TestConfigSetGetWithOptions() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	// ConfigResetStat with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	configParam := map[string]string{"timeout": "1000"}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	configGetParam := []string{"timeout"}
+	resp, err := client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
+
+	// same sections with random route
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	resp, err = client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.Contains(t, strings.ToLower(fmt.Sprint(resp)), strings.ToLower("timeout"))
+
+	// default sections, multi node route
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	suite.verifyOK(client.ConfigSetWithOptions(configParam, opts))
+	resp, err = client.ConfigGetWithOptions(configGetParam, opts)
+	assert.NoError(t, err)
+	assert.True(t, resp.IsMultiValue())
+	for _, messages := range resp.MultiValue() {
+		mapString := fmt.Sprint(messages)
+		assert.Contains(t, strings.ToLower(mapString), strings.ToLower("timeout"))
+	}
+}
+
+func (suite *GlideTestSuite) TestClientSetGetName() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	connectionName := "ConnectionName-" + uuid.NewString()
+	client.ClientSetName(connectionName)
+	response, err := client.ClientGetName()
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// ClientGetName with option or with multiple options without route
+	opts := options.RouteOption{Route: nil}
+	connectionName := "ConnectionName-" + uuid.NewString()
+	response, err := client.ClientSetNameWithOptions(connectionName, opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+	response, err = client.ClientGetNameWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+
+	// same sections with random route
+	connectionName = "ConnectionName-" + uuid.NewString()
+	route := config.Route(config.RandomRoute)
+	opts = options.RouteOption{Route: route}
+	response, err = client.ClientSetNameWithOptions(connectionName, opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+	response, err = client.ClientGetNameWithOptions(opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestConfigRewriteCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+	}
+	res, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range res.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	sections := []options.Section{options.Server}
+
+	// info with option or with multiple options without route
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: nil,
+	}
+	response, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range response.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+			break
+		}
+	}
+
+	// same sections with random route
+	opts = options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: &options.RouteOption{Route: config.RandomRoute},
+	}
+	response, err = client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	lines := strings.Split(response.SingleValue(), "\n")
+	var configFile string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "config_file:") {
+			configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+			break
+		}
+	}
+	if len(configFile) > 0 {
+		responseRewrite, err := client.ConfigRewrite()
+		assert.NoError(t, err)
+		assert.Equal(t, "OK", responseRewrite)
+	}
+
+	// default sections, multi node route
+	opts = options.ClusterInfoOptions{
+		InfoOptions: nil,
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	}
+	response, err = client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range response.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+			break
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterRandomKey() {
+	client := suite.defaultClusterClient()
+	// Test 1: Check if the command return random key
+	t := suite.T()
+	result, err := client.RandomKey()
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+}
+
+func (suite *GlideTestSuite) TestRandomKeyWithRoute() {
+	client := suite.defaultClusterClient()
+	// Test 1: Check if the command return random key
+	t := suite.T()
+	route := config.Route(config.RandomRoute)
+	options := options.RouteOption{Route: route}
+	result, err := client.RandomKeyWithRoute(options)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test with single node route
+	libName := "mylib1c_single"
+	funcName := "myfunc1c_single"
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, true)
+
+	// Flush all functions with SYNC option and single node route
+	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load function with single node route
+	result, err = client.FunctionLoadWithRoute(code, false, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Test FCALL with single node route
+	functionResult, err := client.FCallWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test FCALL_RO with single node route
+	functionResult, err = client.FCallReadOnlyWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test with all primaries route
+	libName = "mylib1c_all"
+	funcName = "myfunc1c_all"
+	functions = map[string]string{
+		funcName: "return args[1]",
+	}
+	code = GenerateLuaLibCode(libName, functions, true)
+
+	// Flush all functions with SYNC option and all primaries route
+	route = options.RouteOption{Route: config.AllPrimaries}
+	result, err = client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load function with all primaries route
+	result, err = client.FunctionLoadWithRoute(code, false, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Test FCALL with all primaries route
+	functionResult, err = client.FCallWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test FCALL_RO with all primaries route
+	functionResult, err = client.FCallReadOnlyWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Flush all functions with SYNC option
+	result, err := client.FunctionFlushSync()
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Create function that returns first argument
+	libName := "mylib1c"
+	funcName := "myfunc1c"
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, true)
+
+	// Load function
+	result, err = client.FunctionLoad(code, false)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Test FCALL
+	functionResult, err := client.FCallWithArgs(funcName, []string{"one", "two"})
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test FCALL_RO
+	functionResult, err = client.FCallReadOnlyWithArgs(funcName, []string{"one", "two"})
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
 }
