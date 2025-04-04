@@ -56,7 +56,6 @@ func NewExecCommand() Cmder {
 
 // Override ExecuteCommand to queue commands in the transaction
 func (t *Transaction) ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
-	fmt.Println("Transaction ExecuteCommand called")
 	t.commands = append(t.commands, &GenericCommand{name: requestType, args: args})
 	return nil, nil // Queue the command instead of executing immediately
 }
@@ -155,7 +154,6 @@ func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (
 		routeBytesPtr,
 		routeBytesCount,
 	)
-	fmt.Println("After execute_transaction")
 
 	client.mu.Unlock()
 

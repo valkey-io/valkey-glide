@@ -29,9 +29,10 @@ func main() {
 
 	//Create Transcation
 	tx := api.NewTransaction(client)
+	//tx.Set("key678", "Glide")
 	tx.Get("key123")
 	tx.Get("key345")
-	//tx.Set("key678", "Glide")
+	tx.Del([]string{"key123"})
 	result, err := tx.Exec()
 
 	if err != nil {

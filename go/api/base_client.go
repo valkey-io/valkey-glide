@@ -477,9 +477,6 @@ func (client *baseClient) ResetConnectionPassword() (Result[string], error) {
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) Set(key string, value string) (string, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
-	if result == nil {
-		return DefaultStringResponse, nil
-	}
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -2910,7 +2907,7 @@ func (client *baseClient) BLMove(
 //
 // [valkey.io]: https://valkey.io/commands/del/
 func (client *baseClient) Del(keys []string) (int64, error) {
-	result, err := client.executeCommand(C.Del, keys)
+	result, err := client.executor.ExecuteCommand(C.Del, keys)
 	if err != nil {
 		return defaultIntResponse, err
 	}
