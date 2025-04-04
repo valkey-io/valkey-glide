@@ -92,17 +92,17 @@ runs:
         - name: Validate no empty/incorrect matrices
           shell: bash
           run: |
-              ENGINES=`jq length <<< ${{ steps.load-engine-matrix.outputs.engine-matrix }}`
+              ENGINES=`jq length <<< '${{ steps.load-engine-matrix.outputs.engine-matrix }}'`
               if [[ $ENGINES == 0 ]]; then
                   echo "Engine matrix is empty!"
                   exit 1
               fi
-              HOSTS=`jq length <<< ${{ steps.load-host-matrix.outputs.host-matrix }}`
+              HOSTS=`jq length <<< '${{ steps.load-host-matrix.outputs.host-matrix }}'`
               if [[ $HOSTS == 0 ]]; then
                   echo "Host matrix is empty!"
                   exit 1
               fi
-              LANGS=`jq length <<< ${{ steps.create-lang-version-matrix.outputs.version-matrix }}`
+              LANGS=`jq length <<< '${{ steps.create-lang-version-matrix.outputs.version-matrix }}'`
               if [[ $LANGS == 0 && $LANGUAGE_NAME != "rust" ]]; then
                   echo "Language matrix is empty!"
                   exit 1
