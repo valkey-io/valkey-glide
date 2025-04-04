@@ -6,7 +6,7 @@
     <RootNamespace>Valkey.Glide.UnitTests</RootNamespace>
     <AssemblyName>Valkey.Glide.UnitTests</AssemblyName>
     <Nullable>enable</Nullable>
-    <LangVersion>12.0</LangVersion>
+    <LangVersion>10.0</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
