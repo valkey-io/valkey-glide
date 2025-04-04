@@ -88,3 +88,19 @@ runs:
                   echo 'Pick language versions listed in 'versions' - on cron (schedule) or if manually triggered job requires a full matrix'
                   jq -c "[.[] | select(.language == \"$LANGUAGE_NAME\") | .versions][0]" < .github/json_matrices/supported-languages-versions.json | awk '{ printf "version-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
               fi
+
+        - name: Validate no empty matrices
+          shell: bash
+          run: |
+              if [[ -z "${{ steps.load-engine-matrix.outputs.engine-matrix }}" ]]; then
+                  echo "Engine matrix is empty!"
+                  exit 1
+              fi
+              if [[ -z "${{ steps.load-host-matrix.outputs.host-matrix }}" ]]; then
+                  echo "Host matrix is empty!"
+                  exit 1
+              fi
+              if [[ -z "${{ steps.create-lang-version-matrix.outputs.version-matrix }}" && $LANGUAGE_NAME != "rust" ]]; then
+                  echo "Language matrix is empty!"
+                  exit 1
+              fi
