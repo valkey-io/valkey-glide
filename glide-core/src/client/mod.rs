@@ -13,8 +13,8 @@ use redis::cluster_routing::{
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{
-    ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PushInfo, RedisError, RedisResult,
-    ScanStateRC, Value,
+    ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy, PushInfo, RedisError,
+    RedisResult, ScanStateRC, Value,
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
@@ -339,6 +339,7 @@ impl Client {
         mut values: Vec<Value>,
         command_count: usize,
         offset: usize,
+        raise_on_error: bool,
     ) -> RedisResult<Value> {
         assert_eq!(values.len(), 1);
         let value = values.pop();
@@ -367,18 +368,35 @@ impl Client {
                     .into());
             }
         };
-        Self::convert_transaction_values_to_expected_types(pipeline, values, command_count)
+        Self::convert_pipeline_values_to_expected_types(
+            pipeline,
+            values,
+            command_count,
+            raise_on_error,
+        )
     }
 
-    fn convert_transaction_values_to_expected_types(
+    fn convert_pipeline_values_to_expected_types(
         pipeline: &redis::Pipeline,
         values: Vec<Value>,
         command_count: usize,
+        raise_on_error: bool,
     ) -> RedisResult<Value> {
         let values = values
             .into_iter()
-            .zip(pipeline.cmd_iter().map(expected_type_for_cmd))
-            .map(|(value, expected_type)| convert_to_expected_type(value, expected_type))
+            .map(|value| {
+                if raise_on_error {
+                    value.extract_error()
+                } else {
+                    Ok(value)
+                }
+            })
+            .zip(
+                pipeline
+                    .cmd_iter()
+                    .map(|cmd| expected_type_for_cmd(cmd.as_ref())),
+            )
+            .map(|(value, expected_type)| convert_to_expected_type(value?, expected_type))
             .try_fold(
                 Vec::with_capacity(command_count),
                 |mut acc, result| -> RedisResult<_> {
@@ -389,29 +407,126 @@ impl Client {
         Ok(Value::Array(values))
     }
 
+    /// Send a pipeline to the server.
+    /// Transaction is a batch of commands that are sent in a single request.
+    /// Unlike a pipelines, transactions are atomic, and in cluster mode, the key-based commands must route to the same slot.
     pub fn send_transaction<'a>(
         &'a mut self,
         pipeline: &'a redis::Pipeline,
         routing: Option<RoutingInfo>,
+        transaction_timeout: Option<u32>,
+        raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         let command_count = pipeline.cmd_iter().count();
+        // The offset is set to command_count + 1 to account for:
+        // 1. The first command, which is the "MULTI" command, that returns "OK"
+        // 2. The "QUEUED" responses for each of the commands in the pipeline (before EXEC)
+        // After these initial responses (OK and QUEUED), we expect a single response,
+        // which is an array containing the results of all the commands in the pipeline.
         let offset = command_count + 1;
-        run_with_timeout(Some(self.request_timeout), async move {
-            let values = match self.internal_client {
-                ClientWrapper::Standalone(ref mut client) => {
-                    client.send_pipeline(pipeline, offset, 1).await
-                }
-
-                ClientWrapper::Cluster { ref mut client } => match routing {
-                    Some(RoutingInfo::SingleNode(route)) => {
-                        client.route_pipeline(pipeline, offset, 1, route).await
+        run_with_timeout(
+            Some(to_duration(transaction_timeout, self.request_timeout)),
+            async move {
+                let values = match self.internal_client {
+                    ClientWrapper::Standalone(ref mut client) => {
+                        client.send_pipeline(pipeline, offset, 1).await
                     }
-                    _ => client.req_packed_commands(pipeline, offset, 1).await,
-                },
-            }?;
 
-            Self::get_transaction_values(pipeline, values, command_count, offset)
-        })
+                    ClientWrapper::Cluster { ref mut client } => match routing {
+                        Some(RoutingInfo::SingleNode(route)) => {
+                            client
+                                .route_pipeline(pipeline, offset, 1, Some(route), None)
+                                .await
+                        }
+                        _ => client.req_packed_commands(pipeline, offset, 1, None).await,
+                    },
+                }?;
+
+                Self::get_transaction_values(
+                    pipeline,
+                    values,
+                    command_count,
+                    offset,
+                    raise_on_error,
+                )
+            },
+        )
+        .boxed()
+    }
+
+    /// Send a pipeline to the server.
+    /// Pipeline is a batch of commands that are sent in a single request.
+    /// Unlike a transaction, the commands are not executed atomically, and in cluster mode, the commands can be sent to different nodes.
+    ///
+    /// The `raise_on_error` parameter determines whether the pipeline should raise an error if any of the commands in the pipeline fail, or return the error as part of the response.
+    /// - `pipeline_retry_strategy`: Configures the retry behavior for pipeline commands.
+    ///   - If `retry_server_error` is `true`, failed commands with a retriable `RetryMethod` will be retried,
+    ///     potentially causing reordering within the same slot.
+    ///     ⚠️ **Caution**: This may lead to commands being executed in a different order than originally sent,
+    ///     which could affect operations that rely on strict execution sequence.
+    ///   - If `retry_connection_error` is `true`, sub-pipeline requests will be retried on connection errors.
+    ///     ⚠️ **Caution**: Retrying after a connection error may result in duplicate executions, since the server might have already received and processed the request before the error occurred.
+    ///     TODO: add wiki link.
+    pub fn send_pipeline<'a>(
+        &'a mut self,
+        pipeline: &'a redis::Pipeline,
+        routing: Option<RoutingInfo>,
+        raise_on_error: bool,
+        pipeline_timeout: Option<u32>,
+        pipeline_retry_strategy: PipelineRetryStrategy,
+    ) -> redis::RedisFuture<'a, Value> {
+        let command_count = pipeline.cmd_iter().count();
+        if pipeline.is_empty() {
+            return async {
+                Err(RedisError::from((
+                    ErrorKind::ResponseError,
+                    "Received empty pipeline",
+                )))
+            }
+            .boxed();
+        }
+
+        run_with_timeout(
+            Some(to_duration(pipeline_timeout, self.request_timeout)),
+            async move {
+                let values = match self.internal_client {
+                    ClientWrapper::Standalone(ref mut client) => {
+                        client.send_pipeline(pipeline, 0, command_count).await
+                    }
+
+                    ClientWrapper::Cluster { ref mut client } => match routing {
+                        Some(RoutingInfo::SingleNode(route)) => {
+                            client
+                                .route_pipeline(
+                                    pipeline,
+                                    0,
+                                    command_count,
+                                    Some(route),
+                                    Some(pipeline_retry_strategy),
+                                )
+                                .await
+                        }
+                        _ => {
+                            client
+                                .req_packed_commands(
+                                    pipeline,
+                                    0,
+                                    command_count,
+                                    Some(pipeline_retry_strategy),
+                                )
+                                .await
+                        }
+                    },
+                }?;
+
+                Self::convert_pipeline_values_to_expected_types(
+                    pipeline,
+                    values,
+                    command_count,
+                    raise_on_error,
+                )
+            },
+        )
         .boxed()
     }
 
