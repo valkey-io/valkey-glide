@@ -131,6 +131,7 @@ pub type FailureCallback = unsafe extern "C" fn(
 /// The PubSub callback needs to handle the push notification synchronously, since the data will be dropped by Rust once the callback returns.
 /// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
 ///
+/// `client_ptr` is a baton-pass back to the caller language to uniquely identify the client.
 /// `kind` is an integer representing the PushKind enum value (0=Disconnection, 1=Other, 2=Invalidate, 3=Message, etc.)
 /// `data_ptr` is a pointer to the CommandResponse containing the push data
 pub type PubSubCallback =
@@ -383,6 +384,60 @@ impl ClientAdapter {
     }
 }
 
+/// Processes a push notification message and calls the provided callback function.
+///
+/// This function converts a PushInfo message to a CommandResponse, determines the
+/// notification type, and invokes the callback with the appropriate parameters.
+///
+/// # Parameters
+/// - `push_msg`: The push notification message to process.
+/// - `pubsub_callback`: The callback function to invoke with the processed notification.
+/// - `client_adapter_ptr`: A pointer to the client adapter to pass to the callback.
+///
+/// # Returns
+/// - `true` if the message was successfully processed and the callback was called.
+/// - `false` if there was an error processing the message (e.g., conversion failed).
+fn process_push_notification(
+    push_msg: redis::PushInfo,
+    pubsub_callback: PubSubCallback,
+    client_adapter_ptr: usize,
+) -> bool {
+    // Convert the push_msg.data to a CommandResponse
+    let data_response = match valkey_value_to_command_response(Value::Array(push_msg.data.clone()))
+    {
+        Ok(response) => response,
+        Err(_e) => {
+            return false; // Skip this message if conversion fails
+        }
+    };
+
+    // Get the numeric value of the PushKind enum
+    let kind_value = match push_msg.kind {
+        redis::PushKind::Disconnection => 0,
+        redis::PushKind::Other(_) => 1,
+        redis::PushKind::Invalidate => 2,
+        redis::PushKind::Message => 3,
+        redis::PushKind::PMessage => 4,
+        redis::PushKind::SMessage => 5,
+        redis::PushKind::Unsubscribe => 6,
+        redis::PushKind::PUnsubscribe => 7,
+        redis::PushKind::SUnsubscribe => 8,
+        redis::PushKind::Subscribe => 9,
+        redis::PushKind::PSubscribe => 10,
+        redis::PushKind::SSubscribe => 11,
+    };
+
+    // Call the pubsub callback with the push notification data
+    unsafe {
+        pubsub_callback(
+            client_adapter_ptr,
+            kind_value,
+            Box::into_raw(Box::new(data_response)),
+        );
+    }
+    true
+}
+
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
@@ -425,16 +480,8 @@ fn create_client_internal(
     // Clone client_adapter before moving it into the async block
     let client_adapter_clone = Arc::into_raw(client_adapter.clone()).addr();
 
-    // Check if the pubsub_callback function pointer is not null
-    // We can't directly use is_null() on function pointers, so we need to compare with std::ptr::null()
-    let null_fn: PubSubCallback = unsafe { std::mem::transmute(std::ptr::null::<()>()) };
-    let is_callback_valid = !std::ptr::eq(
-        pubsub_callback as *const () as *const u8,
-        null_fn as *const () as *const u8,
-    );
-
     // If pubsub_callback is provided (not null), spawn a task to handle push notifications
-    if is_callback_valid {
+    if pubsub_callback as usize != 0 {
         runtime.spawn(async move {
             loop {
                 let result = push_rx.recv().await;
@@ -443,40 +490,7 @@ fn create_client_internal(
                         return;
                     }
                     Some(push_msg) => {
-                        // Convert the push_msg.data to a CommandResponse
-                        let data_response = match valkey_value_to_command_response(Value::Array(
-                            push_msg.data.clone(),
-                        )) {
-                            Ok(response) => response,
-                            Err(_e) => {
-                                continue; // Skip this message if conversion fails
-                            }
-                        };
-
-                        // Get the numeric value of the PushKind enum
-                        let kind_value = match push_msg.kind {
-                            redis::PushKind::Disconnection => 0,
-                            redis::PushKind::Other(_) => 1,
-                            redis::PushKind::Invalidate => 2,
-                            redis::PushKind::Message => 3,
-                            redis::PushKind::PMessage => 4,
-                            redis::PushKind::SMessage => 5,
-                            redis::PushKind::Unsubscribe => 6,
-                            redis::PushKind::PUnsubscribe => 7,
-                            redis::PushKind::SUnsubscribe => 8,
-                            redis::PushKind::Subscribe => 9,
-                            redis::PushKind::PSubscribe => 10,
-                            redis::PushKind::SSubscribe => 11,
-                        };
-
-                        // Call the pubsub callback with the push notification data
-                        unsafe {
-                            pubsub_callback(
-                                client_adapter_clone,
-                                kind_value,
-                                Box::into_raw(Box::new(data_response)),
-                            );
-                        }
+                        process_push_notification(push_msg, pubsub_callback, client_adapter_clone);
                     }
                 }
             }

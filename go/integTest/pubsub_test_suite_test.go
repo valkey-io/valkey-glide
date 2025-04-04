@@ -38,13 +38,6 @@ func (suite *PubSubTestSuite) GetTLS() bool {
 	return suite.tls
 }
 
-// Reuse the same flag variables from GlideTestSuite
-// var (
-// 	tls             = flag.Bool("tls", false, "one")
-// 	clusterHosts    = flag.String("cluster-endpoints", "", "two")
-// 	standaloneHosts = flag.String("standalone-endpoints", "", "three")
-// )
-
 func (suite *PubSubTestSuite) SetupSuite() {
 	// Setup coverage reporting
 	suite.coverageCleanup = SetupCoverage(suite.T())
