@@ -789,3 +789,161 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_ImmediateAuthWrongPass
 	_, err = adminClient.ConfigSet(map[string]string{"requirepass": ""})
 	assert.NoError(suite.T(), err)
 }
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersion() {
+	client := suite.defaultClient()
+	options := options.NewLolwutOptions(8)
+	res, err := client.LolwutWithOptions(*options)
+	assert.NoError(suite.T(), err)
+	assert.Contains(suite.T(), res, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
+	client := suite.defaultClient()
+	opts := options.NewLolwutOptions(8).SetArgs([]int{10, 20})
+	res, err := client.LolwutWithOptions(*opts)
+	assert.NoError(suite.T(), err)
+	assert.Contains(suite.T(), res, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
+	client := suite.defaultClient()
+	opts := options.NewLolwutOptions(6).SetArgs([]int{})
+	res, err := client.LolwutWithOptions(*opts)
+	assert.NoError(suite.T(), err)
+	assert.Contains(suite.T(), res, "Redis ver.")
+}
+
+func (suite *GlideTestSuite) TestClientId() {
+	client := suite.defaultClient()
+	result, err := client.ClientId()
+	assert.Nil(suite.T(), err)
+	assert.Greater(suite.T(), result, int64(0))
+}
+
+func (suite *GlideTestSuite) TestLastSave() {
+	client := suite.defaultClient()
+	t := suite.T()
+	result, err := client.LastSave()
+	assert.Nil(t, err)
+	assert.Greater(t, result, int64(0))
+}
+
+func (suite *GlideTestSuite) TestConfigResetStat() {
+	client := suite.defaultClient()
+	suite.verifyOK(client.ConfigResetStat())
+}
+
+func (suite *GlideTestSuite) TestClientGetSetName() {
+	client := suite.defaultClient()
+	t := suite.T()
+
+	suite.verifyOK(client.ClientSetName("ConnectionName"))
+	result, err := client.ClientGetName()
+	assert.Nil(t, err)
+	assert.Equal(t, result, "ConnectionName")
+}
+
+func (suite *GlideTestSuite) TestMove() {
+	client := suite.defaultClient()
+	t := suite.T()
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(key, "hello"))
+	result, err := client.Move(key, 2)
+	assert.Nil(t, err)
+	assert.True(suite.T(), result)
+}
+
+func (suite *GlideTestSuite) TestScan() {
+	client := suite.defaultClient()
+	t := suite.T()
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(key, "Hello"))
+	resCursor, resCollection, err := client.Scan(0)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(resCursor), 1)
+	assert.GreaterOrEqual(t, len(resCollection), 1)
+}
+
+func (suite *GlideTestSuite) TestScanWithOption() {
+	client := suite.defaultClient()
+	t := suite.T()
+
+	// Test TestScanWithOption SetCount
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(key, "Hello"))
+	opts := options.NewScanOptions().SetCount(10)
+	resCursor, resCollection, err := client.ScanWithOptions(0, *opts)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(resCursor), 1)
+	assert.GreaterOrEqual(t, len(resCollection), 1)
+
+	// Test TestScanWithOption SetType
+	opts = options.NewScanOptions().SetType(options.ObjectTypeString)
+	resCursor, resCollection, err = client.ScanWithOptions(0, *opts)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(resCursor), 1)
+	assert.GreaterOrEqual(t, len(resCollection), 1)
+}
+
+func (suite *GlideTestSuite) TestConfigRewrite() {
+	client := suite.defaultClient()
+	t := suite.T()
+	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
+	response, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	lines := strings.Split(response, "\n")
+	var configFile string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "config_file:") {
+			configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+			break
+		}
+	}
+	if len(configFile) > 0 {
+		suite.verifyOK(client.ConfigRewrite())
+	}
+}
+
+func (suite *GlideTestSuite) TestRandomKey() {
+	client := suite.defaultClient()
+	// Test 1: Check if the command return random key
+	t := suite.T()
+	result, err := client.RandomKey()
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+}
+
+func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+
+	// Flush all functions with SYNC option
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Generate and load function
+	libName := "mylib1c"
+	funcName := "myfunc1c"
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, true)
+	result, err = client.FunctionLoad(code, false)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	// Test FCALL
+	functionResult, err := client.FCallWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "one", functionResult)
+
+	// Test FCALL_RO
+	functionResult, err = client.FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "one", functionResult)
+}

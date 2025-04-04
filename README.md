@@ -4,10 +4,10 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 ## Supported Engine Versions
 Valkey GLIDE is API-compatible with the following engine versions:
 
-| Engine Type           |  6.2  |  7.0  |  7.2  |  8.0  |
-|-----------------------|-------|-------|-------|-------|
-| Valkey                |   -   |   -   |   V   |   V   |
-| Redis                 |   V   |   V   |   V   |   -   |
+| Engine Type           |  6.2  |  7.0  |  7.1  |  7.2  |  8.0  |
+|-----------------------|-------|-------|-------|-------|-------|
+| Valkey                |   -   |   -   |   -   |   V   |   V   |
+| Redis                 |   V   |   V   |   V   |   V   |   -   |
 
 ## Current Status and upcoming releases
 In the current release, Valkey GLIDE is available for Python, Java and Node.js. Support for Go is currently in **public preview** and support for C# is **under active development**, with plans to include more programming languages in the future.
@@ -20,11 +20,30 @@ In the current release, Valkey GLIDE is available for Python, Java and Node.js. 
 - Public preview for GO support
 
 ## Getting Started
--   [Java](./java/README.md)
--   [Python](./python/README.md)
--   [Node](./node/README.md)
--   [Go](./go/README.md)
--   [Documentation](https://github.com/valkey-io/valkey-glide/wiki)
+
+**SDKs**
+- [Java](./java/README.md)
+- [Python](./python/README.md)
+- [Node](./node/README.md)
+- [Go](./go/README.md)
+
+**General Concepts:** 
+- [Custom Command](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
+- [Connection Management](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#connection-management)
+- [Multi-Slot Command Handling](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#multi-slot-command-handling)
+- [Inflight Request Limit](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#inflight-request-limit)
+- [PubSub Support](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#pubsub-support)
+- [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan)
+- [Dynamic Password Management](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#dynamic-password-management)
+- [Modules API](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#modules-api)
+
+**Migration Guides**
+- [Jedis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-Jedis)
+
+**Community**
+- [Contributors meeting](https://github.com/valkey-io/valkey-glide/wiki/Contributors-meeting)
+
+Looking for more? Check out the [Valkey Glide Wiki](https://github.com/valkey-io/valkey-glide/wiki).
 
 ## Getting Help
 If you have any questions, feature requests, encounter issues, or need assistance with this project, please don't hesitate to open a GitHub issue. Our community and contributors are here to help you. Before creating an issue, we recommend checking the [existing issues](https://github.com/valkey-io/valkey-glide/issues) to see if your question or problem has already been addressed. If not, feel free to create a new issue, and we'll do our best to assist you. Please provide as much detail as possible in your issue description, including:
@@ -39,31 +58,6 @@ If you have any questions, feature requests, encounter issues, or need assistanc
 8. Relevant modifications you've made
 9. Any unusual aspects of your environment or deployment
 10. Log files
-
-## Known issues
-
-GLIDE has a native component as a Rust based library. Currently the native componnent is not compatible with certion older GLIBC based OS's.
-The most relevant one is Debian 11, which is the base of ubuntu 20, which some other distros are based on, like Mint and Pop!_OS 20 etc. As a result, the ones mentioned above are incompatible with GLIDE.
-
-Another OS which is known to be incompatible is Amazon Linux 2, which is the previoues versions of what [AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) is running on (node 18, py <=11, java <= 17). Note that this is not affecting MUSL based distros, which are not based on GLIBC.
-
-For all the incompatible Linux distros listed, there's at least one newer and stable version available, and it is recomended to use them.
-
-| Incompatible Distro Version | Compatible Successor Version |
-|-----------------------------|------------------------------|
-| Debian 11                   | Debian 12 / 13               |
-| Ubuntu 20.04 LTS            | Ubuntu 22.04 LTS / 24.04 LTS |
-| Linux Mint 20               | Linux Mint 21 / 22           |
-| Pop!_OS 20.04 LTS           | Pop!_OS 22.04 LTS            |
-| Amazon Linux 2              | Amazon Linux 2023            |
-
-When running on incompatible systems, the client crashes with one of the following errors:
-```console
-/lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found
-/lib64/libm.so.6: version `GLIBC_2.29' not found
-```
-You can get the `GLIBC` version included in your OS by running `ldd --version`. `GLIBC` versions `2.26`, `2.27`, `2.30`, and `2.31` are not supported.
-We are working hard to resolve this issue. You can track our progress in issue [#3291](https://github.com/valkey-io/valkey-glide/issues/3291).
 
 ## Contributing
 
