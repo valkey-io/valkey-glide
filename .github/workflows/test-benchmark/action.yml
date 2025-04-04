@@ -32,4 +32,4 @@ runs:
           working-directory: ./benchmarks
           env:
               LANGUAGE_FLAG: ${{ inputs.language-flag }}
-          run: ./install_and_test.sh -no-tls -minimal -only-glide -data 1 -tasks 10 "$LANGUAGE_FLAG"
+          run: ./install_and_test.sh -no-tls -minimal -only-glide -data 1 -tasks 10 $LANGUAGE_FLAG
