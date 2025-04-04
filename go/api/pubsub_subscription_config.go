@@ -61,7 +61,7 @@ func (config *BaseSubscriptionConfig) SetCallback(callback MessageCallback) *Bas
 
 func (config *BaseSubscriptionConfig) Validate() error {
 	if config.context != nil && config.callback == nil {
-		return &errors.PubSubConfigError{
+		return &errors.ConfigurationError{
 			Msg: "PubSub subscriptions with a context requires a callback function to be configured",
 		}
 	}

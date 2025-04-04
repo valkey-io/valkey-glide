@@ -46,7 +46,7 @@ func (suite *PubSubTestSuite) TestSubscriptionReconnection() {
 		assert.Fail(suite.T(), "Message should be received before network interruption")
 	}
 
-	// Simulate network interruption by stopping and restarting the Redis server
+	// Simulate network interruption by stopping and restarting the server
 	pubsubRunClusterManager(suite, []string{"stop", "--prefix", "cluster"}, true)
 	time.Sleep(1 * time.Second) // Allow time for disconnect
 
