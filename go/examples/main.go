@@ -21,36 +21,17 @@ func main() {
 	}
 
 	//Non transaction
-	resultSet, _ := client.Set("key123", "Hello")
+	resultSet, err := client.Set("key123", "Hello")
+	if err != nil {
+		log.Fatal("error connecting to database: ", err)
+	}
 	fmt.Println(resultSet)
 
-	resultSet, _ = client.Set("key345", "world")
-	fmt.Println(resultSet)
-
-	//Create Transcation
-	// tx := api.NewTransaction(client)
-	// tx.Set("key1", "Glide")
-	// tx.Set("key2", "Hello")
-	// tx.Set("key3", "KeyToDelete")
-	// tx.Get("key1")
-	// tx.Get("key2")
-	// tx.Get("key3")
-	// tx.Del([]string{"key3"})
-	// tx.Append("key2", "_World")
-	// tx.Get("key2")
-
-	// err = tx.Discard()
-	// if err != nil {
-	// 	log.Fatalf("Transaction Discard failed: %v", err)
-	// } else {
-	// 	fmt.Println("Transaction successfully discarded!")
-	// }
-
-	// result, err := tx.Exec()
-	// if err != nil {
-	// 	log.Fatalf("Transaction failed: %v", err)
-	// }
-	//fmt.Println(result)
+	resultGet, err := client.Get("key123")
+	if err != nil {
+		log.Fatal("error connecting to database: ", err)
+	}
+	fmt.Println(resultGet)
 	client.Close()
 
 }
