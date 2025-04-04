@@ -476,11 +476,10 @@ func (client *baseClient) ResetConnectionPassword() (Result[string], error) {
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) Set(key string, value string) (string, error) {
-	result, err := client.executeCommand(C.Set, []string{key, value})
+	result, err := client.executor.ExecuteCommand(C.Set, []string{key, value})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-
 	return handleStringResponse(result)
 }
 
@@ -554,11 +553,6 @@ func (client *baseClient) Get(key string) (Result[string], error) {
 	if result == nil {
 		return CreateNilStringResult(), err
 	}
-
-	// //If inside transaction
-	// if _, ok := client.executor.(*Transaction); ok {
-	// 	return CreateNilStringResult(), nil // Return transaction for chaining when inside a transaction
-	// }
 
 	return handleStringOrNilResponse(result)
 }
@@ -914,7 +908,7 @@ func (client *baseClient) GetRange(key string, start int, end int) (string, erro
 //
 // [valkey.io]: https://valkey.io/commands/append/
 func (client *baseClient) Append(key string, value string) (int64, error) {
-	result, err := client.executeCommand(C.Append, []string{key, value})
+	result, err := client.executor.ExecuteCommand(C.Append, []string{key, value})
 	if err != nil {
 		return defaultIntResponse, err
 	}
