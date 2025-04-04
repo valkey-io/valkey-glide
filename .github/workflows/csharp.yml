@@ -75,6 +75,7 @@ jobs:
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
 
     test-csharp:
+        name: CSharp Tests - ${{ matrix.dotnet }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
         timeout-minutes: 35
         strategy:
@@ -88,6 +89,11 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
+
             - name: Install Node on self-hosted runner
               if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
               uses: actions/setup-node@v4
@@ -99,6 +105,18 @@ jobs:
               run: |
                   sudo apt-get update
                   sudo apt-get install -y npm
+
+            # As per https://github.com/actions/setup-dotnet/issues/608, it is nice to have (but mandatory for mac runners)
+            - name: Create global.json
+              run: |
+                  cat << EOF > global.json
+                  {
+                     "sdk": {
+                         "rollForward": "latestFeature",
+                         "version": "${{ matrix.dotnet }}.0"
+                     }
+                  }
+                  EOF
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
@@ -225,7 +243,7 @@ jobs:
             - name: lint rust
               uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: csharp/lib
+                  cargo-toml-folder: csharp/rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Format
