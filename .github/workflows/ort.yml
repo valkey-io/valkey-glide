@@ -96,7 +96,7 @@ jobs:
                     analyzer:
                       skip_excluded: true
                       allowDynamicVersions: true
-                      enabledPackageManagers: [Cargo, NPM, PIP, GradleInspector]
+                      enabledPackageManagers: [Bazel, Bower, Bundler, Cargo, Carthage, CocoaPods, Composer, Conan, GoMod, Gradle, GradleInspector, Maven, NPM, NuGet, PIP, Pipenv, PNPM, Poetry, Pub, SBT, SpdxDocumentFile, Stack, SwiftPM, Unmanaged, Yarn, Yarn2]
                   EOF
                   cat ~/.ort/config/config.yml
 
