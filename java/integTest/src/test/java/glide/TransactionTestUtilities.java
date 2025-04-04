@@ -11,7 +11,7 @@ import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
-import glide.api.models.BaseTransaction;
+import glide.api.models.BaseBatch;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LPosOptions;
@@ -71,7 +71,7 @@ public class TransactionTestUtilities {
     private static final String field3 = "field3-" + UUID.randomUUID();
 
     @FunctionalInterface
-    public interface TransactionBuilder extends Function<BaseTransaction<?>, Object[]> {}
+    public interface TransactionBuilder extends Function<BaseBatch<?>, Object[]> {}
 
     /** Generate test samples for parametrized tests. Could be routed to random node. */
     public static Stream<Arguments> getCommonTransactionBuilders() {
@@ -114,7 +114,7 @@ public class TransactionTestUtilities {
                         (TransactionBuilder) TransactionTestUtilities::scriptingAndFunctionsCommands));
     }
 
-    private static Object[] genericCommands(BaseTransaction<?> transaction) {
+    private static Object[] genericCommands(BaseBatch<?> transaction) {
         String genericKey1 = "{GenericKey}-1-" + UUID.randomUUID();
         String genericKey2 = "{GenericKey}-2-" + UUID.randomUUID();
         String genericKey3 = "{GenericKey}-3-" + UUID.randomUUID();
@@ -226,7 +226,7 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] stringCommands(BaseTransaction<?> transaction) {
+    private static Object[] stringCommands(BaseBatch<?> transaction) {
         String stringKey1 = "{StringKey}-1-" + UUID.randomUUID();
         String stringKey2 = "{StringKey}-2-" + UUID.randomUUID();
         String stringKey3 = "{StringKey}-3-" + UUID.randomUUID();
@@ -352,7 +352,7 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] hashCommands(BaseTransaction<?> transaction) {
+    private static Object[] hashCommands(BaseBatch<?> transaction) {
         String hashKey1 = "{HashKey}-1-" + UUID.randomUUID();
 
         // This extra key is for HScan testing. It is a key with only one field. HScan doesn't guarantee
@@ -432,7 +432,7 @@ public class TransactionTestUtilities {
         return result;
     }
 
-    private static Object[] listCommands(BaseTransaction<?> transaction) {
+    private static Object[] listCommands(BaseBatch<?> transaction) {
         String listKey1 = "{ListKey}-1-" + UUID.randomUUID();
         String listKey2 = "{ListKey}-2-" + UUID.randomUUID();
         String listKey3 = "{ListKey}-3-" + UUID.randomUUID();
@@ -554,7 +554,7 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] setCommands(BaseTransaction<?> transaction) {
+    private static Object[] setCommands(BaseBatch<?> transaction) {
         String setKey1 = "{setKey}-1-" + UUID.randomUUID();
         String setKey2 = "{setKey}-2-" + UUID.randomUUID();
         String setKey3 = "{setKey}-3-" + UUID.randomUUID();
@@ -634,7 +634,7 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] sortedSetCommands(BaseTransaction<?> transaction) {
+    private static Object[] sortedSetCommands(BaseBatch<?> transaction) {
         String zSetKey1 = "{ZSetKey}-1-" + UUID.randomUUID();
         String zSetKey2 = "{ZSetKey}-2-" + UUID.randomUUID();
         String zSetKey3 = "{ZSetKey}-3-" + UUID.randomUUID();
@@ -801,7 +801,7 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] serverManagementCommands(BaseTransaction<?> transaction) {
+    private static Object[] serverManagementCommands(BaseBatch<?> transaction) {
         transaction
                 .configSet(Map.of("timeout", "1000"))
                 .configGet(new String[] {"timeout"})
@@ -849,7 +849,7 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] connectionManagementCommands(BaseTransaction<?> transaction) {
+    private static Object[] connectionManagementCommands(BaseBatch<?> transaction) {
         transaction.ping().ping(value1).echo(value2);
         // untested:
         // clientId
@@ -862,7 +862,7 @@ public class TransactionTestUtilities {
         };
     }
 
-    private static Object[] hyperLogLogCommands(BaseTransaction<?> transaction) {
+    private static Object[] hyperLogLogCommands(BaseBatch<?> transaction) {
         String hllKey1 = "{HllKey}-1-" + UUID.randomUUID();
         String hllKey2 = "{HllKey}-2-" + UUID.randomUUID();
         String hllKey3 = "{HllKey}-3-" + UUID.randomUUID();
@@ -881,7 +881,7 @@ public class TransactionTestUtilities {
         };
     }
 
-    private static Object[] streamCommands(BaseTransaction<?> transaction) {
+    private static Object[] streamCommands(BaseBatch<?> transaction) {
         final String streamKey1 = "{streamKey}-1-" + UUID.randomUUID();
         final String streamKey2 = "{streamKey}-2-" + UUID.randomUUID();
         final String streamKey3 = "{streamKey}-3-" + UUID.randomUUID();
@@ -1076,7 +1076,7 @@ public class TransactionTestUtilities {
         return result;
     }
 
-    private static Object[] geospatialCommands(BaseTransaction<?> transaction) {
+    private static Object[] geospatialCommands(BaseBatch<?> transaction) {
         final String geoKey1 = "{geoKey}-1-" + UUID.randomUUID();
         final String geoKey2 = "{geoKey}-2-" + UUID.randomUUID();
 
@@ -1198,7 +1198,7 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] scriptingAndFunctionsCommands(BaseTransaction<?> transaction) {
+    private static Object[] scriptingAndFunctionsCommands(BaseBatch<?> transaction) {
         if (SERVER_VERSION.isLowerThan("7.0.0")) {
             return new Object[0];
         }
@@ -1280,7 +1280,7 @@ public class TransactionTestUtilities {
         };
     }
 
-    private static Object[] bitmapCommands(BaseTransaction<?> transaction) {
+    private static Object[] bitmapCommands(BaseBatch<?> transaction) {
         String key1 = "{bitmapKey}-1" + UUID.randomUUID();
         String key2 = "{bitmapKey}-2" + UUID.randomUUID();
         String key3 = "{bitmapKey}-3" + UUID.randomUUID();
@@ -1356,7 +1356,7 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] pubsubCommands(BaseTransaction<?> transaction) {
+    private static Object[] pubsubCommands(BaseBatch<?> transaction) {
         transaction.publish("message", "Tchannel");
 
         return new Object[] {
