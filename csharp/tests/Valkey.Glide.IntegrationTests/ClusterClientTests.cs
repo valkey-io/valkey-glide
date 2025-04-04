@@ -52,7 +52,7 @@ public class ClusterClientTests
         Assert.Contains("# Replication", res);
     }
 
-    [Fact(Skip = "non-string return types are not supported yet")]
+    [Fact]
     public async Task CustomCommandWithMultiNodeRoute()
     {
         GlideClusterClient client = TestConfiguration.DefaultClusterClient();
@@ -60,9 +60,7 @@ public class ClusterClientTests
         _ = await client.Set("klm", "klm");
         _ = await client.Set("xyz", "xyz");
 
-#pragma warning disable CS8629 // Nullable value type may be null.
-        int res = (int)(await client.CustomCommand(["dbsize"]) as int?);
-#pragma warning restore CS8629 // Nullable value type may be null.
-        TestContext.Current.TestOutputHelper?.WriteLine(res.ToString());
+        long res = (long)(await client.CustomCommand(["dbsize"], AllPrimaries))!;
+        Assert.True(res >= 3);
     }
 }
