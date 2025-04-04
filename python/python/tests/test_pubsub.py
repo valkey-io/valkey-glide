@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 from enum import IntEnum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 
+import anyio
 import pytest
 from glide.async_commands.core import CoreCommands
 from glide.config import (
@@ -16,6 +16,7 @@ from glide.config import (
 from glide.constants import OK
 from glide.exceptions import ConfigurationError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+
 from tests.conftest import create_client
 from tests.utils.utils import check_if_server_version_lt, get_random_string
 
@@ -116,8 +117,9 @@ async def check_no_messages_left(
 ):
     if method == MethodTesting.Async:
         # assert there are no messages to read
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(client.get_pubsub_message(), timeout=3)
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(3):
+                await client.get_pubsub_message()
     elif method == MethodTesting.Sync:
         assert client.try_get_pubsub_message() is None
     else:
@@ -196,10 +198,10 @@ async def client_cleanup(
     await client.close()
     del client
     # The closure is not completed in the glide-core instantly
-    await asyncio.sleep(1)
+    await anyio.sleep(1)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestPubSub:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
@@ -245,7 +247,7 @@ class TestPubSub:
             if cluster_mode:
                 assert result == 1
             # allow the message to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             pubsub_msg = await get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -293,7 +295,7 @@ class TestPubSub:
                     assert result == 1
 
             # allow the message to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             async_msg_res = await listening_client.get_pubsub_message()
             sync_msg_res = listening_client.try_get_pubsub_message()
@@ -312,8 +314,9 @@ class TestPubSub:
             assert not sync_msg.message == async_msg.message
 
             # assert there are no messages to read
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(listening_client.get_pubsub_message(), timeout=3)
+            with pytest.raises(TimeoutError):
+                with anyio.fail_after(3):
+                    listening_client.get_pubsub_message()
 
             assert listening_client.try_get_pubsub_message() is None
         finally:
@@ -377,7 +380,7 @@ class TestPubSub:
                     assert result == 1
 
             # Allow the messages to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels_and_messages)):
@@ -449,7 +452,7 @@ class TestPubSub:
                     assert result == 1
 
             # Allow the messages to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Check if all messages are received correctly by each method
             for index in range(len(channels_and_messages)):
@@ -464,8 +467,9 @@ class TestPubSub:
             # check that we received all messages
             assert channels_and_messages == {}
             # assert there are no messages to read
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(listening_client.get_pubsub_message(), timeout=3)
+            with pytest.raises(TimeoutError):
+                with anyio.fail_after(3):
+                    await listening_client.get_pubsub_message()
 
             assert listening_client.try_get_pubsub_message() is None
 
@@ -520,7 +524,7 @@ class TestPubSub:
             )
 
             # allow the message to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             pubsub_msg = await get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -580,7 +584,7 @@ class TestPubSub:
             )
 
             # allow the messages to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             async_msg_res = await listening_client.get_pubsub_message()
             sync_msg_res = listening_client.try_get_pubsub_message()
@@ -599,8 +603,9 @@ class TestPubSub:
             assert not sync_msg.message == async_msg.message
 
             # assert there are no messages to read
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(listening_client.get_pubsub_message(), timeout=3)
+            with pytest.raises(TimeoutError):
+                with anyio.fail_after(3):
+                    listening_client.get_pubsub_message()
 
             assert listening_client.try_get_pubsub_message() is None
         finally:
@@ -666,7 +671,7 @@ class TestPubSub:
                 )
 
             # Allow the messages to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels_and_messages)):
@@ -742,7 +747,7 @@ class TestPubSub:
                     assert result == 1
 
             # allow the message to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels)):
@@ -800,7 +805,7 @@ class TestPubSub:
                     assert result == 1
 
             # allow the message to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Check if all messages are received correctly by each method
             for index in range(len(channels)):
@@ -816,8 +821,9 @@ class TestPubSub:
             assert channels == {}
 
             # assert there are no more messages to read
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(listening_client.get_pubsub_message(), timeout=3)
+            with pytest.raises(TimeoutError):
+                with anyio.fail_after(3):
+                    await listening_client.get_pubsub_message()
 
             assert listening_client.try_get_pubsub_message() is None
 
@@ -873,7 +879,7 @@ class TestPubSub:
                     assert result == 1
 
             # allow the message to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels)):
@@ -978,7 +984,7 @@ class TestPubSub:
                     assert result == 1
 
             # allow the message to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(all_channels_and_messages)):
@@ -1081,12 +1087,13 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client_exact, publishing_client = (
-                await create_two_clients_with_pubsub(
-                    request,
-                    cluster_mode,
-                    pub_sub_exact,
-                )
+            (
+                listening_client_exact,
+                publishing_client,
+            ) = await create_two_clients_with_pubsub(
+                request,
+                cluster_mode,
+                pub_sub_exact,
             )
 
             callback_messages_pattern: List[CoreCommands.PubSubMsg] = []
@@ -1103,10 +1110,11 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client_pattern, client_dont_care = (
-                await create_two_clients_with_pubsub(
-                    request, cluster_mode, pub_sub_pattern
-                )
+            (
+                listening_client_pattern,
+                client_dont_care,
+            ) = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub_pattern
             )
 
             # Publish messages to all channels
@@ -1116,7 +1124,7 @@ class TestPubSub:
                     assert result == 1
 
             # allow the messages to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Verify messages for exact PUBSUB
             for index in range(len(exact_channels_and_messages)):
@@ -1267,7 +1275,7 @@ class TestPubSub:
                 )
 
             # allow the messages to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             all_channels_and_messages = {
                 **exact_channels_and_messages,
@@ -1389,12 +1397,13 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client_exact, publishing_client = (
-                await create_two_clients_with_pubsub(
-                    request,
-                    cluster_mode,
-                    pub_sub_exact,
-                )
+            (
+                listening_client_exact,
+                publishing_client,
+            ) = await create_two_clients_with_pubsub(
+                request,
+                cluster_mode,
+                pub_sub_exact,
             )
 
             if method == MethodTesting.Callback:
@@ -1424,10 +1433,11 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client_pattern, listening_client_sharded = (
-                await create_two_clients_with_pubsub(
-                    request, cluster_mode, pub_sub_pattern, pub_sub_sharded
-                )
+            (
+                listening_client_pattern,
+                listening_client_sharded,
+            ) = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub_pattern, pub_sub_sharded
             )
 
             # Publish messages to all channels
@@ -1450,7 +1460,7 @@ class TestPubSub:
                 )
 
             # allow the messages to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Verify messages for exact PUBSUB
             for index in range(len(exact_channels_and_messages)):
@@ -1592,12 +1602,13 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client_exact, publishing_client = (
-                await create_two_clients_with_pubsub(
-                    request,
-                    cluster_mode,
-                    pub_sub_exact,
-                )
+            (
+                listening_client_exact,
+                publishing_client,
+            ) = await create_two_clients_with_pubsub(
+                request,
+                cluster_mode,
+                pub_sub_exact,
             )
 
             # Setup PUBSUB for pattern channel
@@ -1632,10 +1643,11 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client_pattern, listening_client_sharded = (
-                await create_two_clients_with_pubsub(
-                    request, cluster_mode, pub_sub_pattern, pub_sub_sharded
-                )
+            (
+                listening_client_pattern,
+                listening_client_sharded,
+            ) = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub_pattern, pub_sub_sharded
             )
 
             # Publish messages to each channel
@@ -1649,7 +1661,7 @@ class TestPubSub:
             )
 
             # allow the message to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
             for client, callback, pattern in [  # type: ignore
@@ -1766,7 +1778,7 @@ class TestPubSub:
                     assert result == 2
 
             # allow the message to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
             for client, callback, pattern in [  # type: ignore
@@ -1906,7 +1918,7 @@ class TestPubSub:
             )
 
             # allow the message to propagate
-            await asyncio.sleep(1)
+            await anyio.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
             for client, callback, pattern in [  # type: ignore
@@ -1995,7 +2007,7 @@ class TestPubSub:
             if cluster_mode:
                 assert result == 1
             # allow the message to propagate
-            await asyncio.sleep(15)
+            await anyio.sleep(15)
 
             async_msg = await listening_client.get_pubsub_message()
             assert async_msg.message == message.encode()
@@ -2009,8 +2021,9 @@ class TestPubSub:
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(listening_client.get_pubsub_message(), timeout=3)
+            with pytest.raises(TimeoutError):
+                with anyio.fail_after(3):
+                    await listening_client.get_pubsub_message()
 
             assert listening_client.try_get_pubsub_message() is None
 
@@ -2073,7 +2086,7 @@ class TestPubSub:
             )
 
             # allow the message to propagate
-            await asyncio.sleep(15)
+            await anyio.sleep(15)
 
             async_msg = await listening_client.get_pubsub_message()
             sync_msg = listening_client.try_get_pubsub_message()
@@ -2088,8 +2101,9 @@ class TestPubSub:
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(listening_client.get_pubsub_message(), timeout=3)
+            with pytest.raises(TimeoutError):
+                with anyio.fail_after(3):
+                    await listening_client.get_pubsub_message()
 
             assert listening_client.try_get_pubsub_message() is None
 
@@ -2142,7 +2156,7 @@ class TestPubSub:
             if cluster_mode:
                 assert result == 1
             # allow the message to propagate
-            await asyncio.sleep(15)
+            await anyio.sleep(15)
 
             assert len(callback_messages) == 1
 
@@ -2204,7 +2218,7 @@ class TestPubSub:
             )
 
             # allow the message to propagate
-            await asyncio.sleep(15)
+            await anyio.sleep(15)
 
             assert len(callback_messages) == 1
 
