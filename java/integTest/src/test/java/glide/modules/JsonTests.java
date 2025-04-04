@@ -18,7 +18,7 @@ import com.google.gson.JsonParser;
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.Json;
 import glide.api.commands.servermodules.JsonBatch;
-import glide.api.models.ClusterTransaction;
+import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.FlushMode;
@@ -1234,7 +1234,7 @@ public class JsonTests {
     @Test
     public void transaction_tests() {
 
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch transaction = new ClusterBatch(true);
         ArrayList<Object> expectedResult = new ArrayList<>();
 
         String key1 = "{key}-1" + UUID.randomUUID();

@@ -309,14 +309,14 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-public class TransactionTests {
+public class BatchTests {
     private static Stream<Arguments> getTransactionBuilders() {
-        return Stream.of(Arguments.of(new Transaction()), Arguments.of(new ClusterTransaction()));
+        return Stream.of(Arguments.of(new Batch(true)), Arguments.of(new ClusterBatch(true)));
     }
 
     @ParameterizedTest
     @MethodSource("getTransactionBuilders")
-    public void transaction_builds_protobuf_request(BaseTransaction<?> transaction) {
+    public void transaction_builds_protobuf_request(BaseBatch<?> transaction) {
         List<Pair<RequestType, ArgsArray>> results = new LinkedList<>();
 
         transaction.get("key");
@@ -1535,7 +1535,7 @@ public class TransactionTests {
         transaction.wait(1L, 1000L);
         results.add(Pair.of(Wait, buildArgs("1", "1000")));
 
-        var protobufTransaction = transaction.getProtobufTransaction().build();
+        var protobufTransaction = transaction.getProtobufBatch().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
             Command protobuf = protobufTransaction.getCommands(idx);

@@ -294,9 +294,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import command_request.CommandRequestOuterClass.RequestType;
+import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
-import glide.api.models.Transaction;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
@@ -376,6 +376,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -456,13 +457,13 @@ public class GlideClientTest {
     public void exec() {
         // setup
         Object[] value = new Object[] {"PONG", "PONG"};
-        Transaction transaction = new Transaction().ping().ping();
+        Batch transaction = new Batch(true).ping().ping();
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewTransaction(eq(transaction), any()))
+        when(commandManager.<Object[]>submitNewBatch(eq(transaction), eq(Optional.empty()), any()))
                 .thenReturn(testResponse);
 
         // exercise

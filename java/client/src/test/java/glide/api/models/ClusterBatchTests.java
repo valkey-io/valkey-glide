@@ -6,7 +6,7 @@ import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNu
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
-import static glide.api.models.TransactionTests.buildArgs;
+import static glide.api.models.BatchTests.buildArgs;
 import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
@@ -23,11 +23,11 @@ import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
 
-public class ClusterTransactionTests {
+public class ClusterBatchTests {
 
     @Test
     public void cluster_transaction_builds_protobuf_request() {
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch transaction = new ClusterBatch(true);
         List<Pair<RequestType, ArgsArray>> results = new LinkedList<>();
 
         transaction.publish("msg", "ch1", true);
@@ -89,7 +89,7 @@ public class ClusterTransactionTests {
                                 STORE_COMMAND_STRING,
                                 "key2")));
 
-        var protobufTransaction = transaction.getProtobufTransaction().build();
+        var protobufTransaction = transaction.getProtobufBatch().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
             Command protobuf = protobufTransaction.getCommands(idx);

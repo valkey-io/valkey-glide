@@ -20,9 +20,10 @@ import static org.junit.jupiter.api.Named.named;
 
 import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.GlideClusterClient;
-import glide.api.models.ClusterTransaction;
+import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.configuration.ProtocolVersion;
@@ -71,7 +72,7 @@ public class ClusterTransactionTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void custom_command_info(GlideClusterClient clusterClient) {
-        ClusterTransaction transaction = new ClusterTransaction().customCommand(new String[] {"info"});
+        ClusterBatch transaction = new ClusterBatch(true).customCommand(new String[] {"info"});
         Object[] result = clusterClient.exec(transaction).get();
         assertTrue(((String) result[0]).contains("# Stats"));
     }
@@ -80,8 +81,10 @@ public class ClusterTransactionTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void info_simple_route_test(GlideClusterClient clusterClient) {
-        ClusterTransaction transaction = new ClusterTransaction().info().info();
-        Object[] result = clusterClient.exec(transaction, RANDOM).get();
+        ClusterBatch transaction = new ClusterBatch(true).info().info();
+        ClusterBatchOptions options = ClusterBatchOptions.builder().route(RANDOM).build();
+
+        Object[] result = clusterClient.exec(transaction, options).get();
 
         assertTrue(((String) result[0]).contains("# Stats"));
         assertTrue(((String) result[1]).contains("# Stats"));
@@ -100,7 +103,7 @@ public class ClusterTransactionTests {
     @MethodSource("getCommonTransactionBuilders")
     public void transactions_with_group_of_commands(
             String testName, TransactionBuilder builder, GlideClusterClient clusterClient) {
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch transaction = new ClusterBatch(true);
         Object[] expectedResult = builder.apply(transaction);
 
         Object[] results = clusterClient.exec(transaction).get();
@@ -120,11 +123,12 @@ public class ClusterTransactionTests {
     @MethodSource("getPrimaryNodeTransactionBuilders")
     public void keyless_transactions_with_group_of_commands(
             String testName, TransactionBuilder builder, GlideClusterClient clusterClient) {
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch transaction = new ClusterBatch(true);
         Object[] expectedResult = builder.apply(transaction);
 
         SingleNodeRoute route = new SlotIdRoute(1, SlotType.PRIMARY);
-        Object[] results = clusterClient.exec(transaction, route).get();
+        ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
+        Object[] results = clusterClient.exec(transaction, options).get();
         assertDeepEquals(expectedResult, results);
     }
 
@@ -136,7 +140,7 @@ public class ClusterTransactionTests {
         String key = "0".repeat(length);
         String value = "0".repeat(length);
 
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch transaction = new ClusterBatch(true);
         transaction.set(key, value);
         transaction.get(key);
 
@@ -155,7 +159,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public void lastsave(GlideClusterClient clusterClient) {
         var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
-        var response = clusterClient.exec(new ClusterTransaction().lastsave()).get();
+        var response = clusterClient.exec(new ClusterBatch(true).lastsave()).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
@@ -168,7 +172,7 @@ public class ClusterTransactionTests {
         String oldPolicy =
                 clusterClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
         try {
-            ClusterTransaction transaction = new ClusterTransaction();
+            ClusterBatch transaction = new ClusterBatch(true);
             transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
             transaction.set(objectFreqKey, "");
             transaction.objectFreq(objectFreqKey);
@@ -186,7 +190,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public void objectIdletime(GlideClusterClient clusterClient) {
         String objectIdletimeKey = "key";
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch transaction = new ClusterBatch(true);
         transaction.set(objectIdletimeKey, "");
         transaction.objectIdletime(objectIdletimeKey);
         var response = clusterClient.exec(transaction).get();
@@ -199,7 +203,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public void objectRefcount(GlideClusterClient clusterClient) {
         String objectRefcountKey = "key";
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch transaction = new ClusterBatch(true);
         transaction.set(objectRefcountKey, "");
         transaction.objectRefcount(objectRefcountKey);
         var response = clusterClient.exec(transaction).get();
@@ -213,7 +217,7 @@ public class ClusterTransactionTests {
     public void zrank_zrevrank_withscores(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"));
         String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch transaction = new ClusterBatch(true);
         transaction.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
         transaction.zrankWithScore(zSetKey1, "one");
         transaction.zrevrankWithScore(zSetKey1, "one");
@@ -235,8 +239,8 @@ public class ClusterTransactionTests {
         String foobarString = "foobar";
         String helloString = "hello";
         String[] keys = new String[] {key1, key2, key3};
-        ClusterTransaction setFoobarTransaction = new ClusterTransaction();
-        ClusterTransaction setHelloTransaction = new ClusterTransaction();
+        ClusterBatch setFoobarTransaction = new ClusterBatch(true);
+        ClusterBatch setHelloTransaction = new ClusterBatch(true);
         String[] expectedExecResponse = new String[] {OK, OK, OK};
 
         // Returns null when a watched key is modified before it is executed in a transaction command.
@@ -290,7 +294,7 @@ public class ClusterTransactionTests {
         String foobarString = "foobar";
         String helloString = "hello";
         String[] keys = new String[] {key1, key2};
-        ClusterTransaction setFoobarTransaction = new ClusterTransaction();
+        ClusterBatch setFoobarTransaction = new ClusterBatch(true);
         String[] expectedExecResponse = new String[] {OK, OK};
 
         // UNWATCH returns OK when there no watched keys
@@ -312,7 +316,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public void spublish(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        ClusterTransaction transaction = new ClusterTransaction().publish("messagae", "Schannel", true);
+        ClusterBatch transaction = new ClusterBatch(true).publish("messagae", "Schannel", true);
 
         assertArrayEquals(new Object[] {0L}, clusterClient.exec(transaction).get());
     }
@@ -329,7 +333,7 @@ public class ClusterTransactionTests {
         String key5 = prefix + "5";
         String key6 = prefix + "6";
         String[] descendingList = new String[] {"3", "2", "1"};
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch transaction = new ClusterBatch(true);
         String[] ascendingListByAge = new String[] {"Bob", "Alice"};
         String[] descendingListByAge = new String[] {"Alice", "Bob"};
         transaction
@@ -423,7 +427,7 @@ public class ClusterTransactionTests {
         String key = UUID.randomUUID().toString();
         long numreplicas = 1L;
         long timeout = 1000L;
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch transaction = new ClusterBatch(true);
 
         transaction.set(key, "value").wait(numreplicas, timeout);
         Object[] results = clusterClient.exec(transaction).get();
@@ -449,17 +453,20 @@ public class ClusterTransactionTests {
         clusterClient.functionLoad(code, true).get();
 
         // Verify functionDump
-        ClusterTransaction transaction = new ClusterTransaction().withBinaryOutput().functionDump();
+        ClusterBatch transaction = new ClusterBatch(true).withBinaryOutput().functionDump();
         Object[] result = clusterClient.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
 
         // Verify functionRestore
-        transaction = new ClusterTransaction();
+        transaction = new ClusterBatch(true);
         transaction.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
         // For the cluster mode, PRIMARY SlotType is required to avoid the error:
         //  "RequestError: An error was signalled by the server -
         //   ReadOnly: You can't write against a read only replica."
-        Object[] response = clusterClient.exec(transaction, new SlotIdRoute(1, SlotType.PRIMARY)).get();
+        ClusterBatchOptions options =
+                ClusterBatchOptions.builder().route(new SlotIdRoute(1, SlotType.PRIMARY)).build();
+
+        Object[] response = clusterClient.exec(transaction, options).get();
         assertEquals(OK, response[0]);
     }
 
@@ -467,7 +474,7 @@ public class ClusterTransactionTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void test_transaction_xinfoStream(GlideClusterClient clusterClient) {
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch transaction = new ClusterBatch(true);
         final String streamKey = "{streamKey}-" + UUID.randomUUID();
         LinkedHashMap<String, Object> expectedStreamInfo =
                 new LinkedHashMap<>() {
@@ -528,7 +535,7 @@ public class ClusterTransactionTests {
         var bytes = clusterClient.dump(gs(key)).get();
 
         var transaction =
-                new ClusterTransaction().withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
+                new ClusterBatch(true).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
 
         var responses = clusterClient.exec(transaction).get();
 

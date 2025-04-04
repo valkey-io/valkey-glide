@@ -28,8 +28,8 @@ import static org.junit.jupiter.api.Named.named;
 
 import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.GlideClient;
+import glide.api.models.Batch;
 import glide.api.models.GlideString;
-import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
@@ -81,7 +81,7 @@ public class TransactionTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void custom_command_info(GlideClient client) {
-        Transaction transaction = new Transaction().customCommand(new String[] {"info"});
+        Batch transaction = new Batch(true).customCommand(new String[] {"info"});
         Object[] result = client.exec(transaction).get();
         assertTrue(((String) result[0]).contains("# Stats"));
     }
@@ -90,7 +90,7 @@ public class TransactionTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void info_test(GlideClient client) {
-        Transaction transaction = new Transaction().info().info(new Section[] {CLUSTER});
+        Batch transaction = new Batch(true).info().info(new Section[] {CLUSTER});
         Object[] result = client.exec(transaction).get();
 
         // sanity check
@@ -102,7 +102,7 @@ public class TransactionTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void ping_tests(GlideClient client) {
-        Transaction transaction = new Transaction();
+        Batch transaction = new Batch(true);
         int numberOfPings = 100;
         for (int idx = 0; idx < numberOfPings; idx++) {
             if ((idx % 2) == 0) {
@@ -134,7 +134,7 @@ public class TransactionTests {
     @MethodSource("getCommonTransactionBuilders")
     public void transactions_with_group_of_commands(
             String testName, TransactionBuilder builder, GlideClient client) {
-        Transaction transaction = new Transaction();
+        Batch transaction = new Batch(true);
         Object[] expectedResult = builder.apply(transaction);
 
         Object[] results = client.exec(transaction).get();
@@ -154,7 +154,7 @@ public class TransactionTests {
     @MethodSource("getPrimaryNodeTransactionBuilders")
     public void keyless_transactions_with_group_of_commands(
             String testName, TransactionBuilder builder, GlideClient client) {
-        Transaction transaction = new Transaction();
+        Batch transaction = new Batch(true);
         Object[] expectedResult = builder.apply(transaction);
 
         Object[] results = client.exec(transaction).get();
@@ -169,7 +169,7 @@ public class TransactionTests {
         String key = "0".repeat(length);
         String value = "0".repeat(length);
 
-        Transaction transaction = new Transaction();
+        Batch transaction = new Batch(true);
         transaction.set(key, value);
         transaction.get(key);
 
@@ -190,7 +190,7 @@ public class TransactionTests {
         String key = UUID.randomUUID().toString();
         String value = UUID.randomUUID().toString();
 
-        Transaction transaction = new Transaction();
+        Batch transaction = new Batch(true);
         transaction.set(key, value);
         transaction.get(key);
         transaction.move(key, 1L);
@@ -218,7 +218,7 @@ public class TransactionTests {
     public void lastsave(GlideClient client) {
         var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
 
-        var response = client.exec(new Transaction().lastsave()).get();
+        var response = client.exec(new Batch(true).lastsave()).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
@@ -231,7 +231,7 @@ public class TransactionTests {
 
         String oldPolicy = client.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
         try {
-            Transaction transaction = new Transaction();
+            Batch transaction = new Batch(true);
             transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
             transaction.set(objectFreqKey, "");
             transaction.objectFreq(objectFreqKey);
@@ -249,7 +249,7 @@ public class TransactionTests {
     @SneakyThrows
     public void objectIdletime(GlideClient client) {
         String objectIdletimeKey = "key";
-        Transaction transaction = new Transaction();
+        Batch transaction = new Batch(true);
         transaction.set(objectIdletimeKey, "");
         transaction.objectIdletime(objectIdletimeKey);
         var response = client.exec(transaction).get();
@@ -262,7 +262,7 @@ public class TransactionTests {
     @SneakyThrows
     public void objectRefcount(GlideClient client) {
         String objectRefcountKey = "key";
-        Transaction transaction = new Transaction();
+        Batch transaction = new Batch(true);
         transaction.set(objectRefcountKey, "");
         transaction.objectRefcount(objectRefcountKey);
         var response = client.exec(transaction).get();
@@ -276,7 +276,7 @@ public class TransactionTests {
     public void zrank_zrevrank_withscores(GlideClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"));
         String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
-        Transaction transaction = new Transaction();
+        Batch transaction = new Batch(true);
         transaction.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
         transaction.zrankWithScore(zSetKey1, "one");
         transaction.zrevrankWithScore(zSetKey1, "one");
@@ -295,8 +295,8 @@ public class TransactionTests {
         // setup
         String copyKey1 = "{CopyKey}-1-" + UUID.randomUUID();
         String copyKey2 = "{CopyKey}-2-" + UUID.randomUUID();
-        Transaction transaction =
-                new Transaction()
+        Batch transaction =
+                new Batch(true)
                         .copy(copyKey1, copyKey2, 1, false)
                         .set(copyKey1, "one")
                         .set(copyKey2, "two")
@@ -336,12 +336,12 @@ public class TransactionTests {
         String foobarString = "foobar";
         String helloString = "hello";
         String[] keys = new String[] {key1, key2, key3};
-        Transaction setFoobarTransaction = new Transaction();
-        Transaction setHelloTransaction = new Transaction();
+        Batch setFoobarTransaction = new Batch(true);
+        Batch setHelloTransaction = new Batch(true);
         String[] expectedExecResponse = new String[] {OK, OK, OK};
 
         // Returns null when a watched key is modified before it is executed in a transaction command.
-        // Transaction commands are not performed.
+        // Batch commands are not performed.
         assertEquals(OK, client.watch(keys).get());
         assertEquals(OK, client.set(key2, helloString).get());
         setFoobarTransaction.set(key1, foobarString).set(key2, foobarString).set(key3, foobarString);
@@ -350,7 +350,7 @@ public class TransactionTests {
         assertEquals(helloString, client.get(key2).get());
         assertNull(client.get(key3).get());
 
-        // Transaction executes command successfully with a read command on the watch key before
+        // Batch executes command successfully with a read command on the watch key before
         // transaction is executed.
         assertEquals(OK, client.watch(keys).get());
         assertEquals(helloString, client.get(key2).get());
@@ -359,14 +359,14 @@ public class TransactionTests {
         assertEquals(foobarString, client.get(key2).get());
         assertEquals(foobarString, client.get(key3).get());
 
-        // Transaction executes command successfully with unmodified watched keys
+        // Batch executes command successfully with unmodified watched keys
         assertEquals(OK, client.watch(keys).get());
         assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
         assertEquals(foobarString, client.get(key1).get()); // Sanity check
         assertEquals(foobarString, client.get(key2).get());
         assertEquals(foobarString, client.get(key3).get());
 
-        // Transaction executes command successfully with a modified watched key but is not in the
+        // Batch executes command successfully with a modified watched key but is not in the
         // transaction.
         assertEquals(OK, client.watch(new String[] {key4}).get());
         setHelloTransaction.set(key1, helloString).set(key2, helloString).set(key3, helloString);
@@ -392,12 +392,12 @@ public class TransactionTests {
         String foobarString = "foobar";
         String helloString = "hello";
         GlideString[] keys = new GlideString[] {key1, key2, key3};
-        Transaction setFoobarTransaction = new Transaction();
-        Transaction setHelloTransaction = new Transaction();
+        Batch setFoobarTransaction = new Batch(true);
+        Batch setHelloTransaction = new Batch(true);
         String[] expectedExecResponse = new String[] {OK, OK, OK};
 
         // Returns null when a watched key is modified before it is executed in a transaction command.
-        // Transaction commands are not performed.
+        // Batch commands are not performed.
         assertEquals(OK, client.watch(keys).get());
         assertEquals(OK, client.set(key2, gs(helloString)).get());
         setFoobarTransaction
@@ -409,7 +409,7 @@ public class TransactionTests {
         assertEquals(gs(helloString), client.get(key2).get());
         assertNull(client.get(key3).get());
 
-        // Transaction executes command successfully with a read command on the watch key before
+        // Batch executes command successfully with a read command on the watch key before
         // transaction is executed.
         assertEquals(OK, client.watch(keys).get());
         assertEquals(gs(helloString), client.get(key2).get());
@@ -418,14 +418,14 @@ public class TransactionTests {
         assertEquals(gs(foobarString), client.get(key2).get());
         assertEquals(gs(foobarString), client.get(key3).get());
 
-        // Transaction executes command successfully with unmodified watched keys
+        // Batch executes command successfully with unmodified watched keys
         assertEquals(OK, client.watch(keys).get());
         assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
         assertEquals(gs(foobarString), client.get(key1).get()); // Sanity check
         assertEquals(gs(foobarString), client.get(key2).get());
         assertEquals(gs(foobarString), client.get(key3).get());
 
-        // Transaction executes command successfully with a modified watched key but is not in the
+        // Batch executes command successfully with a modified watched key but is not in the
         // transaction.
         assertEquals(OK, client.watch(new GlideString[] {key4}).get());
         setHelloTransaction
@@ -452,13 +452,13 @@ public class TransactionTests {
         String foobarString = "foobar";
         String helloString = "hello";
         String[] keys = new String[] {key1, key2};
-        Transaction setFoobarTransaction = new Transaction();
+        Batch setFoobarTransaction = new Batch(true);
         String[] expectedExecResponse = new String[] {OK, OK};
 
         // UNWATCH returns OK when there no watched keys
         assertEquals(OK, client.unwatch().get());
 
-        // Transaction executes successfully after modifying a watched key then calling UNWATCH
+        // Batch executes successfully after modifying a watched key then calling UNWATCH
         assertEquals(OK, client.watch(keys).get());
         assertEquals(OK, client.set(key2, helloString).get());
         assertEquals(OK, client.unwatch().get());
@@ -472,8 +472,8 @@ public class TransactionTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void sort_and_sortReadOnly(GlideClient client) {
-        Transaction transaction1 = new Transaction();
-        Transaction transaction2 = new Transaction();
+        Batch transaction1 = new Batch(true);
+        Batch transaction2 = new Batch(true);
         var prefix = UUID.randomUUID();
         String genericKey1 = "{GenericKey}-1-" + prefix;
         String genericKey2 = "{GenericKey}-2-" + prefix;
@@ -564,7 +564,7 @@ public class TransactionTests {
         String key = UUID.randomUUID().toString();
         long numreplicas = 1L;
         long timeout = 1000L;
-        Transaction transaction = new Transaction();
+        Batch transaction = new Batch(true);
 
         transaction.set(key, "value");
         transaction.wait(numreplicas, timeout);
@@ -591,7 +591,7 @@ public class TransactionTests {
         String cursor = "0";
         Object[] keysFound = new Object[0];
         do {
-            Transaction transaction = new Transaction();
+            Batch transaction = new Batch(true);
             transaction.scan(cursor);
             Object[] results = client.exec(transaction).get();
             cursor = (String) ((Object[]) results[0])[0];
@@ -613,7 +613,7 @@ public class TransactionTests {
         GlideString cursor = gs("0");
         Object[] keysFound = new Object[0];
         do {
-            Transaction transaction = new Transaction().withBinaryOutput().scan(cursor);
+            Batch transaction = new Batch(true).withBinaryOutput().scan(cursor);
             Object[] results = client.exec(transaction).get();
             cursor = (GlideString) ((Object[]) results[0])[0];
             keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
@@ -627,7 +627,7 @@ public class TransactionTests {
     @MethodSource("getClients")
     public void scan_with_options_test(GlideClient client) {
         // setup
-        Transaction setupTransaction = new Transaction();
+        Batch setupTransaction = new Batch(true);
 
         Map<ScanOptions.ObjectType, String> typeKeys =
                 Map.of(
@@ -654,7 +654,7 @@ public class TransactionTests {
             String cursor = "0";
             Object[] keysFound = new Object[0];
             do {
-                Transaction transaction = new Transaction();
+                Batch transaction = new Batch(true);
                 transaction.scan(cursor, options);
                 Object[] results = client.exec(transaction).get();
                 cursor = (String) ((Object[]) results[0])[0];
@@ -669,7 +669,7 @@ public class TransactionTests {
             cursor = "0";
             keysFound = new Object[0];
             do {
-                Transaction transaction = new Transaction();
+                Batch transaction = new Batch(true);
                 transaction.scan(cursor, options);
                 Object[] results = client.exec(transaction).get();
                 cursor = (String) ((Object[]) results[0])[0];
@@ -687,7 +687,7 @@ public class TransactionTests {
     @MethodSource("getClients")
     public void scan_binary_with_options_test(GlideClient client) {
         // setup
-        Transaction setupTransaction = new Transaction().withBinaryOutput();
+        Batch setupTransaction = new Batch(true).withBinaryOutput();
 
         Map<ScanOptions.ObjectType, GlideString> typeKeys =
                 Map.of(
@@ -716,7 +716,7 @@ public class TransactionTests {
             GlideString cursor = initialCursor;
             Object[] keysFound = new Object[0];
             do {
-                Transaction transaction = new Transaction().withBinaryOutput().scan(cursor, options);
+                Batch transaction = new Batch(true).withBinaryOutput().scan(cursor, options);
                 Object[] results = client.exec(transaction).get();
                 cursor = (GlideString) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
@@ -731,7 +731,7 @@ public class TransactionTests {
             cursor = initialCursor;
             keysFound = new Object[0];
             do {
-                Transaction transaction = new Transaction().withBinaryOutput().scan(cursor, options);
+                Batch transaction = new Batch(true).withBinaryOutput().scan(cursor, options);
                 Object[] results = client.exec(transaction).get();
                 cursor = (GlideString) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
@@ -755,12 +755,12 @@ public class TransactionTests {
         assertEquals(OK, client.set(key1, gs(value)).get());
 
         // Verify dump
-        Transaction transaction = new Transaction().withBinaryOutput().dump(key1);
+        Batch transaction = new Batch(true).withBinaryOutput().dump(key1);
         Object[] result = client.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
 
         // Verify restore
-        transaction = new Transaction();
+        transaction = new Batch(true);
         transaction.restore(key2, 0, payload.getBytes());
         transaction.get(key2);
         Object[] response = client.exec(transaction).get();
@@ -781,12 +781,12 @@ public class TransactionTests {
         client.functionLoad(code, true).get();
 
         // Verify functionDump
-        Transaction transaction = new Transaction().withBinaryOutput().functionDump();
+        Batch transaction = new Batch(true).withBinaryOutput().functionDump();
         Object[] result = client.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
 
         // Verify functionRestore
-        transaction = new Transaction();
+        transaction = new Batch(true);
         transaction.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
         Object[] response = client.exec(transaction).get();
         assertEquals(OK, response[0]);
@@ -796,7 +796,7 @@ public class TransactionTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void test_transaction_xinfoStream(GlideClient client) {
-        Transaction transaction = new Transaction();
+        Batch transaction = new Batch(true);
         final String streamKey = "{streamKey}-" + UUID.randomUUID();
         LinkedHashMap<String, Object> expectedStreamInfo =
                 new LinkedHashMap<>() {
@@ -856,7 +856,7 @@ public class TransactionTests {
         // use dump to ensure that we have non-string convertible bytes
         var bytes = client.dump(gs(key)).get();
 
-        var transaction = new Transaction().withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
+        var transaction = new Batch(true).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
 
         var responses = client.exec(transaction).get();
 
