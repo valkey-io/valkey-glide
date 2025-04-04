@@ -1,10 +1,11 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
-import glide.api.models.Transaction;
+import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -97,11 +98,11 @@ public interface GenericClusterCommands {
     CompletableFuture<ClusterValue<Object>> customCommand(GlideString[] args, Route route);
 
     /**
-     * Executes a transaction by processing the queued commands.
-     *
-     * <p>The transaction will be routed to the slot owner of the first key found in the transaction.
-     * If no key is found, the command will be sent to a random node.
-     *
+     * @deprecated Use {@link #exec(ClusterBatch)} instead. This method is being replaced by a more
+     *     flexible approach using {@link ClusterBatch}.
+     *     <p>Executes a transaction by processing the queued commands.
+     *     <p>The transaction will be routed to the slot owner of the first key found in the
+     *     transaction. If no key is found, the command will be sent to a random node.
      * @see <a href="https://valkey.io/docs/topics/transactions/">valkey.io</a> for details on
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
@@ -121,11 +122,14 @@ public interface GenericClusterCommands {
      * assert ((String) result[0]).contains("# Stats");
      * }</pre>
      */
+    @Deprecated
     CompletableFuture<Object[]> exec(ClusterTransaction transaction);
 
     /**
-     * Executes a transaction by processing the queued commands.
-     *
+     * @deprecated Use {@link #exec(ClusterBatch, ClusterBatchOptions)} instead. This method is being
+     *     replaced by a more flexible approach using {@link ClusterBatch} and {@link
+     *     ClusterBatchOptions}.
+     *     <p>Executes a transaction by processing the queued commands.
      * @see <a href="https://valkey.io/docs/topics/transactions/">valkey.io</a> for details on
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
@@ -148,7 +152,154 @@ public interface GenericClusterCommands {
      * assert ((String) result[1]).contains("# Stats");
      * }</pre>
      */
+    @Deprecated
     CompletableFuture<Object[]> exec(ClusterTransaction transaction, SingleNodeRoute route);
+
+    /**
+     * Executes a batch by processing the queued commands.
+     *
+     * <p><strong>Routing Behavior:</strong>
+     *
+     * <ul>
+     *   <li><strong>For atomic batches (Transactions):</strong>
+     *       <ul>
+     *         <li>The transaction will be routed to the slot owner of the first key found in the
+     *             batch.
+     *         <li>If no key is found, the request will be sent to a random node.
+     *       </ul>
+     *   <li><strong>For non-atomic batches:</strong>
+     *       <ul>
+     *         <li>Each command will be routed to the node that owns the corresponding key's slot. If
+     *             no key is present, the routing will follow the default policy for the command.
+     *         <li>Multi-node commands will be automatically split and sent to the respective nodes.
+     *       </ul>
+     * </ul>
+     *
+     * @remarks
+     *     <ul>
+     *       <li><strong>Atomic Batches - Transactions:</strong> All key-based commands in an atomic
+     *           batch must map to the same hash slot. If commands reference keys from different
+     *           slots, the transaction will fail.
+     *       <li>If the transaction fails due to a <code>WATCH</code> command, <code>EXEC</code> will
+     *           return <code>null</code>.
+     *     </ul>
+     *
+     * @param batch A {@link ClusterBatch} object containing a list of commands to be executed.
+     * @return A {@link CompletableFuture} resolving to an array of results, where each entry
+     *     corresponds to the execution result of a command in the batch.
+     * @see <a href="https://valkey.io/docs/topics/transactions/">Valkey Transactions (Atomic
+     *     Batches)</a>
+     * @see <a href="https://valkey.io/docs/topics/pipelining/">Valkey Pipelines (Non-Atomic
+     *     Batches)</a>
+     * @example
+     *     <pre>{@code
+     * // Example 1: Atomic Batch (Transaction)
+     * // All commands must operate on the same hash slot.
+     * ClusterBatch atomicBatch = new ClusterBatch(true) // Atomic (Transactional)
+     *     .set("key", "1")
+     *     .incr("key")
+     *     .get("key");
+     * Object[] atomicResult = clusterClient.exec(atomicBatch).get();
+     * System.out.println("Atomic Batch Result: " + Arrays.toString(atomicResult));
+     * // Expected Output: Atomic Batch Result: [OK, 2, 2]
+     *
+     * // Example 2: Non-Atomic Batch (Pipeline)
+     * // Commands can operate on different hash slots.
+     * ClusterBatch nonAtomicBatch = new ClusterBatch(false) // Non-Atomic (Pipeline)
+     *     .set("key1", "value1")
+     *     .set("key2", "value2")
+     *     .get("key1")
+     *     .get("key2");
+     * Object[] nonAtomicResult = clusterClient.exec(nonAtomicBatch).get();
+     * System.out.println("Non-Atomic Batch Result: " + Arrays.toString(nonAtomicResult));
+     * // Expected Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
+     * }</pre>
+     */
+    CompletableFuture<Object[]> exec(ClusterBatch batch);
+
+    /**
+     * Executes a batch by processing the queued commands.
+     *
+     * <p><strong>Routing Behavior:</strong>
+     *
+     * <ul>
+     *   <li>If a <code>route</code> is provided in {@link ClusterBatchOptions}, the entire batch will
+     *       be sent to the specified node.
+     *   <li>If no <code>route</code> is provided:
+     *       <ul>
+     *         <li><strong>For atomic batches (Transactions):</strong> The transaction will be routed
+     *             to the slot owner of the first key found in the batch. If no key is found, the
+     *             request will be sent to a random node.
+     *         <li><strong>For non-atomic batches:</strong> Each command will be routed to the node
+     *             that owns the corresponding key's slot. If no key is present, the routing will
+     *             follow the default policy for the command.
+     *         <li>Multi-node commands will be automatically split and sent to the respective nodes.
+     *       </ul>
+     * </ul>
+     *
+     * @remarks
+     *     <ul>
+     *       <li><strong>Atomic Batches - Transactions:</strong> All key-based commands in an atomic
+     *           batch must map to the same hash slot. If commands reference keys from different
+     *           slots, the transaction will fail.
+     *       <li>If the transaction fails due to a <code>WATCH</code> command, <code>EXEC</code> will
+     *           return <code>null</code>.
+     *     </ul>
+     *     <p><strong>Retry and Redirection:</strong>
+     *     <ul>
+     *       <li>If a redirection error occurs due to the provided <code>route</code>:
+     *           <ul>
+     *             <li>For atomic batches, the entire transaction will be redirected.
+     *             <li>For non-atomic batches, only the commands that encountered redirection errors
+     *                 will be redirected.
+     *           </ul>
+     *       <li>Retries for failures will be handled according to the configured {@link
+     *           BatchRetryStrategy}.
+     *     </ul>
+     *
+     * @param batch A {@link ClusterBatch} object containing a list of commands to be executed.
+     * @param options A {@link ClusterBatchOptions} object containing execution options.
+     * @return A {@link CompletableFuture} resolving to an array of results, where each entry
+     *     corresponds to the execution result of a command in the batch.
+     * @see ClusterBatchOptions for available execution options.
+     * @see <a href="https://valkey.io/docs/topics/transactions/">Valkey Transactions (Atomic
+     *     Batches)</a>
+     * @see <a href="https://valkey.io/docs/topics/pipelining/">Valkey Pipelines (Non-Atomic
+     *     Batches)</a>
+     * @example
+     *     <pre>{@code
+     * // Example 1: Atomic Batch (Transaction) with ClusterBatchOptions
+     * // All commands must operate on the same hash slot.
+     * ClusterBatchOptions options = ClusterBatchOptions.builder()
+     *     .timeout(1000) // Set a timeout of 1000 milliseconds
+     *      .raiseOnError(false) // Do not raise an error on failure
+     *     .build();
+     *
+     * ClusterBatch atomicBatch = new ClusterBatch(true) // Atomic (Transactional)
+     *     .set("key", "1")
+     *     .incr("key")
+     *     .get("key");
+     * Object[] atomicResult = clusterClient.exec(atomicBatch, options).get();
+     * System.out.println("Atomic Batch Result: " + Arrays.toString(atomicResult));
+     * // Expected Output: Atomic Batch Result: [OK, 2, 2]
+     *
+     * // Example 2: Non-Atomic Batch (Pipeline) with ClusterBatchOptions
+     * // Commands can operate on different hash slots.
+     * ClusterBatchOptions options = ClusterBatchOptions.builder()
+     *     .retryStrategy(new BatchRetryStrategy(true, false)) // Retry only server errors
+     *     .build();
+     *
+     * ClusterBatch nonAtomicBatch = new ClusterBatch(false) // Non-Atomic (Pipeline)
+     *     .set("key1", "value1")
+     *     .set("key2", "value2")
+     *     .get("key1")
+     *     .get("key2");
+     * Object[] nonAtomicResult = clusterClient.exec(nonAtomicBatch, options).get();
+     * System.out.println("Non-Atomic Batch Result: " + Arrays.toString(nonAtomicResult));
+     * // Expected Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
+     * }</pre>
+     */
+    CompletableFuture<Object[]> exec(ClusterBatch batch, ClusterBatchOptions options);
 
     /**
      * Returns a random key.
