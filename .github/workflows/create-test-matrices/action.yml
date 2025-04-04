@@ -92,15 +92,19 @@ runs:
         - name: Validate no empty matrices
           shell: bash
           run: |
-              if [[ -z "${{ steps.load-engine-matrix.outputs.engine-matrix }}" ]]; then
+              ENGINES=${{ steps.load-engine-matrix.outputs.engine-matrix }}
+              if [[ -z $ENGINES || "$ENGINES" == "[]" ]]; then
                   echo "Engine matrix is empty!"
                   exit 1
               fi
-              if [[ -z "${{ steps.load-host-matrix.outputs.host-matrix }}" ]]; then
+              HOSTS=${{ steps.load-host-matrix.outputs.host-matrix }}
+              if [[ -z $HOSTS || "$HOSTS" == "[]" ]]; then
                   echo "Host matrix is empty!"
                   exit 1
               fi
-              if [[ -z "${{ steps.create-lang-version-matrix.outputs.version-matrix }}" && $LANGUAGE_NAME != "rust" ]]; then
+              LANGS=${{ steps.create-lang-version-matrix.outputs.version-matrix }}
+              echo ${{ fromJson(LANGS) }}
+              if [[ (-z $LANGS || "$LANGS" == "[]") && $LANGUAGE_NAME != "rust" ]]; then
                   echo "Language matrix is empty!"
                   exit 1
               fi
