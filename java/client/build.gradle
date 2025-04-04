@@ -28,6 +28,7 @@ dependencies {
     shadow group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.115.Final', classifier: 'linux-x86_64'
     shadow group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.115.Final', classifier: 'linux-aarch_64'
     shadow group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.115.Final', classifier: 'osx-aarch_64'
+    shadow group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.115.Final', classifier: 'osx-x86_64'
 
     // junit
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '3.12.4'
