@@ -86,5 +86,5 @@ runs:
                   jq -c '[.[] | select(.language == "$LANGUAGE_NAME") | .["always-run-versions"]][0] // []' < .github/json_matrices/supported-languages-versions.json | awk '{ printf "version-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
               else
                   echo 'Pick language versions listed in 'versions' - on cron (schedule) or if manually triggered job requires a full matrix'
-                  jq -c '[.[] | select(.language == "$LANGUAGE_NAME") | .versions][0]' < .github/json_matrices/supported-languages-versions.json | awk '{ printf "version-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
+                  jq -c "[.[] | select(.language == \"$LANGUAGE_NAME\") | .versions][0]" < .github/json_matrices/supported-languages-versions.json | awk '{ printf "version-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
               fi
