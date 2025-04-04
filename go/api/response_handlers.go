@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"time"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/errors"
@@ -1463,5 +1464,54 @@ func handleStringIntMapResponse(response *C.struct_CommandResponse) (map[string]
 	if !ok {
 		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of map: %T", converted)}
 	}
+	return result, nil
+}
+
+func handleFunctionStatsResponse(response *C.struct_CommandResponse) (map[string]options.FunctionStatsResult, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]options.FunctionStatsResult)
+	for nodeAddr, nodeData := range data.(map[string]interface{}) {
+		nodeMap := nodeData.(map[string]interface{})
+		stats := options.FunctionStatsResult{}
+
+		// Process running_script if present
+		if runningScript, ok := nodeMap["running_script"]; ok {
+			if runningScript != nil {
+				scriptMap := runningScript.(map[string]interface{})
+				stats.RunningScript = options.RunningScript{
+					Name:     scriptMap["name"].(string),
+					Cmd:      scriptMap["command"].(string),
+					Duration: time.Duration(scriptMap["duration_ms"].(int64)) * time.Millisecond,
+				}
+			}
+		}
+
+		// Process engines
+		if engines, ok := nodeMap["engines"]; ok {
+			enginesMap := engines.(map[string]interface{})
+			stats.Engines = make(map[string]options.Engine)
+			for engineName, engineData := range enginesMap {
+				engineMap := engineData.(map[string]interface{})
+				stats.Engines[engineName] = options.Engine{
+					FunctionCount: engineMap["functions_count"].(int64),
+					LibraryCount:  engineMap["libraries_count"].(int64),
+				}
+			}
+		}
+
+		result[nodeAddr] = stats
+	}
+
 	return result, nil
 }
