@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Configurations>Debug;Release;Lint</Configurations>
     <RootNamespace>Valkey.Glide.CustomBenchmark</RootNamespace>
   </PropertyGroup>
 
