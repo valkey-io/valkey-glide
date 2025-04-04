@@ -6,6 +6,7 @@ package api
 import "C"
 
 import (
+	"time"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
@@ -1383,4 +1384,124 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
 func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []string) (ClusterValue[any], error) {
 	return client.FCallReadOnlyWithArgsWithRoute(function, args, options.RouteOption{})
+}
+
+// FunctionStats returns information about the function that's currently running and information about the
+// available execution engines.
+// The command will be routed to all primary nodes.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	A [ClusterValue] containing a map of node addresses to their function statistics.
+//
+// [valkey.io]: https://valkey.io/commands/function-stats/
+func (client *GlideClusterClient) FunctionStats() (
+	ClusterValue[map[string]options.FunctionStatsResult], error,
+) {
+	response, err := client.executeCommand(C.FunctionStats, []string{})
+	if err != nil {
+		return createEmptyClusterValue[map[string]options.FunctionStatsResult](), err
+	}
+
+	stats, err := handleFunctionStatsResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[map[string]options.FunctionStatsResult](), err
+	}
+
+	// Create a map of maps to match the expected type
+	result := make(map[string]map[string]options.FunctionStatsResult)
+	for addr, nodeStats := range stats {
+		result[addr] = map[string]options.FunctionStatsResult{addr: nodeStats}
+	}
+	return createClusterMultiValue[map[string]options.FunctionStatsResult](result), nil
+}
+
+// FunctionStatsWithRoute returns information about the function that's currently running and information about the
+// available execution engines.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	       command to the nodes defined by route.
+//
+// Return value:
+//
+//	A [ClusterValue] containing a map of node addresses to their function statistics.
+//
+// [valkey.io]: https://valkey.io/commands/function-stats/
+func (client *GlideClusterClient) FunctionStatsWithRoute(
+	opts options.RouteOption,
+) (ClusterValue[map[string]options.FunctionStatsResult], error) {
+	response, err := client.executeCommandWithRoute(C.FunctionStats, []string{}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[map[string]options.FunctionStatsResult](), err
+	}
+
+	if opts.Route != nil && opts.Route.IsMultiNode() {
+		data, err := handleStringToAnyMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[map[string]options.FunctionStatsResult](), err
+		}
+
+		result := make(map[string]map[string]options.FunctionStatsResult)
+		for addr, nodeData := range data {
+			nodeMap := nodeData.(map[string]interface{})
+			stats := options.FunctionStatsResult{}
+
+			// Process running_script if present
+			if runningScript, ok := nodeMap["running_script"]; ok {
+				if runningScript != nil {
+					scriptMap := runningScript.(map[string]interface{})
+					stats.RunningScript = options.RunningScript{
+						Name: scriptMap["name"].(string),
+						Cmd:  scriptMap["command"].(string),
+						Duration: time.Duration(
+							scriptMap["duration_ms"].(int64),
+						) * time.Millisecond,
+					}
+				}
+			}
+
+			// Process engines
+			if engines, ok := nodeMap["engines"]; ok {
+				enginesMap := engines.(map[string]interface{})
+				stats.Engines = make(map[string]options.Engine)
+				for engineName, engineData := range enginesMap {
+					engineMap := engineData.(map[string]interface{})
+					stats.Engines[engineName] = options.Engine{
+						FunctionCount: engineMap["functions_count"].(int64),
+						LibraryCount:  engineMap["libraries_count"].(int64),
+					}
+				}
+			}
+
+			result[addr] = map[string]options.FunctionStatsResult{addr: stats}
+		}
+		return createClusterMultiValue[map[string]options.FunctionStatsResult](result), nil
+	}
+
+	// Handle single node response
+	stats, err := handleFunctionStatsResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[map[string]options.FunctionStatsResult](), err
+	}
+
+	// Create a map of maps to match the expected type
+	result := make(map[string]map[string]options.FunctionStatsResult)
+	for addr, nodeStats := range stats {
+		result[addr] = map[string]options.FunctionStatsResult{addr: nodeStats}
+	}
+	return createClusterMultiValue[map[string]options.FunctionStatsResult](result), nil
 }

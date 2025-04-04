@@ -529,3 +529,108 @@ func ExampleGlideClusterClient_FCallReadOnlyWithArgsWithRoute() {
 	// Output:
 	// 1
 }
+
+func ExampleGlideClient_FunctionStats() {
+	client := getExampleGlideClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Get function statistics
+	stats, err := client.FunctionStats()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Print only the engine statistics since node address contains dynamic port
+	for _, nodeStats := range stats {
+		for engineName, engine := range nodeStats.Engines {
+			fmt.Printf("Engine %s: %d functions, %d libraries\n",
+				engineName, engine.FunctionCount, engine.LibraryCount)
+		}
+	}
+
+	// Output:
+	// Engine LUA: 1 functions, 1 libraries
+}
+
+func ExampleGlideClusterClient_FunctionStats() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Get function statistics
+	stats, err := client.FunctionStats()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Collect unique engine stats
+	seen := make(map[string]struct{})
+	for _, nodeStats := range stats.MultiValue() {
+		for _, stats := range nodeStats {
+			for engineName, engine := range stats.Engines {
+				key := fmt.Sprintf("Engine %s: %d functions, %d libraries",
+					engineName, engine.FunctionCount, engine.LibraryCount)
+				if _, exists := seen[key]; !exists {
+					fmt.Println(key)
+					seen[key] = struct{}{}
+				}
+			}
+		}
+	}
+
+	// Output:
+	// Engine LUA: 1 functions, 1 libraries
+}
+
+func ExampleGlideClusterClient_FunctionStatsWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{
+		Route: route,
+	}
+	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Get function statistics with route
+	stats, err := client.FunctionStatsWithRoute(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Collect unique engine stats
+	seen := make(map[string]struct{})
+	for _, nodeStats := range stats.MultiValue() {
+		for _, stats := range nodeStats {
+			for engineName, engine := range stats.Engines {
+				key := fmt.Sprintf("Engine %s: %d functions, %d libraries",
+					engineName, engine.FunctionCount, engine.LibraryCount)
+				if _, exists := seen[key]; !exists {
+					fmt.Println(key)
+					seen[key] = struct{}{}
+				}
+			}
+		}
+	}
+
+	// Output:
+	// Engine LUA: 1 functions, 1 libraries
+}
