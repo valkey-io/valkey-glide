@@ -62,16 +62,19 @@ func (t *Transaction) ExecuteCommand(requestType C.RequestType, args []string) (
 }
 
 // Exec executes all queued commands as a transaction
-func (t *Transaction) Exec() error {
+func (t *Transaction) Exec() ([]any, error) {
 	// Add MULTI and EXEC to the command queue
 	//t.commands = append([]Cmder{NewMultiCommand()}, t.commands...)
 	// t.commands = append(t.commands, &GenericCommand{C.Get, []string{"apples"}})
 	//t.commands = append(t.commands, NewExecCommand())
 
 	// Execute all commands
-	result, _ := t.baseClient.executeTransactionCommand(t.commands) // Use BaseClient for execution
-	fmt.Println(handleAnyArrayResponse(result))
-	return nil
+	result, err := t.baseClient.executeTransactionCommand(t.commands) // Use BaseClient for execution
+
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyArrayResponse(result)
 }
 
 func (client *baseClient) executeTransactionCommand(commands []Cmder) (*C.CommandResponse, error) {
@@ -145,7 +148,6 @@ func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
-	fmt.Println("Before execute_transaction")
 	C.execute_transaction(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),

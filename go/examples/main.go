@@ -21,22 +21,23 @@ func main() {
 	}
 
 	//Non transaction
-	resultSet, _ := client.Set("keyEdric123", "Hello")
+	resultSet, _ := client.Set("key123", "Hello")
 	fmt.Println(resultSet)
 
-	// resultSet, _ = client.Set("keyEdric345", "world")
-	// fmt.Println(resultSet)
+	resultSet, _ = client.Set("key345", "world")
+	fmt.Println(resultSet)
 
 	//Create Transcation
-	// tx := api.NewTransaction(client).Set("key1", "value").Set("key2", "value")
-	// // This adds the GET command to the transaction queue.
-	// // Execute the transaction (MULTI + EXEC)
-	// err = tx.Exec()
-	// if err != nil {
-	// 	log.Fatalf("Transaction failed: %v", err)
-	// } else {
-	// 	fmt.Println("Transaction executed successfully!")
-	// }
+	tx := api.NewTransaction(client)
+	tx.Get("key123")
+	tx.Get("key345")
+	//tx.Set("key678", "Glide")
+	result, err := tx.Exec()
+
+	if err != nil {
+		log.Fatalf("Transaction failed: %v", err)
+	}
+	fmt.Println(result)
 
 	// err = tx.Discard()
 	// if err != nil {
