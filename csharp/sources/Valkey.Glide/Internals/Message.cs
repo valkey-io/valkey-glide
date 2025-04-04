@@ -19,7 +19,7 @@ internal class Message : INotifyCompletion
     private const int COMPLETION_STAGE_NEXT_SHOULD_EXECUTE_CONTINUATION = 1;
     private const int COMPLETION_STAGE_CONTINUATION_EXECUTED = 2;
     private int _completionState;
-    private object? _result = default;
+    private IntPtr _result = default;
     private Exception? _exception;
     // Holding the client prevents it from being GC'd until all operations complete.
 #pragma warning disable IDE0052 // Remove unread private members
@@ -34,7 +34,7 @@ internal class Message : INotifyCompletion
 
     /// Triggers a succesful completion of the task returned from the latest call
     /// to CreateTask.
-    public void SetResult(object? result)
+    public void SetResult(IntPtr result)
     {
         _result = result;
         FinishSet();
@@ -96,5 +96,5 @@ internal class Message : INotifyCompletion
 
     public bool IsCompleted => _completionState == COMPLETION_STAGE_CONTINUATION_EXECUTED;
 
-    public object? GetResult() => _exception is null ? _result : throw _exception;
+    public IntPtr GetResult() => _exception is null ? _result : throw _exception;
 }

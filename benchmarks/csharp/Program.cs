@@ -35,21 +35,25 @@ public static class MainClass
         [Option('h', "host", Required = false, HelpText = "What host to target")]
         public string Host { get; set; } = "localhost";
 
+        [Option('p', "port", Required = false, HelpText = "What port to target")]
+        public ushort Port { get; set; } = 6379;
+
         [Option('C', "clientCount", Required = false, HelpText = "Number of clients to run concurrently", Default = new[] { 1 })]
         public IEnumerable<int> ClientCount { get; set; } = [];
 
         [Option('t', "tls", HelpText = "Should benchmark a TLS server")]
         public bool Tls { get; set; } = false;
 
+        [Option("clusterModeEnabled", HelpText = "Should benchmark a cluster server")]
+        public bool ClusterMode { get; set; } = false;
 
         [Option('m', "minimal", HelpText = "Should use a minimal number of actions")]
         public bool Minimal { get; set; } = false;
     }
 
-    private const int PORT = 6379;
-    private static string GetAddress(string host) => $"{host}:{PORT}";
+    private static string GetAddress(string host, ushort port) => $"{host}:{port}";
 
-    private static string GetAddressForStackExchangeRedis(string host, bool useTLS) => $"{GetAddress(host)},ssl={useTLS}";
+    private static string GetAddressForStackExchangeRedis(string host, ushort port, bool useTLS) => $"{GetAddress(host, port)},ssl={useTLS}";
 
     private const double PROB_GET = 0.8;
 
@@ -96,6 +100,7 @@ public static class MainClass
 
     private static void PrintResults(string resultsFile)
     {
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(resultsFile)!);
         using FileStream createStream = File.Create(resultsFile);
         JsonSerializer.Serialize(createStream, BenchJsonResults);
     }
@@ -171,6 +176,7 @@ public static class MainClass
     private static async Task RunClients(
         ClientWrapper[] clients,
         string client_name,
+        bool isCluster,
         int total_commands,
         int data_size,
         int num_of_concurrent_tasks
@@ -208,7 +214,7 @@ public static class MainClass
             {"data_size", data_size},
             {"tps", tps},
             {"client_count", clients.Length},
-            {"is_cluster", "false"}
+            {"is_cluster", isCluster}
         };
         result = result
             .Concat(get_existing_latency_results)
@@ -253,25 +259,38 @@ public static class MainClass
         int num_of_concurrent_tasks,
         string clientsToRun,
         string host,
+        ushort port,
         int clientCount,
-        bool useTLS)
+        bool useTLS,
+        bool isCluster)
     {
         if (clientsToRun is "all" or "glide")
         {
             ClientWrapper[] clients = await CreateClients(clientCount, () =>
             {
-                StandaloneClientConfiguration config = new StandaloneClientConfigurationBuilder()
-                    .WithAddress(host, PORT).WithTls(useTLS).Build();
-                BaseClient glide_client = new GlideClient(config);
+                BaseClient glideClient;
+                if (!isCluster)
+                {
+                    StandaloneClientConfiguration config = new StandaloneClientConfigurationBuilder()
+                        .WithAddress(host, port).WithTls(useTLS).Build();
+                    glideClient = new GlideClient(config);
+                }
+                else
+                {
+                    ClusterClientConfiguration config = new ClusterClientConfigurationBuilder()
+                        .WithAddress(host, port).WithTls(useTLS).Build();
+                    glideClient = new GlideClusterClient(config);
+                }
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
-                    (async (key) => await glide_client.Get(key),
-                     async (key, value) => await glide_client.Set(key, value),
-                     () => glide_client.Dispose()));
+                    (async (key) => await glideClient.Get(key),
+                     async (key, value) => await glideClient.Set(key, value),
+                     () => glideClient.Dispose()));
             });
 
             await RunClients(
                 clients,
                 "glide",
+                isCluster,
                 total_commands,
                 data_size,
                 num_of_concurrent_tasks
@@ -282,7 +301,7 @@ public static class MainClass
         {
             ClientWrapper[] clients = await CreateClients(clientCount, () =>
                 {
-                    ConnectionMultiplexer connection = ConnectionMultiplexer.Connect(GetAddressForStackExchangeRedis(host, useTLS));
+                    ConnectionMultiplexer connection = ConnectionMultiplexer.Connect(GetAddressForStackExchangeRedis(host, port, useTLS));
                     IDatabase db = connection.GetDatabase();
                     return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                         (async (key) => await db.StringGetAsync(key),
@@ -292,6 +311,7 @@ public static class MainClass
             await RunClients(
                 clients,
                 "StackExchange.Redis",
+                isCluster,
                 total_commands,
                 data_size,
                 num_of_concurrent_tasks
@@ -318,7 +338,7 @@ public static class MainClass
         foreach ((int concurrentTasks, int dataSize, int clientCount) in product)
         {
             int iterations = options.Minimal ? 1000 : NumberOfIterations(concurrentTasks);
-            await RunWithParameters(iterations, dataSize, concurrentTasks, options.ClientsToRun, options.Host, clientCount, options.Tls);
+            await RunWithParameters(iterations, dataSize, concurrentTasks, options.ClientsToRun, options.Host, options.Port, clientCount, options.Tls, options.ClusterMode);
         }
 
         PrintResults(options.ResultsFile);
