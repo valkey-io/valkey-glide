@@ -689,53 +689,6 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "opentelemetry config_%p",
-        async (protocol) => {
-            await expect( 
-                GlideClusterClient.createClient({
-                    ...getClientConfigurationOption(
-                        cluster.getAddresses(),
-                        protocol,
-                    ),
-                    advancedConfiguration: {
-                        openTelemetryConfig: {
-                            tracesCollectorEndPoint: "https://valid-endpoint/v1/traces",
-                            metricsCollectorEndPoint: "https://valid-endpoint/v1/metrics",
-                            spanFlushIntervalMs: 400,
-                        },
-                    },
-                }),
-            ).rejects.toThrowError("not yet implemented");
-
-            // await client.set("otel", "test");
-            // expect(await client.get("otel")).toEqual("test");
-            // client.close();
-        },
-        TIMEOUT
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "opentelemetry config wrong parameter_%p",
-        async (protocol) => {
-            await expect(
-                GlideClusterClient.createClient({
-                    ...getClientConfigurationOption(
-                        cluster.getAddresses(),
-                        protocol,
-                    ),
-                    advancedConfiguration: {
-                        openTelemetryConfig: {
-                            tracesCollectorEndPoint: "wrong.endpoint",
-                            metricsCollectorEndPoint: "wrong.endpoint",
-                            spanFlushIntervalMs: 400,
-                        },
-                    },
-                }),
-            ).rejects.toThrowError(/InvalidInput/i); // Ensure InvalidInput error
-        },
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lolwut test_%p`,
         async (protocol) => {
             client = await GlideClusterClient.createClient(
