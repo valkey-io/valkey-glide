@@ -93,6 +93,12 @@ jobs:
               with:
                   node-version: ${{ matrix.node }}
 
+            - uses: actions/cache@v4
+              with:
+                  path: ['node/rust-client/target', 'glide-core/src/generated']
+                  key: ${{ matrix.host.TARGET }}-node
+                  restore-keys: ${{ matrix.host.TARGET }}-glide-core
+
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
@@ -210,6 +216,11 @@ jobs:
               with:
                   node-version: ${{ matrix.node }}
 
+            - uses: actions/cache@v4
+              with:
+                  path: ['node/rust-client/target', 'glide-core/src/generated']
+                  key: ${{ matrix.host.IMAGE }}-node
+
             - name: Build Node wrapper
               if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
               uses: ./.github/workflows/build-node-wrapper
@@ -259,6 +270,12 @@ jobs:
               uses: actions/setup-node@v4
               with:
                   node-version: 20.x
+
+            - uses: actions/cache@v4
+              with:
+                  path: ['node/rust-client/target', 'glide-core/src/generated']
+                  key: aarch64-unknown-linux-gnu-node
+                  restore-keys: aarch64-unknown-linux-gnu-glide-core
 
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper

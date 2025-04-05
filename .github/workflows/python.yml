@@ -103,6 +103,12 @@ jobs:
                   python -m pip install --upgrade pip
                   pip install mypy-protobuf
 
+            - uses: actions/cache@v4
+              with:
+                  path: python/target
+                  key: ${{ matrix.host.TARGET }}-python
+                  restore-keys: ${{ matrix.host.TARGET }}-glide-core
+
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
@@ -165,6 +171,12 @@ jobs:
               uses: actions/setup-python@v5
               with:
                   python-version: ${{ matrix.python }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: ['python/target', 'glide-core/src/generated']
+                  key: ${{ matrix.host.TARGET }}-python
+                  restore-keys: ${{ matrix.host.TARGET }}-glide-core
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -292,6 +304,11 @@ jobs:
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
 
+            - uses: actions/cache@v4
+              with:
+                  path: ['python/target', 'glide-core/src/generated']
+                  key: ${{ matrix.host.IMAGE }}-python
+
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
@@ -334,12 +351,19 @@ jobs:
               with:
                   submodules: recursive
 
+            - uses: ['python/target', 'glide-core/src/generated']
+              with:
+                  path: python/target
+                  key: aarch64-unknown-linux-gnu-python
+                  restore-keys: aarch64-unknown-linux-gnu-glide-core
+
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
                   os: ubuntu
                   target: aarch64-unknown-linux-gnu
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
             - name: Test with pytest
               working-directory: ./python
               run: |

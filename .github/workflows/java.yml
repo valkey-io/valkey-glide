@@ -106,6 +106,12 @@ jobs:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - uses: actions/cache@v4
+              with:
+                  path: ['java/target', 'glide-core/src/generated']
+                  key: ${{ matrix.host.TARGET }}-java
+                  restore-keys: ${{ matrix.host.TARGET }}-glide-core
+
             - name: Build java client
               working-directory: java
               run: ./gradlew --continue build -x javadoc
@@ -165,6 +171,12 @@ jobs:
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: ['java/target', 'glide-core/src/generated']
+                  key: ${{ matrix.host.TARGET }}-java
+                  restore-keys: ${{ matrix.host.TARGET }}-glide-core
 
             - name: Test pubsub
               working-directory: java
@@ -235,6 +247,11 @@ jobs:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - uses: actions/cache@v4
+              with:
+                  path: ['java/target', 'glide-core/src/generated']
+                  key: ${{ matrix.host.IMAGE }}-java
+
             - name: Build java wrapper
               working-directory: java
               run: ./gradlew --continue build -x javadoc
@@ -285,6 +302,12 @@ jobs:
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: ['java/target', 'glide-core/src/generated']
+                  key: aarch64-unknown-linux-gnu-java
+                  restore-keys: aarch64-unknown-linux-gnu-glide-core
 
             - name: Test java wrapper
               working-directory: java

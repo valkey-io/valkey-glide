@@ -97,7 +97,7 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: glide-core/target
+                  path: ['glide-core/target', 'glide-core/src/generated']
                   key: ${{ matrix.host.TARGET }}-glide-core
 
             - name: Run tests
@@ -106,7 +106,7 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: glide-core/target
+                  path: ['glide-core/target', 'glide-core/src/generated']
                   key: ${{ matrix.host.TARGET }}-logger_core
 
             - name: Run logger tests
@@ -121,8 +121,8 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: glide-core/target
-                  key: ${{ matrix.host.TARGET }}-benchmarks-rust
+                  path: ['glide-core/target', 'glide-core/src/generated']
+                  key: ${{ matrix.host.TARGET }}-benchmarks/rust
                   restore-keys: ${{ matrix.host.TARGET }}-glide-core
 
             - uses: ./.github/workflows/test-benchmark
