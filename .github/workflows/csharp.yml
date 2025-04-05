@@ -130,7 +130,7 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: "csharp/rust/target"
+                  path: csharp/rust/target
                   key: ${{ matrix.host.TARGET }}-csharp
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core
@@ -217,7 +217,7 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: "csharp/rust/target"
+                  path: csharp/rust/target
                   key: ${{ matrix.host.IMAGE }}-csharp
                   restore-keys: ${{ matrix.host.IMAGE }}
 

@@ -111,7 +111,9 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: ["python/target", "glide-core/src/generated"]
+                  path: |
+                      python/target
+                      glide-core/src/generated
                   key: ${{ matrix.host.TARGET }}-python
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core
@@ -188,7 +190,9 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: ["python/target", "glide-core/src/generated"]
+                  path: |
+                      python/target
+                      glide-core/src/generated
                   key: ${{ matrix.host.TARGET }}-python
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core
@@ -322,7 +326,9 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: ["python/target", "glide-core/src/generated"]
+                  path: |
+                      python/target
+                      glide-core/src/generated
                   key: ${{ matrix.host.IMAGE }}-python
                   restore-keys: ${{ matrix.host.IMAGE }}
 
@@ -369,7 +375,9 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: ["python/target", "glide-core/src/generated"]
+                  path: |
+                      python/target
+                      glide-core/src/generated
                   key: aarch64-unknown-linux-gnu-python
                   restore-keys: |
                       aarch64-unknown-linux-gnu-glide-core

@@ -101,7 +101,9 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: ["node/rust-client/target", "glide-core/src/generated"]
+                  path: |
+                      node/rust-client/target
+                      glide-core/src/generated
                   key: ${{ matrix.host.TARGET }}-node
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core
@@ -225,7 +227,9 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: ["node/rust-client/target", "glide-core/src/generated"]
+                  path: |
+                      node/rust-client/target
+                      glide-core/src/generated
                   key: ${{ matrix.host.IMAGE }}-node
                   restore-keys: ${{ matrix.host.IMAGE }}
 
@@ -281,7 +285,9 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: ["node/rust-client/target", "glide-core/src/generated"]
+                  path: |
+                      node/rust-client/target
+                      glide-core/src/generated
                   key: aarch64-unknown-linux-gnu-node
                   restore-keys: |
                       aarch64-unknown-linux-gnu-glide-core
