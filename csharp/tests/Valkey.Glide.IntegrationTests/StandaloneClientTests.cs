@@ -90,7 +90,7 @@ public class StandaloneClientTests
         string key2 = Guid.NewGuid().ToString();
         Assert.Equal(3, (long)(await client.CustomCommand(Args("sadd", key2, "a", "b", "c")))!);
         Assert.Equal(
-            Args(new gs("a"), new gs("b"), new gs("c")),
+            new HashSet<gs> { "a", "b", "c" },
             (await client.CustomCommand(Args("smembers", key2)) as HashSet<object>)!
         );
         Assert.Equal(
