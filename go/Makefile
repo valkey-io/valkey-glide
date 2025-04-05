@@ -1,6 +1,29 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 SHELL:=/bin/bash
+GO_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+ROOT_FOLDER := $(abspath $(GO_DIR)/..)
+GLIDE_CORE_FOLDER := $(ROOT_FOLDER)/glide-core
+GLIDE_FFI_FOLDER := $(ROOT_FOLDER)/ffi
+
+# Determine the target folder based on OS and architecture
+UNAME := $(shell uname)
+ARCH := $(shell uname -m)
+
+ifeq ($(UNAME), Darwin)
+    TARGET_FOLDER := $(if $(filter arm64,$(ARCH)),aarch64-apple-darwin,x86_64-apple-darwin)
+    STRIP_CMD := strip -x
+else ifeq ($(UNAME), Linux)
+    TARGET_FOLDER := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu)
+    STRIP_CMD := strip --strip-unneeded
+else
+    $(error Unsupported platform: $(UNAME) $(ARCH))
+endif
+
+TARGET_FOLDER := rustbin/$(TARGET_FOLDER)
+
+# Ensure the target directory exists
+$(shell mkdir -p $(TARGET_FOLDER))
 
 install-build-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
@@ -39,54 +62,42 @@ clean:
 	rm -f lib.h
 	rm -f benchmarks/benchmarks
 	rm -rf protobuf
-	rm -rf target
+	rm -rf $(GLIDE_FFI_FOLDER)/target
 	rm -rf reports
 
-build-glide-client:
-	cargo build --release
-	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h --lang c
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		strip -x target/release/libglide_rs.a; \
-		if [ "$$(uname -m)" = "arm64" ]; then \
-			echo "Platform: aarch64-apple-darwin"; \
-			mkdir -p rustbin/aarch64-apple-darwin; \
-			cp target/release/libglide_rs.a rustbin/aarch64-apple-darwin/; \
-		elif [ "$$(uname -m)" = "x86_64" ]; then \
-			echo "Platform: x86_64-apple-darwin"; \
-			mkdir -p rustbin/x86_64-apple-darwin; \
-			cp target/release/libglide_rs.a rustbin/x86_64-apple-darwin/; \
-		fi; \
-	elif [ "$$(uname)" = "Linux" ]; then \
-		strip --strip-unneeded target/release/libglide_rs.a; \
-		if [ "$$(uname -m)" = "arm64" ] || [ "$$(uname -m)" = "aarch64" ]; then \
-			echo "Platform: aarch64-unknown-linux-gnu"; \
-			mkdir -p rustbin/aarch64-unknown-linux-gnu; \
-			cp target/release/libglide_rs.a rustbin/aarch64-unknown-linux-gnu/; \
-		elif [ "$$(uname -m)" = "x86_64" ]; then \
-			echo "Platform: x86_64-unknown-linux-gnu"; \
-			mkdir -p rustbin/x86_64-unknown-linux-gnu; \
-			cp target/release/libglide_rs.a rustbin/x86_64-unknown-linux-gnu/; \
-		fi; \
-	else \
-		echo "Unsupported platform: $(shell uname), $(shell uname -m)"; \
-		exit 1; \
-	fi
 
+# Release build
+build-glide-client: BUILD_FLAGS=--release --crate-type staticlib
+build-glide-client: TARGET_SUBDIR=release
+build-glide-client: build-glide-ffi
 
-build-glide-client-debug:
-	cargo build
-	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h --lang c
+# Debug build (no --release flag)
+build-glide-client-debug: BUILD_FLAGS=--crate-type staticlib
+build-glide-client-debug: TARGET_SUBDIR=debug
+build-glide-client-debug: build-glide-ffi
+
+libglide_ffi:
+	cd $(GLIDE_FFI_FOLDER) && cargo rustc $(BUILD_FLAGS)
+
+build-glide-ffi: gen-c-bindings
+
+gen-c-bindings: libglide_ffi
+	cd $(GLIDE_FFI_FOLDER) && \
+	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)/lib.h --lang c
+	echo $(TARGET_FOLDER)
+	$(STRIP_CMD) $(GLIDE_FFI_FOLDER)/target/$(TARGET_SUBDIR)/libglide_ffi.a
+	cp $(GLIDE_FFI_FOLDER)/target/$(TARGET_SUBDIR)/libglide_ffi.a $(TARGET_FOLDER)
 
 generate-protobuf:
 	rm -rf protobuf
 	mkdir -p protobuf
-	protoc --proto_path=../glide-core/src/protobuf \
+	protoc --proto_path=$(GLIDE_CORE_FOLDER)/src/protobuf \
 		--go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \
 		--go_opt=Mcommand_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \
 		--go_opt=Mresponse.proto=github.com/valkey-io/valkey-glide/go/protobuf \
 		--go_out=./protobuf \
 		--go_opt=paths=source_relative \
-		../glide-core/src/protobuf/*.proto
+		$(GLIDE_CORE_FOLDER)/src/protobuf/*.proto
 
 lint:
 	go vet ./...
@@ -116,7 +127,7 @@ format:
 unit-test:
 	mkdir -p reports
 	set -o pipefail; \
-	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
+	LD_LIBRARY_PATH=$(shell find . -name libglide_ffi.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v ./... -skip 'Example|TestGlideTestSuite' -run Test $(if $(test-filter), -run $(test-filter)) \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
 
@@ -131,7 +142,7 @@ example-test:
 	CLUSTER_OUTPUT=$$(python3 ../utils/cluster_manager.py start --cluster-mode); \
 	GLIDE_CLUSTER_NODES=$$(echo "$$CLUSTER_OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
 	echo "GLIDE_CLUSTER_NODES=$$GLIDE_CLUSTER_NODES"; \
-	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
+	LD_LIBRARY_PATH=$(shell find . -name libglide_ffi.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v ./api -skip Test $(if $(test-filter), -run $(test-filter)) -clusternodes $$GLIDE_CLUSTER_NODES -standalonenode $$GLIDE_NODE \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/api \
 	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
@@ -147,7 +158,7 @@ modules-test: __it
 __it:
 	mkdir -p reports
 	set -o pipefail; \
-	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
+	LD_LIBRARY_PATH=$(shell find . -name libglide_ffi.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v ./integTest/... \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \
