@@ -1,12 +1,14 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using static Valkey.Glide.BaseClient;
 using static Valkey.Glide.Route;
 
 namespace Valkey.Glide.IntegrationTests;
 
 public class ClusterClientTests
 {
+    // Syntax sugar - use `Args(a, b, c)` instead of `new GlideString[] { a, b, c }`
+    internal static GlideString[] Args(params GlideString[] args) => args;
+
     [Fact]
     public async Task CustomCommandWithRandomRoute()
     {

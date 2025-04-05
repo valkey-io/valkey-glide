@@ -1,12 +1,13 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using static Valkey.Glide.BaseClient;
-
 using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
 public class StandaloneClientTests
 {
+    // Syntax sugar - use `Args(a, b, c)` instead of `new GlideString[] { a, b, c }`
+    internal static gs[] Args(params gs[] args) => args;
+
     [Fact]
     public void CustomCommand()
     {
