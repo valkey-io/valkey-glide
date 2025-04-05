@@ -101,6 +101,7 @@ jobs:
               with:
                   path: ['glide-core/target', 'glide-core/src/generated']
                   key: ${{ matrix.host.TARGET }}-glide-core
+                  restore-keys: ['${{ matrix.host.TARGET }}']
 
             - name: Run glide-core tests
               working-directory: ./glide-core
@@ -129,7 +130,7 @@ jobs:
               with:
                   path: ['glide-core/target', 'glide-core/src/generated']
                   key: ${{ matrix.host.TARGET }}-benchmarks/rust
-                  restore-keys: ${{ matrix.host.TARGET }}-glide-core
+                  restore-keys: ['${{ matrix.host.TARGET }}-glide-core', '${{ matrix.host.TARGET }}']
 
             - uses: ./.github/workflows/test-benchmark
               with:

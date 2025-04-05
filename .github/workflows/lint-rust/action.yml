@@ -9,7 +9,6 @@ inputs:
         description: "github token"
         required: false
         type: string
-# TODO add param for cache keys and paths
 
 runs:
     using: "composite"

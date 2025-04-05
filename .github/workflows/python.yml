@@ -111,9 +111,9 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: python/target
+                  path: ['python/target', 'glide-core/src/generated']
                   key: ${{ matrix.host.TARGET }}-python
-                  restore-keys: ${{ matrix.host.TARGET }}-glide-core
+                  restore-keys: ['${{ matrix.host.TARGET }}-glide-core', '${{ matrix.host.TARGET }}']
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -188,7 +188,7 @@ jobs:
               with:
                   path: ['python/target', 'glide-core/src/generated']
                   key: ${{ matrix.host.TARGET }}-python
-                  restore-keys: ${{ matrix.host.TARGET }}-glide-core
+                  restore-keys: ['${{ matrix.host.TARGET }}-glide-core', '${{ matrix.host.TARGET }}']
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -320,6 +320,7 @@ jobs:
               with:
                   path: ['python/target', 'glide-core/src/generated']
                   key: ${{ matrix.host.IMAGE }}-python
+                  restore-keys: ['${{ matrix.host.IMAGE }}']
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -362,11 +363,11 @@ jobs:
               with:
                   submodules: recursive
 
-            - uses: ['python/target', 'glide-core/src/generated']
+            - uses: actions/cache@v4
               with:
-                  path: python/target
+                  path: ['python/target', 'glide-core/src/generated']
                   key: aarch64-unknown-linux-gnu-python
-                  restore-keys: aarch64-unknown-linux-gnu-glide-core
+                  restore-keys: ['aarch64-unknown-linux-gnu-glide-core', 'aarch64-unknown-linux-gnu']
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper

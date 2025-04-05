@@ -23,8 +23,6 @@ env:
 runs:
     using: "composite"
 
-    # TODO: self-hosted runners are actually cloning the repo, using the cache from the previous run
-    # will not work as expected. We need to find a way to cache the valkey repo on the runner itself.
     steps:
         - name: "Setup Environment Variables"
           shell: bash
@@ -33,33 +31,49 @@ runs:
           run: |
               echo "ENGINE_VERSION=$ENGINE_VERSION" >> $GITHUB_ENV
 
-        - name: Cache Valkey for non self hosted runners
-          if: ${{!contains(inputs.target, 'aarch64-unknown') }}
-          uses: actions/cache@v4
-          id: cache-valkey
-          with:
-              path: |
-                  ~/valkey
-              key: valkey-${{ inputs.engine-version }}-${{ inputs.target }}
-
         - name: Prepare Valkey sources
-          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
           shell: bash
           run: |
               echo "Cloning and checking out Valkey $ENGINE_VERSION"
-              cd ~/
               if [[ -d valkey ]]; then
-                echo "Removing existing valkey directory..."
-                rm -fR valkey
+                  echo "Removing existing valkey directory..."
+                  rm -fR valkey
               fi
               git clone https://github.com/valkey-io/valkey.git
-              cd valkey
-              git checkout "$ENGINE_VERSION"
+              cd valkey/src
+              git checkout "$ENGINE_VERSION" -- version.h
+              SOURCES_VERSION=`grep ' VALKEY_VERSION ' version.h | grep -P -o '\d+\.\d\.\d'`
+              if [[ -z $SOURCES_VERSION ]]; then
+                  SOURCES_VERSION=`grep ' REDIS_VERSION ' version.h | grep -P -o '\d+\.\d\.\d'`
+              fi
+              echo "SOURCES_VERSION=$SOURCES_VERSION" >> $GITHUB_ENV
 
-        - name: Build and install engine
+        - uses: actions/cache@v4
+          id: cache-valkey
+          with:
+              path: ['valkey/src/valkey-server', 'valkey/src/valkey-cli']
+              key: valkey-${{ env.SOURCES_VERSION }}-${{ inputs.target }}
+
+        # Manual install, because makefile target rebuilds everything, we want to avoid that
+        - name: Install cached engine
+          if: ${{ steps.cache-valkey.outputs.cache-hit == 'true' }}
           shell: bash
           run: |
-              cd ~/valkey
+              cd valkey/src
+              if command -v sudo &> /dev/null
+              then
+                  echo "sudo command exists"
+                  $SUDO=sudo
+              fi
+              $SUDO cp valkey-server valkey-cli redis-server redis-cli /usr/local/bin/ 2>/dev/null || :
+              echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
+
+        - name: Build and install engine
+          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
+          shell: bash
+          run: |
+              cd valkey
+              git checkout "$ENGINE_VERSION"
               make BUILD_TLS=yes
               if command -v sudo &> /dev/null
               then

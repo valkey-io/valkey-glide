@@ -116,7 +116,7 @@ jobs:
               with:
                   path: ['java/target', 'glide-core/src/generated']
                   key: ${{ matrix.host.TARGET }}-java
-                  restore-keys: ${{ matrix.host.TARGET }}-glide-core
+                  restore-keys: ['${{ matrix.host.TARGET }}-glide-core', '${{ matrix.host.TARGET }}']
 
             - name: Build java client
               working-directory: java
@@ -188,7 +188,7 @@ jobs:
               with:
                   path: ['java/target', 'glide-core/src/generated']
                   key: ${{ matrix.host.TARGET }}-java
-                  restore-keys: ${{ matrix.host.TARGET }}-glide-core
+                  restore-keys: ['${{ matrix.host.TARGET }}-glide-core', '${{ matrix.host.TARGET }}']
 
             - name: Test pubsub
               working-directory: java
@@ -263,6 +263,7 @@ jobs:
               with:
                   path: ['java/target', 'glide-core/src/generated']
                   key: ${{ matrix.host.IMAGE }}-java
+                  restore-keys: ['${{ matrix.host.IMAGE }}']
 
             - name: Build java wrapper
               working-directory: java
@@ -319,7 +320,7 @@ jobs:
               with:
                   path: ['java/target', 'glide-core/src/generated']
                   key: aarch64-unknown-linux-gnu-java
-                  restore-keys: aarch64-unknown-linux-gnu-glide-core
+                  restore-keys: ['aarch64-unknown-linux-gnu-glide-core', 'aarch64-unknown-linux-gnu']
 
             - name: Test java wrapper
               working-directory: java
