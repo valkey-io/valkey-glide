@@ -693,7 +693,7 @@ export interface BaseClientConfiguration {
  * - **openTelemetryConfig**: Use the `openTelemetryConfig` property to specify the endpoint of the collector to export the measurments.
  *   - **Traces Collector EndPoint**: Set `tracesCollectorEndPoint` to specify the endpoint path of the collector to export the traces measurments.
  *   - **Metrics Collector EndPoint**: Set `metricsCollectorEndPoint` to specify the endpoint path of the collector to export the metrics data.
- *   - **Span Flush Interval Ms**: Set `spanFlushIntervalMs` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 500 will be used.
+ *   - **Flush Interval Ms**: Set `flushIntervalMs` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 500 will be used.
  *
  * @example
  * ```typescript
@@ -702,7 +702,7 @@ export interface BaseClientConfiguration {
  *   openTelemetryConfig: {
  *      tracesCollectorEndPoint: 'https://127.0.0.1/v1/traces',
  *      metricsCollectorEndPoint: 'https://127.0.0.1/v1/metrics',
- *      spanFlushIntervalMs: 500,
+ *      flushIntervalMs: 500,
  *   },
  * };
  * ```
@@ -731,7 +731,7 @@ export interface AdvancedBaseClientConfiguration {
          * The duration in milliseconds the data will exported to the collector.
          * If interval is not specified, 500 will be used.
          */
-        spanFlushIntervalMs?: number;
+        flushIntervalMs?: number;
     };
 }
 
@@ -7760,6 +7760,12 @@ export class BaseClient {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
+            
+        // Validate flushIntervalMs is not negative
+        if (options.openTelemetryConfig?.flushIntervalMs !== undefined && options.openTelemetryConfig.flushIntervalMs < 0) {
+            throw new Error("InvalidInput: flushIntervalMs cannot be negative");
+        }
+        
         request.opentelemetryConfig = options.openTelemetryConfig;
     }
 

@@ -3,12 +3,12 @@
  */
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
+import * as fs from 'fs';
 import {
     ClusterTransaction,
-    convertRecordToGlideRecord,
     GlideClient,
     GlideClusterClient,
-    ProtocolVersion,
+    ProtocolVersion
 } from "..";
 import ValkeyCluster from "../../utils/TestUtils";
 import {
@@ -51,7 +51,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `GlideClusterClient test automatic span lifecycle_%p`,
+        `GlideClusterClient test span memory leak_%p`,
         async (protocol) => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
@@ -59,9 +59,18 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
             const startMemory = process.memoryUsage().heapUsed;
 
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+                advancedConfiguration: {
+                    openTelemetryConfig: {
+                        tracesCollectorEndPoint: "https://valid-endpoint/v1/traces",
+                        metricsCollectorEndPoint: "https://valid-endpoint/v1/metrics",
+                    },
+                },
+            });
 
             // Execute a series of commands sequentially
             for (let i = 0; i < 100; i++) {
@@ -84,25 +93,76 @@ describe("OpenTelemetry GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `GlideClusterClient test transaction_%p`,
+        `GlideClusterClient test span transaction memory leak_%p`,
         async (protocol) => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
             }
-
+            
             const startMemory = process.memoryUsage().heapUsed;
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+                advancedConfiguration: {
+                    openTelemetryConfig: {
+                        tracesCollectorEndPoint: "https://valid-endpoint/v1/traces",
+                        metricsCollectorEndPoint: "https://valid-endpoint/v1/metrics",
+                        flushIntervalMs: 400,
+                    },
+                },
+            });
 
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const transaction = new ClusterTransaction()
-                .configSet({ timeout: "1000" })
-                .configGet(["timeout"]);
-            const result = await client.exec(transaction);
-            expect(result).toEqual([
-                "OK",
-                convertRecordToGlideRecord({ timeout: "1000" }),
-            ]);
+            // Remove the span file if it exists
+            if (fs.existsSync('/tmp/spans.json')) {
+                fs.unlinkSync('/tmp/spans.json');
+            }
+            const transaction = new ClusterTransaction();
+
+            transaction.set("test_key", "foo");
+            transaction.objectRefcount("test_key");
+
+            const response = await client.exec(transaction);
+            expect(response).not.toBeNull();
+
+            if (response != null) {
+                expect(response.length).toEqual(2);
+                expect(response[0]).toEqual("OK"); // transaction.set("test_key", "foo");
+                expect(response[1]).toBeGreaterThanOrEqual(1); // transaction.objectRefcount("test_key");
+            }
+
+            // Wait for spans to be flushed to file
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Read and check span names from the file
+            let spanData: string;
+            try {
+                spanData = fs.readFileSync('/tmp/spans.json', 'utf8');
+            } catch (error: any) {
+                // Fail the test if we can't read the span file
+                throw new Error(`Failed to read or validate span file: ${error.message}`);
+            }
+            const spans = spanData.split('\n').filter((line: string) => line.trim() !== '');
+            
+            // Check that we have spans
+            expect(spans.length).toBeGreaterThan(0);
+            
+            // Parse and check span names
+            const spanNames = spans.map((line: string) => {
+                try {
+                    const span = JSON.parse(line);
+                    return span.name;
+                } catch (e) {
+                    return null;
+                }
+            }).filter((name: string | null) => name !== null);
+            
+            console.log('Found span names:', spanNames);
+            
+            // Check for expected span names - these checks will fail the test if not found
+            expect(spanNames).toContain('Batch');
+            expect(spanNames).toContain('send_command');
 
             // Force GC and check memory
             if (global.gc) {
@@ -118,26 +178,46 @@ describe("OpenTelemetry GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `GlideClusterClient test span transaction_%p`,
+        "opentelemetry wrong config - negative flush interval_%p",
         async (protocol) => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const transaction = new ClusterTransaction();
-
-            transaction.set("test_key", "foo");
-            transaction.objectRefcount("test_key");
-
-            const response = await client.exec(transaction);
-            expect(response).not.toBeNull();
-
-            if (response != null) {
-                expect(response.length).toEqual(2);
-                expect(response[0]).toEqual("OK"); // transaction.set(key, "foo");
-                expect(response[1]).toBeGreaterThanOrEqual(1); // transaction.objectRefcount(key);
-            }
+            await expect(
+                GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                    advancedConfiguration: {
+                        openTelemetryConfig: {
+                            tracesCollectorEndPoint: "https://valid-endpoint/v1/traces",
+                            metricsCollectorEndPoint: "https://valid-endpoint/v1/metrics",
+                            flushIntervalMs: -400,
+                        },
+                    },
+                })
+            ).rejects.toThrow(/InvalidInput/i);
         },
-        TIMEOUT,
+        TIMEOUT
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry config wrong parameter_%p",
+        async (protocol) => {
+            await expect(
+                GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                    advancedConfiguration: {
+                        openTelemetryConfig: {
+                            tracesCollectorEndPoint: "wrong.endpoint",
+                            metricsCollectorEndPoint: "wrong.endpoint",
+                            flushIntervalMs: 400,
+                        },
+                    },
+                }),
+            ).rejects.toThrow(/InvalidInput/i); // Ensure InvalidInput error
+        },
     );
 });
 
@@ -235,5 +315,46 @@ describe("OpenTelemetry GlideClient", () => {
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow small fluctuations
         },
         TIMEOUT,
+    );
+
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry config_%p",
+        async (protocol) => {
+            await GlideClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+                advancedConfiguration: {
+                    openTelemetryConfig: {
+                        tracesCollectorEndPoint: "https://valid-endpoint/v1/traces",
+                        metricsCollectorEndPoint: "https://valid-endpoint/v1/metrics",
+                        flushIntervalMs: 400,
+                    },
+                },
+            });
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry config wrong parameter_%p",
+        async (protocol) => {
+            await expect(
+                GlideClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                    advancedConfiguration: {
+                        openTelemetryConfig: {
+                            tracesCollectorEndPoint: "wrong.endpoint",
+                            metricsCollectorEndPoint: "wrong.endpoint",
+                            flushIntervalMs: 400,
+                        },
+                    },
+                }),
+            ).rejects.toThrow(/InvalidInput/i); // Ensure InvalidInput error
+        },
     );
 });
