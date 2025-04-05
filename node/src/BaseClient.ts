@@ -7760,12 +7760,15 @@ export class BaseClient {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
-            
+
         // Validate flushIntervalMs is not negative
-        if (options.openTelemetryConfig?.flushIntervalMs !== undefined && options.openTelemetryConfig.flushIntervalMs < 0) {
+        if (
+            options.openTelemetryConfig?.flushIntervalMs !== undefined &&
+            options.openTelemetryConfig.flushIntervalMs < 0
+        ) {
             throw new Error("InvalidInput: flushIntervalMs cannot be negative");
         }
-        
+
         request.opentelemetryConfig = options.openTelemetryConfig;
     }
 

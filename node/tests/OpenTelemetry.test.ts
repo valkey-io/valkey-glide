@@ -3,12 +3,12 @@
  */
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
-import * as fs from 'fs';
+import * as fs from "fs";
 import {
     ClusterTransaction,
     GlideClient,
     GlideClusterClient,
-    ProtocolVersion
+    ProtocolVersion,
 } from "..";
 import ValkeyCluster from "../../utils/TestUtils";
 import {
@@ -66,8 +66,10 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint: "https://valid-endpoint/v1/traces",
-                        metricsCollectorEndPoint: "https://valid-endpoint/v1/metrics",
+                        tracesCollectorEndPoint:
+                            "https://valid-endpoint/v1/traces",
+                        metricsCollectorEndPoint:
+                            "https://valid-endpoint/v1/metrics",
                     },
                 },
             });
@@ -98,7 +100,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
             }
-            
+
             const startMemory = process.memoryUsage().heapUsed;
             client = await GlideClusterClient.createClient({
                 ...getClientConfigurationOption(
@@ -107,17 +109,20 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint: "https://valid-endpoint/v1/traces",
-                        metricsCollectorEndPoint: "https://valid-endpoint/v1/metrics",
+                        tracesCollectorEndPoint:
+                            "https://valid-endpoint/v1/traces",
+                        metricsCollectorEndPoint:
+                            "https://valid-endpoint/v1/metrics",
                         flushIntervalMs: 400,
                     },
                 },
             });
 
             // Remove the span file if it exists
-            if (fs.existsSync('/tmp/spans.json')) {
-                fs.unlinkSync('/tmp/spans.json');
+            if (fs.existsSync("/tmp/spans.json")) {
+                fs.unlinkSync("/tmp/spans.json");
             }
+
             const transaction = new ClusterTransaction();
 
             transaction.set("test_key", "foo");
@@ -133,36 +138,44 @@ describe("OpenTelemetry GlideClusterClient", () => {
             }
 
             // Wait for spans to be flushed to file
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise((resolve) => setTimeout(resolve, 500));
 
             // Read and check span names from the file
             let spanData: string;
+
             try {
-                spanData = fs.readFileSync('/tmp/spans.json', 'utf8');
-            } catch (error: any) {
+                spanData = fs.readFileSync("/tmp/spans.json", "utf8");
+            } catch (error: unknown) {
                 // Fail the test if we can't read the span file
-                throw new Error(`Failed to read or validate span file: ${error.message}`);
+                throw new Error(
+                    `Failed to read or validate span file: ${error instanceof Error ? error.message : String(error)}`,
+                );
             }
-            const spans = spanData.split('\n').filter((line: string) => line.trim() !== '');
-            
+
+            const spans = spanData
+                .split("\n")
+                .filter((line: string) => line.trim() !== "");
+
             // Check that we have spans
             expect(spans.length).toBeGreaterThan(0);
-            
+
             // Parse and check span names
-            const spanNames = spans.map((line: string) => {
-                try {
-                    const span = JSON.parse(line);
-                    return span.name;
-                } catch (e) {
-                    return null;
-                }
-            }).filter((name: string | null) => name !== null);
-            
-            console.log('Found span names:', spanNames);
-            
+            const spanNames = spans
+                .map((line: string) => {
+                    try {
+                        const span = JSON.parse(line);
+                        return span.name;
+                    } catch {
+                        return null;
+                    }
+                })
+                .filter((name: string | null) => name !== null);
+
+            console.log("Found span names:", spanNames);
+
             // Check for expected span names - these checks will fail the test if not found
-            expect(spanNames).toContain('Batch');
-            expect(spanNames).toContain('send_command');
+            expect(spanNames).toContain("Batch");
+            expect(spanNames).toContain("send_command");
 
             // Force GC and check memory
             if (global.gc) {
@@ -188,15 +201,17 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     ),
                     advancedConfiguration: {
                         openTelemetryConfig: {
-                            tracesCollectorEndPoint: "https://valid-endpoint/v1/traces",
-                            metricsCollectorEndPoint: "https://valid-endpoint/v1/metrics",
+                            tracesCollectorEndPoint:
+                                "https://valid-endpoint/v1/traces",
+                            metricsCollectorEndPoint:
+                                "https://valid-endpoint/v1/metrics",
                             flushIntervalMs: -400,
                         },
                     },
-                })
+                }),
             ).rejects.toThrow(/InvalidInput/i);
         },
-        TIMEOUT
+        TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -317,7 +332,6 @@ describe("OpenTelemetry GlideClient", () => {
         TIMEOUT,
     );
 
-
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "opentelemetry config_%p",
         async (protocol) => {
@@ -328,8 +342,10 @@ describe("OpenTelemetry GlideClient", () => {
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint: "https://valid-endpoint/v1/traces",
-                        metricsCollectorEndPoint: "https://valid-endpoint/v1/metrics",
+                        tracesCollectorEndPoint:
+                            "https://valid-endpoint/v1/traces",
+                        metricsCollectorEndPoint:
+                            "https://valid-endpoint/v1/metrics",
                         flushIntervalMs: 400,
                     },
                 },

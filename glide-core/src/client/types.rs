@@ -25,9 +25,9 @@ pub struct ConnectionRequest {
     pub periodic_checks: Option<PeriodicCheck>,
     pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
     pub inflight_requests_limit: Option<u32>,
-    pub traces_otel_endpoint: Option<String>,
-    pub metrics_otel_endpoint: Option<String>,
-    pub otel_span_flush_interval_ms: Option<u64>,
+    pub otel_traces_endpoint: Option<String>,
+    pub otel_metrics_endpoint: Option<String>,
+    pub otel_flush_interval_ms: Option<u64>,
 }
 
 pub struct AuthenticationInfo {
@@ -227,11 +227,11 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
 
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
 
-        let traces_otel_endpoint =
+        let otel_traces_endpoint =
             chars_to_string_option(&value.opentelemetry_config.traces_collector_end_point);
-        let metrics_otel_endpoint =
+        let otel_metrics_endpoint =
             chars_to_string_option(&value.opentelemetry_config.metrics_collector_end_point);
-        let otel_span_flush_interval_ms = value.opentelemetry_config.span_flush_interval;
+        let otel_flush_interval_ms = value.opentelemetry_config.flush_interval;
 
         ConnectionRequest {
             read_from,
@@ -248,9 +248,9 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             periodic_checks,
             pubsub_subscriptions,
             inflight_requests_limit,
-            traces_otel_endpoint,
-            metrics_otel_endpoint,
-            otel_span_flush_interval_ms,
+            otel_traces_endpoint,
+            otel_metrics_endpoint,
+            otel_flush_interval_ms,
         }
     }
 }
