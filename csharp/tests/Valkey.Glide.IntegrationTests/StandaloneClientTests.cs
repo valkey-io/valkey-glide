@@ -1,7 +1,8 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using gs = Valkey.Glide.GlideString;
 using static Valkey.Glide.BaseClient;
+
+using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
 public class StandaloneClientTests
@@ -90,7 +91,7 @@ public class StandaloneClientTests
         string key2 = Guid.NewGuid().ToString();
         Assert.Equal(3, (long)(await client.CustomCommand(Args("sadd", key2, "a", "b", "c")))!);
         Assert.Equal(
-            new HashSet<gs> { "a", "b", "c" },
+            new HashSet<object> { new gs("a"), new gs("b"), new gs("c") },
             (await client.CustomCommand(Args("smembers", key2)) as HashSet<object>)!
         );
         Assert.Equal(
