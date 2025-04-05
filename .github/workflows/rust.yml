@@ -97,10 +97,7 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: |
-                      glide-core/target
-                      ~/.cargo/registry/index/
-                      ~/.cargo/registry/cache/
+                  path: glide-core/target
                   key: ${{ matrix.host.TARGET }}-glide-core
 
             - name: Run tests
@@ -109,10 +106,7 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: |
-                      glide-core/target
-                      ~/.cargo/registry/index/
-                      ~/.cargo/registry/cache/
+                  path: glide-core/target
                   key: ${{ matrix.host.TARGET }}-logger_core
 
             - name: Run logger tests
@@ -127,11 +121,9 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: |
-                      glide-core/target
-                      ~/.cargo/registry/index/
-                      ~/.cargo/registry/cache/
+                  path: glide-core/target
                   key: ${{ matrix.host.TARGET }}-benchmarks-rust
+                  restore-keys: ${{ matrix.host.TARGET }}-glide-core
 
             - uses: ./.github/workflows/test-benchmark
               with:
@@ -145,18 +137,18 @@ jobs:
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./glide-core
+                  cargo-toml-folder: glide-core
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-core
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./logger_core
+                  cargo-toml-folder: logger_core
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint logger
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./benchmarks/rust
+                  cargo-toml-folder: benchmarks/rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint benchmark
