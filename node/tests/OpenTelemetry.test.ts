@@ -8,7 +8,7 @@ import {
     ClusterTransaction,
     GlideClient,
     GlideClusterClient,
-    ProtocolVersion
+    ProtocolVersion,
 } from "..";
 import ValkeyCluster from "../../utils/TestUtils";
 import {

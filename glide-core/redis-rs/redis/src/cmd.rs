@@ -6,7 +6,7 @@ use futures_util::{
 };
 #[cfg(feature = "aio")]
 use std::pin::Pin;
-use std::{borrow::Borrow, fmt, io, sync::Arc};
+use std::{borrow::Borrow, fmt, io};
 
 use crate::connection::ConnectionLike;
 use crate::pipeline::Pipeline;
