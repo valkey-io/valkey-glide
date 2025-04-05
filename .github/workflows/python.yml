@@ -111,9 +111,11 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: ['python/target', 'glide-core/src/generated']
+                  path: ["python/target", "glide-core/src/generated"]
                   key: ${{ matrix.host.TARGET }}-python
-                  restore-keys: ['${{ matrix.host.TARGET }}-glide-core', '${{ matrix.host.TARGET }}']
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -186,9 +188,11 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: ['python/target', 'glide-core/src/generated']
+                  path: ["python/target", "glide-core/src/generated"]
                   key: ${{ matrix.host.TARGET }}-python
-                  restore-keys: ['${{ matrix.host.TARGET }}-glide-core', '${{ matrix.host.TARGET }}']
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -318,9 +322,9 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: ['python/target', 'glide-core/src/generated']
+                  path: ["python/target", "glide-core/src/generated"]
                   key: ${{ matrix.host.IMAGE }}-python
-                  restore-keys: ['${{ matrix.host.IMAGE }}']
+                  restore-keys: ${{ matrix.host.IMAGE }}
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -365,9 +369,11 @@ jobs:
 
             - uses: actions/cache@v4
               with:
-                  path: ['python/target', 'glide-core/src/generated']
+                  path: ["python/target", "glide-core/src/generated"]
                   key: aarch64-unknown-linux-gnu-python
-                  restore-keys: ['aarch64-unknown-linux-gnu-glide-core', 'aarch64-unknown-linux-gnu']
+                  restore-keys: |
+                      aarch64-unknown-linux-gnu-glide-core
+                      aarch64-unknown-linux-gnu
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper

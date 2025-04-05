@@ -51,7 +51,7 @@ runs:
         - uses: actions/cache@v4
           id: cache-valkey
           with:
-              path: ['valkey/src/valkey-server', 'valkey/src/valkey-cli']
+              path: ["valkey/src/valkey-server", "valkey/src/valkey-cli"]
               key: valkey-${{ env.SOURCES_VERSION }}-${{ inputs.target }}
 
         # Manual install, because makefile target rebuilds everything, we want to avoid that
