@@ -41,7 +41,7 @@ runs:
               fi
               git clone https://github.com/valkey-io/valkey.git
               cd valkey/src
-              git checkout $ENGINE_VERSION -- version.h
+              git checkout $ENGINE_VERSION
               SOURCES_VERSION=`grep ' VALKEY_VERSION ' version.h | grep -P -o '\d+\.\d\.\d'`
               if [[ -z $SOURCES_VERSION ]]; then
                   SOURCES_VERSION=`grep ' REDIS_VERSION ' version.h | grep -P -o '\d+\.\d\.\d'`
@@ -75,7 +75,6 @@ runs:
           shell: bash
           run: |
               cd valkey
-              git checkout $ENGINE_VERSION
               make BUILD_TLS=yes
               if command -v sudo &> /dev/null
               then
