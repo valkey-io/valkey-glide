@@ -53,6 +53,8 @@ import {
     convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
+    Score,
+    ElementAndScore,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
@@ -4154,6 +4156,17 @@ export function runBaseTests(config: {
                 expect(
                     await client.zadd(key, newMembersScores, { changed: true }),
                 ).toEqual(2);
+                const infMembersScores: Record<string, Score> = {
+                    infMember: "+inf",
+                    negInfMember: "-inf",
+                };
+                expect(await client.zadd(key, infMembersScores)).toEqual(2);
+
+                const infElementAndScore: ElementAndScore[] = [
+                    { element: "infMemberEAS", score: "+inf" },
+                    { element: "negInfMemberEAS", score: "-inf" },
+                ];
+                expect(await client.zadd(key, infElementAndScore)).toEqual(2);
             }, protocol);
         },
         config.timeout,
@@ -4537,6 +4550,24 @@ export function runBaseTests(config: {
 
                 expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(client.zscore(key2, "foo")).rejects.toThrow();
+
+                const inf_key = uuidv4();
+                const infMembersScores: Record<string, Score> = {
+                    infMember: "+inf",
+                    negInfMember: "-inf",
+                };
+                expect(await client.zadd(inf_key, infMembersScores)).toEqual(2);
+                expect(await client.zscore(inf_key, "infMember")).toEqual(
+                    Infinity,
+                );
+
+                const inf_key2 = uuidv4();
+                expect(
+                    await client.zadd(inf_key2, { infMember: -Infinity }),
+                ).toEqual(1);
+                expect(await client.zscore(inf_key2, "infMember")).toEqual(
+                    -Infinity,
+                );
             }, protocol);
         },
         config.timeout,
