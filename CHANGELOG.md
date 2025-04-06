@@ -4,6 +4,7 @@
 
 #### Fixes
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
+* Node: Fix ZADD, enabling `+inf` and `-inf` as score ([#3370](https://github.com/valkey-io/valkey-glide/pull/3370))
 * Go: Fix data race on the coreClient with `sync.Mutex` and a channel map ([#3292](https://github.com/valkey-io/valkey-glide/pull/3292))
 * Go: Fix channel passing from Go to Rust by using `runtime.Pinner` or `cgo.Handle` ([#3270](https://github.com/valkey-io/valkey-glide/pull/3270))
 

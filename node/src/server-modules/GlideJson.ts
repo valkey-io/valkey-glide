@@ -159,15 +159,15 @@ export class GlideJson {
      *
      * @example
      * ```typescript
-     * const jsonStr = await GlideJson.get('doc', {path: '$'});
+     * const jsonStr = await GlideJson.get(client, 'doc', {path: '$'});
      * console.log(JSON.parse(jsonStr as string));
      * // Output: [{"a": 1.0, "b" :2}] - JSON object retrieved from the key `doc`.
      *
-     * const jsonData = await GlideJson.get(('doc', {path: '$'});
+     * const jsonData = await GlideJson.get(client, 'doc', {path: '$'});
      * console.log(jsonData);
      * // Output: '[{"a":1.0,"b":2}]' - Returns the value at path '$' in the JSON document stored at `doc`.
      *
-     * const formattedJson = await GlideJson.get(('doc', {
+     * const formattedJson = await GlideJson.get(client, 'doc', {
      *     ['$.a', '$.b']
      *     indent: "  ",
      *     newline: "\n",
@@ -176,7 +176,7 @@ export class GlideJson {
      * console.log(formattedJson);
      * // Output: "{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}" - Returns values at paths '$.a' and '$.b' with custom format.
      *
-     * const nonExistingPath = await GlideJson.get(('doc', {path: '$.non_existing_path'});
+     * const nonExistingPath = await GlideJson.get(client, 'doc', {path: '$.non_existing_path'});
      * console.log(nonExistingPath);
      * // Output: "[]" - Empty array since the path does not exist in the JSON document.
      * ```
