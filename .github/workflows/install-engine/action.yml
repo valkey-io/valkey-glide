@@ -65,7 +65,7 @@ runs:
               if command -v sudo &> /dev/null
               then
                   echo "sudo command exists"
-                  $SUDO=sudo
+                  SUDO=sudo
               fi
               $SUDO cp valkey-server valkey-cli redis-server redis-cli /usr/local/bin/ 2>/dev/null || :
               echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
