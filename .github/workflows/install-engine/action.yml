@@ -68,6 +68,9 @@ runs:
                   SUDO=sudo
               fi
               $SUDO cp valkey-server valkey-cli redis-server redis-cli /usr/local/bin/ 2>/dev/null || :
+              if [[ ! -e /usr/local/bin/redis-server ]]; then
+                  $SUDO cp valkey-server /usr/local/bin/redis-server
+              fi
               echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
         - name: Build and install engine
