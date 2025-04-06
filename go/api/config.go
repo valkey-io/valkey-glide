@@ -16,7 +16,7 @@ const (
 // NodeAddress represents the host address and port of a node in the cluster.
 type NodeAddress struct {
 	Host string // If not supplied, api.DefaultHost will be used.
-	Port int    // If not supplied, api.DefaultPost will be used.
+	Port int    // If not supplied, api.DefaultPort will be used.
 }
 
 func (addr *NodeAddress) toProtobuf() *protobuf.NodeAddress {
@@ -215,9 +215,9 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 //
 //	config := NewGlideClientConfiguration().
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPost}).
+//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPost})
+//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPort})
 func (config *GlideClientConfiguration) WithAddress(address *NodeAddress) *GlideClientConfiguration {
 	config.addresses = append(config.addresses, *address)
 	return config
@@ -325,9 +325,9 @@ func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.Connectio
 //
 //	config := NewGlideClusterClientConfiguration().
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPost}).
+//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPost})
+//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPort})
 func (config *GlideClusterClientConfiguration) WithAddress(address *NodeAddress) *GlideClusterClientConfiguration {
 	config.addresses = append(config.addresses, *address)
 	return config
