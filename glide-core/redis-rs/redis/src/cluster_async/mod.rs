@@ -151,7 +151,7 @@ where
     /// * `scan_state_rc` - A reference to the scan state, For initiating new scan send [`ScanStateRC::new()`],
     ///   for each subsequent iteration use the returned [`ScanStateRC`].
     /// * `cluster_scan_args` - A [`ClusterScanArgs`] struct containing the arguments for the cluster scan command - match pattern, count,
-    ///    object type and the allow_non_covered_slots flag.
+    ///   object type and the allow_non_covered_slots flag.
     ///
     /// # Returns
     ///
@@ -313,6 +313,11 @@ where
     ) -> RedisResult<Value> {
         self.route_operation_request(Operation::UpdateConnectionPassword(password))
             .await
+    }
+
+    /// Get the username used to authenticate with all cluster servers
+    pub async fn get_username(&mut self) -> RedisResult<Value> {
+        self.route_operation_request(Operation::GetUsername).await
     }
 
     /// Routes an operation request to the appropriate handler.
@@ -619,6 +624,7 @@ enum CmdArg<C> {
 #[derive(Clone)]
 enum Operation {
     UpdateConnectionPassword(Option<String>),
+    GetUsername,
 }
 
 fn route_for_pipeline(pipeline: &crate::Pipeline) -> RedisResult<Option<Route>> {
@@ -2176,6 +2182,16 @@ where
                     core.set_cluster_param(|params| params.password = password)
                         .expect(MUTEX_WRITE_ERR);
                     Ok(Response::Single(Value::Okay))
+                }
+                Operation::GetUsername => {
+                    let username = match core
+                        .get_cluster_param(|params| params.username.clone())
+                        .expect(MUTEX_READ_ERR)
+                    {
+                        Some(username) => Value::SimpleString(username),
+                        None => Value::Nil,
+                    };
+                    Ok(Response::Single(username))
                 }
             },
         }
