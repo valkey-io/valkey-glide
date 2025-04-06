@@ -225,6 +225,8 @@ function initialize() {
         ReturnTypeAttribute,
         ReturnTypeJson,
         UniversalReturnTypeJson,
+        Score,
+        ElementAndScore,
     } = nativeBinding;
 
     module.exports = {
@@ -374,6 +376,8 @@ function initialize() {
         ReturnTypeAttribute,
         ReturnTypeJson,
         UniversalReturnTypeJson,
+        Score,
+        ElementAndScore,
     };
 
     globalObject = Object.assign(global, nativeBinding);
