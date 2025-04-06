@@ -5,7 +5,7 @@
 #### Breaking Changes
 
 #### Fixes
-* Python: fix update_connection_password to use username for ACL usecase ([#3539](https://github.com/valkey-io/valkey-glide/pull/3539))
+* Core: fix update_connection_password to use username for ACL usecase ([#3539](https://github.com/valkey-io/valkey-glide/pull/3539))
 * Python: Bump PyO3 version ([#3536](https://github.com/valkey-io/valkey-glide/pull/3536))
 * Node: Fix documentation for GlideJson.get method ([#3540] (https://github.com/valkey-io/valkey-glide/pull/3540))
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
