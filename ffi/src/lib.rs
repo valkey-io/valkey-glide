@@ -428,10 +428,6 @@ impl From<redis::PushKind> for PushKind {
     }
 }
 
-fn type_of<T>(_: &T) -> &'static str {
-    std::any::type_name::<T>()
-}
-
 /// Processes a push notification message and calls the provided callback function.
 ///
 /// This function converts a PushInfo message to a CommandResponse, determines the
