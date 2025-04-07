@@ -241,8 +241,12 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
         ClientType::SyncClient
     }));
     unsafe {
-        let response_ptr =
-            create_client(connection_request_ptr, connection_request_len, client_type, std::ptr::null());
+        let response_ptr = create_client(
+            connection_request_ptr,
+            connection_request_len,
+            client_type,
+            std::ptr::null(),
+        );
 
         assert!(!response_ptr.is_null(), "Failed to create client");
         let response = &*response_ptr;
