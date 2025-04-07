@@ -38,9 +38,3 @@ func (msg *PubSubMessage) ToString() string {
 	}
 	return string(jsonBytes)
 }
-
-// PushInfo represents a message received from the server
-type PushInfo struct {
-	Kind    C.PushKind
-	Message *PubSubMessage
-}
