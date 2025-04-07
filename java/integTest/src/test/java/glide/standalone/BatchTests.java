@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
-import glide.TransactionTestUtilities.BatchBuilder;
+import glide.BatchTestUtilities.BatchBuilder;
 import glide.api.GlideClient;
 import glide.api.models.Batch;
 import glide.api.models.GlideString;
@@ -52,7 +52,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(10) // seconds
-public class TransactionTests {
+public class BatchTests {
 
     @SneakyThrows
     public static Stream<Arguments> getClients() {
@@ -122,7 +122,7 @@ public class TransactionTests {
     }
 
     public static Stream<Arguments> getCommonBatchBuilders() {
-        return glide.TransactionTestUtilities.getCommonBatchBuilders()
+        return glide.BatchTestUtilities.getCommonBatchBuilders()
                 .flatMap(
                         test ->
                                 getClients()
@@ -152,7 +152,7 @@ public class TransactionTests {
     }
 
     public static Stream<Arguments> getPrimaryNodeBatchBuilders() {
-        return glide.TransactionTestUtilities.getPrimaryNodeBatchBuilders()
+        return glide.BatchTestUtilities.getPrimaryNodeBatchBuilders()
                 .flatMap(
                         test ->
                                 getClients()
@@ -163,7 +163,7 @@ public class TransactionTests {
                                                                         isAtomic ->
                                                                                 Arguments.of(
                                                                                         test.get()[0], // test name
-                                                                                        test.get()[1], // TransactionBuilder
+                                                                                        test.get()[1], // BatchBuilder
                                                                                         client.get()[0], // GlideClient
                                                                                         isAtomic // boolean isAtomic
                                                                                         ))));
@@ -787,7 +787,7 @@ public class TransactionTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void test_transaction_dump_restore(GlideClient client, boolean isAtomic) {
+    public void test_batch_dump_restore(GlideClient client, boolean isAtomic) {
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
         String value = UUID.randomUUID().toString();
@@ -812,7 +812,7 @@ public class TransactionTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void test_transaction_function_dump_restore(GlideClient client, boolean isAtomic) {
+    public void test_batch_function_dump_restore(GlideClient client, boolean isAtomic) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String libName = "mylib";
         String funcName = "myfun";
@@ -836,7 +836,7 @@ public class TransactionTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void test_transaction_xinfoStream(GlideClient client, boolean isAtomic) {
+    public void test_batch_xinfoStream(GlideClient client, boolean isAtomic) {
         Batch batch = new Batch(isAtomic);
         final String streamKey = "{streamKey}-" + UUID.randomUUID();
         LinkedHashMap<String, Object> expectedStreamInfo =

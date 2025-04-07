@@ -61,7 +61,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Stream;
 import org.junit.jupiter.params.provider.Arguments;
 
-public class TransactionTestUtilities {
+public class BatchTestUtilities {
 
     private static final String value1 = "value1-" + UUID.randomUUID();
     private static final String value2 = "value2-" + UUID.randomUUID();
@@ -113,23 +113,21 @@ public class TransactionTestUtilities {
     /** Generate test samples for parametrized tests. Could be routed to random node. */
     public static Stream<Arguments> getCommonBatchBuilders() {
         return Stream.of(
-                Arguments.of("Generic Commands", (BatchBuilder) TransactionTestUtilities::genericCommands),
-                Arguments.of("String Commands", (BatchBuilder) TransactionTestUtilities::stringCommands),
-                Arguments.of("Hash Commands", (BatchBuilder) TransactionTestUtilities::hashCommands),
-                Arguments.of("List Commands", (BatchBuilder) TransactionTestUtilities::listCommands),
-                Arguments.of("Set Commands", (BatchBuilder) TransactionTestUtilities::setCommands),
+                Arguments.of("Generic Commands", (BatchBuilder) BatchTestUtilities::genericCommands),
+                Arguments.of("String Commands", (BatchBuilder) BatchTestUtilities::stringCommands),
+                Arguments.of("Hash Commands", (BatchBuilder) BatchTestUtilities::hashCommands),
+                Arguments.of("List Commands", (BatchBuilder) BatchTestUtilities::listCommands),
+                Arguments.of("Set Commands", (BatchBuilder) BatchTestUtilities::setCommands),
+                Arguments.of("Sorted Set Commands", (BatchBuilder) BatchTestUtilities::sortedSetCommands),
                 Arguments.of(
-                        "Sorted Set Commands", (BatchBuilder) TransactionTestUtilities::sortedSetCommands),
-                Arguments.of(
-                        "HyperLogLog Commands", (BatchBuilder) TransactionTestUtilities::hyperLogLogCommands),
-                Arguments.of("Stream Commands", (BatchBuilder) TransactionTestUtilities::streamCommands),
+                        "HyperLogLog Commands", (BatchBuilder) BatchTestUtilities::hyperLogLogCommands),
+                Arguments.of("Stream Commands", (BatchBuilder) BatchTestUtilities::streamCommands),
                 Arguments.of(
                         "Connection Management Commands",
-                        (BatchBuilder) TransactionTestUtilities::connectionManagementCommands),
-                Arguments.of(
-                        "Geospatial Commands", (BatchBuilder) TransactionTestUtilities::geospatialCommands),
-                Arguments.of("Bitmap Commands", (BatchBuilder) TransactionTestUtilities::bitmapCommands),
-                Arguments.of("PubSub Commands", (BatchBuilder) TransactionTestUtilities::pubsubCommands));
+                        (BatchBuilder) BatchTestUtilities::connectionManagementCommands),
+                Arguments.of("Geospatial Commands", (BatchBuilder) BatchTestUtilities::geospatialCommands),
+                Arguments.of("Bitmap Commands", (BatchBuilder) BatchTestUtilities::bitmapCommands),
+                Arguments.of("PubSub Commands", (BatchBuilder) BatchTestUtilities::pubsubCommands));
     }
 
     /** Generate test samples for parametrized tests. Could be routed to primary nodes only. */
@@ -137,10 +135,10 @@ public class TransactionTestUtilities {
         return Stream.of(
                 Arguments.of(
                         "Server Management Commands",
-                        (BatchBuilder) TransactionTestUtilities::serverManagementCommands),
+                        (BatchBuilder) BatchTestUtilities::serverManagementCommands),
                 Arguments.of(
                         "Scripting and Function Commands",
-                        (BatchBuilder) TransactionTestUtilities::scriptingAndFunctionsCommands));
+                        (BatchBuilder) BatchTestUtilities::scriptingAndFunctionsCommands));
     }
 
     private static Object[] genericCommands(BaseBatch<?> batch, boolean isAtomic) {

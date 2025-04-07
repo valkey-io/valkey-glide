@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
-import glide.TransactionTestUtilities.BatchBuilder;
+import glide.BatchTestUtilities.BatchBuilder;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
@@ -43,7 +43,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(10) // seconds
-public class ClusterTransactionTests {
+public class ClusterBatchTests {
 
     @SneakyThrows
     public static Stream<Arguments> getClients() {
@@ -87,6 +87,15 @@ public class ClusterTransactionTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
+    public void custom_command_info(GlideClusterClient clusterClient, boolean isAtomic) {
+        ClusterBatch batch = new ClusterBatch(isAtomic).customCommand(new String[] {"ping"});
+        Object[] result = clusterClient.exec(batch).get();
+        assertEquals(result[0], "PONG");
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClientsWithAtomic")
+    @SneakyThrows
     public void info_simple_route_test(GlideClusterClient clusterClient, boolean isAtomic) {
         ClusterBatch batch = new ClusterBatch(isAtomic).info().info();
         ClusterBatchOptions options = ClusterBatchOptions.builder().route(RANDOM).build();
@@ -98,7 +107,7 @@ public class ClusterTransactionTests {
     }
 
     public static Stream<Arguments> getCommonBatchBuilders() {
-        return glide.TransactionTestUtilities.getCommonBatchBuilders()
+        return glide.BatchTestUtilities.getCommonBatchBuilders()
                 .flatMap(
                         test ->
                                 getClients()
@@ -118,7 +127,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     @ParameterizedTest(name = "{0} - isAtomic: {3}")
     @MethodSource("getCommonBatchBuilders")
-    public void transactions_with_group_of_commands(
+    public void batches_with_group_of_commands(
             String testName, BatchBuilder builder, GlideClusterClient clusterClient, boolean isAtomic) {
         ClusterBatch batch = new ClusterBatch(isAtomic);
         Object[] expectedResult = builder.apply(batch, isAtomic);
@@ -128,7 +137,7 @@ public class ClusterTransactionTests {
     }
 
     public static Stream<Arguments> getPrimaryNodeBatchBuilders() {
-        return glide.TransactionTestUtilities.getPrimaryNodeBatchBuilders()
+        return glide.BatchTestUtilities.getPrimaryNodeBatchBuilders()
                 .flatMap(
                         test ->
                                 getClients()
@@ -147,7 +156,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     @ParameterizedTest(name = "{0} - isAtomic: {3}")
     @MethodSource("getPrimaryNodeBatchBuilders")
-    public void keyless_transactions_with_group_of_commands(
+    public void keyless_batches_with_group_of_commands(
             String testName, BatchBuilder builder, GlideClusterClient clusterClient, boolean isAtomic) {
         ClusterBatch batch = new ClusterBatch(isAtomic);
         Object[] expectedResult = builder.apply(batch, isAtomic);
@@ -165,7 +174,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
-    public void test_transaction_large_values(GlideClusterClient clusterClient, boolean isAtomic) {
+    public void test_batch_large_values(GlideClusterClient clusterClient, boolean isAtomic) {
         int length = 1 << 25; // 33mb
         String key = "0".repeat(length);
         String value = "0".repeat(length);
@@ -473,8 +482,7 @@ public class ClusterTransactionTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void test_transaction_function_dump_restore(
-            GlideClusterClient clusterClient, boolean isAtomic) {
+    public void test_batch_function_dump_restore(GlideClusterClient clusterClient, boolean isAtomic) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String libName = "mylib";
         String funcName = "myfun";
@@ -504,7 +512,7 @@ public class ClusterTransactionTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void test_transaction_xinfoStream(GlideClusterClient clusterClient, boolean isAtomic) {
+    public void test_batch_xinfoStream(GlideClusterClient clusterClient, boolean isAtomic) {
         ClusterBatch batch = new ClusterBatch(isAtomic);
         final String streamKey = "{streamKey}-" + UUID.randomUUID();
         LinkedHashMap<String, Object> expectedStreamInfo =
