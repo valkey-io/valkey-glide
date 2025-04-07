@@ -44,7 +44,15 @@ func main() {
 	}
 	fmt.Println(resultWatch)
 
+	// resultUnWatch, err := clientNormal.Unwatch([]string{"key123", "key345"})
+	// if err != nil {
+	// 	log.Fatal("error connecting to database: ", err)
+	// }
+	// fmt.Println(resultUnWatch)
+
 	tx := api.NewTransaction(client)
+	tx.Set("key123", "Glide")
+	tx.Watch([]string{"key123"})
 	tx.Set("key1", "Glide")
 	tx.Set("key2", "Hello")
 	tx.Set("key3", "KeyToDelete")
@@ -54,6 +62,36 @@ func main() {
 	tx.Del([]string{"key3"})
 	tx.Append("key2", "_World")
 	tx.Get("key2")
+	tx.Set("key123", "Valkey")
+	tx.Get("key123")
+	tx.Type("key123")
+	tx.Exists([]string{"key1", "key2"})
+	tx.Touch([]string{"key1", "key2"})
+	tx.PTTL("key1")
+	tx.TTL("key1")
+	tx.Set("UnlinkKey", "Hello")
+	tx.Unlink([]string{"UnlinkKey"})
+	tx.Persist("key1")
+	//tx.ObjectEncoding("key1")
+	//tx.ObjectFreq("key1")
+	//tx.ObjectIdleTime("key1")
+	//tx.ObjectFreq("key1")
+	tx.Set("key4", "newkey3")
+	tx.Rename("key2", "newkey2")
+	tx.RenameNX("key4", "newkey4") //newKey must be not existing
+	tx.Copy("key2", "keyCopy")
+	//tx.Dump("key2")
+	tx.Del([]string{"key2"})
+	//tx.Restore("key2", 0, "\x00\x0bHello World\x0b\x00\xad\xb7\xa9\x8fcM3Y")
+	tx.PExpire("key4", 100)
+	tx.Expire("key4", 100)
+	tx.ExpireTime("key4")
+	tx.PExpireTime("key4")
+	tx.PExpireAt("key4", 100)
+	tx.PExpire("key4", 100)
+	tx.LPush("keySort", []string{"1", "3", "2", "4"})
+	tx.Sort("keySort")
+	tx.Wait(10, 10)
 
 	// err = tx.Discard()
 	// if err != nil {

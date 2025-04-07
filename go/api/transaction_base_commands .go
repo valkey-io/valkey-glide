@@ -10,11 +10,8 @@ package api
 type TransactionBaseCommands interface {
 	Watch(keys []string) (string, error)
 
+	//Unwatch(keys []string) (string, error)
 	//Exec() error
 
 	//Discard() error
-
-	// Get(key string) interface{}
-
-	// Set(key string, value string) interface{}
 }

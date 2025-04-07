@@ -198,6 +198,15 @@ func (client *baseClient) Watch(keys []string) (string, error) {
 	return handleStringResponse(result)
 }
 
+func (client *baseClient) Unwatch(keys []string) (string, error) {
+	fmt.Println("Unwatch")
+	result, err := client.executeCommand(C.UnWatch, keys)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 func (t *Transaction) Discard() error {
 	if len(t.commands) > 0 {
 		t.commands = []Cmder{}
@@ -205,22 +214,3 @@ func (t *Transaction) Discard() error {
 	}
 	return fmt.Errorf("no command where queue")
 }
-
-// func (client *Transaction) Set(key string, value string) interface{} {
-// 	fmt.Println("Transaction Set!")
-// 	_, err := client.ExecuteCommand(C.Set, []string{key, value})
-// 	if err != nil {
-// 		return nil
-// 	}
-
-// 	return client
-// }
-
-// func (client *Transaction) Get(key string) interface{} {
-// 	_, err := client.ExecuteCommand(C.Get, []string{key})
-
-// 	if err != nil {
-// 		return nil
-// 	}
-// 	return client
-// }
