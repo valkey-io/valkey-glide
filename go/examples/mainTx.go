@@ -20,6 +20,30 @@ func main() {
 		log.Fatal("error connecting to database: ", err)
 	}
 
+	// Create a new GlideClient
+	clientNormal, err := api.NewGlideClient(config)
+	if err != nil {
+		log.Fatal("error connecting to database: ", err)
+	}
+
+	//Non transaction
+	resultSet, err := clientNormal.Set("key123", "Hello")
+	if err != nil {
+		log.Fatal("Set error: ", err)
+	}
+	fmt.Println(resultSet)
+	//Non transaction
+	resultSet, err = clientNormal.Set("key345", "Hello")
+	if err != nil {
+		log.Fatal("Set error: ", err)
+	}
+	fmt.Println(resultSet)
+	resultWatch, err := clientNormal.Watch([]string{"key123", "key345"})
+	if err != nil {
+		log.Fatal("error connecting to database: ", err)
+	}
+	fmt.Println(resultWatch)
+
 	tx := api.NewTransaction(client)
 	tx.Set("key1", "Glide")
 	tx.Set("key2", "Hello")

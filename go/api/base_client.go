@@ -43,6 +43,7 @@ type BaseClient interface {
 	GenericBaseCommands
 	BitmapCommands
 	GeoSpatialCommands
+	TransactionBaseCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
