@@ -339,7 +339,6 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4

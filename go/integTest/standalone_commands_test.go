@@ -913,3 +913,37 @@ func (suite *GlideTestSuite) TestRandomKey() {
 	assert.Nil(t, err)
 	assert.NotNil(t, result)
 }
+
+func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+
+	// Flush all functions with SYNC option
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Generate and load function
+	libName := "mylib1c"
+	funcName := "myfunc1c"
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, true)
+	result, err = client.FunctionLoad(code, false)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	// Test FCALL
+	functionResult, err := client.FCallWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "one", functionResult)
+
+	// Test FCALL_RO
+	functionResult, err = client.FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "one", functionResult)
+}
