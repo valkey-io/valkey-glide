@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
+from glide.async_commands.batch import Batch
 from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import (
     CoreCommands,
@@ -11,7 +12,6 @@ from glide.async_commands.core import (
     FunctionRestorePolicy,
     InfoSection,
 )
-from glide.async_commands.transaction import Transaction
 from glide.constants import (
     TOK,
     TEncodable,
@@ -67,7 +67,8 @@ class StandaloneCommands(CoreCommands):
 
     async def exec(
         self,
-        transaction: Transaction,
+        batch: Batch,
+        raise_on_error: bool = True,
     ) -> Optional[List[TResult]]:
         """
         Execute a transaction by processing the queued commands.
@@ -84,8 +85,12 @@ class StandaloneCommands(CoreCommands):
 
             If the transaction failed due to a WATCH command, `exec` will return `None`.
         """
-        commands = transaction.commands[:]
-        return await self._execute_transaction(commands)
+        commands = batch.commands[:]
+        return await self._execute_batch(
+            commands,
+            is_atomic=batch.is_atomic,
+            raise_on_error=raise_on_error,
+        )
 
     async def select(self, index: int) -> TOK:
         """

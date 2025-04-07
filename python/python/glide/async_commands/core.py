@@ -444,12 +444,21 @@ class CoreCommands(Protocol):
         request_type: RequestType.ValueType,
         args: List[TEncodable],
         route: Optional[Route] = ...,
+        timeout: Optional[int] = ...,
+        raise_on_error: bool = ...,
+        retry_server_error: bool = ...,
+        retry_connection_error: bool = ...,
     ) -> TResult: ...
 
-    async def _execute_transaction(
+    async def _execute_batch(
         self,
         commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
         route: Optional[Route] = None,
+        timeout: Optional[int] = None,
+        is_atomic: bool = True,
+        raise_on_error: bool = True,
+        retry_server_error: bool = False,
+        retry_connection_error: bool = False,
     ) -> List[TResult]: ...
 
     async def _execute_script(

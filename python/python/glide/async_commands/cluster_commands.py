@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
+from glide.async_commands.batch import ClusterBatch
 from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import (
     CoreCommands,
@@ -11,7 +12,6 @@ from glide.async_commands.core import (
     FunctionRestorePolicy,
     InfoSection,
 )
-from glide.async_commands.transaction import ClusterTransaction
 from glide.constants import (
     TOK,
     TClusterResponse,
@@ -86,19 +86,34 @@ class ClusterCommands(CoreCommands):
 
     async def exec(
         self,
-        transaction: ClusterTransaction,
+        batch: ClusterBatch,
         route: Optional[TSingleNodeRoute] = None,
+        timeout: Optional[int] = None,
+        raise_on_error: bool = True,
+        retry_server_error: bool = False,
+        retry_connection_error: bool = False,
     ) -> Optional[List[TResult]]:
         """
-        Execute a transaction by processing the queued commands.
+        Execute a batch by processing the queued commands.
 
-        See [valkey.io](https://valkey.io/docs/topics/transactions/) for details on Transactions.
+        See [valkey.io]https://valkey.io/docs/topics/transactions/) and
+        [valkey.io](https://valkey.io/docs/topics/pipelining/) for details.
 
         Args:
-            transaction (ClusterTransaction): A `ClusterTransaction` object containing a list of commands to be executed.
+            batch (ClusterBatch): A `ClusterBatch` object containing a list of commands to be executed.
             route (Optional[TSingleNodeRoute]): If `route` is not provided, the transaction will be routed to the slot owner
                 of the first key found in the transaction. If no key is found, the command will be sent to a random node.
                 If `route` is provided, the client will route the command to the nodes defined by `route`.
+            timeout (Optional[int]): Specifies a timeout in milliseconds for the execution of the batch.
+                If the execution exceeds the timeout, it will be cancelled, and will raise an error. It is recommended to set a relatively high timeout,
+                especially for complex or lengthy transactions, to avoid premature cancellations.
+            retry_server_error (Optional[bool]): If set to `True`, the client will retry the batch execution in case of server errors.
+                This is useful for handling transient server issues. Note that when retrying due to server errors, the order of commands
+                within the batch may be reordered.
+            retry_connection_error (Optional[bool]): If set to `True`, the client will retry the batch execution in case of connection errors.
+                This is useful for handling network issues. Be aware that when retrying due to connection errors, commands within the batch
+                may be executed multiple times.
+
 
         Returns:
             Optional[List[TResult]]: A list of results corresponding to the execution of each command
@@ -107,8 +122,16 @@ class ClusterCommands(CoreCommands):
 
             If the transaction failed due to a WATCH command, `exec` will return `None`.
         """
-        commands = transaction.commands[:]
-        return await self._execute_transaction(commands, route)
+        commands = batch.commands[:]
+        return await self._execute_batch(
+            commands,
+            route,
+            timeout,
+            batch.is_atomic,
+            raise_on_error,
+            retry_server_error,
+            retry_connection_error,
+        )
 
     async def config_resetstat(
         self,

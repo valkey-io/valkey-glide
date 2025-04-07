@@ -40,7 +40,7 @@ excluded_symbol_list = [
     "ProtobufCodec",  # ClassDef
     "PartialMessageException",  # Exception
     # python/python/glide/async_commands/transaction.py
-    "BaseTransaction",  # ClassDef
+    "BaseBatch",  # ClassDef
     # python/python/glide/async_commands/standalone_commands.py
     "StandaloneCommands",  # ClassDef
     # python/python/glide/async_commands/cluster_commands.py
