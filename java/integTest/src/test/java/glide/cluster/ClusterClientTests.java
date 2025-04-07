@@ -7,7 +7,11 @@ import static glide.TestUtilities.deleteAclUser;
 import static glide.TestUtilities.getRandomString;
 import static glide.TestUtilities.setNewAclUserPassword;
 import static glide.api.BaseClient.OK;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClusterClient;
@@ -20,7 +24,6 @@ import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -278,9 +281,6 @@ public class ClusterClientTests {
         }
     }
 
-    static int count = 0;
-
-    @RepeatedTest(100)
     @Timeout(50)
     @SneakyThrows
     @Test
@@ -289,23 +289,10 @@ public class ClusterClientTests {
         var pwd = UUID.randomUUID().toString();
         var newPwd = UUID.randomUUID().toString();
 
-        GlideClusterClient adminClient;
+        GlideClusterClient adminClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
 
         try {
-            adminClient = GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
-        } catch (ExecutionException e) {
-            if (e.getMessage().contains("IoError")) {
-                // ignore
-                fail();
-                return;
-            } else {
-                throw e;
-            }
-        }
-
-        try {
-            System.out.println("setting for " + count);
-            adminClient.set("Iteration:", Integer.toString(count++)).get();
 
             setNewAclUserPassword(adminClient, username, pwd);
 
@@ -318,17 +305,11 @@ public class ClusterClientTests {
                                             .build())
                             .get();
 
-            adminClient.set(count + " about to call ", "info").get();
-
             // Validate client works
             assertNotNull(testClient.info().get());
 
-            adminClient.set(count + " about to call ", "updateConnPw").get();
-
             // Update the password of the client with non immediate auth
             assertEquals(OK, testClient.updateConnectionPassword(newPwd, false).get());
-
-            adminClient.set(count + " about to call ", "deletAclUser").get();
 
             // Delete the user (which will cause reconnection) and reset it with the new password
             deleteAclUser(adminClient, username);
