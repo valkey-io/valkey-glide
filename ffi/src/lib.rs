@@ -454,18 +454,11 @@ unsafe fn process_push_notification(
         .data
         .iter()
         .map(|v| {
-            println!(
-                "Push notification {:?}: {:?} (type: {})",
-                push_msg.kind,
-                v,
-                type_of(v)
-            );
-
             let Value::BulkString(str) = v else {
                 unreachable!()
             };
             let (ptr, len) = convert_vec_to_pointer(str.clone());
-            (ptr, len as i64)
+            (ptr, len)
         })
         .collect();
 
@@ -475,7 +468,7 @@ unsafe fn process_push_notification(
         if strings.len() == 3 {
             (strings[0], strings[1], strings[2])
         } else {
-            ((0 as *mut u8, 0), strings[0], strings[1])
+            ((std::ptr::null_mut::<u8>(), 0), strings[0], strings[1])
         }
     };
 
