@@ -45,6 +45,7 @@
 * Go: Add Function Load, Function Flush, FCall and FCall_RO ([#3474](https://github.com/valkey-io/valkey-glide/pull/3474))
 
 #### Breaking Changes
+* Go: Drop support for Go 1.20 ([#3513](https://github.com/valkey-io/valkey-glide/pull/3513))
 
 #### Fixes
 

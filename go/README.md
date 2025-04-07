@@ -29,10 +29,7 @@ macOS:
 
 ## GO supported versions
 
-| Go Version     |
-|----------------|
-| 1.20           |
-| 1.22           |
+Valkey GLIDE Go support Go version 1.22 and above.
 
 ## Installation and Setup
 
