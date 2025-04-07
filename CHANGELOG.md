@@ -1,4 +1,5 @@
 #### Changes
+* Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
 * Core: Add `opentelemetry` protocols support ([#3191](https://github.com/valkey-io/valkey-glide/pull/3191))
 * Node: Fix ZADD, enabling `+inf` and `-inf` as score ([#3370](https://github.com/valkey-io/valkey-glide/pull/3370))
 * Go: Add JSON.SET and JSON.GET ([#3115](https://github.com/valkey-io/valkey-glide/pull/3115))
@@ -22,6 +23,7 @@
 * Go: Add `BITPOS` ([#3407](https://github.com/valkey-io/valkey-glide/pull/3407))
 * Go: Add `FLUSHALL` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
 * Go: Add `FLUSHDB` ([#3117](https://github.com/valkey-io/valkey-glide/pull/3117))
+* Go: Add `PFMERGE` ([#3082](https://github.com/valkey-io/valkey-glide/pull/3082))
 * Go: Add password update api ([#3346](https://github.com/valkey-io/valkey-glide/pull/3346))
 * Go: Add `BITOP` ([#3384](https://github.com/valkey-io/valkey-glide/pull/3384))
 * Go: Add `GeoHash` ([#3439](https://github.com/valkey-io/valkey-glide/pull/3439))
@@ -35,8 +37,12 @@
 * Go: Add `Cluster Config Set & Get` ([#3274](https://github.com/valkey-io/valkey-glide/pull/3274))
 * Go: Add `Client Set & Get` ([#3302](https://github.com/valkey-io/valkey-glide/pull/3302))* Go: Add `Move` ([#3369](https://github.com/valkey-io/valkey-glide/pull/3369))
 * Go: Add `Scan` ([#3378](https://github.com/valkey-io/valkey-glide/pull/3378))
+* Go: Add `LCS` ([#3475](https://github.com/valkey-io/valkey-glide/pull/3475))
 * Core/FFI/Go: Add Support for Async and Sync Client Types in FFI ([#3451](https://github.com/valkey-io/valkey-glide/pull/3451))
 * Core/FFI/Go: Add support for async and sync client types in FFI ([#3451](https://github.com/valkey-io/valkey-glide/pull/3451))
+* Go: Add `Config Rewrite` ([#3156](https://github.com/valkey-io/valkey-glide/pull/3156))
+* Go: Add `Random Key` ([#3358](https://github.com/valkey-io/valkey-glide/pull/3358))
+* Go: Add Function Load, Function Flush, FCall and FCall_RO ([#3474](https://github.com/valkey-io/valkey-glide/pull/3474))
 * Go: Add PubSub support ([#3417](https://github.com/valkey-io/valkey-glide/pull/3417))
 * Go: Add `Publish` ([#3417](https://github.com/valkey-io/valkey-glide/pull/3417))
 

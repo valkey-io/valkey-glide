@@ -62,20 +62,22 @@ clean:
 	rm -f lib.h
 	rm -f benchmarks/benchmarks
 	rm -rf protobuf
-	rm -rf target
+	rm -rf $(GLIDE_FFI_FOLDER)/target
 	rm -rf reports
 
 
 # Release build
-build-glide-client: BUILD_FLAGS=--release
+build-glide-client: BUILD_FLAGS=--release --crate-type staticlib
+build-glide-client: TARGET_SUBDIR=release
 build-glide-client: build-glide-ffi
 
 # Debug build (no --release flag)
-build-glide-client-debug: BUILD_FLAGS=
+build-glide-client-debug: BUILD_FLAGS=--crate-type staticlib
+build-glide-client-debug: TARGET_SUBDIR=debug
 build-glide-client-debug: build-glide-ffi
 
 libglide_ffi:
-	cd $(GLIDE_FFI_FOLDER) && cargo build $(BUILD_FLAGS)
+	cd $(GLIDE_FFI_FOLDER) && cargo rustc $(BUILD_FLAGS)
 
 build-glide-ffi: gen-c-bindings
 
@@ -83,8 +85,8 @@ gen-c-bindings: libglide_ffi
 	cd $(GLIDE_FFI_FOLDER) && \
 	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)/lib.h --lang c
 	echo $(TARGET_FOLDER)
-	$(STRIP_CMD) $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a
-	cp $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a $(TARGET_FOLDER)
+	$(STRIP_CMD) $(GLIDE_FFI_FOLDER)/target/$(TARGET_SUBDIR)/libglide_ffi.a
+	cp $(GLIDE_FFI_FOLDER)/target/$(TARGET_SUBDIR)/libglide_ffi.a $(TARGET_FOLDER)
 
 generate-protobuf:
 	rm -rf protobuf

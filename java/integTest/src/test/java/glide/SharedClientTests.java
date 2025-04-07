@@ -178,6 +178,24 @@ public class SharedClientTests {
             assertTrue(e.getCause().getMessage().contains("maximum inflight requests"));
         }
 
+        BaseClient cleanupClient;
+        if (clusterMode) {
+            cleanupClient =
+                    GlideClient.createClient(
+                                    commonClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
+                            .get();
+        } else {
+            cleanupClient =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
+                            .get();
+        }
+
+        for (int i = 0; i < inflightRequestsLimit; i++) {
+            cleanupClient.lpush(keyName, new String[] {"val"}).get();
+        }
+
+        cleanupClient.close();
         testClient.close();
     }
 }
