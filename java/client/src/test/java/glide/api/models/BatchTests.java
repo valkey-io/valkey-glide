@@ -310,361 +310,359 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 public class BatchTests {
-    private static Stream<Arguments> getTransactionBuilders() {
-        return Stream.of(Arguments.of(new Batch(true)), Arguments.of(new ClusterBatch(true)));
+    private static Stream<Arguments> getBatchBuilders() {
+        return Stream.of(
+                Arguments.of(new Batch(true)),
+                Arguments.of(new Batch(false)),
+                Arguments.of(new ClusterBatch(true), Arguments.of(new ClusterBatch(false))));
     }
 
     @ParameterizedTest
-    @MethodSource("getTransactionBuilders")
-    public void transaction_builds_protobuf_request(BaseBatch<?> transaction) {
+    @MethodSource("getBatchBuilders")
+    public void batch_builds_protobuf_request(BaseBatch<?> batch) {
         List<Pair<RequestType, ArgsArray>> results = new LinkedList<>();
 
-        transaction.get("key");
+        batch.get("key");
         results.add(Pair.of(Get, buildArgs("key")));
 
-        transaction.getex("key");
+        batch.getex("key");
         results.add(Pair.of(GetEx, buildArgs("key")));
 
-        transaction.getex("key", GetExOptions.Seconds(10L));
+        batch.getex("key", GetExOptions.Seconds(10L));
         results.add(Pair.of(GetEx, buildArgs("key", "EX", "10")));
 
-        transaction.set("key", "value");
+        batch.set("key", "value");
         results.add(Pair.of(Set, buildArgs("key", "value")));
 
-        transaction.set("key", "value", SetOptions.builder().returnOldValue(true).build());
+        batch.set("key", "value", SetOptions.builder().returnOldValue(true).build());
         results.add(Pair.of(Set, buildArgs("key", "value", RETURN_OLD_VALUE)));
 
-        transaction.append("key", "value");
+        batch.append("key", "value");
         results.add(Pair.of(Append, buildArgs("key", "value")));
 
-        transaction.del(new String[] {"key1", "key2"});
+        batch.del(new String[] {"key1", "key2"});
         results.add(Pair.of(Del, buildArgs("key1", "key2")));
 
-        transaction.echo("GLIDE");
+        batch.echo("GLIDE");
         results.add(Pair.of(Echo, buildArgs("GLIDE")));
 
-        transaction.ping();
+        batch.ping();
         results.add(Pair.of(Ping, buildArgs()));
 
-        transaction.ping("KING PONG");
+        batch.ping("KING PONG");
         results.add(Pair.of(Ping, buildArgs("KING PONG")));
 
-        transaction.info();
+        batch.info();
         results.add(Pair.of(Info, buildArgs()));
 
-        transaction.info(new Section[] {EVERYTHING});
+        batch.info(new Section[] {EVERYTHING});
         results.add(Pair.of(Info, buildArgs(EVERYTHING.toString())));
 
-        transaction.mset(Map.of("key", "value"));
+        batch.mset(Map.of("key", "value"));
         results.add(Pair.of(MSet, buildArgs("key", "value")));
 
-        transaction.msetnx(Map.of("key", "value"));
+        batch.msetnx(Map.of("key", "value"));
         results.add(Pair.of(MSetNX, buildArgs("key", "value")));
 
-        transaction.mget(new String[] {"key"});
+        batch.mget(new String[] {"key"});
         results.add(Pair.of(MGet, buildArgs("key")));
 
-        transaction.incr("key");
+        batch.incr("key");
         results.add(Pair.of(Incr, buildArgs("key")));
 
-        transaction.incrBy("key", 1);
+        batch.incrBy("key", 1);
         results.add(Pair.of(IncrBy, buildArgs("key", "1")));
 
-        transaction.incrByFloat("key", 2.5);
+        batch.incrByFloat("key", 2.5);
         results.add(Pair.of(IncrByFloat, buildArgs("key", "2.5")));
 
-        transaction.decr("key");
+        batch.decr("key");
         results.add(Pair.of(Decr, buildArgs("key")));
 
-        transaction.decrBy("key", 2);
+        batch.decrBy("key", 2);
         results.add(Pair.of(DecrBy, buildArgs("key", "2")));
 
-        transaction.strlen("key");
+        batch.strlen("key");
         results.add(Pair.of(Strlen, buildArgs("key")));
 
-        transaction.setrange("key", 42, "str");
+        batch.setrange("key", 42, "str");
         results.add(Pair.of(SetRange, buildArgs("key", "42", "str")));
 
-        transaction.getrange("key", 42, 54);
+        batch.getrange("key", 42, 54);
         results.add(Pair.of(GetRange, buildArgs("key", "42", "54")));
 
-        transaction.hset("key", Map.of("field", "value"));
+        batch.hset("key", Map.of("field", "value"));
         results.add(Pair.of(HSet, buildArgs("key", "field", "value")));
 
-        transaction.hsetnx("key", "field", "value");
+        batch.hsetnx("key", "field", "value");
         results.add(Pair.of(HSetNX, buildArgs("key", "field", "value")));
 
-        transaction.hget("key", "field");
+        batch.hget("key", "field");
         results.add(Pair.of(HGet, buildArgs("key", "field")));
 
-        transaction.hdel("key", new String[] {"field"});
+        batch.hdel("key", new String[] {"field"});
         results.add(Pair.of(HDel, buildArgs("key", "field")));
 
-        transaction.hlen("key");
+        batch.hlen("key");
         results.add(Pair.of(HLen, buildArgs("key")));
 
-        transaction.hvals("key");
+        batch.hvals("key");
         results.add(Pair.of(HVals, buildArgs("key")));
 
-        transaction.hmget("key", new String[] {"field"});
+        batch.hmget("key", new String[] {"field"});
         results.add(Pair.of(HMGet, buildArgs("key", "field")));
 
-        transaction.hexists("key", "field");
+        batch.hexists("key", "field");
         results.add(Pair.of(HExists, buildArgs("key", "field")));
 
-        transaction.hgetall("key");
+        batch.hgetall("key");
         results.add(Pair.of(HGetAll, buildArgs("key")));
 
-        transaction.hincrBy("key", "field", 1);
+        batch.hincrBy("key", "field", 1);
         results.add(Pair.of(HIncrBy, buildArgs("key", "field", "1")));
 
-        transaction.hincrByFloat("key", "field", 1.5);
+        batch.hincrByFloat("key", "field", 1.5);
         results.add(Pair.of(HIncrByFloat, buildArgs("key", "field", "1.5")));
 
-        transaction.hkeys("key");
+        batch.hkeys("key");
         results.add(Pair.of(HKeys, buildArgs("key")));
 
-        transaction.hstrlen("key", "field");
+        batch.hstrlen("key", "field");
         results.add(Pair.of(HStrlen, buildArgs("key", "field")));
 
-        transaction
-                .hrandfield("key")
-                .hrandfieldWithCount("key", 2)
-                .hrandfieldWithCountWithValues("key", 3);
+        batch.hrandfield("key").hrandfieldWithCount("key", 2).hrandfieldWithCountWithValues("key", 3);
         results.add(Pair.of(HRandField, buildArgs("key")));
         results.add(Pair.of(HRandField, buildArgs("key", "2")));
         results.add(Pair.of(HRandField, buildArgs("key", "3", WITH_VALUES_VALKEY_API)));
 
-        transaction.lpush("key", new String[] {"element1", "element2"});
+        batch.lpush("key", new String[] {"element1", "element2"});
         results.add(Pair.of(LPush, buildArgs("key", "element1", "element2")));
 
-        transaction.lpos("key", "element1");
+        batch.lpos("key", "element1");
         results.add(Pair.of(LPos, buildArgs("key", "element1")));
 
-        transaction.lpos("key", "element1", LPosOptions.builder().rank(1L).build());
+        batch.lpos("key", "element1", LPosOptions.builder().rank(1L).build());
         results.add(Pair.of(LPos, buildArgs("key", "element1", "RANK", "1")));
 
-        transaction.lposCount("key", "element1", 1L);
+        batch.lposCount("key", "element1", 1L);
         results.add(Pair.of(LPos, buildArgs("key", "element1", "COUNT", "1")));
 
-        transaction.lposCount("key", "element1", 1L, LPosOptions.builder().rank(1L).build());
+        batch.lposCount("key", "element1", 1L, LPosOptions.builder().rank(1L).build());
         results.add(Pair.of(LPos, buildArgs("key", "element1", "COUNT", "1", "RANK", "1")));
 
-        transaction.lpop("key");
+        batch.lpop("key");
         results.add(Pair.of(LPop, buildArgs("key")));
 
-        transaction.lpopCount("key", 2);
+        batch.lpopCount("key", 2);
         results.add(Pair.of(LPop, buildArgs("key", "2")));
 
-        transaction.lrange("key", 1, 2);
+        batch.lrange("key", 1, 2);
         results.add(Pair.of(LRange, buildArgs("key", "1", "2")));
 
-        transaction.lindex("key", 1);
+        batch.lindex("key", 1);
         results.add(Pair.of(LIndex, buildArgs("key", "1")));
 
-        transaction.ltrim("key", 1, 2);
+        batch.ltrim("key", 1, 2);
         results.add(Pair.of(LTrim, buildArgs("key", "1", "2")));
 
-        transaction.llen("key");
+        batch.llen("key");
         results.add(Pair.of(LLen, buildArgs("key")));
 
-        transaction.lrem("key", 1, "element");
+        batch.lrem("key", 1, "element");
         results.add(Pair.of(LRem, buildArgs("key", "1", "element")));
 
-        transaction.rpush("key", new String[] {"element"});
+        batch.rpush("key", new String[] {"element"});
         results.add(Pair.of(RPush, buildArgs("key", "element")));
 
-        transaction.rpop("key");
+        batch.rpop("key");
         results.add(Pair.of(RPop, buildArgs("key")));
 
-        transaction.rpopCount("key", 2);
+        batch.rpopCount("key", 2);
         results.add(Pair.of(RPop, buildArgs("key", "2")));
 
-        transaction.sadd("key", new String[] {"value"});
+        batch.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, buildArgs("key", "value")));
 
-        transaction.sismember("key", "member");
+        batch.sismember("key", "member");
         results.add(Pair.of(SIsMember, buildArgs("key", "member")));
 
-        transaction.srem("key", new String[] {"value"});
+        batch.srem("key", new String[] {"value"});
         results.add(Pair.of(SRem, buildArgs("key", "value")));
 
-        transaction.smembers("key");
+        batch.smembers("key");
         results.add(Pair.of(SMembers, buildArgs("key")));
 
-        transaction.scard("key");
+        batch.scard("key");
         results.add(Pair.of(SCard, buildArgs("key")));
 
-        transaction.smove("key1", "key2", "elem");
+        batch.smove("key1", "key2", "elem");
         results.add(Pair.of(SMove, buildArgs("key1", "key2", "elem")));
 
-        transaction.sinter(new String[] {"key1", "key2"});
+        batch.sinter(new String[] {"key1", "key2"});
         results.add(Pair.of(SInter, buildArgs("key1", "key2")));
 
-        transaction.sinterstore("key", new String[] {"set1", "set2"});
+        batch.sinterstore("key", new String[] {"set1", "set2"});
         results.add(Pair.of(SInterStore, buildArgs("key", "set1", "set2")));
 
-        transaction.smismember("key", new String[] {"1", "2"});
+        batch.smismember("key", new String[] {"1", "2"});
         results.add(Pair.of(SMIsMember, buildArgs("key", "1", "2")));
 
-        transaction.sunionstore("key", new String[] {"set1", "set2"});
+        batch.sunionstore("key", new String[] {"set1", "set2"});
         results.add(Pair.of(SUnionStore, buildArgs("key", "set1", "set2")));
 
-        transaction.exists(new String[] {"key1", "key2"});
+        batch.exists(new String[] {"key1", "key2"});
         results.add(Pair.of(Exists, buildArgs("key1", "key2")));
 
-        transaction.unlink(new String[] {"key1", "key2"});
+        batch.unlink(new String[] {"key1", "key2"});
         results.add(Pair.of(Unlink, buildArgs("key1", "key2")));
 
-        transaction.expire("key", 9L);
+        batch.expire("key", 9L);
         results.add(Pair.of(Expire, buildArgs("key", "9")));
-        transaction.expireAt("key", 9999L, NEW_EXPIRY_LESS_THAN_CURRENT);
+        batch.expireAt("key", 9999L, NEW_EXPIRY_LESS_THAN_CURRENT);
         results.add(Pair.of(ExpireAt, buildArgs("key", "9999", "LT")));
 
-        transaction.pexpire("key", 99999L);
+        batch.pexpire("key", 99999L);
         results.add(Pair.of(PExpire, buildArgs("key", "99999")));
 
-        transaction.pexpire("key", 999999L, HAS_EXISTING_EXPIRY);
+        batch.pexpire("key", 999999L, HAS_EXISTING_EXPIRY);
         results.add(Pair.of(PExpire, buildArgs("key", "999999", "XX")));
 
-        transaction.pexpireAt("key", 9999999L);
+        batch.pexpireAt("key", 9999999L);
         results.add(Pair.of(PExpireAt, buildArgs("key", "9999999")));
 
-        transaction.pexpireAt("key", 99999999L, HAS_NO_EXPIRY);
+        batch.pexpireAt("key", 99999999L, HAS_NO_EXPIRY);
         results.add(Pair.of(PExpireAt, buildArgs("key", "99999999", "NX")));
 
-        transaction.getdel("key");
+        batch.getdel("key");
         results.add(Pair.of(GetDel, buildArgs("key")));
 
-        transaction.ttl("key");
+        batch.ttl("key");
         results.add(Pair.of(TTL, buildArgs("key")));
 
-        transaction.pttl("key");
+        batch.pttl("key");
         results.add(Pair.of(PTTL, buildArgs("key")));
 
-        transaction.expiretime("key");
+        batch.expiretime("key");
         results.add(Pair.of(ExpireTime, buildArgs("key")));
 
-        transaction.pexpiretime("key");
+        batch.pexpiretime("key");
         results.add(Pair.of(PExpireTime, buildArgs("key")));
 
-        transaction.clientId();
+        batch.clientId();
         results.add(Pair.of(ClientId, buildArgs()));
 
-        transaction.clientGetName();
+        batch.clientGetName();
         results.add(Pair.of(ClientGetName, buildArgs()));
 
-        transaction.configRewrite();
+        batch.configRewrite();
         results.add(Pair.of(ConfigRewrite, buildArgs()));
 
-        transaction.configResetStat();
+        batch.configResetStat();
         results.add(Pair.of(ConfigResetStat, buildArgs()));
 
-        transaction.configGet(new String[] {"maxmemory", "hash-max-listpack-entries"});
+        batch.configGet(new String[] {"maxmemory", "hash-max-listpack-entries"});
         results.add(Pair.of(ConfigGet, buildArgs("maxmemory", "hash-max-listpack-entries")));
 
         var configSetMap = new LinkedHashMap<String, String>();
         configSetMap.put("maxmemory", "100mb");
         configSetMap.put("save", "60");
 
-        transaction.configSet(configSetMap);
+        batch.configSet(configSetMap);
         results.add(Pair.of(ConfigSet, buildArgs("maxmemory", "100mb", "save", "60")));
 
         Map<String, Double> membersScores = new LinkedHashMap<>();
         membersScores.put("member1", 1.0);
         membersScores.put("member2", 2.0);
-        transaction.zadd(
+        batch.zadd(
                 "key",
                 membersScores,
                 ZAddOptions.builder().updateOptions(SCORE_LESS_THAN_CURRENT).build(),
                 true);
         results.add(Pair.of(ZAdd, buildArgs("key", "LT", "CH", "1.0", "member1", "2.0", "member2")));
 
-        transaction.zaddIncr(
+        batch.zaddIncr(
                 "key",
                 "member1",
                 3.0,
                 ZAddOptions.builder().updateOptions(SCORE_LESS_THAN_CURRENT).build());
         results.add(Pair.of(ZAdd, buildArgs("key", "LT", "INCR", "3.0", "member1")));
 
-        transaction.zrem("key", new String[] {"member1", "member2"});
+        batch.zrem("key", new String[] {"member1", "member2"});
         results.add(Pair.of(ZRem, buildArgs("key", "member1", "member2")));
 
-        transaction.zcard("key");
+        batch.zcard("key");
         results.add(Pair.of(ZCard, buildArgs("key")));
 
-        transaction.zpopmin("key");
+        batch.zpopmin("key");
         results.add(Pair.of(ZPopMin, buildArgs("key")));
 
-        transaction.zpopmin("key", 2);
+        batch.zpopmin("key", 2);
         results.add(Pair.of(ZPopMin, buildArgs("key", "2")));
 
-        transaction.bzpopmin(new String[] {"key1", "key2"}, .5);
+        batch.bzpopmin(new String[] {"key1", "key2"}, .5);
         results.add(Pair.of(BZPopMin, buildArgs("key1", "key2", "0.5")));
 
-        transaction.zpopmax("key");
+        batch.zpopmax("key");
         results.add(Pair.of(ZPopMax, buildArgs("key")));
 
-        transaction.bzpopmax(new String[] {"key1", "key2"}, .5);
+        batch.bzpopmax(new String[] {"key1", "key2"}, .5);
         results.add(Pair.of(BZPopMax, buildArgs("key1", "key2", "0.5")));
 
-        transaction.zpopmax("key", 2);
+        batch.zpopmax("key", 2);
         results.add(Pair.of(ZPopMax, buildArgs("key", "2")));
 
-        transaction.zscore("key", "member");
+        batch.zscore("key", "member");
         results.add(Pair.of(ZScore, buildArgs("key", "member")));
 
-        transaction.zrank("key", "member");
+        batch.zrank("key", "member");
         results.add(Pair.of(ZRank, buildArgs("key", "member")));
 
-        transaction.zrankWithScore("key", "member");
+        batch.zrankWithScore("key", "member");
         results.add(Pair.of(ZRank, buildArgs("key", "member", WITH_SCORE_VALKEY_API)));
 
-        transaction.zrevrank("key", "member");
+        batch.zrevrank("key", "member");
         results.add(Pair.of(ZRevRank, buildArgs("key", "member")));
 
-        transaction.zrevrankWithScore("key", "member");
+        batch.zrevrankWithScore("key", "member");
         results.add(Pair.of(ZRevRank, buildArgs("key", "member", WITH_SCORE_VALKEY_API)));
 
-        transaction.zmscore("key", new String[] {"member1", "member2"});
+        batch.zmscore("key", new String[] {"member1", "member2"});
         results.add(Pair.of(ZMScore, buildArgs("key", "member1", "member2")));
 
-        transaction.zdiff(new String[] {"key1", "key2"});
+        batch.zdiff(new String[] {"key1", "key2"});
         results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2")));
 
-        transaction.zdiffWithScores(new String[] {"key1", "key2"});
+        batch.zdiffWithScores(new String[] {"key1", "key2"});
         results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2", WITH_SCORES_VALKEY_API)));
 
-        transaction.zdiffstore("destKey", new String[] {"key1", "key2"});
+        batch.zdiffstore("destKey", new String[] {"key1", "key2"});
         results.add(Pair.of(ZDiffStore, buildArgs("destKey", "2", "key1", "key2")));
 
-        transaction.zmpop(new String[] {"key1", "key2"}, MAX).zmpop(new String[] {"key"}, MIN, 42);
+        batch.zmpop(new String[] {"key1", "key2"}, MAX).zmpop(new String[] {"key"}, MIN, 42);
         results.add(Pair.of(ZMPop, buildArgs("2", "key1", "key2", "MAX")));
         results.add(Pair.of(ZMPop, buildArgs("1", "key", "MIN", "COUNT", "42")));
 
-        transaction
-                .bzmpop(new String[] {"key1", "key2"}, MAX, .1)
-                .bzmpop(new String[] {"key"}, MIN, .1, 42);
+        batch.bzmpop(new String[] {"key1", "key2"}, MAX, .1).bzmpop(new String[] {"key"}, MIN, .1, 42);
         results.add(Pair.of(BZMPop, buildArgs("0.1", "2", "key1", "key2", "MAX")));
         results.add(Pair.of(BZMPop, buildArgs("0.1", "1", "key", "MIN", "COUNT", "42")));
 
-        transaction.zcount("key", new ScoreBoundary(5, false), InfScoreBound.POSITIVE_INFINITY);
+        batch.zcount("key", new ScoreBoundary(5, false), InfScoreBound.POSITIVE_INFINITY);
         results.add(Pair.of(ZCount, buildArgs("key", "(5.0", "+inf")));
 
-        transaction.zremrangebyrank("key", 0, -1);
+        batch.zremrangebyrank("key", 0, -1);
         results.add(Pair.of(ZRemRangeByRank, buildArgs("key", "0", "-1")));
 
-        transaction.zremrangebylex("key", new LexBoundary("a", false), InfLexBound.POSITIVE_INFINITY);
+        batch.zremrangebylex("key", new LexBoundary("a", false), InfLexBound.POSITIVE_INFINITY);
         results.add(Pair.of(ZRemRangeByLex, buildArgs("key", "(a", "+")));
 
-        transaction.zremrangebyscore(
+        batch.zremrangebyscore(
                 "key", new ScoreBoundary(5, false), RangeOptions.InfScoreBound.POSITIVE_INFINITY);
         results.add(Pair.of(ZRemRangeByScore, buildArgs("key", "(5.0", "+inf")));
 
-        transaction.zlexcount("key", new LexBoundary("c", false), InfLexBound.POSITIVE_INFINITY);
+        batch.zlexcount("key", new LexBoundary("c", false), InfLexBound.POSITIVE_INFINITY);
         results.add(Pair.of(ZLexCount, buildArgs("key", "(c", "+")));
 
-        transaction.zrangestore(
+        batch.zrangestore(
                 "destination",
                 "source",
                 new RangeByScore(
@@ -676,26 +674,26 @@ public class BatchTests {
                         buildArgs(
                                 "destination", "source", "-inf", "(3.0", "BYSCORE", "REV", "LIMIT", "1", "2")));
 
-        transaction.zrangestore("destination", "source", new RangeByIndex(2, 3));
+        batch.zrangestore("destination", "source", new RangeByIndex(2, 3));
         results.add(Pair.of(ZRangeStore, buildArgs("destination", "source", "2", "3")));
 
-        transaction.zinterstore("destination", new KeyArray(new String[] {"key1", "key2"}));
+        batch.zinterstore("destination", new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZInterStore, buildArgs("destination", "2", "key1", "key2")));
 
-        transaction.zunionstore("destination", new KeyArray(new String[] {"key1", "key2"}));
+        batch.zunionstore("destination", new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZUnionStore, buildArgs("destination", "2", "key1", "key2")));
 
-        transaction.zunion(new KeyArray(new String[] {"key1", "key2"}));
+        batch.zunion(new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2")));
 
-        transaction.zunionWithScores(new KeyArray(new String[] {"key1", "key2"}));
+        batch.zunionWithScores(new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2", WITH_SCORES_VALKEY_API)));
 
         List<Pair<String, Double>> weightedKeys = new ArrayList<>();
         weightedKeys.add(Pair.of("key1", 10.0));
         weightedKeys.add(Pair.of("key2", 20.0));
 
-        transaction.zinterstore("destination", new WeightedKeys(weightedKeys), Aggregate.MAX);
+        batch.zinterstore("destination", new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(
                         ZInterStore,
@@ -710,7 +708,7 @@ public class BatchTests {
                                 AGGREGATE_VALKEY_API,
                                 Aggregate.MAX.toString())));
 
-        transaction.zunionstore("destination", new WeightedKeys(weightedKeys), Aggregate.MAX);
+        batch.zunionstore("destination", new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(
                         ZUnionStore,
@@ -725,7 +723,7 @@ public class BatchTests {
                                 AGGREGATE_VALKEY_API,
                                 Aggregate.MAX.toString())));
 
-        transaction.zunionWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
+        batch.zunionWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(
                         ZUnion,
@@ -739,19 +737,19 @@ public class BatchTests {
                                 AGGREGATE_VALKEY_API,
                                 Aggregate.MAX.toString(),
                                 WITH_SCORES_VALKEY_API)));
-        transaction.zintercard(new String[] {"key1", "key2"}, 5);
+        batch.zintercard(new String[] {"key1", "key2"}, 5);
         results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2", LIMIT_VALKEY_API, "5")));
 
-        transaction.zintercard(new String[] {"key1", "key2"});
+        batch.zintercard(new String[] {"key1", "key2"});
         results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2")));
 
-        transaction.zinter(new KeyArray(new String[] {"key1", "key2"}));
+        batch.zinter(new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2")));
 
-        transaction.zinterWithScores(new KeyArray(new String[] {"key1", "key2"}));
+        batch.zinterWithScores(new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2", WITH_SCORES_VALKEY_API)));
 
-        transaction.zinterWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
+        batch.zinterWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(
                         ZInter,
@@ -766,29 +764,29 @@ public class BatchTests {
                                 Aggregate.MAX.toString(),
                                 WITH_SCORES_VALKEY_API)));
 
-        transaction.xadd("key", Map.of("field1", "foo1"));
+        batch.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
 
-        transaction.xadd("key", Map.of("field1", "foo1"), StreamAddOptions.builder().id("id").build());
+        batch.xadd("key", Map.of("field1", "foo1"), StreamAddOptions.builder().id("id").build());
         results.add(Pair.of(XAdd, buildArgs("key", "id", "field1", "foo1")));
 
-        transaction.xadd("key", new String[][] {new String[] {"field1", "foo1"}});
+        batch.xadd("key", new String[][] {new String[] {"field1", "foo1"}});
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
 
-        transaction.xadd(
+        batch.xadd(
                 "key",
                 new String[][] {new String[] {"field1", "foo1"}},
                 StreamAddOptions.builder().id("id").build());
         results.add(Pair.of(XAdd, buildArgs("key", "id", "field1", "foo1")));
 
-        transaction.xtrim("key", new MinId(true, "id"));
+        batch.xtrim("key", new MinId(true, "id"));
         results.add(
                 Pair.of(XTrim, buildArgs("key", TRIM_MINID_VALKEY_API, TRIM_EXACT_VALKEY_API, "id")));
 
-        transaction.xread(Map.of("key", "id"));
+        batch.xread(Map.of("key", "id"));
         results.add(Pair.of(XRead, buildArgs(READ_STREAMS_VALKEY_API, "key", "id")));
 
-        transaction.xread(Map.of("key", "id"), StreamReadOptions.builder().block(1L).count(2L).build());
+        batch.xread(Map.of("key", "id"), StreamReadOptions.builder().block(1L).count(2L).build());
         results.add(
                 Pair.of(
                         XRead,
@@ -801,17 +799,17 @@ public class BatchTests {
                                 "key",
                                 "id")));
 
-        transaction.xlen("key");
+        batch.xlen("key");
         results.add(Pair.of(XLen, buildArgs("key")));
 
-        transaction.xdel("key", new String[] {"12345-1", "98765-4"});
+        batch.xdel("key", new String[] {"12345-1", "98765-4"});
         results.add(Pair.of(XDel, buildArgs("key", "12345-1", "98765-4")));
 
-        transaction.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX);
+        batch.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX);
         results.add(
                 Pair.of(XRange, buildArgs("key", MINIMUM_RANGE_VALKEY_API, MAXIMUM_RANGE_VALKEY_API)));
 
-        transaction.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX, 99L);
+        batch.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX, 99L);
         results.add(
                 Pair.of(
                         XRange,
@@ -822,11 +820,11 @@ public class BatchTests {
                                 RANGE_COUNT_VALKEY_API,
                                 "99")));
 
-        transaction.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN);
+        batch.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN);
         results.add(
                 Pair.of(XRevRange, buildArgs("key", MAXIMUM_RANGE_VALKEY_API, MINIMUM_RANGE_VALKEY_API)));
 
-        transaction.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN, 99L);
+        batch.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN, 99L);
         results.add(
                 Pair.of(
                         XRevRange,
@@ -837,10 +835,10 @@ public class BatchTests {
                                 RANGE_COUNT_VALKEY_API,
                                 "99")));
 
-        transaction.xgroupCreate("key", "group", "id");
+        batch.xgroupCreate("key", "group", "id");
         results.add(Pair.of(XGroupCreate, buildArgs("key", "group", "id")));
 
-        transaction.xgroupCreate(
+        batch.xgroupCreate(
                 "key", "group", "id", StreamGroupOptions.builder().makeStream().entriesRead(123L).build());
         results.add(
                 Pair.of(
@@ -848,29 +846,29 @@ public class BatchTests {
                         buildArgs(
                                 "key", "group", "id", MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, "123")));
 
-        transaction.xgroupDestroy("key", "group");
+        batch.xgroupDestroy("key", "group");
         results.add(Pair.of(XGroupDestroy, buildArgs("key", "group")));
 
-        transaction.xgroupCreateConsumer("key", "group", "consumer");
+        batch.xgroupCreateConsumer("key", "group", "consumer");
         results.add(Pair.of(XGroupCreateConsumer, buildArgs("key", "group", "consumer")));
 
-        transaction.xgroupDelConsumer("key", "group", "consumer");
+        batch.xgroupDelConsumer("key", "group", "consumer");
         results.add(Pair.of(XGroupDelConsumer, buildArgs("key", "group", "consumer")));
 
-        transaction.xreadgroup(Map.of("key", "id"), "group", "consumer");
+        batch.xreadgroup(Map.of("key", "id"), "group", "consumer");
         results.add(
                 Pair.of(
                         XReadGroup,
                         buildArgs(
                                 READ_GROUP_VALKEY_API, "group", "consumer", READ_STREAMS_VALKEY_API, "key", "id")));
 
-        transaction.xgroupSetId("key", "group", "id");
+        batch.xgroupSetId("key", "group", "id");
         results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id")));
 
-        transaction.xgroupSetId("key", "group", "id", 1);
+        batch.xgroupSetId("key", "group", "id", 1);
         results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id", "ENTRIESREAD", "1")));
 
-        transaction.xreadgroup(
+        batch.xreadgroup(
                 Map.of("key", "id"),
                 "group",
                 "consumer",
@@ -891,19 +889,19 @@ public class BatchTests {
                                 "key",
                                 "id")));
 
-        transaction.xack("key", "group", new String[] {"12345-1", "98765-4"});
+        batch.xack("key", "group", new String[] {"12345-1", "98765-4"});
         results.add(Pair.of(XAck, buildArgs("key", "group", "12345-1", "98765-4")));
 
-        transaction.xpending("key", "group");
+        batch.xpending("key", "group");
         results.add(Pair.of(XPending, buildArgs("key", "group")));
 
-        transaction.xpending("key", "group", InfRangeBound.MAX, InfRangeBound.MIN, 99L);
+        batch.xpending("key", "group", InfRangeBound.MAX, InfRangeBound.MIN, 99L);
         results.add(
                 Pair.of(
                         XPending,
                         buildArgs("key", "group", MAXIMUM_RANGE_VALKEY_API, MINIMUM_RANGE_VALKEY_API, "99")));
 
-        transaction.xpending(
+        batch.xpending(
                 "key",
                 "group",
                 StreamRange.IdBound.ofExclusive("11"),
@@ -923,17 +921,17 @@ public class BatchTests {
                                 "99",
                                 "consumer")));
 
-        transaction.xinfoStream("key").xinfoStreamFull("key").xinfoStreamFull("key", 42);
+        batch.xinfoStream("key").xinfoStreamFull("key").xinfoStreamFull("key", 42);
         results.add(Pair.of(XInfoStream, buildArgs("key")));
         results.add(Pair.of(XInfoStream, buildArgs("key", FULL)));
         results.add(Pair.of(XInfoStream, buildArgs("key", FULL, COUNT, "42")));
 
-        transaction.xclaim("key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"});
+        batch.xclaim("key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"});
         results.add(Pair.of(XClaim, buildArgs("key", "group", "consumer", "99", "12345-1", "98765-4")));
 
         StreamClaimOptions claimOptions =
                 StreamClaimOptions.builder().force().idle(11L).idleUnixTime(12L).retryCount(5L).build();
-        transaction.xclaim(
+        batch.xclaim(
                 "key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"}, claimOptions);
         results.add(
                 Pair.of(
@@ -953,13 +951,13 @@ public class BatchTests {
                                 "5",
                                 FORCE_VALKEY_API)));
 
-        transaction.xclaimJustId("key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"});
+        batch.xclaimJustId("key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"});
         results.add(
                 Pair.of(
                         XClaim,
                         buildArgs("key", "group", "consumer", "99", "12345-1", "98765-4", JUST_ID_VALKEY_API)));
 
-        transaction.xclaimJustId(
+        batch.xclaimJustId(
                 "key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"}, claimOptions);
         results.add(
                 Pair.of(
@@ -980,100 +978,100 @@ public class BatchTests {
                                 FORCE_VALKEY_API,
                                 JUST_ID_VALKEY_API)));
 
-        transaction.xinfoGroups("key");
+        batch.xinfoGroups("key");
         results.add(Pair.of(XInfoGroups, buildArgs("key")));
 
-        transaction.xinfoConsumers("key", "groupName");
+        batch.xinfoConsumers("key", "groupName");
         results.add(Pair.of(XInfoConsumers, buildArgs("key", "groupName")));
 
-        transaction.xautoclaim("key", "group", "consumer", 99L, "0-0");
+        batch.xautoclaim("key", "group", "consumer", 99L, "0-0");
         results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0")));
 
-        transaction.xautoclaim("key", "group", "consumer", 99L, "0-0", 1234L);
+        batch.xautoclaim("key", "group", "consumer", 99L, "0-0", 1234L);
         results.add(
                 Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "COUNT", "1234")));
 
-        transaction.xautoclaimJustId("key", "group", "consumer", 99L, "0-0");
+        batch.xautoclaimJustId("key", "group", "consumer", 99L, "0-0");
         results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "JUSTID")));
 
-        transaction.xautoclaimJustId("key", "group", "consumer", 99L, "0-0", 1234L);
+        batch.xautoclaimJustId("key", "group", "consumer", 99L, "0-0", 1234L);
         results.add(
                 Pair.of(
                         XAutoClaim,
                         buildArgs("key", "group", "consumer", "99", "0-0", "COUNT", "1234", "JUSTID")));
 
-        transaction.time();
+        batch.time();
         results.add(Pair.of(Time, buildArgs()));
 
-        transaction.lastsave();
+        batch.lastsave();
         results.add(Pair.of(LastSave, buildArgs()));
 
-        transaction.flushall().flushall(ASYNC);
+        batch.flushall().flushall(ASYNC);
         results.add(Pair.of(FlushAll, buildArgs()));
         results.add(Pair.of(FlushAll, buildArgs(ASYNC.toString())));
 
-        transaction.flushdb().flushdb(ASYNC);
+        batch.flushdb().flushdb(ASYNC);
         results.add(Pair.of(FlushDB, buildArgs()));
         results.add(Pair.of(FlushDB, buildArgs(ASYNC.toString())));
 
-        transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
+        batch.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
         results.add(Pair.of(Lolwut, buildArgs()));
         results.add(Pair.of(Lolwut, buildArgs(VERSION_VALKEY_API, "5")));
         results.add(Pair.of(Lolwut, buildArgs("1", "2")));
         results.add(Pair.of(Lolwut, buildArgs(VERSION_VALKEY_API, "6", "42")));
 
-        transaction.dbsize();
+        batch.dbsize();
         results.add(Pair.of(DBSize, buildArgs()));
 
-        transaction.persist("key");
+        batch.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));
 
-        transaction.zrandmember("key");
+        batch.zrandmember("key");
         results.add(Pair.of(ZRandMember, buildArgs("key")));
 
-        transaction.zrandmemberWithCount("key", 5);
+        batch.zrandmemberWithCount("key", 5);
         results.add(Pair.of(ZRandMember, buildArgs("key", "5")));
 
-        transaction.zrandmemberWithCountWithScores("key", 5);
+        batch.zrandmemberWithCountWithScores("key", 5);
         results.add(Pair.of(ZRandMember, buildArgs("key", "5", WITH_SCORES_VALKEY_API)));
 
-        transaction.zincrby("key", 3.14, "value");
+        batch.zincrby("key", 3.14, "value");
         results.add(Pair.of(ZIncrBy, buildArgs("key", "3.14", "value")));
 
-        transaction.type("key");
+        batch.type("key");
         results.add(Pair.of(Type, buildArgs("key")));
 
-        transaction.randomKey();
+        batch.randomKey();
         results.add(Pair.of(RandomKey, buildArgs()));
 
-        transaction.rename("key", "newKey");
+        batch.rename("key", "newKey");
         results.add(Pair.of(Rename, buildArgs("key", "newKey")));
 
-        transaction.renamenx("key", "newKey");
+        batch.renamenx("key", "newKey");
         results.add(Pair.of(RenameNX, buildArgs("key", "newKey")));
 
-        transaction.linsert("key", AFTER, "pivot", "elem");
+        batch.linsert("key", AFTER, "pivot", "elem");
         results.add(Pair.of(LInsert, buildArgs("key", "AFTER", "pivot", "elem")));
 
-        transaction.brpop(new String[] {"key1", "key2"}, 0.5);
+        batch.brpop(new String[] {"key1", "key2"}, 0.5);
         results.add(Pair.of(BRPop, buildArgs("key1", "key2", "0.5")));
-        transaction.blpop(new String[] {"key1", "key2"}, 0.5);
+        batch.blpop(new String[] {"key1", "key2"}, 0.5);
         results.add(Pair.of(BLPop, buildArgs("key1", "key2", "0.5")));
 
-        transaction.rpushx("key", new String[] {"element1", "element2"});
+        batch.rpushx("key", new String[] {"element1", "element2"});
         results.add(Pair.of(RPushX, buildArgs("key", "element1", "element2")));
 
-        transaction.lpushx("key", new String[] {"element1", "element2"});
+        batch.lpushx("key", new String[] {"element1", "element2"});
         results.add(Pair.of(LPushX, buildArgs("key", "element1", "element2")));
 
-        transaction.zrange(
+        batch.zrange(
                 "key",
                 new RangeByScore(NEGATIVE_INFINITY, new ScoreBoundary(3, false), new Limit(1, 2)),
                 true);
         results.add(
                 Pair.of(ZRange, buildArgs("key", "-inf", "(3.0", "BYSCORE", "REV", "LIMIT", "1", "2")));
 
-        transaction.zrangeWithScores(
+        batch.zrangeWithScores(
                 "key",
                 new RangeByScore(new ScoreBoundary(5, true), POSITIVE_INFINITY, new Limit(1, 2)),
                 false);
@@ -1082,42 +1080,42 @@ public class BatchTests {
                         ZRange,
                         buildArgs("key", "5.0", "+inf", "BYSCORE", "LIMIT", "1", "2", WITH_SCORES_VALKEY_API)));
 
-        transaction.pfadd("hll", new String[] {"a", "b", "c"});
+        batch.pfadd("hll", new String[] {"a", "b", "c"});
         results.add(Pair.of(PfAdd, buildArgs("hll", "a", "b", "c")));
 
-        transaction.pfcount(new String[] {"hll1", "hll2"});
+        batch.pfcount(new String[] {"hll1", "hll2"});
         results.add(Pair.of(PfCount, buildArgs("hll1", "hll2")));
-        transaction.pfmerge("hll", new String[] {"hll1", "hll2"});
+        batch.pfmerge("hll", new String[] {"hll1", "hll2"});
         results.add(Pair.of(PfMerge, buildArgs("hll", "hll1", "hll2")));
 
-        transaction.sdiff(new String[] {"key1", "key2"});
+        batch.sdiff(new String[] {"key1", "key2"});
         results.add(Pair.of(SDiff, buildArgs("key1", "key2")));
 
-        transaction.sdiffstore("key1", new String[] {"key2", "key3"});
+        batch.sdiffstore("key1", new String[] {"key2", "key3"});
         results.add(Pair.of(SDiffStore, buildArgs("key1", "key2", "key3")));
 
-        transaction.objectEncoding("key");
+        batch.objectEncoding("key");
         results.add(Pair.of(ObjectEncoding, buildArgs("key")));
 
-        transaction.objectFreq("key");
+        batch.objectFreq("key");
         results.add(Pair.of(ObjectFreq, buildArgs("key")));
 
-        transaction.objectIdletime("key");
+        batch.objectIdletime("key");
         results.add(Pair.of(ObjectIdleTime, buildArgs("key")));
 
-        transaction.objectRefcount("key");
+        batch.objectRefcount("key");
         results.add(Pair.of(ObjectRefCount, buildArgs("key")));
 
-        transaction.touch(new String[] {"key1", "key2"});
+        batch.touch(new String[] {"key1", "key2"});
         results.add(Pair.of(Touch, buildArgs("key1", "key2")));
 
-        transaction.geoadd("key", Map.of("Place", new GeospatialData(10.0, 20.0)));
+        batch.geoadd("key", Map.of("Place", new GeospatialData(10.0, 20.0)));
         results.add(Pair.of(GeoAdd, buildArgs("key", "10.0", "20.0", "Place")));
 
-        transaction.getbit("key", 1);
+        batch.getbit("key", 1);
         results.add(Pair.of(GetBit, buildArgs("key", "1")));
 
-        transaction.geoadd(
+        batch.geoadd(
                 "key",
                 Map.of("Place", new GeospatialData(10.0, 20.0)),
                 new GeoAddOptions(ConditionalChange.ONLY_IF_EXISTS, true));
@@ -1131,103 +1129,103 @@ public class BatchTests {
                                 "10.0",
                                 "20.0",
                                 "Place")));
-        transaction.geopos("key", new String[] {"Place"});
+        batch.geopos("key", new String[] {"Place"});
         results.add(Pair.of(GeoPos, buildArgs("key", "Place")));
 
-        transaction.functionLoad("pewpew", false).functionLoad("ololo", true);
+        batch.functionLoad("pewpew", false).functionLoad("ololo", true);
         results.add(Pair.of(FunctionLoad, buildArgs("pewpew")));
         results.add(Pair.of(FunctionLoad, buildArgs("REPLACE", "ololo")));
 
-        transaction.functionList(true).functionList("*", false);
+        batch.functionList(true).functionList("*", false);
         results.add(Pair.of(FunctionList, buildArgs(WITH_CODE_VALKEY_API)));
         results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_VALKEY_API, "*")));
 
-        transaction.functionDump();
+        batch.functionDump();
         results.add(Pair.of(FunctionDump, buildArgs()));
 
-        transaction.functionRestore("TEST".getBytes());
+        batch.functionRestore("TEST".getBytes());
         results.add(Pair.of(FunctionRestore, buildArgs("TEST")));
 
-        transaction.fcall("func", new String[] {"key1", "key2"}, new String[] {"arg1", "arg2"});
+        batch.fcall("func", new String[] {"key1", "key2"}, new String[] {"arg1", "arg2"});
         results.add(Pair.of(FCall, buildArgs("func", "2", "key1", "key2", "arg1", "arg2")));
-        transaction.fcall("func", new String[] {"arg1", "arg2"});
+        batch.fcall("func", new String[] {"arg1", "arg2"});
         results.add(Pair.of(FCall, buildArgs("func", "0", "arg1", "arg2")));
 
-        transaction.fcallReadOnly("func", new String[] {"key1", "key2"}, new String[] {"arg1", "arg2"});
+        batch.fcallReadOnly("func", new String[] {"key1", "key2"}, new String[] {"arg1", "arg2"});
         results.add(Pair.of(FCallReadOnly, buildArgs("func", "2", "key1", "key2", "arg1", "arg2")));
-        transaction.fcallReadOnly("func", new String[] {"arg1", "arg2"});
+        batch.fcallReadOnly("func", new String[] {"arg1", "arg2"});
         results.add(Pair.of(FCallReadOnly, buildArgs("func", "0", "arg1", "arg2")));
 
-        transaction.functionStats();
+        batch.functionStats();
         results.add(Pair.of(FunctionStats, buildArgs()));
 
-        transaction.geodist("key", "Place", "Place2");
+        batch.geodist("key", "Place", "Place2");
         results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2")));
-        transaction.geodist("key", "Place", "Place2", GeoUnit.KILOMETERS);
+        batch.geodist("key", "Place", "Place2", GeoUnit.KILOMETERS);
         results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2", "km")));
 
-        transaction.geohash("key", new String[] {"Place"});
+        batch.geohash("key", new String[] {"Place"});
         results.add(Pair.of(GeoHash, buildArgs("key", "Place")));
 
-        transaction.bitcount("key");
+        batch.bitcount("key");
         results.add(Pair.of(BitCount, buildArgs("key")));
 
-        transaction.bitcount("key", 1);
+        batch.bitcount("key", 1);
         results.add(Pair.of(BitCount, buildArgs("key", "1")));
 
-        transaction.bitcount("key", 1, 1);
+        batch.bitcount("key", 1, 1);
         results.add(Pair.of(BitCount, buildArgs("key", "1", "1")));
 
-        transaction.bitcount("key", 1, 1, BitmapIndexType.BIT);
+        batch.bitcount("key", 1, 1, BitmapIndexType.BIT);
         results.add(Pair.of(BitCount, buildArgs("key", "1", "1", BitmapIndexType.BIT.toString())));
 
-        transaction.setbit("key", 8, 1);
+        batch.setbit("key", 8, 1);
         results.add(Pair.of(SetBit, buildArgs("key", "8", "1")));
 
-        transaction.bitpos("key", 1);
+        batch.bitpos("key", 1);
         results.add(Pair.of(BitPos, buildArgs("key", "1")));
-        transaction.bitpos("key", 0, 8);
+        batch.bitpos("key", 0, 8);
         results.add(Pair.of(BitPos, buildArgs("key", "0", "8")));
-        transaction.bitpos("key", 1, 8, 10);
+        batch.bitpos("key", 1, 8, 10);
         results.add(Pair.of(BitPos, buildArgs("key", "1", "8", "10")));
-        transaction.bitpos("key", 1, 8, 10, BitmapIndexType.BIT);
+        batch.bitpos("key", 1, 8, 10, BitmapIndexType.BIT);
         results.add(Pair.of(BitPos, buildArgs("key", "1", "8", "10", BitmapIndexType.BIT.toString())));
 
-        transaction.bitop(BitwiseOperation.AND, "destination", new String[] {"key"});
+        batch.bitop(BitwiseOperation.AND, "destination", new String[] {"key"});
         results.add(Pair.of(BitOp, buildArgs(BitwiseOperation.AND.toString(), "destination", "key")));
 
-        transaction.lmpop(new String[] {"key"}, ListDirection.LEFT);
+        batch.lmpop(new String[] {"key"}, ListDirection.LEFT);
         results.add(Pair.of(LMPop, buildArgs("1", "key", "LEFT")));
-        transaction.lmpop(new String[] {"key"}, ListDirection.LEFT, 1L);
+        batch.lmpop(new String[] {"key"}, ListDirection.LEFT, 1L);
         results.add(Pair.of(LMPop, buildArgs("1", "key", "LEFT", "COUNT", "1")));
 
-        transaction.blmpop(new String[] {"key"}, ListDirection.LEFT, 0.1);
+        batch.blmpop(new String[] {"key"}, ListDirection.LEFT, 0.1);
         results.add(Pair.of(BLMPop, buildArgs("0.1", "1", "key", "LEFT")));
-        transaction.blmpop(new String[] {"key"}, ListDirection.LEFT, 1L, 0.1);
+        batch.blmpop(new String[] {"key"}, ListDirection.LEFT, 1L, 0.1);
         results.add(Pair.of(BLMPop, buildArgs("0.1", "1", "key", "LEFT", "COUNT", "1")));
 
-        transaction.lset("key", 0, "zero");
+        batch.lset("key", 0, "zero");
         results.add(Pair.of(LSet, buildArgs("key", "0", "zero")));
 
-        transaction.lmove("key1", "key2", ListDirection.LEFT, ListDirection.LEFT);
+        batch.lmove("key1", "key2", ListDirection.LEFT, ListDirection.LEFT);
         results.add(Pair.of(LMove, buildArgs("key1", "key2", "LEFT", "LEFT")));
 
-        transaction.blmove("key1", "key2", ListDirection.LEFT, ListDirection.LEFT, 0.1);
+        batch.blmove("key1", "key2", ListDirection.LEFT, ListDirection.LEFT, 0.1);
         results.add(Pair.of(BLMove, buildArgs("key1", "key2", "LEFT", "LEFT", "0.1")));
 
-        transaction.srandmember("key");
+        batch.srandmember("key");
         results.add(Pair.of(SRandMember, buildArgs("key")));
 
-        transaction.srandmember("key", 1);
+        batch.srandmember("key", 1);
         results.add(Pair.of(SRandMember, buildArgs("key", "1")));
 
-        transaction.spop("key");
+        batch.spop("key");
         results.add(Pair.of(SPop, buildArgs("key")));
 
-        transaction.spopCount("key", 1);
+        batch.spopCount("key", 1);
         results.add(Pair.of(SPop, buildArgs("key", "1")));
 
-        transaction.bitfieldReadOnly(
+        batch.bitfieldReadOnly(
                 "key",
                 new BitFieldReadOnlySubCommands[] {new BitFieldGet(new SignedEncoding(5), new Offset(3))});
         results.add(
@@ -1238,7 +1236,7 @@ public class BatchTests {
                                 BitFieldOptions.GET_COMMAND_STRING,
                                 BitFieldOptions.SIGNED_ENCODING_PREFIX.concat("5"),
                                 "3")));
-        transaction.bitfield(
+        batch.bitfield(
                 "key",
                 new BitFieldSubCommands[] {
                     new BitFieldSet(new UnsignedEncoding(10), new OffsetMultiplier(3), 4)
@@ -1253,62 +1251,62 @@ public class BatchTests {
                                 BitFieldOptions.OFFSET_MULTIPLIER_PREFIX.concat("3"),
                                 "4")));
 
-        transaction.sintercard(new String[] {"key1", "key2"});
+        batch.sintercard(new String[] {"key1", "key2"});
         results.add(Pair.of(SInterCard, buildArgs("2", "key1", "key2")));
 
-        transaction.sintercard(new String[] {"key1", "key2"}, 1);
+        batch.sintercard(new String[] {"key1", "key2"}, 1);
         results.add(Pair.of(SInterCard, buildArgs("2", "key1", "key2", "LIMIT", "1")));
 
-        transaction.functionFlush().functionFlush(ASYNC);
+        batch.functionFlush().functionFlush(ASYNC);
         results.add(Pair.of(FunctionFlush, buildArgs()));
         results.add(Pair.of(FunctionFlush, buildArgs("ASYNC")));
 
-        transaction.functionDelete("LIB");
+        batch.functionDelete("LIB");
         results.add(Pair.of(FunctionDelete, buildArgs("LIB")));
 
-        transaction.copy("key1", "key2", true);
+        batch.copy("key1", "key2", true);
         results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_VALKEY_API)));
 
-        transaction.dump("key1");
+        batch.dump("key1");
         results.add(Pair.of(Dump, buildArgs("key1")));
 
-        transaction.restore("key2", 0, "TEST".getBytes());
+        batch.restore("key2", 0, "TEST".getBytes());
         results.add(Pair.of(Restore, buildArgs("key2", "0", "TEST")));
 
-        transaction.lcs("key1", "key2");
+        batch.lcs("key1", "key2");
         results.add(Pair.of(LCS, buildArgs("key1", "key2")));
 
-        transaction.lcsLen("key1", "key2");
+        batch.lcsLen("key1", "key2");
         results.add(Pair.of(LCS, buildArgs("key1", "key2", "LEN")));
 
-        transaction.publish("msg", "ch1");
+        batch.publish("msg", "ch1");
         results.add(Pair.of(Publish, buildArgs("ch1", "msg")));
 
-        transaction.pubsubChannels();
+        batch.pubsubChannels();
         results.add(Pair.of(PubSubChannels, buildArgs()));
 
-        transaction.pubsubChannels("pattern");
+        batch.pubsubChannels("pattern");
         results.add(Pair.of(PubSubChannels, buildArgs("pattern")));
 
-        transaction.pubsubNumPat();
+        batch.pubsubNumPat();
         results.add(Pair.of(PubSubNumPat, buildArgs()));
 
-        transaction.pubsubNumSub(new String[] {"ch1", "ch2"});
+        batch.pubsubNumSub(new String[] {"ch1", "ch2"});
         results.add(Pair.of(PubSubNumSub, buildArgs("ch1", "ch2")));
 
-        transaction.lcsIdx("key1", "key2");
+        batch.lcsIdx("key1", "key2");
         results.add(Pair.of(LCS, buildArgs("key1", "key2", IDX_COMMAND_STRING)));
 
-        transaction.lcsIdx("key1", "key2", 10);
+        batch.lcsIdx("key1", "key2", 10);
         results.add(
                 Pair.of(
                         LCS, buildArgs("key1", "key2", IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, "10")));
 
-        transaction.lcsIdxWithMatchLen("key1", "key2");
+        batch.lcsIdxWithMatchLen("key1", "key2");
         results.add(
                 Pair.of(LCS, buildArgs("key1", "key2", IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING)));
 
-        transaction.lcsIdxWithMatchLen("key1", "key2", 10);
+        batch.lcsIdxWithMatchLen("key1", "key2", 10);
         results.add(
                 Pair.of(
                         LCS,
@@ -1320,17 +1318,17 @@ public class BatchTests {
                                 "10",
                                 WITHMATCHLEN_COMMAND_STRING)));
 
-        transaction.sunion(new String[] {"key1", "key2"});
+        batch.sunion(new String[] {"key1", "key2"});
         results.add(Pair.of(SUnion, buildArgs("key1", "key2")));
 
-        transaction.sort("key1");
+        batch.sort("key1");
         results.add(Pair.of(Sort, buildArgs("key1")));
-        transaction.sortReadOnly("key1");
+        batch.sortReadOnly("key1");
         results.add(Pair.of(SortReadOnly, buildArgs("key1")));
-        transaction.sortStore("key1", "key2");
+        batch.sortStore("key1", "key2");
         results.add(Pair.of(Sort, buildArgs("key1", STORE_COMMAND_STRING, "key2")));
 
-        transaction.geosearch(
+        batch.geosearch(
                 "key",
                 new GeoSearchOrigin.MemberOrigin("member"),
                 new GeoSearchShape(1, GeoUnit.KILOMETERS));
@@ -1338,7 +1336,7 @@ public class BatchTests {
                 Pair.of(
                         GeoSearch, buildArgs("key", FROMMEMBER_VALKEY_API, "member", "BYRADIUS", "1.0", "km")));
 
-        transaction.geosearch(
+        batch.geosearch(
                 "key",
                 new GeoSearchOrigin.CoordOrigin(new GeospatialData(1.0, 1.0)),
                 new GeoSearchShape(1, 1, GeoUnit.KILOMETERS),
@@ -1359,7 +1357,7 @@ public class BatchTests {
                                 "2",
                                 "ASC")));
 
-        transaction.geosearch(
+        batch.geosearch(
                 "key",
                 new GeoSearchOrigin.MemberOrigin("member"),
                 new GeoSearchShape(1, GeoUnit.KILOMETERS),
@@ -1383,7 +1381,7 @@ public class BatchTests {
                                 "ANY",
                                 "ASC")));
 
-        transaction.geosearch(
+        batch.geosearch(
                 "key",
                 new GeoSearchOrigin.CoordOrigin(new GeospatialData(1.0, 1.0)),
                 new GeoSearchShape(1, 1, GeoUnit.KILOMETERS),
@@ -1404,7 +1402,7 @@ public class BatchTests {
                                 "WITHCOORD",
                                 "WITHHASH")));
 
-        transaction.geosearchstore(
+        batch.geosearchstore(
                 "destination",
                 "source",
                 new GeoSearchOrigin.MemberOrigin("member"),
@@ -1421,7 +1419,7 @@ public class BatchTests {
                                 "1.0",
                                 "km")));
 
-        transaction.geosearchstore(
+        batch.geosearchstore(
                 "destination",
                 "source",
                 new GeoSearchOrigin.CoordOrigin(new GeospatialData(1.0, 1.0)),
@@ -1444,7 +1442,7 @@ public class BatchTests {
                                 "2",
                                 "ASC")));
 
-        transaction.geosearchstore(
+        batch.geosearchstore(
                 "destination",
                 "source",
                 new GeoSearchOrigin.MemberOrigin("member"),
@@ -1463,7 +1461,7 @@ public class BatchTests {
                                 "km",
                                 "STOREDIST")));
 
-        transaction.geosearchstore(
+        batch.geosearchstore(
                 "destination",
                 "source",
                 new GeoSearchOrigin.MemberOrigin("member"),
@@ -1487,10 +1485,10 @@ public class BatchTests {
                                 "ANY",
                                 "ASC")));
 
-        transaction.sscan("key1", "0");
+        batch.sscan("key1", "0");
         results.add(Pair.of(SScan, buildArgs("key1", "0")));
 
-        transaction.sscan("key1", "0", SScanOptions.builder().matchPattern("*").count(10L).build());
+        batch.sscan("key1", "0", SScanOptions.builder().matchPattern("*").count(10L).build());
         results.add(
                 Pair.of(
                         SScan,
@@ -1502,10 +1500,10 @@ public class BatchTests {
                                 SScanOptions.COUNT_OPTION_STRING,
                                 "10")));
 
-        transaction.zscan("key1", "0");
+        batch.zscan("key1", "0");
         results.add(Pair.of(ZScan, buildArgs("key1", "0")));
 
-        transaction.zscan("key1", "0", ZScanOptions.builder().matchPattern("*").count(10L).build());
+        batch.zscan("key1", "0", ZScanOptions.builder().matchPattern("*").count(10L).build());
         results.add(
                 Pair.of(
                         ZScan,
@@ -1517,10 +1515,10 @@ public class BatchTests {
                                 ZScanOptions.COUNT_OPTION_STRING,
                                 "10")));
 
-        transaction.hscan("key1", "0");
+        batch.hscan("key1", "0");
         results.add(Pair.of(HScan, buildArgs("key1", "0")));
 
-        transaction.hscan("key1", "0", HScanOptions.builder().matchPattern("*").count(10L).build());
+        batch.hscan("key1", "0", HScanOptions.builder().matchPattern("*").count(10L).build());
         results.add(
                 Pair.of(
                         HScan,
@@ -1532,13 +1530,13 @@ public class BatchTests {
                                 HScanOptions.COUNT_OPTION_STRING,
                                 "10")));
 
-        transaction.wait(1L, 1000L);
+        batch.wait(1L, 1000L);
         results.add(Pair.of(Wait, buildArgs("1", "1000")));
 
-        var protobufTransaction = transaction.getProtobufBatch().build();
+        var protobufbatch = batch.getProtobufBatch().build();
 
-        for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
-            Command protobuf = protobufTransaction.getCommands(idx);
+        for (int idx = 0; idx < protobufbatch.getCommandsCount(); idx++) {
+            Command protobuf = protobufbatch.getCommands(idx);
 
             assertEquals(results.get(idx).getLeft(), protobuf.getRequestType());
             assertEquals(

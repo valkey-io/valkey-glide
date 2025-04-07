@@ -21,28 +21,30 @@ import glide.api.models.commands.SortOptions;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class ClusterBatchTests {
 
-    @Test
-    public void cluster_transaction_builds_protobuf_request() {
-        ClusterBatch transaction = new ClusterBatch(true);
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void cluster_batch_builds_protobuf_request(boolean isAtomic) {
+        ClusterBatch batch = new ClusterBatch(isAtomic);
         List<Pair<RequestType, ArgsArray>> results = new LinkedList<>();
 
-        transaction.publish("msg", "ch1", true);
+        batch.publish("msg", "ch1", true);
         results.add(Pair.of(SPublish, buildArgs("ch1", "msg")));
 
-        transaction.pubsubShardChannels();
+        batch.pubsubShardChannels();
         results.add(Pair.of(PubSubShardChannels, buildArgs()));
 
-        transaction.pubsubShardChannels("test*");
+        batch.pubsubShardChannels("test*");
         results.add(Pair.of(PubSubShardChannels, buildArgs("test*")));
 
-        transaction.pubsubShardNumSub(new String[] {"ch1", "ch2"});
+        batch.pubsubShardNumSub(new String[] {"ch1", "ch2"});
         results.add(Pair.of(PubSubShardNumSub, buildArgs("ch1", "ch2")));
 
-        transaction.sortReadOnly(
+        batch.sortReadOnly(
                 "key1",
                 SortOptions.builder()
                         .orderBy(ASC)
@@ -55,7 +57,7 @@ public class ClusterBatchTests {
                         buildArgs(
                                 "key1", LIMIT_COMMAND_STRING, "0", "1", ASC.toString(), ALPHA_COMMAND_STRING)));
 
-        transaction.sort(
+        batch.sort(
                 "key1",
                 SortOptions.builder()
                         .orderBy(ASC)
@@ -68,7 +70,7 @@ public class ClusterBatchTests {
                         buildArgs(
                                 "key1", LIMIT_COMMAND_STRING, "0", "1", ASC.toString(), ALPHA_COMMAND_STRING)));
 
-        transaction.sortStore(
+        batch.sortStore(
                 "key1",
                 "key2",
                 SortOptions.builder()
@@ -89,10 +91,10 @@ public class ClusterBatchTests {
                                 STORE_COMMAND_STRING,
                                 "key2")));
 
-        var protobufTransaction = transaction.getProtobufBatch().build();
+        var protobufBatch = batch.getProtobufBatch().build();
 
-        for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
-            Command protobuf = protobufTransaction.getCommands(idx);
+        for (int idx = 0; idx < protobufBatch.getCommandsCount(); idx++) {
+            Command protobuf = protobufBatch.getCommands(idx);
 
             assertEquals(results.get(idx).getLeft(), protobuf.getRequestType());
             assertEquals(

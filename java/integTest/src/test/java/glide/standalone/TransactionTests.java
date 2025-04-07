@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
-import glide.TransactionTestUtilities.TransactionBuilder;
+import glide.TransactionTestUtilities.BatchBuilder;
 import glide.api.GlideClient;
 import glide.api.models.Batch;
 import glide.api.models.GlideString;
@@ -78,20 +78,20 @@ public class TransactionTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void custom_command_info(GlideClient client) {
-        Batch transaction = new Batch(true).customCommand(new String[] {"info"});
-        Object[] result = client.exec(transaction).get();
+    public void custom_command_info(GlideClient client, boolean isAtomic) {
+        Batch batch = new Batch(isAtomic).customCommand(new String[] {"info"});
+        Object[] result = client.exec(batch).get();
         assertTrue(((String) result[0]).contains("# Stats"));
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void info_test(GlideClient client) {
-        Batch transaction = new Batch(true).info().info(new Section[] {CLUSTER});
-        Object[] result = client.exec(transaction).get();
+    public void info_test(GlideClient client, boolean isAtomic) {
+        Batch batch = new Batch(isAtomic).info().info(new Section[] {CLUSTER});
+        Object[] result = client.exec(batch).get();
 
         // sanity check
         assertTrue(((String) result[0]).contains("# Stats"));
@@ -99,19 +99,19 @@ public class TransactionTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void ping_tests(GlideClient client) {
-        Batch transaction = new Batch(true);
+    public void ping_tests(GlideClient client, boolean isAtomic) {
+        Batch batch = new Batch(isAtomic);
         int numberOfPings = 100;
         for (int idx = 0; idx < numberOfPings; idx++) {
             if ((idx % 2) == 0) {
-                transaction.ping();
+                batch.ping();
             } else {
-                transaction.ping(Integer.toString(idx));
+                batch.ping(Integer.toString(idx));
             }
         }
-        Object[] result = client.exec(transaction).get();
+        Object[] result = client.exec(batch).get();
         for (int idx = 0; idx < numberOfPings; idx++) {
             if ((idx % 2) == 0) {
                 assertEquals("PONG", result[idx]);
@@ -121,121 +121,156 @@ public class TransactionTests {
         }
     }
 
-    public static Stream<Arguments> getCommonTransactionBuilders() {
-        return glide.TransactionTestUtilities.getCommonTransactionBuilders()
+    public static Stream<Arguments> getCommonBatchBuilders() {
+        return glide.TransactionTestUtilities.getCommonBatchBuilders()
                 .flatMap(
                         test ->
                                 getClients()
-                                        .map(client -> Arguments.of(test.get()[0], test.get()[1], client.get()[0])));
+                                        .flatMap(
+                                                client ->
+                                                        Stream.of(true, false)
+                                                                .map(
+                                                                        isAtomic ->
+                                                                                Arguments.of(
+                                                                                        test.get()[0], // test name (String)
+                                                                                        test.get()[1], // BatchBuilder
+                                                                                        client.get()[0], // GlideClient or GlideClusterClient
+                                                                                        isAtomic // boolean isAtomic
+                                                                                        ))));
     }
 
     @SneakyThrows
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("getCommonTransactionBuilders")
-    public void transactions_with_group_of_commands(
-            String testName, TransactionBuilder builder, GlideClient client) {
-        Batch transaction = new Batch(true);
-        Object[] expectedResult = builder.apply(transaction);
+    @ParameterizedTest(name = "{0} - isAtomic: {3}")
+    @MethodSource("getCommonBatchBuilders")
+    public void batches_with_group_of_commands(
+            String testName, BatchBuilder builder, GlideClient client, boolean isAtomic) {
+        Batch batches = new Batch(isAtomic);
+        Object[] expectedResult = builder.apply(batches, isAtomic);
 
-        Object[] results = client.exec(transaction).get();
+        Object[] results = client.exec(batches).get();
         assertDeepEquals(expectedResult, results);
     }
 
-    public static Stream<Arguments> getPrimaryNodeTransactionBuilders() {
-        return glide.TransactionTestUtilities.getPrimaryNodeTransactionBuilders()
+    public static Stream<Arguments> getPrimaryNodeBatchBuilders() {
+        return glide.TransactionTestUtilities.getPrimaryNodeBatchBuilders()
                 .flatMap(
                         test ->
                                 getClients()
-                                        .map(client -> Arguments.of(test.get()[0], test.get()[1], client.get()[0])));
+                                        .flatMap(
+                                                client ->
+                                                        Stream.of(true, false)
+                                                                .map(
+                                                                        isAtomic ->
+                                                                                Arguments.of(
+                                                                                        test.get()[0], // test name
+                                                                                        test.get()[1], // TransactionBuilder
+                                                                                        client.get()[0], // GlideClient
+                                                                                        isAtomic // boolean isAtomic
+                                                                                        ))));
+    }
+
+    public static Stream<Arguments> getClientsWithAtomic() {
+        return getClients()
+                .flatMap(
+                        client ->
+                                Stream.of(true, false)
+                                        .map(
+                                                isAtomic ->
+                                                        Arguments.of(
+                                                                client.get()[0],
+                                                                isAtomic) // Providing both the client and isAtomic flag
+                                                ));
     }
 
     @SneakyThrows
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("getPrimaryNodeTransactionBuilders")
-    public void keyless_transactions_with_group_of_commands(
-            String testName, TransactionBuilder builder, GlideClient client) {
-        Batch transaction = new Batch(true);
-        Object[] expectedResult = builder.apply(transaction);
+    @ParameterizedTest(name = "{0} - isAtomic: {3}")
+    @MethodSource("getPrimaryNodeBatchBuilders")
+    public void keyless_batches_with_group_of_commands(
+            String testName, BatchBuilder builder, GlideClient client, boolean isAtomic) {
+        Batch batches = new Batch(isAtomic);
+        Object[] expectedResult = builder.apply(batches, isAtomic);
 
-        Object[] results = client.exec(transaction).get();
+        Object[] results = client.exec(batches).get();
         assertDeepEquals(expectedResult, results);
     }
 
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
-    public void test_transaction_large_values(GlideClient client) {
+    @MethodSource("getClientsWithAtomic")
+    public void test_batch_large_values(GlideClient client, boolean isAtomic) {
         int length = 1 << 25; // 33mb
         String key = "0".repeat(length);
         String value = "0".repeat(length);
 
-        Batch transaction = new Batch(true);
-        transaction.set(key, value);
-        transaction.get(key);
+        Batch batch = new Batch(isAtomic);
+        batch.set(key, value);
+        batch.get(key);
 
         Object[] expectedResult =
                 new Object[] {
-                    OK, // transaction.set(key, value);
-                    value, // transaction.get(key);
+                    OK, // batch.set(key, value);
+                    value, // batch.get(key);
                 };
 
-        Object[] result = client.exec(transaction).get();
+        Object[] result = client.exec(batch).get();
         assertArrayEquals(expectedResult, result);
     }
 
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
-    public void test_standalone_transaction(GlideClient client) {
+    @MethodSource("getClientsWithAtomic")
+    public void test_standalone_batch(GlideClient client, boolean isAtomic) {
         String key = UUID.randomUUID().toString();
         String value = UUID.randomUUID().toString();
 
-        Batch transaction = new Batch(true);
-        transaction.set(key, value);
-        transaction.get(key);
-        transaction.move(key, 1L);
-        transaction.get(key);
-        transaction.select(1);
-        transaction.get(key);
+        Batch batch = new Batch(isAtomic);
+        batch.select(0);
+        batch.set(key, value);
+        batch.get(key);
+        batch.move(key, 1L);
+        batch.get(key);
+        batch.select(1);
+        batch.get(key);
 
         Object[] expectedResult =
                 new Object[] {
-                    OK, // transaction.set(key, value);
-                    value, // transaction.get(key);
-                    true, // transaction.move(key, 1L);
-                    null, // transaction.get(key);
-                    OK, // transaction.select(1);
-                    value // transaction.get(key);
+                    OK, // batch.select(0);
+                    OK, // batch.set(key, value);
+                    value, // batch.get(key);
+                    true, // batch.move(key, 1L);
+                    null, // batch.get(key);
+                    OK, // batch.select(1);
+                    value // batch.get(key);
                 };
 
-        Object[] result = client.exec(transaction).get();
+        Object[] result = client.exec(batch).get();
         assertArrayEquals(expectedResult, result);
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void lastsave(GlideClient client) {
+    public void lastsave(GlideClient client, boolean isAtomic) {
         var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
 
-        var response = client.exec(new Batch(true).lastsave()).get();
+        var response = client.exec(new Batch(isAtomic).lastsave()).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void objectFreq(GlideClient client) {
+    public void objectFreq(GlideClient client, boolean isAtomic) {
         String objectFreqKey = "key";
         String maxmemoryPolicy = "maxmemory-policy";
 
         String oldPolicy = client.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
         try {
-            Batch transaction = new Batch(true);
-            transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
-            transaction.set(objectFreqKey, "");
-            transaction.objectFreq(objectFreqKey);
-            var response = client.exec(transaction).get();
+            Batch batch = new Batch(isAtomic);
+            batch.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
+            batch.set(objectFreqKey, "");
+            batch.objectFreq(objectFreqKey);
+            var response = client.exec(batch).get();
             assertEquals(OK, response[0]);
             assertEquals(OK, response[1]);
             assertTrue((long) response[2] >= 0L);
@@ -245,58 +280,58 @@ public class TransactionTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void objectIdletime(GlideClient client) {
+    public void objectIdletime(GlideClient client, boolean isAtomic) {
         String objectIdletimeKey = "key";
-        Batch transaction = new Batch(true);
-        transaction.set(objectIdletimeKey, "");
-        transaction.objectIdletime(objectIdletimeKey);
-        var response = client.exec(transaction).get();
+        Batch batch = new Batch(isAtomic);
+        batch.set(objectIdletimeKey, "");
+        batch.objectIdletime(objectIdletimeKey);
+        var response = client.exec(batch).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void objectRefcount(GlideClient client) {
+    public void objectRefcount(GlideClient client, boolean isAtomic) {
         String objectRefcountKey = "key";
-        Batch transaction = new Batch(true);
-        transaction.set(objectRefcountKey, "");
-        transaction.objectRefcount(objectRefcountKey);
-        var response = client.exec(transaction).get();
+        Batch batch = new Batch(isAtomic);
+        batch.set(objectRefcountKey, "");
+        batch.objectRefcount(objectRefcountKey);
+        var response = client.exec(batch).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void zrank_zrevrank_withscores(GlideClient client) {
+    public void zrank_zrevrank_withscores(GlideClient client, boolean isAtomic) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"));
         String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
-        Batch transaction = new Batch(true);
-        transaction.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
-        transaction.zrankWithScore(zSetKey1, "one");
-        transaction.zrevrankWithScore(zSetKey1, "one");
+        Batch batch = new Batch(isAtomic);
+        batch.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
+        batch.zrankWithScore(zSetKey1, "one");
+        batch.zrevrankWithScore(zSetKey1, "one");
 
-        Object[] result = client.exec(transaction).get();
+        Object[] result = client.exec(batch).get();
         assertEquals(3L, result[0]);
         assertArrayEquals(new Object[] {0L, 1.0}, (Object[]) result[1]);
         assertArrayEquals(new Object[] {2L, 1.0}, (Object[]) result[2]);
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void copy(GlideClient client) {
+    public void copy(GlideClient client, boolean isAtomic) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"));
         // setup
         String copyKey1 = "{CopyKey}-1-" + UUID.randomUUID();
         String copyKey2 = "{CopyKey}-2-" + UUID.randomUUID();
-        Batch transaction =
-                new Batch(true)
+        Batch batch =
+                new Batch(isAtomic)
                         .copy(copyKey1, copyKey2, 1, false)
                         .set(copyKey1, "one")
                         .set(copyKey2, "two")
@@ -321,7 +356,7 @@ public class TransactionTests {
                     "one", // get(copyKey2)
                 };
 
-        Object[] result = client.exec(transaction).get();
+        Object[] result = client.exec(batch).get();
         assertArrayEquals(expectedResult, result);
     }
 
@@ -469,18 +504,18 @@ public class TransactionTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void sort_and_sortReadOnly(GlideClient client) {
-        Batch transaction1 = new Batch(true);
-        Batch transaction2 = new Batch(true);
+    public void sort_and_sortReadOnly(GlideClient client, boolean isAtomic) {
+        Batch batch1 = new Batch(isAtomic);
+        Batch batch2 = new Batch(isAtomic);
         var prefix = UUID.randomUUID();
         String genericKey1 = "{GenericKey}-1-" + prefix;
         String genericKey2 = "{GenericKey}-2-" + prefix;
         String[] ascendingListByAge = new String[] {"Bob", "Alice"};
         String[] descendingListByAge = new String[] {"Alice", "Bob"};
 
-        transaction1
+        batch1
                 .hset(prefix + "user:1", Map.of("name", "Alice", "age", "30"))
                 .hset(prefix + "user:2", Map.of("name", "Bob", "age", "25"))
                 .lpush(genericKey1, new String[] {"2", "1"})
@@ -517,21 +552,21 @@ public class TransactionTests {
 
         var expectedResults =
                 new Object[] {
-                    2L, // hset("user:1", Map.of("name", "Alice", "age", "30"))
-                    2L, // hset("user:2", Map.of("name", "Bob", "age", "25"))
-                    2L, // lpush(genericKey1, new String[] {"2", "1"})
+                    2L, // hset(prefix + "user:1", ...);
+                    2L, // hset(prefix + "user:2", ...);
+                    2L, // lpush(genericKey1, ...);
                     ascendingListByAge, // sort(genericKey1, SortOptions)
                     descendingListByAge, // sort(genericKey1, SortOptions)
                     2L, // sortStore(genericKey1, genericKey2, SortOptions)
-                    ascendingListByAge, // lrange(genericKey4, 0, -1)
+                    ascendingListByAge, // lrange(genericKey2, 0, -1)
                     2L, // sortStore(genericKey1, genericKey2, SortOptions)
                     descendingListByAge, // lrange(genericKey2, 0, -1)
                 };
 
-        assertArrayEquals(expectedResults, client.exec(transaction1).get());
+        assertArrayEquals(expectedResults, client.exec(batch1).get());
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction2
+            batch2
                     .sortReadOnly(
                             genericKey1,
                             SortOptions.builder()
@@ -552,24 +587,24 @@ public class TransactionTests {
                         descendingListByAge, // sortReadOnly(genericKey1, SortOptions)
                     };
 
-            assertArrayEquals(expectedResults, client.exec(transaction2).get());
+            assertArrayEquals(expectedResults, client.exec(batch2).get());
         }
     }
 
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
-    public void waitTest(GlideClient client) {
+    @MethodSource("getClientsWithAtomic")
+    public void waitTest(GlideClient client, boolean isAtomic) {
         // setup
         String key = UUID.randomUUID().toString();
         long numreplicas = 1L;
         long timeout = 1000L;
-        Batch transaction = new Batch(true);
+        Batch batch = new Batch(isAtomic);
 
-        transaction.set(key, "value");
-        transaction.wait(numreplicas, timeout);
+        batch.set(key, "value");
+        batch.wait(numreplicas, timeout);
 
-        Object[] results = client.exec(transaction).get();
+        Object[] results = client.exec(batch).get();
         Object[] expectedResult =
                 new Object[] {
                     OK, // set(key,  "value")
@@ -581,8 +616,8 @@ public class TransactionTests {
 
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
-    public void scan_test(GlideClient client) {
+    @MethodSource("getClientsWithAtomic")
+    public void scan_test(GlideClient client, boolean isAtomic) {
         // setup
         String key = UUID.randomUUID().toString();
         Map<String, String> msetMap = Map.of(key, UUID.randomUUID().toString());
@@ -591,9 +626,9 @@ public class TransactionTests {
         String cursor = "0";
         Object[] keysFound = new Object[0];
         do {
-            Batch transaction = new Batch(true);
-            transaction.scan(cursor);
-            Object[] results = client.exec(transaction).get();
+            Batch batch = new Batch(isAtomic);
+            batch.scan(cursor);
+            Object[] results = client.exec(batch).get();
             cursor = (String) ((Object[]) results[0])[0];
             keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
         } while (!cursor.equals("0"));
@@ -603,8 +638,8 @@ public class TransactionTests {
 
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
-    public void scan_binary_test(GlideClient client) {
+    @MethodSource("getClientsWithAtomic")
+    public void scan_binary_test(GlideClient client, boolean isAtomic) {
         // setup
         String key = UUID.randomUUID().toString();
         Map<String, String> msetMap = Map.of(key, UUID.randomUUID().toString());
@@ -613,8 +648,9 @@ public class TransactionTests {
         GlideString cursor = gs("0");
         Object[] keysFound = new Object[0];
         do {
-            Batch transaction = new Batch(true).withBinaryOutput().scan(cursor);
-            Object[] results = client.exec(transaction).get();
+            Batch batch = new Batch(isAtomic).withBinaryOutput();
+            batch.scan(cursor);
+            Object[] results = client.exec(batch).get();
             cursor = (GlideString) ((Object[]) results[0])[0];
             keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
         } while (!cursor.equals(gs("0")));
@@ -624,10 +660,10 @@ public class TransactionTests {
 
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
-    public void scan_with_options_test(GlideClient client) {
+    @MethodSource("getClientsWithAtomic")
+    public void scan_with_options_test(GlideClient client, boolean isAtomic) {
         // setup
-        Batch setupTransaction = new Batch(true);
+        Batch setupBatch = new Batch(isAtomic);
 
         Map<ScanOptions.ObjectType, String> typeKeys =
                 Map.of(
@@ -638,15 +674,15 @@ public class TransactionTests {
                         HASH, "{hash}-" + UUID.randomUUID(),
                         STREAM, "{stream}-" + UUID.randomUUID());
 
-        setupTransaction.set(typeKeys.get(STRING), UUID.randomUUID().toString());
-        setupTransaction.lpush(typeKeys.get(LIST), new String[] {UUID.randomUUID().toString()});
-        setupTransaction.sadd(typeKeys.get(SET), new String[] {UUID.randomUUID().toString()});
-        setupTransaction.zadd(typeKeys.get(ZSET), Map.of(UUID.randomUUID().toString(), 1.0));
-        setupTransaction.hset(
+        setupBatch.set(typeKeys.get(STRING), UUID.randomUUID().toString());
+        setupBatch.lpush(typeKeys.get(LIST), new String[] {UUID.randomUUID().toString()});
+        setupBatch.sadd(typeKeys.get(SET), new String[] {UUID.randomUUID().toString()});
+        setupBatch.zadd(typeKeys.get(ZSET), Map.of(UUID.randomUUID().toString(), 1.0));
+        setupBatch.hset(
                 typeKeys.get(HASH), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
-        setupTransaction.xadd(
+        setupBatch.xadd(
                 typeKeys.get(STREAM), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
-        assertNotNull(client.exec(setupTransaction).get());
+        assertNotNull(client.exec(setupBatch).get());
 
         for (var type : ScanOptions.ObjectType.values()) {
             ScanOptions options = ScanOptions.builder().type(type).count(99L).build();
@@ -654,9 +690,9 @@ public class TransactionTests {
             String cursor = "0";
             Object[] keysFound = new Object[0];
             do {
-                Batch transaction = new Batch(true);
-                transaction.scan(cursor, options);
-                Object[] results = client.exec(transaction).get();
+                Batch batch = new Batch(isAtomic);
+                batch.scan(cursor, options);
+                Object[] results = client.exec(batch).get();
                 cursor = (String) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
             } while (!cursor.equals("0"));
@@ -669,9 +705,9 @@ public class TransactionTests {
             cursor = "0";
             keysFound = new Object[0];
             do {
-                Batch transaction = new Batch(true);
-                transaction.scan(cursor, options);
-                Object[] results = client.exec(transaction).get();
+                Batch batch = new Batch(isAtomic);
+                batch.scan(cursor, options);
+                Object[] results = client.exec(batch).get();
                 cursor = (String) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
             } while (!cursor.equals("0"));
@@ -684,10 +720,10 @@ public class TransactionTests {
 
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
-    public void scan_binary_with_options_test(GlideClient client) {
+    @MethodSource("getClientsWithAtomic")
+    public void scan_binary_with_options_test(GlideClient client, boolean isAtomic) {
         // setup
-        Batch setupTransaction = new Batch(true).withBinaryOutput();
+        Batch setupBatch = new Batch(isAtomic).withBinaryOutput();
 
         Map<ScanOptions.ObjectType, GlideString> typeKeys =
                 Map.of(
@@ -698,15 +734,15 @@ public class TransactionTests {
                         HASH, gs("{hash}-" + UUID.randomUUID()),
                         STREAM, gs("{stream}-" + UUID.randomUUID()));
 
-        setupTransaction.set(typeKeys.get(STRING), UUID.randomUUID().toString());
-        setupTransaction.lpush(typeKeys.get(LIST), new String[] {UUID.randomUUID().toString()});
-        setupTransaction.sadd(typeKeys.get(SET), new String[] {UUID.randomUUID().toString()});
-        setupTransaction.zadd(typeKeys.get(ZSET), Map.of(UUID.randomUUID().toString(), 1.0));
-        setupTransaction.hset(
+        setupBatch.set(typeKeys.get(STRING), UUID.randomUUID().toString());
+        setupBatch.lpush(typeKeys.get(LIST), new String[] {UUID.randomUUID().toString()});
+        setupBatch.sadd(typeKeys.get(SET), new String[] {UUID.randomUUID().toString()});
+        setupBatch.zadd(typeKeys.get(ZSET), Map.of(UUID.randomUUID().toString(), 1.0));
+        setupBatch.hset(
                 typeKeys.get(HASH), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
-        setupTransaction.xadd(
+        setupBatch.xadd(
                 typeKeys.get(STREAM), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
-        assertNotNull(client.exec(setupTransaction).get());
+        assertNotNull(client.exec(setupBatch).get());
 
         final GlideString initialCursor = gs("0");
 
@@ -716,8 +752,9 @@ public class TransactionTests {
             GlideString cursor = initialCursor;
             Object[] keysFound = new Object[0];
             do {
-                Batch transaction = new Batch(true).withBinaryOutput().scan(cursor, options);
-                Object[] results = client.exec(transaction).get();
+                Batch batch = new Batch(isAtomic).withBinaryOutput();
+                batch.scan(cursor, options);
+                Object[] results = client.exec(batch).get();
                 cursor = (GlideString) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
             } while (!cursor.equals(initialCursor));
@@ -731,8 +768,9 @@ public class TransactionTests {
             cursor = initialCursor;
             keysFound = new Object[0];
             do {
-                Batch transaction = new Batch(true).withBinaryOutput().scan(cursor, options);
-                Object[] results = client.exec(transaction).get();
+                Batch batch = new Batch(isAtomic).withBinaryOutput();
+                batch.scan(cursor, options);
+                Object[] results = client.exec(batch).get();
                 cursor = (GlideString) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
             } while (!cursor.equals(initialCursor));
@@ -744,9 +782,9 @@ public class TransactionTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void test_transaction_dump_restore(GlideClient client) {
+    public void test_transaction_dump_restore(GlideClient client, boolean isAtomic) {
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
         String value = UUID.randomUUID().toString();
@@ -755,23 +793,23 @@ public class TransactionTests {
         assertEquals(OK, client.set(key1, gs(value)).get());
 
         // Verify dump
-        Batch transaction = new Batch(true).withBinaryOutput().dump(key1);
-        Object[] result = client.exec(transaction).get();
-        GlideString payload = (GlideString) (result[0]);
+        Batch batch = new Batch(isAtomic).withBinaryOutput().dump(key1);
+        Object[] result = client.exec(batch).get();
+        GlideString payload = (GlideString) result[0];
 
         // Verify restore
-        transaction = new Batch(true);
-        transaction.restore(key2, 0, payload.getBytes());
-        transaction.get(key2);
-        Object[] response = client.exec(transaction).get();
+        batch = new Batch(isAtomic);
+        batch.restore(key2, 0, payload.getBytes());
+        batch.get(key2);
+        Object[] response = client.exec(batch).get();
         assertEquals(OK, response[0]);
         assertEquals(value, response[1]);
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void test_transaction_function_dump_restore(GlideClient client) {
+    public void test_transaction_function_dump_restore(GlideClient client, boolean isAtomic) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String libName = "mylib";
         String funcName = "myfun";
@@ -781,22 +819,22 @@ public class TransactionTests {
         client.functionLoad(code, true).get();
 
         // Verify functionDump
-        Batch transaction = new Batch(true).withBinaryOutput().functionDump();
-        Object[] result = client.exec(transaction).get();
-        GlideString payload = (GlideString) (result[0]);
+        Batch batch = new Batch(isAtomic).withBinaryOutput().functionDump();
+        Object[] result = client.exec(batch).get();
+        GlideString payload = (GlideString) result[0];
 
         // Verify functionRestore
-        transaction = new Batch(true);
-        transaction.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
-        Object[] response = client.exec(transaction).get();
+        batch = new Batch(isAtomic);
+        batch.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
+        Object[] response = client.exec(batch).get();
         assertEquals(OK, response[0]);
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void test_transaction_xinfoStream(GlideClient client) {
-        Batch transaction = new Batch(true);
+    public void test_transaction_xinfoStream(GlideClient client, boolean isAtomic) {
+        Batch batch = new Batch(isAtomic);
         final String streamKey = "{streamKey}-" + UUID.randomUUID();
         LinkedHashMap<String, Object> expectedStreamInfo =
                 new LinkedHashMap<>() {
@@ -822,12 +860,12 @@ public class TransactionTests {
                     }
                 };
 
-        transaction
+        batch
                 .xadd(streamKey, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
                 .xinfoStream(streamKey)
                 .xinfoStreamFull(streamKey);
 
-        Object[] results = client.exec(transaction).get();
+        Object[] results = client.exec(batch).get();
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedStreamInfo.put("max-deleted-entry-id", "0-0");
@@ -840,25 +878,25 @@ public class TransactionTests {
 
         assertDeepEquals(
                 new Object[] {
-                    "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
+                    "0-1", // xadd(streamKey, Map.of("field1", "value1"), ... .id("0-1").build());
                     expectedStreamInfo, // xinfoStream(streamKey)
-                    expectedStreamFullInfo, // xinfoStreamFull(streamKey1)
+                    expectedStreamFullInfo, // xinfoStreamFull(streamKey)
                 },
                 results);
     }
 
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
-    public void binary_strings(GlideClient client) {
+    @MethodSource("getClientsWithAtomic")
+    public void binary_strings(GlideClient client, boolean isAtomic) {
         String key = UUID.randomUUID().toString();
         client.set(key, "_").get();
         // use dump to ensure that we have non-string convertible bytes
         var bytes = client.dump(gs(key)).get();
 
-        var transaction = new Batch(true).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
+        var batch = new Batch(isAtomic).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
 
-        var responses = client.exec(transaction).get();
+        var responses = client.exec(batch).get();
 
         assertDeepEquals(
                 new Object[] {

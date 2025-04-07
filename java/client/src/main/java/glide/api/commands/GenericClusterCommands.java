@@ -286,7 +286,7 @@ public interface GenericClusterCommands {
      * // Example 2: Non-Atomic Batch (Pipeline) with ClusterBatchOptions
      * // Commands can operate on different hash slots.
      * ClusterBatchOptions options = ClusterBatchOptions.builder()
-     *     .retryStrategy(new BatchRetryStrategy(true, false)) // Retry only server errors
+     *     .retryStrategy(BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(false).build()) // Retry only server errors
      *     .build();
      *
      * ClusterBatch nonAtomicBatch = new ClusterBatch(false) // Non-Atomic (Pipeline)

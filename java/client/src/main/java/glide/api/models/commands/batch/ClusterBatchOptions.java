@@ -18,7 +18,7 @@ public class ClusterBatchOptions extends BaseBatchOptions {
      * <p>If a redirection error occurs:
      *
      * <ul>
-     *   <li>For Atomic Batches (Transactions) , the entire transaction will be redirected.
+     *   <li>For Atomic Batches (Transactions), the entire transaction will be redirected.
      *   <li>For Non-Atomic Batches (Pipelines), only the commands that encountered redirection errors
      *       will be redirected.
      * </ul>
@@ -51,6 +51,9 @@ public class ClusterBatchOptions extends BaseBatchOptions {
      * options.</b>
      *
      * <p><b>Note:</b> Currently, retry strategies are supported only for non-atomic batches.
+     *
+     * <p><b>Recommendation:</b> It is recommended to increase the timeout in {@code BaseBatchOptions}
+     * when enabling these strategies.
      */
     private final BatchRetryStrategy retryStrategy;
 }

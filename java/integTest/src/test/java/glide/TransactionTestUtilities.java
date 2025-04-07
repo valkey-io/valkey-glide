@@ -57,7 +57,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.stream.Stream;
 import org.junit.jupiter.params.provider.Arguments;
 
@@ -70,59 +70,88 @@ public class TransactionTestUtilities {
     private static final String field2 = "field2-" + UUID.randomUUID();
     private static final String field3 = "field3-" + UUID.randomUUID();
 
+    /**
+     * Generate a key with the same hash slot if keySlot is provided and isAtomic is true; otherwise,
+     * generate a random key.
+     *
+     * @param keySlot optional hash tag to force the same slot; if null or empty, a random key is
+     *     generated
+     * @param isAtomic if true, keySlot is used to force the hash slot
+     * @return the generated key
+     */
+    public static String generateKey(String keySlot, boolean isAtomic) {
+        if (isAtomic && keySlot != null && !keySlot.isEmpty()) {
+            // Use keySlot to force the same hash slot with a 10-character random suffix.
+            return "{" + keySlot + "}-" + UUID.randomUUID();
+        }
+        // Generate a random key with 20 characters.
+        return UUID.randomUUID().toString();
+    }
+
+    /**
+     * Generate a key with the same hash slot as the provided keySlot. If keySlot already contains a
+     * hash tag (i.e. starts with "{" and contains "}"), only the tag between the braces is used.
+     *
+     * @param keySlot the key or tag to be used for the hash slot; if it contains a tag, the tag is
+     *     extracted
+     * @return the generated key with the same hash slot
+     */
+    public static String generateKeySameSlot(String keySlot) {
+        String tag;
+        if (keySlot.startsWith("{") && keySlot.indexOf("}") > 0) {
+            // Extract the tag between the first '{' and '}'
+            tag = keySlot.substring(1, keySlot.indexOf("}"));
+        } else {
+            tag = keySlot;
+        }
+        return "{" + tag + "}-" + UUID.randomUUID();
+    }
+
     @FunctionalInterface
-    public interface TransactionBuilder extends Function<BaseBatch<?>, Object[]> {}
+    public interface BatchBuilder extends BiFunction<BaseBatch<?>, Boolean, Object[]> {}
 
     /** Generate test samples for parametrized tests. Could be routed to random node. */
-    public static Stream<Arguments> getCommonTransactionBuilders() {
+    public static Stream<Arguments> getCommonBatchBuilders() {
         return Stream.of(
+                Arguments.of("Generic Commands", (BatchBuilder) TransactionTestUtilities::genericCommands),
+                Arguments.of("String Commands", (BatchBuilder) TransactionTestUtilities::stringCommands),
+                Arguments.of("Hash Commands", (BatchBuilder) TransactionTestUtilities::hashCommands),
+                Arguments.of("List Commands", (BatchBuilder) TransactionTestUtilities::listCommands),
+                Arguments.of("Set Commands", (BatchBuilder) TransactionTestUtilities::setCommands),
                 Arguments.of(
-                        "Generic Commands", (TransactionBuilder) TransactionTestUtilities::genericCommands),
+                        "Sorted Set Commands", (BatchBuilder) TransactionTestUtilities::sortedSetCommands),
                 Arguments.of(
-                        "String Commands", (TransactionBuilder) TransactionTestUtilities::stringCommands),
-                Arguments.of("Hash Commands", (TransactionBuilder) TransactionTestUtilities::hashCommands),
-                Arguments.of("List Commands", (TransactionBuilder) TransactionTestUtilities::listCommands),
-                Arguments.of("Set Commands", (TransactionBuilder) TransactionTestUtilities::setCommands),
-                Arguments.of(
-                        "Sorted Set Commands",
-                        (TransactionBuilder) TransactionTestUtilities::sortedSetCommands),
-                Arguments.of(
-                        "HyperLogLog Commands",
-                        (TransactionBuilder) TransactionTestUtilities::hyperLogLogCommands),
-                Arguments.of(
-                        "Stream Commands", (TransactionBuilder) TransactionTestUtilities::streamCommands),
+                        "HyperLogLog Commands", (BatchBuilder) TransactionTestUtilities::hyperLogLogCommands),
+                Arguments.of("Stream Commands", (BatchBuilder) TransactionTestUtilities::streamCommands),
                 Arguments.of(
                         "Connection Management Commands",
-                        (TransactionBuilder) TransactionTestUtilities::connectionManagementCommands),
+                        (BatchBuilder) TransactionTestUtilities::connectionManagementCommands),
                 Arguments.of(
-                        "Geospatial Commands",
-                        (TransactionBuilder) TransactionTestUtilities::geospatialCommands),
-                Arguments.of(
-                        "Bitmap Commands", (TransactionBuilder) TransactionTestUtilities::bitmapCommands),
-                Arguments.of(
-                        "PubSub Commands", (TransactionBuilder) TransactionTestUtilities::pubsubCommands));
+                        "Geospatial Commands", (BatchBuilder) TransactionTestUtilities::geospatialCommands),
+                Arguments.of("Bitmap Commands", (BatchBuilder) TransactionTestUtilities::bitmapCommands),
+                Arguments.of("PubSub Commands", (BatchBuilder) TransactionTestUtilities::pubsubCommands));
     }
 
     /** Generate test samples for parametrized tests. Could be routed to primary nodes only. */
-    public static Stream<Arguments> getPrimaryNodeTransactionBuilders() {
+    public static Stream<Arguments> getPrimaryNodeBatchBuilders() {
         return Stream.of(
                 Arguments.of(
                         "Server Management Commands",
-                        (TransactionBuilder) TransactionTestUtilities::serverManagementCommands),
+                        (BatchBuilder) TransactionTestUtilities::serverManagementCommands),
                 Arguments.of(
                         "Scripting and Function Commands",
-                        (TransactionBuilder) TransactionTestUtilities::scriptingAndFunctionsCommands));
+                        (BatchBuilder) TransactionTestUtilities::scriptingAndFunctionsCommands));
     }
 
-    private static Object[] genericCommands(BaseBatch<?> transaction) {
-        String genericKey1 = "{GenericKey}-1-" + UUID.randomUUID();
-        String genericKey2 = "{GenericKey}-2-" + UUID.randomUUID();
-        String genericKey3 = "{GenericKey}-3-" + UUID.randomUUID();
-        String genericKey4 = "{GenericKey}-4-" + UUID.randomUUID();
+    private static Object[] genericCommands(BaseBatch<?> batch, boolean isAtomic) {
+        String genericKey1 = generateKey("GenericKey", isAtomic);
+        String genericKey2 = generateKeySameSlot(genericKey1);
+        String genericKey3 = generateKey("GenericKey", isAtomic);
+        String genericKey4 = generateKeySameSlot(genericKey3);
         String[] ascendingList = new String[] {"1", "2", "3"};
         String[] descendingList = new String[] {"3", "2", "1"};
 
-        transaction
+        batch
                 .set(genericKey1, value1)
                 .customCommand(new String[] {"MGET", genericKey1, genericKey2})
                 .exists(new String[] {genericKey1})
@@ -149,7 +178,7 @@ public class TransactionTestUtilities {
                 .lrange(genericKey4, 0, -1);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction
+            batch
                     .set(genericKey1, value1)
                     .expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
                     .expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
@@ -161,7 +190,7 @@ public class TransactionTestUtilities {
         }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            transaction
+            batch
                     .set(genericKey3, "value")
                     .set(genericKey4, "value2")
                     .copy(genericKey3, genericKey4, false)
@@ -226,16 +255,16 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] stringCommands(BaseBatch<?> transaction) {
-        String stringKey1 = "{StringKey}-1-" + UUID.randomUUID();
-        String stringKey2 = "{StringKey}-2-" + UUID.randomUUID();
-        String stringKey3 = "{StringKey}-3-" + UUID.randomUUID();
-        String stringKey4 = "{StringKey}-4-" + UUID.randomUUID();
-        String stringKey5 = "{StringKey}-5-" + UUID.randomUUID();
-        String stringKey6 = "{StringKey}-6-" + UUID.randomUUID();
-        String stringKey7 = "{StringKey}-7-" + UUID.randomUUID();
-        String stringKey8 = "{StringKey}-8-" + UUID.randomUUID();
-        String stringKey9 = "{StringKey}-9-" + UUID.randomUUID();
+    private static Object[] stringCommands(BaseBatch<?> batch, boolean isAtomic) {
+        String stringKey1 = generateKey("StringKey", isAtomic);
+        String stringKey2 = generateKey("StringKey", isAtomic);
+        String stringKey3 = generateKey("StringKey", isAtomic);
+        String stringKey4 = generateKey("StringKey", isAtomic);
+        String stringKey5 = generateKeySameSlot(stringKey4);
+        String stringKey6 = generateKey("StringKey", isAtomic);
+        String stringKey7 = generateKeySameSlot(stringKey6);
+        String stringKey8 = generateKeySameSlot(stringKey6);
+        String stringKey9 = generateKey("StringKey", isAtomic);
 
         Map<String, Object> expectedLcsIdxObject =
                 Map.of("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
@@ -247,7 +276,7 @@ public class TransactionTestUtilities {
                         "len",
                         3L);
 
-        transaction
+        batch
                 .flushall()
                 .set(stringKey1, value1)
                 .randomKey()
@@ -272,7 +301,7 @@ public class TransactionTestUtilities {
                 .mget(new String[] {stringKey4, stringKey5});
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction
+            batch
                     .set(stringKey6, "abcd")
                     .set(stringKey7, "bcde")
                     .set(stringKey8, "wxyz")
@@ -287,10 +316,7 @@ public class TransactionTestUtilities {
         }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            transaction
-                    .set(stringKey9, value1)
-                    .getex(stringKey9)
-                    .getex(stringKey9, GetExOptions.Seconds(20L));
+            batch.set(stringKey9, value1).getex(stringKey9).getex(stringKey9, GetExOptions.Seconds(20L));
         }
 
         var expectedResults =
@@ -352,14 +378,14 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] hashCommands(BaseBatch<?> transaction) {
-        String hashKey1 = "{HashKey}-1-" + UUID.randomUUID();
+    private static Object[] hashCommands(BaseBatch<?> batch, boolean isAtomic) {
+        String hashKey1 = generateKey("HashKey", isAtomic);
 
         // This extra key is for HScan testing. It is a key with only one field. HScan doesn't guarantee
         // a return order but this test compares arrays so order is significant.
-        String hashKey2 = "{HashKey}-2-" + UUID.randomUUID();
+        String hashKey2 = generateKey("HashKey", isAtomic);
 
-        transaction
+        batch
                 .hset(hashKey1, Map.of(field1, value1, field2, value2))
                 .hget(hashKey1, field1)
                 .hlen(hashKey1)
@@ -383,7 +409,7 @@ public class TransactionTestUtilities {
                 .hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
-            transaction
+            batch
                     .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(false).build())
                     .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(true).build());
         }
@@ -432,16 +458,16 @@ public class TransactionTestUtilities {
         return result;
     }
 
-    private static Object[] listCommands(BaseBatch<?> transaction) {
-        String listKey1 = "{ListKey}-1-" + UUID.randomUUID();
-        String listKey2 = "{ListKey}-2-" + UUID.randomUUID();
-        String listKey3 = "{ListKey}-3-" + UUID.randomUUID();
-        String listKey4 = "{ListKey}-4-" + UUID.randomUUID();
-        String listKey5 = "{ListKey}-5-" + UUID.randomUUID();
-        String listKey6 = "{ListKey}-6-" + UUID.randomUUID();
-        String listKey7 = "{ListKey}-7-" + UUID.randomUUID();
+    private static Object[] listCommands(BaseBatch<?> batch, boolean isAtomic) {
+        String listKey1 = generateKey("ListKey", isAtomic);
+        String listKey2 = generateKey("ListKey", isAtomic);
+        String listKey3 = generateKey("ListKey", isAtomic);
+        String listKey4 = generateKey("ListKey", isAtomic);
+        String listKey5 = generateKey("ListKey", isAtomic);
+        String listKey6 = generateKey("ListKey", isAtomic);
+        String listKey7 = generateKeySameSlot(listKey6);
 
-        transaction
+        batch
                 .lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
                 .llen(listKey1)
                 .lindex(listKey1, 0)
@@ -469,7 +495,7 @@ public class TransactionTestUtilities {
                 .lrange(listKey5, 0, -1);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction
+            batch
                     .lpush(listKey4, new String[] {value1, value2, value3, value1, value2, value3})
                     .lmpop(new String[] {listKey4}, ListDirection.LEFT)
                     .lmpop(new String[] {listKey4}, ListDirection.LEFT, 2L)
@@ -478,7 +504,7 @@ public class TransactionTestUtilities {
         } // listKey4 is now empty
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            transaction
+            batch
                     .lpush(listKey6, new String[] {value3, value2, value1})
                     .lpush(listKey7, new String[] {value1, value2, value3})
                     .lmove(listKey7, listKey7, ListDirection.LEFT, ListDirection.LEFT)
@@ -554,15 +580,15 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] setCommands(BaseBatch<?> transaction) {
-        String setKey1 = "{setKey}-1-" + UUID.randomUUID();
-        String setKey2 = "{setKey}-2-" + UUID.randomUUID();
-        String setKey3 = "{setKey}-3-" + UUID.randomUUID();
-        String setKey4 = "{setKey}-4-" + UUID.randomUUID();
-        String setKey5 = "{setKey}-5-" + UUID.randomUUID();
-        String setKey6 = "{setKey}-6-" + UUID.randomUUID();
+    private static Object[] setCommands(BaseBatch<?> batch, boolean isAtomic) {
+        String setKey1 = generateKey("setKey", isAtomic);
+        String setKey2 = generateKeySameSlot(setKey1);
+        String setKey3 = generateKeySameSlot(setKey1);
+        String setKey4 = generateKey("setKey", isAtomic);
+        String setKey5 = generateKey("setKey", isAtomic);
+        String setKey6 = generateKeySameSlot(setKey5);
 
-        transaction
+        batch
                 .sadd(setKey1, new String[] {"baz", "foo"})
                 .srem(setKey1, new String[] {"foo"})
                 .sscan(setKey1, "0")
@@ -587,7 +613,7 @@ public class TransactionTestUtilities {
                 .spopCount(setKey4, 3); // setKey4 is now empty
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction
+            batch
                     .sadd(setKey5, new String[] {"one", "two", "three", "four"})
                     .sadd(setKey6, new String[] {"two", "three", "four", "five"})
                     .sintercard(new String[] {setKey5, setKey6})
@@ -634,15 +660,15 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] sortedSetCommands(BaseBatch<?> transaction) {
-        String zSetKey1 = "{ZSetKey}-1-" + UUID.randomUUID();
-        String zSetKey2 = "{ZSetKey}-2-" + UUID.randomUUID();
-        String zSetKey3 = "{ZSetKey}-3-" + UUID.randomUUID();
-        String zSetKey4 = "{ZSetKey}-4-" + UUID.randomUUID();
-        String zSetKey5 = "{ZSetKey}-4-" + UUID.randomUUID();
-        String zSetKey6 = "{ZSetKey}-5-" + UUID.randomUUID();
+    private static Object[] sortedSetCommands(BaseBatch<?> batch, boolean isAtomic) {
+        String zSetKey1 = generateKey("ZSetKey", isAtomic);
+        String zSetKey2 = generateKey("ZSetKey", isAtomic);
+        String zSetKey3 = generateKey("ZSetKey", isAtomic);
+        String zSetKey4 = generateKeySameSlot(zSetKey3);
+        String zSetKey5 = generateKey("ZSetKey", isAtomic);
+        String zSetKey6 = generateKeySameSlot(zSetKey5);
 
-        transaction
+        batch
                 .zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
                 .zrank(zSetKey1, "one")
                 .zrevrank(zSetKey1, "one")
@@ -671,16 +697,16 @@ public class TransactionTestUtilities {
                 .zscan(zSetKey2, "0")
                 .zscan(zSetKey2, "0", ZScanOptions.builder().count(20L).build());
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
-            transaction
+            batch
                     .zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(false).build())
                     .zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(true).build());
         }
 
-        transaction.bzpopmin(new String[] {zSetKey2}, .1);
+        batch.bzpopmin(new String[] {zSetKey2}, .1);
         // zSetKey2 is now empty
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            transaction
+            batch
                     .zadd(zSetKey5, Map.of("one", 1.0, "two", 2.0))
                     // zSetKey6 is empty
                     .zdiffstore(zSetKey6, new String[] {zSetKey6, zSetKey6})
@@ -697,7 +723,7 @@ public class TransactionTestUtilities {
         }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction
+            batch
                     .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
                     .zadd(zSetKey4, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
                     .zmpop(new String[] {zSetKey3}, MAX)
@@ -801,8 +827,8 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] serverManagementCommands(BaseBatch<?> transaction) {
-        transaction
+    private static Object[] serverManagementCommands(BaseBatch<?> batch, boolean isAtomic) {
+        batch
                 .configSet(Map.of("timeout", "1000"))
                 .configGet(new String[] {"timeout"})
                 .configResetStat()
@@ -814,7 +840,7 @@ public class TransactionTestUtilities {
                 .dbsize();
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction
+            batch
                     .configSet(Map.of("timeout", "2000", "rdb-save-incremental-fsync", "no"))
                     .configGet(new String[] {"timeout", "rdb-save-incremental-fsync"});
         }
@@ -849,8 +875,8 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] connectionManagementCommands(BaseBatch<?> transaction) {
-        transaction.ping().ping(value1).echo(value2);
+    private static Object[] connectionManagementCommands(BaseBatch<?> batch, boolean isAtomic) {
+        batch.ping().ping(value1).echo(value2);
         // untested:
         // clientId
         // clientGetName
@@ -862,12 +888,12 @@ public class TransactionTestUtilities {
         };
     }
 
-    private static Object[] hyperLogLogCommands(BaseBatch<?> transaction) {
-        String hllKey1 = "{HllKey}-1-" + UUID.randomUUID();
-        String hllKey2 = "{HllKey}-2-" + UUID.randomUUID();
-        String hllKey3 = "{HllKey}-3-" + UUID.randomUUID();
+    private static Object[] hyperLogLogCommands(BaseBatch<?> batch, boolean isAtomic) {
+        String hllKey1 = generateKey("HllKey", isAtomic);
+        String hllKey2 = generateKeySameSlot(hllKey1);
+        String hllKey3 = generateKeySameSlot(hllKey1);
 
-        transaction
+        batch
                 .pfadd(hllKey1, new String[] {"a", "b", "c"})
                 .pfcount(new String[] {hllKey1, hllKey2})
                 .pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
@@ -881,17 +907,17 @@ public class TransactionTestUtilities {
         };
     }
 
-    private static Object[] streamCommands(BaseBatch<?> transaction) {
-        final String streamKey1 = "{streamKey}-1-" + UUID.randomUUID();
-        final String streamKey2 = "{streamKey}-2-" + UUID.randomUUID();
-        final String streamKey3 = "{streamKey}-3-" + UUID.randomUUID();
-        final String streamKey4 = "{streamKey}-4-" + UUID.randomUUID();
+    private static Object[] streamCommands(BaseBatch<?> batch, boolean isAtomic) {
+        final String streamKey1 = generateKey("streamKey", isAtomic);
+        final String streamKey2 = generateKey("streamKey", isAtomic);
+        final String streamKey3 = generateKey("streamKey", isAtomic);
+        final String streamKey4 = generateKey("streamKey", isAtomic);
         final String groupName1 = "{groupName}-1-" + UUID.randomUUID();
         final String groupName2 = "{groupName}-2-" + UUID.randomUUID();
         final String groupName3 = "{groupName}-2-" + UUID.randomUUID();
         final String consumer1 = "{consumer}-1-" + UUID.randomUUID();
 
-        transaction
+        batch
                 .xadd(streamKey1, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
                 .xadd(streamKey1, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build())
                 .xadd(streamKey1, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
@@ -938,12 +964,12 @@ public class TransactionTestUtilities {
                 .xpending(streamKey1, groupName1);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            transaction
+            batch
                     .xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
                     .xautoclaimJustId(streamKey1, groupName1, consumer1, 0L, "0-0");
         }
 
-        transaction
+        batch
                 .xack(streamKey1, groupName1, new String[] {"0-3"})
                 .xpending(
                         streamKey1,
@@ -960,7 +986,7 @@ public class TransactionTestUtilities {
                 .xinfoGroups(streamKey1);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction
+            batch
                     .xadd(streamKey2, Map.of("f0", "v0"), StreamAddOptions.builder().id("1-0").build())
                     .xgroupCreate(streamKey2, groupName3, "0")
                     .xgroupSetId(streamKey2, groupName3, "1-0", 1);
@@ -1076,11 +1102,11 @@ public class TransactionTestUtilities {
         return result;
     }
 
-    private static Object[] geospatialCommands(BaseBatch<?> transaction) {
-        final String geoKey1 = "{geoKey}-1-" + UUID.randomUUID();
-        final String geoKey2 = "{geoKey}-2-" + UUID.randomUUID();
+    private static Object[] geospatialCommands(BaseBatch<?> batch, boolean isAtomic) {
+        final String geoKey1 = generateKey("geoKey", isAtomic);
+        final String geoKey2 = generateKeySameSlot(geoKey1);
 
-        transaction
+        batch
                 .geoadd(
                         geoKey1,
                         Map.of(
@@ -1094,7 +1120,7 @@ public class TransactionTestUtilities {
                 .geohash(geoKey1, new String[] {"Palermo", "Catania", "NonExisting"});
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            transaction
+            batch
                     .geosearch(
                             geoKey1,
                             new GeoSearchOrigin.MemberOrigin("Palermo"),
@@ -1198,7 +1224,7 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] scriptingAndFunctionsCommands(BaseBatch<?> transaction) {
+    private static Object[] scriptingAndFunctionsCommands(BaseBatch<?> batch, boolean isAtomic) {
         if (SERVER_VERSION.isLowerThan("7.0.0")) {
             return new Object[0];
         }
@@ -1246,7 +1272,7 @@ public class TransactionTestUtilities {
                     }
                 };
 
-        transaction
+        batch
                 .functionFlush(SYNC)
                 .functionList(false)
                 .functionLoad(code, false)
@@ -1280,15 +1306,15 @@ public class TransactionTestUtilities {
         };
     }
 
-    private static Object[] bitmapCommands(BaseBatch<?> transaction) {
-        String key1 = "{bitmapKey}-1" + UUID.randomUUID();
-        String key2 = "{bitmapKey}-2" + UUID.randomUUID();
-        String key3 = "{bitmapKey}-3" + UUID.randomUUID();
-        String key4 = "{bitmapKey}-4" + UUID.randomUUID();
+    private static Object[] bitmapCommands(BaseBatch<?> batch, boolean isAtomic) {
+        String key1 = generateKey("bitmapKey", isAtomic);
+        String key2 = generateKey("bitmapKey", isAtomic);
+        String key3 = generateKeySameSlot(key1);
+        String key4 = generateKeySameSlot(key1);
         BitFieldGet bitFieldGet = new BitFieldGet(new SignedEncoding(5), new Offset(3));
         BitFieldSet bitFieldSet = new BitFieldSet(new UnsignedEncoding(10), new OffsetMultiplier(3), 4);
 
-        transaction
+        batch
                 .set(key1, "foobar")
                 .bitcount(key1)
                 .bitcount(key1, 1, 1)
@@ -1305,14 +1331,14 @@ public class TransactionTestUtilities {
                 .bitfield(key1, new BitFieldSubCommands[] {bitFieldSet});
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction
+            batch
                     .set(key3, "foobar")
                     .bitcount(key3, 5, 30, BitmapIndexType.BIT)
                     .bitpos(key3, 1, 44, 50, BitmapIndexType.BIT);
         }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
-            transaction.set(key4, "foobar").bitcount(key4, 0);
+            batch.set(key4, "foobar").bitcount(key4, 0);
         }
 
         var expectedResults =
@@ -1356,8 +1382,8 @@ public class TransactionTestUtilities {
         return expectedResults;
     }
 
-    private static Object[] pubsubCommands(BaseBatch<?> transaction) {
-        transaction.publish("message", "Tchannel");
+    private static Object[] pubsubCommands(BaseBatch<?> batch, boolean isAtomic) {
+        batch.publish("message", "Tchannel");
 
         return new Object[] {
             0L, // publish("message", "Tchannel")

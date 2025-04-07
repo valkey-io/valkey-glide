@@ -1,10 +1,11 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.batch;
 
-import lombok.Builder;
+// Should we use Builder or SuperBuilder ?
 import lombok.Getter;
+import lombok.experimental.SuperBuilder;
 
-// TODO: document that its currently supported just for non atomic batches
+// TODO: should we raise an error if retryStrategy is set in atomic batch?
 /**
  * Defines a retry strategy for batch requests, allowing control over retries in case of server or
  * connection errors.
@@ -57,7 +58,7 @@ import lombok.Getter;
  * <b>Note:</b> Currently, retry strategies are supported only for non-atomic batches.
  */
 @Getter
-@Builder
+@SuperBuilder
 public class BatchRetryStrategy {
 
     /**
@@ -67,7 +68,7 @@ public class BatchRetryStrategy {
      * <p>⚠️ <b>Warning:</b> Enabling this flag may cause commands targeting the same slot to execute
      * out of order.
      */
-    private final boolean retryServerError = false;
+    private final boolean retryServerError;
 
     /**
      * If {@code true}, batch requests will be retried in case of connection errors.
@@ -75,5 +76,5 @@ public class BatchRetryStrategy {
      * <p>⚠️ <b>Warning:</b> Retrying after a connection error may lead to duplicate executions, since
      * the server might have already received and processed the request before the error occurred.
      */
-    private final boolean retryConnectionError = false;
+    private final boolean retryConnectionError;
 }

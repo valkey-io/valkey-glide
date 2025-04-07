@@ -29,8 +29,8 @@ import lombok.NonNull;
  *     <pre>{@code
  * // Example of Atomic Batch (Transaction) in a Cluster
  * ClusterBatch transaction = new ClusterBatch(true) // Atomic (Transactional)
- *     .set("key", "value")  // Command to set a key-value pair
- *     .get("key");          // Command to retrieve the value
+ *     .set("key", "value")
+ *     .get("key");
  * Object[] result = client.exec(transaction).get();
  * // result contains: OK and "value"
  * assert result[0].equals("OK");
@@ -41,10 +41,10 @@ import lombok.NonNull;
  *     <pre>{@code
  * // Example of Non-Atomic Batch (Pipeline) in a Cluster
  * ClusterBatch pipeline = new ClusterBatch(false) // Non-Atomic (Pipeline)
- *     .set("key1", "value1")  // Command to set the first key-value pair
- *     .set("key2", "value2")  // Command to set the second key-value pair
- *     .get("key1")            // Command to get the value for key1
- *     .get("key2");           // Command to get the value for key2
+ *     .set("key1", "value1")
+ *     .set("key2", "value2")
+ *     .get("key1")
+ *     .get("key2");
  * Object[] result = client.exec(pipeline).get();
  * // result contains: OK, OK, "value1", "value2"
  * assert result[0].equals("OK");

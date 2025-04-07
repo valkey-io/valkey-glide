@@ -328,6 +328,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeysBinary;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
@@ -388,6 +389,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class GlideClientTest {
 
@@ -453,21 +455,47 @@ public class GlideClientTest {
     }
 
     @SneakyThrows
-    @Test
-    public void exec() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void exec(boolean isAtomic) {
         // setup
         Object[] value = new Object[] {"PONG", "PONG"};
-        Batch transaction = new Batch(true).ping().ping();
+        Batch batch = new Batch(isAtomic).ping().ping();
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewBatch(eq(transaction), eq(Optional.empty()), any()))
+        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.empty()), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(transaction);
+        CompletableFuture<Object[]> response = service.exec(batch);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void exec_with_options(boolean isAtomic) {
+        // setup
+        Object[] value = new Object[] {"PONG", "PONG"};
+        Batch batch = new Batch(isAtomic).ping().ping();
+        BatchOptions options = BatchOptions.builder().raiseOnError(true).timeout(1000).build();
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.of(options)), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.exec(batch, options);
         Object[] payload = response.get();
 
         // verify
