@@ -42,7 +42,6 @@ pub enum GlideSpanStatus {
     Error(String),
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 /// Defines the method that exporter connects to the collector. It can be:
 /// gRPC or HTTP. The third type (i.e. "File") defines an exporter that does not connect to a collector
@@ -60,6 +59,7 @@ pub enum GlideOpenTelemetryTraceExporter {
 impl std::str::FromStr for GlideOpenTelemetryTraceExporter {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@s: {}", s);
         parse_endpoint(s)
     }
 }
@@ -68,6 +68,7 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
     // Parse the URL using the `url` crate to validate it
     let url = Url::parse(endpoint)
         .map_err(|_| Error::new(ErrorKind::InvalidInput, format!("Parse error. {endpoint}")))?;
+    println!("url: {}", url);
 
     match url.scheme() {
         "http" => Ok(GlideOpenTelemetryTraceExporter::Http(format!(
@@ -85,6 +86,19 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
             url.host_str().unwrap_or("127.0.0.1"),
             url.port().unwrap_or(80)
         ))), // gRPC endpoint
+        "file" => {
+            // For file URLs, we need to extract the path without the 'file://' prefix
+            let path = url.path();
+            let full_path = if path.starts_with("file://") {
+                &path[7..]
+            } else {
+                path
+            };
+            println!("full_path: {}", full_path);
+            Ok(GlideOpenTelemetryTraceExporter::File(PathBuf::from(
+                full_path,
+            )))
+        } // file endpoint
         _ => Err(Error::new(ErrorKind::InvalidInput, endpoint)),
     }
 }
@@ -331,7 +345,7 @@ impl Default for GlideOpenTelemetryConfigBuilder {
     fn default() -> Self {
         GlideOpenTelemetryConfigBuilder {
             span_flush_interval: std::time::Duration::from_millis(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
-            trace_exporter: GlideOpenTelemetryTraceExporter::File(std::env::temp_dir()),
+            trace_exporter: GlideOpenTelemetryTraceExporter::Http("http://test.com".to_string()),
         }
     }
 }

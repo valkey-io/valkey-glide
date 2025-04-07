@@ -110,7 +110,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 advancedConfiguration: {
                     openTelemetryConfig: {
                         tracesCollectorEndPoint:
-                            "https://valid-endpoint/v1/traces",
+                            "file:///tmp/spans.json",
                         metricsCollectorEndPoint:
                             "https://valid-endpoint/v1/metrics",
                         flushIntervalMs: 400,

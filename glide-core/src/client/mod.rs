@@ -18,7 +18,6 @@ use redis::{
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
@@ -955,7 +954,6 @@ impl Client {
         if let Some(endpoint_str) = &request.otel_traces_endpoint {
             let trace_exporter = GlideOpenTelemetryTraceExporter::from_str(endpoint_str.as_str())
                 .map_err(ConnectionError::IoError)?;
-            // let trace_exporter = GlideOpenTelemetryTraceExporter::File(PathBuf::from("/tmp"));
             let config = GlideOpenTelemetryConfigBuilder::default()
                 .with_flush_interval(std::time::Duration::from_millis(
                     request
