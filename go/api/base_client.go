@@ -69,10 +69,6 @@ type baseClient struct {
 	messageHandler *MessageHandler
 }
 
-func (client *baseClient) GetClientID() string {
-	return fmt.Sprintf("%p", client)
-}
-
 // SetMessageHandler assigns a message handler to the client for processing pub/sub messages
 func (client *baseClient) SetMessageHandler(handler *MessageHandler) {
 	client.messageHandler = handler
