@@ -62,6 +62,7 @@ pub enum GlideOpenTelemetryTraceExporter {
 impl std::str::FromStr for GlideOpenTelemetryTraceExporter {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@s: {}", s);
         parse_endpoint(s)
     }
 }
@@ -70,6 +71,7 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
     // Parse the URL using the `url` crate to validate it
     let url = Url::parse(endpoint)
         .map_err(|_| Error::new(ErrorKind::InvalidInput, format!("Parse error. {endpoint}")))?;
+    println!("url: {}", url);
 
     match url.scheme() {
         "http" | "https" => Ok(GlideOpenTelemetryTraceExporter::Http(endpoint.to_string())), // HTTP/HTTPS endpoint

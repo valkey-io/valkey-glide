@@ -33,7 +33,7 @@ protobuf = { version = "3", features = [
     "with-bytes",
 ], optional = true }
 integer-encoding = { version = "4.0.0", optional = true }
-thiserror = "1"
+thiserror = "=1.0.50"
 rand = { version = "0.8.5" }
 futures-intrusive = "0.5.0"
 directories = { version = "5.0", optional = true }
