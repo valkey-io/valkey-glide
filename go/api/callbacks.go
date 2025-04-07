@@ -4,6 +4,7 @@ package api
 
 // #include "../lib.h"
 import "C"
+
 import (
 	"fmt"
 	"sync"
@@ -56,7 +57,7 @@ func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorTyp
 }
 
 //export pubSubCallback
-func pubSubCallback(clientPtr unsafe.Pointer, kind C.uint32_t, cResponse *C.struct_CommandResponse) {
+func pubSubCallback(clientPtr unsafe.Pointer, pushKind C.PushKind, cResponse *C.struct_CommandResponse) {
 	defer C.free_command_response(cResponse)
 
 	if clientPtr == nil || cResponse == nil {
@@ -70,9 +71,6 @@ func pubSubCallback(clientPtr unsafe.Pointer, kind C.uint32_t, cResponse *C.stru
 		fmt.Printf("Error processing pubsub notification: %v\n", err)
 		return
 	}
-
-	// Convert the kind to a PubSub event type
-	pushKind := PushKind(kind)
 
 	// Process different types of push messages
 	message, shouldReturn := getMessage(pushKind, arrayValues)
@@ -101,11 +99,11 @@ func pubSubCallback(clientPtr unsafe.Pointer, kind C.uint32_t, cResponse *C.stru
 	}
 }
 
-func getMessage(pushKind PushKind, messageValues []any) (*PubSubMessage, bool) {
+func getMessage(pushKind C.PushKind, messageValues []any) (*PubSubMessage, bool) {
 	var message *PubSubMessage
 
 	switch pushKind {
-	case Message, SMessage:
+	case C.PushMessage, C.PushSMessage:
 		if len(messageValues) < 2 {
 			return nil, true
 		}
@@ -122,7 +120,7 @@ func getMessage(pushKind PushKind, messageValues []any) (*PubSubMessage, bool) {
 
 		message = NewPubSubMessage(msgContent, channel)
 
-	case PMessage:
+	case C.PushPMessage:
 		if len(messageValues) < 3 {
 			return nil, true
 		}
@@ -144,7 +142,7 @@ func getMessage(pushKind PushKind, messageValues []any) (*PubSubMessage, bool) {
 
 		message = NewPubSubMessageWithPattern(msgContent, channel, pattern)
 
-	case Subscribe, PSubscribe, SSubscribe, Unsubscribe, PUnsubscribe, SUnsubscribe:
+	case C.PushSubscribe, C.PushPSubscribe, C.PushSSubscribe, C.PushUnsubscribe, C.PushPUnsubscribe, C.PushSUnsubscribe:
 		if len(messageValues) < 2 {
 			return nil, true
 		}
