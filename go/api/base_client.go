@@ -180,13 +180,12 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 
 	client := &baseClient{
 		coreClient: cResponse.conn_ptr,
+		pending:    make(map[unsafe.Pointer]struct{}),
 		executor:   nil, // Will be set after initialization
 	}
-
 	// Set executor after the client is created to avoid self-reference issues
 	client.executor = client
-
-	return &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}, nil
+	return client, nil
 }
 
 // Close terminates the client by closing all associated resources.

@@ -27,6 +27,12 @@ func main() {
 	}
 	fmt.Println(resultSet)
 
+	resultSet, err = client.Set("key123", "Hello")
+	if err != nil {
+		log.Fatal("error connecting to database: ", err)
+	}
+	fmt.Println(resultSet)
+
 	resultGet, err := client.Get("key123")
 	if err != nil {
 		log.Fatal("error connecting to database: ", err)
