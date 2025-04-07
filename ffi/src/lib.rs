@@ -553,23 +553,14 @@ fn create_client_internal(
                     None => {
                         return;
                     }
-                    Some(push_msg) => unsafe {
-                        match push_msg.kind {
-                            redis::PushKind::Message
-                            | redis::PushKind::PMessage
-                            | redis::PushKind::SMessage => {
-                                // We only care about the message push notifications
-                                process_push_notification(
-                                    push_msg,
-                                    pubsub_callback,
-                                    client_adapter_clone,
-                                );
-                            }
-                            _ => {
-                                // Ignore all other message variants
-                            }
-                        }
+                    Some(push_msg)
+                        if push_msg.kind == redis::PushKind::Message
+                            || push_msg.kind == redis::PushKind::PMessage
+                            || push_msg.kind == redis::PushKind::SMessage =>
+                    unsafe {
+                        process_push_notification(push_msg, pubsub_callback, client_adapter_clone);
                     },
+                    _ => {}
                 }
             }
         });
