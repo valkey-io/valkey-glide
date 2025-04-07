@@ -134,8 +134,16 @@ pub type FailureCallback = unsafe extern "C" fn(
 /// `client_ptr` is a baton-pass back to the caller language to uniquely identify the client.
 /// `kind` is an integer representing the PushKind enum value (0=Disconnection, 1=Other, 2=Invalidate, 3=Message, etc.)
 /// `data_ptr` is a pointer to the CommandResponse containing the push data
-pub type PubSubCallback =
-    unsafe extern "C" fn(client_ptr: usize, kind: PushKind, data_ptr: *const CommandResponse) -> ();
+pub type PubSubCallback = unsafe extern "C" fn(
+    client_ptr: usize,
+    kind: PushKind,
+    message: *const u8,
+    message_len: i64,
+    channel: *const u8,
+    channel_len: i64,
+    pattern: *const u8,
+    pattern_len: i64,
+) -> ();
 
 /// The connection response.
 ///
@@ -420,6 +428,10 @@ impl From<redis::PushKind> for PushKind {
     }
 }
 
+fn type_of<T>(_: &T) -> &'static str {
+    std::any::type_name::<T>()
+}
+
 /// Processes a push notification message and calls the provided callback function.
 ///
 /// This function converts a PushInfo message to a CommandResponse, determines the
@@ -433,17 +445,37 @@ impl From<redis::PushKind> for PushKind {
 /// # Returns
 /// - `true` if the message was successfully processed and the callback was called.
 /// - `false` if there was an error processing the message (e.g., conversion failed).
-fn process_push_notification(
+unsafe fn process_push_notification(
     push_msg: redis::PushInfo,
     pubsub_callback: PubSubCallback,
     client_adapter_ptr: usize,
-) -> bool {
-    // Convert the push_msg.data to a CommandResponse
-    let data_response = match valkey_value_to_command_response(Value::Array(push_msg.data.clone()))
-    {
-        Ok(response) => response,
-        Err(_e) => {
-            return false; // Skip this message if conversion fails
+) {
+    let strings: Vec<(*mut u8, i64)> = push_msg
+        .data
+        .iter()
+        .map(|v| {
+            println!(
+                "Push notification {:?}: {:?} (type: {})",
+                push_msg.kind,
+                v,
+                type_of(v)
+            );
+
+            let Value::BulkString(str) = v else {
+                unreachable!()
+            };
+            let (ptr, len) = convert_vec_to_pointer(str.clone());
+            (ptr, len as i64)
+        })
+        .collect();
+
+    // pattner, ch, msg
+    // ch, mgs
+    let ((pattern_ptr, pattern_len), (channel_ptr, channel_len), (message_ptr, message_len)) = {
+        if strings.len() == 3 {
+            (strings[0], strings[1], strings[2])
+        } else {
+            ((0 as *mut u8, 0), strings[0], strings[1])
         }
     };
 
@@ -452,10 +484,20 @@ fn process_push_notification(
         pubsub_callback(
             client_adapter_ptr,
             push_msg.kind.into(),
-            Box::into_raw(Box::new(data_response)),
+            message_ptr,
+            message_len,
+            channel_ptr,
+            channel_len,
+            pattern_ptr,
+            pattern_len,
         );
+        // Free memory
+        let _ = Vec::from_raw_parts(message_ptr, message_len as usize, message_len as usize);
+        let _ = Vec::from_raw_parts(channel_ptr, channel_len as usize, channel_len as usize);
+        if !pattern_ptr.is_null() {
+            let _ = Vec::from_raw_parts(pattern_ptr, pattern_len as usize, pattern_len as usize);
+        }
     }
-    true
 }
 
 fn create_client_internal(
@@ -463,8 +505,6 @@ fn create_client_internal(
     client_type: ClientType,
     pubsub_callback: PubSubCallback,
 ) -> Result<*const ClientAdapter, String> {
-    let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
-
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
     // TODO: optimize this using multiple threads instead of a single worker thread (e.g. by pinning each go thread to a rust thread)
@@ -481,11 +521,15 @@ fn create_client_internal(
     // Wrap the runtime in an Arc so it can be shared
     let runtime = Arc::new(runtime);
 
+    let is_subscriber = request.pubsub_subscriptions.is_some() && pubsub_callback as usize != 0;
+    let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
+    let tx = match is_subscriber {
+        true => Some(push_tx),
+        false => None,
+    };
+
     let client = runtime
-        .block_on(GlideClient::new(
-            ConnectionRequest::from(request),
-            Some(push_tx),
-        ))
+        .block_on(GlideClient::new(ConnectionRequest::from(request), tx))
         .map_err(|err| err.to_string())?;
 
     // Create the client adapter that will be returned and used as conn_ptr
@@ -501,7 +545,7 @@ fn create_client_internal(
     let client_adapter_clone = Arc::into_raw(client_adapter.clone()).addr();
 
     // If pubsub_callback is provided (not null), spawn a task to handle push notifications
-    if pubsub_callback as usize != 0 {
+    if is_subscriber {
         runtime.spawn(async move {
             loop {
                 let result = push_rx.recv().await;
@@ -509,20 +553,24 @@ fn create_client_internal(
                     None => {
                         return;
                     }
-                    Some(push_msg) => {
-                        process_push_notification(push_msg, pubsub_callback, client_adapter_clone);
-                    }
+                    Some(push_msg) => unsafe {
+                        match push_msg.kind {
+                            redis::PushKind::Message
+                            | redis::PushKind::PMessage
+                            | redis::PushKind::SMessage => {
+                                // We only care about the message push notifications
+                                process_push_notification(
+                                    push_msg,
+                                    pubsub_callback,
+                                    client_adapter_clone,
+                                );
+                            }
+                            _ => {
+                                // Ignore all other message variants
+                            }
+                        }
+                    },
                 }
-            }
-        });
-    } else {
-        // If no pubsub callback is provided, we need to handle the channel to prevent infinite queue growth
-        runtime.spawn(async move {
-            loop {
-                if push_rx.recv().await.is_none() {
-                    return;
-                }
-                // Simply drop the PushInfo
             }
         });
     }
