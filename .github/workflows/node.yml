@@ -226,6 +226,7 @@ jobs:
                   node-version: ${{ matrix.node }}
 
             - uses: actions/cache@v4
+              if: ${{ matrix.host.ARCH != 'arm64' }} # JavaScript Actions in Alpine containers are not supported on arm
               with:
                   path: |
                       node/rust-client/target
