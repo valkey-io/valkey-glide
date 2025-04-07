@@ -5,8 +5,6 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.generateLuaLibCode;
-import static glide.TransactionTestUtilities.generateKey;
-import static glide.TransactionTestUtilities.generateKeySameSlot;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
@@ -153,7 +151,10 @@ public class ClusterTransactionTests {
             String testName, BatchBuilder builder, GlideClusterClient clusterClient, boolean isAtomic) {
         ClusterBatch batch = new ClusterBatch(isAtomic);
         Object[] expectedResult = builder.apply(batch, isAtomic);
-
+        if (expectedResult.length == 0 && !isAtomic) {
+            // Empty pipelines returns an error
+            return;
+        }
         SingleNodeRoute route = new SlotIdRoute(1, SlotType.PRIMARY);
         ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
         Object[] results = clusterClient.exec(batch, options).get();
@@ -355,12 +356,12 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public void sort(GlideClusterClient clusterClient, boolean isAtomic) {
         var prefix = "{" + UUID.randomUUID() + "}:";
-        String key1 = generateKey(prefix, isAtomic);
-        String key2 = generateKeySameSlot(key1);
-        String key3 = generateKey(prefix, isAtomic);
-        String key4 = generateKey(prefix, isAtomic);
-        String key5 = generateKey(prefix, isAtomic);
-        String key6 = generateKeySameSlot(key5);
+        String key1 = prefix + "1";
+        String key2 = prefix + "2";
+        String key3 = prefix + "3";
+        String key4 = prefix + "4";
+        String key5 = prefix + "5";
+        String key6 = prefix + "6";
         String[] descendingList = new String[] {"3", "2", "1"};
         ClusterBatch batch = new ClusterBatch(isAtomic);
         String[] ascendingListByAge = new String[] {"Bob", "Alice"};
