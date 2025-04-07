@@ -101,26 +101,18 @@ class ClusterCommands(CoreCommands):
 
         Args:
             batch (ClusterBatch): A `ClusterBatch` object containing a list of commands to be executed.
-            route (Optional[TSingleNodeRoute]): If `route` is not provided, the transaction will be routed to the slot owner
-                of the first key found in the transaction. If no key is found, the command will be sent to a random node.
-                If `route` is provided, the client will route the command to the nodes defined by `route`.
-            timeout (Optional[int]): Specifies a timeout in milliseconds for the execution of the batch.
-                If the execution exceeds the timeout, it will be cancelled, and will raise an error. It is recommended to set a relatively high timeout,
-                especially for complex or lengthy transactions, to avoid premature cancellations.
-            retry_server_error (Optional[bool]): If set to `True`, the client will retry the batch execution in case of server errors.
-                This is useful for handling transient server issues. Note that when retrying due to server errors, the order of commands
-                within the batch may be reordered.
-            retry_connection_error (Optional[bool]): If set to `True`, the client will retry the batch execution in case of connection errors.
-                This is useful for handling network issues. Be aware that when retrying due to connection errors, commands within the batch
-                may be executed multiple times.
-
+            route (Optional[TSingleNodeRoute]): If not provided, routes to slot owner of first key in transaction. If no key,
+                sends to random node. If provided, routes to nodes defined by `route`.
+            timeout (Optional[int]): Timeout in ms for batch execution. If exceeded, cancels and raises error. Set high
+                timeout for complex transactions to avoid premature cancellation.
+            retry_server_error (Optional[bool]): If True, retries batch on server errors. Useful for transient issues.
+                Note: Command order may change on retry.
+            retry_connection_error (Optional[bool]): If True, retries batch on connection errors. Useful for network issues.
+                Note: Commands may execute multiple times.
 
         Returns:
-            Optional[List[TResult]]: A list of results corresponding to the execution of each command
-            in the transaction. If a command returns a value, it will be included in the list. If a command
-            doesn't return a value, the list entry will be `None`.
-
-            If the transaction failed due to a WATCH command, `exec` will return `None`.
+            Optional[List[TResult]]: Results list matching executed commands. Contains values or None for commands without
+            return values. Returns None if transaction failed due to WATCH command.
         """
         commands = batch.commands[:]
         return await self._execute_batch(
