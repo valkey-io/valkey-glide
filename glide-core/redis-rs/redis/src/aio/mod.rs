@@ -3,6 +3,7 @@ use crate::cmd::{cmd, Cmd};
 use crate::connection::{
     get_resp3_hello_command_error, PubSubSubscriptionKind, RedisConnectionInfo,
 };
+use crate::pipeline::PipelineRetryStrategy;
 use crate::types::{
     ErrorKind, FromRedisValue, InfoDict, ProtocolVersion, RedisError, RedisFuture, RedisResult,
     Value,
@@ -77,6 +78,7 @@ pub trait ConnectionLike {
         cmd: &'a crate::Pipeline,
         offset: usize,
         count: usize,
+        pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>>;
 
     /// Returns the database this connection is bound to.  Note that this
