@@ -11,7 +11,6 @@ import (
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/errors"
-	"github.com/valkey-io/valkey-glide/go/utils"
 )
 
 // Registry to track clients by their pointer address
@@ -57,150 +56,59 @@ func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorTyp
 }
 
 //export pubSubCallback
-func pubSubCallback(clientPtr unsafe.Pointer, pushKind C.PushKind, cResponse *C.struct_CommandResponse) {
-	defer C.free_command_response(cResponse)
+func pubSubCallback(clientPtr unsafe.Pointer, pushKind C.PushKind, message unsafe.Pointer, message_len C.int, channel unsafe.Pointer, channel_len C.int, pattern unsafe.Pointer, pattern_len C.int) {
 
-	if clientPtr == nil || cResponse == nil {
+	if clientPtr == nil {
 		return
 	}
 
-	// TODO: Refactor this out
-	// Extract values from the CommandResponse
-	arrayValues, err := processCommandResponseArray(cResponse)
-	if err != nil {
-		fmt.Printf("Error processing pubsub notification: %v\n", err)
-		return
+	msg := string(C.GoBytes(message, message_len))
+	cha := string(C.GoBytes(channel, channel_len))
+	pat := ""
+	if pattern_len > 0 && pattern != nil {
+		pat = string(C.GoBytes(pattern, pattern_len))
 	}
 
-	// Process different types of push messages
-	message, shouldReturn := getMessage(pushKind, arrayValues)
-	if shouldReturn {
-		return
-	}
+	go func() {
 
-	if clientPtr != nil {
-		// Look up the client in our registry using the pointer address
-		ptrValue := uintptr(clientPtr)
-		client := GetClientByPtr(ptrValue)
-
-		if client != nil {
-			// If the client has a message handler, use it
-			if handler := client.GetMessageHandler(); handler != nil {
-				// Create PushInfo and pass it to the handler
-				pushMsg := PushInfo{
-					Kind:    pushKind,
-					Message: message,
-				}
-				handler.Handle(pushMsg)
-			}
-		} else {
-			fmt.Printf("Client not found for pointer: %v\n", ptrValue)
+		// Process different types of push messages
+		message, err := getMessage(pushKind, msg, cha, pat)
+		if err != nil {
+			// todo log
+			return
 		}
-	}
+
+		if clientPtr != nil {
+			// Look up the client in our registry using the pointer address
+			ptrValue := uintptr(clientPtr)
+			client := GetClientByPtr(ptrValue)
+
+			if client != nil {
+				// If the client has a message handler, use it
+				if handler := client.GetMessageHandler(); handler != nil {
+					handler.Handle(pushKind, message)
+				}
+			} else {
+				// TODO log
+				fmt.Printf("Client not found for pointer: %v\n", ptrValue)
+			}
+		}
+	}()
 }
 
-func getMessage(pushKind C.PushKind, messageValues []any) (*PubSubMessage, bool) {
-	var message *PubSubMessage
-
+func getMessage(pushKind C.PushKind, msgContent string, channel string, pattern string) (*PubSubMessage, error) {
 	switch pushKind {
 	case C.PushMessage, C.PushSMessage:
-		if len(messageValues) < 2 {
-			return nil, true
-		}
-
-		channel, ok := utils.ToString(messageValues[0])
-		if !ok {
-			return nil, true
-		}
-
-		msgContent, ok := utils.ToString(messageValues[1])
-		if !ok {
-			return nil, true
-		}
-
-		message = NewPubSubMessage(msgContent, channel)
+		return NewPubSubMessage(msgContent, channel), nil
 
 	case C.PushPMessage:
-		if len(messageValues) < 3 {
-			return nil, true
-		}
-
-		pattern, ok := utils.ToString(messageValues[0])
-		if !ok {
-			return nil, true
-		}
-
-		channel, ok := utils.ToString(messageValues[1])
-		if !ok {
-			return nil, true
-		}
-
-		msgContent, ok := utils.ToString(messageValues[2])
-		if !ok {
-			return nil, true
-		}
-
-		message = NewPubSubMessageWithPattern(msgContent, channel, pattern)
+		return NewPubSubMessageWithPattern(msgContent, channel, pattern), nil
 
 	case C.PushSubscribe, C.PushPSubscribe, C.PushSSubscribe, C.PushUnsubscribe, C.PushPUnsubscribe, C.PushSUnsubscribe:
-		if len(messageValues) < 2 {
-			return nil, true
-		}
-		channel, ok := utils.ToString(messageValues[0])
-		if !ok {
-			return nil, true
-		}
-		msgContent, ok := utils.ToString(messageValues[1])
-		if !ok {
-			return nil, true
-		}
-		message = NewPubSubMessage(msgContent, channel)
+		return NewPubSubMessage(msgContent, channel), nil
 
 	default:
 		// log unsupported push kind
-		return nil, true
+		return nil, fmt.Errorf("unsupported push kind")
 	}
-	return message, false
-}
-
-// Helper function to process a CommandResponse array into a Go slice
-func processCommandResponseArray(cResponse *C.struct_CommandResponse) ([]any, error) {
-	if typeErr := checkResponseType(cResponse, C.Array, false); typeErr != nil {
-		return nil, typeErr
-	}
-
-	arrayLen := int(cResponse.array_value_len)
-	arrayPtr := cResponse.array_value
-	result := make([]any, arrayLen)
-
-	// Iterate through the array elements
-	for i := 0; i < arrayLen; i++ {
-		element := unsafe.Pointer(uintptr(unsafe.Pointer(arrayPtr)) + uintptr(i)*unsafe.Sizeof(*arrayPtr))
-		elemPtr := (*C.struct_CommandResponse)(element)
-
-		// Convert element based on type
-		switch elemPtr.response_type {
-		case C.String:
-			strLen := int(elemPtr.string_value_len)
-			if strLen > 0 && elemPtr.string_value != nil {
-				bytes := C.GoBytes(unsafe.Pointer(elemPtr.string_value), C.int(strLen))
-				result[i] = bytes
-			} else {
-				result[i] = []byte{}
-			}
-		case C.Int:
-			result[i] = int64(elemPtr.int_value)
-		case C.Float:
-			result[i] = float64(elemPtr.float_value)
-		case C.Bool:
-			result[i] = bool(elemPtr.bool_value)
-		case C.Null:
-			result[i] = nil
-		default:
-			// For other types, we'd need more complex handling
-			// For simplicity, convert to string representation
-			result[i] = fmt.Sprintf("Unsupported type: %d", elemPtr.response_type)
-		}
-	}
-	return result, nil
 }
