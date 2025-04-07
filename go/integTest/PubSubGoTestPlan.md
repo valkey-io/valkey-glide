@@ -104,4 +104,4 @@ Message handler functionality tested through the basic tests above:
 
 ## Future Refactoring Tasks
 
-- [ ] Refactor test suite helpers using generics to consolidate duplicate code between GlideTestSuite and PubSubTestSuite
+- [ ] Refactor test suite to consolidate duplicate code between GlideTestSuite and PubSubTestSuite
