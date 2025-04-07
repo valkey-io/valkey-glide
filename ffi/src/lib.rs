@@ -135,7 +135,7 @@ pub type FailureCallback = unsafe extern "C" fn(
 /// `kind` is an integer representing the PushKind enum value (0=Disconnection, 1=Other, 2=Invalidate, 3=Message, etc.)
 /// `data_ptr` is a pointer to the CommandResponse containing the push data
 pub type PubSubCallback =
-    unsafe extern "C" fn(client_ptr: usize, kind: u32, data_ptr: *const CommandResponse) -> ();
+    unsafe extern "C" fn(client_ptr: usize, kind: PushKind, data_ptr: *const CommandResponse) -> ();
 
 /// The connection response.
 ///
@@ -384,6 +384,42 @@ impl ClientAdapter {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub enum PushKind {
+    PushDisconnection,
+    PushOther,
+    PushInvalidate,
+    PushMessage,
+    PushPMessage,
+    PushSMessage,
+    PushUnsubscribe,
+    PushPUnsubscribe,
+    PushSUnsubscribe,
+    PushSubscribe,
+    PushPSubscribe,
+    PushSSubscribe,
+}
+
+impl From<redis::PushKind> for PushKind {
+    fn from(value: redis::PushKind) -> Self {
+        match value {
+            redis::PushKind::Disconnection => PushKind::PushDisconnection,
+            redis::PushKind::Other(_) => PushKind::PushOther,
+            redis::PushKind::Invalidate => PushKind::PushInvalidate,
+            redis::PushKind::Message => PushKind::PushMessage,
+            redis::PushKind::PMessage => PushKind::PushPMessage,
+            redis::PushKind::SMessage => PushKind::PushSMessage,
+            redis::PushKind::Unsubscribe => PushKind::PushUnsubscribe,
+            redis::PushKind::PUnsubscribe => PushKind::PushPUnsubscribe,
+            redis::PushKind::SUnsubscribe => PushKind::PushSUnsubscribe,
+            redis::PushKind::Subscribe => PushKind::PushSubscribe,
+            redis::PushKind::PSubscribe => PushKind::PushPSubscribe,
+            redis::PushKind::SSubscribe => PushKind::PushSSubscribe,
+        }
+    }
+}
+
 /// Processes a push notification message and calls the provided callback function.
 ///
 /// This function converts a PushInfo message to a CommandResponse, determines the
@@ -411,27 +447,11 @@ fn process_push_notification(
         }
     };
 
-    // Get the numeric value of the PushKind enum
-    let kind_value = match push_msg.kind {
-        redis::PushKind::Disconnection => 0,
-        redis::PushKind::Other(_) => 1,
-        redis::PushKind::Invalidate => 2,
-        redis::PushKind::Message => 3,
-        redis::PushKind::PMessage => 4,
-        redis::PushKind::SMessage => 5,
-        redis::PushKind::Unsubscribe => 6,
-        redis::PushKind::PUnsubscribe => 7,
-        redis::PushKind::SUnsubscribe => 8,
-        redis::PushKind::Subscribe => 9,
-        redis::PushKind::PSubscribe => 10,
-        redis::PushKind::SSubscribe => 11,
-    };
-
     // Call the pubsub callback with the push notification data
     unsafe {
         pubsub_callback(
             client_adapter_ptr,
-            kind_value,
+            push_msg.kind.into(),
             Box::into_raw(Box::new(data_response)),
         );
     }
