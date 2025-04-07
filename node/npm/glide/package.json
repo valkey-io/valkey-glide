@@ -33,6 +33,7 @@
     },
     "homepage": "https://github.com/valkey-io/valkey-glide#readme",
     "devDependencies": {
+        "@jest/globals": "^29.7.0",
         "@types/node": "^22.13.1",
         "@typescript-eslint/eslint-plugin": "^8.24.0",
         "@typescript-eslint/parser": "^8.24.0",

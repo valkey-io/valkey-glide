@@ -2,9 +2,8 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { it } from "@jest/globals";
+import { describe, it } from "@jest/globals";
 import * as f from "fs/promises";
-import { describe } from "node:test";
 import * as ts from "typescript";
 import * as glideApi from "../"; //ESM convention,
 
@@ -79,8 +78,8 @@ describe("Validation of Exported Symbols", () => {
 
         if (missingSymbols.length > 0) {
             console.log(
-                "The following symbols are exported from npm/glide package but missing " +
-                    "from the internal node package export. These symbols might be from glide-rs package",
+                "The following symbols are exported from npm/glide package but missing from the" +
+                    "internal node package export. These symbols might be from glide-rs package",
             );
             console.log(missingSymbols);
         }
