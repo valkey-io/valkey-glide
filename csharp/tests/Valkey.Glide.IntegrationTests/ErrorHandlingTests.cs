@@ -15,7 +15,7 @@ public class ErrorHandlingTests
             await GlideClient.CreateClient(new StandaloneClientConfigurationBuilder().WithAddress(null, 42).Build())
         );
 
-    [Fact(Skip = "Deactivated until #3395 merged")]
+    [Fact]
     public async Task ErrorIfTimedOut() =>
         await Assert.ThrowsAsync<TimeoutException>(async () =>
             await TestConfiguration.DefaultClusterClient().CustomCommand(["debug", "sleep", "1"])
