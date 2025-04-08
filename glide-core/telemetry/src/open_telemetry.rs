@@ -67,7 +67,6 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
     // Parse the URL using the `url` crate to validate it
     let url = Url::parse(endpoint)
         .map_err(|_| Error::new(ErrorKind::InvalidInput, format!("Parse error. {endpoint}")))?;
-    println!("url: {}", url);
 
     match url.scheme() {
         "http" => Ok(GlideOpenTelemetryTraceExporter::Http(format!(
@@ -88,8 +87,9 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
         "file" => {
             // For file URLs, we need to extract the path without the 'file://' prefix
             let path = url.path();
-            let full_path = if path.starts_with("file://") {
-                &path[7..]
+            let file_prefix = "file://";
+            let full_path = if path.starts_with(file_prefix) {
+                &path[file_prefix.len()..]
             } else {
                 path
             };
@@ -104,7 +104,6 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
 #[derive(Clone, Debug)]
 struct GlideSpanInner {
     span: Arc<RwLock<opentelemetry::global::BoxedSpan>>,
-    span_name: String,
     #[cfg(test)]
     reference_count: Arc<AtomicUsize>,
 }
@@ -122,14 +121,9 @@ impl GlideSpanInner {
 
         GlideSpanInner {
             span,
-            span_name: name.to_string(),
             #[cfg(test)]
             reference_count: Arc::new(AtomicUsize::new(1)),
         }
-    }
-
-    pub fn print_span_name(&self) {
-        println!("The span name is: {}", self.span_name);
     }
 
     /// Create new span as a child of `parent`, returning an error if the parent span lock is poisoned.
@@ -153,7 +147,6 @@ impl GlideSpanInner {
         ));
         Ok(GlideSpanInner {
             span,
-            span_name: name.to_string(),
             #[cfg(test)]
             reference_count: Arc::new(AtomicUsize::new(1)),
         })
@@ -269,10 +262,6 @@ impl GlideSpan {
         }
     }
 
-    pub fn print_span(&self) {
-        self.inner.print_span_name();
-    }
-
     /// Attach event with name to this span.
     pub fn add_event(&self, name: &str) {
         self.inner.add_event(name, None)
@@ -345,7 +334,7 @@ impl Default for GlideOpenTelemetryConfigBuilder {
             span_flush_interval: std::time::Duration::from_millis(
                 DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as u64,
             ),
-            trace_exporter: GlideOpenTelemetryTraceExporter::Http("http://test.com".to_string()),
+            trace_exporter: GlideOpenTelemetryTraceExporter::File(std::env::temp_dir()),
         }
     }
 }

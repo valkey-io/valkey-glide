@@ -109,8 +109,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint:
-                           "https://valid-endpoint/v1/traces", // "file:///tmp/",
+                        tracesCollectorEndPoint: "file:///tmp/",
                         metricsCollectorEndPoint:
                             "https://valid-endpoint/v1/metrics",
                         flushIntervalMs: 100,
@@ -175,7 +174,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
             // Check for expected span names - these checks will fail the test if not found
             expect(spanNames).toContain("Batch");
-            expect(spanNames).toContain("send_command");
+            expect(spanNames).toContain("send_batch");
 
             // Force GC and check memory
             if (global.gc) {

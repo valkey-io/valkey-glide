@@ -397,7 +397,7 @@ async fn send_batch(
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
     pipeline.set_pipeline_span(span_command);
-    let child_span = pipeline.span().map(|span| span.add_span("send_command"));
+    let child_span = pipeline.span().map(|span| span.add_span("send_batch"));
     if request.is_atomic {
         pipeline.atomic();
     }
@@ -637,8 +637,7 @@ async fn handle_requests(
 fn get_unsafe_span_from_ptr(span_command: Option<u64>) -> Option<GlideSpan> {
     span_command.map(|span_command| unsafe {
         Arc::increment_strong_count(span_command as *const GlideSpan);
-        let span = (*Arc::from_raw(span_command as *const GlideSpan)).clone();
-        span
+        (*Arc::from_raw(span_command as *const GlideSpan)).clone()
     })
 }
 

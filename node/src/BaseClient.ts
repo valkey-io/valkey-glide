@@ -693,7 +693,13 @@ export interface BaseClientConfiguration {
  * - **openTelemetryConfig**: Use the `openTelemetryConfig` property to specify the endpoint of the collector to export the measurments.
  *   - **Traces Collector EndPoint**: Set `tracesCollectorEndPoint` to specify the endpoint path of the collector to export the traces measurments.
  *   - **Metrics Collector EndPoint**: Set `metricsCollectorEndPoint` to specify the endpoint path of the collector to export the metrics data.
- *   - **Flush Interval Ms**: Set `flushIntervalMs` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 500 will be used.
+ *   - **Flush Interval Ms**: Set `flushIntervalMs` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 5000 will be used.
+ *
+ * The collector endpoints support multiple protocols:
+ * - HTTP: Use `http://` prefix (e.g., `http://localhost:4318`)
+ * - HTTPS: Use `https://` prefix (e.g., `https://collector.example.com:4318`)
+ * - gRPC: Use `grpc://` prefix (e.g., `grpc://localhost:4317`)
+ * - File: Use `file://` prefix followed by the full path (e.g., `file:///path/to/collector.json`) to write the signals data to a file.
  *
  * @example
  * ```typescript
@@ -702,7 +708,7 @@ export interface BaseClientConfiguration {
  *   openTelemetryConfig: {
  *      tracesCollectorEndPoint: 'https://127.0.0.1/v1/traces',
  *      metricsCollectorEndPoint: 'https://127.0.0.1/v1/metrics',
- *      flushIntervalMs: 500,
+ *      flushIntervalMs: 5000, // 5 seconds
  *   },
  * };
  * ```
@@ -729,7 +735,7 @@ export interface AdvancedBaseClientConfiguration {
         metricsCollectorEndPoint: string;
         /**
          * The duration in milliseconds the data will exported to the collector.
-         * If interval is not specified, 500 will be used.
+         * If interval is not specified, 5000 will be used.
          */
         flushIntervalMs?: number;
     };
@@ -7771,8 +7777,10 @@ export class BaseClient {
 
         if (options.openTelemetryConfig) {
             request.opentelemetryConfig = {
-                tracesCollectorEndPoint: options.openTelemetryConfig.tracesCollectorEndPoint,
-                metricsCollectorEndPoint: options.openTelemetryConfig.metricsCollectorEndPoint,
+                tracesCollectorEndPoint:
+                    options.openTelemetryConfig.tracesCollectorEndPoint,
+                metricsCollectorEndPoint:
+                    options.openTelemetryConfig.metricsCollectorEndPoint,
                 flushInterval: options.openTelemetryConfig.flushIntervalMs,
             };
         }
