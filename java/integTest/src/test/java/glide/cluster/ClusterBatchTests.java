@@ -18,11 +18,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
-import glide.TransactionTestUtilities.TransactionBuilder;
+import glide.BatchTestUtilities.BatchBuilder;
 import glide.api.GlideClusterClient;
-import glide.api.models.ClusterTransaction;
+import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.configuration.ProtocolVersion;
@@ -42,7 +43,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(10) // seconds
-public class ClusterTransactionTests {
+public class ClusterBatchTests {
 
     @SneakyThrows
     public static Stream<Arguments> getClients() {
@@ -67,112 +68,154 @@ public class ClusterTransactionTests {
                                         .get())));
     }
 
-    @ParameterizedTest
-    @MethodSource("getClients")
     @SneakyThrows
-    public void custom_command_info(GlideClusterClient clusterClient) {
-        ClusterTransaction transaction = new ClusterTransaction().customCommand(new String[] {"info"});
-        Object[] result = clusterClient.exec(transaction).get();
-        assertTrue(((String) result[0]).contains("# Stats"));
+    public static Stream<Arguments> getClientsWithAtomic() {
+        return getClients()
+                .flatMap(
+                        args -> Stream.of(true, false).map(isAtomic -> Arguments.of(args.get()[0], isAtomic)));
     }
 
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
-    public void info_simple_route_test(GlideClusterClient clusterClient) {
-        ClusterTransaction transaction = new ClusterTransaction().info().info();
-        Object[] result = clusterClient.exec(transaction, RANDOM).get();
+    public void custom_command_info(GlideClusterClient clusterClient) {
+        ClusterBatch transaction = new ClusterBatch(true).customCommand(new String[] {"info"});
+        Object[] result = clusterClient.exec(transaction).get();
+        assertTrue(((String) result[0]).contains("# Stats"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClientsWithAtomic")
+    @SneakyThrows
+    public void custom_command_info(GlideClusterClient clusterClient, boolean isAtomic) {
+        ClusterBatch batch = new ClusterBatch(isAtomic).customCommand(new String[] {"ping"});
+        Object[] result = clusterClient.exec(batch).get();
+        assertEquals(result[0], "PONG");
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClientsWithAtomic")
+    @SneakyThrows
+    public void info_simple_route_test(GlideClusterClient clusterClient, boolean isAtomic) {
+        ClusterBatch batch = new ClusterBatch(isAtomic).info().info();
+        ClusterBatchOptions options = ClusterBatchOptions.builder().route(RANDOM).build();
+
+        Object[] result = clusterClient.exec(batch, options).get();
 
         assertTrue(((String) result[0]).contains("# Stats"));
         assertTrue(((String) result[1]).contains("# Stats"));
     }
 
-    public static Stream<Arguments> getCommonTransactionBuilders() {
-        return glide.TransactionTestUtilities.getCommonTransactionBuilders()
+    public static Stream<Arguments> getCommonBatchBuilders() {
+        return glide.BatchTestUtilities.getCommonBatchBuilders()
                 .flatMap(
                         test ->
                                 getClients()
-                                        .map(client -> Arguments.of(test.get()[0], test.get()[1], client.get()[0])));
+                                        .flatMap(
+                                                client ->
+                                                        Stream.of(true, false)
+                                                                .map(
+                                                                        isAtomic ->
+                                                                                Arguments.of(
+                                                                                        test.get()[0], // test name (String)
+                                                                                        test.get()[1], // BatchBuilder
+                                                                                        client.get()[0], // GlideClusterClient
+                                                                                        isAtomic // boolean isAtomic
+                                                                                        ))));
     }
 
     @SneakyThrows
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("getCommonTransactionBuilders")
-    public void transactions_with_group_of_commands(
-            String testName, TransactionBuilder builder, GlideClusterClient clusterClient) {
-        ClusterTransaction transaction = new ClusterTransaction();
-        Object[] expectedResult = builder.apply(transaction);
+    @ParameterizedTest(name = "{0} - isAtomic: {3}")
+    @MethodSource("getCommonBatchBuilders")
+    public void batches_with_group_of_commands(
+            String testName, BatchBuilder builder, GlideClusterClient clusterClient, boolean isAtomic) {
+        ClusterBatch batch = new ClusterBatch(isAtomic);
+        Object[] expectedResult = builder.apply(batch, isAtomic);
 
-        Object[] results = clusterClient.exec(transaction).get();
+        Object[] results = clusterClient.exec(batch).get();
         assertDeepEquals(expectedResult, results);
     }
 
-    public static Stream<Arguments> getPrimaryNodeTransactionBuilders() {
-        return glide.TransactionTestUtilities.getPrimaryNodeTransactionBuilders()
+    public static Stream<Arguments> getPrimaryNodeBatchBuilders() {
+        return glide.BatchTestUtilities.getPrimaryNodeBatchBuilders()
                 .flatMap(
                         test ->
                                 getClients()
-                                        .map(client -> Arguments.of(test.get()[0], test.get()[1], client.get()[0])));
+                                        .flatMap(
+                                                client ->
+                                                        Stream.of(true, false)
+                                                                .map(
+                                                                        isAtomic ->
+                                                                                Arguments.of(
+                                                                                        test.get()[0], // test name
+                                                                                        test.get()[1], // builder
+                                                                                        client.get()[0], // client
+                                                                                        isAtomic))));
     }
 
     @SneakyThrows
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("getPrimaryNodeTransactionBuilders")
-    public void keyless_transactions_with_group_of_commands(
-            String testName, TransactionBuilder builder, GlideClusterClient clusterClient) {
-        ClusterTransaction transaction = new ClusterTransaction();
-        Object[] expectedResult = builder.apply(transaction);
-
+    @ParameterizedTest(name = "{0} - isAtomic: {3}")
+    @MethodSource("getPrimaryNodeBatchBuilders")
+    public void keyless_batches_with_group_of_commands(
+            String testName, BatchBuilder builder, GlideClusterClient clusterClient, boolean isAtomic) {
+        ClusterBatch batch = new ClusterBatch(isAtomic);
+        Object[] expectedResult = builder.apply(batch, isAtomic);
+        if (expectedResult.length == 0 && !isAtomic) {
+            // Empty pipelines returns an error
+            return;
+        }
         SingleNodeRoute route = new SlotIdRoute(1, SlotType.PRIMARY);
-        Object[] results = clusterClient.exec(transaction, route).get();
+        ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
+        Object[] results = clusterClient.exec(batch, options).get();
+
         assertDeepEquals(expectedResult, results);
     }
 
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
-    public void test_transaction_large_values(GlideClusterClient clusterClient) {
+    @MethodSource("getClientsWithAtomic")
+    public void test_batch_large_values(GlideClusterClient clusterClient, boolean isAtomic) {
         int length = 1 << 25; // 33mb
         String key = "0".repeat(length);
         String value = "0".repeat(length);
 
-        ClusterTransaction transaction = new ClusterTransaction();
-        transaction.set(key, value);
-        transaction.get(key);
+        ClusterBatch batch = new ClusterBatch(isAtomic);
+        batch.set(key, value);
+        batch.get(key);
 
         Object[] expectedResult =
                 new Object[] {
-                    OK, // transaction.set(key, value);
-                    value, // transaction.get(key);
+                    OK, // batch.set(key, value);
+                    value, // batch.get(key);
                 };
 
-        Object[] result = clusterClient.exec(transaction).get();
+        Object[] result = clusterClient.exec(batch).get();
         assertArrayEquals(expectedResult, result);
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void lastsave(GlideClusterClient clusterClient) {
+    public void lastsave(GlideClusterClient clusterClient, boolean isAtomic) {
         var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
-        var response = clusterClient.exec(new ClusterTransaction().lastsave()).get();
+        var response = clusterClient.exec(new ClusterBatch(isAtomic).lastsave()).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void objectFreq(GlideClusterClient clusterClient) {
+    public void objectFreq(GlideClusterClient clusterClient, boolean isAtomic) {
         String objectFreqKey = "key";
         String maxmemoryPolicy = "maxmemory-policy";
         String oldPolicy =
                 clusterClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
         try {
-            ClusterTransaction transaction = new ClusterTransaction();
-            transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
-            transaction.set(objectFreqKey, "");
-            transaction.objectFreq(objectFreqKey);
-            var response = clusterClient.exec(transaction).get();
+            ClusterBatch batch = new ClusterBatch(isAtomic);
+            batch.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
+            batch.set(objectFreqKey, "");
+            batch.objectFreq(objectFreqKey);
+            var response = clusterClient.exec(batch).get();
             assertEquals(OK, response[0]);
             assertEquals(OK, response[1]);
             assertTrue((long) response[2] >= 0L);
@@ -182,27 +225,27 @@ public class ClusterTransactionTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void objectIdletime(GlideClusterClient clusterClient) {
+    public void objectIdletime(GlideClusterClient clusterClient, boolean isAtomic) {
         String objectIdletimeKey = "key";
-        ClusterTransaction transaction = new ClusterTransaction();
-        transaction.set(objectIdletimeKey, "");
-        transaction.objectIdletime(objectIdletimeKey);
-        var response = clusterClient.exec(transaction).get();
+        ClusterBatch batch = new ClusterBatch(isAtomic);
+        batch.set(objectIdletimeKey, "");
+        batch.objectIdletime(objectIdletimeKey);
+        var response = clusterClient.exec(batch).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void objectRefcount(GlideClusterClient clusterClient) {
+    public void objectRefcount(GlideClusterClient clusterClient, boolean isAtomic) {
         String objectRefcountKey = "key";
-        ClusterTransaction transaction = new ClusterTransaction();
-        transaction.set(objectRefcountKey, "");
-        transaction.objectRefcount(objectRefcountKey);
-        var response = clusterClient.exec(transaction).get();
+        ClusterBatch batch = new ClusterBatch(isAtomic);
+        batch.set(objectRefcountKey, "");
+        batch.objectRefcount(objectRefcountKey);
+        var response = clusterClient.exec(batch).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
@@ -213,12 +256,12 @@ public class ClusterTransactionTests {
     public void zrank_zrevrank_withscores(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"));
         String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
-        ClusterTransaction transaction = new ClusterTransaction();
-        transaction.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
-        transaction.zrankWithScore(zSetKey1, "one");
-        transaction.zrevrankWithScore(zSetKey1, "one");
+        ClusterBatch batch = new ClusterBatch(true);
+        batch.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
+        batch.zrankWithScore(zSetKey1, "one");
+        batch.zrevrankWithScore(zSetKey1, "one");
 
-        Object[] result = clusterClient.exec(transaction).get();
+        Object[] result = clusterClient.exec(batch).get();
         assertEquals(3L, result[0]);
         assertArrayEquals(new Object[] {0L, 1.0}, (Object[]) result[1]);
         assertArrayEquals(new Object[] {2L, 1.0}, (Object[]) result[2]);
@@ -235,8 +278,8 @@ public class ClusterTransactionTests {
         String foobarString = "foobar";
         String helloString = "hello";
         String[] keys = new String[] {key1, key2, key3};
-        ClusterTransaction setFoobarTransaction = new ClusterTransaction();
-        ClusterTransaction setHelloTransaction = new ClusterTransaction();
+        ClusterBatch setFoobarTransaction = new ClusterBatch(true);
+        ClusterBatch setHelloTransaction = new ClusterBatch(true);
         String[] expectedExecResponse = new String[] {OK, OK, OK};
 
         // Returns null when a watched key is modified before it is executed in a transaction command.
@@ -290,7 +333,7 @@ public class ClusterTransactionTests {
         String foobarString = "foobar";
         String helloString = "hello";
         String[] keys = new String[] {key1, key2};
-        ClusterTransaction setFoobarTransaction = new ClusterTransaction();
+        ClusterBatch setFoobarTransaction = new ClusterBatch(true);
         String[] expectedExecResponse = new String[] {OK, OK};
 
         // UNWATCH returns OK when there no watched keys
@@ -308,19 +351,19 @@ public class ClusterTransactionTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void spublish(GlideClusterClient clusterClient) {
+    public void spublish(GlideClusterClient clusterClient, boolean isAtomic) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        ClusterTransaction transaction = new ClusterTransaction().publish("messagae", "Schannel", true);
+        ClusterBatch batch = new ClusterBatch(isAtomic).publish("messagae", "Schannel", true);
 
-        assertArrayEquals(new Object[] {0L}, clusterClient.exec(transaction).get());
+        assertArrayEquals(new Object[] {0L}, clusterClient.exec(batch).get());
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void sort(GlideClusterClient clusterClient) {
+    public void sort(GlideClusterClient clusterClient, boolean isAtomic) {
         var prefix = "{" + UUID.randomUUID() + "}:";
         String key1 = prefix + "1";
         String key2 = prefix + "2";
@@ -329,21 +372,21 @@ public class ClusterTransactionTests {
         String key5 = prefix + "5";
         String key6 = prefix + "6";
         String[] descendingList = new String[] {"3", "2", "1"};
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch batch = new ClusterBatch(isAtomic);
         String[] ascendingListByAge = new String[] {"Bob", "Alice"};
         String[] descendingListByAge = new String[] {"Alice", "Bob"};
-        transaction
+        batch
                 .lpush(key1, new String[] {"3", "1", "2"})
                 .sort(key1, SortOptions.builder().orderBy(DESC).build())
                 .sortStore(key1, key2, SortOptions.builder().orderBy(DESC).build())
                 .lrange(key2, 0, -1);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction.sortReadOnly(key1, SortOptions.builder().orderBy(DESC).build());
+            batch.sortReadOnly(key1, SortOptions.builder().orderBy(DESC).build());
         }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
-            transaction
+            batch
                     .hset(key3, Map.of("name", "Alice", "age", "30"))
                     .hset(key4, Map.of("name", "Bob", "age", "25"))
                     .lpush(key5, new String[] {"4", "3"})
@@ -379,19 +422,19 @@ public class ClusterTransactionTests {
                     .lrange(key6, 0, -1);
         }
 
-        Object[] results = clusterClient.exec(transaction).get();
+        Object[] results = clusterClient.exec(batch).get();
         Object[] expectedResult =
                 new Object[] {
                     3L, // lpush(key1, new String[] {"3", "1", "2"})
                     descendingList, // sort(key1, SortOptions.builder().orderBy(DESC).build())
-                    3L, // sortStore(key1, key2, DESC))
+                    3L, // sortStore(key1, key2, SortOptions.builder().orderBy(DESC).build())
                     descendingList, // lrange(key2, 0, -1)
                 };
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResult =
                     concatenateArrays(
-                            expectedResult, new Object[] {descendingList} // sortReadOnly(key1, DESC)
+                            expectedResult, new Object[] {descendingList} // sortReadOnly(key1, SortOptions)
                             );
         }
 
@@ -405,9 +448,9 @@ public class ClusterTransactionTests {
                                 2L, // lpush(key5, new String[] {"4", "3"})
                                 ascendingListByAge, // sort(key5, SortOptions)
                                 descendingListByAge, // sort(key5, SortOptions)
-                                2L, // sortStore(key5, ksy6, SortOptions)
+                                2L, // sortStore(key5, key6, SortOptions)
                                 ascendingListByAge, // lrange(key6, 0, -1)
-                                2L, // sortStore(key5, ksy6, SortOptions)
+                                2L, // sortStore(key5, key6, SortOptions)
                                 descendingListByAge, // lrange(key6, 0, -1)
                             });
         }
@@ -417,16 +460,16 @@ public class ClusterTransactionTests {
 
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
-    public void waitTest(GlideClusterClient clusterClient) {
+    @MethodSource("getClientsWithAtomic")
+    public void waitTest(GlideClusterClient clusterClient, boolean isAtomic) {
         // setup
         String key = UUID.randomUUID().toString();
         long numreplicas = 1L;
         long timeout = 1000L;
-        ClusterTransaction transaction = new ClusterTransaction();
+        ClusterBatch batch = new ClusterBatch(isAtomic);
 
-        transaction.set(key, "value").wait(numreplicas, timeout);
-        Object[] results = clusterClient.exec(transaction).get();
+        batch.set(key, "value").wait(numreplicas, timeout);
+        Object[] results = clusterClient.exec(batch).get();
         Object[] expectedResult =
                 new Object[] {
                     OK, // set(key,  "value")
@@ -437,9 +480,9 @@ public class ClusterTransactionTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void test_transaction_function_dump_restore(GlideClusterClient clusterClient) {
+    public void test_batch_function_dump_restore(GlideClusterClient clusterClient, boolean isAtomic) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String libName = "mylib";
         String funcName = "myfun";
@@ -449,25 +492,28 @@ public class ClusterTransactionTests {
         clusterClient.functionLoad(code, true).get();
 
         // Verify functionDump
-        ClusterTransaction transaction = new ClusterTransaction().withBinaryOutput().functionDump();
-        Object[] result = clusterClient.exec(transaction).get();
-        GlideString payload = (GlideString) (result[0]);
+        ClusterBatch batch = new ClusterBatch(isAtomic).withBinaryOutput().functionDump();
+        Object[] result = clusterClient.exec(batch).get();
+        GlideString payload = (GlideString) result[0];
 
         // Verify functionRestore
-        transaction = new ClusterTransaction();
-        transaction.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
+        batch = new ClusterBatch(isAtomic);
+        batch.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
         // For the cluster mode, PRIMARY SlotType is required to avoid the error:
         //  "RequestError: An error was signalled by the server -
         //   ReadOnly: You can't write against a read only replica."
-        Object[] response = clusterClient.exec(transaction, new SlotIdRoute(1, SlotType.PRIMARY)).get();
+        ClusterBatchOptions options =
+                ClusterBatchOptions.builder().route(new SlotIdRoute(1, SlotType.PRIMARY)).build();
+
+        Object[] response = clusterClient.exec(batch, options).get();
         assertEquals(OK, response[0]);
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void test_transaction_xinfoStream(GlideClusterClient clusterClient) {
-        ClusterTransaction transaction = new ClusterTransaction();
+    public void test_batch_xinfoStream(GlideClusterClient clusterClient, boolean isAtomic) {
+        ClusterBatch batch = new ClusterBatch(isAtomic);
         final String streamKey = "{streamKey}-" + UUID.randomUUID();
         LinkedHashMap<String, Object> expectedStreamInfo =
                 new LinkedHashMap<>() {
@@ -493,12 +539,12 @@ public class ClusterTransactionTests {
                     }
                 };
 
-        transaction
+        batch
                 .xadd(streamKey, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
                 .xinfoStream(streamKey)
                 .xinfoStreamFull(streamKey);
 
-        Object[] results = clusterClient.exec(transaction).get();
+        Object[] results = clusterClient.exec(batch).get();
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedStreamInfo.put("max-deleted-entry-id", "0-0");
@@ -511,26 +557,25 @@ public class ClusterTransactionTests {
 
         assertDeepEquals(
                 new Object[] {
-                    "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
+                    "0-1", // xadd(streamKey, Map.of("field1", "value1"), ... .id("0-1").build());
                     expectedStreamInfo, // xinfoStream(streamKey)
-                    expectedStreamFullInfo, // xinfoStreamFull(streamKey1)
+                    expectedStreamFullInfo, // xinfoStreamFull(streamKey)
                 },
                 results);
     }
 
     @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getClients")
-    public void binary_strings(GlideClusterClient clusterClient) {
+    @MethodSource("getClientsWithAtomic")
+    public void binary_strings(GlideClusterClient clusterClient, boolean isAtomic) {
         String key = UUID.randomUUID().toString();
         clusterClient.set(key, "_").get();
         // use dump to ensure that we have non-string convertible bytes
         var bytes = clusterClient.dump(gs(key)).get();
 
-        var transaction =
-                new ClusterTransaction().withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
+        var batch = new ClusterBatch(isAtomic).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
 
-        var responses = clusterClient.exec(transaction).get();
+        var responses = clusterClient.exec(batch).get();
 
         assertDeepEquals(
                 new Object[] {
