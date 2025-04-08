@@ -255,6 +255,11 @@ class ExpirySet:
     ) -> None:
         self.set_expiry_type_and_value(expiry_type, value)
 
+    def __eq__(self, other: "object") -> bool:
+        if not isinstance(other, ExpirySet):
+            return NotImplemented
+        return self.expiry_type == other.expiry_type and self.value == other.value
+
     def set_expiry_type_and_value(
         self, expiry_type: ExpiryType, value: Optional[Union[int, datetime, timedelta]]
     ):
