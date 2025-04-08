@@ -105,3 +105,6 @@ Message handler functionality tested through the basic tests above:
 ## Future Refactoring Tasks
 
 - [ ] Refactor test suite to consolidate duplicate code between GlideTestSuite and PubSubTestSuite
+- [ ] Update makefile with PubSub tests
+- [ ] Update the developer.md file with how to use PubSub API
+- [ ] Update CI pipeline to run PubSub tests
