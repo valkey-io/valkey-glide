@@ -38,6 +38,9 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 	if err != nil {
 		return nil, err
 	}
+	if config.subscriptionConfig != nil {
+		client.SetMessageHandler(NewMessageHandler(config.subscriptionConfig.callback, config.subscriptionConfig.context))
+	}
 
 	return &GlideClusterClient{client}, nil
 }
