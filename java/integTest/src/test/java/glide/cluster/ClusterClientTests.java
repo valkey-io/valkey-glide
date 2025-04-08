@@ -293,7 +293,6 @@ public class ClusterClientTests {
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
 
         try {
-
             setNewAclUserPassword(adminClient, username, pwd);
 
             // Create client with ACL user credentials
