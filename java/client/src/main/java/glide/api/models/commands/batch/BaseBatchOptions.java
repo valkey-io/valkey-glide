@@ -28,7 +28,7 @@ public abstract class BaseBatchOptions {
      *
      * <p>When set to {@code true}, the first encountered error in the batch will be raised as an
      * exception of type {@link RequestException} after all retries and reconnections have been
-     * exhausted.
+     * executed.
      *
      * <p>When set to {@code false}, errors will be included as part of the batch response, allowing
      * the caller to process both successful and failed commands together. In this case, error details
