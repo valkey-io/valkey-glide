@@ -112,9 +112,6 @@ func getMessage(pushKind C.PushKind, msgContent string, channel string, pattern 
 	case C.PushPMessage:
 		return NewPubSubMessageWithPattern(msgContent, channel, pattern), nil
 
-	case C.PushSubscribe, C.PushPSubscribe, C.PushSSubscribe, C.PushUnsubscribe, C.PushPUnsubscribe, C.PushSUnsubscribe:
-		return NewPubSubMessage(msgContent, channel), nil
-
 	default:
 		// log unsupported push kind
 		return nil, fmt.Errorf("unsupported push kind")
