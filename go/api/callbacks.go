@@ -55,9 +55,18 @@ func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorTyp
 	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
 }
 
+//
 //export pubSubCallback
-func pubSubCallback(clientPtr unsafe.Pointer, pushKind C.PushKind, message unsafe.Pointer, message_len C.int, channel unsafe.Pointer, channel_len C.int, pattern unsafe.Pointer, pattern_len C.int) {
-
+func pubSubCallback(
+	clientPtr unsafe.Pointer,
+	pushKind C.PushKind,
+	message unsafe.Pointer,
+	message_len C.int,
+	channel unsafe.Pointer,
+	channel_len C.int,
+	pattern unsafe.Pointer,
+	pattern_len C.int,
+) {
 	if clientPtr == nil {
 		return
 	}
@@ -70,7 +79,6 @@ func pubSubCallback(clientPtr unsafe.Pointer, pushKind C.PushKind, message unsaf
 	}
 
 	go func() {
-
 		// Process different types of push messages
 		message, err := getMessage(pushKind, msg, cha, pat)
 		if err != nil {
