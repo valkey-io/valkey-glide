@@ -10,8 +10,6 @@ type PubSubCommands interface {
 	PubSubChannelsWithPattern(pattern string) ([]string, error)
 	PubSubNumPat() (int64, error)
 	PubSubNumSub(channels []string) (map[string]int64, error)
-	SetMessageHandler(handler *MessageHandler)
-	GetMessageHandler() *MessageHandler
 }
 
 // PubSubClusterCommands defines additional Pub/Sub operations available only in cluster mode.

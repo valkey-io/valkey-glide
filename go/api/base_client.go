@@ -7647,14 +7647,13 @@ func (client *baseClient) Publish(channel string, message string) (int64, error)
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-channels
 func (client *baseClient) PubSubChannels() ([]string, error) {
-	// args := []string{"CHANNELS"}
-	// result, err := client.executeCommand(C.PubSubChannels, args)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	args := []string{"CHANNELS"}
+	result, err := client.executeCommand(C.PubSubChannels, args)
+	if err != nil {
+		return nil, err
+	}
 
-	// return handleStringArrayResponse(result)
-	return nil, nil
+	return handleStringArrayResponse(result)
 }
 
 // PubSubChannelsWithPattern lists the currently active channels matching the specified pattern.
