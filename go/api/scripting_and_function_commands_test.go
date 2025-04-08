@@ -4,16 +4,41 @@ package api
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
-	"github.com/valkey-io/valkey-glide/go/integTest"
 )
 
+func generateExampleLuaLibCode(libName string, functions map[string]string, readonly bool) string {
+	var code strings.Builder
+
+	// Write header
+	code.WriteString("#!lua name=")
+	code.WriteString(libName)
+	code.WriteString("\n")
+
+	// Write each function
+	for name, function := range functions {
+		code.WriteString("redis.register_function{ function_name = '")
+		code.WriteString(name)
+		code.WriteString("', callback = function(keys, args) ")
+		code.WriteString(function)
+		code.WriteString(" end")
+
+		if readonly {
+			code.WriteString(", flags = { 'no-writes' }")
+		}
+		code.WriteString(" }\n")
+	}
+
+	return code.String()
+}
+
 var (
-	libraryCode         = integTest.GenerateLuaLibCode("mylib", map[string]string{"myfunc": "return 42"}, true)
-	libraryCodeWithArgs = integTest.GenerateLuaLibCode("mylib", map[string]string{"myfunc": "return args[1]"}, true)
+	libraryCode         = generateExampleLuaLibCode("mylib", map[string]string{"myfunc": "return 42"}, true)
+	libraryCodeWithArgs = generateExampleLuaLibCode("mylib", map[string]string{"myfunc": "return args[1]"}, true)
 )
 
 // FunctionLoad Examples
