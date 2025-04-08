@@ -7670,18 +7670,17 @@ func (client *baseClient) PubSubChannels() ([]string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-channels
 func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
-	// if pattern == "" {
-	// 	return nil, errors.New("pattern is required for PubSubChannelsWithPattern command")
-	// }
+	if pattern == "" {
+		return nil, errors.New("pattern is required for PubSubChannelsWithPattern command")
+	}
 
-	// args := []string{"CHANNELS", pattern}
-	// result, err := client.executeCommand(C.PubSubChannels, args)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	args := []string{"CHANNELS", pattern}
+	result, err := client.executeCommand(C.PubSubChannels, args)
+	if err != nil {
+		return nil, err
+	}
 
-	// return handleStringArrayResponse(result)
-	return nil, nil
+	return handleStringArrayResponse(result)
 }
 
 // PubSubNumPat returns the number of patterns that are subscribed to by clients.
