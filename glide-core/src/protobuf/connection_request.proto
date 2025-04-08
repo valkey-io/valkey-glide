@@ -57,7 +57,7 @@ message OpenTelemetryConfig
 {
     string traces_collector_end_point = 1;
     string metrics_collector_end_point = 2;
-    optional uint64 flush_interval= 3;
+    uint32 flush_interval= 3;
 }
 
 // IMPORTANT - if you add fields here, you probably need to add them also in client/mod.rs:`sanitized_request_string`.

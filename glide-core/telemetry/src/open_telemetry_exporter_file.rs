@@ -37,7 +37,6 @@ impl SpanExporterFile {
 
 macro_rules! file_writeln {
     ($file:expr, $content:expr) => {{
-        println!("writing to file: {}", $content);
         if let Err(e) = $file.write(format!("{}\n", $content).as_bytes()) {
             return Box::pin(std::future::ready(Err(TraceError::from(format!(
                 "File write error. {e}",

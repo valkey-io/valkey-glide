@@ -35,7 +35,7 @@ pub enum GlideOTELError {
 }
 
 /// Default interval in milliseconds for flushing open telemetry data to the collector.
-pub const DEFAULT_FLUSH_SPAN_INTERVAL_MS: u64 = 5000;
+pub const DEFAULT_FLUSH_SIGNAL_INTERVAL_MS: u32 = 5000;
 
 pub enum GlideSpanStatus {
     Ok,
@@ -59,7 +59,6 @@ pub enum GlideOpenTelemetryTraceExporter {
 impl std::str::FromStr for GlideOpenTelemetryTraceExporter {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@s: {}", s);
         parse_endpoint(s)
     }
 }
@@ -94,7 +93,6 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
             } else {
                 path
             };
-            println!("full_path: {}", full_path);
             Ok(GlideOpenTelemetryTraceExporter::File(PathBuf::from(
                 full_path,
             )))
@@ -344,7 +342,9 @@ pub struct GlideOpenTelemetryConfigBuilder {
 impl Default for GlideOpenTelemetryConfigBuilder {
     fn default() -> Self {
         GlideOpenTelemetryConfigBuilder {
-            span_flush_interval: std::time::Duration::from_millis(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
+            span_flush_interval: std::time::Duration::from_millis(
+                DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as u64,
+            ),
             trace_exporter: GlideOpenTelemetryTraceExporter::Http("http://test.com".to_string()),
         }
     }

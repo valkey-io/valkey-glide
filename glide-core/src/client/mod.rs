@@ -958,18 +958,18 @@ impl Client {
                 .with_flush_interval(std::time::Duration::from_millis(
                     request
                         .otel_flush_interval_ms
-                        .unwrap_or(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
+                        .unwrap_or(DEFAULT_FLUSH_SIGNAL_INTERVAL_MS) as u64,
                 ))
                 .with_trace_exporter(trace_exporter)
                 .build();
 
-            let _ = GlideOpenTelemetry::initialise(config).map_err(|e| {
+            if let Err(e) = GlideOpenTelemetry::initialise(config) {
                 log_error(
                     "OpenTelemetry initialization",
                     format!("OpenTelemetry initialization failed: {}", e),
-                )
-            });
-        };
+                );
+            }
+        }
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             let internal_client = if request.cluster_mode_enabled {

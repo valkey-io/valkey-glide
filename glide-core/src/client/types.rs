@@ -27,7 +27,7 @@ pub struct ConnectionRequest {
     pub inflight_requests_limit: Option<u32>,
     pub otel_traces_endpoint: Option<String>,
     pub otel_metrics_endpoint: Option<String>,
-    pub otel_flush_interval_ms: Option<u64>,
+    pub otel_flush_interval_ms: Option<u32>,
 }
 
 pub struct AuthenticationInfo {
@@ -231,7 +231,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             chars_to_string_option(&value.opentelemetry_config.traces_collector_end_point);
         let otel_metrics_endpoint =
             chars_to_string_option(&value.opentelemetry_config.metrics_collector_end_point);
-        let otel_flush_interval_ms = value.opentelemetry_config.flush_interval;
+        let otel_flush_interval_ms = none_if_zero(value.opentelemetry_config.flush_interval);
 
         ConnectionRequest {
             read_from,

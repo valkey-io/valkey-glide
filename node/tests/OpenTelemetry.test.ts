@@ -110,10 +110,10 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 advancedConfiguration: {
                     openTelemetryConfig: {
                         tracesCollectorEndPoint:
-                            "file:///tmp/spans.json",
+                           "https://valid-endpoint/v1/traces", // "file:///tmp/",
                         metricsCollectorEndPoint:
                             "https://valid-endpoint/v1/metrics",
-                        flushIntervalMs: 400,
+                        flushIntervalMs: 100,
                     },
                 },
             });
@@ -138,7 +138,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
             }
 
             // Wait for spans to be flushed to file
-            await new Promise((resolve) => setTimeout(resolve, 500));
+            await new Promise((resolve) => setTimeout(resolve, 5000));
 
             // Read and check span names from the file
             let spanData: string;

@@ -7769,7 +7769,13 @@ export class BaseClient {
             throw new Error("InvalidInput: flushIntervalMs cannot be negative");
         }
 
-        request.opentelemetryConfig = options.openTelemetryConfig;
+        if (options.openTelemetryConfig) {
+            request.opentelemetryConfig = {
+                tracesCollectorEndPoint: options.openTelemetryConfig.tracesCollectorEndPoint,
+                metricsCollectorEndPoint: options.openTelemetryConfig.metricsCollectorEndPoint,
+                flushInterval: options.openTelemetryConfig.flushIntervalMs,
+            };
+        }
     }
 
     /**
