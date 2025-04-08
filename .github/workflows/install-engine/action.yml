@@ -26,7 +26,14 @@ runs:
     # TODO: self-hosted runners are actually cloning the repo, using the cache from the previous run
     # will not work as expected. We need to find a way to cache the valkey repo on the runner itself.
     steps:
-        - name: Cache Valkey
+        - name: "Setup Environment Variables"
+          shell: bash
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+          run: |
+              echo "ENGINE_VERSION=$ENGINE_VERSION" >> $GITHUB_ENV
+
+        - name: Cache Valkey for non self hosted runners
           if: ${{!contains(inputs.target, 'aarch64-unknown') }}
           uses: actions/cache@v4
           id: cache-valkey
@@ -35,40 +42,21 @@ runs:
                   ~/valkey
               key: valkey-${{ inputs.engine-version }}-${{ inputs.target }}
 
-        - name: Build Valkey for ARM
-          if: ${{ contains(inputs.target, 'aarch64-unknown') }}
+        - name: Prepare Valkey sources
+          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
           shell: bash
-          working-directory: ~
           run: |
-              cd ~
-              echo "Building valkey ${{ inputs.engine-version }}"
-              # check if the valkey repo is already cloned
-              if [[ ! -d valkey ]]; then
-                  git clone https://github.com/valkey-io/valkey.git
-              else
-                  # check if the branch=version is already checked out
-                  if [[ $(git branch --show-current) != ${{ inputs.engine-version }} ]]; then
-                      cd valkey
-                      make clean
-                      make distclean
-                      sudo rm -rf /usr/local/bin/redis-* /usr/local/bin/valkey-* ./valkey-* ./redis-* ./dump.rdb
-                      git fetch --all
-                      git checkout ${{ inputs.engine-version }}
-                      git pull
-                  fi
+              echo "Cloning and checking out Valkey $ENGINE_VERSION"
+              cd ~/
+              if [[ -d valkey ]]; then
+                echo "Removing existing valkey directory..."
+                rm -fR valkey
               fi
-        # if no cache hit, build the engine
-        - name: Build Valkey
-          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' && !contains(inputs.target, 'aarch64-unknown') }}
-          shell: bash
-          run: |
-              echo "Building valkey ${{ inputs.engine-version }}"
-              cd ~
               git clone https://github.com/valkey-io/valkey.git
               cd valkey
-              git checkout ${{ inputs.engine-version }}
+              git checkout "$ENGINE_VERSION"
 
-        - name: Install engine
+        - name: Build and install engine
           shell: bash
           run: |
               cd ~/valkey
@@ -92,7 +80,7 @@ runs:
               # In Valkey releases, the engine is built with symlinks from valkey-server and valkey-cli
               # to redis-server and redis-cli. This step ensures that the engine is properly installed
               # with the expected version and that Valkey symlinks are correctly created.
-              EXPECTED_VERSION=`echo ${{ inputs.engine-version }} | sed -e "s/^redis-//"`
+              EXPECTED_VERSION=`echo "$ENGINE_VERSION" | sed -e "s/^redis-//"`
               INSTALLED_VER=$(redis-server -v)
               if [[ $INSTALLED_VER != *"${EXPECTED_VERSION}"* ]]; then
                   echo "Wrong version has been installed. Expected: $EXPECTED_VERSION, Installed: $INSTALLED_VER"

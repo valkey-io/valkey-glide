@@ -57,3 +57,5 @@ utils/TestUtils.js
 docs/markdown/python/**
 docs/markdown/typescript/**
 
+# generaged files (e.g. protobuf)
+generated/

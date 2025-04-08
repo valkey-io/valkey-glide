@@ -133,6 +133,14 @@ public class ConnectionManager {
             connectionRequestBuilder.setClientAz(configuration.getClientAZ());
         }
 
+        if (configuration.getReadFrom() == ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY) {
+            if (configuration.getClientAZ() == null) {
+                throw new ConfigurationError(
+                        "`clientAZ` must be set when read_from is set to `AZ_AFFINITY_REPLICAS_AND_PRIMARY`");
+            }
+            connectionRequestBuilder.setClientAz(configuration.getClientAZ());
+        }
+
         if (configuration.getProtocol() != null) {
             connectionRequestBuilder.setProtocolValue(configuration.getProtocol().ordinal());
         }
@@ -256,6 +264,8 @@ public class ConnectionManager {
                 return ConnectionRequestOuterClass.ReadFrom.PreferReplica;
             case AZ_AFFINITY:
                 return ConnectionRequestOuterClass.ReadFrom.AZAffinity;
+            case AZ_AFFINITY_REPLICAS_AND_PRIMARY:
+                return ConnectionRequestOuterClass.ReadFrom.AZAffinityReplicasAndPrimary;
             default:
                 return ConnectionRequestOuterClass.ReadFrom.Primary;
         }

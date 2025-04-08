@@ -147,7 +147,8 @@ class BaseClient(CoreCommands):
         All open futures will be closed with an exception.
 
         Args:
-            err_message (Optional[str]): If not None, this error message will be passed along with the exceptions when closing all open futures.
+            err_message (Optional[str]): If not None, this error message will be passed along with the exceptions when
+            closing all open futures.
             Defaults to None.
         """
         self._is_closed = True
@@ -294,7 +295,9 @@ class BaseClient(CoreCommands):
             else:
                 command.args_vec_pointer = create_leaked_bytes_vec(encoded_args)
             transaction_commands.append(command)
-        request.transaction.commands.extend(transaction_commands)
+        request.batch.commands.extend(transaction_commands)
+        request.batch.is_atomic = True
+        # TODO: add support for timeout, raise on error and retry strategy
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 

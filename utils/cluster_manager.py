@@ -355,8 +355,7 @@ def start_server(
                     return server
             except Exception as e:
                 logging.error(f"Error checking {server}: {e}")
-        raise Exception(
-            "Neither valkey-server nor redis-server found in the system.")
+        raise Exception("Neither valkey-server nor redis-server found in the system.")
 
     def get_server_version(server_name):
         result = subprocess.run(
@@ -687,13 +686,13 @@ def wait_for_all_topology_views(
             "slots",
         ]
         logging.debug(f"Executing: {cmd_args}")
-        retries = 60
+        retries = 80
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
             if output is not None and output.count(f"{server.host}") == len(servers):
                 # Server is ready, get the node's role
                 cmd_args = [
-                    "redis-cli",
+                    CLI_COMMAND,
                     "-h",
                     server.host,
                     "-p",

@@ -4,6 +4,8 @@
 
 import { expect } from "@jest/globals";
 import { exec } from "child_process";
+import { Socket } from "net";
+import { promisify } from "util";
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClient,
@@ -23,12 +25,12 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
-    GlideMultiJson,
     GlideReturnType,
     GlideString,
     InfBoundary,
     InfoOptions,
     InsertPosition,
+    JsonBatch,
     ListDirection,
     ProtocolVersion,
     ReturnTypeMap,
@@ -41,6 +43,7 @@ import {
     convertRecordToGlideRecord,
 } from "..";
 import ValkeyCluster from "../../utils/TestUtils";
+const execAsync = promisify(exec);
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function intoArrayInternal(obj: any, builder: string[]) {
@@ -183,6 +186,25 @@ export interface Client {
     get: (key: string) => Promise<GlideString | null>;
 }
 
+export async function checkWhichCommandAvailable(
+    valkeyCommand: string,
+    redisCommand: string,
+): Promise<string> {
+    try {
+        if (await checkCommandAvailability(valkeyCommand)) {
+            return valkeyCommand;
+        }
+    } catch {
+        // ignore
+    }
+
+    if (await checkCommandAvailability(redisCommand)) {
+        return redisCommand;
+    }
+
+    throw new Error("No available command found.");
+}
+
 export async function GetAndSetRandomValue(client: Client) {
     const key = uuidv4();
     // Adding random repetition, to prevent the inputs from always having the same alignment.
@@ -193,17 +215,21 @@ export async function GetAndSetRandomValue(client: Client) {
     expect(intoString(result)).toEqual(value);
 }
 
-export function flushallOnPort(port: number): Promise<void> {
-    return new Promise<void>((resolve, reject) =>
-        exec(`redis-cli -p ${port} FLUSHALL`, (error, _, stderr) => {
+export async function flushallOnPort(port: number): Promise<void> {
+    try {
+        const command = await checkWhichCommandAvailable(
+            "valkey-cli",
+            "redis-cli",
+        );
+        exec(`${command} -p ${port} flushall`, (error) => {
             if (error) {
-                console.error(stderr);
-                reject(error);
-            } else {
-                resolve();
+                console.error(`exec error: ${error}`);
+                return;
             }
-        }),
-    );
+        });
+    } catch (error) {
+        console.error(`Error flushing on port ${port}: ${error}`);
+    }
 }
 
 /**
@@ -546,6 +572,57 @@ export function checkFunctionStatsResponse(
 }
 
 /**
+ * Checks if the given test is a known flaky test. If it is, we test it accordingly.
+ *
+ * This function returns false in two cases:
+ *  1. The test is not a known flaky test (i.e., we haven't created a case to specially test it).
+ *  2. An error occurs during the processing of the responses. Then, we default back to regular testing instead.
+ *
+ * Otherwise, returns true to prevent redundant testing.
+ *
+ * @param testName - The name of the test.
+ * @param response - One of the transaction results received from `exec` call.
+ * @param expectedResponse - One of the expected result data from {@link transactionTest}.
+ */
+export function checkAndHandleFlakyTests(
+    testName: string,
+    response: GlideReturnType | undefined,
+    expectedResponse: GlideReturnType,
+): boolean {
+    switch (testName) {
+        case "xpendingWithOptions(key9, groupName1, -, +, 10)": {
+            // Response Type: [ [id: string, consumerName: string, idleTime: number, deliveryCount: number ] ]
+            if (!Array.isArray(expectedResponse) || !Array.isArray(response)) {
+                return false;
+            }
+
+            const [responseArray] = response as any[];
+            const [expectedResponseArray] = expectedResponse as any[];
+
+            for (let i = 0; i < responseArray.length; i++) {
+                if (i == 2) {
+                    // Since idleTime will vary, check that it does not exceed a threshold instead
+                    expect(
+                        Math.abs(expectedResponseArray[i] - responseArray[i]),
+                    ).toBeLessThan(2);
+                } else {
+                    expect(responseArray[i]).toEqual(expectedResponseArray[i]);
+                }
+            }
+
+            break;
+        }
+
+        default: {
+            // All other tests
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
  * Check transaction response.
  * @param response - Transaction result received from `exec` call.
  * @param expectedResponseData - Expected result data from {@link transactionTest}.
@@ -560,7 +637,15 @@ export function validateTransactionResponse(
         const [testName, expectedResponse] = expectedResponseData[i];
 
         try {
-            expect(response?.[i]).toEqual(expectedResponse);
+            if (
+                !checkAndHandleFlakyTests(
+                    testName,
+                    response?.[i],
+                    expectedResponse,
+                )
+            ) {
+                expect(response?.[i]).toEqual(expectedResponse);
+            }
         } catch {
             const expected =
                 expectedResponse instanceof Map
@@ -1089,22 +1174,38 @@ export async function transactionTest(
         { element: member3, score: 3.5 },
         { element: member4, score: 4 },
         { element: member5, score: 5 },
+        { element: "infMember", score: "+inf" },
+        { element: "negInfMember", score: "-inf" },
     ]);
-    responseData.push(["zadd(key8, { ... } ", 5]);
+    responseData.push(["zadd(key8, { ... } ", 7]);
     baseTransaction.zrank(key8, member1);
-    responseData.push(['zrank(key8, "member1")', 0]);
+    responseData.push(['zrank(key8, "member1")', 1]);
+    baseTransaction.zrank(key8, "negInfMember");
+    responseData.push(['zrank(key8, "negInfMember")', 0]);
 
     if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
         baseTransaction.zrankWithScore(key8, member1);
-        responseData.push(['zrankWithScore(key8, "member1")', [0, 1]]);
+        responseData.push(['zrankWithScore(key8, "member1")', [1, 1]]);
+        baseTransaction.zrankWithScore(key8, "negInfMember");
+        responseData.push([
+            'zrankWithScore(key8, "negInfMember")',
+            [0, -Infinity],
+        ]);
     }
 
     baseTransaction.zrevrank(key8, "member5");
-    responseData.push(['zrevrank(key8, "member5")', 0]);
+    responseData.push(['zrevrank(key8, "member5")', 1]);
+    baseTransaction.zrevrank(key8, "infMember");
+    responseData.push(['zrevrank(key8, "infMember")', 0]);
 
     if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
         baseTransaction.zrevrankWithScore(key8, "member5");
-        responseData.push(['zrevrankWithScore(key8, "member5")', [0, 5]]);
+        responseData.push(['zrevrankWithScore(key8, "member5")', [1, 5]]);
+        baseTransaction.zrevrankWithScore(key8, "infMember");
+        responseData.push([
+            'zrevrankWithScore(key8, "infMember")',
+            [0, Infinity],
+        ]);
     }
 
     baseTransaction.zaddIncr(key8, member2, 1);
@@ -1114,28 +1215,34 @@ export async function transactionTest(
     baseTransaction.zrem(key8, [member1]);
     responseData.push(['zrem(key8, ["member1"])', 1]);
     baseTransaction.zcard(key8);
-    responseData.push(["zcard(key8)", 4]);
+    responseData.push(["zcard(key8)", 6]);
 
     baseTransaction.zscore(key8, member2);
     responseData.push(['zscore(key8, "member2")', 3.0]);
+    baseTransaction.zscore(key8, "infMember");
+    responseData.push(['zscore(key8, "infMember")', Infinity]);
     baseTransaction.zrange(key8, { start: 0, end: -1 });
     responseData.push([
         "zrange(key8, { start: 0, end: -1 })",
         [
+            "negInfMember",
             member2.toString(),
             member3.toString(),
             member4.toString(),
             member5.toString(),
+            "infMember",
         ],
     ]);
     baseTransaction.zrangeWithScores(key8, { start: 0, end: -1 });
     responseData.push([
         "zrangeWithScores(key8, { start: 0, end: -1 })",
         convertRecordToGlideRecord({
+            negInfMember: -Infinity,
             member2: 3,
             member3: 3.5,
             member4: 4,
             member5: 5,
+            infMember: Infinity,
         }),
     ]);
     baseTransaction.zadd(key12, [
@@ -1176,7 +1283,7 @@ export async function transactionTest(
         baseTransaction.zrangeStore(key8, key8, { start: 0, end: -1 });
         responseData.push([
             "zrangeStore(key8, key8, { start: 0, end: -1 })",
-            4,
+            6,
         ]);
         baseTransaction.zdiff([key13, key12]);
         responseData.push(["zdiff([key13, key12])", ["three"]]);
@@ -1232,7 +1339,7 @@ export async function transactionTest(
     baseTransaction.zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity);
     responseData.push([
         "zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity)",
-        4,
+        5,
     ]);
     baseTransaction.zlexcount(
         key8,
@@ -1241,17 +1348,17 @@ export async function transactionTest(
     );
     responseData.push([
         'zlexcount(key8, { value: "a" }, InfBoundary.PositiveInfinity)',
-        4,
+        6,
     ]);
     baseTransaction.zpopmin(key8);
     responseData.push([
         "zpopmin(key8)",
-        convertRecordToGlideRecord({ member2: 3.0 }),
+        convertRecordToGlideRecord({ negInfMember: -Infinity }),
     ]);
     baseTransaction.zpopmax(key8);
     responseData.push([
         "zpopmax(key8)",
-        convertRecordToGlideRecord({ member5: 5 }),
+        convertRecordToGlideRecord({ infMember: Infinity }),
     ]);
     baseTransaction.zadd(key8, [{ element: member6, score: 6 }]);
     responseData.push(["zadd(key8, {member6: 6})", 1]);
@@ -1274,7 +1381,7 @@ export async function transactionTest(
         InfBoundary.NegativeInfinity,
         InfBoundary.PositiveInfinity,
     );
-    responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
+    responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 3]); // key8 is now empty
     baseTransaction.zremRangeByLex(
         key8,
         InfBoundary.NegativeInfinity,
@@ -1889,7 +1996,7 @@ export async function transactionTest(
  * @param baseTransaction - A transaction.
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
  */
-export async function transactionMultiJsonForArrCommands(
+export async function JsonBatchForArrCommands(
     baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
@@ -1897,58 +2004,58 @@ export async function transactionMultiJsonForArrCommands(
     const jsonValue = { a: 1.0, b: 2 };
 
     // JSON.SET
-    GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key, "{ a: 1.0, b: 2 }")', "OK"]);
 
     // JSON.CLEAR
-    GlideMultiJson.clear(baseTransaction, key, { path: "$" });
+    JsonBatch.clear(baseTransaction, key, { path: "$" });
     responseData.push(['clear(key, "bar")', 1]);
 
-    GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key, "$", "{ "a": 1, b: ["one", "two"] }")', "OK"]);
 
     // JSON.GET
-    GlideMultiJson.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseTransaction, key, { path: "." });
     responseData.push(['get(key, {path: "."})', JSON.stringify(jsonValue)]);
 
     const jsonValue2 = { a: 1.0, b: [1, 2] };
-    GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue2));
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue2));
     responseData.push(['set(key, "$", "{ "a": 1, b: ["1", "2"] }")', "OK"]);
 
     // JSON.ARRAPPEND
-    GlideMultiJson.arrappend(baseTransaction, key, "$.b", ["3", "4"]);
+    JsonBatch.arrappend(baseTransaction, key, "$.b", ["3", "4"]);
     responseData.push(['arrappend(key, "$.b", [\'"3"\', \'"4"\'])', [4]]);
 
     // JSON.GET to check JSON.ARRAPPEND was successful.
     const jsonValueAfterAppend = { a: 1.0, b: [1, 2, 3, 4] };
-    GlideMultiJson.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseTransaction, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterAppend),
     ]);
 
     // JSON.ARRINDEX
-    GlideMultiJson.arrindex(baseTransaction, key, "$.b", "2");
+    JsonBatch.arrindex(baseTransaction, key, "$.b", "2");
     responseData.push(['arrindex(key, "$.b", "1")', [1]]);
 
     // JSON.ARRINSERT
-    GlideMultiJson.arrinsert(baseTransaction, key, "$.b", 2, ["5"]);
+    JsonBatch.arrinsert(baseTransaction, key, "$.b", 2, ["5"]);
     responseData.push(['arrinsert(key, "$.b", 4, [\'"5"\'])', [5]]);
 
     // JSON.GET to check JSON.ARRINSERT was successful.
     const jsonValueAfterArrInsert = { a: 1.0, b: [1, 2, 5, 3, 4] };
-    GlideMultiJson.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseTransaction, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterArrInsert),
     ]);
 
     // JSON.ARRLEN
-    GlideMultiJson.arrlen(baseTransaction, key, { path: "$.b" });
+    JsonBatch.arrlen(baseTransaction, key, { path: "$.b" });
     responseData.push(['arrlen(key, "$.b")', [5]]);
 
     // JSON.ARRPOP
-    GlideMultiJson.arrpop(baseTransaction, key, {
+    JsonBatch.arrpop(baseTransaction, key, {
         path: "$.b",
         index: 2,
     });
@@ -1956,19 +2063,19 @@ export async function transactionMultiJsonForArrCommands(
 
     // JSON.GET to check JSON.ARRPOP was successful.
     const jsonValueAfterArrpop = { a: 1.0, b: [1, 2, 3, 4] };
-    GlideMultiJson.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseTransaction, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterArrpop),
     ]);
 
     // JSON.ARRTRIM
-    GlideMultiJson.arrtrim(baseTransaction, key, "$.b", 1, 2);
+    JsonBatch.arrtrim(baseTransaction, key, "$.b", 1, 2);
     responseData.push(['arrtrim(key, "$.b", 2, 3)', [2]]);
 
     // JSON.GET to check JSON.ARRTRIM was successful.
     const jsonValueAfterArrTrim = { a: 1.0, b: [2, 3] };
-    GlideMultiJson.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseTransaction, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterArrTrim),
@@ -1976,7 +2083,7 @@ export async function transactionMultiJsonForArrCommands(
     return responseData;
 }
 
-export async function transactionMultiJson(
+export async function CreateJsonBatchCommands(
     baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
@@ -1984,64 +2091,64 @@ export async function transactionMultiJson(
     const jsonValue = { a: [1, 2], b: [3, 4], c: "c", d: true };
 
     // JSON.SET to create a key for testing commands.
-    GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key, "$")', "OK"]);
 
     // JSON.DEBUG MEMORY
-    GlideMultiJson.debugMemory(baseTransaction, key, { path: "$.a" });
+    JsonBatch.debugMemory(baseTransaction, key, { path: "$.a" });
     responseData.push(['debugMemory(key, "{ path: "$.a" }")', [48]]);
 
     // JSON.DEBUG FIELDS
-    GlideMultiJson.debugFields(baseTransaction, key, { path: "$.a" });
+    JsonBatch.debugFields(baseTransaction, key, { path: "$.a" });
     responseData.push(['debugFields(key, "{ path: "$.a" }")', [2]]);
 
     // JSON.OBJLEN
-    GlideMultiJson.objlen(baseTransaction, key, { path: "." });
+    JsonBatch.objlen(baseTransaction, key, { path: "." });
     responseData.push(["objlen(key)", 4]);
 
     // JSON.OBJKEY
-    GlideMultiJson.objkeys(baseTransaction, key, { path: "." });
+    JsonBatch.objkeys(baseTransaction, key, { path: "." });
     responseData.push(['objkeys(key, "$.")', ["a", "b", "c", "d"]]);
 
     // JSON.NUMINCRBY
-    GlideMultiJson.numincrby(baseTransaction, key, "$.a[*]", 10.0);
+    JsonBatch.numincrby(baseTransaction, key, "$.a[*]", 10.0);
     responseData.push(['numincrby(key, "$.a[*]", 10.0)', "[11,12]"]);
 
     // JSON.NUMMULTBY
-    GlideMultiJson.nummultby(baseTransaction, key, "$.a[*]", 10.0);
+    JsonBatch.nummultby(baseTransaction, key, "$.a[*]", 10.0);
     responseData.push(['nummultby(key, "$.a[*]", 10.0)', "[110,120]"]);
 
     // // JSON.STRAPPEND
-    GlideMultiJson.strappend(baseTransaction, key, '"-test"', { path: "$.c" });
+    JsonBatch.strappend(baseTransaction, key, '"-test"', { path: "$.c" });
     responseData.push(['strappend(key, \'"-test"\', "$.c")', [6]]);
 
     // // JSON.STRLEN
-    GlideMultiJson.strlen(baseTransaction, key, { path: "$.c" });
+    JsonBatch.strlen(baseTransaction, key, { path: "$.c" });
     responseData.push(['strlen(key, "$.c")', [6]]);
 
     // JSON.TYPE
-    GlideMultiJson.type(baseTransaction, key, { path: "$.a" });
+    JsonBatch.type(baseTransaction, key, { path: "$.a" });
     responseData.push(['type(key, "$.a")', ["array"]]);
 
     // JSON.MGET
     const key2 = "{key}:2" + uuidv4();
     const key3 = "{key}:3" + uuidv4();
     const jsonValue2 = { b: [3, 4], c: "c", d: true };
-    GlideMultiJson.set(baseTransaction, key2, "$", JSON.stringify(jsonValue2));
+    JsonBatch.set(baseTransaction, key2, "$", JSON.stringify(jsonValue2));
     responseData.push(['set(key2, "$")', "OK"]);
 
-    GlideMultiJson.mget(baseTransaction, [key, key2, key3], "$.a");
+    JsonBatch.mget(baseTransaction, [key, key2, key3], "$.a");
     responseData.push([
         'json.mget([key, key2, key3], "$.a")',
         ["[[110,120]]", "[]", null],
     ]);
 
     // JSON.TOGGLE
-    GlideMultiJson.toggle(baseTransaction, key, { path: "$.d" });
+    JsonBatch.toggle(baseTransaction, key, { path: "$.d" });
     responseData.push(['toggle(key2, "$.d")', [false]]);
 
     // JSON.RESP
-    GlideMultiJson.resp(baseTransaction, key, { path: "$" });
+    JsonBatch.resp(baseTransaction, key, { path: "$" });
     responseData.push([
         'resp(key, "$")',
         [
@@ -2056,11 +2163,11 @@ export async function transactionMultiJson(
     ]);
 
     // JSON.DEL
-    GlideMultiJson.del(baseTransaction, key, { path: "$.d" });
+    JsonBatch.del(baseTransaction, key, { path: "$.d" });
     responseData.push(['del(key, { path: "$.d" })', 1]);
 
     // JSON.FORGET
-    GlideMultiJson.forget(baseTransaction, key, { path: "$.c" });
+    JsonBatch.forget(baseTransaction, key, { path: "$.c" });
     responseData.push(['forget(key, {path: "$.c" })', 1]);
 
     return responseData;
@@ -2105,4 +2212,49 @@ export async function getServerVersion(
     }
 
     return version;
+}
+
+/**
+ * Check if a command is available on the system
+ */
+export function checkCommandAvailability(command: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        exec(`which ${command}`, (error) => {
+            resolve(!error);
+        });
+    });
+}
+
+/**
+ * Starts a Valkey/Redis-compatible server on the specified port
+ */
+export async function startServer(
+    port: number,
+): Promise<{ process: any; command: string }> {
+    // check which command is available
+    const serverCmd = await checkWhichCommandAvailable(
+        "valkey-server",
+        "redis-server",
+    );
+    // run server, and wait for it to start
+    const serverProcess = await execAsync(`${serverCmd} --port ${port}`)
+        .then(async (process) => {
+            // wait for the server to start
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            // check if the server is running by connecting to it using a socket
+            const client = new Socket();
+            await new Promise<void>((resolve) => {
+                client.connect(port, "localhost", () => {
+                    client.end();
+                    resolve();
+                });
+            });
+            return process;
+        })
+        .catch((err) => {
+            console.error("Failed to start the server:", err);
+            process.exit(1);
+        });
+
+    return { process: serverProcess, command: serverCmd };
 }

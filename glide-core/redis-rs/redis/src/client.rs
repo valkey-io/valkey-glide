@@ -86,7 +86,7 @@ pub struct GlideConnectionOptions {
     #[cfg(feature = "aio")]
     /// Passive disconnect notifier
     pub disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
-    /// If ReadFromReplica strategy is set to AZAffinity, this parameter will be set to 'true'.
+    /// If ReadFromReplica strategy is set to AZAffinity or AZAffinityReplicasAndPrimary, this parameter will be set to 'true'.
     /// In this case, an INFO command will be triggered in the connection's setup to update the connection's 'availability_zone' property.
     pub discover_az: bool,
     /// Connection timeout duration.
@@ -460,10 +460,10 @@ impl Client {
     ///
     /// - `conn_info` - URL using the `rediss://` scheme.
     /// - `tls_certs` - `TlsCertificates` structure containing:
-    ///     -- `client_tls` - Optional `ClientTlsConfig` containing byte streams for
-    ///     --- `client_cert` - client's byte stream containing client certificate in PEM format
-    ///     --- `client_key` - client's byte stream containing private key in PEM format
-    ///     -- `root_cert` - Optional byte stream yielding PEM formatted file for root certificates.
+    ///   -- `client_tls` - Optional `ClientTlsConfig` containing byte streams for
+    ///   -- `client_cert` - client's byte stream containing client certificate in PEM format
+    ///   -- `client_key` - client's byte stream containing private key in PEM format
+    ///   -- `root_cert` - Optional byte stream yielding PEM formatted file for root certificates.
     ///
     /// If `ClientTlsConfig` ( cert+key pair ) is not provided, then client-side authentication is not enabled.
     /// If `root_cert` is not provided, then system root certificates are used instead.
@@ -562,6 +562,11 @@ impl Client {
         self.get_async_connection(None)
             .await
             .map(|connection| connection.into_monitor())
+    }
+
+    /// Updates the password in connection_info.
+    pub fn update_password(&mut self, password: Option<String>) {
+        self.connection_info.redis.password = password;
     }
 }
 

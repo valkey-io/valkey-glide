@@ -2,8 +2,8 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { SortOrder } from "src/Commands";
 import { GlideRecord, GlideString } from "../BaseClient";
+import { SortOrder } from "../Commands";
 import { GlideFt } from "./GlideFt"; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 interface BaseField {
@@ -58,7 +58,7 @@ export type VectorField = BaseField & {
 /**
  * Base class for defining vector field attributes to be used after the vector algorithm name.
  */
-export interface VectorFieldAttributes {
+interface VectorFieldAttributes {
     /** Number of dimensions in the vector. Equivalent to `DIM` in the module API. */
     dimensions: number;
     /**

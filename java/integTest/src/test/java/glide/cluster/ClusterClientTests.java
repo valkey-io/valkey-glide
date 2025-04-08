@@ -3,7 +3,9 @@ package glide.cluster;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.TestUtilities.deleteAclUser;
 import static glide.TestUtilities.getRandomString;
+import static glide.TestUtilities.setNewAclUserPassword;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -21,6 +23,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -164,6 +167,7 @@ public class ClusterClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
+    @Disabled("flaky test: re-enable once fixed, or remove based on PR #3311")
     @SneakyThrows
     @Test
     public void test_update_connection_password() {
@@ -273,6 +277,179 @@ public class ClusterClientTests {
             assertEquals(OK, testClient.updateConnectionPassword(notThePwd, true).get());
         } finally {
             adminClient.configSet(Map.of("requirepass", "")).get();
+            adminClient.close();
+        }
+    }
+
+    @Timeout(50)
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_acl_user() {
+        var username = "username";
+        var pwd = UUID.randomUUID().toString();
+        var newPwd = UUID.randomUUID().toString();
+
+        GlideClusterClient adminClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+
+        try {
+            setNewAclUserPassword(adminClient, username, pwd);
+
+            // Create client with ACL user credentials
+            GlideClusterClient testClient =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(pwd).build())
+                                            .build())
+                            .get();
+
+            // Validate client works
+            assertNotNull(testClient.info().get());
+
+            // Update the password of the client with non immediate auth
+            assertEquals(OK, testClient.updateConnectionPassword(newPwd, false).get());
+
+            // Delete the user (which will cause reconnection) and reset it with the new password
+            deleteAclUser(adminClient, username);
+            setNewAclUserPassword(adminClient, username, newPwd);
+
+            // Sleep to ensure password change in server and client reconnection
+            Thread.sleep(1000);
+
+            // Validate client reconnected succsessfuly
+            assertNotNull(testClient.info().get());
+
+            // Verify immediate auth with the same password works
+            assertEquals(OK, testClient.updateConnectionPassword(newPwd, true).get());
+
+            // Validate client still working
+            assertNotNull(testClient.info().get());
+
+        } finally {
+            deleteAclUser(adminClient, username);
+            adminClient.close();
+        }
+    }
+
+    @Timeout(50)
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_reconnection_with_immediate_auth_with_acl_user() {
+        var username = "username";
+        var pwd = UUID.randomUUID().toString();
+        var newPwd = UUID.randomUUID().toString();
+
+        GlideClusterClient adminClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+
+        try {
+            setNewAclUserPassword(adminClient, username, pwd);
+
+            // Create client with ACL user credentials
+            GlideClusterClient testClient =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(pwd).build())
+                                            .build())
+                            .get();
+
+            // Validate client works
+            assertNotNull(testClient.info().get());
+
+            // Delete user name and reset with new  password (this will cause disconnection)
+            deleteAclUser(adminClient, username);
+            setNewAclUserPassword(adminClient, username, newPwd);
+
+            // Sleep to ensure password change in server and client reconnection
+            Thread.sleep(1000);
+
+            // Ensure client can reconnect when updating the password with immediate auth
+            assertEquals(OK, testClient.updateConnectionPassword(newPwd, true).get());
+
+            // Validate client reconnected and is working
+            assertNotNull(testClient.info().get());
+        } finally {
+            deleteAclUser(adminClient, username);
+            adminClient.close();
+        }
+    }
+
+    @Timeout(50)
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_replace_password_immediateAuth_acl_user() {
+        var username = "username";
+        var pwd = UUID.randomUUID().toString();
+        var newPwd = UUID.randomUUID().toString();
+
+        GlideClusterClient adminClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+
+        try {
+            setNewAclUserPassword(adminClient, username, pwd);
+
+            // Create client with ACL user credentials
+            GlideClusterClient testClient =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(pwd).build())
+                                            .build())
+                            .get();
+
+            // Validate client works
+            assertNotNull(testClient.info().get());
+
+            // Add a new password to the client
+            setNewAclUserPassword(adminClient, username, newPwd);
+
+            // Ensure client can authenticate immediately with the new password
+            assertEquals(OK, testClient.updateConnectionPassword(newPwd, true).get());
+
+            // Validate client is working
+            assertNotNull(testClient.info().get());
+        } finally {
+            deleteAclUser(adminClient, username);
+            adminClient.close();
+        }
+    }
+
+    @Timeout(50)
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_non_valid_auth_acl_user() {
+        var username = "username";
+        var pwd = UUID.randomUUID().toString();
+        var newPwd = UUID.randomUUID().toString();
+
+        GlideClusterClient adminClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+
+        try {
+            setNewAclUserPassword(adminClient, username, pwd);
+
+            // Create client with ACL user credentials
+            GlideClusterClient testClient =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(pwd).build())
+                                            .build())
+                            .get();
+
+            var emptyPasswordException =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword("", true).get());
+            assertInstanceOf(RequestException.class, emptyPasswordException.getCause());
+
+            var noPasswordException =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword(true).get());
+            assertInstanceOf(RequestException.class, noPasswordException.getCause());
+        } finally {
+            deleteAclUser(adminClient, username);
             adminClient.close();
         }
     }

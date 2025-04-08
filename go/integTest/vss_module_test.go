@@ -6,15 +6,20 @@ import (
 	"strings"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 func (suite *GlideTestSuite) TestModuleVerifyVssLoaded() {
 	client := suite.defaultClusterClient()
-	// TODO use INFO command
-	result, err := client.CustomCommand([]string{"INFO", "MODULES"})
+	result, err := client.InfoWithOptions(
+		options.ClusterInfoOptions{
+			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+			RouteOption: nil,
+		},
+	)
 
 	assert.Nil(suite.T(), err)
-	for _, value := range result.Value().(map[string]interface{}) {
-		assert.True(suite.T(), strings.Contains(value.(string), "# search_index_stats"))
+	for _, value := range result.MultiValue() {
+		assert.True(suite.T(), strings.Contains(value, "# search_index_stats"))
 	}
 }

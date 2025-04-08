@@ -277,6 +277,11 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             obj.set_named_property("values", js_array_view)?;
             Ok(obj.into_unknown())
         }
+        Value::ServerError(_) => Err(Error::new(
+            // TODO: add ServerError support
+            Status::GenericFailure,
+            "ServerError is not supported",
+        )),
     }
 }
 
@@ -311,6 +316,7 @@ fn split_pointer<T>(pointer: *mut T) -> [u32; 2] {
 }
 
 #[napi(ts_return_type = "[number, number]")]
+/// @internal @test
 /// This function is for tests that require a value allocated on the heap.
 /// Should NOT be used in production.
 #[cfg(feature = "testing_utilities")]
@@ -321,6 +327,9 @@ pub fn create_leaked_string(message: String) -> [u32; 2] {
 }
 
 #[napi(ts_return_type = "[number, number]")]
+/// @internal @test
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
 pub fn create_leaked_string_vec(message: Vec<Uint8Array>) -> [u32; 2] {
     // Convert the string vec -> Bytes vector
     let bytes_vec: Vec<Bytes> = message.iter().map(|v| Bytes::from(v.to_vec())).collect();
@@ -329,6 +338,7 @@ pub fn create_leaked_string_vec(message: Vec<Uint8Array>) -> [u32; 2] {
 }
 
 #[napi(ts_return_type = "[number, number]")]
+/// @internal @test
 /// This function is for tests that require a value allocated on the heap.
 /// Should NOT be used in production.
 #[cfg(feature = "testing_utilities")]
@@ -342,6 +352,7 @@ pub fn create_leaked_map(map: HashMap<String, String>) -> [u32; 2] {
 }
 
 #[napi(ts_return_type = "[number, number]")]
+/// @internal @test
 /// This function is for tests that require a value allocated on the heap.
 /// Should NOT be used in production.
 #[cfg(feature = "testing_utilities")]
@@ -353,6 +364,7 @@ pub fn create_leaked_array(array: Vec<String>) -> [u32; 2] {
 }
 
 #[napi(ts_return_type = "[number, number]")]
+/// @internal @test
 /// This function is for tests that require a value allocated on the heap.
 /// Should NOT be used in production.
 #[cfg(feature = "testing_utilities")]
@@ -368,6 +380,7 @@ pub fn create_leaked_attribute(message: String, attribute: HashMap<String, Strin
 }
 
 #[napi(ts_return_type = "[number, number]")]
+/// @internal @test
 /// This function is for tests that require a value allocated on the heap.
 /// Should NOT be used in production.
 #[cfg(feature = "testing_utilities")]
@@ -393,6 +406,7 @@ pub fn create_leaked_bigint(big_int: BigInt) -> [u32; 2] {
 }
 
 #[napi(ts_return_type = "[number, number]")]
+/// @internal @test
 /// This function is for tests that require a value allocated on the heap.
 /// Should NOT be used in production.
 #[cfg(feature = "testing_utilities")]

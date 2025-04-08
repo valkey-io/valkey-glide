@@ -2,7 +2,7 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+import "github.com/valkey-io/valkey-glide/go/api/options"
 
 // Supports commands and transactions for the "Bitmap" group of commands for standalone and cluster clients.
 //
@@ -16,5 +16,15 @@ type BitmapCommands interface {
 
 	BitCount(key string) (int64, error)
 
-	BitCountWithOptions(key string, options *options.BitCountOptions) (int64, error)
+	BitCountWithOptions(key string, options options.BitCountOptions) (int64, error)
+
+	BitPos(key string, bit int64) (int64, error)
+
+	BitPosWithOptions(key string, bit int64, options options.BitPosOptions) (int64, error)
+
+	BitField(key string, subCommands []options.BitFieldSubCommands) ([]Result[int64], error)
+
+	BitFieldRO(key string, commands []options.BitFieldROCommands) ([]Result[int64], error)
+
+	BitOp(bitwiseOperation options.BitOpType, destination string, keys []string) (int64, error)
 }

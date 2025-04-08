@@ -6,7 +6,7 @@ use logger_core::log_warn;
 use std::collections::HashSet;
 use std::time::Duration;
 
-#[cfg(feature = "socket-layer")]
+#[cfg(feature = "proto")]
 use crate::connection_request as protobuf;
 
 #[derive(Default)]
@@ -25,6 +25,8 @@ pub struct ConnectionRequest {
     pub periodic_checks: Option<PeriodicCheck>,
     pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
     pub inflight_requests_limit: Option<u32>,
+    pub otel_endpoint: Option<String>,
+    pub otel_span_flush_interval_ms: Option<u64>,
 }
 
 pub struct AuthenticationInfo {
@@ -58,9 +60,11 @@ pub enum ReadFrom {
     Primary,
     PreferReplica,
     AZAffinity(String),
+    AZAffinityReplicasAndPrimary(String),
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Default)]
+#[repr(C)]
 pub enum TlsMode {
     #[default]
     NoTls,
@@ -68,13 +72,15 @@ pub enum TlsMode {
     SecureTls,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+#[repr(C)]
 pub struct ConnectionRetryStrategy {
     pub exponent_base: u32,
     pub factor: u32,
     pub number_of_retries: u32,
 }
 
-#[cfg(feature = "socket-layer")]
+#[cfg(feature = "proto")]
 fn chars_to_string_option(chars: &::protobuf::Chars) -> Option<String> {
     if chars.is_empty() {
         None
@@ -83,8 +89,8 @@ fn chars_to_string_option(chars: &::protobuf::Chars) -> Option<String> {
     }
 }
 
-#[cfg(feature = "socket-layer")]
-fn none_if_zero(value: u32) -> Option<u32> {
+#[cfg(feature = "proto")]
+pub(crate) fn none_if_zero(value: u32) -> Option<u32> {
     if value == 0 {
         None
     } else {
@@ -92,7 +98,7 @@ fn none_if_zero(value: u32) -> Option<u32> {
     }
 }
 
-#[cfg(feature = "socket-layer")]
+#[cfg(feature = "proto")]
 impl From<protobuf::ConnectionRequest> for ConnectionRequest {
     fn from(value: protobuf::ConnectionRequest) -> Self {
         let read_from = value.read_from.enum_value().ok().map(|val| match val {
@@ -113,6 +119,20 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                     ReadFrom::PreferReplica
                 }
             }
+            protobuf::ReadFrom::AZAffinityReplicasAndPrimary => {
+                if let Some(client_az) = chars_to_string_option(&value.client_az) {
+                    ReadFrom::AZAffinityReplicasAndPrimary(client_az)
+                } else {
+                    log_warn(
+                        "types",
+                        format!(
+                            "Failed to convert availability zone string: '{:?}'. Falling back to `ReadFrom::PreferReplica`",
+                            value.client_az
+                        ),
+                    );
+                    ReadFrom::PreferReplica
+                }
+            },
         });
 
         let client_name = chars_to_string_option(&value.client_name);
@@ -206,6 +226,9 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
 
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
 
+        let otel_endpoint = chars_to_string_option(&value.opentelemetry_config.collector_end_point);
+        let otel_span_flush_interval_ms = value.opentelemetry_config.span_flush_interval;
+
         ConnectionRequest {
             read_from,
             client_name,
@@ -221,6 +244,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             periodic_checks,
             pubsub_subscriptions,
             inflight_requests_limit,
+            otel_endpoint,
+            otel_span_flush_interval_ms,
         }
     }
 }

@@ -52,6 +52,7 @@ import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.TransactionsClusterCommands;
 import glide.api.logging.Logger;
+import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
@@ -60,6 +61,7 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptArgOptions;
 import glide.api.models.commands.ScriptArgOptionsGlideString;
+import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
@@ -70,7 +72,7 @@ import glide.ffi.resolvers.ClusterScanCursorResolver;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -155,26 +157,52 @@ public class GlideClusterClient extends BaseClient
         return ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response));
     }
 
+    @Deprecated
     @Override
     public CompletableFuture<Object[]> exec(@NonNull ClusterTransaction transaction) {
         if (transaction.isBinaryOutput()) {
-            return commandManager.submitNewTransaction(
+            return commandManager.submitNewBatch(
                     transaction, Optional.empty(), this::handleArrayOrNullResponseBinary);
         } else {
-            return commandManager.submitNewTransaction(
+            return commandManager.submitNewBatch(
                     transaction, Optional.empty(), this::handleArrayOrNullResponse);
+        }
+    }
+
+    @Deprecated
+    @Override
+    public CompletableFuture<Object[]> exec(
+            @NonNull ClusterTransaction transaction, @NonNull SingleNodeRoute route) {
+        ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
+        if (transaction.isBinaryOutput()) {
+            return commandManager.submitNewBatch(
+                    transaction, Optional.of(options), this::handleArrayOrNullResponseBinary);
+        } else {
+            return commandManager.submitNewBatch(
+                    transaction, Optional.of(options), this::handleArrayOrNullResponse);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Object[]> exec(@NonNull ClusterBatch batch) {
+        if (batch.isBinaryOutput()) {
+            return commandManager.submitNewBatch(
+                    batch, Optional.empty(), this::handleArrayOrNullResponseBinary);
+        } else {
+            return commandManager.submitNewBatch(
+                    batch, Optional.empty(), this::handleArrayOrNullResponse);
         }
     }
 
     @Override
     public CompletableFuture<Object[]> exec(
-            @NonNull ClusterTransaction transaction, @NonNull SingleNodeRoute route) {
-        if (transaction.isBinaryOutput()) {
-            return commandManager.submitNewTransaction(
-                    transaction, Optional.of(route), this::handleArrayOrNullResponseBinary);
+            @NonNull ClusterBatch batch, @NonNull ClusterBatchOptions options) {
+        if (batch.isBinaryOutput()) {
+            return commandManager.submitNewBatch(
+                    batch, Optional.of(options), this::handleArrayOrNullResponseBinary);
         } else {
-            return commandManager.submitNewTransaction(
-                    transaction, Optional.of(route), this::handleArrayOrNullResponse);
+            return commandManager.submitNewBatch(
+                    batch, Optional.of(options), this::handleArrayOrNullResponse);
         }
     }
 
@@ -602,7 +630,7 @@ public class GlideClusterClient extends BaseClient
         } else {
             // each `Object` is a `Map<String, Object>[]` actually
             Map<String, Object> info = handleMapResponse(response);
-            Map<String, Map<String, Object>[]> data = new HashMap<>();
+            Map<String, Map<String, Object>[]> data = new LinkedHashMap<>();
             for (var nodeInfo : info.entrySet()) {
                 data.put(nodeInfo.getKey(), handleFunctionListResponse((Object[]) nodeInfo.getValue()));
             }
@@ -620,7 +648,7 @@ public class GlideClusterClient extends BaseClient
         } else {
             // each `Object` is a `Map<GlideString, Object>[]` actually
             Map<GlideString, Object> info = handleBinaryStringMapResponse(response);
-            Map<GlideString, Map<GlideString, Object>[]> data = new HashMap<>();
+            Map<GlideString, Map<GlideString, Object>[]> data = new LinkedHashMap<>();
             for (var nodeInfo : info.entrySet()) {
                 data.put(
                         nodeInfo.getKey(), handleFunctionListResponseBinary((Object[]) nodeInfo.getValue()));

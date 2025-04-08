@@ -53,6 +53,8 @@ import {
     convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
+    Score,
+    ElementAndScore,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
@@ -4154,6 +4156,17 @@ export function runBaseTests(config: {
                 expect(
                     await client.zadd(key, newMembersScores, { changed: true }),
                 ).toEqual(2);
+                const infMembersScores: Record<string, Score> = {
+                    infMember: "+inf",
+                    negInfMember: "-inf",
+                };
+                expect(await client.zadd(key, infMembersScores)).toEqual(2);
+
+                const infElementAndScore: ElementAndScore[] = [
+                    { element: "infMemberEAS", score: "+inf" },
+                    { element: "negInfMemberEAS", score: "-inf" },
+                ];
+                expect(await client.zadd(key, infElementAndScore)).toEqual(2);
             }, protocol);
         },
         config.timeout,
@@ -4537,6 +4550,24 @@ export function runBaseTests(config: {
 
                 expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(client.zscore(key2, "foo")).rejects.toThrow();
+
+                const inf_key = uuidv4();
+                const infMembersScores: Record<string, Score> = {
+                    infMember: "+inf",
+                    negInfMember: "-inf",
+                };
+                expect(await client.zadd(inf_key, infMembersScores)).toEqual(2);
+                expect(await client.zscore(inf_key, "infMember")).toEqual(
+                    Infinity,
+                );
+
+                const inf_key2 = uuidv4();
+                expect(
+                    await client.zadd(inf_key2, { infMember: -Infinity }),
+                ).toEqual(1);
+                expect(await client.zscore(inf_key2, "infMember")).toEqual(
+                    -Infinity,
+                );
             }, protocol);
         },
         config.timeout,
@@ -8108,7 +8139,7 @@ export function runBaseTests(config: {
         const setWithUnixSec = await client.set(key, value, {
             expiry: {
                 type: TimeUnit.UnixSeconds,
-                count: Math.floor(Date.now() / 1000) + 1,
+                count: Math.floor(Date.now() / 1000) + 2,
             },
         });
         expect(setWithUnixSec).toEqual("OK");
@@ -8122,7 +8153,7 @@ export function runBaseTests(config: {
         const getResWithExpiryKeep = await client.get(key);
         expect(getResWithExpiryKeep).toEqual(value);
         // wait for the key to expire base on the previous set
-        let sleep = new Promise((resolve) => setTimeout(resolve, 1000));
+        let sleep = new Promise((resolve) => setTimeout(resolve, 2000));
         await sleep;
         const getResExpire = await client.get(key);
         // key should have expired

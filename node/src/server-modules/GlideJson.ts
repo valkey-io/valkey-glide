@@ -2,11 +2,11 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { ClusterTransaction, Transaction } from "src/Transaction";
 import { BaseClient, DecoderOption, GlideString } from "../BaseClient";
 import { ConditionalChange } from "../Commands";
 import { GlideClient } from "../GlideClient";
 import { GlideClusterClient, RouteOption } from "../GlideClusterClient";
+import { ClusterTransaction, Transaction } from "../Transaction";
 
 export type ReturnTypeJson<T> = T | (T | null)[];
 export type UniversalReturnTypeJson<T> = T | T[];
@@ -159,15 +159,15 @@ export class GlideJson {
      *
      * @example
      * ```typescript
-     * const jsonStr = await GlideJson.get('doc', {path: '$'});
+     * const jsonStr = await GlideJson.get(client, 'doc', {path: '$'});
      * console.log(JSON.parse(jsonStr as string));
      * // Output: [{"a": 1.0, "b" :2}] - JSON object retrieved from the key `doc`.
      *
-     * const jsonData = await GlideJson.get(('doc', {path: '$'});
+     * const jsonData = await GlideJson.get(client, 'doc', {path: '$'});
      * console.log(jsonData);
      * // Output: '[{"a":1.0,"b":2}]' - Returns the value at path '$' in the JSON document stored at `doc`.
      *
-     * const formattedJson = await GlideJson.get(('doc', {
+     * const formattedJson = await GlideJson.get(client, 'doc', {
      *     ['$.a', '$.b']
      *     indent: "  ",
      *     newline: "\n",
@@ -176,7 +176,7 @@ export class GlideJson {
      * console.log(formattedJson);
      * // Output: "{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}" - Returns values at paths '$.a' and '$.b' with custom format.
      *
-     * const nonExistingPath = await GlideJson.get(('doc', {path: '$.non_existing_path'});
+     * const nonExistingPath = await GlideJson.get(client, 'doc', {path: '$.non_existing_path'});
      * console.log(nonExistingPath);
      * // Output: "[]" - Empty array since the path does not exist in the JSON document.
      * ```
@@ -1166,15 +1166,15 @@ export class GlideJson {
  * @example
  * ```typescript
  * const transaction = new Transaction();
- * GlideMultiJson.set(transaction, "doc", ".", '{"a": 1.0, "b": 2}');
- * GlideMultiJson.get(transaction, "doc");
+ * JsonBatch.set(transaction, "doc", ".", '{"a": 1.0, "b": 2}');
+ * JsonBatch.get(transaction, "doc");
  * const result = await client.exec(transaction);
  *
- * console.log(result[0]); // Output: 'OK' - result of GlideMultiJson.set()
- * console.log(result[1]); // Output: '{"a": 1.0, "b": 2}' - result of GlideMultiJson.get()
+ * console.log(result[0]); // Output: 'OK' - result of JsonBatch.set()
+ * console.log(result[1]); // Output: '{"a": 1.0, "b": 2}' - result of JsonBatch.get()
  * ```
  */
-export class GlideMultiJson {
+export class JsonBatch {
     /**
      * Sets the JSON value at the specified `path` stored at `key`.
      *

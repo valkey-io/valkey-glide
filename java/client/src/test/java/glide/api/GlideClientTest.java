@@ -223,6 +223,7 @@ import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
 import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
+import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EQUAL;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
@@ -293,9 +294,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import command_request.CommandRequestOuterClass.RequestType;
+import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
-import glide.api.models.Transaction;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
@@ -327,6 +328,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeysBinary;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
@@ -375,6 +377,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -386,6 +389,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class GlideClientTest {
 
@@ -451,21 +455,47 @@ public class GlideClientTest {
     }
 
     @SneakyThrows
-    @Test
-    public void exec() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void exec(boolean isAtomic) {
         // setup
         Object[] value = new Object[] {"PONG", "PONG"};
-        Transaction transaction = new Transaction().ping().ping();
+        Batch batch = new Batch(isAtomic).ping().ping();
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewTransaction(eq(transaction), any()))
+        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.empty()), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(transaction);
+        CompletableFuture<Object[]> response = service.exec(batch);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void exec_with_options(boolean isAtomic) {
+        // setup
+        Object[] value = new Object[] {"PONG", "PONG"};
+        Batch batch = new Batch(isAtomic).ping().ping();
+        BatchOptions options = BatchOptions.builder().raiseOnError(true).timeout(1000).build();
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.of(options)), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.exec(batch, options);
         Object[] payload = response.get();
 
         // verify
@@ -951,6 +981,100 @@ public class GlideClientTest {
         // verify
         assertNotNull(response);
         assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void set_with_SetOptions_OnlyIfEqual_success() {
+        // setup
+        String key = "key";
+        String value = "value";
+        String newValue = "newValue";
+
+        // Set `key` to `value` initially
+        CompletableFuture<String> initialSetResponse = new CompletableFuture<>();
+        initialSetResponse.complete("OK");
+        String[] initialArguments = new String[] {key, value};
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(initialArguments), any()))
+                .thenReturn(initialSetResponse);
+
+        CompletableFuture<String> initialResponse = service.set(key, value);
+        assertNotNull(initialResponse);
+        assertEquals("OK", initialResponse.get());
+
+        // Set `key` to `newValue` with the correct condition
+        SetOptions setOptions =
+                SetOptions.builder()
+                        .conditionalSetOnlyIfEqualTo(value) // Key must currently have `value`
+                        .expiry(Expiry.UnixSeconds(60L))
+                        .build();
+        String[] correctConditionArguments =
+                new String[] {key, newValue, ONLY_IF_EQUAL.getValkeyApi(), value, "EXAT", "60"};
+        CompletableFuture<String> correctSetResponse = new CompletableFuture<>();
+        correctSetResponse.complete("OK");
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(correctConditionArguments), any()))
+                .thenReturn(correctSetResponse);
+
+        CompletableFuture<String> correctResponse = service.set(key, newValue, setOptions);
+        assertNotNull(correctResponse);
+        assertEquals("OK", correctResponse.get());
+
+        // Verify that the key is now set to `newValue`
+        CompletableFuture<String> fetchValueResponse = new CompletableFuture<>();
+        fetchValueResponse.complete(newValue);
+        when(commandManager.<String>submitNewCommand(eq(Get), eq(new String[] {key}), any()))
+                .thenReturn(fetchValueResponse);
+
+        CompletableFuture<String> finalValue = service.get(key);
+        assertEquals(newValue, finalValue.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void set_with_SetOptions_OnlyIfEqual_fails() {
+        // Key-Value setup
+        String key = "key";
+        String value = "value";
+        String newValue = "newValue";
+
+        // Set `key` to `value` initially
+        CompletableFuture<String> initialSetResponse = new CompletableFuture<>();
+        initialSetResponse.complete("OK");
+        String[] initialArguments = new String[] {key, value};
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(initialArguments), any()))
+                .thenReturn(initialSetResponse);
+
+        CompletableFuture<String> initialResponse = service.set(key, value);
+        assertNotNull(initialResponse);
+        assertEquals("OK", initialResponse.get());
+
+        // Attempt to set `key` to `newValue` with the wrong condition
+        SetOptions wrongConditionOptions =
+                SetOptions.builder()
+                        .conditionalSetOnlyIfEqualTo(newValue) // Incorrect: current value of key is `value`
+                        .expiry(Expiry.UnixSeconds(60L))
+                        .build();
+
+        String[] wrongConditionArguments =
+                new String[] {key, newValue, ONLY_IF_EQUAL.getValkeyApi(), newValue, "EXAT", "60"};
+
+        CompletableFuture<String> failedSetResponse = new CompletableFuture<>();
+        failedSetResponse.complete(null);
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(wrongConditionArguments), any()))
+                .thenReturn(failedSetResponse);
+
+        CompletableFuture<String> failedResponse = service.set(key, newValue, wrongConditionOptions);
+        assertNotNull(failedResponse);
+        assertNull(failedResponse.get()); // Ensure the set operation failed
+
+        // Verify that the key remains set to `value`
+        CompletableFuture<String> fetchValueResponse = new CompletableFuture<>();
+        fetchValueResponse.complete(value);
+        when(commandManager.<String>submitNewCommand(eq(Get), eq(new String[] {key}), any()))
+                .thenReturn(fetchValueResponse);
+
+        CompletableFuture<String> finalValue = service.get(key);
+        assertEquals(value, finalValue.get());
     }
 
     @SneakyThrows

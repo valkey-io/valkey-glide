@@ -59,7 +59,6 @@ import {
     TimeUnit,
     ZAddOptions,
     ZScanOptions,
-    convertElementsAndScores,
     convertFieldsAndValuesToHashDataType,
     convertKeysAndEntries,
     createAppend,
@@ -349,6 +348,22 @@ export type HashDataType = {
 export type StreamEntryDataType = Record<string, [GlideString, GlideString][]>;
 
 /**
+ * Union type that can store either a number or positive/negative infinity.
+ */
+export type Score = number | "+inf" | "-inf";
+
+/**
+ * Data type which represents sorted sets data for input parameter of ZADD command,
+ * including element and its respective score.
+ */
+export type ElementAndScore = {
+    /** The sorted set element name. */
+    element: GlideString;
+    /** The element score. */
+    score: Score;
+};
+
+/**
  * @internal
  * Convert `GlideRecord<number>` recevied after resolving the value pointer into `SortedSetDataType`.
  */
@@ -501,7 +516,10 @@ export type ReadFrom =
     | "preferReplica"
     /** Spread the requests between replicas in the same client's Aviliablity zone in a round robin manner.
         If no replica is available, route the requests to the primary.*/
-    | "AZAffinity";
+    | "AZAffinity"
+    /** Spread the read requests among all nodes within the client's Availability Zone (AZ) in a round robin manner,
+         prioritizing local replicas, then the local primary, and falling back to any replica or the primary if needed.*/
+    | "AZAffinityReplicasAndPrimary";
 
 /**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
@@ -531,11 +549,11 @@ export type ReadFrom =
  *
  * ### Read Strategy
  *
- * - Use `readFrom` to specify the client's read strategy (e.g., primary, preferReplica, AZAffinity).
+ * - Use `readFrom` to specify the client's read strategy (e.g., primary, preferReplica, AZAffinity, AZAffinityReplicasAndPrimary).
  *
  * ### Availability Zone
  *
- * - Use `clientAz` to specify the client's availability zone, which can influence read operations when using `readFrom: 'AZAffinity'`.
+ * - Use `clientAz` to specify the client's availability zone, which can influence read operations when using `readFrom: 'AZAffinity'or `readFrom: 'AZAffinityReplicasAndPrimary'`.
  *
  * ### Decoder Settings
  *
@@ -637,13 +655,15 @@ export interface BaseClientConfiguration {
     inflightRequestsLimit?: number;
     /**
      * Availability Zone of the client.
-     * If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
+     * If ReadFrom strategy is AZAffinity or AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to nodes within the specified AZ if they exist.
      *
      * @example
      * ```typescript
      * // Example configuration for setting client availability zone and read strategy
      * configuration.clientAz = 'us-east-1a'; // Sets the client's availability zone
      * configuration.readFrom = 'AZAffinity'; // Directs read operations to nodes within the same AZ
+     * Or
+     * configuration.readFrom = 'AZAffinityReplicasAndPrimary'; // Directs read operations to any node (primary or replica) within the same AZ
      * ```
      */
     clientAz?: string;
@@ -729,6 +749,9 @@ export interface PubSubMsg {
  */
 export type WritePromiseOptions = RouteOption & DecoderOption;
 
+/**
+ * Base client interface for GLIDE
+ */
 export class BaseClient {
     private socket: net.Socket;
     protected readonly promiseCallbackFunctions:
@@ -1112,8 +1135,10 @@ export class BaseClient {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
                   callbackIdx,
-                  transaction: command_request.Transaction.create({
+                  batch: command_request.Batch.create({
+                      isAtomic: true,
                       commands: command,
+                      // TODO: add support for timeout, raiseOnError and retryStrategy
                   }),
                   route,
               })
@@ -3853,8 +3878,12 @@ export class BaseClient {
     ): Promise<GlideReturnType> {
         const scriptInvocation = command_request.ScriptInvocation.create({
             hash: script.getHash(),
-            keys: options?.keys?.map(Buffer.from),
-            args: options?.args?.map(Buffer.from),
+            keys: options?.keys?.map((key) =>
+                typeof key === "string" ? Buffer.from(key) : key,
+            ),
+            args: options?.args?.map((arg) =>
+                typeof arg === "string" ? Buffer.from(arg) : arg,
+            ),
         });
         return this.createScriptInvocationPromise(scriptInvocation, options);
     }
@@ -4008,15 +4037,11 @@ export class BaseClient {
      */
     public async zadd(
         key: GlideString,
-        membersAndScores: SortedSetDataType | Record<string, number>,
+        membersAndScores: ElementAndScore[] | Record<string, Score>,
         options?: ZAddOptions,
     ): Promise<number> {
         return this.createWritePromise(
-            createZAdd(
-                key,
-                convertElementsAndScores(membersAndScores),
-                options,
-            ),
+            createZAdd(key, membersAndScores, options),
         );
     }
 
@@ -6069,6 +6094,8 @@ export class BaseClient {
         primary: connection_request.ReadFrom.Primary,
         preferReplica: connection_request.ReadFrom.PreferReplica,
         AZAffinity: connection_request.ReadFrom.AZAffinity,
+        AZAffinityReplicasAndPrimary:
+            connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
     };
 
     /**

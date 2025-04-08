@@ -11,10 +11,13 @@ from glide.constants import (
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
-from glide.glide_client import TGlideClient
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.routes import AllNodes
 from packaging import version
 
 T = TypeVar("T")
+
+version_str = ""
 
 
 def is_single_response(response: T, single_res: T) -> bool:
@@ -78,8 +81,10 @@ def get_random_string(length):
 
 async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
     # TODO: change to pytest fixture after sync client is implemented
-    info = parse_info_response(await client.info([InfoSection.SERVER]))
-    version_str = info.get("valkey_version") or info.get("redis_version")
+    global version_str
+    if not version_str:
+        info = parse_info_response(await client.info([InfoSection.SERVER]))
+        version_str = info.get("valkey_version") or info.get("redis_version")  # type: ignore
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
@@ -106,8 +111,10 @@ def compare_maps(
     Compare two maps by converting them to JSON strings and checking for equality, including property order.
 
     Args:
-        map1 (Optional[Union[Mapping[str, TResult], Dict[str, TResult], Mapping[bytes, TResult], Dict[bytes, TResult]]]): The first map to compare.
-        map2 (Optional[Union[Mapping[str, TResult], Dict[str, TResult], Mapping[bytes, TResult], Dict[bytes, TResult]]]): The second map to compare.
+        map1 (Optional[Union[Mapping[str, TResult], Dict[str, TResult], Mapping[bytes, TResult], Dict[bytes, TResult]]]):
+            The first map to compare.
+        map2 (Optional[Union[Mapping[str, TResult], Dict[str, TResult], Mapping[bytes, TResult], Dict[bytes, TResult]]]):
+            The second map to compare.
 
     Returns:
         bool: True if the maps are equal, False otherwise.
@@ -153,7 +160,7 @@ def convert_bytes_to_string_object(
             Mapping[str, Any],
             Dict[str, Any],
         ]
-    ]
+    ],
 ) -> Optional[
     Union[
         List[Any],
@@ -192,7 +199,7 @@ def convert_string_to_bytes_object(
             Mapping[str, Any],
             Dict[str, Any],
         ]
-    ]
+    ],
 ) -> Optional[
     Union[
         List[Any],
@@ -229,7 +236,8 @@ def generate_lua_lib_code(
     code = f"#!lua name={lib_name}\n"
     for function_name, function_body in functions.items():
         code += (
-            f"redis.register_function{{ function_name = '{function_name}', callback = function(keys, args) "
+            f"redis.register_function{{"
+            f" function_name = '{function_name}', callback = function(keys, args) "
             f"{function_body} end"
         )
         if readonly:
@@ -253,15 +261,16 @@ def create_lua_lib_with_long_running_function(
         "  redis.pcall('set', keys[1], 42)\n"
         "  while (true) do\n"
         "    local now = tonumber(redis.pcall('time')[1])\n"
-        f"    if now > started + {timeout} then\n"
-        f"      return 'Timed out {timeout} sec'\n"
+        # We disable flake8 checks for the next two lines as the extra spaces are helpful
+        f"    if now > started + {timeout} then\n"  # noqa: E272
+        f"      return 'Timed out {timeout} sec'\n"  # noqa: E272
         "    end\n"
         "  end\n"
         "  return 'OK'\n"
         "end\n"
         "redis.register_function{\n"
-        f"function_name='{func_name}',\n"
-        f"callback={lib_name}_{func_name},\n"
+        f"function_name='{func_name}', \n"
+        f"callback={lib_name}_{func_name}, \n"
     )
     if readonly:
         code += "flags={ 'no-writes' }\n"
@@ -278,8 +287,9 @@ def create_long_running_lua_script(timeout: int) -> str:
         "  local started = tonumber(redis.pcall('time')[1])\n"
         "  while (true) do\n"
         "    local now = tonumber(redis.pcall('time')[1])\n"
-        f"    if now > started + {timeout} then\n"
-        f"      return 'Timed out {timeout} sec'\n"
+        # We disable flake8 checks for the next two lines as the extra spaces are helpful
+        f"    if now > started + {timeout} then\n"  # noqa: E272
+        f"      return 'Timed out {timeout} sec'\n"  # noqa: E272
         "    end\n"
         "  end\n"
     )
@@ -364,3 +374,36 @@ def check_function_stats_response(
         b"LUA": {b"libraries_count": lib_count, b"functions_count": function_count}
     }
     assert expected == response.get(b"engines")
+
+
+async def set_new_acl_username_with_password(
+    client: TGlideClient, username: str, password: str
+):
+    """
+    Sets a new ACL user with the provided password
+    """
+    try:
+        if isinstance(client, GlideClient):
+            await client.custom_command(
+                ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"]
+            )
+        elif isinstance(client, GlideClusterClient):
+            await client.custom_command(
+                ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"],
+                route=AllNodes(),
+            )
+    except Exception as e:
+        raise RuntimeError(f"Failed to set ACL user: {e}")
+
+
+async def delete_acl_username_and_password(client: TGlideClient, username: str):
+    """
+    Deletes the username and its password from the ACL list
+    """
+    if isinstance(client, GlideClient):
+        return await client.custom_command(["ACL", "DELUSER", username])
+
+    elif isinstance(client, GlideClusterClient):
+        return await client.custom_command(
+            ["ACL", "DELUSER", username], route=AllNodes()
+        )

@@ -2,26 +2,30 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/glide/protobuf"
+import (
+	"errors"
+
+	"github.com/valkey-io/valkey-glide/go/protobuf"
+)
 
 const (
-	defaultHost = "localhost"
-	defaultPort = 6379
+	DefaultHost = "localhost"
+	DefaultPort = 6379
 )
 
 // NodeAddress represents the host address and port of a node in the cluster.
 type NodeAddress struct {
-	Host string // If not supplied, "localhost" will be used.
-	Port int    // If not supplied, 6379 will be used.
+	Host string // If not supplied, api.DefaultHost will be used.
+	Port int    // If not supplied, api.DefaultPort will be used.
 }
 
 func (addr *NodeAddress) toProtobuf() *protobuf.NodeAddress {
 	if addr.Host == "" {
-		addr.Host = defaultHost
+		addr.Host = DefaultHost
 	}
 
 	if addr.Port == 0 {
-		addr.Port = defaultPort
+		addr.Port = DefaultPort
 	}
 
 	return &protobuf.NodeAddress{Host: addr.Host, Port: uint32(addr.Port)}
@@ -60,11 +64,26 @@ const (
 	// PreferReplica - Spread the requests between all replicas in a round-robin manner. If no replica is available, route the
 	// requests to the primary.
 	PreferReplica
+	// Spread the read requests between replicas in the same client's AZ (Aviliablity zone) in a
+	// round-robin manner, falling back to other replicas or the primary if needed.
+	AzAffinity
+	// Spread the read requests among nodes within the client's Availability Zone (AZ) in a round
+	// robin manner, prioritizing local replicas, then the local primary, and falling back to any
+	// replica or the primary if needed.
+	AzAffinityReplicaAndPrimary
 )
 
 func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 	if readFrom == PreferReplica {
 		return protobuf.ReadFrom_PreferReplica
+	}
+
+	if readFrom == AzAffinity {
+		return protobuf.ReadFrom_AZAffinity
+	}
+
+	if readFrom == AzAffinityReplicaAndPrimary {
+		return protobuf.ReadFrom_AZAffinityReplicasAndPrimary
 	}
 
 	return protobuf.ReadFrom_Primary
@@ -77,9 +96,10 @@ type baseClientConfiguration struct {
 	readFrom       ReadFrom
 	requestTimeout int
 	clientName     string
+	clientAZ       string
 }
 
-func (config *baseClientConfiguration) toProtobuf() *protobuf.ConnectionRequest {
+func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
 	request := protobuf.ConnectionRequest{}
 	for _, address := range config.addresses {
 		request.Addresses = append(request.Addresses, address.toProtobuf())
@@ -104,7 +124,18 @@ func (config *baseClientConfiguration) toProtobuf() *protobuf.ConnectionRequest 
 		request.ClientName = config.clientName
 	}
 
-	return &request
+	if config.clientAZ != "" {
+		request.ClientAz = config.clientAZ
+	}
+
+	if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
+		request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
+		if config.clientAZ == "" {
+			return nil, errors.New("client AZ must be set when using AZ affinity or AZ affinity with replicas and primary")
+		}
+	}
+
+	return &request, nil
 }
 
 // BackoffStrategy represents the strategy used to determine how and when to reconnect, in case of connection failures. The
@@ -145,6 +176,7 @@ type GlideClientConfiguration struct {
 	baseClientConfiguration
 	reconnectStrategy *BackoffStrategy
 	databaseId        int
+	AdvancedGlideClientConfiguration
 }
 
 // NewGlideClientConfiguration returns a [GlideClientConfiguration] with default configuration settings. For further
@@ -153,8 +185,11 @@ func NewGlideClientConfiguration() *GlideClientConfiguration {
 	return &GlideClientConfiguration{}
 }
 
-func (config *GlideClientConfiguration) toProtobuf() *protobuf.ConnectionRequest {
-	request := config.baseClientConfiguration.toProtobuf()
+func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
+	request, err := config.baseClientConfiguration.toProtobuf()
+	if err != nil {
+		return nil, err
+	}
 	request.ClusterModeEnabled = false
 	if config.reconnectStrategy != nil {
 		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
@@ -164,7 +199,11 @@ func (config *GlideClientConfiguration) toProtobuf() *protobuf.ConnectionRequest
 		request.DatabaseId = uint32(config.databaseId)
 	}
 
-	return request
+	if config.AdvancedGlideClientConfiguration.connectionTimeout != 0 {
+		request.ConnectionTimeout = uint32(config.AdvancedGlideClientConfiguration.connectionTimeout)
+	}
+
+	return request, nil
 }
 
 // WithAddress adds an address for a known node in the cluster to this configuration's list of addresses. WithAddress can be
@@ -176,9 +215,9 @@ func (config *GlideClientConfiguration) toProtobuf() *protobuf.ConnectionRequest
 //
 //	config := NewGlideClientConfiguration().
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: 6379}).
+//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: 6379})
+//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPort})
 func (config *GlideClientConfiguration) WithAddress(address *NodeAddress) *GlideClientConfiguration {
 	config.addresses = append(config.addresses, *address)
 	return config
@@ -221,6 +260,12 @@ func (config *GlideClientConfiguration) WithClientName(clientName string) *Glide
 	return config
 }
 
+// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
+func (config *GlideClientConfiguration) WithClientAZ(clientAZ string) *GlideClientConfiguration {
+	config.clientAZ = clientAZ
+	return config
+}
+
 // WithReconnectStrategy sets the [BackoffStrategy] used to determine how and when to reconnect, in case of connection
 // failures. If not set, a default backoff strategy will be used.
 func (config *GlideClientConfiguration) WithReconnectStrategy(strategy *BackoffStrategy) *GlideClientConfiguration {
@@ -234,25 +279,41 @@ func (config *GlideClientConfiguration) WithDatabaseId(id int) *GlideClientConfi
 	return config
 }
 
+// WithAdvancedConfiguration sets the advanced configuration settings for the client.
+func (config *GlideClientConfiguration) WithAdvancedConfiguration(
+	advancedConfig *AdvancedGlideClientConfiguration,
+) *GlideClientConfiguration {
+	config.AdvancedGlideClientConfiguration = *advancedConfig
+	return config
+}
+
 // GlideClusterClientConfiguration represents the configuration settings for a Cluster Glide client.
 // Note: Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff with fixed values is
 // used.
 type GlideClusterClientConfiguration struct {
 	baseClientConfiguration
+	AdvancedGlideClusterClientConfiguration
 }
 
 // NewGlideClusterClientConfiguration returns a [GlideClusterClientConfiguration] with default configuration settings. For
 // further configuration, use the [GlideClientConfiguration] With* methods.
 func NewGlideClusterClientConfiguration() *GlideClusterClientConfiguration {
 	return &GlideClusterClientConfiguration{
-		baseClientConfiguration: baseClientConfiguration{},
+		baseClientConfiguration:                 baseClientConfiguration{},
+		AdvancedGlideClusterClientConfiguration: AdvancedGlideClusterClientConfiguration{},
 	}
 }
 
-func (config *GlideClusterClientConfiguration) toProtobuf() *protobuf.ConnectionRequest {
-	request := config.baseClientConfiguration.toProtobuf()
+func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
+	request, err := config.baseClientConfiguration.toProtobuf()
+	if err != nil {
+		return nil, err
+	}
 	request.ClusterModeEnabled = true
-	return request
+	if (config.AdvancedGlideClusterClientConfiguration.connectionTimeout) != 0 {
+		request.ConnectionTimeout = uint32(config.AdvancedGlideClusterClientConfiguration.connectionTimeout)
+	}
+	return request, nil
 }
 
 // WithAddress adds an address for a known node in the cluster to this configuration's list of addresses. WithAddress can be
@@ -264,9 +325,9 @@ func (config *GlideClusterClientConfiguration) toProtobuf() *protobuf.Connection
 //
 //	config := NewGlideClusterClientConfiguration().
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: 6379}).
+//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: 6379})
+//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPort})
 func (config *GlideClusterClientConfiguration) WithAddress(address *NodeAddress) *GlideClusterClientConfiguration {
 	config.addresses = append(config.addresses, *address)
 	return config
@@ -308,5 +369,66 @@ func (config *GlideClusterClientConfiguration) WithRequestTimeout(requestTimeout
 // establishment.
 func (config *GlideClusterClientConfiguration) WithClientName(clientName string) *GlideClusterClientConfiguration {
 	config.clientName = clientName
+	return config
+}
+
+// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
+func (config *GlideClusterClientConfiguration) WithClientAZ(clientAZ string) *GlideClusterClientConfiguration {
+	config.clientAZ = clientAZ
+	return config
+}
+
+// WithAdvancedConfiguration sets the advanced configuration settings for the client.
+func (config *GlideClusterClientConfiguration) WithAdvancedConfiguration(
+	advancedConfig *AdvancedGlideClusterClientConfiguration,
+) *GlideClusterClientConfiguration {
+	config.AdvancedGlideClusterClientConfiguration = *advancedConfig
+	return config
+}
+
+// Advanced configuration settings class for creating a client. Shared settings for standalone and
+// cluster clients.
+type AdvancedBaseClientConfiguration struct {
+	connectionTimeout int
+}
+
+// Represents advanced configuration settings for a Standalone [GlideClient] used in [GlideClientConfiguration].
+type AdvancedGlideClientConfiguration struct {
+	AdvancedBaseClientConfiguration
+}
+
+// NewAdvancedGlideClientConfiguration returns a new [AdvancedGlideClientConfiguration] with default settings.
+func NewAdvancedGlideClientConfiguration() *AdvancedGlideClientConfiguration {
+	return &AdvancedGlideClientConfiguration{}
+}
+
+// WithConnectionTimeout sets the duration in milliseconds to wait for a TCP/TLS connection to complete.
+// The duration in milliseconds to wait for a TCP/TLS connection to complete. This applies both
+// during initial client creation and any reconnections that may occur during request processing.
+// Note: A high connection timeout may lead to prolonged blocking of the entire command
+// pipeline. If not explicitly set, a default value of 250 milliseconds will be used.
+func (config *AdvancedGlideClientConfiguration) WithConnectionTimeout(
+	connectionTimeout int,
+) *AdvancedGlideClientConfiguration {
+	config.connectionTimeout = connectionTimeout
+	return config
+}
+
+// Represents advanced configuration settings for a Standalone [GlideClusterClient] used in
+// [GlideClusterClientConfiguration].
+type AdvancedGlideClusterClientConfiguration struct {
+	AdvancedBaseClientConfiguration
+}
+
+// NewAdvancedGlideClusterClientConfiguration returns a new [AdvancedGlideClusterClientConfiguration] with default settings.
+func NewAdvancedGlideClusterClientConfiguration() *AdvancedGlideClusterClientConfiguration {
+	return &AdvancedGlideClusterClientConfiguration{}
+}
+
+// WithConnectionTimeout sets the duration in milliseconds to wait for a TCP/TLS connection to complete.
+func (config *AdvancedGlideClusterClientConfiguration) WithConnectionTimeout(
+	connectionTimeout int,
+) *AdvancedGlideClusterClientConfiguration {
+	config.connectionTimeout = connectionTimeout
 	return config
 }

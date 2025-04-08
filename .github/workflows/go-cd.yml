@@ -1,0 +1,228 @@
+name: Go - Continuous Deployment
+
+on:
+    push:
+        tags:
+            - "v*.*"
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "The release version of GLIDE, formatted as v*.*.* or v*.*.*-rc*"
+                required: true
+            pkg_go_dev_publish:
+                description: "Publish to pkg.go.dev"
+                required: true
+                type: boolean
+                default: false
+
+concurrency:
+    group: go-cd-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    id-token: write
+
+env:
+    BASE_GO_VERSION: "1.22"
+
+jobs:
+    load-platform-matrix:
+        if: github.repository_owner == 'valkey-io'
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        outputs:
+            PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: load-platform-matrix
+              id: load-platform-matrix
+              shell: bash
+              run: |
+                  # Filter entries with pkg_go_dev in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
+                  export PLATFORM_MATRIX=$(jq 'map(
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pkg_go_dev"])))
+                      | .RUNNER = (
+                          if (.RUNNER | type == "array") 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
+                          end
+                      )
+                  )' < .github/json_matrices/build-matrix.json | jq -c .)
+                  echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+
+    validate-release-version:
+        if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish }}
+        runs-on: ubuntu-latest
+        outputs:
+            RELEASE_VERSION: ${{ steps.release-tag.outputs.RELEASE_VERSION }}
+        env:
+            INPUT_VERSION: ${{ github.event.inputs.version }}
+            TAG_VERSION: ${{ github.ref_name }}
+        steps:
+            - name: Checkout for tag check
+              if: ${{ github.event_name == 'workflow_dispatch' }}
+              uses: actions/checkout@v4
+
+            - name: Validate version agaisnt tags
+              if: ${{ github.event_name == 'workflow_dispatch' }}
+              run: |
+                  git fetch --tags
+                  if git tag | grep -q "^go/${{ env.INPUT_VERSION }}$"; then
+                      echo "Version ${{ env.INPUT_VERSION }} already exists."
+                      exit 1
+                  fi
+
+            - name: Validate Version Against RegEx and output
+              id: release-tag
+              run: |
+                  if ${{ github.event_name == 'workflow_dispatch' }}; then
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION="${{ env.TAG_VERSION }}"
+                  fi
+                  echo "Releassing version is: ${R_VERSION}"
+                  if ! echo "${R_VERSION}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
+                      echo "Version is not valid, must be v*.*.* or v*.*.*-rc*"
+                      exit 1
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_OUTPUT
+
+    create-binaries:
+        needs: [load-platform-matrix]
+        if: success()
+        strategy:
+            fail-fast: false
+            matrix:
+                host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+        runs-on: ${{ matrix.host.RUNNER }}
+        steps:
+            - name: Setup self-hosted runner access
+              run: |
+                  GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
+                  if [ -d $GHA_HOME ]; then
+                    sudo chown -R $USER:$USER $GHA_HOME
+                    sudo rm -rf $GHA_HOME
+                    mkdir -p $GHA_HOME/valkey-glide
+                  else
+                    echo "No cleaning needed"
+                  fi
+            - uses: actions/checkout@v4
+            - uses: actions/setup-go@v5
+              with:
+                  go-version: ${{ env.BASE_GO_VERSION }}
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+            - name: Build Go client
+              working-directory: go
+              run: |
+                  make install-build-tools
+                  make build
+            - name: Upload artifacts
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ matrix.host.TARGET }}
+                  path: |
+                      ffi/target/release/libglide_ffi.a
+                      go/lib.h
+                      go/protobuf/
+
+    commit-auto-gen-files-with-tag:
+        if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish }}
+        needs: [validate-release-version, create-binaries]
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/download-artifact@v4
+              with:
+                  path: artifacts
+            - name: Copy generated files to repo
+              run: |
+                  cd artifacts
+                  for dir in */; do
+                    target_name=${dir%/}
+                    mkdir -p $GITHUB_WORKSPACE/go/rustbin/${target_name}
+                    cp ${target_name}/target/release/libglide_ffi.a $GITHUB_WORKSPACE/go/rustbin/${target_name}/
+                  done
+                  # TODO: move generation of protobuf and header file to a non-matrix step
+                  cd x86_64-unknown-linux-gnu
+                  cp lib.h $GITHUB_WORKSPACE/go/
+                  mkdir -p $GITHUB_WORKSPACE/go/protobuf
+                  cp protobuf/* $GITHUB_WORKSPACE/go/protobuf/
+            - name: Commit and push tag
+              run: |
+                  RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
+                  git config user.name github-actions
+                  git config user.email github-actions@github.com
+                  git add -f .
+                  git commit -m "Automated commit from GitHub Actions"
+                  git tag go/$RELEASE_VERSION
+                  git push origin go/$RELEASE_VERSION
+                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go@$RELEASE_VERSION
+
+    extra-post-commit-test:
+        needs:
+            [
+                load-platform-matrix,
+                validate-release-version,
+                commit-auto-gen-files-with-tag,
+            ]
+        strategy:
+            fail-fast: false
+            matrix:
+                host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+        runs-on: ${{ matrix.host.RUNNER }}
+        steps:
+            - name: Setup self-hosted runner access
+              run: |
+                  GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
+                  if [ -d $GHA_HOME ]; then
+                    sudo chown -R $USER:$USER $GHA_HOME
+                    sudo rm -rf $GHA_HOME
+                    mkdir -p $GHA_HOME/valkey-glide
+                  else
+                    echo "No cleaning needed"
+                  fi
+            - uses: actions/checkout@v4
+              with:
+                  ref: "go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}"
+            - uses: actions/setup-go@v5
+              with:
+                  go-version: ${{ env.BASE_GO_VERSION }}
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "8.0"
+            - name: Start standalone Valkey server
+              working-directory: utils
+              id: start-server
+              run: |
+                  PORT=$(python3 ./cluster_manager.py start -r 0 2>&1 | grep CLUSTER_NODES | cut -d = -f 2 | cut -d , -f 1 | cut -d : -f 2)
+                  echo "PORT=$PORT" >> $GITHUB_OUTPUT
+            - name: test newly released go client
+              env:
+                  PORT: ${{ steps.start-server.outputs.PORT }}
+              working-directory: go/benchmarks
+              run: |
+                  # change go/benchmarks/go.mod on the fly
+                  RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
+                  if [[ "${{ matrix.host.OS }}" == "macos" ]]; then
+                      sed -i '' '\|replace github\.com/valkey-io/valkey-glide/go|d' go.mod
+                      sed -i '' "s|github\.com/valkey-io/valkey-glide/go v.*|github.com/valkey-io/valkey-glide/go $RELEASE_VERSION|g" go.mod
+                  else
+                      sed -i '\|replace github\.com/valkey-io/valkey-glide/go|d' go.mod
+                      sed -i "s|github\.com/valkey-io/valkey-glide/go v.*|github.com/valkey-io/valkey-glide/go $RELEASE_VERSION|g" go.mod
+                  fi
+                  go mod tidy
+                  go run . -minimal -clients glide -concurrentTasks 10 -port ${{ env.PORT }}
