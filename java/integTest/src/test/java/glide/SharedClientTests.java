@@ -44,7 +44,8 @@ public class SharedClientTests {
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        standaloneClient = GlideClient.createClient(commonClientConfig().build()).get();
+        standaloneClient =
+                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
         clusterClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get();
@@ -71,6 +72,10 @@ public class SharedClientTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void send_and_receive_large_values(BaseClient client) {
+        System.out.println("standaloneClient: " + standaloneClient);
+        System.out.println("clusterClient: " + clusterClient);
+        System.out.println(client);
+        System.out.println("Sending large values");
         int length = 1 << 25; // 33mb
         String key = "0".repeat(length);
         String value = "0".repeat(length);
