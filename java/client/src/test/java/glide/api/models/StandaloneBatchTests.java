@@ -9,7 +9,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
 import static glide.api.commands.GenericCommands.DB_VALKEY_API;
-import static glide.api.models.TransactionTests.buildArgs;
+import static glide.api.models.BatchTests.buildArgs;
 import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.Limit;
@@ -29,23 +29,25 @@ import glide.api.models.commands.scan.ScanOptions;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
-public class StandaloneTransactionTests {
-    @Test
-    public void standalone_transaction_commands() {
+public class StandaloneBatchTests {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void standalone_batch_commands(boolean isAtomic) {
         List<Pair<CommandRequestOuterClass.RequestType, CommandRequestOuterClass.Command.ArgsArray>>
                 results = new LinkedList<>();
-        Transaction transaction = new Transaction();
+        Batch batch = new Batch(isAtomic);
 
-        transaction.select(5L);
+        batch.select(5L);
         results.add(Pair.of(Select, buildArgs("5")));
-        transaction.move("testKey", 2L);
+        batch.move("testKey", 2L);
         results.add(Pair.of(Move, buildArgs("testKey", "2")));
-        transaction.copy("key1", "key2", 1, true);
+        batch.copy("key1", "key2", 1, true);
         results.add(Pair.of(Copy, buildArgs("key1", "key2", DB_VALKEY_API, "1", REPLACE_VALKEY_API)));
 
-        transaction.sort(
+        batch.sort(
                 "key1",
                 SortOptions.builder()
                         .byPattern("byPattern")
@@ -62,7 +64,7 @@ public class StandaloneTransactionTests {
                                 "getPattern1",
                                 GET_COMMAND_STRING,
                                 "getPattern2")));
-        transaction.sort(
+        batch.sort(
                 "key1",
                 SortOptions.builder()
                         .orderBy(DESC)
@@ -87,7 +89,7 @@ public class StandaloneTransactionTests {
                                 "getPattern1",
                                 GET_COMMAND_STRING,
                                 "getPattern2")));
-        transaction.sortReadOnly(
+        batch.sortReadOnly(
                 "key1",
                 SortOptions.builder()
                         .byPattern("byPattern")
@@ -104,7 +106,7 @@ public class StandaloneTransactionTests {
                                 "getPattern1",
                                 GET_COMMAND_STRING,
                                 "getPattern2")));
-        transaction.sortReadOnly(
+        batch.sortReadOnly(
                 "key1",
                 SortOptions.builder()
                         .orderBy(DESC)
@@ -129,7 +131,7 @@ public class StandaloneTransactionTests {
                                 "getPattern1",
                                 GET_COMMAND_STRING,
                                 "getPattern2")));
-        transaction.sortStore(
+        batch.sortStore(
                 "key1",
                 "key2",
                 SortOptions.builder()
@@ -149,7 +151,7 @@ public class StandaloneTransactionTests {
                                 "getPattern2",
                                 STORE_COMMAND_STRING,
                                 "key2")));
-        transaction.sortStore(
+        batch.sortStore(
                 "key1",
                 "key2",
                 SortOptions.builder()
@@ -178,10 +180,10 @@ public class StandaloneTransactionTests {
                                 STORE_COMMAND_STRING,
                                 "key2")));
 
-        transaction.scan("cursor");
+        batch.scan("cursor");
         results.add(Pair.of(Scan, buildArgs("cursor")));
 
-        transaction.scan(
+        batch.scan(
                 "cursor", ScanOptions.builder().matchPattern("pattern").count(99L).type(ZSET).build());
         results.add(
                 Pair.of(
@@ -195,10 +197,10 @@ public class StandaloneTransactionTests {
                                 TYPE_OPTION_STRING,
                                 ZSET.toString())));
 
-        var protobufTransaction = transaction.getProtobufTransaction().build();
+        var protobufBatch = batch.getProtobufBatch().build();
 
-        for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
-            CommandRequestOuterClass.Command protobuf = protobufTransaction.getCommands(idx);
+        for (int idx = 0; idx < protobufBatch.getCommandsCount(); idx++) {
+            CommandRequestOuterClass.Command protobuf = protobufBatch.getCommands(idx);
 
             assertEquals(results.get(idx).getLeft(), protobuf.getRequestType());
             assertEquals(
