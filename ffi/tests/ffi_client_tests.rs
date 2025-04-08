@@ -245,7 +245,19 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
             connection_request_ptr,
             connection_request_len,
             client_type,
-            std::ptr::null(),
+            std::mem::transmute::<
+                *mut c_void,
+                unsafe extern "C" fn(
+                    client_ptr: usize,
+                    kind: PushKind,
+                    message: *const u8,
+                    message_len: i64,
+                    channel: *const u8,
+                    channel_len: i64,
+                    pattern: *const u8,
+                    pattern_len: i64,
+                ),
+            >(std::ptr::null_mut()),
         );
 
         assert!(!response_ptr.is_null(), "Failed to create client");
