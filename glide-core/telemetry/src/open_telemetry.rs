@@ -70,7 +70,6 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
     // Parse the URL using the `url` crate to validate it
     let url = Url::parse(endpoint)
         .map_err(|_| Error::new(ErrorKind::InvalidInput, format!("Parse error. {endpoint}")))?;
-    println!("url: {}", url);
 
     match url.scheme() {
         "http" | "https" => Ok(GlideOpenTelemetryTraceExporter::Http(endpoint.to_string())), // HTTP/HTTPS endpoint
@@ -292,10 +291,6 @@ impl GlideSpan {
         GlideSpan {
             inner: GlideSpanInner::new(name),
         }
-    }
-
-    pub fn print_span(&self) {
-        self.inner.print_span_name();
     }
 
     /// Attach event with name to this span.
