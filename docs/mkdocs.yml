@@ -54,9 +54,9 @@ theme:
   font:
     text: Roboto
     code: Roboto Mono
-  palette:
-    scheme: slate
-    colour: black
+#  palette:
+#    scheme: slate
+#    colour: white
 markdown_extensions:
   - pymdownx.keys
   - admonition
