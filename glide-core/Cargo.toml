@@ -20,7 +20,6 @@ redis = { path = "./redis-rs/redis", features = [
     "cluster-async",
 ] }
 telemetrylib = { path = "./telemetry" }
-opentelemetry = "0.20"
 tokio = { version = "1", features = ["macros", "time"] }
 logger_core = { path = "../logger_core" }
 dispose = "0.5.0"
@@ -33,7 +32,7 @@ protobuf = { version = "3", features = [
     "with-bytes",
 ], optional = true }
 integer-encoding = { version = "4.0.0", optional = true }
-thiserror = "=1.0.50"
+thiserror = "1"
 rand = { version = "0.8.5" }
 futures-intrusive = "0.5.0"
 directories = { version = "5.0", optional = true }

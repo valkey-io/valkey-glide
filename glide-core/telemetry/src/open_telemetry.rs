@@ -62,7 +62,6 @@ pub enum GlideOpenTelemetryTraceExporter {
 impl std::str::FromStr for GlideOpenTelemetryTraceExporter {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@s: {}", s);
         parse_endpoint(s)
     }
 }
