@@ -10,8 +10,7 @@ import glide.api.models.configuration.ReadFrom;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Generic Commands" group for standalone and cluster
- * clients.
+ * Supports commands for the "Generic Commands" group for standalone and cluster clients.
  *
  * @see <a href="https://valkey.io/commands/?group=generic">Generic Commands</a>
  */

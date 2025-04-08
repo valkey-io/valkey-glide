@@ -252,7 +252,7 @@ To run a single test, use the following command:
 To run one class, use the following command:
 
 ```bash
-./gradlew :client:test --tests 'TransactionTests' --rerun
+./gradlew :client:test --tests 'BatchTests' --rerun
 ```
 
 To run IT tests against an existing cluster and/or standalone endpoint, use:
@@ -270,7 +270,7 @@ If those endpoints use TLS, add `-Dtls=true` (applied to both endpoints):
 You can combine this with test filter as well:
 
 ```bash
-./gradlew :integTest:test -Dcluster-endpoints=localhost:7000 -Dstandalone-endpoints=localhost:6379 --tests 'TransactionTests' -Dtls=true
+./gradlew :integTest:test -Dcluster-endpoints=localhost:7000 -Dstandalone-endpoints=localhost:6379 --tests 'BatchTests' -Dtls=true
 ```
 
 To run server modules test (it doesn't start servers):
@@ -311,28 +311,27 @@ Implement unit tests in the following files:
 These files are found in the java/client/src/test/java/glide/api path.
 
 Implement integration tests in the following files:
-
-- [TransactionTests.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/test/java/glide/api/models/TransactionTests.java) (standalone and cluster).
-- [TransactionTestsUtilities.java](https://github.com/valkey-io/valkey-glide/blob/main/java/integTest/src/test/java/glide/TransactionTestUtilities.java) (standalone and cluster).
+- [BatchTests.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/test/java/glide/api/models/BatchTests.java) (standalone and cluster).
+- [BatchTestsUtilities.java](https://github.com/valkey-io/valkey-glide/blob/main/java/integTest/src/test/java/glide/BatchTestUtilities.java) (standalone and cluster).
 - [SharedCommandTests.java](https://github.com/valkey-io/valkey-glide/blob/main/java/integTest/src/test/java/glide/SharedCommandTests.java) (standalone and cluster).
 - [cluster/CommandTests.java](https://github.com/valkey-io/valkey-glide/blob/main/java/integTest/src/test/java/glide/cluster/CommandTests.java) (cluster).
 - [standalone/CommandTests.java](https://github.com/valkey-io/valkey-glide/blob/main/java/integTest/src/test/java/glide/standalone/CommandTests.java) (standalone).
 For commands that have options, create a separate file for the optional values.
 
-[BaseTransaction.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) will add the command to the Transactions API.
+[BaseBatch.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/glide/api/models/BaseBatch.java) will add the command to the Batches API.
 Refer to [this](https://github.com/valkey-io/valkey-glide/tree/main/java/client/src/main/java/glide/api/commands) link to view the interface directory.
-Refer to <https://valkey.io/docs/topics/transactions/> for more details about how Transactions work in Valkey.
+Refer to <https://valkey.io/docs/topics/transactions/> and <https://valkey.io/topics/pipelining> for more details about how Batches work in Valkey.
 
 ### Javadocs
 
-[BaseTransaction.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) and the methods within the command interfaces will both contain documentation on how the command operates.
+[BaseBatch.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/glide/api/models/BaseBatch.java) and the methods within the command interfaces will both contain documentation on how the command operates.
 In the command interface each command's javadoc should contain:
 
 - Detail on when Valkey started supporting the command (if it wasn't initially implemented in 6.0.0 or before).
 - A link to the Valkey documentation.
 - Information about the function parameters.
 - Any glide-core implementation details, such as how glide-core manages default routing for the command. Reference this [link](https://github.com/valkey-io/valkey-glide/blob/4df0dd939b515dbf9da0a00bfca6d3ad2f27440b/java/client/src/main/java/glide/api/commands/SetBaseCommands.java#L119) for an example.
-- The command's return type. In the [BaseTransaction.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) file, include "Command Response" before specifying the return type.
+- The command's return type. In the [BaseBatch.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/glide/api/models/BaseBatch.java) file, include "Command Response" before specifying the return type.
 
 ### Previous PR's
 

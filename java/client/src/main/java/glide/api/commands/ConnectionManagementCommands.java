@@ -5,7 +5,7 @@ import glide.api.models.GlideString;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Connection Management" group for a standalone client.
+ * Supports commands for the "Connection Management" group for a standalone client.
  *
  * @see <a href="https://valkey.io/commands/?group=connection">Connection Management Commands</a>
  */
