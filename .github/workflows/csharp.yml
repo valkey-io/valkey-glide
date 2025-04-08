@@ -234,6 +234,17 @@ jobs:
                   cargo-toml-folder: csharp/rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Set up dotnet 6
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: '6.0' # using the lowest supported version
+
+            # Older dotnet fails if sees a references to a newer one
+            - name: Patch project files
+              run: |
+                  find {benchmarks,csharp} -name '*.csproj' | xargs \
+                      sed -i "s|<TargetFrameworks>.*</TargetFrameworks>|<TargetFrameworks>net6.0</TargetFrameworks>|g"
+
             - name: Format
               working-directory: csharp
               run: |

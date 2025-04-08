@@ -20,3 +20,9 @@ logger_core = {path = "../../logger_core"}
 [profile.release]
 lto = true
 debug = true
+panic = 'unwind'
+
+[profile.dev]
+lto = true
+debug = true
+panic = 'unwind'
