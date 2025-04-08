@@ -23,9 +23,10 @@ import lombok.NonNull;
  * command given to the {@link Batch}. The response for each command depends on the executed Valkey
  * command. Specific response types are documented alongside each method.
  *
- * @param isAtomic Determines whether the batch is atomic or non-atomic. If {@code true}, the batch
- *     will be executed as an atomic transaction. If {@code false}, the batch will be executed as a
- *     non-atomic pipeline.
+ * <p><strong>isAtomic:</strong> Determines whether the batch is atomic or non-atomic. If {@code
+ * true}, the batch will be executed as an atomic transaction. If {@code false}, the batch will be
+ * executed as a non-atomic pipeline.
+ *
  * @see <a href="https://valkey.io/docs/topics/transactions/">Valkey Transactions (Atomic
  *     Batches)</a>
  * @see <a href="https://valkey.io/topics/pipelining">Valkey Pipelines (Non-Atomic Batches)</a>
@@ -60,6 +61,13 @@ import lombok.NonNull;
  */
 public class Batch extends BaseBatch<Batch> {
 
+    /**
+     * Creates a new Batch instance.
+     *
+     * @param isAtomic Determines whether the batch is atomic or non-atomic. If {@code true}, the
+     *     batch will be executed as an atomic transaction. If {@code false}, the batch will be
+     *     executed as a non-atomic pipeline.
+     */
     public Batch(boolean isAtomic) {
         super(isAtomic);
     }

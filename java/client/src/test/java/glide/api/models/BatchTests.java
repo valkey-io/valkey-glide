@@ -314,7 +314,8 @@ public class BatchTests {
         return Stream.of(
                 Arguments.of(new Batch(true)),
                 Arguments.of(new Batch(false)),
-                Arguments.of(new ClusterBatch(true), Arguments.of(new ClusterBatch(false))));
+                Arguments.of(new ClusterBatch(true)),
+                Arguments.of(new ClusterBatch(false)));
     }
 
     @ParameterizedTest

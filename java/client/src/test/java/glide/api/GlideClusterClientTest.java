@@ -321,16 +321,14 @@ public class GlideClusterClientTest {
         ClusterBatch batch = new ClusterBatch(isAtomic).ping().ping();
         SingleNodeRoute route = RANDOM;
 
-        BatchRetryStrategy strategy =
-                BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
-
-        ClusterBatchOptions options =
-                ClusterBatchOptions.builder()
-                        .raiseOnError(true)
-                        .timeout(1000)
-                        .route(route)
-                        .retryStrategy(strategy)
-                        .build();
+        ClusterBatchOptions.ClusterBatchOptionsBuilder builder =
+                ClusterBatchOptions.builder().raiseOnError(true).timeout(1000).route(route);
+        if (!isAtomic) {
+            BatchRetryStrategy strategy =
+                    BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
+            builder.retryStrategy(strategy);
+        }
+        ClusterBatchOptions options = builder.build();
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);

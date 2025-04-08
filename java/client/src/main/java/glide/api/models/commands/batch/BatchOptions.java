@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
-/** Options for a batch request with settings inherited from {@link BaseBatchOptions}. */
+/** Options for a batch request for a standalone client. */
 @Getter
 @SuperBuilder
 @ToString

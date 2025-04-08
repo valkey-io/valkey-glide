@@ -1,11 +1,9 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.batch;
 
-// Should we use Builder or SuperBuilder ?
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 
-// TODO: should we raise an error if retryStrategy is set in atomic batch?
 /**
  * Defines a retry strategy for batch requests, allowing control over retries in case of server or
  * connection errors.

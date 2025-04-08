@@ -621,7 +621,7 @@ public class BatchTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     public void scan_test(GlideClient client, boolean isAtomic) {
-        assertEquals(OK, client.flushAll().get());
+        assertEquals(OK, client.flushall().get());
         // setup
         String key = UUID.randomUUID().toString();
         Map<String, String> msetMap = Map.of(key, UUID.randomUUID().toString());
@@ -644,7 +644,7 @@ public class BatchTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     public void scan_binary_test(GlideClient client, boolean isAtomic) {
-        assertEquals(OK, client.flushAll().get());
+        assertEquals(OK, client.flushall().get());
         // setup
         String key = UUID.randomUUID().toString();
         Map<String, String> msetMap = Map.of(key, UUID.randomUUID().toString());
@@ -667,7 +667,7 @@ public class BatchTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     public void scan_with_options_test(GlideClient client, boolean isAtomic) {
-        assertEquals(OK, client.flushAll().get());
+        assertEquals(OK, client.flushall().get());
         // setup
         Batch setupBatch = new Batch(isAtomic);
 
@@ -728,7 +728,7 @@ public class BatchTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     public void scan_binary_with_options_test(GlideClient client, boolean isAtomic) {
-        assertEquals(OK, client.flushAll().get());
+        assertEquals(OK, client.flushall().get());
         // setup
         Batch setupBatch = new Batch(isAtomic).withBinaryOutput();
 

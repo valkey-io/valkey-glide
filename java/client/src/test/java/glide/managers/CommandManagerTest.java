@@ -335,15 +335,14 @@ public class CommandManagerTest {
         ClusterBatch batch =
                 new ClusterBatch(isAtomic).customCommand(arg1).customCommand(arg2).customCommand(arg3);
 
-        BatchRetryStrategy strategy =
-                BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
-        ClusterBatchOptions options =
-                ClusterBatchOptions.builder()
-                        .raiseOnError(false)
-                        .timeout(1000)
-                        .route(RANDOM)
-                        .retryStrategy(strategy)
-                        .build();
+        ClusterBatchOptions.ClusterBatchOptionsBuilder optionsBuilder =
+                ClusterBatchOptions.builder().raiseOnError(false).timeout(1000).route(RANDOM);
+        if (!isAtomic) {
+            BatchRetryStrategy strategy =
+                    BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
+            optionsBuilder.retryStrategy(strategy);
+        }
+        ClusterBatchOptions options = optionsBuilder.build();
 
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
@@ -365,6 +364,13 @@ public class CommandManagerTest {
         assertTrue(requestBuilder.hasRoute());
         assertTrue(requestBuilder.getRoute().hasSimpleRoutes());
         assertEquals(requestBuilder.getRoute().getSimpleRoutes(), SimpleRoutes.Random);
+        if (!isAtomic) {
+            assertTrue(requestBuilder.getBatch().getRetryConnectionError());
+            assertTrue(requestBuilder.getBatch().getRetryServerError());
+        } else {
+            assertFalse(requestBuilder.getBatch().getRetryConnectionError());
+            assertFalse(requestBuilder.getBatch().getRetryServerError());
+        }
 
         LinkedList<ByteString> resultPayloads = new LinkedList<>();
         resultPayloads.add(ByteString.copyFromUtf8("one"));
@@ -376,5 +382,30 @@ public class CommandManagerTest {
             assertEquals(ByteString.copyFromUtf8("GETSTRING"), command.getArgsArray().getArgs(0));
             assertEquals(resultPayloads.pop(), command.getArgsArray().getArgs(1));
         }
+    }
+
+    @SneakyThrows
+    @Test
+    public void submitNewCommand_with_ClusterBatch_with_options_raise_error() {
+
+        String[] arg1 = new String[] {"GETSTRING", "one"};
+        String[] arg2 = new String[] {"GETSTRING", "two"};
+        String[] arg3 = new String[] {"GETSTRING", "three"};
+        ClusterBatch batch =
+                new ClusterBatch(true).customCommand(arg1).customCommand(arg2).customCommand(arg3);
+
+        BatchRetryStrategy strategy =
+                BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
+
+        ClusterBatchOptions.ClusterBatchOptionsBuilder optionsBuilder =
+                ClusterBatchOptions.builder()
+                        .retryStrategy(strategy); // Should not be used with atomic batch
+
+        ClusterBatchOptions options = optionsBuilder.build();
+
+        assertThrows(
+                RequestException.class,
+                () -> service.submitNewBatch(batch, Optional.of(options), r -> null),
+                "Retry strategy should not be used with atomic batches");
     }
 }

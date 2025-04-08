@@ -57,7 +57,7 @@ public class JsonBatch {
     /**
      * Sets the JSON value at the specified <code>path</code> stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be set. The key
      *     will be modified only if <code>value</code> is added as the last child in the specified
@@ -82,7 +82,7 @@ public class JsonBatch {
     /**
      * Sets the JSON value at the specified <code>path</code> stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be set. The key
      *     will be modified only if <code>value</code> is added as the last child in the specified
@@ -115,7 +115,7 @@ public class JsonBatch {
     /**
      * Retrieves the JSON value at the specified <code>path</code> stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @return Command Response - Returns a string representation of the JSON document. If <code>key
      *     </code> doesn't exist, returns <code>null</code>.
@@ -129,7 +129,7 @@ public class JsonBatch {
     /**
      * Retrieves the JSON value at the specified <code>paths</code> stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param paths List of paths within the JSON document.
      * @return Command Response -
@@ -162,7 +162,7 @@ public class JsonBatch {
     /**
      * Retrieves the JSON value at the specified <code>path</code> stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param options Options for formatting the byte representation of the JSON data. See <code>
      *     JsonGetOptions</code>.
@@ -179,7 +179,7 @@ public class JsonBatch {
     /**
      * Retrieves the JSON value at the specified <code>path</code> stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param paths List of paths within the JSON document.
      * @param options Options for formatting the byte representation of the JSON data. See <code>
@@ -221,7 +221,7 @@ public class JsonBatch {
      *
      * @apiNote When using Atomic ClusterBatch (Transaction), all keys in the transaction must be
      *     mapped to the same slot.
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param keys The keys of the JSON documents.
      * @param path The path within the JSON documents.
      * @return Command Response -An array with requested values for each key.
@@ -247,7 +247,7 @@ public class JsonBatch {
      * Appends one or more <code>values</code> to the JSON array at the specified <code>path</code>
      * within the JSON document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the <code>path</code> within the JSON document where the <code>values
      *     </code> will be appended.
@@ -284,7 +284,7 @@ public class JsonBatch {
      * Inserts one or more values into the array at the specified <code>path</code> within the JSON
      * document stored at <code>key</code>, before the given <code>index</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param index The array index before which values are inserted.
@@ -328,7 +328,7 @@ public class JsonBatch {
      * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
      * path.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param scalar The scalar value to search for.
@@ -359,7 +359,7 @@ public class JsonBatch {
      * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
      * path.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param scalar The scalar value to search for.
@@ -398,7 +398,7 @@ public class JsonBatch {
      * Retrieves the length of the array at the specified <code>path</code> within the JSON document
      * stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -428,7 +428,7 @@ public class JsonBatch {
      * Equivalent to {@link #arrlen(BaseBatch, ArgType, ArgType)} with <code>path</code> set to <code>
      * "."</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - The array length stored at the root of the document. If document
      *     root is not an array, an error is raised.<br>
@@ -444,7 +444,7 @@ public class JsonBatch {
      * Reports memory usage in bytes of a JSON object at the specified <code>path</code> within the
      * JSON document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -474,7 +474,7 @@ public class JsonBatch {
      * Equivalent to {@link #debugMemory(BaseBatch, ArgType, ArgType)} with <code>path</code> set to
      * <code>".."</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - The total memory usage in bytes of the entire JSON document.<br>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
@@ -498,7 +498,7 @@ public class JsonBatch {
      * field for each of their containing JSON values. Each container value, except the root
      * container, counts as one additional field.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -531,7 +531,7 @@ public class JsonBatch {
      * Equivalent to {@link #debugFields(BaseBatch, ArgType, ArgType)} with <code>path</code> set to
      * <code>".."</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - The total number of fields in the entire JSON document.<br>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
@@ -547,7 +547,7 @@ public class JsonBatch {
      * key</code>. Equivalent to {@link #arrpop(BaseBatch, ArgType, ArgType)} with <code>
      * path</code> set to <code>"."</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @return Command Response - Returns a string representing the popped JSON value, or <code>null
      *     </code> if the array at document root is empty.<br>
@@ -564,7 +564,7 @@ public class JsonBatch {
      * Pops the last element from the array located at <code>path</code> in the JSON document stored
      * at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -592,7 +592,7 @@ public class JsonBatch {
      * Pops an element from the array located at <code>path</code> in the JSON document stored at
      * <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path The path within the JSON document.
      * @param index The index of the element to pop. Out of boundary indexes are rounded to their
@@ -628,7 +628,7 @@ public class JsonBatch {
      * If <code>start</code> >= size or <code>start</code> > <code>end</code>, the array is emptied
      * and 0 is return.<br>
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param start The index of the first element to keep, inclusive.
@@ -672,7 +672,7 @@ public class JsonBatch {
      * Increments or decrements the JSON value(s) at the specified <code>path</code> by <code>number
      * </code> within the JSON document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param number The number to increment or decrement by.
@@ -707,7 +707,7 @@ public class JsonBatch {
      * Multiplies the JSON value(s) at the specified <code>path</code> by <code>number</code> within
      * the JSON document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param number The number to multiply by.
@@ -743,7 +743,7 @@ public class JsonBatch {
      * Equivalent to {@link #objlen(BaseBatch, ArgType, ArgType)} with <code>path</code> set to <code>
      * "."</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - The object length stored at the root of the document. If document
      *     root is not an object, an error is raised.<br>
@@ -759,7 +759,7 @@ public class JsonBatch {
      * Retrieves the number of key-value pairs in the object values at the specified <code>path</code>
      * within the JSON document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -792,7 +792,7 @@ public class JsonBatch {
      * <code>
      * "."</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - The object length stored at the root of the document. If document
      *     root is not an object, an error is raised.<br>
@@ -808,7 +808,7 @@ public class JsonBatch {
      * Retrieves the key names in the object values at the specified <code>path</code> within the JSON
      * document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -837,7 +837,7 @@ public class JsonBatch {
     /**
      * Deletes the JSON document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @return Command Response - The number of elements deleted. 0 if the key does not exist.
      */
@@ -851,7 +851,7 @@ public class JsonBatch {
      * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at
      * <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be deleted.
      * @return Command Response - The number of elements deleted. 0 if the key does not exist, or if
@@ -867,7 +867,7 @@ public class JsonBatch {
     /**
      * Deletes the JSON document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @return Command Response - The number of elements deleted. 0 if the key does not exist.
      */
@@ -881,7 +881,7 @@ public class JsonBatch {
      * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at
      * <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be deleted.
      * @return Command Response - The number of elements deleted. 0 if the key does not exist, or if
@@ -897,7 +897,7 @@ public class JsonBatch {
     /**
      * Toggles a Boolean value stored at the root within the JSON document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - Returns the toggled boolean value at the root of the document, or
      *     <code>null</code> for JSON values matching the root that are not boolean. If <code>key
@@ -913,7 +913,7 @@ public class JsonBatch {
      * Toggles a Boolean value stored at the specified <code>path</code> within the JSON document
      * stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -938,7 +938,7 @@ public class JsonBatch {
      * Appends the specified <code>value</code> to the string stored at the specified <code>path
      * </code> within the JSON document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param value The value to append to the string. Must be wrapped with single quotes. For
      *     example, to append "foo", pass '"foo"'.
@@ -975,7 +975,7 @@ public class JsonBatch {
      * Appends the specified <code>value</code> to the string stored at the root within the JSON
      * document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param value The value to append to the string. Must be wrapped with single quotes. For
      *     example, to append "foo", pass '"foo"'.
@@ -995,7 +995,7 @@ public class JsonBatch {
      * Returns the length of the JSON string value stored at the specified <code>path</code> within
      * the JSON document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -1024,7 +1024,7 @@ public class JsonBatch {
      * Returns the length of the JSON string value stored at the root within the JSON document stored
      * at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - Returns the length of the JSON value at the root.<br>
      *     If the JSON value is not a string, an error is raised.<br>
@@ -1041,7 +1041,7 @@ public class JsonBatch {
      * Equivalent to {@link #clear(BaseBatch, ArgType, ArgType)} with <code>path</code> set to <code>
      * "."</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - <code>1</code> if the document wasn't empty or <code>0</code> if it
      *     was.<br>
@@ -1059,7 +1059,7 @@ public class JsonBatch {
      * Numeric values are set to <code>0</code>, boolean values are set to <code>false</code>, and
      * string values are converted to empty strings.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response - The number of containers cleared.<br>
@@ -1090,7 +1090,7 @@ public class JsonBatch {
      *       {, followed by key-value pairs, each of which is a RESP bulk string.
      * </ul>
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - Returns the JSON document in its RESP form. If <code>key</code>
      *     doesn't exist, <code>null</code> is returned.
@@ -1118,7 +1118,7 @@ public class JsonBatch {
      *       {, followed by key-value pairs, each of which is a RESP bulk string.
      * </ul>
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -1144,7 +1144,7 @@ public class JsonBatch {
      * Retrieves the type of the JSON value at the root of the JSON document stored at <code>key
      * </code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - Returns the type of the JSON value at root. If <code>key</code>
      *     doesn't exist, <code>
@@ -1160,7 +1160,7 @@ public class JsonBatch {
      * Retrieves the type of the JSON value at the specified <code>path</code> within the JSON
      * document stored at <code>key</code>.
      *
-     * @param batch The Valkey GLIDE client to execute the command in batch.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path Represents the path within the JSON document where the type will be retrieved.
      * @return Command Response -

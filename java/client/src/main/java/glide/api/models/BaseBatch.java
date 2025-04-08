@@ -315,6 +315,10 @@ import lombok.NonNull;
  * given to the batch. The response for each command depends on the executed Valkey command.
  * Specific response types are documented alongside each method.
  *
+ * <p><strong>isAtomic:</strong> Determines whether the batch is atomic or non-atomic. If {@code
+ * true}, the batch will be executed as an atomic transaction. If {@code false}, the batch will be
+ * executed as a non-atomic pipeline.
+ *
  * @param <T> child typing for chaining method calls.
  */
 @Getter

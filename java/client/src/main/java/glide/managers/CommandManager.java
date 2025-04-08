@@ -321,8 +321,7 @@ public class CommandManager {
 
         if (options.isPresent()) {
             BatchOptions opts = options.get();
-            CommandRequestOuterClass.Batch.Builder batchBuilder =
-                    prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
+            var batchBuilder = prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
 
             builder.setBatch(batchBuilder.build());
         } else {
@@ -411,6 +410,9 @@ public class CommandManager {
                     prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
 
             if (opts.getRetryStrategy() != null) {
+                if (batchBuilder.getIsAtomic()) {
+                    throw new RequestException("Retry strategy is not supported for atomic batches.");
+                }
                 batchBuilder.setRetryServerError(opts.getRetryStrategy().isRetryServerError());
                 batchBuilder.setRetryConnectionError(opts.getRetryStrategy().isRetryConnectionError());
             }

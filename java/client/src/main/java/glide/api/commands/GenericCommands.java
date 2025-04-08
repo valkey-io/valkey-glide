@@ -9,7 +9,7 @@ import glide.api.models.commands.scan.ScanOptions;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and batches for the "Generic Commands" group for a standalone client.
+ * Supports commands for the "Generic Commands" group for a standalone client.
  *
  * @see <a href="https://valkey.io/commands/?group=generic">Generic Commands</a>
  */
@@ -59,8 +59,6 @@ public interface GenericCommands {
      * @deprecated Use {@link #exec(Batch)} instead. This method is being replaced by a more flexible
      *     approach using {@link Batch}.
      *     <p>Executes a transaction by processing the queued commands.
-     * @see <a href="https://valkey.io/docs/topics/transactions/">valkey.io</a> for details on
-     *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
      * @return A list of results corresponding to the execution of each command in the transaction.
      * @remarks
@@ -71,6 +69,9 @@ public interface GenericCommands {
      *           return <code>null</code>.
      *     </ul>
      *
+     * @see #exec(Batch)
+     * @see <a href="https://valkey.io/docs/topics/transactions/">valkey.io</a> for details on
+     *     Transactions.
      * @example
      *     <pre>{@code
      * Transaction transaction = new Transaction().customCommand(new String[] {"info"});
@@ -84,15 +85,16 @@ public interface GenericCommands {
     /**
      * Executes a batch by processing the queued commands.
      *
-     * @param batch A {@link Batch} object containing a list of commands to be executed.
-     * @return A list of results corresponding to the execution of each command in the batch.
-     * @remarks
-     *     <ul>
-     *       <li><strong>Atomic Batches - Transactions:</strong>
-     *       <li>If the transaction fails due to a <code>WATCH</code> command, <code>EXEC</code> will
-     *           return <code>null</code>.
-     *     </ul>
+     * <p><strong>Notes:</strong>
      *
+     * <ul>
+     *   <li><strong>Atomic Batches - Transactions:</strong> If the transaction fails due to a <code>
+     *       WATCH</code> command, <code>EXEC</code> will return <code>null</code>.
+     * </ul>
+     *
+     * @param batch A {@link Batch} containing the commands to execute.
+     * @return A {@link CompletableFuture} resolving to an array of results, where each entry
+     *     corresponds to a command’s execution result.
      * @see <a href="https://valkey.io/docs/topics/transactions/">Valkey Transactions (Atomic
      *     Batches)</a>
      * @see <a href="https://valkey.io/docs/topics/pipelining/">Valkey Pipelines (Non-Atomic
@@ -124,15 +126,21 @@ public interface GenericCommands {
     /**
      * Executes a batch by processing the queued commands with additional options.
      *
-     * @param batch A {@link Batch} object containing a list of commands to be executed.
-     * @param options A {@link BatchOptions} object specifying additional configuration options for
-     *     the batch execution.
-     * @return A list of results corresponding to the execution of each command in the batch.
+     * <p><strong>Notes:</strong>
+     *
+     * <ul>
+     *   <li><strong>Atomic Batches - Transactions:</strong> If the transaction fails due to a <code>
+     *       WATCH</code> command, <code>EXEC</code> will return <code>null</code>.
+     * </ul>
+     *
+     * @param batch A {@link Batch} containing the commands to execute.
+     * @param options A {@link BatchOptions} object containing execution options.
+     * @return A {@link CompletableFuture} resolving to an array of results, where each entry
+     *     corresponds to a command’s execution result.
      * @see <a href="https://valkey.io/docs/topics/transactions/">Valkey Transactions (Atomic
      *     Batches)</a>
      * @see <a href="https://valkey.io/docs/topics/pipelining/">Valkey Pipelines (Non-Atomic
      *     Batches)</a>
-     * @see BatchOptions for available execution options.
      * @example
      *     <pre>{@code
      * // Example 1: Atomic Batch (Transaction) with BatchOptions

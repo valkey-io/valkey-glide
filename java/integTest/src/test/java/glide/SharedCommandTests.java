@@ -15566,10 +15566,31 @@ public class SharedCommandTests {
     public void batch_raise_on_error(BaseClient client, boolean isAtomic) {
         boolean isCluster = client instanceof GlideClusterClient;
         String key = UUID.randomUUID().toString();
+        String key2 = "{" + key + "}" + UUID.randomUUID();
 
         BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
 
-        batch.set(key, "hello").lpop(key);
+        batch.set(key, "hello").lpop(key).del(new String[] {key}).rename(key, key2);
+        BaseBatchOptions raiseFalse =
+                isCluster
+                        ? ClusterBatchOptions.builder().raiseOnError(false).build()
+                        : BatchOptions.builder().raiseOnError(false).build();
+
+        Object[] result =
+                isCluster
+                        ? ((GlideClusterClient) client)
+                                .exec((ClusterBatch) batch, (ClusterBatchOptions) raiseFalse)
+                                .get()
+                        : ((GlideClient) client).exec((Batch) batch, (BatchOptions) raiseFalse).get();
+
+        assertEquals(4, result.length);
+        assertEquals(result[0], "OK");
+        assertEquals(result[2], 1L);
+        assertInstanceOf(RequestException.class, result[1]);
+        assertTrue(((RequestException) result[1]).getMessage().contains("WRONGTYPE"));
+        assertInstanceOf(RequestException.class, result[3]);
+        assertTrue(((RequestException) result[3]).getMessage().contains("no such key"));
+
         BaseBatchOptions raiseTrue =
                 isCluster
                         ? ClusterBatchOptions.builder().raiseOnError(true).build()
@@ -15589,23 +15610,5 @@ public class SharedCommandTests {
                         });
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getCause().getMessage().contains("WRONGTYPE"));
-
-        BaseBatchOptions raiseFalse =
-                isCluster
-                        ? ClusterBatchOptions.builder().raiseOnError(false).build()
-                        : BatchOptions.builder().raiseOnError(false).build();
-
-        Object[] result =
-                isCluster
-                        ? ((GlideClusterClient) client)
-                                .exec((ClusterBatch) batch, (ClusterBatchOptions) raiseFalse)
-                                .get()
-                        : ((GlideClient) client).exec((Batch) batch, (BatchOptions) raiseFalse).get();
-
-        System.out.println("Batch execution result: " + Arrays.toString(result));
-        assertEquals(2, result.length);
-        assertEquals(result[0], "OK");
-        assertInstanceOf(RequestException.class, result[1]);
-        assertTrue(((RequestException) result[1]).getMessage().contains("WRONGTYPE"));
     }
 }
