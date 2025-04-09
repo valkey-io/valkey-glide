@@ -1,8 +1,8 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 
-TARGET="build"
-if [ ! -z "$1" ]; then
-    TARGET="$1"
+TARGET=$@
+if [ -z "$TARGET" ]; then
+    TARGET="build"
 fi
 
 BASE_DIR=$(readlink -f $(dirname $(readlink -f $0))/..)
@@ -13,10 +13,10 @@ function install_mkdocs() {
     if [ -z ${MKDOCS} ]; then
         echo "-- Installing mkdocs ..."
         pip3 install --break-system-packages    \
-            mkdocs                              \
-            mkdocstrings-python                 \
-            pymdown-extensions                  \
-            mkdocs-breadcrumbs-plugin           \
+            mkdocs                             \
+            mkdocstrings-python==1.13.0        \
+            pymdown-extensions                 \
+            mkdocs-breadcrumbs-plugin          \
             mkdocs-material
         echo "-- Done"
     fi
@@ -33,4 +33,5 @@ function build_docs() {
     (cd ${BASE_DIR}/docs && python3 -m mkdocs ${TARGET})
 }
 
-build_docs $1
+install_mkdocs
+build_docs $@
