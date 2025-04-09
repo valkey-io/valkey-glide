@@ -295,7 +295,9 @@ class BaseClient(CoreCommands):
             else:
                 command.args_vec_pointer = create_leaked_bytes_vec(encoded_args)
             transaction_commands.append(command)
-        request.transaction.commands.extend(transaction_commands)
+        request.batch.commands.extend(transaction_commands)
+        request.batch.is_atomic = True
+        # TODO: add support for timeout, raise on error and retry strategy
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 

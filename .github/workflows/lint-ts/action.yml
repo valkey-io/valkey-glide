@@ -12,8 +12,11 @@ runs:
     steps:
         - uses: actions/checkout@v4
 
-        - run: cp eslint.config.mjs ${{ inputs.package-folder }}
+        - name: Copy config
           shell: bash
+          env:
+              PACKAGE_FOLDER: ${{ inputs.package-folder }}
+          run: cp eslint.config.mjs "$PACKAGE_FOLDER"
 
         - run: |
               npm install

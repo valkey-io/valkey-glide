@@ -501,3 +501,33 @@ func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.Sca
 	}
 	return handleScanResponse(res)
 }
+
+// Rewrites the configuration file with the current configuration.
+//
+// Return value:
+//
+//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/config-rewrite/
+func (client *GlideClient) ConfigRewrite() (string, error) {
+	response, err := client.executeCommand(C.ConfigRewrite, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Returns a random existing key name from the currently selected database.
+//
+// Return value:
+//
+//	A random existing key name from the currently selected database.
+//
+// [valkey.io]: https://valkey.io/commands/randomkey/
+func (client *GlideClient) RandomKey() (Result[string], error) {
+	result, err := client.executeCommand(C.RandomKey, []string{})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}

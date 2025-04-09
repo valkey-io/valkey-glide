@@ -885,3 +885,65 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 	assert.GreaterOrEqual(t, len(resCursor), 1)
 	assert.GreaterOrEqual(t, len(resCollection), 1)
 }
+
+func (suite *GlideTestSuite) TestConfigRewrite() {
+	client := suite.defaultClient()
+	t := suite.T()
+	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
+	response, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	lines := strings.Split(response, "\n")
+	var configFile string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "config_file:") {
+			configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+			break
+		}
+	}
+	if len(configFile) > 0 {
+		suite.verifyOK(client.ConfigRewrite())
+	}
+}
+
+func (suite *GlideTestSuite) TestRandomKey() {
+	client := suite.defaultClient()
+	// Test 1: Check if the command return random key
+	t := suite.T()
+	result, err := client.RandomKey()
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+}
+
+func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+
+	// Flush all functions with SYNC option
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Generate and load function
+	libName := "mylib1c"
+	funcName := "myfunc1c"
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, true)
+	result, err = client.FunctionLoad(code, false)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	// Test FCALL
+	functionResult, err := client.FCallWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "one", functionResult)
+
+	// Test FCALL_RO
+	functionResult, err = client.FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "one", functionResult)
+}
