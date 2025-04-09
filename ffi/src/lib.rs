@@ -548,15 +548,15 @@ fn create_client_internal(
     if is_subscriber {
         runtime.spawn(async move {
             while let Some(push_msg) = push_rx.recv().await {
-                 if push_msg.kind == redis::PushKind::Message
-                     || push_msg.kind == redis::PushKind::PMessage
-                     || push_msg.kind == redis::PushKind::SMessage {
-                         unsafe {
-                             process_push_notification(push_msg, pubsub_callback, client_adapter_clone);
-                         }
-                     }
-                 }
-             }
+                if push_msg.kind == redis::PushKind::Message
+                    || push_msg.kind == redis::PushKind::PMessage
+                    || push_msg.kind == redis::PushKind::SMessage
+                {
+                    unsafe {
+                        process_push_notification(push_msg, pubsub_callback, client_adapter_clone);
+                    }
+                }
+            }
         });
     }
 
