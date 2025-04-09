@@ -15544,6 +15544,9 @@ public class SharedCommandTests {
         assertInstanceOf(
                 glide.api.models.exceptions.TimeoutException.class, executionException.getCause());
 
+        // Ensures that the debug sleep has completed before proceeding.
+        Thread.sleep(500);
+
         // Retry with a longer timeout and expect [null]
         BaseBatchOptions options2 =
                 isCluster
