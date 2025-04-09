@@ -88,7 +88,6 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
             const endMemory = process.memoryUsage().heapUsed;
 
-            console.log(`Memory before: ${startMemory}, after: ${endMemory}`);
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow 10% growth
         },
         TIMEOUT,
@@ -96,6 +95,59 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient test span transaction memory leak_%p`,
+        async (protocol) => {
+            if (global.gc) {
+                global.gc(); // Run garbage collection
+            }
+
+            const startMemory = process.memoryUsage().heapUsed;
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+                advancedConfiguration: {
+                    openTelemetryConfig: {
+                        tracesCollectorEndPoint: "file:///tmp/",
+                        metricsCollectorEndPoint:
+                            "https://valid-endpoint/v1/metrics",
+                        flushIntervalMs: 100,
+                    },
+                },
+            });
+
+            // Remove the span file if it exists
+            if (fs.existsSync("/tmp/spans.json")) {
+                fs.unlinkSync("/tmp/spans.json");
+            }
+            const transaction = new ClusterTransaction();
+
+            transaction.set("test_key", "foo");
+            transaction.objectRefcount("test_key");
+
+            const response = await client.exec(transaction);
+            expect(response).not.toBeNull();
+
+            if (response != null) {
+                expect(response.length).toEqual(2);
+                expect(response[0]).toEqual("OK"); // transaction.set("test_key", "foo");
+                expect(response[1]).toBeGreaterThanOrEqual(1); // transaction.objectRefcount("test_key");
+            }
+
+            // Force GC and check memory
+            if (global.gc) {
+                global.gc();
+            }
+
+            const endMemory = process.memoryUsage().heapUsed;
+
+            expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow 10% growth
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClusterClient test span batch file_%p`,
         async (protocol) => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
@@ -170,8 +222,6 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 })
                 .filter((name: string | null) => name !== null);
 
-            console.log("Found span names:", spanNames);
-
             // Check for expected span names - these checks will fail the test if not found
             expect(spanNames).toContain("Batch");
             expect(spanNames).toContain("send_batch");
@@ -183,7 +233,6 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
             const endMemory = process.memoryUsage().heapUsed;
 
-            console.log(`Memory before: ${startMemory}, after: ${endMemory}`);
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow 10% growth
         },
         TIMEOUT,
@@ -209,6 +258,83 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     },
                 }),
             ).rejects.toThrow(/InvalidInput/i);
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry wrong file path config_%p",
+        async (protocol) => {
+            await expect(
+                GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                    advancedConfiguration: {
+                        openTelemetryConfig: {
+                            tracesCollectorEndPoint:
+                                "file:invalid-path/v1/traces.json",
+                            metricsCollectorEndPoint:
+                                "https://valid-endpoint/v1/metrics",
+                            flushIntervalMs: 400,
+                        },
+                    },
+                }),
+            ).rejects.toThrow(/InvalidInput/i);
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry not exits folder path config_%p",
+        async (protocol) => {
+            await expect(
+                GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                    advancedConfiguration: {
+                        openTelemetryConfig: {
+                            tracesCollectorEndPoint:
+                                "file:///no-exits-path/v1/traces",
+                            metricsCollectorEndPoint:
+                                "https://valid-endpoint/v1/metrics",
+                            flushIntervalMs: 400,
+                        },
+                    },
+                }),
+            ).rejects.toThrow(/InvalidInput/i);
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry file path instead of folder path config_%p",
+        async (protocol) => {
+            const path = "/tmp/traces.json";
+            fs.createWriteStream(path);
+            await expect(
+                GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                    advancedConfiguration: {
+                        openTelemetryConfig: {
+                            tracesCollectorEndPoint: "file://" + path,
+                            metricsCollectorEndPoint:
+                                "https://valid-endpoint/v1/metrics",
+                            flushIntervalMs: 400,
+                        },
+                    },
+                }),
+            ).rejects.toThrow(/InvalidInput/i);
+            // Remove the span file if it exists
+            if (fs.existsSync(path)) {
+                fs.unlinkSync(path);
+            }
         },
         TIMEOUT,
     );
@@ -288,7 +414,6 @@ describe("OpenTelemetry GlideClient", () => {
 
             const endMemory = process.memoryUsage().heapUsed;
 
-            console.log(`Memory before: ${startMemory}, after: ${endMemory}`);
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow small fluctuations
         },
         TIMEOUT,
@@ -325,7 +450,6 @@ describe("OpenTelemetry GlideClient", () => {
 
             const endMemory = process.memoryUsage().heapUsed;
 
-            console.log(`Memory before: ${startMemory}, after: ${endMemory}`);
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow small fluctuations
         },
         TIMEOUT,
@@ -350,6 +474,7 @@ describe("OpenTelemetry GlideClient", () => {
                 },
             });
         },
+        TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -371,5 +496,6 @@ describe("OpenTelemetry GlideClient", () => {
                 }),
             ).rejects.toThrow(/InvalidInput/i); // Ensure InvalidInput error
         },
+        TIMEOUT,
     );
 });

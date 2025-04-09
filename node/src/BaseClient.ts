@@ -699,7 +699,7 @@ export interface BaseClientConfiguration {
  * - HTTP: Use `http://` prefix (e.g., `http://localhost:4318`)
  * - HTTPS: Use `https://` prefix (e.g., `https://collector.example.com:4318`)
  * - gRPC: Use `grpc://` prefix (e.g., `grpc://localhost:4317`)
- * - File: Use `file://` prefix followed by the full path (e.g., `file:///path/to/collector.json`) to write the signals data to a file.
+ * - File: Use `file://` prefix followed by the full path (e.g., `file:///path/to/`) to write the signals data to a file.
  *
  * @example
  * ```typescript

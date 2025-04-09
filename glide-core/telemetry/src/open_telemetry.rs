@@ -88,14 +88,41 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
             // For file URLs, we need to extract the path without the 'file://' prefix
             let path = url.path();
             let file_prefix = "file://";
-            let full_path = if path.starts_with(file_prefix) {
-                &path[file_prefix.len()..]
-            } else {
-                path
-            };
-            Ok(GlideOpenTelemetryTraceExporter::File(PathBuf::from(
-                full_path,
-            )))
+            if !endpoint.starts_with(file_prefix) {
+                return Err(Error::new(
+                    ErrorKind::InvalidInput,
+                    "File path must start with 'file://'",
+                ));
+            }
+            let path_buf = PathBuf::from(path);
+
+            // Check if the directory exists and is a directory
+            match path_buf.try_exists() {
+                Ok(exists) => {
+                    if !exists {
+                        return Err(Error::new(
+                            ErrorKind::InvalidInput,
+                            format!("Path does not exist: {}", path),
+                        ));
+                    }
+
+                    // Check if it's a directory
+                    if !path_buf.is_dir() {
+                        return Err(Error::new(
+                            ErrorKind::InvalidInput,
+                            format!("Path exists but is not a directory: {}", path),
+                        ));
+                    }
+                }
+                Err(e) => {
+                    return Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        format!("Error checking if path exists: {}", e),
+                    ));
+                }
+            }
+
+            Ok(GlideOpenTelemetryTraceExporter::File(path_buf))
         } // file endpoint
         _ => Err(Error::new(ErrorKind::InvalidInput, endpoint)),
     }
