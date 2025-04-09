@@ -16,10 +16,13 @@ public class ErrorHandlingTests
         );
 
     [Fact]
-    public async Task ErrorIfTimedOut() =>
-        await Assert.ThrowsAsync<TimeoutException>(async () =>
-            await TestConfiguration.DefaultClusterClient().CustomCommand(["debug", "sleep", "1"])
+    public async Task ErrorIfTimedOut()
+    {
+        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+        _ = await Assert.ThrowsAsync<TimeoutException>(async () =>
+            await client.CustomCommand(["debug", "sleep", "1"])
         );
+    }
 
     [Fact]
     public async Task ErrorIfIncorrectArgs() =>
