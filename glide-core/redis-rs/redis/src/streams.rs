@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Defines types to use with the streams commands.
 
 use crate::{

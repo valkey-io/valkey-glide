@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 #![cfg(feature = "geospatial")]
 
 use assert_approx_eq::assert_approx_eq;

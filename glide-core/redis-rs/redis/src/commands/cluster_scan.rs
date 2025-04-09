@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! This module implements cluster-wide scanning operations for clusters.
 //!
 //! # Overview

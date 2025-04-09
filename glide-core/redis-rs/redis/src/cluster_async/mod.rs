@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! This module provides async functionality for Redis Cluster.
 //!
 //! By default, [`ClusterConnection`] makes use of [`MultiplexedConnection`] and maintains a pool

@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Defines a Sentinel type that connects to Redis sentinels and creates clients to
 //! master or replica nodes.
 //!

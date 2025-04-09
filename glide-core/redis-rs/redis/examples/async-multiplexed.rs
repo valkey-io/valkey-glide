@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 #![allow(unknown_lints, dependency_on_unit_never_type_fallback)]
 use futures::prelude::*;
 use redis::{aio::MultiplexedConnection, GlideConnectionOptions, RedisResult};
