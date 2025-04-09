@@ -4,6 +4,7 @@ module glide.api {
     exports glide.api.logging;
     exports glide.api.models;
     exports glide.api.models.commands;
+    exports glide.api.models.commands.batch;
     exports glide.api.models.commands.bitmap;
     exports glide.api.models.commands.geospatial;
     exports glide.api.models.commands.function;
