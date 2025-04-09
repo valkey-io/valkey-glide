@@ -547,22 +547,16 @@ fn create_client_internal(
     // If pubsub_callback is provided (not null), spawn a task to handle push notifications
     if is_subscriber {
         runtime.spawn(async move {
-            loop {
-                let result = push_rx.recv().await;
-                match result {
-                    None => {
-                        return;
-                    }
-                    Some(push_msg)
-                        if push_msg.kind == redis::PushKind::Message
-                            || push_msg.kind == redis::PushKind::PMessage
-                            || push_msg.kind == redis::PushKind::SMessage =>
-                    unsafe {
-                        process_push_notification(push_msg, pubsub_callback, client_adapter_clone);
-                    },
-                    _ => {}
-                }
-            }
+            while let Some(push_msg) = push_rx.recv().await {
+                 if push_msg.kind == redis::PushKind::Message
+                     || push_msg.kind == redis::PushKind::PMessage
+                     || push_msg.kind == redis::PushKind::SMessage {
+                         unsafe {
+                             process_push_notification(push_msg, pubsub_callback, client_adapter_clone);
+                         }
+                     }
+                 }
+             }
         });
     }
 
