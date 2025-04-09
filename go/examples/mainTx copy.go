@@ -51,31 +51,6 @@ func main() {
 	}
 	fmt.Println(resultUnWatch)
 
-	resultDump, err := clientNormal.Dump("key123")
-	if err != nil {
-		log.Fatal("error connecting to database: ", err)
-	}
-	fmt.Println("resultdump", resultDump)
-
-	// resultDump, err = clientNormal.Dump("ssdsffigjdgf")
-	// if err != nil {
-	// 	log.Fatal("error connecting to database: ", err)
-	// }
-	// fmt.Println("resultdump", resultDump)
-
-	resultObjEnc, err := clientNormal.ObjectEncoding("key123")
-	if err != nil {
-		log.Fatal("error connecting to database: ", err)
-	}
-	fmt.Println("resultObjEnc", resultObjEnc)
-
-	clientNormal.LPush("keylist", []string{"1", "3", "2", "4", "5"})
-	resultLpop, err := clientNormal.LPop("keylist")
-	if err != nil {
-		log.Fatal("error connecting to database: ", err)
-	}
-	fmt.Println("resultLpop", resultLpop)
-
 	tx := api.NewTransaction(client)
 	tx.Set("key123", "Glide")
 	tx.Watch([]string{"key123"})
@@ -98,15 +73,15 @@ func main() {
 	tx.Set("UnlinkKey", "Hello")
 	tx.Unlink([]string{"UnlinkKey"})
 	tx.Persist("key1")
-	tx.ObjectEncoding("key123")
-	tx.ObjectIdleTime("key1")
+	//tx.ObjectEncoding("key1")
 	//tx.ObjectFreq("key1")
-	tx.ObjectRefCount("key1")
+	//tx.ObjectIdleTime("key1")
+	//tx.ObjectFreq("key1")
 	tx.Set("key4", "newkey3")
 	tx.Rename("key2", "newkey2")
 	tx.RenameNX("key4", "newkey4") //newKey must be not existing
 	tx.Copy("key2", "keyCopy")
-	tx.Dump("key123")
+	tx.Dump("keyToDump")
 	tx.Del([]string{"key2"})
 	//tx.Restore("key2", 0, "\x00\x0bHello World\x0b\x00\xad\xb7\xa9\x8fcM3Y")
 	tx.PExpire("key4", 100)
@@ -139,7 +114,7 @@ func main() {
 	tx.SScan("someKey", "0")
 
 	tx.LPush("keylist", []string{"1", "3", "2", "4"})
-	tx.LPop("keylist")
+	//tx.LPop("keylist")
 	//tx.LPos("keylist", "1")
 	tx.LRange("keylist", 1, 4)
 	tx.RPush("keylist", []string{"a", "b"})
@@ -178,12 +153,13 @@ func main() {
 	tx.HMGet("my_hash", []string{"field1", "field2"})
 	tx.HGetAll("my_hash")
 
-	// // err = tx.Discard()
-	// // if err != nil {
-	// // 	log.Fatalf("Transaction Discard failed: %v", err)
-	// // } else {
-	// // 	fmt.Println("Transaction successfully discarded!")
-	// // }
+	// err = tx.Discard()
+	// if err != nil {
+	// 	log.Fatalf("Transaction Discard failed: %v", err)
+	// } else {
+	// 	fmt.Println("Transaction successfully discarded!")
+	// }
+
 	result, err := tx.Exec()
 	if err != nil {
 		log.Fatalf("Transaction failed: %v", err)

@@ -1544,6 +1544,9 @@ func (client *baseClient) LPop(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
+	if result == nil {
+		return CreateNilStringResult(), err
+	}
 
 	return handleStringOrNilResponse(result)
 }
@@ -4937,6 +4940,9 @@ func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
+	if result == nil {
+		return CreateNilStringResult(), err
+	}
 	return handleStringOrNilResponse(result)
 }
 
@@ -4955,6 +4961,9 @@ func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 func (client *baseClient) Dump(key string) (Result[string], error) {
 	result, err := client.executor.ExecuteCommand(C.Dump, []string{key})
 	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	if result == nil {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
@@ -4981,6 +4990,10 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
+	if result == nil {
+		return CreateNilStringResult(), err
+	}
+
 	return handleStringOrNilResponse(result)
 }
 
@@ -5272,6 +5285,10 @@ func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
+	if result == nil {
+		return CreateNilInt64Result(), err
+	}
+
 	return handleIntOrNilResponse(result)
 }
 
@@ -5289,6 +5306,9 @@ func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
 func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
 	result, err := client.executor.ExecuteCommand(C.ObjectIdleTime, []string{key})
 	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	if result == nil {
 		return CreateNilInt64Result(), err
 	}
 	return handleIntOrNilResponse(result)
@@ -5309,6 +5329,9 @@ func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
 func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
 	result, err := client.executor.ExecuteCommand(C.ObjectRefCount, []string{key})
 	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	if result == nil {
 		return CreateNilInt64Result(), err
 	}
 	return handleIntOrNilResponse(result)

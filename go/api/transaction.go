@@ -66,10 +66,8 @@ func (t *Transaction) Exec() ([]any, error) {
 	//t.commands = append([]Cmder{NewMultiCommand()}, t.commands...)
 	// t.commands = append(t.commands, &GenericCommand{C.Get, []string{"apples"}})
 	//t.commands = append(t.commands, NewExecCommand())
-
 	// Execute all commands
 	result, err := t.baseClient.executeTransactionCommand(t.commands) // Use BaseClient for execution
-
 	if err != nil {
 		return nil, err
 	}
@@ -198,9 +196,9 @@ func (client *baseClient) Watch(keys []string) (string, error) {
 	return handleStringResponse(result)
 }
 
-func (client *baseClient) Unwatch(keys []string) (string, error) {
+func (client *baseClient) Unwatch() (string, error) {
 	fmt.Println("Unwatch")
-	result, err := client.executeCommand(C.UnWatch, keys)
+	result, err := client.executeCommand(C.UnWatch, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
