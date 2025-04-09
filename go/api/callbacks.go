@@ -96,7 +96,6 @@ func pubSubCallback(
 				// If the client has a message handler, use it
 				if handler := client.getMessageHandler(); handler != nil {
 					handler.handleMessage(message)
-
 				}
 			} else {
 				// TODO log

@@ -9,5 +9,4 @@ type PubSubCommands interface {
 }
 
 // PubSubClusterCommands defines additional Pub/Sub operations available only in cluster mode.
-type PubSubClusterCommands interface {
-}
+type PubSubClusterCommands interface{}
