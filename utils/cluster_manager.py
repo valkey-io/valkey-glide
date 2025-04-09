@@ -477,6 +477,14 @@ def create_servers(
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
         if is_address_already_in_use(server, f"{node_folder}/server.log"):
+            logging.debug(f"waiting for pid {server.pid} to exit")
+            # while (os.path.exists(f"/proc/{server.pid}")):
+            #     # Even though the server is not running, the process might still take some time to exit
+            #     try:
+            #         remove_folder(node_folder)
+            #     except Exception as e:
+            #         logging.warning(f"Failed to remove folder {node_folder}: {e}")
+            #         time.sleep(1)
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error
@@ -497,6 +505,19 @@ def create_servers(
             )
             continue
         if not wait_for_server(server, cluster_folder, tls):
+            # # Log netstat output to help debug address in use issues
+            # try:
+            #     netstat_output = subprocess.check_output(["netstat", "-tlpnta"], text=True)
+            #     with open("netstat_output.txt", "w") as f:
+            #         f.write(f"Netstat output when server {server.host}:{server.port} failed to start:\n")
+            #         f.write(netstat_output)
+
+            #     # Also write the server log
+            #     with open(f"{node_folder}/server.log", "r") as log_file, open("server_log.txt", "w") as output_file:
+            #         output_file.write(log_file.read()
+            #                           )
+            # except Exception as e:
+            #     logging.error(f"Failed to get netstat output: {e}")
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
                 f"See {node_folder}/server.log for more information"
@@ -814,7 +835,7 @@ def is_address_already_in_use(
     while time.time() < timeout_start + timeout:
         with open(log_file, "r") as f:
             server_log = f.read()
-            if "Address already in use" in server_log:
+            if "Address already in use" in server_log or "Address in use" in server_log:
                 logging.debug(f"Address is already bind for server {server}")
                 return True
             elif "Ready" in server_log:
@@ -928,7 +949,7 @@ def wait_for_server_shutdown(
 
 
 def remove_folder(folder_path: str):
-    logging.debug(f"Removing folder {folder_path}")
+    logging.error(f"Removing folder {folder_path}")
     p = subprocess.Popen(
         [
             "rm",
