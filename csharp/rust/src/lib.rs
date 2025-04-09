@@ -128,6 +128,28 @@ unsafe fn report_error(
     _ = CString::from_raw(err_ptr);
 }
 
+/// Panic Guard as per https://www.reddit.com/r/rust/comments/zg2xcu/comment/izi758v/
+struct PanicGuard {
+    panicked: bool,
+    failure_callback: FailureCallback,
+    callback_index: usize,
+}
+
+impl Drop for PanicGuard {
+    fn drop(&mut self) {
+        if self.panicked {
+            unsafe {
+                report_error(
+                    self.failure_callback,
+                    self.callback_index,
+                    "Native function panicked".into(),
+                    RequestErrorType::Unspecified,
+                );
+            }
+        }
+    }
+}
+
 /// # Safety
 /// Unsafe, becase calls to an FFI function. See the safety documentation of [`SuccessCallback`].
 unsafe fn create_client_internal(
@@ -232,6 +254,12 @@ pub unsafe extern "C-unwind" fn command(
     };
     let core = client.core.clone();
 
+    let mut panic_guard = PanicGuard {
+        panicked: true,
+        failure_callback: core.failure_callback,
+        callback_index,
+    };
+
     let arg_vec =
         unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) };
 
@@ -255,6 +283,12 @@ pub unsafe extern "C-unwind" fn command(
     let route = create_route(route_info, &cmd);
 
     client.runtime.spawn(async move {
+        let mut panic_guard = PanicGuard {
+            panicked: true,
+            failure_callback: core.failure_callback,
+            callback_index,
+        };
+
         let result = core.client.clone().send_command(&cmd, route).await;
         match result {
             Ok(value) => {
@@ -275,7 +309,12 @@ pub unsafe extern "C-unwind" fn command(
                 }
             }
         };
+        panic_guard.panicked = false;
+        drop(panic_guard);
     });
+
+    panic_guard.panicked = false;
+    drop(panic_guard);
 }
 
 /// Free the memory allocated for a [`ResponseValue`] and nested structure.
