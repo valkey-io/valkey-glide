@@ -53,5 +53,8 @@ utils/TestUtils.js
 # java compiled files.
 *.class
 
+# docs
+docs/markdown/typescript/**
+
 # generaged files (e.g. protobuf)
 generated/
