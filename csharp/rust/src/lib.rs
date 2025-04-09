@@ -128,7 +128,7 @@ unsafe fn report_error(
     _ = CString::from_raw(err_ptr);
 }
 
-/// Panic Guard as per https://www.reddit.com/r/rust/comments/zg2xcu/comment/izi758v/
+/// Panic Guard as per <https://www.reddit.com/r/rust/comments/zg2xcu/comment/izi758v/>
 struct PanicGuard {
     panicked: bool,
     failure_callback: FailureCallback,
