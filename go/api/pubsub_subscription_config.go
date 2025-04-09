@@ -48,17 +48,6 @@ func (config *BaseSubscriptionConfig) toProtobuf() *protobuf.PubSubSubscriptions
 	return &request
 }
 
-func (config *BaseSubscriptionConfig) WithCallback(callback MessageCallback, context any) *BaseSubscriptionConfig {
-	config.callback = callback
-	config.context = context
-	return config
-}
-
-func (config *BaseSubscriptionConfig) SetCallback(callback MessageCallback) *BaseSubscriptionConfig {
-	config.callback = callback
-	return config
-}
-
 func (config *BaseSubscriptionConfig) Validate() error {
 	if config.context != nil && config.callback == nil {
 		return &errors.ConfigurationError{
@@ -66,10 +55,6 @@ func (config *BaseSubscriptionConfig) Validate() error {
 		}
 	}
 	return nil
-}
-
-type SubscriptionConfigAccessor interface {
-	GetBaseConfig() *BaseSubscriptionConfig
 }
 
 // *** StandaloneSubscriptionConfig ***
@@ -85,14 +70,6 @@ func (mode PubSubChannelMode) String() string {
 	return [...]string{"EXACT", "PATTERN"}[mode]
 }
 
-func (mode PubSubChannelMode) Command() string {
-	return [...]string{"SUBSCRIBE", "PSUBSCRIBE"}[mode]
-}
-
-func (mode PubSubChannelMode) UnsubscribeCommand() string {
-	return [...]string{"UNSUBSCRIBE", "PUNSUBSCRIBE"}[mode]
-}
-
 type StandaloneSubscriptionConfig struct {
 	*BaseSubscriptionConfig
 }
@@ -104,12 +81,8 @@ func NewStandaloneSubscriptionConfig() *StandaloneSubscriptionConfig {
 }
 
 func (config *StandaloneSubscriptionConfig) WithCallback(callback MessageCallback, context any) *StandaloneSubscriptionConfig {
-	config.BaseSubscriptionConfig.WithCallback(callback, context)
-	return config
-}
-
-func (config *StandaloneSubscriptionConfig) SetCallback(callback MessageCallback) *StandaloneSubscriptionConfig {
-	config.BaseSubscriptionConfig.SetCallback(callback)
+	config.callback = callback
+	config.context = context
 	return config
 }
 
@@ -133,10 +106,6 @@ func (config *StandaloneSubscriptionConfig) Validate() error {
 	return config.BaseSubscriptionConfig.Validate()
 }
 
-func (config *StandaloneSubscriptionConfig) GetBaseConfig() *BaseSubscriptionConfig {
-	return config.BaseSubscriptionConfig
-}
-
 // *** ClusterSubscriptionConfig ***
 
 type PubSubClusterChannelMode int
@@ -151,14 +120,6 @@ func (mode PubSubClusterChannelMode) String() string {
 	return [...]string{"EXACT", "PATTERN", "SHARDED"}[mode]
 }
 
-func (mode PubSubClusterChannelMode) Command() string {
-	return [...]string{"SUBSCRIBE", "PSUBSCRIBE", "SSUBSCRIBE"}[mode]
-}
-
-func (mode PubSubClusterChannelMode) UnsubscribeCommand() string {
-	return [...]string{"UNSUBSCRIBE", "PUNSUBSCRIBE", "SUNSUBSCRIBE"}[mode]
-}
-
 type ClusterSubscriptionConfig struct {
 	*BaseSubscriptionConfig
 }
@@ -170,12 +131,8 @@ func NewClusterSubscriptionConfig() *ClusterSubscriptionConfig {
 }
 
 func (config *ClusterSubscriptionConfig) WithCallback(callback MessageCallback, context any) *ClusterSubscriptionConfig {
-	config.BaseSubscriptionConfig.WithCallback(callback, context)
-	return config
-}
-
-func (config *ClusterSubscriptionConfig) SetCallback(callback MessageCallback) *ClusterSubscriptionConfig {
-	config.BaseSubscriptionConfig.SetCallback(callback)
+	config.callback = callback
+	config.context = context
 	return config
 }
 
@@ -195,8 +152,4 @@ func (config *ClusterSubscriptionConfig) WithSubscription(
 
 func (config *ClusterSubscriptionConfig) Validate() error {
 	return config.BaseSubscriptionConfig.Validate()
-}
-
-func (config *ClusterSubscriptionConfig) GetBaseConfig() *BaseSubscriptionConfig {
-	return config.BaseSubscriptionConfig
 }

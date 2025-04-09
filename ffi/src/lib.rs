@@ -131,9 +131,20 @@ pub type FailureCallback = unsafe extern "C" fn(
 /// The PubSub callback needs to handle the push notification synchronously, since the data will be dropped by Rust once the callback returns.
 /// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
 ///
-/// `client_ptr` is a baton-pass back to the caller language to uniquely identify the client.
-/// `kind` is an integer representing the PushKind enum value (0=Disconnection, 1=Other, 2=Invalidate, 3=Message, etc.)
-/// `data_ptr` is a pointer to the CommandResponse containing the push data
+/// # Parameters
+/// * `client_ptr`: A baton-pass back to the caller language to uniquely identify the client.
+/// * `kind`: An enum variant representing the PushKind (Message, PMessage, SMessage, etc.)
+/// * `message`: A pointer to the raw message bytes.
+/// * `message_len`: The length of the message data in bytes.
+/// * `channel`: A pointer to the raw channel name bytes.
+/// * `channel_len`: The length of the channel name in bytes.
+/// * `pattern`: A pointer to the raw pattern bytes (null if no pattern).
+/// * `pattern_len`: The length of the pattern in bytes (0 if no pattern).
+///
+/// # Safety
+/// The pointers are only valid during the callback execution and will be freed
+/// automatically when the callback returns. Any data needed beyond the callback's
+/// execution must be copied.
 pub type PubSubCallback = unsafe extern "C" fn(
     client_ptr: usize,
     kind: PushKind,

@@ -14,7 +14,10 @@ package api
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
 // void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
-// void pubSubCallback(void *clientPtr, uint32_t kind, struct CommandResponse *message);
+// void pubSubCallback(void *clientPtr, enum PushKind kind,
+//                     const uint8_t *message, int64_t message_len,
+//                     const uint8_t *channel, int64_t channel_len,
+//                     const uint8_t *pattern, int64_t pattern_len);
 import "C"
 
 import (
@@ -69,13 +72,13 @@ type baseClient struct {
 	messageHandler *MessageHandler
 }
 
-// SetMessageHandler assigns a message handler to the client for processing pub/sub messages
-func (client *baseClient) SetMessageHandler(handler *MessageHandler) {
+// setMessageHandler assigns a message handler to the client for processing pub/sub messages
+func (client *baseClient) setMessageHandler(handler *MessageHandler) {
 	client.messageHandler = handler
 }
 
-// GetMessageHandler returns the currently assigned message handler
-func (client *baseClient) GetMessageHandler() *MessageHandler {
+// getMessageHandler returns the currently assigned message handler
+func (client *baseClient) getMessageHandler() *MessageHandler {
 	return client.messageHandler
 }
 
@@ -172,7 +175,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	client.coreClient = cResponse.conn_ptr
 
 	// Register the client in our registry using the pointer value from C
-	RegisterClient(client, uintptr(cResponse.conn_ptr))
+	registerClient(client, uintptr(cResponse.conn_ptr))
 
 	return client, nil
 }
@@ -186,7 +189,7 @@ func (client *baseClient) Close() {
 		return
 	}
 
-	UnregisterClient(uintptr(client.coreClient))
+	unregisterClient(uintptr(client.coreClient))
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
@@ -7628,7 +7631,6 @@ func (client *baseClient) Publish(channel string, message string) (int64, error)
 	if message == "" || channel == "" {
 		return 0, goErr.New("both message and channel are required for Publish command")
 	}
-	fmt.Printf("Publishing message to channel '%s': %s\n", channel, message)
 	args := []string{channel, message}
 	result, err := client.executeCommand(C.Publish, args)
 	if err != nil {

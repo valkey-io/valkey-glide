@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"unsafe"
 
@@ -19,22 +20,22 @@ var (
 	clientRegistryMu sync.RWMutex
 )
 
-// RegisterClient registers a client in the registry using its pointer value
-func RegisterClient(client *baseClient, ptrValue uintptr) {
+// registerClient registers a client in the registry using its pointer value
+func registerClient(client *baseClient, ptrValue uintptr) {
 	clientRegistryMu.Lock()
 	defer clientRegistryMu.Unlock()
 	clientRegistry[ptrValue] = client
 }
 
-// UnregisterClient removes a client from the registry
-func UnregisterClient(ptrValue uintptr) {
+// unregisterClient removes a client from the registry
+func unregisterClient(ptrValue uintptr) {
 	clientRegistryMu.Lock()
 	defer clientRegistryMu.Unlock()
 	delete(clientRegistry, ptrValue)
 }
 
-// GetClientByPtr gets a client from the registry by its pointer value
-func GetClientByPtr(ptrValue uintptr) *baseClient {
+// getClientByPtr gets a client from the registry by its pointer value
+func getClientByPtr(ptrValue uintptr) *baseClient {
 	clientRegistryMu.RLock()
 	defer clientRegistryMu.RUnlock()
 	return clientRegistry[ptrValue]
@@ -73,14 +74,14 @@ func pubSubCallback(
 
 	msg := string(C.GoBytes(message, message_len))
 	cha := string(C.GoBytes(channel, channel_len))
-	pat := ""
+	pat := CreateNilStringResult()
 	if pattern_len > 0 && pattern != nil {
-		pat = string(C.GoBytes(pattern, pattern_len))
+		pat = CreateStringResult(string(C.GoBytes(pattern, pattern_len)))
 	}
 
 	go func() {
 		// Process different types of push messages
-		message, err := getMessage(pushKind, msg, cha, pat)
+		message, err := getMessage(pushKind, msg, cha, pat.Value())
 		if err != nil {
 			// todo log
 			return
@@ -89,16 +90,17 @@ func pubSubCallback(
 		if clientPtr != nil {
 			// Look up the client in our registry using the pointer address
 			ptrValue := uintptr(clientPtr)
-			client := GetClientByPtr(ptrValue)
+			client := getClientByPtr(ptrValue)
 
 			if client != nil {
 				// If the client has a message handler, use it
-				if handler := client.GetMessageHandler(); handler != nil {
-					handler.Handle(pushKind, message)
+				if handler := client.getMessageHandler(); handler != nil {
+					handler.handleMessage(message)
+
 				}
 			} else {
 				// TODO log
-				fmt.Printf("Client not found for pointer: %v\n", ptrValue)
+				log.Printf("Client not found for pointer: %v\n", ptrValue)
 			}
 		}
 	}()
@@ -114,6 +116,6 @@ func getMessage(pushKind C.PushKind, msgContent string, channel string, pattern 
 
 	default:
 		// log unsupported push kind
-		return nil, fmt.Errorf("unsupported push kind")
+		return nil, fmt.Errorf("unsupported push kind: %v", pushKind)
 	}
 }

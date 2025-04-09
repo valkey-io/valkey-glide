@@ -48,7 +48,7 @@ type ClosingError struct {
 
 func (e *ClosingError) Error() string { return e.Msg }
 
-// ConfigurationError is a client error that occurs when there is an issue with PubSub configuration.
+// ConfigurationError is a client error that occurs when there is an issue with client configuration.
 type ConfigurationError struct {
 	Msg string
 }
