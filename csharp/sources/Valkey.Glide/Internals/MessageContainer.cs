@@ -43,6 +43,8 @@ internal class MessageContainer
     {
         if (_messages.Any(message => !message.IsCompleted))
         {
+            Debug.Write("MessageContainer::DisposeWithError");
+            Debug.Write(new StackTrace().ToString());
             BaseClient.LOG("MessageContainer::DisposeWithError");
             BaseClient.LOG(new StackTrace().ToString());
         }
