@@ -6,7 +6,6 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional, Union, cast
 
 import pytest
-from glide import RequestError
 from glide.async_commands.batch import BaseBatch, Batch, ClusterBatch
 from glide.async_commands.bitmap import (
     BitFieldGet,
@@ -61,6 +60,8 @@ from tests.utils.utils import (
     generate_lua_lib_code,
     get_random_string,
 )
+
+from glide import RequestError
 
 
 def generate_key(keyslot: Optional[str], is_atomic: bool) -> str:
@@ -1441,14 +1442,14 @@ class TestTransaction:
             if isinstance(glide_client, GlideClient)
             else ClusterBatch(is_atomic=True)
         )
-        
+
         # Add a command that will sleep for longer than our timeout
         transaction.custom_command(["DEBUG", "SLEEP", "0.5"])  # Sleep for 1 second
-        
+
         # Try to execute with a short timeout (100ms)
         with pytest.raises(RequestError, match="timed out"):
             await exec_batch(glide_client, transaction, timeout=100)
-            
+
         # Now try with a longer timeout (1000ms), this should succeed
         transaction = (
             Batch(is_atomic=True)
@@ -1457,12 +1458,12 @@ class TestTransaction:
         )
         transaction.custom_command(["DEBUG", "SLEEP", "0.1"])  # Sleep for 0.1 seconds
         transaction.set(key, "value")
-        
+
         result = await exec_batch(glide_client, transaction, timeout=1000)
         assert result is not None
         assert result[0] == OK  # DEBUG SLEEP returns OK
         assert result[1] == OK  # SET command succeeded
-        
+
         # Verify the key was set
         value = await glide_client.get(key)
         assert value == b"value"
@@ -1628,7 +1629,7 @@ class TestPipeline:
 
         result = await exec_batch(glide_client, pipeline, timeout=1000)
         assert result == [None, OK]
-        
+
         # Verify the key was set
         value = await glide_client.get(key)
         assert value == b"value"

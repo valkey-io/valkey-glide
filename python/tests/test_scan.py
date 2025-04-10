@@ -2,16 +2,17 @@ import asyncio
 from typing import AsyncGenerator, List, cast
 
 import pytest
-from glide import ByAddressRoute
 from glide.async_commands.command_args import ObjectType
 from glide.config import ProtocolVersion
 from glide.exceptions import RequestError
-from glide.glide import ClusterScanCursor
 from glide.glide_client import GlideClient, GlideClusterClient
 
 from tests.conftest import create_client
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import get_random_string
+
+from glide import ByAddressRoute
+from glide.glide import ClusterScanCursor
 
 
 # Helper function to get a number of nodes, and ask the cluster till we get the number of nodes

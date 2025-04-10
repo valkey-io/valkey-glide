@@ -444,10 +444,6 @@ class CoreCommands(Protocol):
         request_type: RequestType.ValueType,
         args: List[TEncodable],
         route: Optional[Route] = ...,
-        timeout: Optional[int] = ...,
-        raise_on_error: bool = ...,
-        retry_server_error: bool = ...,
-        retry_connection_error: bool = ...,
     ) -> TResult: ...
 
     async def _execute_batch(

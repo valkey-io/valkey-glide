@@ -5323,7 +5323,7 @@ class Batch(BaseBatch):
         [OK , OK , None]
 
     Pipeline Example:
-        pipeline = Batch(is_atomic=False)  
+        pipeline = Batch(is_atomic=False)
         >>> pipeline.set("key", "value")
         >>> pipeline.select(1)  # Standalone command
         >>> pipeline.get("key")
