@@ -124,7 +124,7 @@ class ClusterCommands(CoreCommands):
 
         Args:
             batch (ClusterBatch): A `ClusterBatch` object containing a list of commands to be executed.
-            route (Optional[TSingleNodeRoute]): If not provided, routes to slot owner of first key in transaction. 
+            route (Optional[TSingleNodeRoute]): If not provided, routes to slot owner of first key in transaction.
                 If no key, sends to random node. If provided, routes to nodes defined by `route`.
             timeout (Optional[int]): The timeout in milliseconds that the client should wait for the batch request
                 to complete. This includes sending the request, awaiting a response, and any reconnections or retries.
