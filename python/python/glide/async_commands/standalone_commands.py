@@ -69,27 +69,48 @@ class StandaloneCommands(CoreCommands):
         self,
         batch: Batch,
         raise_on_error: bool = True,
+        timeout: Optional[int] = None,
     ) -> Optional[List[TResult]]:
         """
-        Execute a transaction by processing the queued commands.
+        Executes a batch of commands and returns a list of results.
 
-        See [valkey.io](https://valkey.io/docs/topics/transactions/) for details on Transactions.
+        See [valkey.io]https://valkey.io/docs/topics/transactions/) and
+        [valkey.io](https://valkey.io/docs/topics/pipelining/) for details.
+
 
         Args:
-            transaction (Transaction): A `Transaction` object containing a list of commands to be executed.
+            batch (Batch): The batch of commands to execute.
+            raise_on_error (bool): Determines how errors are handled within the batch response.
+                When set to True, the first encountered error in the batch will be raised as an
+                exception after all retries and reconnections have been executed.
+                When set to False, errors will be included as part of the batch response, allowing
+                the caller to process both successful and failed commands together.
+            timeout (Optional[int]): The duration in milliseconds for the client to wait for the batch request to complete.
+                This timeout applies to the entire batch execution, including:
+                - Sending the request to the server
+                - Waiting for the response
+                - Any necessary reconnections or retries
+                If the timeout is exceeded, a timeout error will be raised.
+                If not specified, the default request timeout will be used.
 
         Returns:
             Optional[List[TResult]]: A list of results corresponding to the execution of each command
-            in the transaction. If a command returns a value, it will be included in the list.
+            in the batch. If a command returns a value, it will be included in the list.
             If a command doesn't return a value, the list entry will be `None`.
+            If the batch failed due to a WATCH command, `exec` will return `None`.
 
-            If the transaction failed due to a WATCH command, `exec` will return `None`.
+        Note:
+            - For atomic batches (transactions), all commands are executed as a single atomic operation.
+            - For non-atomic batches, commands are executed sequentially but not atomically.
+            - The timeout applies to the entire batch execution, not individual commands.
+            - If a WATCH command is used and the watched keys are modified, the batch will fail and return None.
         """
         commands = batch.commands[:]
         return await self._execute_batch(
             commands,
             is_atomic=batch.is_atomic,
             raise_on_error=raise_on_error,
+            timeout=timeout,
         )
 
     async def select(self, index: int) -> TOK:

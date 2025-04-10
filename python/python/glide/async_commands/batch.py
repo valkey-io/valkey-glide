@@ -64,7 +64,7 @@ class BaseBatch:
     """
     Base class encompassing shared commands for both standalone and cluster mode implementations in batch.
 
-    Command Response:
+    Batch Response:
         The response for each command depends on the executed command. Specific response types
         are documented alongside each method.
 
@@ -5302,7 +5302,6 @@ class Batch(BaseBatch):
         The response for each command depends on the executed command. Specific response types
         are documented alongside each method.
 
-
     Transaction vs Pipeline:
         - Transactions (is_atomic=True) ensure that all commands are executed atomically.
           In a transaction, all keys must belong to the same slot. This means if any key is in a different slot,
@@ -5324,14 +5323,21 @@ class Batch(BaseBatch):
         [OK , OK , None]
 
     Pipeline Example:
-        pipeline = Batch(is_atomic=True)
+        pipeline = Batch(is_atomic=False)  
         >>> pipeline.set("key", "value")
         >>> pipeline.select(1)  # Standalone command
         >>> pipeline.get("key")
         >>> await client.exec(pipeline)
         [OK , OK , None]
 
-
+    Timeout Behavior:
+        When executing a batch (transaction or pipeline), you can specify a timeout in milliseconds.
+        This timeout applies to the entire batch execution, including:
+        - Sending all commands to the server
+        - Waiting for all responses
+        - Any necessary reconnections or retries
+        If the timeout is exceeded, a timeout error will be raised.
+        If no timeout is specified, the default request timeout will be used.
     """
 
     # TODO: add SLAVEOF and all SENTINEL commands
@@ -5422,7 +5428,7 @@ class Batch(BaseBatch):
 
 class ClusterBatch(BaseBatch):
     """
-    Extends BaseBatch class for cluster mode commands that are not supported in standalone.
+    Extends BaseBatch class for commands that are not supported in standalone mode.
 
     Command Response:
         The response for each command depends on the executed command. Specific response types
@@ -5439,6 +5445,28 @@ class ClusterBatch(BaseBatch):
     Note for Cluster Mode:
         When cluster mode is enabled and the client is configured to read from replicas, read commands
         in a pipeline will be distributed in a round-robin manner across the replicas.
+    Transaction Example:
+        transaction = ClusterBatch(is_atomic=True)
+        >>> transaction.set("key", "value")
+        >>> transaction.get("key")
+        >>> await client.exec(transaction)
+        [OK , None]
+
+    Pipeline Example:
+        pipeline = ClusterBatch(is_atomic=False)  # Note: is_atomic should be False for pipelines
+        >>> pipeline.set("key", "value")
+        >>> pipeline.get("key")
+        >>> await client.exec(pipeline)
+        [OK , None]
+
+    Timeout Behavior:
+        When executing a batch (transaction or pipeline), you can specify a timeout in milliseconds.
+        This timeout applies to the entire batch execution, including:
+        - Sending all commands to the server
+        - Waiting for all responses
+        - Any necessary reconnections or retries
+        If the timeout is exceeded, a timeout error will be raised.
+        If no timeout is specified, the default request timeout will be used.
     """
 
     def copy(
