@@ -98,7 +98,7 @@ class BaseTransaction:
         """
         Get the value associated with the given key, or null if no such value exists.
 
-        See https://valkey.io/commands/get/ for details.
+        See [valkey.io](https://valkey.io/commands/get/) for details.
 
         Args:
             key (TEncodable): The key to retrieve from the database.
@@ -114,7 +114,7 @@ class BaseTransaction:
         """
         Gets a value associated with the given string `key` and deletes the key.
 
-        See https://valkey.io/commands/getdel for more details.
+        See [valkey.io](https://valkey.io/commands/getdel) for more details.
 
         Args:
             key (TEncodable): The `key` to retrieve from the database.
@@ -138,7 +138,7 @@ class BaseTransaction:
         If `key` does not exist, an empty string is returned. If `start` or `end`
         are out of range, returns the substring within the valid range of the string.
 
-        See https://valkey.io/commands/getrange/ for more details.
+        See [valkey.io](https://valkey.io/commands/getrange/) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -161,7 +161,7 @@ class BaseTransaction:
         """
         Set the given key with the given value. Return value is dependent on the passed options.
 
-        See https://valkey.io/commands/set/ for details.
+        See [valkey.io](https://valkey.io/commands/set/) for details.
 
         Args:
             key (TEncodable): the key to store.
@@ -204,7 +204,7 @@ class BaseTransaction:
         """
         Get the length of the string value stored at `key`.
 
-        See https://valkey.io/commands/strlen/ for more details.
+        See [valkey.io](https://valkey.io/commands/strlen/) for more details.
 
         Args:
             key (TEncodable): The key to return its length.
@@ -227,7 +227,7 @@ class BaseTransaction:
             In Cluster mode, both `key` and `newkey` must be in the same hash slot,
             meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
 
-        See https://valkey.io/commands/rename/ for more details.
+        See [valkey.io](https://valkey.io/commands/rename/) for more details.
 
         Args:
             key (TEncodable) : The key to rename.
@@ -246,7 +246,7 @@ class BaseTransaction:
         """
         Renames `key` to `new_key` if `new_key` does not yet exist.
 
-        See https://valkey.io/commands/renamenx for more details.
+        See [valkey.io](https://valkey.io/commands/renamenx) for more details.
 
         Args:
             key (TEncodable): The key to rename.
@@ -265,7 +265,8 @@ class BaseTransaction:
         """
         Executes a single command, without checking inputs.
 
-        See the `Valkey GLIDE Wiki <https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command>`_
+        See the Valkey GLIDE Wiki
+        [custom command](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
         Args:
@@ -289,7 +290,7 @@ class BaseTransaction:
         If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to
         SET in this special case.
 
-        See https://valkey.io/commands/append for more details.
+        See [valkey.io](https://valkey.io/commands/append) for more details.
 
         Args:
             key (TEncodable): The key to which the value will be appended.
@@ -307,7 +308,7 @@ class BaseTransaction:
         """
         Get information and statistics about the server.
 
-        See https://valkey.io/commands/info/ for details.
+        See [valkey.io](https://valkey.io/commands/info/) for details.
 
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
@@ -325,7 +326,7 @@ class BaseTransaction:
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
 
-        See https://valkey.io/commands/del/ for details.
+        See [valkey.io](https://valkey.io/commands/del/) for details.
 
         Args:
             keys (List[TEncodable]): A list of keys to be deleted from the database.
@@ -340,7 +341,7 @@ class BaseTransaction:
         Get the values of configuration parameters.
         Starting from server version 7, command supports multiple parameters.
 
-        See https://valkey.io/commands/config-get/ for details.
+        See [valkey.io](https://valkey.io/commands/config-get/) for details.
 
         Args:
             parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
@@ -358,7 +359,7 @@ class BaseTransaction:
         Set configuration parameters to the specified values.
         Starting from server version 7, command supports multiple parameters.
 
-        See https://valkey.io/commands/config-set/ for details.
+        See [valkey.io](https://valkey.io/commands/config-set/) for details.
 
         Args:
             parameters_map (Mapping[TEncodable, TEncodable]): A map consisting of configuration
@@ -378,7 +379,7 @@ class BaseTransaction:
         """
         Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
 
-        See https://valkey.io/commands/config-resetstat/ for details.
+        See [valkey.io](https://valkey.io/commands/config-resetstat/) for details.
 
         Command response:
             OK: a simple OK response.
@@ -391,7 +392,7 @@ class BaseTransaction:
         """
         Set multiple keys to multiple values in a single atomic operation.
 
-        See https://valkey.io/commands/mset/ for more details.
+        See [valkey.io](https://valkey.io/commands/mset/) for more details.
 
         Args:
             parameters (Mapping[TEncodable, TEncodable]): A map of key value pairs.
@@ -411,7 +412,7 @@ class BaseTransaction:
         Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
         more keys already exist, the entire operation fails.
 
-        See https://valkey.io/commands/msetnx/ for more details.
+        See [valkey.io](https://valkey.io/commands/msetnx/) for more details.
 
         Args:
             key_value_map (Mapping[TEncodable, TEncodable]): A key-value map consisting of keys and their respective
@@ -431,7 +432,7 @@ class BaseTransaction:
         """
         Retrieve the values of multiple keys.
 
-        See https://valkey.io/commands/mget/ for more details.
+        See [valkey.io](https://valkey.io/commands/mget/) for more details.
 
         Args:
             keys (List[TEncodable]): A list of keys to retrieve values for.
@@ -446,7 +447,7 @@ class BaseTransaction:
         """
         Updates the last access time of specified keys.
 
-        See https://valkey.io/commands/touch/ for details.
+        See [valkey.io](https://valkey.io/commands/touch/) for details.
 
         Args:
             keys (List[TEncodable]): The keys to update last access time.
@@ -460,7 +461,7 @@ class BaseTransaction:
         """
         Rewrite the configuration file with the current configuration.
 
-        See https://valkey.io/commands/config-rewrite/ for details.
+        See [valkey.io](https://valkey.io/commands/config-rewrite/) for details.
 
         Command response:
             OK: OK is returned when the configuration was rewritten properly.
@@ -473,7 +474,7 @@ class BaseTransaction:
         """
         Returns the current connection id.
 
-        See https://valkey.io/commands/client-id/ for more information.
+        See [valkey.io](https://valkey.io/commands/client-id/) for more information.
 
         Command response:
             int: the id of the client.
@@ -486,7 +487,7 @@ class BaseTransaction:
         If `key` does not exist, it is set to 0 before performing the
         operation.
 
-        See https://valkey.io/commands/incr/ for more details.
+        See [valkey.io](https://valkey.io/commands/incr/) for more details.
 
         Args:
             key (TEncodable): The key to increment its value.
@@ -501,7 +502,7 @@ class BaseTransaction:
         Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation.
 
-        See https://valkey.io/commands/incrby/ for more details.
+        See [valkey.io](https://valkey.io/commands/incrby/) for more details.
 
         Args:
           key (TEncodable): The key to increment its value.
@@ -518,7 +519,7 @@ class BaseTransaction:
         By using a negative increment value, the value stored at the `key` is decremented.
         If the key does not exist, it is set to 0 before performing the operation.
 
-        See https://valkey.io/commands/incrbyfloat/ for more details.
+        See [valkey.io](https://valkey.io/commands/incrbyfloat/) for more details.
 
         Args:
           key (TEncodable): The key to increment its value.
@@ -533,7 +534,7 @@ class BaseTransaction:
         """
         Ping the server.
 
-        See https://valkey.io/commands/ping/ for more details.
+        See [valkey.io](https://valkey.io/commands/ping/) for more details.
 
         Args:
             message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
@@ -550,7 +551,7 @@ class BaseTransaction:
         Decrements the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
         operation.
 
-        See https://valkey.io/commands/decr/ for more details.
+        See [valkey.io](https://valkey.io/commands/decr/) for more details.
 
         Args:
             key (TEncodable): The key to decrement its value.
@@ -565,7 +566,7 @@ class BaseTransaction:
         Decrements the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation.
 
-        See https://valkey.io/commands/decrby/ for more details.
+        See [valkey.io](https://valkey.io/commands/decrby/) for more details.
 
         Args:
             key (TEncodable): The key to decrement its value.
@@ -589,7 +590,7 @@ class BaseTransaction:
         the string is padded with zero bytes to make `offset` fit. Creates the `key`
         if it doesn't exist.
 
-        See https://valkey.io/commands/setrange for more details.
+        See [valkey.io](https://valkey.io/commands/setrange) for more details.
 
         Args:
             key (TEncodable): The key of the string to update.
@@ -609,7 +610,7 @@ class BaseTransaction:
         """
         Sets the specified fields to their respective values in the hash stored at `key`.
 
-        See https://valkey.io/commands/hset/ for more details.
+        See [valkey.io](https://valkey.io/commands/hset/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -628,7 +629,7 @@ class BaseTransaction:
         """
         Retrieves the value associated with `field` in the hash stored at `key`.
 
-        See https://valkey.io/commands/hget/ for more details.
+        See [valkey.io](https://valkey.io/commands/hget/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -652,7 +653,7 @@ class BaseTransaction:
         If `key` does not exist, a new key holding a hash is created.
         If `field` already exists, this operation has no effect.
 
-        See https://valkey.io/commands/hsetnx/ for more details.
+        See [valkey.io](https://valkey.io/commands/hsetnx/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -677,7 +678,7 @@ class BaseTransaction:
         By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
         If `field` or `key` does not exist, it is set to 0 before performing the operation.
 
-        See https://valkey.io/commands/hincrby/ for more details.
+        See [valkey.io](https://valkey.io/commands/hincrby/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -702,7 +703,7 @@ class BaseTransaction:
         By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
         If `field` or `key` does not exist, it is set to 0 before performing the operation.
 
-        See https://valkey.io/commands/hincrbyfloat/ for more details.
+        See [valkey.io](https://valkey.io/commands/hincrbyfloat/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -719,7 +720,7 @@ class BaseTransaction:
         """
         Check if a field exists in the hash stored at `key`.
 
-        See https://valkey.io/commands/hexists/ for more details.
+        See [valkey.io](https://valkey.io/commands/hexists/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -736,7 +737,7 @@ class BaseTransaction:
         """
         Returns the number of fields contained in the hash stored at `key`.
 
-        See https://valkey.io/commands/hlen/ for more details.
+        See [valkey.io](https://valkey.io/commands/hlen/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -752,7 +753,7 @@ class BaseTransaction:
         """
         Get the name of the connection on which the transaction is being executed.
 
-        See https://valkey.io/commands/client-getname/ for more details.
+        See [valkey.io](https://valkey.io/commands/client-getname/) for more details.
 
         Command response:
             Optional[bytes]: Returns the name of the client connection as a bytes string if a name is set,
@@ -765,7 +766,7 @@ class BaseTransaction:
         """
         Returns all fields and values of the hash stored at `key`.
 
-        See https://valkey.io/commands/hgetall/ for details.
+        See [valkey.io](https://valkey.io/commands/hgetall/) for details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -784,7 +785,7 @@ class BaseTransaction:
         """
         Retrieve the values associated with specified fields in the hash stored at `key`.
 
-        See https://valkey.io/commands/hmget/ for details.
+        See [valkey.io](https://valkey.io/commands/hmget/) for details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -804,7 +805,7 @@ class BaseTransaction:
         """
         Remove specified fields from the hash stored at `key`.
 
-        See https://valkey.io/commands/hdel/ for more details.
+        See [valkey.io](https://valkey.io/commands/hdel/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -821,7 +822,7 @@ class BaseTransaction:
         """
         Returns all values in the hash stored at `key`.
 
-        See https://valkey.io/commands/hvals/ for more details.
+        See [valkey.io](https://valkey.io/commands/hvals/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -837,7 +838,7 @@ class BaseTransaction:
         """
         Returns all field names in the hash stored at `key`.
 
-        See https://valkey.io/commands/hkeys/ for more details.
+        See [valkey.io](https://valkey.io/commands/hkeys/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -853,7 +854,7 @@ class BaseTransaction:
         """
         Returns a random field name from the hash value stored at `key`.
 
-        See https://valkey.io/commands/hrandfield for more details.
+        See [valkey.io](https://valkey.io/commands/hrandfield) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -871,7 +872,7 @@ class BaseTransaction:
         """
         Retrieves up to `count` random field names from the hash value stored at `key`.
 
-        See https://valkey.io/commands/hrandfield for more details.
+        See [valkey.io](https://valkey.io/commands/hrandfield) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -893,7 +894,7 @@ class BaseTransaction:
         """
         Retrieves up to `count` random field names along with their values from the hash value stored at `key`.
 
-        See https://valkey.io/commands/hrandfield for more details.
+        See [valkey.io](https://valkey.io/commands/hrandfield) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -916,7 +917,7 @@ class BaseTransaction:
         """
         Returns the string length of the value associated with `field` in the hash stored at `key`.
 
-        See https://valkey.io/commands/hstrlen/ for more details.
+        See [valkey.io](https://valkey.io/commands/hstrlen/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -937,7 +938,7 @@ class BaseTransaction:
         `elements` are inserted one after the other to the head of the list, from the leftmost element
         to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
 
-        See https://valkey.io/commands/lpush/ for more details.
+        See [valkey.io](https://valkey.io/commands/lpush/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -955,7 +956,7 @@ class BaseTransaction:
         Inserts all the specified values at the head of the list stored at `key`, only if `key` exists and holds a list.
         If `key` is not a list, this performs no operation.
 
-        See https://valkey.io/commands/lpushx/ for more details.
+        See [valkey.io](https://valkey.io/commands/lpushx/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -971,7 +972,7 @@ class BaseTransaction:
         Remove and return the first elements of the list stored at `key`.
         The command pops a single element from the beginning of the list.
 
-        See https://valkey.io/commands/lpop/ for details.
+        See [valkey.io](https://valkey.io/commands/lpop/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -987,7 +988,7 @@ class BaseTransaction:
         """
         Remove and return up to `count` elements from the list stored at `key`, depending on the list's length.
 
-        See https://valkey.io/commands/lpop/ for details.
+        See [valkey.io](https://valkey.io/commands/lpop/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1007,12 +1008,12 @@ class BaseTransaction:
         Pops an element from the head of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
 
-        See https://valkey.io/commands/blpop for details.
+        See [valkey.io](https://valkey.io/commands/blpop) for details.
 
         Note:
             BLPOP is a client blocking command, see
-            https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details
-            and best practices.
+            [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+            for more details and best practices.
 
         Args:
             keys (List[TEncodable]): The keys of the lists to pop from.
@@ -1036,7 +1037,7 @@ class BaseTransaction:
         """
         Pops one or more elements from the first non-empty list from the provided `keys`.
 
-        See https://valkey.io/commands/lmpop/ for details.
+        See [valkey.io](https://valkey.io/commands/lmpop/) for details.
 
         Args:
             keys (List[TEncodable]): An array of keys of lists.
@@ -1070,7 +1071,7 @@ class BaseTransaction:
 
         `BLMPOP` is the blocking variant of `LMPOP`.
 
-        See https://valkey.io/commands/blmpop/ for details.
+        See [valkey.io](https://valkey.io/commands/blmpop/) for details.
 
         Args:
             keys (List[TEncodable]): An array of keys of lists.
@@ -1103,7 +1104,7 @@ class BaseTransaction:
         element and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list,
         with -1 being the last element of the list, -2 being the penultimate, and so on.
 
-        See https://valkey.io/commands/lrange/ for details.
+        See [valkey.io](https://valkey.io/commands/lrange/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1133,7 +1134,7 @@ class BaseTransaction:
         Negative indices can be used to designate elements starting at the tail of the list.
         Here, -1 means the last element, -2 means the penultimate and so forth.
 
-        See https://valkey.io/commands/lindex/ for more details.
+        See [valkey.io](https://valkey.io/commands/lindex/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1159,7 +1160,7 @@ class BaseTransaction:
         Negative indices can be used to designate elements starting at the tail of the list.
         Here, `-1` means the last element, `-2` means the penultimate and so forth.
 
-        See https://valkey.io/commands/lset/ for details.
+        See [valkey.io](https://valkey.io/commands/lset/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1179,7 +1180,7 @@ class BaseTransaction:
         `elements` are inserted one after the other to the tail of the list, from the leftmost element
         to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
 
-        See https://valkey.io/commands/rpush/ for more details.
+        See [valkey.io](https://valkey.io/commands/rpush/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1199,7 +1200,7 @@ class BaseTransaction:
         Inserts all the specified values at the tail of the list stored at `key`, only if `key` exists and holds a list.
         If `key` is not a list, this performs no operation.
 
-        See https://valkey.io/commands/rpushx/ for more details.
+        See [valkey.io](https://valkey.io/commands/rpushx/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1217,7 +1218,7 @@ class BaseTransaction:
         Removes and returns the last elements of the list stored at `key`.
         The command pops a single element from the end of the list.
 
-        See https://valkey.io/commands/rpop/ for details.
+        See [valkey.io](https://valkey.io/commands/rpop/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1233,7 +1234,7 @@ class BaseTransaction:
         """
         Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
 
-        See https://valkey.io/commands/rpop/ for details.
+        See [valkey.io](https://valkey.io/commands/rpop/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1253,12 +1254,12 @@ class BaseTransaction:
         Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
 
-        See https://valkey.io/commands/brpop for details.
+        See [valkey.io](https://valkey.io/commands/brpop) for details.
 
         Note:
             BRPOP is a client blocking command, see
-            https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details
-            and best practices.
+            [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+            for more details and best practices.
 
         Args:
             keys (List[TEncodable]): The keys of the lists to pop from.
@@ -1283,7 +1284,7 @@ class BaseTransaction:
         """
         Inserts `element` in the list at `key` either before or after the `pivot`.
 
-        See https://valkey.io/commands/linsert/ for details.
+        See [valkey.io](https://valkey.io/commands/linsert/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1315,7 +1316,7 @@ class BaseTransaction:
         depending on `where_from`, and pushes the element at the first/last element of the list
         stored at `destination` depending on `where_to`.
 
-        See https://valkey.io/commands/lmove/ for details.
+        See [valkey.io](https://valkey.io/commands/lmove/) for details.
 
         Args:
             source (TEncodable): The key to the source list.
@@ -1350,7 +1351,7 @@ class BaseTransaction:
         of the list stored at `destination` depending on `where_to`.
         `blmove` is the blocking variant of `lmove`.
 
-        See https://valkey.io/commands/blmove/ for details.
+        See [valkey.io](https://valkey.io/commands/blmove/) for details.
 
         Args:
             source (TEncodable): The key to the source list.
@@ -1382,7 +1383,7 @@ class BaseTransaction:
         Specified members that are already a member of this set are ignored.
         If `key` does not exist, a new set is created before adding `members`.
 
-        See https://valkey.io/commands/sadd/ for more details.
+        See [valkey.io](https://valkey.io/commands/sadd/) for more details.
 
         Args:
             key (TEncodable): The key where members will be added to its set.
@@ -1400,7 +1401,7 @@ class BaseTransaction:
         Remove specified members from the set stored at `key`.
         Specified members that are not a member of this set are ignored.
 
-        See https://valkey.io/commands/srem/ for details.
+        See [valkey.io](https://valkey.io/commands/srem/) for details.
 
         Args:
             key (TEncodable): The key from which members will be removed.
@@ -1417,7 +1418,7 @@ class BaseTransaction:
         """
         Retrieve all the members of the set value stored at `key`.
 
-        See https://valkey.io/commands/smembers/ for details.
+        See [valkey.io](https://valkey.io/commands/smembers/) for details.
 
         Args:
             key (TEncodable): The key from which to retrieve the set members.
@@ -1433,7 +1434,7 @@ class BaseTransaction:
         """
         Retrieve the set cardinality (number of elements) of the set stored at `key`.
 
-        See https://valkey.io/commands/scard/ for details.
+        See [valkey.io](https://valkey.io/commands/scard/) for details.
 
         Args:
             key (TEncodable): The key from which to retrieve the number of set members.
@@ -1449,7 +1450,7 @@ class BaseTransaction:
         """
         Removes and returns one random member from the set stored at `key`.
 
-        See https://valkey-io.github.io/commands/spop/ for more details.
+        See [valkey.io](https://valkey-io.github.io/commands/spop/) for more details.
         To pop multiple members, see `spop_count`.
 
         Args:
@@ -1466,7 +1467,7 @@ class BaseTransaction:
         """
         Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
 
-        See https://valkey-io.github.io/commands/spop/ for more details.
+        See [valkey.io](https://valkey-io.github.io/commands/spop/) for more details.
 
         To pop a single member, see `spop`.
 
@@ -1489,7 +1490,7 @@ class BaseTransaction:
         """
         Returns if `member` is a member of the set stored at `key`.
 
-        See https://valkey.io/commands/sismember/ for more details.
+        See [valkey.io](https://valkey.io/commands/sismember/) for more details.
 
         Args:
             key (TEncodable): The key of the set.
@@ -1512,7 +1513,7 @@ class BaseTransaction:
         Moves `member` from the set at `source` to the set at `destination`, removing it from the source set. Creates a
         new destination set if needed. The operation is atomic.
 
-        See https://valkey.io/commands/smove for more details.
+        See [valkey.io](https://valkey.io/commands/smove) for more details.
 
         Args:
             source (TEncodable): The key of the set to remove the element from.
@@ -1530,7 +1531,7 @@ class BaseTransaction:
         """
         Gets the union of all the given sets.
 
-        See https://valkey.io/commands/sunion for more details.
+        See [valkey.io](https://valkey.io/commands/sunion) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sets.
@@ -1550,7 +1551,7 @@ class BaseTransaction:
         """
         Stores the members of the union of all given sets specified by `keys` into a new set at `destination`.
 
-        See https://valkey.io/commands/sunionstore for more details.
+        See [valkey.io](https://valkey.io/commands/sunionstore) for more details.
 
         Args:
             destination (TEncodable): The key of the destination set.
@@ -1565,7 +1566,7 @@ class BaseTransaction:
         """
         Gets the intersection of all the given sets.
 
-        See https://valkey.io/commands/sinter for more details.
+        See [valkey.io](https://valkey.io/commands/sinter) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sets.
@@ -1585,7 +1586,7 @@ class BaseTransaction:
         """
         Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
 
-        See https://valkey.io/commands/sinterstore for more details.
+        See [valkey.io](https://valkey.io/commands/sinterstore) for more details.
 
         Args:
             destination (TEncodable): The key of the destination set.
@@ -1604,7 +1605,7 @@ class BaseTransaction:
         Optionally, a `limit` can be specified to stop the computation early if the intersection
         cardinality reaches the specified limit.
 
-        See https://valkey.io/commands/sintercard for more details.
+        See [valkey.io](https://valkey.io/commands/sintercard) for more details.
 
         Args:
             keys (List[TEncodable]): A list of keys representing the sets to intersect.
@@ -1624,7 +1625,7 @@ class BaseTransaction:
         """
         Computes the difference between the first set and all the successive sets in `keys`.
 
-        See https://valkey.io/commands/sdiff for more details.
+        See [valkey.io](https://valkey.io/commands/sdiff) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sets to diff.
@@ -1645,7 +1646,7 @@ class BaseTransaction:
         Stores the difference between the first set and all the successive sets in `keys` into a new set at
         `destination`.
 
-        See https://valkey.io/commands/sdiffstore for more details.
+        See [valkey.io](https://valkey.io/commands/sdiffstore) for more details.
 
         Args:
             destination (TEncodable): The key of the destination set.
@@ -1662,7 +1663,7 @@ class BaseTransaction:
         """
         Checks whether each member is contained in the members of the set stored at `key`.
 
-        See https://valkey.io/commands/smismember for more details.
+        See [valkey.io](https://valkey.io/commands/smismember) for more details.
 
         Args:
             key (TEncodable): The key of the set to check.
@@ -1683,7 +1684,7 @@ class BaseTransaction:
         These offsets can also be negative numbers indicating offsets starting at the end of the list, with -1 being the last
         element of the list, -2 being the penultimate, and so on.
 
-        See https://valkey.io/commands/ltrim/ for more details.
+        See [valkey.io](https://valkey.io/commands/ltrim/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1715,7 +1716,7 @@ class BaseTransaction:
         If `count` is 0 or greater than the occurrences of elements equal to `element`, it removes all elements
         equal to `element`.
 
-        See https://valkey.io/commands/lrem/ for more details.
+        See [valkey.io](https://valkey.io/commands/lrem/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1733,7 +1734,7 @@ class BaseTransaction:
         """
         Get the length of the list stored at `key`.
 
-        See https://valkey.io/commands/llen/ for details.
+        See [valkey.io](https://valkey.io/commands/llen/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1749,7 +1750,7 @@ class BaseTransaction:
         """
         Returns the number of keys in `keys` that exist in the database.
 
-        See https://valkey.io/commands/exists/ for more details.
+        See [valkey.io](https://valkey.io/commands/exists/) for more details.
 
         Args:
             keys (List[TEncodable]): The list of keys to check.
@@ -1765,9 +1766,9 @@ class BaseTransaction:
         Unlink (delete) multiple keys from the database.
         A key is ignored if it does not exist.
         This command, similar to DEL, removes specified keys and ignores non-existent ones.
-        However, this command does not block the server, while `DEL <https://valkey.io/commands/del>`_ does.
+        However, this command does not block the server, while `DEL <[valkey.io](https://valkey.io/commands/del>`_) does.
 
-        See https://valkey.io/commands/unlink/ for more details.
+        See [valkey.io](https://valkey.io/commands/unlink/) for more details.
 
         Args:
             keys (List[TEncodable]): The list of keys to unlink.
@@ -1789,7 +1790,7 @@ class BaseTransaction:
         If `seconds` is a non-positive number, the key will be deleted rather than expired.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
 
-        See https://valkey.io/commands/expire/ for more details.
+        See [valkey.io](https://valkey.io/commands/expire/) for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -1821,7 +1822,7 @@ class BaseTransaction:
         If `key` already has an existing expire set, the time to live is updated to the new value.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
 
-        See https://valkey.io/commands/expireat/ for more details.
+        See [valkey.io](https://valkey.io/commands/expireat/) for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -1853,7 +1854,7 @@ class BaseTransaction:
         If `milliseconds` is a non-positive number, the key will be deleted rather than expired.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
 
-        See https://valkey.io/commands/pexpire/ for more details.
+        See [valkey.io](https://valkey.io/commands/pexpire/) for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -1887,7 +1888,7 @@ class BaseTransaction:
         If `key` already has an existing expire set, the time to live is updated to the new value.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
 
-        See https://valkey.io/commands/pexpireat/ for more details.
+        See [valkey.io](https://valkey.io/commands/pexpireat/) for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -1913,7 +1914,7 @@ class BaseTransaction:
         the given `key` will expire, in seconds.
         To get the expiration with millisecond precision, use `pexpiretime`.
 
-        See https://valkey.io/commands/expiretime/ for details.
+        See [valkey.io](https://valkey.io/commands/expiretime/) for details.
 
         Args:
             key (TEncodable): The `key` to determine the expiration value of.
@@ -1934,7 +1935,7 @@ class BaseTransaction:
         Returns the absolute Unix timestamp (since January 1, 1970) at which
         the given `key` will expire, in milliseconds.
 
-        See https://valkey.io/commands/pexpiretime/ for details.
+        See [valkey.io](https://valkey.io/commands/pexpiretime/) for details.
 
         Args:
             key (TEncodable): The `key` to determine the expiration value of.
@@ -1954,7 +1955,7 @@ class BaseTransaction:
         """
         Returns the remaining time to live of `key` that has a timeout.
 
-        See https://valkey.io/commands/ttl/ for more details.
+        See [valkey.io](https://valkey.io/commands/ttl/) for more details.
 
         Args:
             key (TEncodable): The key to return its timeout.
@@ -1975,7 +1976,7 @@ class BaseTransaction:
         """
         Returns the remaining time to live of `key` that has a timeout, in milliseconds.
 
-        See https://valkey.io/commands/pttl for more details.
+        See [valkey.io](https://valkey.io/commands/pttl) for more details.
 
         Args:
             key (TEncodable): The key to return its timeout.
@@ -1997,7 +1998,7 @@ class BaseTransaction:
         Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
         persistent (a key that will never expire as no timeout is associated).
 
-        See https://valkey.io/commands/persist/ for more details.
+        See [valkey.io](https://valkey.io/commands/persist/) for more details.
 
         Args:
             key (TEncodable): The key to remove the existing timeout on.
@@ -2013,7 +2014,7 @@ class BaseTransaction:
         """
         Echoes the provided `message` back.
 
-        See https://valkey.io/commands/echo for more details.
+        See [valkey.io](https://valkey.io/commands/echo) for more details.
 
         Args:
             message (TEncodable): The message to be echoed back.
@@ -2027,7 +2028,7 @@ class BaseTransaction:
         """
         Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
 
-        See https://valkey.io/commands/lastsave for more details.
+        See [valkey.io](https://valkey.io/commands/lastsave) for more details.
 
         Command response:
             int: The Unix time of the last successful DB save.
@@ -2038,7 +2039,7 @@ class BaseTransaction:
         """
          Returns the string representation of the type of the value stored at `key`.
 
-         See https://valkey.io/commands/type/ for more details.
+         See [valkey.io](https://valkey.io/commands/type/) for more details.
 
         Args:
             key (TEncodable): The key to check its data type.
@@ -2056,7 +2057,7 @@ class BaseTransaction:
         """
         Loads a library to Valkey.
 
-        See https://valkey.io/commands/function-load/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-load/) for more details.
 
         Args:
             library_code (TEncodable): The source code that implements the library.
@@ -2081,7 +2082,7 @@ class BaseTransaction:
         """
         Returns information about the functions and libraries.
 
-        See https://valkey.io/commands/function-list/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-list/) for more details.
 
         Args:
             library_name_pattern (Optional[TEncodable]):  A wildcard pattern for matching library names.
@@ -2108,7 +2109,7 @@ class BaseTransaction:
         """
         Deletes all function libraries.
 
-        See https://valkey.io/commands/function-flush/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-flush/) for more details.
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -2127,7 +2128,7 @@ class BaseTransaction:
         """
         Deletes a library and all its functions.
 
-        See https://valkey.io/commands/function-delete/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-delete/) for more details.
 
         Args:
             library_name (TEncodable): The library name to delete
@@ -2151,7 +2152,7 @@ class BaseTransaction:
         """
         Invokes a previously loaded function.
 
-        See https://valkey.io/commands/fcall/ for more details.
+        See [valkey.io](https://valkey.io/commands/fcall/) for more details.
 
         Args:
             function (TEncodable): The function name.
@@ -2184,7 +2185,7 @@ class BaseTransaction:
         """
         Invokes a previously loaded read-only function.
 
-        See https://valkey.io/commands/fcall_ro for more details.
+        See [valkey.io](https://valkey.io/commands/fcall_ro) for more details.
 
         Args:
             function (TEncodable): The function name.
@@ -2213,7 +2214,7 @@ class BaseTransaction:
         Returns information about the function that's currently running and information about the
         available execution engines.
 
-        See https://valkey.io/commands/function-stats/ for more details
+        See [valkey.io](https://valkey.io/commands/function-stats/) for more details
 
         Command Response:
             TFunctionStatsSingleNodeResponse: A `Mapping` with two keys:
@@ -2229,7 +2230,7 @@ class BaseTransaction:
         """
         Returns the serialized payload of all loaded libraries.
 
-        See https://valkey.io/commands/function-dump/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-dump/) for more details.
 
         Command response:
             bytes: The serialized payload of all loaded libraries.
@@ -2246,7 +2247,7 @@ class BaseTransaction:
         """
         Restores libraries from the serialized payload returned by the `function_dump` command.
 
-        See https://valkey.io/commands/function-restore/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-restore/) for more details.
 
         Args:
             payload (TEncodable): The serialized data from the `function_dump` command.
@@ -2269,7 +2270,7 @@ class BaseTransaction:
         """
         Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
 
-        See https://valkey.io/commands/dump/ for more details.
+        See [valkey.io](https://valkey.io/commands/dump/) for more details.
 
         Args:
             key (TEncodable): The `key` to serialize.
@@ -2295,7 +2296,7 @@ class BaseTransaction:
         Create a `key` associated with a `value` that is obtained by deserializing the provided
         serialized `value` obtained via `dump`.
 
-        See https://valkey.io/commands/restore for more details.
+        See [valkey.io](https://valkey.io/commands/restore) for more details.
 
         Note:
             `IDLETIME` and `FREQ` modifiers cannot be set at the same time.
@@ -2333,7 +2334,7 @@ class BaseTransaction:
         """
         Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
 
-        See https://valkey.io/commands/xadd for more details.
+        See [valkey.io](https://valkey.io/commands/xadd) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2359,7 +2360,7 @@ class BaseTransaction:
         """
         Removes the specified entries by id from a stream, and returns the number of entries deleted.
 
-        See https://valkey.io/commands/xdel for more details.
+        See [valkey.io](https://valkey.io/commands/xdel) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2379,7 +2380,7 @@ class BaseTransaction:
         """
         Trims the stream stored at `key` by evicting older entries.
 
-        See https://valkey.io/commands/xtrim for more details.
+        See [valkey.io](https://valkey.io/commands/xtrim) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2400,7 +2401,7 @@ class BaseTransaction:
         """
         Returns the number of entries in the stream stored at `key`.
 
-        See https://valkey.io/commands/xlen for more details.
+        See [valkey.io](https://valkey.io/commands/xlen) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2422,7 +2423,7 @@ class BaseTransaction:
         """
         Returns stream entries matching a given range of IDs.
 
-        See https://valkey.io/commands/xrange for more details.
+        See [valkey.io](https://valkey.io/commands/xrange) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2464,7 +2465,7 @@ class BaseTransaction:
         Returns stream entries matching a given range of IDs in reverse order. Equivalent to `XRANGE` but returns the
         entries in reverse order.
 
-        See https://valkey.io/commands/xrevrange for more details.
+        See [valkey.io](https://valkey.io/commands/xrevrange) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2503,7 +2504,7 @@ class BaseTransaction:
         """
         Reads entries from the given streams.
 
-        See https://valkey.io/commands/xread for more details.
+        See [valkey.io](https://valkey.io/commands/xread) for more details.
 
         Args:
             keys_and_ids (Mapping[TEncodable, TEncodable]): A mapping of stream keys to stream entry IDs to read from.
@@ -2536,7 +2537,7 @@ class BaseTransaction:
         """
         Creates a new consumer group uniquely identified by `group_name` for the stream stored at `key`.
 
-        See https://valkey.io/commands/xgroup-create for more details.
+        See [valkey.io](https://valkey.io/commands/xgroup-create) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2560,7 +2561,7 @@ class BaseTransaction:
         """
         Destroys the consumer group `group_name` for the stream stored at `key`.
 
-        See https://valkey.io/commands/xgroup-destroy for more details.
+        See [valkey.io](https://valkey.io/commands/xgroup-destroy) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2582,7 +2583,7 @@ class BaseTransaction:
         """
         Creates a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
 
-        See https://valkey.io/commands/xgroup-createconsumer for more details.
+        See [valkey.io](https://valkey.io/commands/xgroup-createconsumer) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2607,7 +2608,7 @@ class BaseTransaction:
         """
         Deletes a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
 
-        See https://valkey.io/commands/xgroup-delconsumer for more details.
+        See [valkey.io](https://valkey.io/commands/xgroup-delconsumer) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2631,7 +2632,7 @@ class BaseTransaction:
         """
         Set the last delivered ID for a consumer group.
 
-        See https://valkey.io/commands/xgroup-setid for more details.
+        See [valkey.io](https://valkey.io/commands/xgroup-setid) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2660,7 +2661,7 @@ class BaseTransaction:
         """
         Reads entries from the given streams owned by a consumer group.
 
-        See https://valkey.io/commands/xreadgroup for more details.
+        See [valkey.io](https://valkey.io/commands/xreadgroup) for more details.
 
         Args:
             keys_and_ids (Mapping[TEncodable, TEncodable]): A mapping of stream keys to stream entry IDs to read from.
@@ -2696,7 +2697,7 @@ class BaseTransaction:
         This command should be called on pending messages so that such messages do not get processed again by the
         consumer group.
 
-        See https://valkey.io/commands/xack for more details.
+        See [valkey.io](https://valkey.io/commands/xack) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2716,7 +2717,7 @@ class BaseTransaction:
         """
         Returns stream message summary information for pending messages for the given consumer group.
 
-        See https://valkey.io/commands/xpending for more details.
+        See [valkey.io](https://valkey.io/commands/xpending) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2748,7 +2749,7 @@ class BaseTransaction:
         """
         Returns an extended form of stream message information for pending messages matching a given range of IDs.
 
-        See https://valkey.io/commands/xpending for more details.
+        See [valkey.io](https://valkey.io/commands/xpending) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2794,7 +2795,7 @@ class BaseTransaction:
         """
         Transfers ownership of pending stream entries that match the specified criteria.
 
-        See https://valkey.io/commands/xautoclaim for more details.
+        See [valkey.io](https://valkey.io/commands/xautoclaim) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2839,7 +2840,7 @@ class BaseTransaction:
         argument to further specify that the return value should contain a list of claimed IDs without their
         field-value info.
 
-        See https://valkey.io/commands/xautoclaim for more details.
+        See [valkey.io](https://valkey.io/commands/xautoclaim) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2878,7 +2879,7 @@ class BaseTransaction:
         """
         Returns the list of all consumer groups and their attributes for the stream stored at `key`.
 
-        See https://valkey.io/commands/xinfo-groups for more details.
+        See [valkey.io](https://valkey.io/commands/xinfo-groups) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2898,7 +2899,7 @@ class BaseTransaction:
         Returns the list of all consumers and their attributes for the given consumer group of the stream stored at
         `key`.
 
-        See https://valkey.io/commands/xinfo-consumers for more details.
+        See [valkey.io](https://valkey.io/commands/xinfo-consumers) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2917,7 +2918,7 @@ class BaseTransaction:
         """
         Returns information about the stream stored at `key`. To get more detailed information, use `xinfo_stream_full`.
 
-        See https://valkey.io/commands/xinfo-stream for more details.
+        See [valkey.io](https://valkey.io/commands/xinfo-stream) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2935,7 +2936,7 @@ class BaseTransaction:
         """
         Returns verbose information about the stream stored at `key`.
 
-        See https://valkey.io/commands/xinfo-stream for more details.
+        See [valkey.io](https://valkey.io/commands/xinfo-stream) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -2962,7 +2963,7 @@ class BaseTransaction:
         Adds geospatial members with their positions to the specified sorted set stored at `key`.
         If a member is already a part of the sorted set, its position is updated.
 
-        See https://valkey.io/commands/geoadd for more details.
+        See [valkey.io](https://valkey.io/commands/geoadd) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3008,7 +3009,7 @@ class BaseTransaction:
         """
         Returns the distance between two members in the geospatial index stored at `key`.
 
-        See https://valkey.io/commands/geodist for more details.
+        See [valkey.io](https://valkey.io/commands/geodist) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3035,7 +3036,7 @@ class BaseTransaction:
         Returns the GeoHash bytes strings representing the positions of all the specified members in the sorted set stored at
         `key`.
 
-        See https://valkey.io/commands/geohash for more details.
+        See [valkey.io](https://valkey.io/commands/geohash) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3058,7 +3059,7 @@ class BaseTransaction:
         Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored
         at `key`.
 
-        See https://valkey.io/commands/geopos for more details.
+        See [valkey.io](https://valkey.io/commands/geopos) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3086,7 +3087,7 @@ class BaseTransaction:
         Searches for members in a sorted set stored at `key` representing geospatial data within a circular or
         rectangular area.
 
-        See https://valkey.io/commands/geosearch/ for more details.
+        See [valkey.io](https://valkey.io/commands/geosearch/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set representing geospatial data.
@@ -3152,7 +3153,7 @@ class BaseTransaction:
 
         To get the result directly, see `geosearch`.
 
-        See https://valkey.io/commands/geosearch/ for more details.
+        See [valkey.io](https://valkey.io/commands/geosearch/) for more details.
 
         Args:
             destination (TEncodable): The key to store the search results.
@@ -3201,7 +3202,7 @@ class BaseTransaction:
         Adds members with their scores to the sorted set stored at `key`.
         If a member is already a part of the sorted set, its score is updated.
 
-        See https://valkey.io/commands/zadd/ for more details.
+        See [valkey.io](https://valkey.io/commands/zadd/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3262,7 +3263,7 @@ class BaseTransaction:
         previous score was 0.0).
         If `key` does not exist, a new sorted set with the specified member as its sole member is created.
 
-        See https://valkey.io/commands/zadd/ for more details.
+        See [valkey.io](https://valkey.io/commands/zadd/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3306,7 +3307,7 @@ class BaseTransaction:
         """
         Returns the cardinality (number of elements) of the sorted set stored at `key`.
 
-        See https://valkey.io/commands/zcard/ for more details.
+        See [valkey.io](https://valkey.io/commands/zcard/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3327,7 +3328,7 @@ class BaseTransaction:
         """
         Returns the number of members in the sorted set stored at `key` with scores between `min_score` and `max_score`.
 
-        See https://valkey.io/commands/zcount/ for more details.
+        See [valkey.io](https://valkey.io/commands/zcount/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3368,7 +3369,7 @@ class BaseTransaction:
         If `member` does not exist in the sorted set, it is added with `increment` as its score.
         If `key` does not exist, a new sorted set is created with the specified member as its sole member.
 
-        See https://valkey.io/commands/zincrby/ for more details.
+        See [valkey.io](https://valkey.io/commands/zincrby/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3388,7 +3389,7 @@ class BaseTransaction:
         If `count` is provided, up to `count` members with the highest scores are removed and returned.
         Otherwise, only one member with the highest score is removed and returned.
 
-        See https://valkey.io/commands/zpopmax for more details.
+        See [valkey.io](https://valkey.io/commands/zpopmax) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3418,10 +3419,10 @@ class BaseTransaction:
 
         Note:
             `BZPOPMAX` is a client blocking command, see
-            https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+            [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
             for more details and best practices.
 
-        See https://valkey.io/commands/bzpopmax for more details.
+        See [valkey.io](https://valkey.io/commands/bzpopmax) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -3444,7 +3445,7 @@ class BaseTransaction:
         If `count` is provided, up to `count` members with the lowest scores are removed and returned.
         Otherwise, only one member with the lowest score is removed and returned.
 
-        See https://valkey.io/commands/zpopmin for more details.
+        See [valkey.io](https://valkey.io/commands/zpopmin) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3473,10 +3474,10 @@ class BaseTransaction:
 
         Note:
             `BZPOPMIN` is a client blocking command, see
-            https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+            [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
             for more details and best practices.
 
-        See https://valkey.io/commands/bzpopmin for more details.
+        See [valkey.io](https://valkey.io/commands/bzpopmin) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -3502,7 +3503,7 @@ class BaseTransaction:
 
         ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
 
-        See https://valkey.io/commands/zrange/ for more details.
+        See [valkey.io](https://valkey.io/commands/zrange/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3534,7 +3535,7 @@ class BaseTransaction:
         Returns the specified range of elements with their scores in the sorted set stored at `key`.
         Similar to ZRANGE but with a WITHSCORE flag.
 
-        See https://valkey.io/commands/zrange/ for more details.
+        See [valkey.io](https://valkey.io/commands/zrange/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3569,7 +3570,7 @@ class BaseTransaction:
         ZRANGESTORE can perform different types of range queries: by index (rank), by the score, or by lexicographical
         order.
 
-        See https://valkey.io/commands/zrangestore for more details.
+        See [valkey.io](https://valkey.io/commands/zrangestore) for more details.
 
         Args:
             destination (TEncodable): The key for the destination sorted set.
@@ -3598,7 +3599,7 @@ class BaseTransaction:
         """
         Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
 
-        See https://valkey.io/commands/zrank for more details.
+        See [valkey.io](https://valkey.io/commands/zrank) for more details.
 
         To get the rank of `member` with its score, see `zrank_withscore`.
 
@@ -3622,7 +3623,7 @@ class BaseTransaction:
         Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
         lowest to highest.
 
-        See https://valkey.io/commands/zrank for more details.
+        See [valkey.io](https://valkey.io/commands/zrank) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3646,7 +3647,7 @@ class BaseTransaction:
 
         To get the rank of `member` with its score, see `zrevrank_withscore`.
 
-        See https://valkey.io/commands/zrevrank for more details.
+        See [valkey.io](https://valkey.io/commands/zrevrank) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3666,7 +3667,7 @@ class BaseTransaction:
         Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
         highest to lowest, starting from `0`.
 
-        See https://valkey.io/commands/zrevrank for more details.
+        See [valkey.io](https://valkey.io/commands/zrevrank) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3691,7 +3692,7 @@ class BaseTransaction:
         Removes the specified members from the sorted set stored at `key`.
         Specified members that are not a member of this set are ignored.
 
-        See https://valkey.io/commands/zrem/ for more details.
+        See [valkey.io](https://valkey.io/commands/zrem/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3713,7 +3714,7 @@ class BaseTransaction:
         """
         Removes all elements in the sorted set stored at `key` with a score between `min_score` and `max_score`.
 
-        See https://valkey.io/commands/zremrangebyscore/ for more details.
+        See [valkey.io](https://valkey.io/commands/zremrangebyscore/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3755,7 +3756,7 @@ class BaseTransaction:
         Removes all elements in the sorted set stored at `key` with a lexicographical order between `min_lex` and
         `max_lex`.
 
-        See https://valkey.io/commands/zremrangebylex/ for more details.
+        See [valkey.io](https://valkey.io/commands/zremrangebylex/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3795,7 +3796,7 @@ class BaseTransaction:
         Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
         These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
 
-        See https://valkey.io/commands/zremrangebyrank/ for more details.
+        See [valkey.io](https://valkey.io/commands/zremrangebyrank/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3825,7 +3826,7 @@ class BaseTransaction:
         Returns the number of members in the sorted set stored at `key` with lexographical values between
         `min_lex` and `max_lex`.
 
-        See https://valkey.io/commands/zlexcount/ for more details.
+        See [valkey.io](https://valkey.io/commands/zlexcount/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3858,7 +3859,7 @@ class BaseTransaction:
         """
         Returns the score of `member` in the sorted set stored at `key`.
 
-        See https://valkey.io/commands/zscore/ for more details.
+        See [valkey.io](https://valkey.io/commands/zscore/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3879,7 +3880,7 @@ class BaseTransaction:
         """
         Returns the scores associated with the specified `members` in the sorted set stored at `key`.
 
-        See https://valkey.io/commands/zmscore for more details.
+        See [valkey.io](https://valkey.io/commands/zmscore) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3897,7 +3898,7 @@ class BaseTransaction:
         Returns the difference between the first sorted set and all the successive sorted sets.
         To get the elements with their scores, see `zdiff_withscores`.
 
-        See https://valkey.io/commands/zdiff for more details.
+        See [valkey.io](https://valkey.io/commands/zdiff) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -3916,7 +3917,7 @@ class BaseTransaction:
         """
         Returns the difference between the first sorted set and all the successive sorted sets, with the associated scores.
 
-        See https://valkey.io/commands/zdiff for more details.
+        See [valkey.io](https://valkey.io/commands/zdiff) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -3941,7 +3942,7 @@ class BaseTransaction:
         the difference as a sorted set to `destination`, overwriting it if it already exists. Non-existent keys are
         treated as empty sets.
 
-        See https://valkey.io/commands/zdiffstore for more details.
+        See [valkey.io](https://valkey.io/commands/zdiffstore) for more details.
 
         Args:
             destination (TEncodable): The key for the resulting sorted set.
@@ -3961,7 +3962,7 @@ class BaseTransaction:
         """
         Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
 
-        See https://valkey.io/commands/zinter/ for more details.
+        See [valkey.io](https://valkey.io/commands/zinter/) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -3982,7 +3983,7 @@ class BaseTransaction:
         Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of
         intersecting elements with scores.
 
-        See https://valkey.io/commands/zinter/ for more details.
+        See [valkey.io](https://valkey.io/commands/zinter/) for more details.
 
         Args:
             keys (Union[List[TEncodable], List[Tuple[TEncodable, float]]]): The keys of the sorted sets with possible formats:
@@ -4013,7 +4014,7 @@ class BaseTransaction:
         Note:
             When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
-        See https://valkey.io/commands/zinterstore/ for more details.
+        See [valkey.io](https://valkey.io/commands/zinterstore/) for more details.
 
         Args:
             destination (TEncodable): The key of the destination sorted set.
@@ -4038,7 +4039,7 @@ class BaseTransaction:
         """
         Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
 
-        See https://valkey.io/commands/zunion/ for more details.
+        See [valkey.io](https://valkey.io/commands/zunion/) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -4058,7 +4059,7 @@ class BaseTransaction:
         """
         Computes the union of sorted sets given by the specified `keys` and returns a sorted set of union elements with scores.
 
-        See https://valkey.io/commands/zunion/ for more details.
+        See [valkey.io](https://valkey.io/commands/zunion/) for more details.
 
         Args:
             keys (Union[List[TEncodable], List[Tuple[TEncodable, float]]]): The keys of the sorted sets with possible formats:
@@ -4089,7 +4090,7 @@ class BaseTransaction:
         Note:
             When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
-        see https://valkey.io/commands/zunionstore/ for more details.
+        see [valkey.io](https://valkey.io/commands/zunionstore/) for more details.
 
         Args:
             destination (TEncodable): The key of the destination sorted set.
@@ -4111,7 +4112,7 @@ class BaseTransaction:
         """
         Returns a random member from the sorted set stored at 'key'.
 
-        See https://valkey.io/commands/zrandmember for more details.
+        See [valkey.io](https://valkey.io/commands/zrandmember) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4129,7 +4130,7 @@ class BaseTransaction:
         """
         Retrieves up to the absolute value of `count` random members from the sorted set stored at 'key'.
 
-        See https://valkey.io/commands/zrandmember for more details.
+        See [valkey.io](https://valkey.io/commands/zrandmember) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4152,7 +4153,7 @@ class BaseTransaction:
         Retrieves up to the absolute value of `count` random members along with their scores from the sorted set
         stored at 'key'.
 
-        See https://valkey.io/commands/zrandmember for more details.
+        See [valkey.io](https://valkey.io/commands/zrandmember) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4182,7 +4183,7 @@ class BaseTransaction:
         that they are given. The optional `count` argument can be used to specify the number of elements to pop, and is
         set to 1 by default. The number of popped elements is the minimum from the sorted set's cardinality and `count`.
 
-        See https://valkey.io/commands/zmpop for more details.
+        See [valkey.io](https://valkey.io/commands/zmpop) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -4221,11 +4222,11 @@ class BaseTransaction:
 
         `BZMPOP` is the blocking variant of `ZMPOP`.
 
-        See https://valkey.io/commands/bzmpop for more details.
+        See [valkey.io](https://valkey.io/commands/bzmpop) for more details.
 
         Note:
             `BZMPOP` is a client blocking command, see
-            https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+            [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
             for more details and best practices.
 
         Args:
@@ -4258,7 +4259,7 @@ class BaseTransaction:
         optional `limit` argument, if the intersection cardinality reaches `limit` partway through the computation, the
         algorithm will exit early and yield `limit` as the cardinality.
 
-        See https://valkey.io/commands/zintercard for more details.
+        See [valkey.io](https://valkey.io/commands/zintercard) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets to intersect.
@@ -4280,7 +4281,7 @@ class BaseTransaction:
         """
         Returns the number of keys in the currently selected database.
 
-        See https://valkey.io/commands/dbsize for more details.
+        See [valkey.io](https://valkey.io/commands/dbsize) for more details.
 
         Commands response:
             int: The number of keys in the database.
@@ -4295,7 +4296,7 @@ class BaseTransaction:
         Creates a new structure if the `key` does not exist.
         When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
 
-        See https://valkey.io/commands/pfadd/ for more details.
+        See [valkey.io](https://valkey.io/commands/pfadd/) for more details.
 
         Args:
             key (TEncodable): The key of the HyperLogLog data structure to add elements into.
@@ -4314,7 +4315,7 @@ class BaseTransaction:
         Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
         calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
 
-        See https://valkey.io/commands/pfcount for more details.
+        See [valkey.io](https://valkey.io/commands/pfcount) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the HyperLogLog data structures to be analyzed.
@@ -4334,7 +4335,7 @@ class BaseTransaction:
         Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
         of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
 
-        See https://valkey.io/commands/pfmerge for more details.
+        See [valkey.io](https://valkey.io/commands/pfmerge) for more details.
 
         Args:
             destination (TEncodable): The key of the destination HyperLogLog where the merged data sets will be stored.
@@ -4354,7 +4355,7 @@ class BaseTransaction:
         Counts the number of set bits (population counting) in a string stored at `key`. The `options` argument can
         optionally be provided to count the number of bits in a specific string interval.
 
-        See https://valkey.io/commands/bitcount for more details.
+        See [valkey.io](https://valkey.io/commands/bitcount) for more details.
 
         Args:
             key (TEncodable): The key for the string to count the set bits of.
@@ -4382,7 +4383,7 @@ class BaseTransaction:
         than `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to
         `value` and the preceding bits are set to `0`.
 
-        See https://valkey.io/commands/setbit for more details.
+        See [valkey.io](https://valkey.io/commands/setbit) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -4399,7 +4400,7 @@ class BaseTransaction:
         Returns the bit value at `offset` in the string value stored at `key`.
         `offset` should be greater than or equal to zero.
 
-        See https://valkey.io/commands/getbit for more details.
+        See [valkey.io](https://valkey.io/commands/getbit) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -4424,7 +4425,7 @@ class BaseTransaction:
         The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
         the last byte of the list, `-2` being the penultimate, and so on.
 
-        See https://valkey.io/commands/bitpos for more details.
+        See [valkey.io](https://valkey.io/commands/bitpos) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -4452,7 +4453,7 @@ class BaseTransaction:
         Perform a bitwise operation between multiple keys (containing string values) and store the result in the
         `destination`.
 
-        See https://valkey.io/commands/bitop for more details.
+        See [valkey.io](https://valkey.io/commands/bitop) for more details.
 
         Args:
             operation (BitwiseOperation): The bitwise operation to perform.
@@ -4475,7 +4476,7 @@ class BaseTransaction:
         Reads or modifies the array of bits representing the string that is held at `key` based on the specified
         `subcommands`.
 
-        See https://valkey.io/commands/bitfield for more details.
+        See [valkey.io](https://valkey.io/commands/bitfield) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -4506,7 +4507,7 @@ class BaseTransaction:
         """
         Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
 
-        See https://valkey.io/commands/bitfield_ro for more details.
+        See [valkey.io](https://valkey.io/commands/bitfield_ro) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -4524,7 +4525,7 @@ class BaseTransaction:
         """
         Returns the internal encoding for the Valkey object stored at `key`.
 
-        See https://valkey.io/commands/object-encoding for more details.
+        See [valkey.io](https://valkey.io/commands/object-encoding) for more details.
 
         Args:
             key (TEncodable): The `key` of the object to get the internal encoding of.
@@ -4541,7 +4542,7 @@ class BaseTransaction:
         """
         Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
 
-        See https://valkey.io/commands/object-freq for more details.
+        See [valkey.io](https://valkey.io/commands/object-freq) for more details.
 
         Args:
             key (TEncodable): The key of the object to get the logarithmic access frequency counter of.
@@ -4558,7 +4559,7 @@ class BaseTransaction:
         """
         Returns the time in seconds since the last access to the value stored at `key`.
 
-        See https://valkey.io/commands/object-idletime for more details.
+        See [valkey.io](https://valkey.io/commands/object-idletime) for more details.
 
         Args:
             key (TEncodable): The key of the object to get the idle time of.
@@ -4574,7 +4575,7 @@ class BaseTransaction:
         """
         Returns the reference count of the object stored at `key`.
 
-        See https://valkey.io/commands/object-refcount for more details.
+        See [valkey.io](https://valkey.io/commands/object-refcount) for more details.
 
         Args:
             key (TEncodable): The key of the object to get the reference count of.
@@ -4590,7 +4591,7 @@ class BaseTransaction:
         """
         Returns a random element from the set value stored at 'key'.
 
-        See https://valkey.io/commands/srandmember for more details.
+        See [valkey.io](https://valkey.io/commands/srandmember) for more details.
 
         Args:
             key (TEncodable): The key from which to retrieve the set member.
@@ -4608,7 +4609,7 @@ class BaseTransaction:
         """
         Returns one or more random elements from the set value stored at 'key'.
 
-        See https://valkey.io/commands/srandmember for more details.
+        See [valkey.io](https://valkey.io/commands/srandmember) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4630,7 +4631,7 @@ class BaseTransaction:
         """
         Deletes all the keys of all the existing databases. This command never fails.
 
-        See https://valkey.io/commands/flushall for more details.
+        See [valkey.io](https://valkey.io/commands/flushall) for more details.
 
         Args:
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -4649,7 +4650,7 @@ class BaseTransaction:
         """
         Deletes all the keys of the currently selected database. This command never fails.
 
-        See https://valkey.io/commands/flushdb for more details.
+        See [valkey.io](https://valkey.io/commands/flushdb) for more details.
 
         Args:
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -4668,7 +4669,7 @@ class BaseTransaction:
         """
         Get the value of `key` and optionally set its expiration. GETEX is similar to GET.
 
-        See https://valkey.io/commands/getex for more details.
+        See [valkey.io](https://valkey.io/commands/getex) for more details.
 
         Args:
             key (TEncodable): The key to get.
@@ -4695,7 +4696,7 @@ class BaseTransaction:
         """
         Displays a piece of generative computer art and the Valkey version.
 
-        See https://valkey.io/commands/lolwut for more details.
+        See [valkey.io](https://valkey.io/commands/lolwut) for more details.
 
         Args:
             version (Optional[int]): Version of computer art to generate.
@@ -4719,7 +4720,7 @@ class BaseTransaction:
         """
         Returns a random existing key name.
 
-        See https://valkey.io/commands/randomkey for more details.
+        See [valkey.io](https://valkey.io/commands/randomkey) for more details.
 
         Command response:
             Optional[bytes]: A random existing key name.
@@ -4736,7 +4737,7 @@ class BaseTransaction:
         """
         Iterates incrementally over a set.
 
-        See https://valkey.io/commands/sscan for more details.
+        See [valkey.io](https://valkey.io/commands/sscan) for more details.
 
         Args:
             key (TEncodable): The key of the set.
@@ -4776,7 +4777,7 @@ class BaseTransaction:
         """
         Iterates incrementally over a sorted set.
 
-        See https://valkey.io/commands/zscan for more details.
+        See [valkey.io](https://valkey.io/commands/zscan) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4822,7 +4823,7 @@ class BaseTransaction:
         """
         Iterates incrementally over a hash.
 
-        See https://valkey.io/commands/hscan for more details.
+        See [valkey.io](https://valkey.io/commands/hscan) for more details.
 
         Args:
             key (TEncodable): The key of the set.
@@ -4872,7 +4873,7 @@ class BaseTransaction:
             For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
             from left to right, the longest common set of characters is composed of the first "f" and then the "o".
 
-        See https://valkey.io/commands/lcs for more details.
+        See [valkey.io](https://valkey.io/commands/lcs) for more details.
 
         Args:
             key1 (TEncodable): The key that stores the first value.
@@ -4904,7 +4905,7 @@ class BaseTransaction:
             For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
             from left to right, the longest common set of characters is composed of the first "f" and then the "o".
 
-        See https://valkey.io/commands/lcs for more details.
+        See [valkey.io](https://valkey.io/commands/lcs) for more details.
 
         Args:
             key1 (TEncodable): The key that stores the first value.
@@ -4936,7 +4937,7 @@ class BaseTransaction:
             For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
             from left to right, the longest common set of characters is composed of the first "f" and then the "o".
 
-        See https://valkey.io/commands/lcs for more details.
+        See [valkey.io](https://valkey.io/commands/lcs) for more details.
 
         Args:
             key1 (TEncodable): The key that stores the first value.
@@ -4976,7 +4977,7 @@ class BaseTransaction:
         before this command, both in the case where the specified number of replicas are reached, or
         when the timeout is reached.
 
-        See https://valkey.io/commands/wait for more details.
+        See [valkey.io](https://valkey.io/commands/wait) for more details.
 
         Args:
             numreplicas (int): The number of replicas to reach.
@@ -5000,7 +5001,7 @@ class BaseTransaction:
         Returns the index or indexes of element(s) matching `element` in the `key` list. If no match is found,
         None is returned.
 
-        See https://valkey.io/commands/lpos for more details.
+        See [valkey.io](https://valkey.io/commands/lpos) for more details.
 
         Args:
             key (TEncodable): The name of the list.
@@ -5044,7 +5045,7 @@ class BaseTransaction:
         """
         Changes the ownership of a pending message.
 
-        See https://valkey.io/commands/xclaim for more details.
+        See [valkey.io](https://valkey.io/commands/xclaim) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -5082,7 +5083,7 @@ class BaseTransaction:
         Changes the ownership of a pending message. This function returns a List with
         only the message/entry IDs, and is equivalent to using JUSTID in the Valkey API.
 
-        See https://valkey.io/commands/xclaim for more details.
+        See [valkey.io](https://valkey.io/commands/xclaim) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -5116,7 +5117,7 @@ class BaseTransaction:
         """
         Lists the currently active channels.
 
-        See https://valkey.io/commands/pubsub-channels for details.
+        See [valkey.io](https://valkey.io/commands/pubsub-channels) for details.
 
         Args:
             pattern (Optional[TEncodable]): A glob-style pattern to match active channels.
@@ -5140,7 +5141,7 @@ class BaseTransaction:
             This is the total number of unique patterns all the clients are subscribed to,
             not the count of clients subscribed to patterns.
 
-        See https://valkey.io/commands/pubsub-numpat for details.
+        See [valkey.io](https://valkey.io/commands/pubsub-numpat) for details.
 
         Command response:
             int: The number of unique patterns.
@@ -5156,7 +5157,7 @@ class BaseTransaction:
         Note:
             It is valid to call this command without channels. In this case, it will just return an empty map.
 
-        See https://valkey.io/commands/pubsub-numsub for details.
+        See [valkey.io](https://valkey.io/commands/pubsub-numsub) for details.
 
         Args:
             channels (Optional[List[str]]): The list of channels to query for the number of subscribers.
@@ -5184,7 +5185,7 @@ class BaseTransaction:
         elements.
         To store the result into a new key, see `sort_store`.
 
-        See https://valkey.io/commands/sort for more details.
+        See [valkey.io](https://valkey.io/commands/sort) for more details.
 
         Note:
             When in cluster mode, `key`, and any patterns specified in `by_pattern` or `get_patterns`
@@ -5244,7 +5245,7 @@ class BaseTransaction:
         on sorted elements.
         This command is routed depending on the client's `ReadFrom` strategy.
 
-        See https://valkey.io/commands/sort for more details.
+        See [valkey.io](https://valkey.io/commands/sort) for more details.
 
         Note:
             When in cluster mode, `key`, and any patterns specified in `by_pattern` or `get_patterns`
@@ -5307,7 +5308,7 @@ class BaseTransaction:
         and store the result in a new key.
         To get the sort result without storing it into a key, see `sort`.
 
-        See https://valkey.io/commands/sort for more details.
+        See [valkey.io](https://valkey.io/commands/sort) for more details.
 
         Note:
             When in cluster mode, `key`, `destination`, and any patterns specified in `by_pattern` or `get_patterns`
@@ -5379,7 +5380,7 @@ class Transaction(BaseTransaction):
         """
         Move `key` from the currently selected database to the database specified by `db_index`.
 
-        See https://valkey.io/commands/move/ for more details.
+        See [valkey.io](https://valkey.io/commands/move/) for more details.
 
         Args:
             key (TEncodable): The key to move.
@@ -5397,7 +5398,7 @@ class Transaction(BaseTransaction):
         """
         Change the currently selected database.
 
-        See https://valkey.io/commands/select/ for details.
+        See [valkey.io](https://valkey.io/commands/select/) for details.
 
         Args:
             index (int): The index of the database to select.
@@ -5420,7 +5421,7 @@ class Transaction(BaseTransaction):
         otherwise the current database will be used. When `replace` is True, removes the
         `destination` key first if it already exists, otherwise performs no action.
 
-        See https://valkey.io/commands/copy for more details.
+        See [valkey.io](https://valkey.io/commands/copy) for more details.
 
         Args:
             source (TEncodable): The key to the source value.
@@ -5447,7 +5448,7 @@ class Transaction(BaseTransaction):
         """
         Publish a message on pubsub channel.
 
-        See https://valkey.io/commands/publish for more details.
+        See [valkey.io](https://valkey.io/commands/publish) for more details.
 
         Args:
             message (TEncodable): Message to publish
@@ -5479,7 +5480,7 @@ class ClusterTransaction(BaseTransaction):
         Copies the value stored at the `source` to the `destination` key. When `replace` is True,
         removes the `destination` key first if it already exists, otherwise performs no action.
 
-        See https://valkey.io/commands/copy for more details.
+        See [valkey.io](https://valkey.io/commands/copy) for more details.
 
         Args:
             source (TEncodable): The key to the source value.
@@ -5507,7 +5508,8 @@ class ClusterTransaction(BaseTransaction):
         This command aggregates PUBLISH and SPUBLISH commands functionalities.
         The mode is selected using the 'sharded' parameter
 
-        See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
+        See [PUBLISH](https://valkey.io/commands/publish) and [SPUBLISH](https://valkey.io/commands/spublish)
+        for more details.
 
         Args:
             message (str): Message to publish
@@ -5527,7 +5529,7 @@ class ClusterTransaction(BaseTransaction):
         """
         Lists the currently active shard channels.
 
-        See https://valkey.io/commands/pubsub-shardchannels for details.
+        See [valkey.io](https://valkey.io/commands/pubsub-shardchannels) for details.
 
         Args:
             pattern (Optional[TEncodable]): A glob-style pattern to match active shard channels.
@@ -5550,7 +5552,7 @@ class ClusterTransaction(BaseTransaction):
         Note:
             It is valid to call this command without channels. In this case, it will just return an empty map.
 
-        See https://valkey.io/commands/pubsub-shardnumsub for details.
+        See [valkey.io](https://valkey.io/commands/pubsub-shardnumsub) for details.
 
         Args:
             channels (Optional[List[str]]): The list of shard channels to query for the number of subscribers.
