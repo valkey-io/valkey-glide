@@ -43,8 +43,8 @@ internal class MessageContainer
     {
         if (_messages.Any(message => !message.IsCompleted))
         {
-            Logger.Log(Level.Error, "DBG", "MessageContainer::DisposeWithError");
-            Logger.Log(Level.Error, "DBG", new StackTrace().ToString());
+            BaseClient.LOG("MessageContainer::DisposeWithError");
+            BaseClient.LOG(new StackTrace().ToString());
         }
         lock (_messages)
         {

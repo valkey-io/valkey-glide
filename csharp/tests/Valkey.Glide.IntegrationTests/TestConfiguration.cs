@@ -51,7 +51,7 @@ public class TestConfiguration : IDisposable
 
     public TestConfiguration()
     {
-        Logger.Init(Level.Info);
+        BaseClient.LOG = (str) => TestContext.Current.TestOutputHelper?.WriteLine(str);
         string? projectDir = Directory.GetCurrentDirectory();
         while (!(Path.GetFileName(projectDir) == "csharp" || projectDir == null))
         {
