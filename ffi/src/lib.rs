@@ -273,9 +273,8 @@ pub enum ClientType {
 }
 
 /// A `GlideClient` adapter.
-#[derive(Clone)]
 pub struct ClientAdapter {
-    runtime: Arc<Runtime>,
+    runtime: Runtime,
     core: Arc<CommandExecutionCore>,
 }
 
@@ -518,9 +517,6 @@ fn create_client_internal(
             errors::error_message(&redis_error)
         })?;
 
-    // Wrap the runtime in an Arc so it can be shared
-    let runtime = Arc::new(runtime);
-
     let is_subscriber = request.pubsub_subscriptions.is_some() && pubsub_callback as usize != 0;
     let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
     let tx = match is_subscriber {
@@ -537,23 +533,21 @@ fn create_client_internal(
         client: client.clone(),
         client_type: client_type.clone(),
     });
-    let client_adapter = Arc::new(ClientAdapter {
-        runtime: runtime.clone(),
-        core,
-    });
+    let client_adapter = Arc::new(ClientAdapter { runtime, core });
     // Clone client_adapter before moving it into the async block
-    let client_adapter_clone = Arc::into_raw(client_adapter.clone()).addr();
+    let client_adapter_ptr = Arc::into_raw(client_adapter).addr();
+    let client_adapter = unsafe { Arc::from_raw(client_adapter_ptr as *mut ClientAdapter) };
 
     // If pubsub_callback is provided (not null), spawn a task to handle push notifications
     if is_subscriber {
-        runtime.spawn(async move {
+        client_adapter.runtime.spawn(async move {
             while let Some(push_msg) = push_rx.recv().await {
                 if push_msg.kind == redis::PushKind::Message
                     || push_msg.kind == redis::PushKind::PMessage
                     || push_msg.kind == redis::PushKind::SMessage
                 {
                     unsafe {
-                        process_push_notification(push_msg, pubsub_callback, client_adapter_clone);
+                        process_push_notification(push_msg, pubsub_callback, client_adapter_ptr);
                     }
                 }
             }
