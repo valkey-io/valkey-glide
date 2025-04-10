@@ -6,7 +6,6 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional, Union, cast
 
 import pytest
-from glide import RequestError
 from glide.async_commands.batch import BaseBatch, Batch, ClusterBatch
 from glide.async_commands.bitmap import (
     BitFieldGet,
@@ -61,6 +60,8 @@ from tests.utils.utils import (
     generate_lua_lib_code,
     get_random_string,
 )
+
+from glide import RequestError
 
 
 def generate_key(keyslot: Optional[str], is_atomic: bool) -> str:
