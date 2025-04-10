@@ -337,7 +337,7 @@ class BaseClient(CoreCommands):
         route: Optional[Route] = None,
         timeout: Optional[int] = None,
         is_atomic: bool = True,
-        raise_on_error: bool = True,
+        raise_on_error: bool = False,
         retry_server_error: bool = False,
         retry_connection_error: bool = False,
     ) -> List[TResult]:
