@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace Valkey.Glide.Internals;
 
@@ -40,6 +41,8 @@ internal class MessageContainer
 
     internal void DisposeWithError(Exception? error)
     {
+        Logger.Log(Level.Error, "DBG", "MessageContainer::DisposeWithError");
+        Logger.Log(Level.Error, "DBG", new StackTrace().ToString());
         lock (_messages)
         {
             foreach (Message? message in _messages.Where(message => !message.IsCompleted))
