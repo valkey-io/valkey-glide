@@ -102,7 +102,7 @@ def pytest_addoption(parser):
         "--async-backend",
         action="append",
         choices=("asyncio", "uvloop", "trio"),
-        help="""Async framework with which the tests will be run. By default, runs on asyncio, asyncio+uvloop, and trio.
+        help="""Async framework with which the tests will be run. By default, runs on asyncio and trio.
             Example:
                 pytest -v --async-backend=trio
                 pytest -v --async-backend=uvloop --async-backend=trio
@@ -178,7 +178,6 @@ def call_before_all_pytests(request):
 
     request.config.async_backends = request.config.getoption("--async-backend") or (
         "asyncio",
-        "uvloop",
         "trio",
     )
 
