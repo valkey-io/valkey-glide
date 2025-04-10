@@ -978,11 +978,11 @@ async def exec_batch(
     batch: BaseBatch,
     route: Optional[TSingleNodeRoute] = None,
     timeout: Optional[int] = None,
-    raise_on_error: bool = True,
+    raise_on_error: bool = False,
 ) -> Optional[List[TResult]]:
     if isinstance(glide_client, GlideClient):
         return await cast(GlideClient, glide_client).exec(
-            cast(Batch, batch), raise_on_error
+            cast(Batch, batch), raise_on_error, timeout
         )
     else:
         return await cast(GlideClusterClient, glide_client).exec(
@@ -1430,6 +1430,43 @@ class TestTransaction:
             # Test clean up
             await glide_client.function_flush()
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_timeout(self, glide_client: TGlideClient):
+        assert await glide_client.custom_command(["FLUSHALL"]) == OK
+
+        key = get_random_string(10)
+        transaction = (
+            Batch(is_atomic=True)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
+        
+        # Add a command that will sleep for longer than our timeout
+        transaction.custom_command(["DEBUG", "SLEEP", "0.5"])  # Sleep for 1 second
+        
+        # Try to execute with a short timeout (100ms)
+        with pytest.raises(RequestError, match="timed out"):
+            await exec_batch(glide_client, transaction, timeout=100)
+            
+        # Now try with a longer timeout (1000ms), this should succeed
+        transaction = (
+            Batch(is_atomic=True)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
+        transaction.custom_command(["DEBUG", "SLEEP", "0.1"])  # Sleep for 0.1 seconds
+        transaction.set(key, "value")
+        
+        result = await exec_batch(glide_client, transaction, timeout=1000)
+        assert result is not None
+        assert result[0] == OK  # DEBUG SLEEP returns OK
+        assert result[1] == OK  # SET command succeeded
+        
+        # Verify the key was set
+        value = await glide_client.get(key)
+        assert value == b"value"
+
 
 class TestPipeline:
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1574,7 +1611,7 @@ class TestPipeline:
             else Batch(is_atomic=False)
         )
         # This BLPOP will sleep for 5 seconds, but our timeout (100ms) forces a timeout.
-        pipeline.blpop([key], 5)
+        pipeline.blpop([key], 0.5)
         pipeline.get(key)
 
         with pytest.raises(RequestError, match="timed out"):
@@ -1585,8 +1622,13 @@ class TestPipeline:
             if isinstance(glide_client, GlideClusterClient)
             else Batch(is_atomic=False)
         )
-        # Use BLPOP with a 3-second block time and a long timeout, so the BLPOP has time to succesfuly return None.
-        pipeline.blpop([key], 3)
+        # Use BLPOP with a short block time and a long timeout, so the BLPOP has time to successfully return None.
+        pipeline.blpop([key], 0.1)
+        pipeline.set(key, "value")
 
-        result = await exec_batch(glide_client, pipeline, timeout=10000)
-        assert result == [None]
+        result = await exec_batch(glide_client, pipeline, timeout=1000)
+        assert result == [None, OK]
+        
+        # Verify the key was set
+        value = await glide_client.get(key)
+        assert value == b"value"
