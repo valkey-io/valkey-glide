@@ -560,7 +560,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     """
     Client used for connection to cluster servers.
     For full documentation, see
-    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster
+    [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster)
     """
 
     async def _cluster_scan(
@@ -600,7 +600,7 @@ class GlideClient(BaseClient, StandaloneCommands):
     """
     Client used for connection to standalone servers.
     For full documentation, see
-    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone
+    [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone)
     """
 
 
