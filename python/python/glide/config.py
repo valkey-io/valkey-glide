@@ -346,7 +346,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
     class PubSubChannelModes(IntEnum):
         """
         Describes pubsub subsciption modes.
-        See https://valkey.io/docs/topics/pubsub/ for more details
+        See [valkey.io](https://valkey.io/docs/topics/pubsub/) for more details
         """
 
         Exact = 0
@@ -519,7 +519,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
     class PubSubChannelModes(IntEnum):
         """
         Describes pubsub subsciption modes.
-        See https://valkey.io/docs/topics/pubsub/ for more details
+        See [valkey.io](https://valkey.io/docs/topics/pubsub/) for more details
         """
 
         Exact = 0
