@@ -41,8 +41,11 @@ internal class MessageContainer
 
     internal void DisposeWithError(Exception? error)
     {
-        Logger.Log(Level.Error, "DBG", "MessageContainer::DisposeWithError");
-        Logger.Log(Level.Error, "DBG", new StackTrace().ToString());
+        if (_messages.Any(message => !message.IsCompleted))
+        {
+            Logger.Log(Level.Error, "DBG", "MessageContainer::DisposeWithError");
+            Logger.Log(Level.Error, "DBG", new StackTrace().ToString());
+        }
         lock (_messages)
         {
             foreach (Message? message in _messages.Where(message => !message.IsCompleted))
