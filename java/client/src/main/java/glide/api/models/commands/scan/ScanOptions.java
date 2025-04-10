@@ -16,7 +16,7 @@ import lombok.experimental.SuperBuilder;
  * @see <a href="https://valkey.io/commands/scan/">valkey.io</a>
  */
 @SuperBuilder
-@EqualsAndHashCode
+@EqualsAndHashCode(callSuper = true)
 public class ScanOptions extends BaseScanOptions {
     /** <code>TYPE</code> option string to include in the <code>SCAN</code> commands. */
     public static final String TYPE_OPTION_STRING = "TYPE";
