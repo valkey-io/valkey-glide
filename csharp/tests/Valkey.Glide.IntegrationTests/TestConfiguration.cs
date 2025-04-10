@@ -3,6 +3,8 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
+using Microsoft.VisualStudio.TestPlatform.Utilities;
+
 using Valkey.Glide.IntegrationTests;
 
 using static Valkey.Glide.ConnectionConfiguration;
@@ -49,9 +51,13 @@ public class TestConfiguration : IDisposable
 
     public static void ResetTestClients() => s_testClients = [];
 
+    private readonly StringWriter _output = new();
+
     public TestConfiguration()
     {
-        BaseClient.LOG = (str) => TestContext.Current.TestOutputHelper?.WriteLine(str);
+        BaseClient.LOG = _output.WriteLine;
+        Console.SetOut(_output);
+
         string? projectDir = Directory.GetCurrentDirectory();
         while (!(Path.GetFileName(projectDir) == "csharp" || projectDir == null))
         {
@@ -91,9 +97,12 @@ public class TestConfiguration : IDisposable
 
     ~TestConfiguration() => Dispose();
 
-    public void Dispose() =>
+    public void Dispose()
+    {
         // Stop all
         StopServer(true);
+        TestConsoleWriteLine(_output.ToString());
+    }
 
     private readonly string _scriptDir;
 
