@@ -529,3 +529,106 @@ func ExampleGlideClusterClient_FCallReadOnlyWithArgsWithRoute() {
 	// Output:
 	// 1
 }
+
+func ExampleGlideClient_FunctionStats() {
+	client := getExampleGlideClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Get function statistics
+	stats, err := client.FunctionStats()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Print statistics for each node
+	for _, nodeStats := range stats {
+		fmt.Println("Example stats:")
+		for engineName, engine := range nodeStats.Engines {
+			fmt.Printf("  Engine %s: %d functions, %d libraries\n",
+				engineName, engine.FunctionCount, engine.LibraryCount)
+		}
+	}
+
+	// Output:
+	// Example stats:
+	//   Engine LUA: 1 functions, 1 libraries
+}
+
+func ExampleGlideClusterClient_FunctionStats() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Get function statistics
+	stats, err := client.FunctionStats()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Print statistics
+	fmt.Printf("Nodes reached: %d\n", len(stats))
+	for _, nodeStats := range stats {
+		fmt.Println("Example stats:")
+		for engineName, engine := range nodeStats.Engines {
+			fmt.Printf("  Engine %s: %d functions, %d libraries\n",
+				engineName, engine.FunctionCount, engine.LibraryCount)
+		}
+		break
+	}
+
+	// Output:
+	// Nodes reached: 6
+	// Example stats:
+	//   Engine LUA: 1 functions, 1 libraries
+}
+
+func ExampleGlideClusterClient_FunctionStatsWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{
+		Route: route,
+	}
+	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Get function statistics with route
+	stats, err := client.FunctionStatsWithRoute(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Print statistics
+	fmt.Printf("Nodes reached: %d\n", len(stats.MultiValue()))
+	for _, nodeStats := range stats.MultiValue() {
+		fmt.Println("Example stats:")
+		for engineName, engine := range nodeStats.Engines {
+			fmt.Printf("  Engine %s: %d functions, %d libraries\n",
+				engineName, engine.FunctionCount, engine.LibraryCount)
+		}
+		break
+	}
+
+	// Output:
+	// Nodes reached: 3
+	// Example stats:
+	//   Engine LUA: 1 functions, 1 libraries
+}

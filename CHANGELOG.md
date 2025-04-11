@@ -45,6 +45,8 @@
 * Go: Add Function Load, Function Flush, FCall and FCall_RO ([#3474](https://github.com/valkey-io/valkey-glide/pull/3474))
 * Python: Add equallity check to `ExpirySet` ([#3554](https://github.com/valkey-io/valkey-glide/issues/3554))
 * Java: Add Batches support ([#3561](https://github.com/valkey-io/valkey-glide/pull/3561))
+* Go: Add Function Stats ([#3526](https://github.com/valkey-io/valkey-glide/pull/3526))
+
 #### Breaking Changes
 * Go: Drop support for Go 1.20 ([#3513](https://github.com/valkey-io/valkey-glide/pull/3513))
 * Java: Deprecate `Transaction` and `ClusterTransaction` ([#3561](https://github.com/valkey-io/valkey-glide/pull/3561))

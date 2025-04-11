@@ -20,6 +20,7 @@ type GlideClientCommands interface {
 	ServerManagementCommands
 	BitmapCommands
 	ConnectionManagementCommands
+	ScriptingAndFunctionStandaloneCommands
 }
 
 // GlideClient implements standalone mode operations by extending baseClient functionality.
@@ -530,4 +531,31 @@ func (client *GlideClient) RandomKey() (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
+}
+
+// Returns information about the function that's currently running and information about the
+// available execution engines.
+// `FUNCTION STATS` runs on all nodes of the server, including primary and replicas.
+// The response includes a mapping from node address to the command response for that node.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	A map of node addresses to their function statistics represented by
+//	[FunctionStatsResult] object containing the following information:
+//	running_script - Information about the running script.
+//	engines - Information about available engines and their stats.
+//
+// [valkey.io]: https://valkey.io/commands/function-stats/
+func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, error) {
+	response, err := client.executeCommand(C.FunctionStats, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleFunctionStatsResponse(response)
 }

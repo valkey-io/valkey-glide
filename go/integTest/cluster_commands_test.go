@@ -1579,3 +1579,204 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
 		}
 	}
 }
+
+func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Flush all functions with SYNC option
+	result, err := client.FunctionFlushSync()
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load first function
+	libName := "functionStats_without_route"
+	funcName := libName
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, false)
+	result, err = client.FunctionLoad(code, true)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Check stats after loading first function
+	stats, err := client.FunctionStats()
+	assert.NoError(t, err)
+	for _, nodeStats := range stats {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Load second function with multiple functions
+	libName2 := libName + "_2"
+	functions2 := map[string]string{
+		funcName + "_2": "return 'OK'",
+		funcName + "_3": "return 42",
+	}
+	code2 := GenerateLuaLibCode(libName2, functions2, false)
+	result, err = client.FunctionLoad(code2, true)
+	assert.NoError(t, err)
+	assert.Equal(t, libName2, result)
+
+	// Check stats after loading second function
+	stats, err = client.FunctionStats()
+	assert.NoError(t, err)
+	for _, nodeStats := range stats {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(3), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(2), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Flush all functions
+	result, err = client.FunctionFlushSync()
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Check stats after flushing
+	stats, err = client.FunctionStats()
+	assert.NoError(t, err)
+	for _, nodeStats := range stats {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].LibraryCount)
+	}
+}
+
+func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test with single node route
+	libName := "functionStats_with_route_single"
+	funcName := libName
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, false)
+
+	// Flush all functions with SYNC option and single node route
+	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load function with single node route
+	result, err = client.FunctionLoadWithRoute(code, true, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Check stats with single node route
+	stats, err := client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Load second function with multiple functions
+	libName2 := libName + "_2"
+	functions2 := map[string]string{
+		funcName + "_2": "return 'OK'",
+		funcName + "_3": "return 42",
+	}
+	code2 := GenerateLuaLibCode(libName2, functions2, false)
+	result, err = client.FunctionLoadWithRoute(code2, true, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName2, result)
+
+	// Check stats after loading second function
+	stats, err = client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(3), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(2), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Flush all functions
+	result, err = client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Check stats after flushing
+	stats, err = client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Test with all primaries route
+	libName = "functionStats_with_route_all"
+	funcName = libName
+	functions = map[string]string{
+		funcName: "return args[1]",
+	}
+	code = GenerateLuaLibCode(libName, functions, false)
+
+	// Flush all functions with SYNC option and all primaries route
+	route = options.RouteOption{Route: config.AllPrimaries}
+	result, err = client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load function with all primaries route
+	result, err = client.FunctionLoadWithRoute(code, true, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Check stats with all primaries route
+	stats, err = client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Load second function with multiple functions
+	libName2 = libName + "_2"
+	functions2 = map[string]string{
+		funcName + "_2": "return 'OK'",
+		funcName + "_3": "return 42",
+	}
+	code2 = GenerateLuaLibCode(libName2, functions2, false)
+	result, err = client.FunctionLoadWithRoute(code2, true, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName2, result)
+
+	// Check stats after loading second function
+	stats, err = client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(3), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(2), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Flush all functions
+	result, err = client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Check stats after flushing
+	stats, err = client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].LibraryCount)
+	}
+}

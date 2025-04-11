@@ -1384,3 +1384,82 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(
 func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []string) (ClusterValue[any], error) {
 	return client.FCallReadOnlyWithArgsWithRoute(function, args, options.RouteOption{})
 }
+
+// FunctionStats returns information about the function that's currently running and information about the
+// available execution engines.
+// The command will be routed to all nodes by default.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	A map of node addresses to their function statistics represented by
+//	[FunctionStatsResult] object containing the following information:
+//	running_script - Information about the running script.
+//	engines - Information about available engines and their stats.
+//
+// [valkey.io]: https://valkey.io/commands/function-stats/
+func (client *GlideClusterClient) FunctionStats() (
+	map[string]FunctionStatsResult, error,
+) {
+	response, err := client.executeCommand(C.FunctionStats, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	stats, err := handleFunctionStatsResponse(response)
+	if err != nil {
+		return nil, err
+	}
+
+	// For multi-node routes, return the map of node addresses to FunctionStatsResult
+	return stats, nil
+}
+
+// FunctionStatsWithRoute returns information about the function that's currently running and information about the
+// available execution engines.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	       command to the nodes defined by route. If no route is specified, the command
+//	       will be routed to all nodes.
+//
+// Return value:
+//
+//	A [ClusterValue] containing a map of node addresses to their function statistics.
+//
+// [valkey.io]: https://valkey.io/commands/function-stats/
+func (client *GlideClusterClient) FunctionStatsWithRoute(
+	opts options.RouteOption,
+) (ClusterValue[FunctionStatsResult], error) {
+	response, err := client.executeCommandWithRoute(C.FunctionStats, []string{}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[FunctionStatsResult](), err
+	}
+
+	stats, err := handleFunctionStatsResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[FunctionStatsResult](), err
+	}
+
+	// single node routes return a single stat response
+	if len(stats) == 1 {
+		for _, result := range stats {
+			return createClusterSingleValue[FunctionStatsResult](result), nil
+		}
+	}
+
+	// For multi-node routes, return the map of node addresses to FunctionStatsResult
+	return createClusterMultiValue[FunctionStatsResult](stats), nil
+}
