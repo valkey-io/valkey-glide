@@ -126,6 +126,36 @@ pub type FailureCallback = unsafe extern "C" fn(
     error_type: RequestErrorType,
 ) -> ();
 
+/// PubSub callback that is called when a push notification is received.
+///
+/// The PubSub callback needs to handle the push notification synchronously, since the data will be dropped by Rust once the callback returns.
+/// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
+///
+/// # Parameters
+/// * `client_ptr`: A baton-pass back to the caller language to uniquely identify the client.
+/// * `kind`: An enum variant representing the PushKind (Message, PMessage, SMessage, etc.)
+/// * `message`: A pointer to the raw message bytes.
+/// * `message_len`: The length of the message data in bytes.
+/// * `channel`: A pointer to the raw channel name bytes.
+/// * `channel_len`: The length of the channel name in bytes.
+/// * `pattern`: A pointer to the raw pattern bytes (null if no pattern).
+/// * `pattern_len`: The length of the pattern in bytes (0 if no pattern).
+///
+/// # Safety
+/// The pointers are only valid during the callback execution and will be freed
+/// automatically when the callback returns. Any data needed beyond the callback's
+/// execution must be copied.
+pub type PubSubCallback = unsafe extern "C" fn(
+    client_ptr: usize,
+    kind: PushKind,
+    message: *const u8,
+    message_len: i64,
+    channel: *const u8,
+    channel_len: i64,
+    pattern: *const u8,
+    pattern_len: i64,
+) -> ();
+
 /// The connection response.
 ///
 /// It contains either a connection or an error. It is represented as a struct instead of a union for ease of use in the wrapper language.
@@ -372,10 +402,118 @@ impl ClientAdapter {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub enum PushKind {
+    PushDisconnection,
+    PushOther,
+    PushInvalidate,
+    PushMessage,
+    PushPMessage,
+    PushSMessage,
+    PushUnsubscribe,
+    PushPUnsubscribe,
+    PushSUnsubscribe,
+    PushSubscribe,
+    PushPSubscribe,
+    PushSSubscribe,
+}
+
+impl From<redis::PushKind> for PushKind {
+    fn from(value: redis::PushKind) -> Self {
+        match value {
+            redis::PushKind::Disconnection => PushKind::PushDisconnection,
+            redis::PushKind::Other(_) => PushKind::PushOther,
+            redis::PushKind::Invalidate => PushKind::PushInvalidate,
+            redis::PushKind::Message => PushKind::PushMessage,
+            redis::PushKind::PMessage => PushKind::PushPMessage,
+            redis::PushKind::SMessage => PushKind::PushSMessage,
+            redis::PushKind::Unsubscribe => PushKind::PushUnsubscribe,
+            redis::PushKind::PUnsubscribe => PushKind::PushPUnsubscribe,
+            redis::PushKind::SUnsubscribe => PushKind::PushSUnsubscribe,
+            redis::PushKind::Subscribe => PushKind::PushSubscribe,
+            redis::PushKind::PSubscribe => PushKind::PushPSubscribe,
+            redis::PushKind::SSubscribe => PushKind::PushSSubscribe,
+        }
+    }
+}
+
+/// Processes a push notification message and calls the provided callback function.
+///
+/// This function converts a PushInfo message to a CommandResponse, determines the
+/// notification type, and invokes the callback with the appropriate parameters.
+///
+/// # Parameters
+/// - `push_msg`: The push notification message to process.
+/// - `pubsub_callback`: The callback function to invoke with the processed notification.
+/// - `client_adapter_ptr`: A pointer to the client adapter to pass to the callback.
+///
+/// # Returns
+/// - `true` if the message was successfully processed and the callback was called.
+/// - `false` if there was an error processing the message (e.g., conversion failed).
+///
+/// # Safety
+/// This function is unsafe because it:
+/// - Dereferences raw pointers
+/// - Calls an FFI function (`pubsub_callback`) that may have undefined behavior
+/// - Creates and destroys vectors via `Vec::from_raw_parts`
+/// - Assumes push_msg.data contains valid BulkString values
+///
+/// The caller must ensure:
+/// - `pubsub_callback` is a valid function pointer to a properly implemented callback
+/// - `client_adapter_ptr` is a valid usize representing a client adapter pointer
+/// - Memory allocated during conversion is properly freed after the callback completes
+unsafe fn process_push_notification(
+    push_msg: redis::PushInfo,
+    pubsub_callback: PubSubCallback,
+    client_adapter_ptr: usize,
+) {
+    let strings: Vec<(*mut u8, i64)> = push_msg
+        .data
+        .iter()
+        .map(|v| {
+            let Value::BulkString(str) = v else {
+                unreachable!()
+            };
+            let (ptr, len) = convert_vec_to_pointer(str.clone());
+            (ptr, len)
+        })
+        .collect();
+
+    let ((pattern_ptr, pattern_len), (channel_ptr, channel_len), (message_ptr, message_len)) = {
+        if strings.len() == 3 {
+            (strings[0], strings[1], strings[2])
+        } else {
+            ((std::ptr::null_mut::<u8>(), 0), strings[0], strings[1])
+        }
+    };
+
+    // Call the pubsub callback with the push notification data
+    unsafe {
+        pubsub_callback(
+            client_adapter_ptr,
+            push_msg.kind.into(),
+            message_ptr,
+            message_len,
+            channel_ptr,
+            channel_len,
+            pattern_ptr,
+            pattern_len,
+        );
+        // Free memory
+        let _ = Vec::from_raw_parts(message_ptr, message_len as usize, message_len as usize);
+        let _ = Vec::from_raw_parts(channel_ptr, channel_len as usize, channel_len as usize);
+        if !pattern_ptr.is_null() {
+            let _ = Vec::from_raw_parts(pattern_ptr, pattern_len as usize, pattern_len as usize);
+        }
+    }
+}
+
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
-) -> Result<ClientAdapter, String> {
+    pubsub_callback: PubSubCallback,
+) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
     // TODO: optimize this using multiple threads instead of a single worker thread (e.g. by pinning each go thread to a rust thread)
@@ -388,14 +526,44 @@ fn create_client_internal(
             let redis_error = err.into();
             errors::error_message(&redis_error)
         })?;
+
+    let is_subscriber = request.pubsub_subscriptions.is_some() && pubsub_callback as usize != 0;
+    let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
+    let tx = match is_subscriber {
+        true => Some(push_tx),
+        false => None,
+    };
+
     let client = runtime
-        .block_on(GlideClient::new(ConnectionRequest::from(request), None))
+        .block_on(GlideClient::new(ConnectionRequest::from(request), tx))
         .map_err(|err| err.to_string())?;
+
+    // Create the client adapter that will be returned and used as conn_ptr
     let core = Arc::new(CommandExecutionCore {
         client,
         client_type,
     });
-    Ok(ClientAdapter { runtime, core })
+    let client_adapter = Arc::new(ClientAdapter { runtime, core });
+    // Clone client_adapter before moving it into the async block
+    let client_adapter_ptr = Arc::as_ptr(&client_adapter).addr();
+
+    // If pubsub_callback is provided (not null), spawn a task to handle push notifications
+    if is_subscriber {
+        client_adapter.runtime.spawn(async move {
+            while let Some(push_msg) = push_rx.recv().await {
+                if push_msg.kind == redis::PushKind::Message
+                    || push_msg.kind == redis::PushKind::PMessage
+                    || push_msg.kind == redis::PushKind::SMessage
+                {
+                    unsafe {
+                        process_push_notification(push_msg, pubsub_callback, client_adapter_ptr);
+                    }
+                }
+            }
+        });
+    }
+
+    Ok(Arc::into_raw(client_adapter))
 }
 
 /// Creates a new `ClientAdapter` with a new `GlideClient` configured using a Protobuf `ConnectionRequest`.
@@ -420,11 +588,13 @@ pub unsafe extern "C" fn create_client(
     connection_request_bytes: *const u8,
     connection_request_len: usize,
     client_type: *const ClientType,
+    pubsub_callback: PubSubCallback,
 ) -> *const ConnectionResponse {
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
     let client_type = unsafe { &*client_type };
-    let response = match create_client_internal(request_bytes, client_type.clone()) {
+    let response = match create_client_internal(request_bytes, client_type.clone(), pubsub_callback)
+    {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
@@ -432,7 +602,7 @@ pub unsafe extern "C" fn create_client(
             ),
         },
         Ok(client) => ConnectionResponse {
-            conn_ptr: Arc::into_raw(Arc::new(client)) as *const c_void,
+            conn_ptr: client as *const c_void,
             connection_error_message: std::ptr::null(),
         },
     };
