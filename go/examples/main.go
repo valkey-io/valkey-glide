@@ -38,6 +38,12 @@ func main() {
 		log.Fatal("error connecting to database: ", err)
 	}
 	fmt.Println(resultGet)
+
+	resultFuncFlush, err := client.FunctionFlush()
+	if err != nil {
+		log.Fatal("error connecting to database: ", err)
+	}
+	fmt.Println(resultFuncFlush)
 	client.Close()
 
 }

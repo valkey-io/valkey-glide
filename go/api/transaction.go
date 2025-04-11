@@ -67,6 +67,7 @@ func (t *Transaction) Exec() ([]any, error) {
 	// t.commands = append(t.commands, &GenericCommand{C.Get, []string{"apples"}})
 	//t.commands = append(t.commands, NewExecCommand())
 	// Execute all commands
+	fmt.Println("FunctionFlus exec before")
 	result, err := t.baseClient.executeTransactionCommand(t.commands) // Use BaseClient for execution
 	if err != nil {
 		return nil, err
@@ -79,6 +80,7 @@ func (client *baseClient) executeTransactionCommand(commands []Cmder) (*C.Comman
 }
 
 func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (*C.struct_CommandResponse, error) {
+	fmt.Println("ExecuteTransaction entered")
 	if len(cmds) == 0 {
 		return nil, &errors.RequestError{Msg: "Transaction must contain at least one command"}
 	}
@@ -96,19 +98,34 @@ func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (
 		defer C.free(cArgsArray)
 
 		cArgs := (*[1 << 30]*C.char)(cArgsArray)[:len(cmd.Args()):len(cmd.Args())]
+		fmt.Println("cmd.Args len", len(cmd.Args()))
 
 		for j, arg := range cmd.Args() {
 			cArgs[j] = C.CString(arg)
 			argPtrs = append(argPtrs, cArgs[j])
 		}
-
+		//Check cArgs
+		var cArgsPtr **C.char
+		fmt.Println("cArgs value", cArgs)
+		if len(cmd.Args()) > 0 {
+			if len(cArgs) > 0 {
+				fmt.Println("&cArgs[0]", (**C.char)(unsafe.Pointer(&cArgs[0])))
+				cArgsPtr = (**C.char)(unsafe.Pointer(&cArgs[0]))
+			}
+		}
+		fmt.Println("cArgsPtr Final value", cArgsPtr)
 		cCmders[i] = C.Cmder{
 			request_type: C.enum_RequestType(cmd.Name()),
 			args_count:   C.uintptr_t(len(cmd.Args())),
-			args:         (**C.char)(unsafe.Pointer(&cArgs[0])),
+			args:         cArgsPtr,
 		}
-	}
 
+		// cCmders[i] = C.Cmder{
+		// 	request_type: C.enum_RequestType(cmd.Name()),
+		// 	args_count:   C.uintptr_t(len(cmd.Args())),
+		// 	args:         cArgsPtr,
+		// }
+	}
 	transaction := C.Transaction{
 		cmd_count: C.uintptr_t(len(cmds)),
 		commands:  (*C.Cmder)(unsafe.Pointer(cCmdersArray)),
@@ -144,7 +161,7 @@ func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (
 		return nil, &errors.ClosingError{Msg: "Transaction failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
-
+	fmt.Println("FunctionFlus exec result1")
 	C.execute_transaction(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
@@ -166,7 +183,7 @@ func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (
 	if payload.error != nil {
 		return nil, payload.error
 	}
-
+	fmt.Println("FunctionFlus exec result")
 	return payload.value, nil
 }
 

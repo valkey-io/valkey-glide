@@ -1053,6 +1053,9 @@ func (client *baseClient) HGet(key string, field string) (Result[string], error)
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
+	if result == nil {
+		return CreateNilStringResult(), err
+	}
 
 	return handleStringOrNilResponse(result)
 }
@@ -1321,6 +1324,9 @@ func (client *baseClient) HIncrBy(key string, field string, increment int64) (in
 	if err != nil {
 		return defaultIntResponse, err
 	}
+	if result == nil {
+		return defaultIntResponse, err
+	}
 
 	return handleIntResponse(result)
 }
@@ -1436,6 +1442,9 @@ func (client *baseClient) HScanWithOptions(
 func (client *baseClient) HRandField(key string) (Result[string], error) {
 	result, err := client.executor.ExecuteCommand(C.HRandField, []string{key})
 	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	if result == nil {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
@@ -1594,6 +1603,9 @@ func (client *baseClient) LPopCount(key string, count int64) ([]string, error) {
 func (client *baseClient) LPos(key string, element string) (Result[int64], error) {
 	result, err := client.executor.ExecuteCommand(C.LPos, []string{key, element})
 	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	if result == nil {
 		return CreateNilInt64Result(), err
 	}
 
@@ -2041,6 +2053,9 @@ func (client *baseClient) SRandMember(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
+	if result == nil {
+		return CreateNilStringResult(), err
+	}
 
 	return handleStringOrNilResponse(result)
 }
@@ -2062,6 +2077,9 @@ func (client *baseClient) SRandMember(key string) (Result[string], error) {
 func (client *baseClient) SPop(key string) (Result[string], error) {
 	result, err := client.executor.ExecuteCommand(C.SPop, []string{key})
 	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	if result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -2260,6 +2278,9 @@ func (client *baseClient) LIndex(key string, index int64) (Result[string], error
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
+	if result == nil {
+		return CreateNilStringResult(), err
+	}
 
 	return handleStringOrNilResponse(result)
 }
@@ -2367,6 +2388,9 @@ func (client *baseClient) RPop(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
+	if result == nil {
+		return CreateNilStringResult(), err
+	}
 
 	return handleStringOrNilResponse(result)
 }
@@ -2463,6 +2487,9 @@ func (client *baseClient) BLPop(keys []string, timeoutSecs float64) ([]string, e
 	if err != nil {
 		return nil, err
 	}
+	if result == nil {
+		return handleStringArrayResponse(result)
+	}
 
 	return handleStringArrayOrNilResponse(result)
 }
@@ -2494,6 +2521,9 @@ func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]string, e
 	result, err := client.executor.ExecuteCommand(C.BRPop, append(keys, utils.FloatToString(timeoutSecs)))
 	if err != nil {
 		return nil, err
+	}
+	if result == nil {
+		return handleStringArrayResponse(result)
 	}
 
 	return handleStringArrayOrNilResponse(result)
@@ -2812,6 +2842,10 @@ func (client *baseClient) LMove(
 		return CreateNilStringResult(), err
 	}
 
+	if result == nil {
+		return CreateNilStringResult(), err
+	}
+
 	return handleStringOrNilResponse(result)
 }
 
@@ -2866,6 +2900,9 @@ func (client *baseClient) BLMove(
 		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeoutSecs)},
 	)
 	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	if result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -4099,6 +4136,10 @@ func (client *baseClient) BZMPop(
 	if err != nil {
 		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
+	if result == nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
 	return handleKeyWithArrayOfMembersAndScoresResponse(result)
 }
 
@@ -4165,6 +4206,9 @@ func (client *baseClient) BZMPopWithOptions(
 	args = append(args, optionArgs...)
 	result, err := client.executor.ExecuteCommand(C.BZMPop, args)
 	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+	if result == nil {
 		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 
@@ -4362,6 +4406,9 @@ func (client *baseClient) ZRank(key string, member string) (Result[int64], error
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
+	if result == nil {
+		return CreateNilInt64Result(), err
+	}
 	return handleIntOrNilResponse(result)
 }
 
@@ -4385,6 +4432,9 @@ func (client *baseClient) ZRank(key string, member string) (Result[int64], error
 func (client *baseClient) ZRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
 	result, err := client.executor.ExecuteCommand(C.ZRank, []string{key, member, options.WithScoreKeyword})
 	if err != nil {
+		return CreateNilInt64Result(), CreateNilFloat64Result(), err
+	}
+	if result == nil {
 		return CreateNilInt64Result(), CreateNilFloat64Result(), err
 	}
 	return handleLongAndDoubleOrNullResponse(result)
@@ -4414,6 +4464,9 @@ func (client *baseClient) ZRevRank(key string, member string) (Result[int64], er
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
+	if result == nil {
+		return CreateNilInt64Result(), err
+	}
 	return handleIntOrNilResponse(result)
 }
 
@@ -4438,6 +4491,9 @@ func (client *baseClient) ZRevRank(key string, member string) (Result[int64], er
 func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
 	result, err := client.executor.ExecuteCommand(C.ZRevRank, []string{key, member, options.WithScoreKeyword})
 	if err != nil {
+		return CreateNilInt64Result(), CreateNilFloat64Result(), err
+	}
+	if result == nil {
 		return CreateNilInt64Result(), CreateNilFloat64Result(), err
 	}
 	return handleLongAndDoubleOrNullResponse(result)
@@ -4708,6 +4764,9 @@ func (client *baseClient) XDel(key string, ids []string) (int64, error) {
 func (client *baseClient) ZScore(key string, member string) (Result[float64], error) {
 	result, err := client.executor.ExecuteCommand(C.ZScore, []string{key, member})
 	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	if result == nil {
 		return CreateNilFloat64Result(), err
 	}
 	return handleFloatOrNilResponse(result)
@@ -5190,6 +5249,9 @@ func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeB
 func (client *baseClient) ZRandMember(key string) (Result[string], error) {
 	result, err := client.executor.ExecuteCommand(C.ZRandMember, []string{key})
 	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	if result == nil {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
@@ -6307,6 +6369,10 @@ func (client *baseClient) BitField(key string, subCommands []options.BitFieldSub
 	if err != nil {
 		return nil, err
 	}
+	if result == nil {
+		slice := make([]Result[int64], 0, 0)
+		return slice, err
+	}
 	return handleIntOrNilArrayResponse(result)
 }
 
@@ -6976,6 +7042,9 @@ func (client *baseClient) GeoDist(key string, member1 string, member2 string) (R
 	if err != nil {
 		return CreateNilFloat64Result(), err
 	}
+	if result == nil {
+		return CreateNilFloat64Result(), err
+	}
 	return handleFloatOrNilResponse(result)
 }
 
@@ -7456,7 +7525,7 @@ func (client *baseClient) FunctionLoad(libraryCode string, replace bool) (string
 		args = append(args, options.ReplaceKeyword)
 	}
 	args = append(args, libraryCode)
-	result, err := client.executeCommand(C.FunctionLoad, args)
+	result, err := client.executor.ExecuteCommand(C.FunctionLoad, args)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -7477,8 +7546,12 @@ func (client *baseClient) FunctionLoad(libraryCode string, replace bool) (string
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
 func (client *baseClient) FunctionFlush() (string, error) {
-	result, err := client.executeCommand(C.FunctionFlush, []string{})
+	fmt.Println("Command Sig")
+	result, err := client.executor.ExecuteCommand(C.FunctionFlush, []string{})
 	if err != nil {
+		return DefaultStringResponse, err
+	}
+	if result == nil {
 		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
@@ -7498,7 +7571,7 @@ func (client *baseClient) FunctionFlush() (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
 func (client *baseClient) FunctionFlushSync() (string, error) {
-	result, err := client.executeCommand(C.FunctionFlush, []string{string(options.SYNC)})
+	result, err := client.executor.ExecuteCommand(C.FunctionFlush, []string{string(options.SYNC)})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -7519,7 +7592,7 @@ func (client *baseClient) FunctionFlushSync() (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
 func (client *baseClient) FunctionFlushAsync() (string, error) {
-	result, err := client.executeCommand(C.FunctionFlush, []string{string(options.ASYNC)})
+	result, err := client.executor.ExecuteCommand(C.FunctionFlush, []string{string(options.ASYNC)})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -7546,7 +7619,7 @@ func (client *baseClient) FunctionFlushAsync() (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
 func (client *baseClient) FCall(function string) (any, error) {
-	result, err := client.executeCommand(C.FCall, []string{function, utils.IntToString(0)})
+	result, err := client.executor.ExecuteCommand(C.FCall, []string{function, utils.IntToString(0)})
 	if err != nil {
 		return nil, err
 	}
@@ -7572,7 +7645,7 @@ func (client *baseClient) FCall(function string) (any, error) {
 //
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
 func (client *baseClient) FCallReadOnly(function string) (any, error) {
-	result, err := client.executeCommand(C.FCallReadOnly, []string{function, utils.IntToString(0)})
+	result, err := client.executor.ExecuteCommand(C.FCallReadOnly, []string{function, utils.IntToString(0)})
 	if err != nil {
 		return nil, err
 	}
@@ -7610,7 +7683,7 @@ func (client *baseClient) FCallWithKeysAndArgs(
 	cmdArgs := []string{function, utils.IntToString(int64(len(keys)))}
 	cmdArgs = append(cmdArgs, keys...)
 	cmdArgs = append(cmdArgs, args...)
-	result, err := client.executeCommand(C.FCall, cmdArgs)
+	result, err := client.executor.ExecuteCommand(C.FCall, cmdArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -7649,7 +7722,7 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 	cmdArgs := []string{function, utils.IntToString(int64(len(keys)))}
 	cmdArgs = append(cmdArgs, keys...)
 	cmdArgs = append(cmdArgs, args...)
-	result, err := client.executeCommand(C.FCallReadOnly, cmdArgs)
+	result, err := client.executor.ExecuteCommand(C.FCallReadOnly, cmdArgs)
 	if err != nil {
 		return nil, err
 	}
