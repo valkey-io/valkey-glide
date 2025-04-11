@@ -468,8 +468,6 @@ unsafe fn process_push_notification(
         })
         .collect();
 
-    // pattner, ch, msg
-    // ch, mgs
     let ((pattern_ptr, pattern_len), (channel_ptr, channel_len), (message_ptr, message_len)) = {
         if strings.len() == 3 {
             (strings[0], strings[1], strings[2])
