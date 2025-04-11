@@ -81,11 +81,7 @@ func pubSubCallback(
 
 	go func() {
 		// Process different types of push messages
-		message, err := getMessage(pushKind, msg, cha, pat.Value())
-		if err != nil {
-			// todo log
-			return
-		}
+		message, err := NewPubSubMessageWithPattern(msg, cha, pat)
 
 		if clientPtr != nil {
 			// Look up the client in our registry using the pointer address
