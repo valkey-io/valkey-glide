@@ -791,6 +791,101 @@ pub unsafe extern "C" fn command(
     })
 }
 
+#[repr(C)]
+pub struct Cmder {
+    request_type: RequestType, // Equivalent to Go's C.RequestType
+    args_count: c_ulong,
+    args: *const *const c_char, // Array of C strings
+}
+
+#[repr(C)]
+pub struct Transaction {
+    cmd_count: c_ulong,
+    commands: *const Cmder,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn execute_transaction(
+    client_adapter_ptr: *const c_void,
+    channel: usize,
+    transaction: *const Transaction,
+    route_bytes: *const u8,
+    route_bytes_len: usize,
+) -> *mut CommandResult {
+    if transaction.is_null() {
+        panic!("Transaction pointer is NULL");
+    }
+
+    let transaction = unsafe { &*transaction };
+
+    if transaction.commands.is_null() {
+        panic!("Transaction commands pointer is NULL");
+    }
+
+    let mut pipeline = redis::Pipeline::with_capacity(transaction.cmd_count as usize);
+    pipeline.atomic();
+
+    for i in 0..transaction.cmd_count {
+        let cmder = unsafe { &*transaction.commands.add(i as usize) };
+
+        // if cmder.args.is_null() {
+        //     panic!("Cmder args pointer is NULL at index {}", i);
+        // }
+
+        let mut cmd = cmder
+            .request_type
+            .get_command()
+            .expect("Invalid command type");
+
+        for j in 0..cmder.args_count {
+            let arg_ptr = unsafe { *cmder.args.add(j as usize) };
+
+            if arg_ptr.is_null() {
+                panic!("Argument pointer is NULL at command {}, arg {}", i, j);
+            }
+
+            let arg_str = unsafe { CStr::from_ptr(arg_ptr) }
+                .to_str()
+                .expect("Invalid UTF-8 string in transaction");
+
+            cmd.arg(arg_str);
+        }
+
+        pipeline.add_command(cmd);
+    }
+
+    // Ensure route_bytes_len is reasonable
+    if route_bytes_len > 1024 {
+        panic!("Error: route_bytes_len ({}) is too large!", route_bytes_len);
+    }
+
+    // Check if route_bytes is valid
+    let route = if !route_bytes.is_null() {
+        let r_bytes: &[u8] = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
+        Routes::parse_from_bytes(r_bytes).unwrap()
+    } else {
+        Routes::default()
+    };
+
+    let client_adapter = unsafe {
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    // Get routing info with fallback
+    let routing_info = get_route(route, None).unwrap_or_else(|| {
+        RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random) // Default routing
+    });
+
+    let mut client = client_adapter.core.client.clone();
+
+    client_adapter.execute_command(channel, async move {
+        client
+            .send_transaction(&pipeline, Some(routing_info), None, true)
+            .await
+    })
+}
+
 /// Creates a heap-allocated `CommandResult` containing a `CommandError`.
 ///
 /// This function is used to construct an error response when a Valkey command fails,
