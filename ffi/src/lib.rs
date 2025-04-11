@@ -540,8 +540,8 @@ fn create_client_internal(
 
     // Create the client adapter that will be returned and used as conn_ptr
     let core = Arc::new(CommandExecutionCore {
-        client: client,
-        client_type: client_type,
+        client,
+        client_type,
     });
     let client_adapter = Arc::new(ClientAdapter { runtime, core });
     // Clone client_adapter before moving it into the async block
