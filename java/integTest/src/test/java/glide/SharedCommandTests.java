@@ -14271,6 +14271,7 @@ public class SharedCommandTests {
     @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void sscan(BaseClient client) {
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
