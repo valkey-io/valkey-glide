@@ -533,8 +533,7 @@ fn create_client_internal(
     });
     let client_adapter = Arc::new(ClientAdapter { runtime, core });
     // Clone client_adapter before moving it into the async block
-    let client_adapter_ptr = Arc::into_raw(client_adapter).addr();
-    let client_adapter = unsafe { Arc::from_raw(client_adapter_ptr as *mut ClientAdapter) };
+    let client_adapter_ptr = Arc::as_ptr(&client_adapter).addr();
 
     // If pubsub_callback is provided (not null), spawn a task to handle push notifications
     if is_subscriber {
