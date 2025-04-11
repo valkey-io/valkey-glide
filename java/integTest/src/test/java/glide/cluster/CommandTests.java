@@ -102,7 +102,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -500,15 +499,10 @@ public class CommandTests {
         assertEquals("clientGetName_with_multi_node_route", getFirstEntryFromMultiValue(name));
     }
 
-    //    @ParameterizedTest
-    //    @MethodSource("getClients")
-    @RepeatedTest(250)
+    @ParameterizedTest
+    @MethodSource("getClients")
     @SneakyThrows
-    public void config_reset_stat() {
-        GlideClusterClient clusterClient =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
-                        .get();
+    public void config_reset_stat(GlideClusterClient clusterClient) {
         var data = clusterClient.info(new Section[] {STATS}).get();
         String firstNodeInfo = getFirstEntryFromMultiValue(data);
         long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
