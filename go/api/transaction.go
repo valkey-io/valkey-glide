@@ -123,7 +123,7 @@ func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (
 		// cCmders[i] = C.Cmder{
 		// 	request_type: C.enum_RequestType(cmd.Name()),
 		// 	args_count:   C.uintptr_t(len(cmd.Args())),
-		// 	args:         cArgsPtr,
+		// 	args:         (**C.char)(unsafe.Pointer(&cArgs[0]),
 		// }
 	}
 	transaction := C.Transaction{

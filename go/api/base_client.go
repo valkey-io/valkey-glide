@@ -3573,6 +3573,10 @@ func (client *baseClient) XAddWithOptions(
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
+
+	if result == nil {
+		return CreateNilStringResult(), err
+	}
 	return handleStringOrNilResponse(result)
 }
 

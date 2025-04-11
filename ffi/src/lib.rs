@@ -828,9 +828,9 @@ pub unsafe extern "C" fn execute_transaction(
     for i in 0..transaction.cmd_count {
         let cmder = unsafe { &*transaction.commands.add(i as usize) };
 
-        if cmder.args.is_null() {
-            panic!("Cmder args pointer is NULL at index {}", i);
-        }
+        // if cmder.args.is_null() {
+        //     panic!("Cmder args pointer is NULL at index {}", i);
+        // }
 
         let mut cmd = cmder
             .request_type
@@ -880,7 +880,9 @@ pub unsafe extern "C" fn execute_transaction(
     let mut client = client_adapter.core.client.clone();
 
     client_adapter.execute_command(channel, async move {
-        client.send_transaction(&pipeline, Some(routing_info)).await
+        client
+            .send_transaction(&pipeline, Some(routing_info), None, true)
+            .await
     })
 }
 

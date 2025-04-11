@@ -402,6 +402,23 @@ func main() {
 	tx.FCallReadOnly(funcName1)
 	tx.FCallReadOnlyWithKeysAndArgs(funcName1, []string{key1, key2}, []string{"3", "4"})
 	tx.FunctionFlush()
+	tx.FunctionFlushSync()
+	tx.FunctionFlushAsync()
+
+	//Stream Commands
+	keyStream := "{testKey}-" + uuid.New().String()
+	tx.XAdd(
+		keyStream,
+		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+	)
+
+	options := options.NewXAddOptions().
+		SetId("1000-50")
+	values := [][]string{
+		{"key1", "value1"},
+		{"key2", "value2"},
+	}
+	tx.XAddWithOptions("mystream", values, *options)
 
 	// // err = tx.Discard()
 	// // if err != nil {
