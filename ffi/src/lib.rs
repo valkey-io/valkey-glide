@@ -451,6 +451,18 @@ impl From<redis::PushKind> for PushKind {
 /// # Returns
 /// - `true` if the message was successfully processed and the callback was called.
 /// - `false` if there was an error processing the message (e.g., conversion failed).
+///
+/// # Safety
+/// This function is unsafe because it:
+/// - Dereferences raw pointers
+/// - Calls an FFI function (`pubsub_callback`) that may have undefined behavior
+/// - Creates and destroys vectors via `Vec::from_raw_parts`
+/// - Assumes push_msg.data contains valid BulkString values
+///
+/// The caller must ensure:
+/// - `pubsub_callback` is a valid function pointer to a properly implemented callback
+/// - `client_adapter_ptr` is a valid usize representing a client adapter pointer
+/// - Memory allocated during conversion is properly freed after the callback completes
 unsafe fn process_push_notification(
     push_msg: redis::PushInfo,
     pubsub_callback: PubSubCallback,
