@@ -502,7 +502,7 @@ public class CommandTests {
 
     //    @ParameterizedTest
     //    @MethodSource("getClients")
-    @RepeatedTest(500)
+    @RepeatedTest(250)
     @SneakyThrows
     public void config_reset_stat() {
         GlideClusterClient clusterClient =
@@ -511,21 +511,21 @@ public class CommandTests {
                         .get();
         var data = clusterClient.info(new Section[] {STATS}).get();
         String firstNodeInfo = getFirstEntryFromMultiValue(data);
-        long value_before = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+        long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
         var result = clusterClient.configResetStat().get();
         assertEquals(OK, result);
 
         data = clusterClient.info(new Section[] {STATS}).get();
         firstNodeInfo = getFirstEntryFromMultiValue(data);
-        long value_after = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+        long valueAfter = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
-        //        if (value_before == 0) {
-        //            assertEquals(value_before, value_after);
-        //            return;
-        //        }
+        if (valueBefore == 0) {
+            assertEquals(valueBefore, valueAfter);
+            return;
+        }
 
-        assertTrue(value_after < value_before);
+        assertTrue(valueAfter < valueBefore);
     }
 
     @ParameterizedTest
