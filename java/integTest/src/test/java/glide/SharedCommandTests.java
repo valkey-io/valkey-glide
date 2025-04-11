@@ -111,6 +111,8 @@ import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -14269,7 +14271,6 @@ public class SharedCommandTests {
     @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
     public void sscan(BaseClient client) {
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
@@ -14286,15 +14287,27 @@ public class SharedCommandTests {
         int resultCollectionIndex = 1;
 
         // Empty set
+        System.out.println(
+                "### SSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning empty set");
         Object[] result = client.sscan(key1, initialCursor).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            System.out.println(
+                    "### SSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.sscan(key1, "-1").get());
         } else {
+            System.out.println(
+                    "### SSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             result = client.sscan(key1, "-1").get();
             assertEquals(initialCursor, result[resultCursorIndex]);
             assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
@@ -14302,6 +14315,10 @@ public class SharedCommandTests {
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.sadd(key1, charMembers).get());
+        System.out.println(
+                "### SSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning whole set");
         result = client.sscan(key1, initialCursor).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertEquals(charMembers.length, ((Object[]) result[resultCollectionIndex]).length);
@@ -14311,6 +14328,10 @@ public class SharedCommandTests {
                 resultMembers.containsAll(charMemberSet),
                 String.format("resultMembers: {%s}, charMemberSet: {%s}", resultMembers, charMemberSet));
 
+        System.out.println(
+                "### SSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match 'a'");
         result =
                 client.sscan(key1, initialCursor, SScanOptions.builder().matchPattern("a").build()).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
@@ -14322,6 +14343,11 @@ public class SharedCommandTests {
         final Set<Object> secondResultValues = new HashSet<>();
         boolean isFirstLoop = true;
         do {
+            System.out.println(
+                    "### SSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with cursor: "
+                            + resultCursor);
             result = client.sscan(key1, resultCursor).get();
             resultCursor = result[resultCursorIndex].toString();
             secondResultValues.addAll(
@@ -14335,6 +14361,11 @@ public class SharedCommandTests {
             }
 
             // Scan with result cursor has a different set
+            System.out.println(
+                    "### SSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with second cursor: "
+                            + resultCursor);
             Object[] secondResult = client.sscan(key1, resultCursor).get();
             String newResultCursor = secondResult[resultCursorIndex].toString();
             assertNotEquals(resultCursor, newResultCursor);
@@ -14361,17 +14392,29 @@ public class SharedCommandTests {
                         secondResultValues, numberMembersSet));
 
         // Test match pattern
+        System.out.println(
+                "### SSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match '*'");
         result =
                 client.sscan(key1, initialCursor, SScanOptions.builder().matchPattern("*").build()).get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
         // Test count
+        System.out.println(
+                "### SSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with count 20");
         result = client.sscan(key1, initialCursor, SScanOptions.builder().count(20L).build()).get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
 
         // Test count with match returns a non-empty list
+        System.out.println(
+                "### SSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern '1*' and count 20");
         result =
                 client
                         .sscan(
@@ -14383,10 +14426,18 @@ public class SharedCommandTests {
         // Exceptions
         // Non-set key
         assertEquals(OK, client.set(key2, "test").get());
+        System.out.println(
+                "### SSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-set key");
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sscan(key2, initialCursor).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
+        System.out.println(
+                "### SSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-set key with options");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -14400,6 +14451,10 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Negative count
+        System.out.println(
+                "### SSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with negative count");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -14428,15 +14483,27 @@ public class SharedCommandTests {
         int resultCollectionIndex = 1;
 
         // Empty set
+        System.out.println(
+                "### SSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning empty set");
         Object[] result = client.sscan(key1, initialCursor).get();
         assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
         assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            System.out.println(
+                    "### SSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.sscan(key1, gs("-1")).get());
         } else {
+            System.out.println(
+                    "### SSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             result = client.sscan(key1, gs("-1")).get();
             assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
             assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
@@ -14444,6 +14511,10 @@ public class SharedCommandTests {
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.sadd(key1, charMembers).get());
+        System.out.println(
+                "### SSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning whole set");
         result = client.sscan(key1, initialCursor).get();
         assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
         assertEquals(charMembers.length, ((Object[]) result[resultCollectionIndex]).length);
@@ -14453,6 +14524,10 @@ public class SharedCommandTests {
                 resultMembers.containsAll(charMemberSet),
                 String.format("resultMembers: {%s}, charMemberSet: {%s}", resultMembers, charMemberSet));
 
+        System.out.println(
+                "### SSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match 'a'");
         result =
                 client
                         .sscan(key1, initialCursor, SScanOptionsBinary.builder().matchPattern(gs("a")).build())
@@ -14466,6 +14541,11 @@ public class SharedCommandTests {
         final Set<Object> secondResultValues = new HashSet<>();
         boolean isFirstLoop = true;
         do {
+            System.out.println(
+                    "### SSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with cursor: "
+                            + resultCursor);
             result = client.sscan(key1, resultCursor).get();
             resultCursor = gs(result[resultCursorIndex].toString());
             secondResultValues.addAll(
@@ -14479,6 +14559,11 @@ public class SharedCommandTests {
             }
 
             // Scan with result cursor has a different set
+            System.out.println(
+                    "### SSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with second cursor: "
+                            + resultCursor);
             Object[] secondResult = client.sscan(key1, resultCursor).get();
             GlideString newResultCursor = gs(secondResult[resultCursorIndex].toString());
             assertNotEquals(resultCursor, newResultCursor);
@@ -14505,6 +14590,10 @@ public class SharedCommandTests {
                         secondResultValues, numberMembersSet));
 
         // Test match pattern
+        System.out.println(
+                "### SSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match '*'");
         result =
                 client
                         .sscan(key1, initialCursor, SScanOptionsBinary.builder().matchPattern(gs("*")).build())
@@ -14513,12 +14602,20 @@ public class SharedCommandTests {
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
         // Test count
+        System.out.println(
+                "### SSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with count 20");
         result =
                 client.sscan(key1, initialCursor, SScanOptionsBinary.builder().count(20L).build()).get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
 
         // Test count with match returns a non-empty list
+        System.out.println(
+                "### SSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern '1*' and count 20");
         result =
                 client
                         .sscan(
@@ -14532,10 +14629,18 @@ public class SharedCommandTests {
         // Exceptions
         // Non-set key
         assertEquals(OK, client.set(key2, gs("test")).get());
+        System.out.println(
+                "### SSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-set key");
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sscan(key2, initialCursor).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
+        System.out.println(
+                "### SSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-set key with options");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -14549,6 +14654,10 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Negative count
+        System.out.println(
+                "### SSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with negative count");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -14583,15 +14692,27 @@ public class SharedCommandTests {
         }
 
         // Empty set
+        System.out.println(
+                "### ZSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning empty set");
         Object[] result = client.zscan(key1, initialCursor).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            System.out.println(
+                    "### ZSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.zscan(key1, "-1").get());
         } else {
+            System.out.println(
+                    "### ZSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             result = client.zscan(key1, "-1").get();
             assertEquals(initialCursor, result[resultCursorIndex]);
             assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
@@ -14599,6 +14720,10 @@ public class SharedCommandTests {
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.zadd(key1, charMap).get());
+        System.out.println(
+                "### ZSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning whole set");
         result = client.zscan(key1, initialCursor).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertEquals(
@@ -14629,6 +14754,10 @@ public class SharedCommandTests {
                         "resultValues: {%s} expectedScoresAsStrings: {%s}",
                         resultValues, expectedScoresAsStrings));
 
+        System.out.println(
+                "### ZSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match 'a'");
         result =
                 client.zscan(key1, initialCursor, ZScanOptions.builder().matchPattern("a").build()).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
@@ -14641,6 +14770,11 @@ public class SharedCommandTests {
         final Set<Object> secondResultAllValues = new HashSet<>();
         boolean isFirstLoop = true;
         do {
+            System.out.println(
+                    "### ZSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with cursor: "
+                            + resultCursor);
             result = client.zscan(key1, resultCursor).get();
             resultCursor = result[resultCursorIndex].toString();
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
@@ -14657,6 +14791,11 @@ public class SharedCommandTests {
             }
 
             // Scan with result cursor has a different set
+            System.out.println(
+                    "### ZSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with second cursor: "
+                            + resultCursor);
             Object[] secondResult = client.zscan(key1, resultCursor).get();
             String newResultCursor = secondResult[resultCursorIndex].toString();
             assertNotEquals(resultCursor, newResultCursor);
@@ -14691,17 +14830,29 @@ public class SharedCommandTests {
                         secondResultAllValues, numberMapValuesAsStrings));
 
         // Test match pattern
+        System.out.println(
+                "### ZSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match '*'");
         result =
                 client.zscan(key1, initialCursor, ZScanOptions.builder().matchPattern("*").build()).get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
         // Test count
+        System.out.println(
+                "### ZSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with count 20");
         result = client.zscan(key1, initialCursor, ZScanOptions.builder().count(20L).build()).get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
 
         // Test count with match returns a non-empty list
+        System.out.println(
+                "### ZSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern 'member1*' and count 20");
         result =
                 client
                         .zscan(
@@ -14713,6 +14864,10 @@ public class SharedCommandTests {
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            System.out.println(
+                    "### ZSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with noScores option");
             result =
                     client.zscan(key1, initialCursor, ZScanOptions.builder().noScores(true).build()).get();
             assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
@@ -14729,10 +14884,18 @@ public class SharedCommandTests {
         // Exceptions
         // Non-set key
         assertEquals(OK, client.set(key2, "test").get());
+        System.out.println(
+                "### ZSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-set key");
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zscan(key2, initialCursor).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
+        System.out.println(
+                "### ZSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-set key with options");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -14746,6 +14909,10 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Negative count
+        System.out.println(
+                "### ZSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with negative count");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -14786,15 +14953,27 @@ public class SharedCommandTests {
         }
 
         // Empty set
+        System.out.println(
+                "### ZSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning empty set");
         Object[] result = client.zscan(key1, initialCursor).get();
         assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
         assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            System.out.println(
+                    "### ZSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.zscan(key1, gs("-1")).get());
         } else {
+            System.out.println(
+                    "### ZSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             result = client.zscan(key1, gs("-1")).get();
             assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
             assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
@@ -14802,6 +14981,10 @@ public class SharedCommandTests {
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.zadd(key1.toString(), charMap_strings).get());
+        System.out.println(
+                "### ZSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning whole set");
         result = client.zscan(key1, initialCursor).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertEquals(
@@ -14832,6 +15015,10 @@ public class SharedCommandTests {
                         "resultValues: {%s} expectedScoresAsStrings: {%s}",
                         resultValues, expectedScoresAsGlideStrings));
 
+        System.out.println(
+                "### ZSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match 'a'");
         result =
                 client
                         .zscan(key1, initialCursor, ZScanOptionsBinary.builder().matchPattern(gs("a")).build())
@@ -14846,6 +15033,11 @@ public class SharedCommandTests {
         final Set<Object> secondResultAllValues = new HashSet<>();
         boolean isFirstLoop = true;
         do {
+            System.out.println(
+                    "### ZSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with cursor: "
+                            + resultCursor);
             result = client.zscan(key1, resultCursor).get();
             resultCursor = gs(result[resultCursorIndex].toString());
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
@@ -14862,6 +15054,11 @@ public class SharedCommandTests {
             }
 
             // Scan with result cursor has a different set
+            System.out.println(
+                    "### ZSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with second cursor: "
+                            + resultCursor);
             Object[] secondResult = client.zscan(key1, resultCursor).get();
             GlideString newResultCursor = gs(secondResult[resultCursorIndex].toString());
             assertNotEquals(resultCursor, newResultCursor);
@@ -14896,6 +15093,10 @@ public class SharedCommandTests {
                         secondResultAllValues, numberMapValuesAsGlideStrings));
 
         // Test match pattern
+        System.out.println(
+                "### ZSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match '*'");
         result =
                 client
                         .zscan(key1, initialCursor, ZScanOptionsBinary.builder().matchPattern(gs("*")).build())
@@ -14904,12 +15105,20 @@ public class SharedCommandTests {
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
         // Test count
+        System.out.println(
+                "### ZSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with count 20");
         result =
                 client.zscan(key1, initialCursor, ZScanOptionsBinary.builder().count(20L).build()).get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
 
         // Test count with match returns a non-empty list
+        System.out.println(
+                "### ZSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern 'member1*' and count 20");
         result =
                 client
                         .zscan(
@@ -14921,6 +15130,10 @@ public class SharedCommandTests {
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            System.out.println(
+                    "### ZSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with noScores option");
             result =
                     client
                             .zscan(key1, initialCursor, ZScanOptionsBinary.builder().noScores(true).build())
@@ -14938,10 +15151,18 @@ public class SharedCommandTests {
         // Exceptions
         // Non-set key
         assertEquals(OK, client.set(key2, gs("test")).get());
+        System.out.println(
+                "### ZSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-set key");
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zscan(key2, initialCursor).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
+        System.out.println(
+                "### ZSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-set key with options");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -14955,6 +15176,10 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Negative count
+        System.out.println(
+                "### ZSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with negative count");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -14992,15 +15217,27 @@ public class SharedCommandTests {
         }
 
         // Empty set
+        System.out.println(
+                "### HSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning empty set");
         Object[] result = client.hscan(key1, initialCursor).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            System.out.println(
+                    "### HSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.hscan(key1, "-1").get());
         } else {
+            System.out.println(
+                    "### HSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             result = client.hscan(key1, "-1").get();
             assertEquals(initialCursor, result[resultCursorIndex]);
             assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
@@ -15008,6 +15245,10 @@ public class SharedCommandTests {
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.hset(key1, charMap).get());
+        System.out.println(
+                "### HSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning whole set");
         result = client.hscan(key1, initialCursor).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertEquals(
@@ -15030,6 +15271,10 @@ public class SharedCommandTests {
                 resultValues.containsAll(charMap.values()),
                 String.format("resultValues: {%s} charMap.values(): {%s}", resultValues, charMap.values()));
 
+        System.out.println(
+                "### HSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match 'a'");
         result =
                 client.hscan(key1, initialCursor, HScanOptions.builder().matchPattern("a").build()).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
@@ -15044,6 +15289,11 @@ public class SharedCommandTests {
         final Set<Object> secondResultAllValues = new HashSet<>();
         boolean isFirstLoop = true;
         do {
+            System.out.println(
+                    "### HSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with cursor: "
+                            + resultCursor);
             result = client.hscan(key1, resultCursor).get();
             resultCursor = result[resultCursorIndex].toString();
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
@@ -15060,6 +15310,11 @@ public class SharedCommandTests {
             }
 
             // Scan with result cursor has a different set
+            System.out.println(
+                    "### HSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with second cursor: "
+                            + resultCursor);
             Object[] secondResult = client.hscan(key1, resultCursor).get();
             String newResultCursor = secondResult[resultCursorIndex].toString();
             assertNotEquals(resultCursor, newResultCursor);
@@ -15089,17 +15344,29 @@ public class SharedCommandTests {
                         secondResultAllValues, numberMap.values()));
 
         // Test match pattern
+        System.out.println(
+                "### HSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match '*'");
         result =
                 client.hscan(key1, initialCursor, HScanOptions.builder().matchPattern("*").build()).get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
         // Test count
+        System.out.println(
+                "### HSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with count 20");
         result = client.hscan(key1, initialCursor, HScanOptions.builder().count(20L).build()).get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
 
         // Test count with match returns a non-empty list
+        System.out.println(
+                "### HSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern '1*' and count 20");
         result =
                 client
                         .hscan(
@@ -15109,6 +15376,10 @@ public class SharedCommandTests {
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            System.out.println(
+                    "### HSCAN DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with noValues option");
             result =
                     client.hscan(key1, initialCursor, HScanOptions.builder().noValues(true).build()).get();
             assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
@@ -15124,10 +15395,18 @@ public class SharedCommandTests {
         // Exceptions
         // Non-hash key
         assertEquals(OK, client.set(key2, "test").get());
+        System.out.println(
+                "### HSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-hash key");
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hscan(key2, initialCursor).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
+        System.out.println(
+                "### HSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-hash key with options");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -15141,6 +15420,10 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Negative count
+        System.out.println(
+                "### HSCAN DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with negative count");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -15175,15 +15458,27 @@ public class SharedCommandTests {
         }
 
         // Empty set
+        System.out.println(
+                "### HSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning empty set");
         Object[] result = client.hscan(key1, initialCursor).get();
         assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
         assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            System.out.println(
+                    "### HSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.hscan(key1, gs("-1")).get());
         } else {
+            System.out.println(
+                    "### HSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with negative cursor");
             result = client.hscan(key1, gs("-1")).get();
             assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
             assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
@@ -15191,6 +15486,10 @@ public class SharedCommandTests {
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.hset(key1, charMap).get());
+        System.out.println(
+                "### HSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning whole set");
         result = client.hscan(key1, initialCursor).get();
         assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
         assertEquals(
@@ -15213,6 +15512,10 @@ public class SharedCommandTests {
                 resultValues.containsAll(charMap.values()),
                 String.format("resultValues: {%s} charMap.values(): {%s}", resultValues, charMap.values()));
 
+        System.out.println(
+                "### HSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match 'a'");
         result =
                 client
                         .hscan(key1, initialCursor, HScanOptionsBinary.builder().matchPattern(gs("a")).build())
@@ -15229,6 +15532,11 @@ public class SharedCommandTests {
         final Set<Object> secondResultAllValues = new HashSet<>();
         boolean isFirstLoop = true;
         do {
+            System.out.println(
+                    "### HSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with cursor: "
+                            + resultCursor);
             result = client.hscan(key1, resultCursor).get();
             resultCursor = gs(result[resultCursorIndex].toString());
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
@@ -15245,6 +15553,11 @@ public class SharedCommandTests {
             }
 
             // Scan with result cursor has a different set
+            System.out.println(
+                    "### HSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with second cursor: "
+                            + resultCursor);
             Object[] secondResult = client.hscan(key1, resultCursor).get();
             GlideString newResultCursor = gs(secondResult[resultCursorIndex].toString());
             assertNotEquals(resultCursor, newResultCursor);
@@ -15274,6 +15587,10 @@ public class SharedCommandTests {
                         secondResultAllValues, numberMap.values()));
 
         // Test match pattern
+        System.out.println(
+                "### HSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern match '*'");
         result =
                 client
                         .hscan(key1, initialCursor, HScanOptionsBinary.builder().matchPattern(gs("*")).build())
@@ -15282,12 +15599,20 @@ public class SharedCommandTests {
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
         // Test count
+        System.out.println(
+                "### HSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with count 20");
         result =
                 client.hscan(key1, initialCursor, HScanOptionsBinary.builder().count(20L).build()).get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
 
         // Test count with match returns a non-empty list
+        System.out.println(
+                "### HSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with pattern '1*' and count 20");
         result =
                 client
                         .hscan(
@@ -15299,6 +15624,10 @@ public class SharedCommandTests {
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            System.out.println(
+                    "### HSCAN_BINARY DEBUG ["
+                            + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                            + "] - Scanning with noValues option");
             result =
                     client
                             .hscan(key1, initialCursor, HScanOptionsBinary.builder().noValues(true).build())
@@ -15316,10 +15645,18 @@ public class SharedCommandTests {
         // Exceptions
         // Non-hash key
         assertEquals(OK, client.set(key2, gs("test")).get());
+        System.out.println(
+                "### HSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-hash key");
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hscan(key2, initialCursor).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
+        System.out.println(
+                "### HSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning non-hash key with options");
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -15333,6 +15670,10 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Negative count
+        System.out.println(
+                "### HSCAN_BINARY DEBUG ["
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+                        + "] - Scanning with negative count");
         executionException =
                 assertThrows(
                         ExecutionException.class,
