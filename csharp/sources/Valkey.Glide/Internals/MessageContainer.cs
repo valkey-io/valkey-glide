@@ -43,9 +43,7 @@ internal class MessageContainer
     {
         if (_messages.Any(message => !message.IsCompleted))
         {
-            Debug.Write("MessageContainer::DisposeWithError");
-            Debug.Write(new StackTrace().ToString());
-            BaseClient.LOG("MessageContainer::DisposeWithError");
+            BaseClient.LOG($"MessageContainer::DisposeWithError {_client} {DateTime.Now:O}");
             BaseClient.LOG(new StackTrace().ToString());
         }
         lock (_messages)
@@ -54,7 +52,7 @@ internal class MessageContainer
             {
                 try
                 {
-                    message.SetException(new TaskCanceledException("Client closed", error));
+                    message.SetException(new TaskCanceledException($"Client {_client} closed {DateTime.Now:O}", error));
                 }
                 catch (Exception) { }
             }
