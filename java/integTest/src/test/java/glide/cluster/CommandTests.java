@@ -514,12 +514,7 @@ public class CommandTests {
         firstNodeInfo = getFirstEntryFromMultiValue(data);
         long valueAfter = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
-        if (valueBefore == 0) {
-            assertEquals(valueBefore, valueAfter);
-            return;
-        }
-
-        assertTrue(valueAfter < valueBefore);
+        assertTrue(valueBefore == 0 ? valueAfter == 0 : valueAfter < valueBefore);
     }
 
     @ParameterizedTest
