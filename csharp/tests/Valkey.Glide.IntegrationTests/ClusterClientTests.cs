@@ -1,5 +1,6 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using static Valkey.Glide.Commands.Options.InfoOptions;
 using static Valkey.Glide.Route;
 
 namespace Valkey.Glide.IntegrationTests;
@@ -14,7 +15,7 @@ public class ClusterClientTests
         SortedSet<string> ports = [];
         foreach (int i in Enumerable.Range(0, 100))
         {
-            string res = ((await client.CustomCommand(["info", "server"], Route.Random))! as GlideString)!;
+            string res = ((await client.CustomCommand(["info", "server"], Route.Random)).SingleValue! as GlideString)!;
             foreach (string line in res!.Split("\r\n"))
             {
                 if (line.Contains("tcp_port"))
@@ -36,19 +37,19 @@ public class ClusterClientTests
     {
         GlideClusterClient client = TestConfiguration.DefaultClusterClient();
 
-        string res = (await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Primary))! as GlideString)!;
+        string res = ((await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Primary))).SingleValue! as GlideString)!;
         Assert.Contains("role:master", res);
 
-        res = (await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Replica))! as GlideString)!;
+        res = ((await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Replica))).SingleValue! as GlideString)!;
         Assert.Contains("role:slave", res);
 
-        res = (await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Primary))! as GlideString)!;
+        res = ((await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Primary))).SingleValue! as GlideString)!;
         Assert.Contains("role:master", res);
 
-        res = (await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Replica))! as GlideString)!;
+        res = ((await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Replica))).SingleValue! as GlideString)!;
         Assert.Contains("role:slave", res);
 
-        res = (await client.CustomCommand(["info", "replication"], new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port))! as GlideString)!;
+        res = ((await client.CustomCommand(["info", "replication"], new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port))).SingleValue! as GlideString)!;
         Assert.Contains("# Replication", res);
     }
 
@@ -60,7 +61,66 @@ public class ClusterClientTests
         _ = await client.Set("klm", "klm");
         _ = await client.Set("xyz", "xyz");
 
-        long res = (long)(await client.CustomCommand(["dbsize"], AllPrimaries))!;
+        long res = (long)(await client.CustomCommand(["dbsize"], AllPrimaries)).SingleValue!;
         Assert.True(res >= 3);
+    }
+
+    [Fact]
+    public async Task Info()
+    {
+        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+
+        Dictionary<string, string> info = await client.Info();
+        foreach (string nodeInfo in info.Values)
+        {
+            Assert.Multiple([
+                () => Assert.Contains("# Server", nodeInfo),
+                () => Assert.Contains("# Replication", nodeInfo),
+                () => Assert.DoesNotContain("# Latencystats", nodeInfo),
+            ]);
+        }
+
+        info = await client.Info([Section.REPLICATION]);
+        foreach (string nodeInfo in info.Values)
+        {
+            Assert.Multiple([
+                () => Assert.DoesNotContain("# Server", nodeInfo),
+                () => Assert.Contains("# Replication", nodeInfo),
+                () => Assert.DoesNotContain("# Latencystats", nodeInfo),
+            ]);
+        }
+    }
+
+    [Fact]
+    public async Task InfoWithRoute()
+    {
+        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+
+        ClusterValue<string> info = await client.Info(Route.Random);
+        Assert.Multiple([
+            () => Assert.Contains("# Server", info.SingleValue),
+            () => Assert.Contains("# Replication", info.SingleValue),
+            () => Assert.DoesNotContain("# Latencystats", info.SingleValue),
+        ]);
+
+        info = await client.Info(AllPrimaries);
+        foreach (string nodeInfo in info.MultiValue.Values)
+        {
+            Assert.Multiple([
+                () => Assert.Contains("# Server", nodeInfo),
+                () => Assert.Contains("# Replication", nodeInfo),
+                () => Assert.DoesNotContain("# Latencystats", nodeInfo),
+            ]);
+        }
+
+        info = await client.Info([Section.ERRORSTATS], AllNodes);
+
+        foreach (string nodeInfo in info.MultiValue.Values)
+        {
+            Assert.Multiple([
+                () => Assert.DoesNotContain("# Server", nodeInfo),
+                () => Assert.Contains("# Errorstats", nodeInfo),
+            ]);
+        }
     }
 }

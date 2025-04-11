@@ -75,7 +75,7 @@ internal class ResponseHandler
         ValueType.Array => CreateArray(value),
         ValueType.Map => CreateMap(value),
         ValueType.Set => CreateArray(value).ToHashSet(),
-        ValueType.OK => new GlideString("OK"),
+        ValueType.OK => "OK",
         _ => throw new NotImplementedException(),
     };
 }

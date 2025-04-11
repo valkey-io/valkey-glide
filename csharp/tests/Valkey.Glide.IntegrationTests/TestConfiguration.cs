@@ -96,7 +96,7 @@ public class TestConfiguration : IDisposable
 
     private readonly string _scriptDir;
 
-    private void TestConsoleWriteLine(string message) =>
+    private static void TestConsoleWriteLine(string message) =>
         TestContext.Current.SendDiagnosticMessage(message);
 
     internal List<(string host, ushort port)> StartServer(bool cluster, bool tls = false, string? name = null)
@@ -160,21 +160,46 @@ public class TestConfiguration : IDisposable
 
     private static Version GetServerVersion()
     {
-        ProcessStartInfo info = new()
+        Exception? err = null;
+        if (STANDALONE_HOSTS.Count > 0)
         {
-            FileName = "redis-server",
-            Arguments = "-v",
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-        };
-        Process? proc = Process.Start(info);
-        proc?.WaitForExit();
-        string output = proc?.StandardOutput.ReadToEnd() ?? "";
+            GlideClient client = DefaultStandaloneClient();
+            try
+            {
+                return TryGetVersion(client);
+            }
+            catch (Exception e)
+            {
+                err = e;
+            }
+        }
+        if (CLUSTER_HOSTS.Count > 0)
+        {
+            GlideClusterClient client = DefaultClusterClient();
+            try
+            {
+                return TryGetVersion(client);
+            }
+            catch (Exception e)
+            {
+                if (err is not null)
+                {
+                    TestConsoleWriteLine(err.ToString());
+                }
+                TestConsoleWriteLine(e.ToString());
+                throw;
+            }
+        }
+        throw new Exception("No servers are given");
+    }
 
-        // Redis response:
-        // Redis server v=7.2.3 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=7504b1fedf883f2
-        // Valkey response:
-        // Server v=7.2.5 sha=26388270:0 malloc=jemalloc-5.3.0 bits=64 build=ea40bb1576e402d6
-        return new Version(output.Split("v=")[1].Split(" ")[0]);
+    private static Version TryGetVersion(BaseClient client)
+    {
+        string info = client.GetType() == typeof(GlideClient)
+            ? ((GlideClient)client).Info().GetAwaiter().GetResult()
+            : ((GlideClusterClient)client).Info(Route.Random).GetAwaiter().GetResult().SingleValue;
+        string[] lines = info.Split();
+        string line = lines.FirstOrDefault(l => l.Contains("valkey_version")) ?? lines.First(l => l.Contains("redis_version"));
+        return new(line.Split(':')[1]);
     }
 }
