@@ -6,7 +6,6 @@ package api
 import "C"
 
 import (
-	"fmt"
 	"log"
 	"sync"
 	"unsafe"
@@ -81,7 +80,7 @@ func pubSubCallback(
 
 	go func() {
 		// Process different types of push messages
-		message, err := NewPubSubMessageWithPattern(msg, cha, pat)
+		message := NewPubSubMessageWithPattern(msg, cha, pat)
 
 		if clientPtr != nil {
 			// Look up the client in our registry using the pointer address
@@ -94,23 +93,8 @@ func pubSubCallback(
 					handler.handleMessage(message)
 				}
 			} else {
-				// TODO log
 				log.Printf("Client not found for pointer: %v\n", ptrValue)
 			}
 		}
 	}()
-}
-
-func getMessage(pushKind C.PushKind, msgContent string, channel string, pattern string) (*PubSubMessage, error) {
-	switch pushKind {
-	case C.PushMessage, C.PushSMessage:
-		return NewPubSubMessage(msgContent, channel), nil
-
-	case C.PushPMessage:
-		return NewPubSubMessageWithPattern(msgContent, channel, pattern), nil
-
-	default:
-		// log unsupported push kind
-		return nil, fmt.Errorf("unsupported push kind: %v", pushKind)
-	}
 }

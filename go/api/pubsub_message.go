@@ -23,11 +23,11 @@ func NewPubSubMessage(message, channel string) *PubSubMessage {
 	}
 }
 
-func NewPubSubMessageWithPattern(message, channel, pattern string) *PubSubMessage {
+func NewPubSubMessageWithPattern(message, channel string, pattern Result[string]) *PubSubMessage {
 	return &PubSubMessage{
 		Message: message,
 		Channel: channel,
-		Pattern: CreateStringResult(pattern),
+		Pattern: pattern,
 	}
 }
 
