@@ -4,6 +4,9 @@ namespace Valkey.Glide.Commands.Options;
 
 public class InfoOptions
 {
+    /// <summary>
+    /// Specific section of information which could be requested by <c>INFO</c> command.
+    /// </summary>
     public enum Section
     {
         /// <summary>

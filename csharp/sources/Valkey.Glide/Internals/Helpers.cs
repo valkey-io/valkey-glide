@@ -16,7 +16,8 @@ internal static class Helpers
         => dict.Select(p => (p.Key, Value: p.Value.ToString())).ToDictionary(p => p.Key, p => p.Value);
 
     // Convert values in a dictionary from T to V where input dict has type `Dictionary<K, object>`
-    public static Dictionary<K, V> ConvertValues<K, V, T>(this Dictionary<K, object> dict, Func<T, V> converter) where K : class => dict.Select(p => (p.Key, Value: converter((T)p.Value))).ToDictionary(p => p.Key, p => p.Value);
+    public static Dictionary<K, V> ConvertValues<K, V, T>(this Dictionary<K, object> dict, Func<T, V> converter) where K : class
+        => dict.Select(p => (p.Key, Value: converter((T)p.Value))).ToDictionary(p => p.Key, p => p.Value);
 
     // Get type name in format like "Dictionary<GlideString, GlideString>" (not "Dictionary`2")
     public static string GetRealTypeName(this Type t)
