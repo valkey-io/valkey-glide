@@ -14,9 +14,14 @@ package api
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
 // void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
+// void pubSubCallback(void *clientPtr, enum PushKind kind,
+//                     const uint8_t *message, int64_t message_len,
+//                     const uint8_t *channel, int64_t channel_len,
+//                     const uint8_t *pattern, int64_t pattern_len);
 import "C"
 
 import (
+	goErr "errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -44,6 +49,7 @@ type BaseClient interface {
 	BitmapCommands
 	GeoSpatialCommands
 	ScriptingAndFunctionBaseCommands
+	PubSubCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -55,29 +61,25 @@ type payload struct {
 	error error
 }
 
-//export successCallback
-func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandResponse) {
-	response := cResponse
-	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
-	resultChannel <- payload{value: response, error: nil}
-}
-
-//export failureCallback
-func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
-	defer C.free_error_message(cErrorMessage)
-	msg := C.GoString(cErrorMessage)
-	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
-	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
-}
-
 type clientConfiguration interface {
 	toProtobuf() (*protobuf.ConnectionRequest, error)
 }
 
 type baseClient struct {
-	pending    map[unsafe.Pointer]struct{}
-	coreClient unsafe.Pointer
-	mu         sync.Mutex
+	pending        map[unsafe.Pointer]struct{}
+	coreClient     unsafe.Pointer
+	mu             sync.Mutex
+	messageHandler *MessageHandler
+}
+
+// setMessageHandler assigns a message handler to the client for processing pub/sub messages
+func (client *baseClient) setMessageHandler(handler *MessageHandler) {
+	client.messageHandler = handler
+}
+
+// getMessageHandler returns the currently assigned message handler
+func (client *baseClient) getMessageHandler() *MessageHandler {
+	return client.messageHandler
 }
 
 // buildAsyncClientType safely initializes a C.ClientType with an AsyncClient_Body.
@@ -153,23 +155,29 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, &errors.ClosingError{Msg: err.Error()}
 	}
+	client := &baseClient{pending: make(map[unsafe.Pointer]struct{})}
 
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
 			&clientType,
+			(C.PubSubCallback)(unsafe.Pointer(C.pubSubCallback)),
 		),
 	)
 	defer C.free_connection_response(cResponse)
-
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
 		return nil, &errors.ConnectionError{Msg: message}
 	}
 
-	return &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}, nil
+	client.coreClient = cResponse.conn_ptr
+
+	// Register the client in our registry using the pointer value from C
+	registerClient(client, uintptr(cResponse.conn_ptr))
+
+	return client, nil
 }
 
 // Close terminates the client by closing all associated resources.
@@ -180,6 +188,8 @@ func (client *baseClient) Close() {
 	if client.coreClient == nil {
 		return
 	}
+
+	unregisterClient(uintptr(client.coreClient))
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
@@ -5995,9 +6005,6 @@ func (client *baseClient) CopyWithOptions(
 //	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
-//	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
-//	fmt.Println(res) // map[key:[["field1", "entry1"]]
-//
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(
 	key string,
@@ -7610,4 +7617,25 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 		return nil, err
 	}
 	return handleAnyResponse(result)
+}
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *baseClient) Publish(channel string, message string) (int64, error) {
+	if message == "" || channel == "" {
+		return 0, goErr.New("both message and channel are required for Publish command")
+	}
+	args := []string{channel, message}
+	result, err := client.executeCommand(C.Publish, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
 }

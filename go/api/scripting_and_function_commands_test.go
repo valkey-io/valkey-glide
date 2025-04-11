@@ -8,12 +8,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
-	"github.com/valkey-io/valkey-glide/go/integTest"
 )
 
 var (
-	libraryCode         = integTest.GenerateLuaLibCode("mylib", map[string]string{"myfunc": "return 42"}, true)
-	libraryCodeWithArgs = integTest.GenerateLuaLibCode("mylib", map[string]string{"myfunc": "return args[1]"}, true)
+	libraryCode = `#!lua name=mylib
+redis.register_function{ function_name = 'myfunc', callback = function(keys, args) return 42 end, flags = { 'no-writes' } }`
+	libraryCodeWithArgs = `#!lua name=mylib
+redis.register_function{ function_name = 'myfunc', callback = function(keys, args) return args[1] end, flags = { 'no-writes' } }`
 )
 
 // FunctionLoad Examples

@@ -48,6 +48,14 @@ type ClosingError struct {
 
 func (e *ClosingError) Error() string { return e.Msg }
 
+// ConfigurationError is a client error that occurs when there is an issue with client configuration.
+type ConfigurationError struct {
+	Msg string
+}
+
+func (e *ConfigurationError) Error() string { return e.Msg }
+
+// GoError converts a C error type to a corresponding Go error.
 func GoError(cErrorType uint32, errorMessage string) error {
 	switch cErrorType {
 	case C.ExecAbort:
