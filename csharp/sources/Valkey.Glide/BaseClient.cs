@@ -114,15 +114,16 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     }
 
     protected static string HandleOk(IntPtr response)
-        => HandleServerResponse<GlideString, string>(response, false, gs => gs.GetString());
+        => HandleServerResponse<string>(response, false);
 
     protected static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
         => HandleServerResponse<T, T>(response, isNullable, o => o);
 
-    protected static ClusterValue<object?> HandleCustomCommandClusterResponse(IntPtr response, Route route)
-        => HandleServerResponse<object, ClusterValue<object?>>(response, true, data => (data is string str && str == "OK") || route is ISingleNodeRoute
-            ? ClusterValue<object?>.OfSingleValue((object?)data)
-            : ClusterValue<object?>.OfMultiValue((Dictionary<GlideString, object?>)data));
+    protected static ClusterValue<object?> HandleCustomCommandClusterResponse(IntPtr response, Route? route = null)
+        => HandleServerResponse<object, ClusterValue<object?>>(response, true, data
+            => (data is string str && str == "OK") || data is not Dictionary<GlideString, object?> || route is ISingleNodeRoute
+                ? ClusterValue<object?>.OfSingleValue(data)
+                : ClusterValue<object?>.OfMultiValue((Dictionary<GlideString, object?>)data));
 
     /// <summary>
     /// Process and convert a server response that may be a multi-node response.
@@ -172,7 +173,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
             }
             return value is R
                 ? converter((value as R)!)
-                : throw new Exception($"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(T).GetRealTypeName()}");
+                : throw new Exception($"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(R).GetRealTypeName()}");
         }
         finally
         {

@@ -8,6 +8,21 @@ namespace Valkey.Glide.IntegrationTests;
 public class ClusterClientTests
 {
     [Fact]
+    public async Task CustomCommand()
+    {
+        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+        // command which returns always a single value
+        long res = (long)(await client.CustomCommand(["dbsize"])).SingleValue!;
+        Assert.True(res >= 0);
+        // command which returns a multi value by default
+        Dictionary<string, object?> info = (await client.CustomCommand(["info"])).MultiValue;
+        foreach (object? nodeInfo in info.Values)
+        {
+            Assert.Contains("# Server", (nodeInfo as GlideString)!);
+        }
+    }
+
+    [Fact]
     public async Task CustomCommandWithRandomRoute()
     {
         GlideClusterClient client = TestConfiguration.DefaultClusterClient();

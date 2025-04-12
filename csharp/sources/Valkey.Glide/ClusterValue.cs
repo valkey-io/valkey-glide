@@ -11,7 +11,7 @@ public class ClusterValue<T>
 
     private ClusterValue() { }
 
-    public static ClusterValue<T> Of(object obj)
+    internal static ClusterValue<T> Of(object obj)
     {
         if (obj is Dictionary<string, T> dict)
         {
@@ -24,13 +24,13 @@ public class ClusterValue<T>
         return OfSingleValue((T)obj);
     }
 
-    public static ClusterValue<T> OfSingleValue(T obj)
+    internal static ClusterValue<T> OfSingleValue(T obj)
         => new() { _singleValue = obj };
 
-    public static ClusterValue<T> OfMultiValue(Dictionary<string, T> obj)
+    internal static ClusterValue<T> OfMultiValue(Dictionary<string, T> obj)
         => new() { _multiValue = obj };
 
-    public static ClusterValue<T> OfMultiValue(Dictionary<GlideString, T> obj)
+    internal static ClusterValue<T> OfMultiValue(Dictionary<GlideString, T> obj)
         => new() { _multiValue = obj.DonwCastKeys() };
 
     public Dictionary<string, T> MultiValue

@@ -9,8 +9,8 @@ namespace Valkey.Glide;
 
 public sealed class GlideClusterClient(ClusterClientConfiguration config) : BaseClient(config), IGenericClusterCommands, IServerManagementClusterCommands
 {
-    public async Task<object?> CustomCommand(GlideString[] args)
-        => await Command(RequestType.CustomCommand, args, resp => HandleServerResponse<object?>(resp, true));
+    public async Task<ClusterValue<object?>> CustomCommand(GlideString[] args)
+        => await Command(RequestType.CustomCommand, args, resp => HandleCustomCommandClusterResponse(resp));
 
     public async Task<ClusterValue<object?>> CustomCommand(GlideString[] args, Route route)
         => await Command(RequestType.CustomCommand, args, resp => HandleCustomCommandClusterResponse(resp, route), route);

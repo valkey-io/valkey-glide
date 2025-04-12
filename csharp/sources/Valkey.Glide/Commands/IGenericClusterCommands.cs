@@ -17,8 +17,8 @@ public interface IGenericClusterCommands
     /// <example>
     /// <code>
     /// // Query all pub/sub clients
-    /// object? result = await client.CustomCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"]);
-    /// GlideString response = (result as GlideString)!;
+    /// ClusterValue&lt;object?&gt; result = await client.CustomCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"]);
+    /// GlideString response = (result.SingleValue as GlideString)!;
     /// </code>
     /// </example>
     /// </summary>
@@ -27,7 +27,7 @@ public interface IGenericClusterCommands
     /// </remarks>
     /// <param name="args">A list including the command name and arguments for the custom command.</param>
     /// <returns>The returning value depends on the executed command.</returns>
-    Task<object?> CustomCommand(GlideString[] args);
+    Task<ClusterValue<object?>> CustomCommand(GlideString[] args);
 
     /// <summary>
     /// Executes a single command, without checking inputs. Every part of the command, including subcommands,
