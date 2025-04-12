@@ -116,7 +116,7 @@ public class GlideClient extends BaseClient
      *
      * @example
      *     <pre>{@code
-     * GlideClientConfiguration glideClientConfiguration =
+     * GlideClientConfiguration config =
      *     GlideClientConfiguration.builder()
      *         .address(node1address)
      *         .address(node2address)
@@ -126,15 +126,14 @@ public class GlideClient extends BaseClient
      *         .requestTimeout(2000)
      *         .clientName("GLIDE")
      *         .subscriptionConfiguration(
-     *             ClusterSubscriptionConfiguration.builder()
+     *             StandaloneSubscriptionConfiguration.builder()
      *                 .subscription(EXACT, "notifications")
      *                 .subscription(EXACT, "news")
-     *                 .subscription(SHARDED, "data")
      *                 .callback(callback)
      *                 .build())
      *         .inflightRequestsLimit(1000)
      *         .build();
-     * GlideClusterClient client = GlideClusterClient.createClient(glideClientConfiguration).get();
+     * GlideClient client = GlideClient.createClient(config).get();
      * }</pre>
      */
     public static CompletableFuture<GlideClient> createClient(

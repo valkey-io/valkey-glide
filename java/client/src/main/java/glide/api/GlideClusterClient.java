@@ -130,8 +130,8 @@ public class GlideClusterClient extends BaseClient
      *
      * @example
      *     <pre>{@code
-     * GlideClientConfiguration glideClientConfiguration =
-     *     GlideClientConfiguration.builder()
+     * GlideClusterClientConfiguration config =
+     *     GlideClusterClientConfiguration.builder()
      *         .address(node1address)
      *         .address(node2address)
      *         .useTLS(true)
@@ -148,7 +148,7 @@ public class GlideClusterClient extends BaseClient
      *                 .build())
      *         .inflightRequestsLimit(1000)
      *         .build();
-     * GlideClusterClient client = GlideClusterClient.createClient(glideClientConfiguration).get();
+     * GlideClusterClient client = GlideClusterClient.createClient(config).get();
      * }</pre>
      */
     public static CompletableFuture<GlideClusterClient> createClient(
