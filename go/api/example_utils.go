@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 var (
@@ -18,23 +19,33 @@ var (
 )
 
 var (
-	clusterClient *GlideClusterClient
-	clusterOnce   sync.Once
+	clusterClient       *GlideClusterClient
+	clusterOnce         sync.Once
+	clusterAddresses    []NodeAddress
+	standaloneClient    *GlideClient
+	standaloneOnce      sync.Once
+	standaloneAddresses []NodeAddress
+	initOnce            sync.Once
 )
-
-var (
-	standaloneClient *GlideClient
-	standaloneOnce   sync.Once
-)
-
-var initOnce sync.Once
 
 func initFlags() {
 	// Parse flags only once after the test framework has had a chance to set the flags.
 	// This is necessary because the test framework sets the flags after the init function is called.
 	initOnce.Do(func() {
 		flag.Parse()
+		standaloneAddresses = parseHosts(*standaloneNode)
+		clusterAddresses = parseHosts(*clusterNodes)
 	})
+}
+
+func getStandaloneAddresses() []NodeAddress {
+	initFlags()
+	return standaloneAddresses
+}
+
+func getClusterAddresses() []NodeAddress {
+	initFlags()
+	return clusterAddresses
 }
 
 // getExampleGlideClient returns a GlideClient instance for testing purposes.
@@ -42,20 +53,19 @@ func initFlags() {
 func getExampleGlideClient() *GlideClient {
 	standaloneOnce.Do(func() {
 		initFlags()
-		addresses := parseHosts(*standaloneNode)
 		config := NewGlideClientConfiguration().
-			WithAddress(&addresses[0]) // use default address
+			WithAddress(&standaloneAddresses[0])
 
 		client, err := NewGlideClient(config)
 		if err != nil {
-			fmt.Println("error connecting to database: ", err)
+			fmt.Println("error connecting to server: ", err)
 		}
 
 		standaloneClient = client.(*GlideClient)
 	})
 
 	// Flush the database before each test to ensure a clean state.
-	_, err := standaloneClient.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
+	_, err := standaloneClient.FlushAllWithOptions(options.SYNC)
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
@@ -66,24 +76,23 @@ func getExampleGlideClient() *GlideClient {
 func getExampleGlideClusterClient() *GlideClusterClient {
 	clusterOnce.Do(func() {
 		initFlags()
-		addresses := parseHosts(*clusterNodes)
 		config := NewGlideClusterClientConfiguration().
-			WithAddress(&addresses[0]).
+			WithAddress(&clusterAddresses[0]).
 			WithRequestTimeout(5000)
 
 		client, err := NewGlideClusterClient(config)
 		if err != nil {
-			fmt.Println("error connecting to database: ", err)
+			fmt.Println("error connecting to server: ", err)
 		}
 
 		clusterClient = client.(*GlideClusterClient)
 	})
 
 	// Flush the database before each test to ensure a clean state.
-	_, err := clusterClient.CustomCommandWithRoute(
-		[]string{"FLUSHALL"},
-		config.AllPrimaries,
-	) // todo: replace with client.FlushAll() when implemented
+	mode := options.SYNC
+	_, err := clusterClient.FlushAllWithOptions(
+		options.FlushClusterOptions{FlushMode: &mode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}

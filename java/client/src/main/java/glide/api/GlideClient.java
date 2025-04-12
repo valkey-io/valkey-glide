@@ -55,7 +55,11 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.configuration.BackoffStrategy;
+import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
@@ -66,7 +70,12 @@ import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 
 /**
- * Async (non-blocking) client for Standalone mode. Use {@link #createClient} to request a client.
+ * Client used for connection to standalone servers.<br>
+ * Use {@link #createClient} to request a client.
+ *
+ * @see For full documentation refer to <a
+ *     href="https://github.com/valkey-io/valkey-glide/wiki/Java-Wrapper#standalone">Valkey Glide
+ *     Wiki</a>.
  */
 public class GlideClient extends BaseClient
         implements GenericCommands,
@@ -83,10 +92,49 @@ public class GlideClient extends BaseClient
     }
 
     /**
-     * Async request for an async (non-blocking) client in Standalone mode.
+     * Creates a new {@link GlideClient} instance and establishes a connection to a standalone Valkey
+     * server.
      *
-     * @param config Glide client Configuration.
-     * @return A Future to connect and return a GlideClient.
+     * @param config The configuration options for the client, including server addresses,
+     *     authentication credentials, TLS settings, database selection, reconnection strategy, and
+     *     Pub/Sub subscriptions.
+     * @return A Future that resolves to a connected {@link GlideClient} instance.
+     * @remarks Use this static method to create and connect a {@link GlideClient} to a standalone
+     *     Valkey server. The client will automatically handle connection establishment, including any
+     *     authentication and TLS configurations.
+     *     <ul>
+     *       <li><b>Authentication</b>: If {@link ServerCredentials} are provided, the client will
+     *           attempt to authenticate using the specified username and password.
+     *       <li><b>TLS</b>: If {@link
+     *           BaseClientConfiguration.BaseClientConfigurationBuilder#useTLS(boolean)} is set to
+     *           <code>true</code>, the client will establish secure connections using TLS.
+     *       <li><b>Reconnection Strategy</b>: The {@link BackoffStrategy} settings define how the
+     *           client will attempt to reconnect in case of disconnections.
+     *       <li><b>Pub/Sub Subscriptions</b>: Any channels or patterns specified in {@link
+     *           StandaloneSubscriptionConfiguration} will be subscribed to upon connection.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * GlideClientConfiguration config =
+     *     GlideClientConfiguration.builder()
+     *         .address(node1address)
+     *         .address(node2address)
+     *         .useTLS(true)
+     *         .readFrom(ReadFrom.PREFER_REPLICA)
+     *         .credentials(credentialsConfiguration)
+     *         .requestTimeout(2000)
+     *         .clientName("GLIDE")
+     *         .subscriptionConfiguration(
+     *             StandaloneSubscriptionConfiguration.builder()
+     *                 .subscription(EXACT, "notifications")
+     *                 .subscription(EXACT, "news")
+     *                 .callback(callback)
+     *                 .build())
+     *         .inflightRequestsLimit(1000)
+     *         .build();
+     * GlideClient client = GlideClient.createClient(config).get();
+     * }</pre>
      */
     public static CompletableFuture<GlideClient> createClient(
             @NonNull GlideClientConfiguration config) {
