@@ -20,6 +20,9 @@ public class ClusterClientTests
         {
             Assert.Contains("# Server", (nodeInfo as GlideString)!);
         }
+        // command which returns a map even on a single node route
+        ClusterValue<object?> config = await client.CustomCommand(["config", "get", "*file"], Route.Random);
+        Assert.True((config.SingleValue as Dictionary<GlideString, object?>)!.Count > 0);
     }
 
     [Fact]

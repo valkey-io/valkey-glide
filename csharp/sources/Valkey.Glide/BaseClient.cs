@@ -121,7 +121,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     protected static ClusterValue<object?> HandleCustomCommandClusterResponse(IntPtr response, Route? route = null)
         => HandleServerResponse<object, ClusterValue<object?>>(response, true, data
-            => (data is string str && str == "OK") || data is not Dictionary<GlideString, object?> || route is ISingleNodeRoute
+            => (data is string str && str == "OK") || route is ISingleNodeRoute || data is not Dictionary<GlideString, object?>
                 ? ClusterValue<object?>.OfSingleValue(data)
                 : ClusterValue<object?>.OfMultiValue((Dictionary<GlideString, object?>)data));
 
