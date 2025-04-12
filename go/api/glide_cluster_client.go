@@ -812,16 +812,16 @@ func (client *GlideClusterClient) ConfigSetWithOptions(
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClusterClient) ConfigGet(
 	parameters []string,
-) (ClusterValue[interface{}], error) {
+) (map[string]string, error) {
 	res, err := client.executeCommand(C.ConfigGet, parameters)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return nil, err
 	}
-	data, err := handleInterfaceResponse(res)
+	data, err := handleStringToStringMapResponse(res)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return nil, err
 	}
-	return createClusterValue[interface{}](data), nil
+	return data, nil
 }
 
 // Get the values of configuration parameters.
@@ -840,16 +840,23 @@ func (client *GlideClusterClient) ConfigGet(
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClusterClient) ConfigGetWithOptions(
 	parameters []string, opts options.RouteOption,
-) (ClusterValue[interface{}], error) {
+) (ClusterValue[map[string]string], error) {
 	res, err := client.executeCommandWithRoute(C.ConfigGet, parameters, opts.Route)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return createEmptyClusterValue[map[string]string](), err
 	}
-	data, err := handleInterfaceResponse(res)
+	if opts.Route == nil || !opts.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(res)
+		if err != nil {
+			return createEmptyClusterValue[map[string]string](), err
+		}
+		return createClusterSingleValue[map[string]string](data), nil
+	}
+	data, err := handleMapOfStringMapResponse(res)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return createEmptyClusterValue[map[string]string](), err
 	}
-	return createClusterValue[interface{}](data), nil
+	return createClusterMultiValue[map[string]string](data), nil
 }
 
 // Set the name of the current connection.
