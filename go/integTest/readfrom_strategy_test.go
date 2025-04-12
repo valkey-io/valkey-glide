@@ -234,7 +234,7 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	primaryAzResult, err := clientForConfigSet.CustomCommandWithRoute(
 		[]string{"CONFIG", "GET", "availability-zone"}, config.NewSlotIdRoute(config.SlotTypePrimary, 12182))
 	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), az, primaryAzResult.MultiValue()["availability-zone"])
+	assert.Equal(suite.T(), az, primaryAzResult.SingleValue()["availability-zone"])
 
 	clientForConfigSet.Close()
 
