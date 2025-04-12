@@ -72,6 +72,7 @@ import glide.ffi.resolvers.ClusterScanCursorResolver;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -137,6 +138,7 @@ public class GlideClusterClient extends BaseClient
                 CustomCommand, args, route, response -> handleCustomCommandBinaryResponse(route, response));
     }
 
+    @SuppressWarnings("unchecked")
     protected ClusterValue<Object> handleCustomCommandResponse(Route route, Response response) {
         if (route instanceof SingleNodeRoute) {
             return ClusterValue.ofSingleValue(handleObjectOrNullResponse(response));
@@ -144,9 +146,15 @@ public class GlideClusterClient extends BaseClient
         if (response.hasConstantResponse()) {
             return ClusterValue.ofSingleValue(handleStringResponse(response));
         }
-        return ClusterValue.ofMultiValue(handleMapResponse(response));
+        var data =
+                handleValkeyResponse(Object.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+        if (data instanceof Map) {
+            return ClusterValue.ofMultiValue((Map<String, Object>) data);
+        }
+        return ClusterValue.ofSingleValue(data);
     }
 
+    @SuppressWarnings("unchecked")
     protected ClusterValue<Object> handleCustomCommandBinaryResponse(Route route, Response response) {
         if (route instanceof SingleNodeRoute) {
             return ClusterValue.ofSingleValue(handleBinaryObjectOrNullResponse(response));
@@ -154,7 +162,11 @@ public class GlideClusterClient extends BaseClient
         if (response.hasConstantResponse()) {
             return ClusterValue.ofSingleValue(handleStringResponse(response));
         }
-        return ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response));
+        var data = handleValkeyResponse(Object.class, EnumSet.noneOf(ResponseFlags.class), response);
+        if (data instanceof Map) {
+            return ClusterValue.ofMultiValueBinary((Map<GlideString, Object>) data);
+        }
+        return ClusterValue.ofSingleValue(data);
     }
 
     @Deprecated
