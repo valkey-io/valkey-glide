@@ -57,6 +57,8 @@
 
 #### Fixes
 
+* Go, Java: Fix response handling for `customCommand` API for cluster client ([#3593](https://github.com/valkey-io/valkey-glide/pull/3593))
+
 #### Operational Enhancements
 
 ## 1.3.0 (2025-02-14)
