@@ -13,12 +13,7 @@ import (
 // GlideClient interface compliance check.
 var _ GlideClientCommands = (*GlideClient)(nil)
 
-// Client used for connection to cluster servers.
-// Use [NewGlideClient] to request a client.
-//
-// For full documentation refer to [Valkey Glide Wiki].
-//
-// [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#standalone
+// All commands that can be executed by GlideClient.
 type GlideClientCommands interface {
 	BaseClient
 	GenericCommands
@@ -27,7 +22,7 @@ type GlideClientCommands interface {
 	ConnectionManagementCommands
 }
 
-// Client used for connection to cluster servers.
+// Client used for connection to standalone servers.
 // Use [NewGlideClient] to request a client.
 //
 // For full documentation refer to [Valkey Glide Wiki].

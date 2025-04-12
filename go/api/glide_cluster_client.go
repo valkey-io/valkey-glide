@@ -16,12 +16,7 @@ import (
 // GlideClusterClient interface compliance check.
 var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
 
-// Client used for connection to cluster servers.
-// Use [NewGlideClusterClient] to request a client.
-//
-// For full documentation refer to [Valkey Glide Wiki].
-//
-// [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#cluster
+// All commands that can be executed by GlideClusterClient.
 type GlideClusterClientCommands interface {
 	BaseClient
 	GenericClusterCommands
@@ -52,7 +47,7 @@ type GlideClusterClient struct {
 //
 // Remarks:
 //
-//	Use this static method to create and connect a `GlideClient` to a Valkey Cluster.
+//	Use this static method to create and connect a `GlideClusterClient` to a Valkey Cluster.
 //	The client will automatically handle connection establishment, including cluster topology discovery and handling
 //	    of authentication and TLS configurations.
 //
