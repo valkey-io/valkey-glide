@@ -1174,22 +1174,38 @@ export async function transactionTest(
         { element: member3, score: 3.5 },
         { element: member4, score: 4 },
         { element: member5, score: 5 },
+        { element: "infMember", score: "+inf" },
+        { element: "negInfMember", score: "-inf" },
     ]);
-    responseData.push(["zadd(key8, { ... } ", 5]);
+    responseData.push(["zadd(key8, { ... } ", 7]);
     baseTransaction.zrank(key8, member1);
-    responseData.push(['zrank(key8, "member1")', 0]);
+    responseData.push(['zrank(key8, "member1")', 1]);
+    baseTransaction.zrank(key8, "negInfMember");
+    responseData.push(['zrank(key8, "negInfMember")', 0]);
 
     if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
         baseTransaction.zrankWithScore(key8, member1);
-        responseData.push(['zrankWithScore(key8, "member1")', [0, 1]]);
+        responseData.push(['zrankWithScore(key8, "member1")', [1, 1]]);
+        baseTransaction.zrankWithScore(key8, "negInfMember");
+        responseData.push([
+            'zrankWithScore(key8, "negInfMember")',
+            [0, -Infinity],
+        ]);
     }
 
     baseTransaction.zrevrank(key8, "member5");
-    responseData.push(['zrevrank(key8, "member5")', 0]);
+    responseData.push(['zrevrank(key8, "member5")', 1]);
+    baseTransaction.zrevrank(key8, "infMember");
+    responseData.push(['zrevrank(key8, "infMember")', 0]);
 
     if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
         baseTransaction.zrevrankWithScore(key8, "member5");
-        responseData.push(['zrevrankWithScore(key8, "member5")', [0, 5]]);
+        responseData.push(['zrevrankWithScore(key8, "member5")', [1, 5]]);
+        baseTransaction.zrevrankWithScore(key8, "infMember");
+        responseData.push([
+            'zrevrankWithScore(key8, "infMember")',
+            [0, Infinity],
+        ]);
     }
 
     baseTransaction.zaddIncr(key8, member2, 1);
@@ -1199,28 +1215,34 @@ export async function transactionTest(
     baseTransaction.zrem(key8, [member1]);
     responseData.push(['zrem(key8, ["member1"])', 1]);
     baseTransaction.zcard(key8);
-    responseData.push(["zcard(key8)", 4]);
+    responseData.push(["zcard(key8)", 6]);
 
     baseTransaction.zscore(key8, member2);
     responseData.push(['zscore(key8, "member2")', 3.0]);
+    baseTransaction.zscore(key8, "infMember");
+    responseData.push(['zscore(key8, "infMember")', Infinity]);
     baseTransaction.zrange(key8, { start: 0, end: -1 });
     responseData.push([
         "zrange(key8, { start: 0, end: -1 })",
         [
+            "negInfMember",
             member2.toString(),
             member3.toString(),
             member4.toString(),
             member5.toString(),
+            "infMember",
         ],
     ]);
     baseTransaction.zrangeWithScores(key8, { start: 0, end: -1 });
     responseData.push([
         "zrangeWithScores(key8, { start: 0, end: -1 })",
         convertRecordToGlideRecord({
+            negInfMember: -Infinity,
             member2: 3,
             member3: 3.5,
             member4: 4,
             member5: 5,
+            infMember: Infinity,
         }),
     ]);
     baseTransaction.zadd(key12, [
@@ -1261,7 +1283,7 @@ export async function transactionTest(
         baseTransaction.zrangeStore(key8, key8, { start: 0, end: -1 });
         responseData.push([
             "zrangeStore(key8, key8, { start: 0, end: -1 })",
-            4,
+            6,
         ]);
         baseTransaction.zdiff([key13, key12]);
         responseData.push(["zdiff([key13, key12])", ["three"]]);
@@ -1317,7 +1339,7 @@ export async function transactionTest(
     baseTransaction.zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity);
     responseData.push([
         "zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity)",
-        4,
+        5,
     ]);
     baseTransaction.zlexcount(
         key8,
@@ -1326,17 +1348,17 @@ export async function transactionTest(
     );
     responseData.push([
         'zlexcount(key8, { value: "a" }, InfBoundary.PositiveInfinity)',
-        4,
+        6,
     ]);
     baseTransaction.zpopmin(key8);
     responseData.push([
         "zpopmin(key8)",
-        convertRecordToGlideRecord({ member2: 3.0 }),
+        convertRecordToGlideRecord({ negInfMember: -Infinity }),
     ]);
     baseTransaction.zpopmax(key8);
     responseData.push([
         "zpopmax(key8)",
-        convertRecordToGlideRecord({ member5: 5 }),
+        convertRecordToGlideRecord({ infMember: Infinity }),
     ]);
     baseTransaction.zadd(key8, [{ element: member6, score: 6 }]);
     responseData.push(["zadd(key8, {member6: 6})", 1]);
@@ -1359,7 +1381,7 @@ export async function transactionTest(
         InfBoundary.NegativeInfinity,
         InfBoundary.PositiveInfinity,
     );
-    responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
+    responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 3]); // key8 is now empty
     baseTransaction.zremRangeByLex(
         key8,
         InfBoundary.NegativeInfinity,
@@ -1506,16 +1528,15 @@ export async function transactionTest(
         "xpending(key9, groupName1)",
         [1, "0-2", "0-2", [[consumer.toString(), "1"]]],
     ]);
-    // TODO: uncomment once the flakiness in this test has been resolved
-    // baseTransaction.xpendingWithOptions(key9, groupName1, {
-    //     start: InfBoundary.NegativeInfinity,
-    //     end: InfBoundary.PositiveInfinity,
-    //     count: 10,
-    // });
-    // responseData.push([
-    //     "xpendingWithOptions(key9, groupName1, -, +, 10)",
-    //     [["0-2", consumer.toString(), 0, 1]],
-    // ]);
+    baseTransaction.xpendingWithOptions(key9, groupName1, {
+        start: InfBoundary.NegativeInfinity,
+        end: InfBoundary.PositiveInfinity,
+        count: 10,
+    });
+    responseData.push([
+        "xpendingWithOptions(key9, groupName1, -, +, 10)",
+        [["0-2", consumer.toString(), 0, 1]],
+    ]);
     baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
         'xclaim(key9, groupName1, consumer, 0, ["0-2"])',

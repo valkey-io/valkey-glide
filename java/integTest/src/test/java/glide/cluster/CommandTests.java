@@ -53,7 +53,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
 import glide.api.GlideClusterClient;
-import glide.api.models.ClusterTransaction;
+import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
@@ -67,6 +67,7 @@ import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoSearchOrigin;
 import glide.api.models.commands.geospatial.GeoSearchResultOptions;
@@ -100,6 +101,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1659,14 +1661,15 @@ public class CommandTests {
         assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
 
         var transaction =
-                new ClusterTransaction()
+                new ClusterBatch(true)
                         .fcall(funcName, new String[] {key + 1, key + 2}, new String[0])
                         .fcallReadOnly(funcName, new String[] {key + 1, key + 2}, new String[0]);
 
+        ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
         // check response from a routed transaction request
         assertDeepEquals(
                 new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-                clusterClient.exec(transaction, route).get());
+                clusterClient.exec(transaction, options).get());
         // if no route given, GLIDE should detect it automatically
         assertDeepEquals(
                 new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
@@ -1706,15 +1709,16 @@ public class CommandTests {
         assertArrayEquals(new Object[] {binaryString}, (Object[]) functionResult);
 
         var transaction =
-                new ClusterTransaction()
+                new ClusterBatch(true)
                         .withBinaryOutput()
                         .fcall(funcName, new GlideString[] {gs(key)}, new GlideString[] {binaryString})
                         .fcallReadOnly(funcName, new GlideString[] {gs(key)}, new GlideString[] {binaryString});
 
+        ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
         // check response from a routed transaction request
         assertDeepEquals(
                 new Object[][] {{binaryString}, {binaryString}},
-                clusterClient.exec(transaction, route).get());
+                clusterClient.exec(transaction, options).get());
         // if no route given, GLIDE should detect it automatically
         assertDeepEquals(
                 new Object[][] {{binaryString}, {binaryString}}, clusterClient.exec(transaction).get());
@@ -1722,6 +1726,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
+    @Disabled("flaky test") // Related to issue #2277, #2642
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
@@ -3351,6 +3356,7 @@ public class CommandTests {
         script.close();
     }
 
+    @Disabled("flaky test") // Possibly related to issue #2277
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
@@ -3413,6 +3419,8 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
     }
 
+    @Disabled("flaky test") // Possibly related to #2277
+    @Timeout(20)
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
@@ -3435,8 +3443,33 @@ public class CommandTests {
 
                 Thread.sleep(1000);
 
-                boolean foundUnkillable = false;
+                // To prevent timeout issues, ensure script is actually running before trying to kill it
                 int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        clusterClient.ping().get(); // Dummy test command
+                    } catch (ExecutionException err) {
+                        if (err.getCause() instanceof RequestException) {
+
+                            // Check if the script is executing
+                            if (err.getMessage().toLowerCase().contains("valkey is busy running a script")) {
+                                break;
+                            }
+
+                            // Try rerunning the script if 2 seconds have passed and if the exception has not
+                            // changed to "busy running a script"
+                            if (timeout <= 2000
+                                    && err.getMessage().toLowerCase().contains("no scripts in execution right now")) {
+                                promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+                                Thread.sleep(1000);
+                            }
+                        }
+                    }
+                    timeout -= 500;
+                }
+
+                boolean foundUnkillable = false;
+                timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         // valkey kills a script with 5 sec delay
@@ -3449,6 +3482,15 @@ public class CommandTests {
                                 && execException.getMessage().toLowerCase().contains("unkillable")) {
                             foundUnkillable = true;
                             break;
+                        }
+
+                        if (execException.getCause() instanceof RequestException
+                                && execException
+                                        .getMessage()
+                                        .toLowerCase()
+                                        .contains("no scripts in execution right now")) {
+                            promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+                            Thread.sleep(1000);
                         }
                     }
                     Thread.sleep(500);

@@ -354,7 +354,9 @@ class BaseClient(CoreCommands):
             else:
                 command.args_vec_pointer = create_leaked_bytes_vec(encoded_args)
             transaction_commands.append(command)
-        request.transaction.commands.extend(transaction_commands)
+        request.batch.commands.extend(transaction_commands)
+        request.batch.is_atomic = True
+        # TODO: add support for timeout, raise on error and retry strategy
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -618,7 +620,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     Client used for connection to cluster servers.
     Use :func:`~BaseClient.create` to request a client.
     For full documentation, see
-    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster
+    [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster)
     """
 
     async def _cluster_scan(
@@ -659,7 +661,7 @@ class GlideClient(BaseClient, StandaloneCommands):
     Client used for connection to standalone servers.
     Use :func:`~BaseClient.create` to request a client.
     For full documentation, see
-    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone
+    [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone)
     """
 
 

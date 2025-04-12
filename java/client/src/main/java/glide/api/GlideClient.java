@@ -47,10 +47,12 @@ import glide.api.commands.GenericCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.commands.TransactionsCommands;
+import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.BackoffStrategy;
@@ -61,6 +63,7 @@ import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import lombok.NonNull;
@@ -150,13 +153,37 @@ public class GlideClient extends BaseClient
                 CustomCommand, args, this::handleBinaryObjectOrNullResponse);
     }
 
+    @Deprecated
     @Override
     public CompletableFuture<Object[]> exec(@NonNull Transaction transaction) {
         if (transaction.isBinaryOutput()) {
-            return commandManager.submitNewTransaction(
-                    transaction, this::handleArrayOrNullResponseBinary);
+            return commandManager.submitNewBatch(
+                    transaction, Optional.empty(), this::handleArrayOrNullResponseBinary);
         } else {
-            return commandManager.submitNewTransaction(transaction, this::handleArrayOrNullResponse);
+            return commandManager.submitNewBatch(
+                    transaction, Optional.empty(), this::handleArrayOrNullResponse);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Object[]> exec(@NonNull Batch batch) {
+        if (batch.isBinaryOutput()) {
+            return commandManager.submitNewBatch(
+                    batch, Optional.empty(), this::handleArrayOrNullResponseBinary);
+        } else {
+            return commandManager.submitNewBatch(
+                    batch, Optional.empty(), this::handleArrayOrNullResponse);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Object[]> exec(@NonNull Batch batch, @NonNull BatchOptions options) {
+        if (batch.isBinaryOutput()) {
+            return commandManager.submitNewBatch(
+                    batch, Optional.of(options), this::handleArrayOrNullResponseBinary);
+        } else {
+            return commandManager.submitNewBatch(
+                    batch, Optional.of(options), this::handleArrayOrNullResponse);
         }
     }
 

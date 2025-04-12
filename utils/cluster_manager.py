@@ -686,7 +686,7 @@ def wait_for_all_topology_views(
             "slots",
         ]
         logging.debug(f"Executing: {cmd_args}")
-        retries = 60
+        retries = 80
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
             if output is not None and output.count(f"{server.host}") == len(servers):

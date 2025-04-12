@@ -9,6 +9,7 @@ on:
         paths:
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
+            - ffi/src/**
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
@@ -22,6 +23,7 @@ on:
         paths:
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
+            - ffi/src/**
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
@@ -54,6 +56,7 @@ run-name:
 
 env:
     CARGO_TERM_COLOR: always
+    BASE_GO_VERSION: "1.22"
 
 jobs:
     get-matrices:
@@ -72,6 +75,7 @@ jobs:
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
 
     test-go:
+        name: Go Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
         timeout-minutes: 35
         strategy:
@@ -84,6 +88,11 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
 
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
@@ -102,7 +111,7 @@ jobs:
             - name: Install & build & test
               working-directory: go
               run: |
-                  make install-tools-go${{ matrix.go }} build
+                  make install-tools build
                   make -k unit-test integ-test
 
             - name: Run Example Tests
@@ -112,7 +121,7 @@ jobs:
                   make -k example-test
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.go == '1.22' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.go == env.BASE_GO_VERSION }}
               with:
                   language-flag: -go
 
@@ -133,15 +142,10 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: go
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Set up Go ${{ matrix.go }}
+            - name: Set up Go
               uses: actions/setup-go@v5
               with:
-                  go-version: "1.22"
+                  go-version: ${{ env.BASE_GO_VERSION }}
                   cache-dependency-path: go/go.sum
 
             - name: Install protoc
@@ -213,7 +217,7 @@ jobs:
             - name: Install & build & test
               working-directory: go
               run: |
-                  make install-tools-go${{ matrix.go }} build
+                  make install-tools build
                   make -k unit-test integ-test
 
             - name: Upload test reports
@@ -242,13 +246,13 @@ jobs:
             - name: Set up Go
               uses: actions/setup-go@v5
               with:
-                  go-version: "1.20"
+                  go-version: ${{ env.BASE_GO_VERSION }}
                   cache-dependency-path: go/go.sum
 
             - name: Build and test
               working-directory: ./go
               run: |
-                  make install-tools-go1.20 build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
 
             - name: Upload test reports
               if: always()
