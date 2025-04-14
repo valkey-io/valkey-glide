@@ -1257,3 +1257,90 @@ pub unsafe extern "C" fn update_connection_password(
             .await
     })
 }
+
+/// Executes a Lua script.
+///
+/// # Parameters
+///
+/// * `client_adapter_ptr`: Pointer to a valid `GlideClusterClient` returned from [`create_client`].
+/// * `channel`: Pointer to a valid payload buffer created in the calling language.
+/// * `keys_count`: Number of keys in the keys array.
+/// * `keys`: Array of keys used by the script.
+/// * `keys_len`: Array of lengths for each key.
+/// * `args_count`: Number of arguments in the args array.
+/// * `args`: Array of arguments to pass to the script.
+/// * `args_len`: Array of lengths for each argument.
+/// * `hash`: SHA1 hash of the script for script caching.
+/// * `route_bytes`: Optional array of bytes for routing information.
+/// * `route_bytes_len`: Length of the route_bytes array.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`].
+/// * `channel` must be valid until either `success_callback` or `failure_callback` is finished.
+/// * `keys` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `keys_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `keys_count` must be 0 if `keys` and `keys_len` are null.
+/// * `keys` and `keys_len` must either be both null or be both not null.
+/// * `args` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `args_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `args_count` must be 0 if `args` and `args_len` are null.
+/// * `args` and `args_len` must either be both null or be both not null.
+/// * `hash` must be a valid null-terminated C string.
+/// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
+/// * `route_bytes_len` must be 0 if `route_bytes` is null.
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[no_mangle]
+pub unsafe extern "C" fn invoke_script(
+    client_adapter_ptr: *const c_void,
+    channel: usize,
+    hash: *const c_char,
+    keys_count: c_ulong,
+    keys: *const usize,
+    keys_len: *const c_ulong,
+    args_count: c_ulong,
+    args: *const usize,
+    args_len: *const c_ulong,
+    route_bytes: *const u8,
+    route_bytes_len: usize,
+) -> *mut CommandResult {
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    // Convert hash to Rust string
+    let hash_str = unsafe { CStr::from_ptr(hash).to_str().unwrap_or("") };
+
+    // Convert keys to Vec<&[u8]>
+    let keys_vec: Vec<&[u8]> = if !keys.is_null() && !keys_len.is_null() && keys_count > 0 {
+        unsafe { convert_double_pointer_to_vec(keys as *const *const c_void, keys_count, keys_len) }
+    } else {
+        Vec::new()
+    };
+
+    // Convert args to Vec<&[u8]>
+    let args_vec: Vec<&[u8]> = if !args.is_null() && !args_len.is_null() && args_count > 0 {
+        unsafe { convert_double_pointer_to_vec(args as *const *const c_void, args_count, args_len) }
+    } else {
+        Vec::new()
+    };
+
+    // Parse routing information if provided
+    let route = if !route_bytes.is_null() {
+        let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
+        Routes::parse_from_bytes(r_bytes).unwrap()
+    } else {
+        Routes::default()
+    };
+
+    let mut client = client_adapter.core.client.clone();
+    client_adapter.execute_command(channel, async move {
+        client
+            .invoke_script(hash_str, &keys_vec, &args_vec, get_route(route, None))
+            .await
+    })
+}
