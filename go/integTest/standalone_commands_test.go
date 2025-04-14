@@ -1031,4 +1031,3 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 		assert.Equal(suite.T(), int64(0), nodeStats.Engines["LUA"].FunctionCount)
 	}
 }
-
