@@ -32,4 +32,8 @@ type ScriptingAndFunctionClusterCommands interface {
 	FCallWithArgsWithRoute(function string, args []string, route options.RouteOption) (ClusterValue[any], error)
 
 	FCallReadOnlyWithArgsWithRoute(function string, args []string, route options.RouteOption) (ClusterValue[any], error)
+
+	FunctionStats() (map[string]FunctionStatsResult, error)
+
+	FunctionStatsWithRoute(route options.RouteOption) (ClusterValue[FunctionStatsResult], error)
 }
