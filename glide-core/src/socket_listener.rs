@@ -309,25 +309,13 @@ async fn send_command(
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
-    let child_span = cmd.span().map(|span| span.add_span("send_command"));
+    let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let res = client
         .send_command(&cmd, routing)
         .await
         .map_err(|err| err.into());
-    match child_span {
-        Some(Ok(child_span)) => {
-            child_span.end();
-        }
-        Some(Err(error_msg)) => {
-            log_error(
-                "OpenTelemetry error",
-                format!(
-                    "The child span `send command` for command {:?} was failed with error: {:?}",
-                    cmd, error_msg
-                ),
-            );
-        }
-        None => {}
+    if let Some(child_span) = child_span {
+        child_span.end();
     }
     res
 }
@@ -389,6 +377,27 @@ async fn invoke_script(
         .map_err(|err| err.into())
 }
 
+/// Creates a child span for telemetry if telemetry is enabled
+fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Option<GlideSpan> {
+    if let Some(span) = span {
+        match span.add_span(name) {
+            Ok(child_span) => Some(child_span),
+            Err(error_msg) => {
+                log_error(
+                    "OpenTelemetry error",
+                    format!(
+                        "The child span `{:?}` was failed to create with error: {:?}",
+                        name, error_msg
+                    ),
+                );
+                None
+            }
+        }
+    } else {
+        None
+    }
+}
+
 async fn send_batch(
     request: Batch,
     client: &mut Client,
@@ -397,7 +406,8 @@ async fn send_batch(
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
     pipeline.set_pipeline_span(span_command);
-    let child_span = pipeline.span().map(|span| span.add_span("send_batch"));
+    let child_span = create_child_span(pipeline.span().as_ref(), "send_batch");
+
     if request.is_atomic {
         pipeline.atomic();
     }
@@ -429,20 +439,8 @@ async fn send_batch(
             .await
             .map_err(|err| err.into()),
     };
-    match child_span {
-        Some(Ok(child_span)) => {
-            child_span.end();
-        }
-        Some(Err(error_msg)) => {
-            log_error(
-                "OpenTelemetry error",
-                format!(
-                    "The child span was failed to create with error: {:?}",
-                    error_msg
-                ),
-            );
-        }
-        None => {}
+    if let Some(child_span) = child_span {
+        child_span.end();
     }
     res
 }
@@ -634,6 +632,27 @@ async fn handle_requests(
     task::yield_now().await;
 }
 
+/// This function converts a raw pointer to a GlideSpan into a safe Rust reference.
+/// It handles the unsafe pointer operations internally, incrementing the reference count
+/// to ensure the span remains valid while in use.
+///
+/// # Safety
+///
+/// This function is marked as unsafe because it dereferences a raw pointer. The caller
+/// must ensure that:
+/// * The pointer is valid and points to a properly allocated GlideSpan
+/// * The pointer is properly aligned
+/// * The data pointed to is not modified while the returned reference is in use
+/// * The pointer is not used after the referenced data is dropped
+///
+/// # Arguments
+///
+/// * `span_command` - An optional raw pointer (as u64) to a GlideSpan
+///
+/// # Returns
+///
+/// * `Some(GlideSpan)` - A cloned GlideSpan if the pointer is valid
+/// * `None` - If the pointer is None
 fn get_unsafe_span_from_ptr(span_command: Option<u64>) -> Option<GlideSpan> {
     span_command.map(|span_command| unsafe {
         Arc::increment_strong_count(span_command as *const GlideSpan);

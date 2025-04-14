@@ -10,7 +10,7 @@ use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use thiserror::Error;
 use url::Url;
 
@@ -69,24 +69,10 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
         .map_err(|_| Error::new(ErrorKind::InvalidInput, format!("Parse error. {endpoint}")))?;
 
     match url.scheme() {
-        "http" => Ok(GlideOpenTelemetryTraceExporter::Http(format!(
-            "{}:{}",
-            url.host_str().unwrap_or("127.0.0.1"),
-            url.port().unwrap_or(80)
-        ))), // HTTP endpoint
-        "https" => Ok(GlideOpenTelemetryTraceExporter::Http(format!(
-            "{}:{}",
-            url.host_str().unwrap_or("127.0.0.1"),
-            url.port().unwrap_or(443)
-        ))), // HTTPS endpoint
-        "grpc" => Ok(GlideOpenTelemetryTraceExporter::Grpc(format!(
-            "{}:{}",
-            url.host_str().unwrap_or("127.0.0.1"),
-            url.port().unwrap_or(80)
-        ))), // gRPC endpoint
+        "http" | "https" => Ok(GlideOpenTelemetryTraceExporter::Http(endpoint.to_string())), // HTTP/HTTPS endpoint
+        "grpc" => Ok(GlideOpenTelemetryTraceExporter::Grpc(endpoint.to_string())), // gRPC endpoint
         "file" => {
-            // For file URLs, we need to extract the path without the 'file://' prefix
-            let path = url.path();
+            // For file, we need to extract the path without the 'file://' prefix
             let file_prefix = "file://";
             if !endpoint.starts_with(file_prefix) {
                 return Err(Error::new(
@@ -94,6 +80,15 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
                     "File path must start with 'file://'",
                 ));
             }
+
+            // Extract the path by removing the 'file://' prefix
+            let path = endpoint.strip_prefix(file_prefix).ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    "Failed to extract path from file URL",
+                )
+            })?;
+
             let path_buf = PathBuf::from(path);
 
             // Check if the directory exists and is a directory
@@ -397,12 +392,25 @@ fn build_exporter(
 #[derive(Clone)]
 pub struct GlideOpenTelemetry {}
 
+/// Static mutex to track initialization state
+static OTEL_INITIALIZED: Mutex<bool> = Mutex::new(false);
+
 /// Our interface to OpenTelemetry
 impl GlideOpenTelemetry {
     /// Initialise the open telemetry library with a file system exporter
     ///
     /// This method should be called once for the given **process**
+    /// If OpenTelemetry is already initialized, this method will return Ok(()) without reinitializing
     pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
+        // Check if already initialized
+        let mut initialized = OTEL_INITIALIZED.lock().map_err(|_| {
+            GlideOTELError::Other("Failed to acquire initialization lock".to_string())
+        })?;
+
+        if *initialized {
+            return Ok(());
+        }
+
         let batch_config = opentelemetry_sdk::trace::BatchConfigBuilder::default()
             .with_scheduled_delay(config.span_flush_interval)
             .build();
@@ -436,6 +444,10 @@ impl GlideOpenTelemetry {
             .with_span_processor(trace_exporter)
             .build();
         global::set_tracer_provider(provider);
+
+        // Mark as initialized
+        *initialized = true;
+
         Ok(())
     }
 
