@@ -3,6 +3,7 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
+from deprecated import deprecated
 from glide.async_commands.bitmap import (
     BitFieldGet,
     BitFieldSubCommands,
@@ -56,33 +57,48 @@ from glide.async_commands.stream import (
 from glide.constants import TEncodable
 from glide.protobuf.command_request_pb2 import RequestType
 
-TTransaction = TypeVar("TTransaction", bound="BaseTransaction")
+TBatch = TypeVar("TBatch", bound="BaseBatch")
 
 
-class BaseTransaction:
+class BaseBatch:
     """
-    Base class encompassing shared commands for both standalone and cluster mode implementations in transaction.
+    Base class encompassing shared commands for both standalone and cluster mode implementations in batch.
 
-    Command Response:
+    Batch Response:
         The response for each command depends on the executed command. Specific response types
         are documented alongside each method.
 
-    Example:
-        >>> transaction = BaseTransaction()
+    Transaction vs Pipeline:
+        - Transactions (is_atomic=True) ensure that all commands are executed atomically.
+          In a transaction, all keys must belong to the same slot. This means if any key is in a different slot,
+          the transaction will not work.
+        - Pipelines (is_atomic=False) send multiple commands to the server without waiting for each command's
+          response. However, pipeline commands are not atomic and can be sent to different slots in a cluster,
+          meaning they are executed independently.
+
+    Transaction Example:
+        transaction = BaseBatch(is_atomic=True)
         >>> transaction.set("key", "value").get("key")
         >>> await client.exec(transaction)
         [OK , "value"]
+
+    Pipeline Example:
+        pipeline = BaseBatch(is_atomic=False)
+        >>> pipeline.set("key", "value").get("key")
+        >>> await client.exec(pipeline)
+        [OK , "value"]
     """
 
-    def __init__(self) -> None:
+    def __init__(self, is_atomic=False) -> None:
         self.commands: List[Tuple[RequestType.ValueType, List[TEncodable]]] = []
         self.lock = threading.Lock()
+        self.is_atomic = is_atomic
 
     def append_command(
-        self: TTransaction,
+        self: TBatch,
         request_type: RequestType.ValueType,
         args: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         self.lock.acquire()
         try:
             self.commands.append((request_type, args))
@@ -94,7 +110,7 @@ class BaseTransaction:
         with self.lock:
             self.commands.clear()
 
-    def get(self: TTransaction, key: TEncodable) -> TTransaction:
+    def get(self: TBatch, key: TEncodable) -> TBatch:
         """
         Get the value associated with the given key, or null if no such value exists.
 
@@ -110,7 +126,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Get, [key])
 
-    def getdel(self: TTransaction, key: TEncodable) -> TTransaction:
+    def getdel(self: TBatch, key: TEncodable) -> TBatch:
         """
         Gets a value associated with the given string `key` and deletes the key.
 
@@ -126,9 +142,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.GetDel, [key])
 
-    def getrange(
-        self: TTransaction, key: TEncodable, start: int, end: int
-    ) -> TTransaction:
+    def getrange(self: TBatch, key: TEncodable, start: int, end: int) -> TBatch:
         """
         Returns the substring of the string value stored at `key`, determined by the offsets `start` and `end`
         (both are inclusive).
@@ -151,13 +165,13 @@ class BaseTransaction:
         return self.append_command(RequestType.GetRange, [key, str(start), str(end)])
 
     def set(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         value: TEncodable,
         conditional_set: Union[ConditionalChange, None] = None,
         expiry: Union[ExpirySet, None] = None,
         return_old_value: bool = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Set the given key with the given value. Return value is dependent on the passed options.
 
@@ -200,7 +214,7 @@ class BaseTransaction:
             args.extend(expiry.get_cmd_args())
         return self.append_command(RequestType.Set, args)
 
-    def strlen(self: TTransaction, key: TEncodable) -> TTransaction:
+    def strlen(self: TBatch, key: TEncodable) -> TBatch:
         """
         Get the length of the string value stored at `key`.
 
@@ -216,9 +230,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Strlen, [key])
 
-    def rename(
-        self: TTransaction, key: TEncodable, new_key: TEncodable
-    ) -> TTransaction:
+    def rename(self: TBatch, key: TEncodable, new_key: TEncodable) -> TBatch:
         """
         Renames `key` to `new_key`.
         If `newkey` already exists it is overwritten.
@@ -234,15 +246,12 @@ class BaseTransaction:
             new_key (TEncodable) : The new name of the key.
 
         Command response:
-            OK: If the `key` was successfully renamed, return "OK".
-
-            If `key` does not exist, the transaction fails with an error.
+            OK: If the `key` was successfully renamed, return "OK". If `key` does not exist,
+                the batch fails with an error.
         """
         return self.append_command(RequestType.Rename, [key, new_key])
 
-    def renamenx(
-        self: TTransaction, key: TEncodable, new_key: TEncodable
-    ) -> TTransaction:
+    def renamenx(self: TBatch, key: TEncodable, new_key: TEncodable) -> TBatch:
         """
         Renames `key` to `new_key` if `new_key` does not yet exist.
 
@@ -259,14 +268,11 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.RenameNX, [key, new_key])
 
-    def custom_command(
-        self: TTransaction, command_args: List[TEncodable]
-    ) -> TTransaction:
+    def custom_command(self: TBatch, command_args: List[TEncodable]) -> TBatch:
         """
         Executes a single command, without checking inputs.
 
-        See the Valkey GLIDE Wiki
-        [custom command](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
+        See the `Valkey GLIDE Wiki <https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command>`_
         for details on the restrictions and limitations of the custom command API.
 
         Args:
@@ -284,7 +290,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.CustomCommand, command_args)
 
-    def append(self: TTransaction, key: TEncodable, value: TEncodable) -> TTransaction:
+    def append(self: TBatch, key: TEncodable, value: TEncodable) -> TBatch:
         """
         Appends a value to a key.
         If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to
@@ -302,9 +308,9 @@ class BaseTransaction:
         return self.append_command(RequestType.Append, [key, value])
 
     def info(
-        self: TTransaction,
+        self: TBatch,
         sections: Optional[List[InfoSection]] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Get information and statistics about the server.
 
@@ -322,7 +328,7 @@ class BaseTransaction:
         )
         return self.append_command(RequestType.Info, args)
 
-    def delete(self: TTransaction, keys: List[TEncodable]) -> TTransaction:
+    def delete(self: TBatch, keys: List[TEncodable]) -> TBatch:
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
 
@@ -336,7 +342,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Del, keys)
 
-    def config_get(self: TTransaction, parameters: List[TEncodable]) -> TTransaction:
+    def config_get(self: TBatch, parameters: List[TEncodable]) -> TBatch:
         """
         Get the values of configuration parameters.
         Starting from server version 7, command supports multiple parameters.
@@ -352,9 +358,9 @@ class BaseTransaction:
         return self.append_command(RequestType.ConfigGet, parameters)
 
     def config_set(
-        self: TTransaction,
+        self: TBatch,
         parameters_map: Mapping[TEncodable, TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Set configuration parameters to the specified values.
         Starting from server version 7, command supports multiple parameters.
@@ -366,16 +372,14 @@ class BaseTransaction:
             parameters and their respective values to set.
 
         Command response:
-            OK: Returns OK if all configurations have been successfully set.
-
-            Otherwise, the transaction fails with an error.
+            OK: Returns OK if all configurations have been successfully set. Otherwise, the batch fails with an error.
         """
         parameters: List[TEncodable] = []
         for pair in parameters_map.items():
             parameters.extend(pair)
         return self.append_command(RequestType.ConfigSet, parameters)
 
-    def config_resetstat(self: TTransaction) -> TTransaction:
+    def config_resetstat(self: TBatch) -> TBatch:
         """
         Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
 
@@ -386,9 +390,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ConfigResetStat, [])
 
-    def mset(
-        self: TTransaction, key_value_map: Mapping[TEncodable, TEncodable]
-    ) -> TTransaction:
+    def mset(self: TBatch, key_value_map: Mapping[TEncodable, TEncodable]) -> TBatch:
         """
         Set multiple keys to multiple values in a single atomic operation.
 
@@ -399,15 +401,17 @@ class BaseTransaction:
 
         Command response:
             OK: a simple OK response.
+
+        Note:
+            If the batch is a transaction (is_atomic = True), then all keys must map to the same slot.
+            In a pipeline, the keys do not have to map to the same slot.
         """
         parameters: List[TEncodable] = []
         for pair in key_value_map.items():
             parameters.extend(pair)
         return self.append_command(RequestType.MSet, parameters)
 
-    def msetnx(
-        self: TTransaction, key_value_map: Mapping[TEncodable, TEncodable]
-    ) -> TTransaction:
+    def msetnx(self: TBatch, key_value_map: Mapping[TEncodable, TEncodable]) -> TBatch:
         """
         Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
         more keys already exist, the entire operation fails.
@@ -428,7 +432,7 @@ class BaseTransaction:
             parameters.extend(pair)
         return self.append_command(RequestType.MSetNX, parameters)
 
-    def mget(self: TTransaction, keys: List[TEncodable]) -> TTransaction:
+    def mget(self: TBatch, keys: List[TEncodable]) -> TBatch:
         """
         Retrieve the values of multiple keys.
 
@@ -440,10 +444,14 @@ class BaseTransaction:
         Command response:
             List[Optional[bytes]]: A list of values corresponding to the provided keys. If a key is not found,
             its corresponding value in the list will be None.
+
+        Note:
+            If the batch is a transaction (is_atomic = True), then all keys must map to the same slot.
+            In a pipeline, the keys do not have to map to the same slot.
         """
         return self.append_command(RequestType.MGet, keys)
 
-    def touch(self: TTransaction, keys: List[TEncodable]) -> TTransaction:
+    def touch(self: TBatch, keys: List[TEncodable]) -> TBatch:
         """
         Updates the last access time of specified keys.
 
@@ -457,20 +465,18 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Touch, keys)
 
-    def config_rewrite(self: TTransaction) -> TTransaction:
+    def config_rewrite(self: TBatch) -> TBatch:
         """
         Rewrite the configuration file with the current configuration.
 
         See [valkey.io](https://valkey.io/commands/config-rewrite/) for details.
 
         Command response:
-            OK: OK is returned when the configuration was rewritten properly.
-
-            Otherwise, the transaction fails with an error.
+            OK: OK is returned when the configuration was rewritten properly. Otherwise, the batch fails with an error.
         """
         return self.append_command(RequestType.ConfigRewrite, [])
 
-    def client_id(self: TTransaction) -> TTransaction:
+    def client_id(self: TBatch) -> TBatch:
         """
         Returns the current connection id.
 
@@ -481,7 +487,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ClientId, [])
 
-    def incr(self: TTransaction, key: TEncodable) -> TTransaction:
+    def incr(self: TBatch, key: TEncodable) -> TBatch:
         """
         Increments the number stored at `key` by one.
         If `key` does not exist, it is set to 0 before performing the
@@ -497,7 +503,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Incr, [key])
 
-    def incrby(self: TTransaction, key: TEncodable, amount: int) -> TTransaction:
+    def incrby(self: TBatch, key: TEncodable, amount: int) -> TBatch:
         """
         Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation.
@@ -513,7 +519,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.IncrBy, [key, str(amount)])
 
-    def incrbyfloat(self: TTransaction, key: TEncodable, amount: float) -> TTransaction:
+    def incrbyfloat(self: TBatch, key: TEncodable, amount: float) -> TBatch:
         """
         Increment the string representing a floating point number stored at `key` by `amount`.
         By using a negative increment value, the value stored at the `key` is decremented.
@@ -530,7 +536,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.IncrByFloat, [key, str(amount)])
 
-    def ping(self: TTransaction, message: Optional[TEncodable] = None) -> TTransaction:
+    def ping(self: TBatch, message: Optional[TEncodable] = None) -> TBatch:
         """
         Ping the server.
 
@@ -546,7 +552,7 @@ class BaseTransaction:
         argument = [] if message is None else [message]
         return self.append_command(RequestType.Ping, argument)
 
-    def decr(self: TTransaction, key: TEncodable) -> TTransaction:
+    def decr(self: TBatch, key: TEncodable) -> TBatch:
         """
         Decrements the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
         operation.
@@ -561,7 +567,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Decr, [key])
 
-    def decrby(self: TTransaction, key: TEncodable, amount: int) -> TTransaction:
+    def decrby(self: TBatch, key: TEncodable, amount: int) -> TBatch:
         """
         Decrements the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation.
@@ -578,11 +584,11 @@ class BaseTransaction:
         return self.append_command(RequestType.DecrBy, [key, str(amount)])
 
     def setrange(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         offset: int,
         value: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Overwrites part of the string stored at `key`, starting at the specified
         `offset`, for the entire length of `value`.
@@ -603,10 +609,10 @@ class BaseTransaction:
         return self.append_command(RequestType.SetRange, [key, str(offset), value])
 
     def hset(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         field_value_map: Mapping[TEncodable, TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Sets the specified fields to their respective values in the hash stored at `key`.
 
@@ -625,7 +631,7 @@ class BaseTransaction:
             field_value_list.extend(pair)
         return self.append_command(RequestType.HSet, field_value_list)
 
-    def hget(self: TTransaction, key: TEncodable, field: TEncodable) -> TTransaction:
+    def hget(self: TBatch, key: TEncodable, field: TEncodable) -> TBatch:
         """
         Retrieves the value associated with `field` in the hash stored at `key`.
 
@@ -643,11 +649,11 @@ class BaseTransaction:
         return self.append_command(RequestType.HGet, [key, field])
 
     def hsetnx(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         field: TEncodable,
         value: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
         If `key` does not exist, a new key holding a hash is created.
@@ -668,11 +674,11 @@ class BaseTransaction:
         return self.append_command(RequestType.HSetNX, [key, field, value])
 
     def hincrby(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         field: TEncodable,
         amount: int,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Increment or decrement the value of a `field` in the hash stored at `key` by the specified amount.
         By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
@@ -692,11 +698,11 @@ class BaseTransaction:
         return self.append_command(RequestType.HIncrBy, [key, field, str(amount)])
 
     def hincrbyfloat(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         field: TEncodable,
         amount: float,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Increment or decrement the floating-point value stored at `field` in the hash stored at `key` by the specified
         amount.
@@ -716,7 +722,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HIncrByFloat, [key, field, str(amount)])
 
-    def hexists(self: TTransaction, key: TEncodable, field: TEncodable) -> TTransaction:
+    def hexists(self: TBatch, key: TEncodable, field: TEncodable) -> TBatch:
         """
         Check if a field exists in the hash stored at `key`.
 
@@ -733,7 +739,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HExists, [key, field])
 
-    def hlen(self: TTransaction, key: TEncodable) -> TTransaction:
+    def hlen(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns the number of fields contained in the hash stored at `key`.
 
@@ -744,15 +750,13 @@ class BaseTransaction:
 
         Command response:
             int: The number of fields in the hash, or 0 when the key does not exist.
-
-            If `key` holds a value that is not a hash, the transaction fails with an error.
+            If `key` holds a value that is not a hash, the batch fails with an error.
         """
         return self.append_command(RequestType.HLen, [key])
 
-    def client_getname(self: TTransaction) -> TTransaction:
+    def client_getname(self: TBatch) -> TBatch:
         """
-        Get the name of the connection on which the transaction is being executed.
-
+        Get the name of the connection on which the batch is being executed.
         See [valkey.io](https://valkey.io/commands/client-getname/) for more details.
 
         Command response:
@@ -762,7 +766,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ClientGetName, [])
 
-    def hgetall(self: TTransaction, key: TEncodable) -> TTransaction:
+    def hgetall(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns all fields and values of the hash stored at `key`.
 
@@ -779,9 +783,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HGetAll, [key])
 
-    def hmget(
-        self: TTransaction, key: TEncodable, fields: List[TEncodable]
-    ) -> TTransaction:
+    def hmget(self: TBatch, key: TEncodable, fields: List[TEncodable]) -> TBatch:
         """
         Retrieve the values associated with specified fields in the hash stored at `key`.
 
@@ -799,9 +801,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HMGet, [key] + fields)
 
-    def hdel(
-        self: TTransaction, key: TEncodable, fields: List[TEncodable]
-    ) -> TTransaction:
+    def hdel(self: TBatch, key: TEncodable, fields: List[TEncodable]) -> TBatch:
         """
         Remove specified fields from the hash stored at `key`.
 
@@ -818,7 +818,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HDel, [key] + fields)
 
-    def hvals(self: TTransaction, key: TEncodable) -> TTransaction:
+    def hvals(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns all values in the hash stored at `key`.
 
@@ -834,7 +834,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HVals, [key])
 
-    def hkeys(self: TTransaction, key: TEncodable) -> TTransaction:
+    def hkeys(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns all field names in the hash stored at `key`.
 
@@ -850,7 +850,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HKeys, [key])
 
-    def hrandfield(self: TTransaction, key: TEncodable) -> TTransaction:
+    def hrandfield(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns a random field name from the hash value stored at `key`.
 
@@ -866,9 +866,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HRandField, [key])
 
-    def hrandfield_count(
-        self: TTransaction, key: TEncodable, count: int
-    ) -> TTransaction:
+    def hrandfield_count(self: TBatch, key: TEncodable, count: int) -> TBatch:
         """
         Retrieves up to `count` random field names from the hash value stored at `key`.
 
@@ -888,9 +886,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HRandField, [key, str(count)])
 
-    def hrandfield_withvalues(
-        self: TTransaction, key: TEncodable, count: int
-    ) -> TTransaction:
+    def hrandfield_withvalues(self: TBatch, key: TEncodable, count: int) -> TBatch:
         """
         Retrieves up to `count` random field names along with their values from the hash value stored at `key`.
 
@@ -913,7 +909,7 @@ class BaseTransaction:
             RequestType.HRandField, [key, str(count), "WITHVALUES"]
         )
 
-    def hstrlen(self: TTransaction, key: TEncodable, field: TEncodable) -> TTransaction:
+    def hstrlen(self: TBatch, key: TEncodable, field: TEncodable) -> TBatch:
         """
         Returns the string length of the value associated with `field` in the hash stored at `key`.
 
@@ -930,9 +926,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HStrlen, [key, field])
 
-    def lpush(
-        self: TTransaction, key: TEncodable, elements: List[TEncodable]
-    ) -> TTransaction:
+    def lpush(self: TBatch, key: TEncodable, elements: List[TEncodable]) -> TBatch:
         """
         Insert all the specified values at the head of the list stored at `key`.
         `elements` are inserted one after the other to the head of the list, from the leftmost element
@@ -949,9 +943,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LPush, [key] + elements)
 
-    def lpushx(
-        self: TTransaction, key: TEncodable, elements: List[TEncodable]
-    ) -> TTransaction:
+    def lpushx(self: TBatch, key: TEncodable, elements: List[TEncodable]) -> TBatch:
         """
         Inserts all the specified values at the head of the list stored at `key`, only if `key` exists and holds a list.
         If `key` is not a list, this performs no operation.
@@ -967,7 +959,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LPushX, [key] + elements)
 
-    def lpop(self: TTransaction, key: TEncodable) -> TTransaction:
+    def lpop(self: TBatch, key: TEncodable) -> TBatch:
         """
         Remove and return the first elements of the list stored at `key`.
         The command pops a single element from the beginning of the list.
@@ -984,7 +976,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LPop, [key])
 
-    def lpop_count(self: TTransaction, key: TEncodable, count: int) -> TTransaction:
+    def lpop_count(self: TBatch, key: TEncodable, count: int) -> TBatch:
         """
         Remove and return up to `count` elements from the list stored at `key`, depending on the list's length.
 
@@ -1001,9 +993,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LPop, [key, str(count)])
 
-    def blpop(
-        self: TTransaction, keys: List[TEncodable], timeout: float
-    ) -> TTransaction:
+    def blpop(self: TBatch, keys: List[TEncodable], timeout: float) -> TBatch:
         """
         Pops an element from the head of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
@@ -1029,11 +1019,11 @@ class BaseTransaction:
         return self.append_command(RequestType.BLPop, keys + [str(timeout)])
 
     def lmpop(
-        self: TTransaction,
+        self: TBatch,
         keys: List[TEncodable],
         direction: ListDirection,
         count: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Pops one or more elements from the first non-empty list from the provided `keys`.
 
@@ -1060,12 +1050,12 @@ class BaseTransaction:
         return self.append_command(RequestType.LMPop, args)
 
     def blmpop(
-        self: TTransaction,
+        self: TBatch,
         keys: List[TEncodable],
         direction: ListDirection,
         timeout: float,
         count: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Blocks the connection until it pops one or more elements from the first non-empty list from the provided `keys`.
 
@@ -1095,9 +1085,7 @@ class BaseTransaction:
 
         return self.append_command(RequestType.BLMPop, args)
 
-    def lrange(
-        self: TTransaction, key: TEncodable, start: int, end: int
-    ) -> TTransaction:
+    def lrange(self: TBatch, key: TEncodable, start: int, end: int) -> TBatch:
         """
         Retrieve the specified elements of the list stored at `key` within the given range.
         The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next
@@ -1123,10 +1111,10 @@ class BaseTransaction:
         return self.append_command(RequestType.LRange, [key, str(start), str(end)])
 
     def lindex(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         index: int,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the element at `index` in the list stored at `key`.
 
@@ -1148,11 +1136,11 @@ class BaseTransaction:
         return self.append_command(RequestType.LIndex, [key, str(index)])
 
     def lset(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         index: int,
         element: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Sets the list element at `index` to `element`.
 
@@ -1172,9 +1160,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LSet, [key, str(index), element])
 
-    def rpush(
-        self: TTransaction, key: TEncodable, elements: List[TEncodable]
-    ) -> TTransaction:
+    def rpush(self: TBatch, key: TEncodable, elements: List[TEncodable]) -> TBatch:
         """
         Inserts all the specified values at the tail of the list stored at `key`.
         `elements` are inserted one after the other to the tail of the list, from the leftmost element
@@ -1188,14 +1174,11 @@ class BaseTransaction:
 
         Command response:
             int: The length of the list after the push operations.
-
-            If `key` holds a value that is not a list, the transaction fails.
+                If `key` holds a value that is not a list, the batch fails.
         """
         return self.append_command(RequestType.RPush, [key] + elements)
 
-    def rpushx(
-        self: TTransaction, key: TEncodable, elements: List[TEncodable]
-    ) -> TTransaction:
+    def rpushx(self: TBatch, key: TEncodable, elements: List[TEncodable]) -> TBatch:
         """
         Inserts all the specified values at the tail of the list stored at `key`, only if `key` exists and holds a list.
         If `key` is not a list, this performs no operation.
@@ -1211,9 +1194,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.RPushX, [key] + elements)
 
-    def rpop(
-        self: TTransaction, key: TEncodable, count: Optional[int] = None
-    ) -> TTransaction:
+    def rpop(self: TBatch, key: TEncodable, count: Optional[int] = None) -> TBatch:
         """
         Removes and returns the last elements of the list stored at `key`.
         The command pops a single element from the end of the list.
@@ -1230,7 +1211,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.RPop, [key])
 
-    def rpop_count(self: TTransaction, key: TEncodable, count: int) -> TTransaction:
+    def rpop_count(self: TBatch, key: TEncodable, count: int) -> TBatch:
         """
         Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
 
@@ -1247,9 +1228,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.RPop, [key, str(count)])
 
-    def brpop(
-        self: TTransaction, keys: List[TEncodable], timeout: float
-    ) -> TTransaction:
+    def brpop(self: TBatch, keys: List[TEncodable], timeout: float) -> TBatch:
         """
         Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
@@ -1275,12 +1254,12 @@ class BaseTransaction:
         return self.append_command(RequestType.BRPop, keys + [str(timeout)])
 
     def linsert(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         position: InsertPosition,
         pivot: TEncodable,
         element: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Inserts `element` in the list at `key` either before or after the `pivot`.
 
@@ -1305,12 +1284,12 @@ class BaseTransaction:
         )
 
     def lmove(
-        self: TTransaction,
+        self: TBatch,
         source: TEncodable,
         destination: TEncodable,
         where_from: ListDirection,
         where_to: ListDirection,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Atomically pops and removes the left/right-most element to the list stored at `source`
         depending on `where_from`, and pushes the element at the first/last element of the list
@@ -1338,13 +1317,13 @@ class BaseTransaction:
         )
 
     def blmove(
-        self: TTransaction,
+        self: TBatch,
         source: TEncodable,
         destination: TEncodable,
         where_from: ListDirection,
         where_to: ListDirection,
         timeout: float,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Blocks the connection until it pops atomically and removes the left/right-most element to the
         list stored at `source` depending on `where_from`, and pushes the element at the first/last element
@@ -1375,9 +1354,7 @@ class BaseTransaction:
             [source, destination, where_from.value, where_to.value, str(timeout)],
         )
 
-    def sadd(
-        self: TTransaction, key: TEncodable, members: List[TEncodable]
-    ) -> TTransaction:
+    def sadd(self: TBatch, key: TEncodable, members: List[TEncodable]) -> TBatch:
         """
         Add specified members to the set stored at `key`.
         Specified members that are already a member of this set are ignored.
@@ -1394,9 +1371,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SAdd, [key] + members)
 
-    def srem(
-        self: TTransaction, key: TEncodable, members: List[TEncodable]
-    ) -> TTransaction:
+    def srem(self: TBatch, key: TEncodable, members: List[TEncodable]) -> TBatch:
         """
         Remove specified members from the set stored at `key`.
         Specified members that are not a member of this set are ignored.
@@ -1414,7 +1389,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SRem, [key] + members)
 
-    def smembers(self: TTransaction, key: TEncodable) -> TTransaction:
+    def smembers(self: TBatch, key: TEncodable) -> TBatch:
         """
         Retrieve all the members of the set value stored at `key`.
 
@@ -1430,7 +1405,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SMembers, [key])
 
-    def scard(self: TTransaction, key: TEncodable) -> TTransaction:
+    def scard(self: TBatch, key: TEncodable) -> TBatch:
         """
         Retrieve the set cardinality (number of elements) of the set stored at `key`.
 
@@ -1446,7 +1421,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SCard, [key])
 
-    def spop(self: TTransaction, key: TEncodable) -> TTransaction:
+    def spop(self: TBatch, key: TEncodable) -> TBatch:
         """
         Removes and returns one random member from the set stored at `key`.
 
@@ -1463,7 +1438,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SPop, [key])
 
-    def spop_count(self: TTransaction, key: TEncodable, count: int) -> TTransaction:
+    def spop_count(self: TBatch, key: TEncodable, count: int) -> TBatch:
         """
         Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
 
@@ -1483,10 +1458,10 @@ class BaseTransaction:
         return self.append_command(RequestType.SPop, [key, str(count)])
 
     def sismember(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         member: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns if `member` is a member of the set stored at `key`.
 
@@ -1504,11 +1479,11 @@ class BaseTransaction:
         return self.append_command(RequestType.SIsMember, [key, member])
 
     def smove(
-        self: TTransaction,
+        self: TBatch,
         source: TEncodable,
         destination: TEncodable,
         member: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Moves `member` from the set at `source` to the set at `destination`, removing it from the source set. Creates a
         new destination set if needed. The operation is atomic.
@@ -1527,7 +1502,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SMove, [source, destination, member])
 
-    def sunion(self: TTransaction, keys: List[TEncodable]) -> TTransaction:
+    def sunion(self: TBatch, keys: List[TEncodable]) -> TBatch:
         """
         Gets the union of all the given sets.
 
@@ -1544,10 +1519,10 @@ class BaseTransaction:
         return self.append_command(RequestType.SUnion, keys)
 
     def sunionstore(
-        self: TTransaction,
+        self: TBatch,
         destination: TEncodable,
         keys: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Stores the members of the union of all given sets specified by `keys` into a new set at `destination`.
 
@@ -1562,7 +1537,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SUnionStore, [destination] + keys)
 
-    def sinter(self: TTransaction, keys: List[TEncodable]) -> TTransaction:
+    def sinter(self: TBatch, keys: List[TEncodable]) -> TBatch:
         """
         Gets the intersection of all the given sets.
 
@@ -1579,10 +1554,10 @@ class BaseTransaction:
         return self.append_command(RequestType.SInter, keys)
 
     def sinterstore(
-        self: TTransaction,
+        self: TBatch,
         destination: TEncodable,
         keys: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
 
@@ -1598,8 +1573,8 @@ class BaseTransaction:
         return self.append_command(RequestType.SInterStore, [destination] + keys)
 
     def sintercard(
-        self: TTransaction, keys: List[TEncodable], limit: Optional[int] = None
-    ) -> TTransaction:
+        self: TBatch, keys: List[TEncodable], limit: Optional[int] = None
+    ) -> TBatch:
         """
         Gets the cardinality of the intersection of all the given sets.
         Optionally, a `limit` can be specified to stop the computation early if the intersection
@@ -1621,7 +1596,7 @@ class BaseTransaction:
             args.extend(["LIMIT", str(limit)])
         return self.append_command(RequestType.SInterCard, args)
 
-    def sdiff(self: TTransaction, keys: List[TEncodable]) -> TTransaction:
+    def sdiff(self: TBatch, keys: List[TEncodable]) -> TBatch:
         """
         Computes the difference between the first set and all the successive sets in `keys`.
 
@@ -1638,10 +1613,10 @@ class BaseTransaction:
         return self.append_command(RequestType.SDiff, keys)
 
     def sdiffstore(
-        self: TTransaction,
+        self: TBatch,
         destination: TEncodable,
         keys: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Stores the difference between the first set and all the successive sets in `keys` into a new set at
         `destination`.
@@ -1657,9 +1632,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SDiffStore, [destination] + keys)
 
-    def smismember(
-        self: TTransaction, key: TEncodable, members: List[TEncodable]
-    ) -> TTransaction:
+    def smismember(self: TBatch, key: TEncodable, members: List[TEncodable]) -> TBatch:
         """
         Checks whether each member is contained in the members of the set stored at `key`.
 
@@ -1674,9 +1647,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SMIsMember, [key] + members)
 
-    def ltrim(
-        self: TTransaction, key: TEncodable, start: int, end: int
-    ) -> TTransaction:
+    def ltrim(self: TBatch, key: TEncodable, start: int, end: int) -> TBatch:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
         The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next
@@ -1704,11 +1675,11 @@ class BaseTransaction:
         return self.append_command(RequestType.LTrim, [key, str(start), str(end)])
 
     def lrem(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         count: int,
         element: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
         If `count` is positive, it removes elements equal to `element` moving from head to tail.
@@ -1730,7 +1701,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LRem, [key, str(count), element])
 
-    def llen(self: TTransaction, key: TEncodable) -> TTransaction:
+    def llen(self: TBatch, key: TEncodable) -> TBatch:
         """
         Get the length of the list stored at `key`.
 
@@ -1746,7 +1717,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LLen, [key])
 
-    def exists(self: TTransaction, keys: List[TEncodable]) -> TTransaction:
+    def exists(self: TBatch, keys: List[TEncodable]) -> TBatch:
         """
         Returns the number of keys in `keys` that exist in the database.
 
@@ -1761,12 +1732,12 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Exists, keys)
 
-    def unlink(self: TTransaction, keys: List[TEncodable]) -> TTransaction:
+    def unlink(self: TBatch, keys: List[TEncodable]) -> TBatch:
         """
         Unlink (delete) multiple keys from the database.
         A key is ignored if it does not exist.
         This command, similar to DEL, removes specified keys and ignores non-existent ones.
-        However, this command does not block the server, while `DEL <[valkey.io](https://valkey.io/commands/del>`_) does.
+        However, this command does not block the server, while `DEL <See [valkey.io](https://valkey.io/commands/del>`_) does.
 
         See [valkey.io](https://valkey.io/commands/unlink/) for more details.
 
@@ -1779,11 +1750,11 @@ class BaseTransaction:
         return self.append_command(RequestType.Unlink, keys)
 
     def expire(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         seconds: int,
         option: Optional[ExpireOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
         If `key` already has an existing expire set, the time to live is updated to the new value.
@@ -1809,11 +1780,11 @@ class BaseTransaction:
         return self.append_command(RequestType.Expire, args)
 
     def expireat(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         unix_seconds: int,
         option: Optional[ExpireOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Sets a timeout on `key` using an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the
         number of seconds.
@@ -1843,11 +1814,11 @@ class BaseTransaction:
         return self.append_command(RequestType.ExpireAt, args)
 
     def pexpire(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         milliseconds: int,
         option: Optional[ExpireOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
         If `key` already has an existing expire set, the time to live is updated to the new value.
@@ -1875,11 +1846,11 @@ class BaseTransaction:
         return self.append_command(RequestType.PExpire, args)
 
     def pexpireat(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         unix_milliseconds: int,
         option: Optional[ExpireOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Sets a timeout on `key` using an absolute Unix timestamp in milliseconds (milliseconds since January 1, 1970) instead
         of specifying the number of milliseconds.
@@ -1908,7 +1879,7 @@ class BaseTransaction:
         )
         return self.append_command(RequestType.PExpireAt, args)
 
-    def expiretime(self: TTransaction, key: TEncodable) -> TTransaction:
+    def expiretime(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns the absolute Unix timestamp (since January 1, 1970) at which
         the given `key` will expire, in seconds.
@@ -1930,7 +1901,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ExpireTime, [key])
 
-    def pexpiretime(self: TTransaction, key: TEncodable) -> TTransaction:
+    def pexpiretime(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns the absolute Unix timestamp (since January 1, 1970) at which
         the given `key` will expire, in milliseconds.
@@ -1951,7 +1922,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.PExpireTime, [key])
 
-    def ttl(self: TTransaction, key: TEncodable) -> TTransaction:
+    def ttl(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns the remaining time to live of `key` that has a timeout.
 
@@ -1970,9 +1941,9 @@ class BaseTransaction:
         return self.append_command(RequestType.TTL, [key])
 
     def pttl(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the remaining time to live of `key` that has a timeout, in milliseconds.
 
@@ -1991,9 +1962,9 @@ class BaseTransaction:
         return self.append_command(RequestType.PTTL, [key])
 
     def persist(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
         persistent (a key that will never expire as no timeout is associated).
@@ -2010,7 +1981,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Persist, [key])
 
-    def echo(self: TTransaction, message: TEncodable) -> TTransaction:
+    def echo(self: TBatch, message: TEncodable) -> TBatch:
         """
         Echoes the provided `message` back.
 
@@ -2024,7 +1995,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Echo, [message])
 
-    def lastsave(self: TTransaction) -> TTransaction:
+    def lastsave(self: TBatch) -> TBatch:
         """
         Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
 
@@ -2035,7 +2006,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LastSave, [])
 
-    def type(self: TTransaction, key: TEncodable) -> TTransaction:
+    def type(self: TBatch, key: TEncodable) -> TBatch:
         """
          Returns the string representation of the type of the value stored at `key`.
 
@@ -2052,8 +2023,8 @@ class BaseTransaction:
         return self.append_command(RequestType.Type, [key])
 
     def function_load(
-        self: TTransaction, library_code: TEncodable, replace: bool = False
-    ) -> TTransaction:
+        self: TBatch, library_code: TEncodable, replace: bool = False
+    ) -> TBatch:
         """
         Loads a library to Valkey.
 
@@ -2075,10 +2046,10 @@ class BaseTransaction:
         )
 
     def function_list(
-        self: TTransaction,
+        self: TBatch,
         library_name_pattern: Optional[TEncodable] = None,
         with_code: bool = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns information about the functions and libraries.
 
@@ -2103,9 +2074,7 @@ class BaseTransaction:
             args,
         )
 
-    def function_flush(
-        self: TTransaction, mode: Optional[FlushMode] = None
-    ) -> TTransaction:
+    def function_flush(self: TBatch, mode: Optional[FlushMode] = None) -> TBatch:
         """
         Deletes all function libraries.
 
@@ -2124,7 +2093,7 @@ class BaseTransaction:
             [mode.value] if mode else [],
         )
 
-    def function_delete(self: TTransaction, library_name: TEncodable) -> TTransaction:
+    def function_delete(self: TBatch, library_name: TEncodable) -> TBatch:
         """
         Deletes a library and all its functions.
 
@@ -2144,11 +2113,11 @@ class BaseTransaction:
         )
 
     def fcall(
-        self: TTransaction,
+        self: TBatch,
         function: TEncodable,
         keys: Optional[List[TEncodable]] = None,
         arguments: Optional[List[TEncodable]] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Invokes a previously loaded function.
 
@@ -2177,11 +2146,11 @@ class BaseTransaction:
         return self.append_command(RequestType.FCall, args)
 
     def fcall_ro(
-        self: TTransaction,
+        self: TBatch,
         function: TEncodable,
         keys: Optional[List[TEncodable]] = None,
         arguments: Optional[List[TEncodable]] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Invokes a previously loaded read-only function.
 
@@ -2209,7 +2178,7 @@ class BaseTransaction:
             args.extend(arguments)
         return self.append_command(RequestType.FCallReadOnly, args)
 
-    def function_stats(self: TTransaction) -> TTransaction:
+    def function_stats(self: TBatch) -> TBatch:
         """
         Returns information about the function that's currently running and information about the
         available execution engines.
@@ -2226,7 +2195,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.FunctionStats, [])
 
-    def function_dump(self: TTransaction) -> TTransaction:
+    def function_dump(self: TBatch) -> TBatch:
         """
         Returns the serialized payload of all loaded libraries.
 
@@ -2240,10 +2209,10 @@ class BaseTransaction:
         return self.append_command(RequestType.FunctionDump, [])
 
     def function_restore(
-        self: TTransaction,
+        self: TBatch,
         payload: TEncodable,
         policy: Optional[FunctionRestorePolicy] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Restores libraries from the serialized payload returned by the `function_dump` command.
 
@@ -2264,9 +2233,9 @@ class BaseTransaction:
         return self.append_command(RequestType.FunctionRestore, args)
 
     def dump(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
 
@@ -2283,7 +2252,7 @@ class BaseTransaction:
         return self.append_command(RequestType.Dump, [key])
 
     def restore(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         ttl: int,
         value: TEncodable,
@@ -2291,7 +2260,7 @@ class BaseTransaction:
         absttl: bool = False,
         idletime: Optional[int] = None,
         frequency: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Create a `key` associated with a `value` that is obtained by deserializing the provided
         serialized `value` obtained via `dump`.
@@ -2326,11 +2295,11 @@ class BaseTransaction:
         return self.append_command(RequestType.Restore, args)
 
     def xadd(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         values: List[Tuple[TEncodable, TEncodable]],
         options: StreamAddOptions = StreamAddOptions(),
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
 
@@ -2354,9 +2323,7 @@ class BaseTransaction:
 
         return self.append_command(RequestType.XAdd, args)
 
-    def xdel(
-        self: TTransaction, key: TEncodable, ids: List[TEncodable]
-    ) -> TTransaction:
+    def xdel(self: TBatch, key: TEncodable, ids: List[TEncodable]) -> TBatch:
         """
         Removes the specified entries by id from a stream, and returns the number of entries deleted.
 
@@ -2373,10 +2340,10 @@ class BaseTransaction:
         return self.append_command(RequestType.XDel, [key] + ids)
 
     def xtrim(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         options: StreamTrimOptions,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Trims the stream stored at `key` by evicting older entries.
 
@@ -2397,7 +2364,7 @@ class BaseTransaction:
 
         return self.append_command(RequestType.XTrim, args)
 
-    def xlen(self: TTransaction, key: TEncodable) -> TTransaction:
+    def xlen(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns the number of entries in the stream stored at `key`.
 
@@ -2414,12 +2381,12 @@ class BaseTransaction:
         return self.append_command(RequestType.XLen, [key])
 
     def xrange(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         start: StreamRangeBound,
         end: StreamRangeBound,
         count: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns stream entries matching a given range of IDs.
 
@@ -2455,12 +2422,12 @@ class BaseTransaction:
         return self.append_command(RequestType.XRange, args)
 
     def xrevrange(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         end: StreamRangeBound,
         start: StreamRangeBound,
         count: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns stream entries matching a given range of IDs in reverse order. Equivalent to `XRANGE` but returns the
         entries in reverse order.
@@ -2497,10 +2464,10 @@ class BaseTransaction:
         return self.append_command(RequestType.XRevRange, args)
 
     def xread(
-        self: TTransaction,
+        self: TBatch,
         keys_and_ids: Mapping[TEncodable, TEncodable],
         options: Optional[StreamReadOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Reads entries from the given streams.
 
@@ -2528,12 +2495,12 @@ class BaseTransaction:
         return self.append_command(RequestType.XRead, args)
 
     def xgroup_create(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group_name: TEncodable,
         group_id: TEncodable,
         options: Optional[StreamGroupOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Creates a new consumer group uniquely identified by `group_name` for the stream stored at `key`.
 
@@ -2555,9 +2522,7 @@ class BaseTransaction:
 
         return self.append_command(RequestType.XGroupCreate, args)
 
-    def xgroup_destroy(
-        self: TTransaction, key: TEncodable, group_name: TEncodable
-    ) -> TTransaction:
+    def xgroup_destroy(self: TBatch, key: TEncodable, group_name: TEncodable) -> TBatch:
         """
         Destroys the consumer group `group_name` for the stream stored at `key`.
 
@@ -2575,11 +2540,11 @@ class BaseTransaction:
         return self.append_command(RequestType.XGroupDestroy, [key, group_name])
 
     def xgroup_create_consumer(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group_name: TEncodable,
         consumer_name: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Creates a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
 
@@ -2600,11 +2565,11 @@ class BaseTransaction:
         )
 
     def xgroup_del_consumer(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group_name: TEncodable,
         consumer_name: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Deletes a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
 
@@ -2623,12 +2588,12 @@ class BaseTransaction:
         )
 
     def xgroup_set_id(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group_name: TEncodable,
         stream_id: TEncodable,
         entries_read_id: Optional[str] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Set the last delivered ID for a consumer group.
 
@@ -2652,12 +2617,12 @@ class BaseTransaction:
         return self.append_command(RequestType.XGroupSetId, args)
 
     def xreadgroup(
-        self: TTransaction,
+        self: TBatch,
         keys_and_ids: Mapping[TEncodable, TEncodable],
         group_name: TEncodable,
         consumer_name: TEncodable,
         options: Optional[StreamReadGroupOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Reads entries from the given streams owned by a consumer group.
 
@@ -2687,11 +2652,11 @@ class BaseTransaction:
         return self.append_command(RequestType.XReadGroup, args)
 
     def xack(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group_name: TEncodable,
         ids: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Removes one or multiple messages from the Pending Entries List (PEL) of a stream consumer group.
         This command should be called on pending messages so that such messages do not get processed again by the
@@ -2710,10 +2675,10 @@ class BaseTransaction:
         return self.append_command(RequestType.XAck, [key, group_name] + ids)
 
     def xpending(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group_name: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns stream message summary information for pending messages for the given consumer group.
 
@@ -2738,14 +2703,14 @@ class BaseTransaction:
         return self.append_command(RequestType.XPending, [key, group_name])
 
     def xpending_range(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group_name: TEncodable,
         start: StreamRangeBound,
         end: StreamRangeBound,
         count: int,
         options: Optional[StreamPendingOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns an extended form of stream message information for pending messages matching a given range of IDs.
 
@@ -2784,14 +2749,14 @@ class BaseTransaction:
         return self.append_command(RequestType.XPending, args)
 
     def xautoclaim(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group_name: TEncodable,
         consumer_name: TEncodable,
         min_idle_time_ms: int,
         start: TEncodable,
         count: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Transfers ownership of pending stream entries that match the specified criteria.
 
@@ -2827,14 +2792,14 @@ class BaseTransaction:
         return self.append_command(RequestType.XAutoClaim, args)
 
     def xautoclaim_just_id(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group_name: TEncodable,
         consumer_name: TEncodable,
         min_idle_time_ms: int,
         start: TEncodable,
         count: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Transfers ownership of pending stream entries that match the specified criteria. This command uses the JUSTID
         argument to further specify that the return value should contain a list of claimed IDs without their
@@ -2873,9 +2838,9 @@ class BaseTransaction:
         return self.append_command(RequestType.XAutoClaim, args)
 
     def xinfo_groups(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the list of all consumer groups and their attributes for the stream stored at `key`.
 
@@ -2891,10 +2856,10 @@ class BaseTransaction:
         return self.append_command(RequestType.XInfoGroups, [key])
 
     def xinfo_consumers(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group_name: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the list of all consumers and their attributes for the given consumer group of the stream stored at
         `key`.
@@ -2912,9 +2877,9 @@ class BaseTransaction:
         return self.append_command(RequestType.XInfoConsumers, [key, group_name])
 
     def xinfo_stream(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns information about the stream stored at `key`. To get more detailed information, use `xinfo_stream_full`.
 
@@ -2929,10 +2894,10 @@ class BaseTransaction:
         return self.append_command(RequestType.XInfoStream, [key])
 
     def xinfo_stream_full(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         count: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns verbose information about the stream stored at `key`.
 
@@ -2953,12 +2918,12 @@ class BaseTransaction:
         return self.append_command(RequestType.XInfoStream, args)
 
     def geoadd(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         members_geospatialdata: Mapping[TEncodable, GeospatialData],
         existing_options: Optional[ConditionalChange] = None,
         changed: bool = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Adds geospatial members with their positions to the specified sorted set stored at `key`.
         If a member is already a part of the sorted set, its position is updated.
@@ -3000,12 +2965,12 @@ class BaseTransaction:
         return self.append_command(RequestType.GeoAdd, args)
 
     def geodist(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         member1: TEncodable,
         member2: TEncodable,
         unit: Optional[GeoUnit] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the distance between two members in the geospatial index stored at `key`.
 
@@ -3029,9 +2994,7 @@ class BaseTransaction:
 
         return self.append_command(RequestType.GeoDist, args)
 
-    def geohash(
-        self: TTransaction, key: TEncodable, members: List[TEncodable]
-    ) -> TTransaction:
+    def geohash(self: TBatch, key: TEncodable, members: List[TEncodable]) -> TBatch:
         """
         Returns the GeoHash bytes strings representing the positions of all the specified members in the sorted set stored at
         `key`.
@@ -3051,10 +3014,10 @@ class BaseTransaction:
         return self.append_command(RequestType.GeoHash, [key] + members)
 
     def geopos(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         members: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored
         at `key`.
@@ -3073,7 +3036,7 @@ class BaseTransaction:
         return self.append_command(RequestType.GeoPos, [key] + members)
 
     def geosearch(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         search_from: Union[TEncodable, GeospatialData],
         search_by: Union[GeoSearchByRadius, GeoSearchByBox],
@@ -3082,7 +3045,7 @@ class BaseTransaction:
         with_coord: bool = False,
         with_dist: bool = False,
         with_hash: bool = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Searches for members in a sorted set stored at `key` representing geospatial data within a circular or
         rectangular area.
@@ -3138,14 +3101,14 @@ class BaseTransaction:
         return self.append_command(RequestType.GeoSearch, args)
 
     def geosearchstore(
-        self: TTransaction,
+        self: TBatch,
         destination: TEncodable,
         source: TEncodable,
         search_from: Union[TEncodable, GeospatialData],
         search_by: Union[GeoSearchByRadius, GeoSearchByBox],
         count: Optional[GeoSearchCount] = None,
         store_dist: bool = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular
         area and stores the result in `destination`.
@@ -3191,13 +3154,13 @@ class BaseTransaction:
         return self.append_command(RequestType.GeoSearchStore, args)
 
     def zadd(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         members_scores: Mapping[TEncodable, float],
         existing_options: Optional[ConditionalChange] = None,
         update_condition: Optional[UpdateOptions] = None,
         changed: bool = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Adds members with their scores to the sorted set stored at `key`.
         If a member is already a part of the sorted set, its score is updated.
@@ -3250,13 +3213,13 @@ class BaseTransaction:
         return self.append_command(RequestType.ZAdd, args)
 
     def zadd_incr(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         member: TEncodable,
         increment: float,
         existing_options: Optional[ConditionalChange] = None,
         update_condition: Optional[UpdateOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Increments the score of member in the sorted set stored at `key` by `increment`.
         If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its
@@ -3303,7 +3266,7 @@ class BaseTransaction:
         args += [str(increment), member]
         return self.append_command(RequestType.ZAdd, args)
 
-    def zcard(self: TTransaction, key: TEncodable) -> TTransaction:
+    def zcard(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns the cardinality (number of elements) of the sorted set stored at `key`.
 
@@ -3320,11 +3283,11 @@ class BaseTransaction:
         return self.append_command(RequestType.ZCard, [key])
 
     def zcount(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         min_score: Union[InfBound, ScoreBoundary],
         max_score: Union[InfBound, ScoreBoundary],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the number of members in the sorted set stored at `key` with scores between `min_score` and `max_score`.
 
@@ -3359,11 +3322,11 @@ class BaseTransaction:
         return self.append_command(RequestType.ZCount, [key, score_min, score_max])
 
     def zincrby(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         increment: float,
         member: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Increments the score of `member` in the sorted set stored at `key` by `increment`.
         If `member` does not exist in the sorted set, it is added with `increment` as its score.
@@ -3381,9 +3344,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZIncrBy, [key, str(increment), member])
 
-    def zpopmax(
-        self: TTransaction, key: TEncodable, count: Optional[int] = None
-    ) -> TTransaction:
+    def zpopmax(self: TBatch, key: TEncodable, count: Optional[int] = None) -> TBatch:
         """
         Removes and returns the members with the highest scores from the sorted set stored at `key`.
         If `count` is provided, up to `count` members with the highest scores are removed and returned.
@@ -3407,9 +3368,7 @@ class BaseTransaction:
             RequestType.ZPopMax, [key, str(count)] if count else [key]
         )
 
-    def bzpopmax(
-        self: TTransaction, keys: List[TEncodable], timeout: float
-    ) -> TTransaction:
+    def bzpopmax(self: TBatch, keys: List[TEncodable], timeout: float) -> TBatch:
         """
         Pops the member with the highest score from the first non-empty sorted set, with the given keys being checked in
         the order that they are given. Blocks the connection when there are no members to remove from any of the given
@@ -3437,9 +3396,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.BZPopMax, keys + [str(timeout)])
 
-    def zpopmin(
-        self: TTransaction, key: TEncodable, count: Optional[int] = None
-    ) -> TTransaction:
+    def zpopmin(self: TBatch, key: TEncodable, count: Optional[int] = None) -> TBatch:
         """
         Removes and returns the members with the lowest scores from the sorted set stored at `key`.
         If `count` is provided, up to `count` members with the lowest scores are removed and returned.
@@ -3462,9 +3419,7 @@ class BaseTransaction:
             RequestType.ZPopMin, [key, str(count)] if count else [key]
         )
 
-    def bzpopmin(
-        self: TTransaction, keys: List[TEncodable], timeout: float
-    ) -> TTransaction:
+    def bzpopmin(self: TBatch, keys: List[TEncodable], timeout: float) -> TBatch:
         """
         Pops the member with the lowest score from the first non-empty sorted set, with the given keys being checked in
         the order that they are given. Blocks the connection when there are no members to remove from any of the given
@@ -3493,11 +3448,11 @@ class BaseTransaction:
         return self.append_command(RequestType.BZPopMin, keys + [str(timeout)])
 
     def zrange(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
         reverse: bool = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the specified range of elements in the sorted set stored at `key`.
 
@@ -3526,11 +3481,11 @@ class BaseTransaction:
         return self.append_command(RequestType.ZRange, args)
 
     def zrange_withscores(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         range_query: Union[RangeByIndex, RangeByScore],
         reverse: bool = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the specified range of elements with their scores in the sorted set stored at `key`.
         Similar to ZRANGE but with a WITHSCORE flag.
@@ -3557,12 +3512,12 @@ class BaseTransaction:
         return self.append_command(RequestType.ZRange, args)
 
     def zrangestore(
-        self: TTransaction,
+        self: TBatch,
         destination: TEncodable,
         source: TEncodable,
         range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
         reverse: bool = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Stores a specified range of elements from the sorted set at `source`, into a new sorted set at `destination`. If
         `destination` doesn't exist, a new sorted set is created; if it exists, it's overwritten.
@@ -3592,10 +3547,10 @@ class BaseTransaction:
         return self.append_command(RequestType.ZRangeStore, args)
 
     def zrank(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         member: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
 
@@ -3615,10 +3570,10 @@ class BaseTransaction:
         return self.append_command(RequestType.ZRank, [key, member])
 
     def zrank_withscore(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         member: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
         lowest to highest.
@@ -3638,9 +3593,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZRank, [key, member, "WITHSCORE"])
 
-    def zrevrank(
-        self: TTransaction, key: TEncodable, member: TEncodable
-    ) -> TTransaction:
+    def zrevrank(self: TBatch, key: TEncodable, member: TEncodable) -> TBatch:
         """
         Returns the rank of `member` in the sorted set stored at `key`, where scores are ordered from the highest to
         lowest, starting from `0`.
@@ -3660,9 +3613,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZRevRank, [key, member])
 
-    def zrevrank_withscore(
-        self: TTransaction, key: TEncodable, member: TEncodable
-    ) -> TTransaction:
+    def zrevrank_withscore(self: TBatch, key: TEncodable, member: TEncodable) -> TBatch:
         """
         Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
         highest to lowest, starting from `0`.
@@ -3684,10 +3635,10 @@ class BaseTransaction:
         return self.append_command(RequestType.ZRevRank, [key, member, "WITHSCORE"])
 
     def zrem(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         members: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Removes the specified members from the sorted set stored at `key`.
         Specified members that are not a member of this set are ignored.
@@ -3706,11 +3657,11 @@ class BaseTransaction:
         return self.append_command(RequestType.ZRem, [key] + members)
 
     def zremrangebyscore(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         min_score: Union[InfBound, ScoreBoundary],
         max_score: Union[InfBound, ScoreBoundary],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Removes all elements in the sorted set stored at `key` with a score between `min_score` and `max_score`.
 
@@ -3747,11 +3698,11 @@ class BaseTransaction:
         )
 
     def zremrangebylex(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         min_lex: Union[InfBound, LexBoundary],
         max_lex: Union[InfBound, LexBoundary],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Removes all elements in the sorted set stored at `key` with a lexicographical order between `min_lex` and
         `max_lex`.
@@ -3786,11 +3737,11 @@ class BaseTransaction:
         )
 
     def zremrangebyrank(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         start: int,
         end: int,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
         Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
@@ -3817,11 +3768,11 @@ class BaseTransaction:
         )
 
     def zlexcount(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         min_lex: Union[InfBound, LexBoundary],
         max_lex: Union[InfBound, LexBoundary],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the number of members in the sorted set stored at `key` with lexographical values between
         `min_lex` and `max_lex`.
@@ -3855,7 +3806,7 @@ class BaseTransaction:
             RequestType.ZLexCount, [key, min_lex_arg, max_lex_arg]
         )
 
-    def zscore(self: TTransaction, key: TEncodable, member: TEncodable) -> TTransaction:
+    def zscore(self: TBatch, key: TEncodable, member: TEncodable) -> TBatch:
         """
         Returns the score of `member` in the sorted set stored at `key`.
 
@@ -3874,9 +3825,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZScore, [key, member])
 
-    def zmscore(
-        self: TTransaction, key: TEncodable, members: List[TEncodable]
-    ) -> TTransaction:
+    def zmscore(self: TBatch, key: TEncodable, members: List[TEncodable]) -> TBatch:
         """
         Returns the scores associated with the specified `members` in the sorted set stored at `key`.
 
@@ -3893,7 +3842,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZMScore, [key] + members)
 
-    def zdiff(self: TTransaction, keys: List[TEncodable]) -> TTransaction:
+    def zdiff(self: TBatch, keys: List[TEncodable]) -> TBatch:
         """
         Returns the difference between the first sorted set and all the successive sorted sets.
         To get the elements with their scores, see `zdiff_withscores`.
@@ -3913,7 +3862,7 @@ class BaseTransaction:
         args.extend(keys)
         return self.append_command(RequestType.ZDiff, args)
 
-    def zdiff_withscores(self: TTransaction, keys: List[TEncodable]) -> TTransaction:
+    def zdiff_withscores(self: TBatch, keys: List[TEncodable]) -> TBatch:
         """
         Returns the difference between the first sorted set and all the successive sorted sets, with the associated scores.
 
@@ -3933,10 +3882,10 @@ class BaseTransaction:
         )
 
     def zdiffstore(
-        self: TTransaction,
+        self: TBatch,
         destination: TEncodable,
         keys: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Calculates the difference between the first sorted set and all the successive sorted sets at `keys` and stores
         the difference as a sorted set to `destination`, overwriting it if it already exists. Non-existent keys are
@@ -3956,9 +3905,9 @@ class BaseTransaction:
         )
 
     def zinter(
-        self: TTransaction,
+        self: TBatch,
         keys: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
 
@@ -3975,10 +3924,10 @@ class BaseTransaction:
         return self.append_command(RequestType.ZInter, args)
 
     def zinter_withscores(
-        self: TTransaction,
+        self: TBatch,
         keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]],
         aggregation_type: Optional[AggregationType] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of
         intersecting elements with scores.
@@ -4002,11 +3951,11 @@ class BaseTransaction:
         return self.append_command(RequestType.ZInter, args)
 
     def zinterstore(
-        self: TTransaction,
+        self: TBatch,
         destination: TEncodable,
         keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]],
         aggregation_type: Optional[AggregationType] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
@@ -4033,9 +3982,9 @@ class BaseTransaction:
         return self.append_command(RequestType.ZInterStore, args)
 
     def zunion(
-        self: TTransaction,
+        self: TBatch,
         keys: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
 
@@ -4052,10 +4001,10 @@ class BaseTransaction:
         return self.append_command(RequestType.ZUnion, args)
 
     def zunion_withscores(
-        self: TTransaction,
+        self: TBatch,
         keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]],
         aggregation_type: Optional[AggregationType] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Computes the union of sorted sets given by the specified `keys` and returns a sorted set of union elements with scores.
 
@@ -4078,11 +4027,11 @@ class BaseTransaction:
         return self.append_command(RequestType.ZUnion, args)
 
     def zunionstore(
-        self: TTransaction,
+        self: TBatch,
         destination: TEncodable,
         keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]],
         aggregation_type: Optional[Optional[AggregationType]] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
@@ -4090,7 +4039,7 @@ class BaseTransaction:
         Note:
             When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
-        see [valkey.io](https://valkey.io/commands/zunionstore/) for more details.
+        See [valkey.io](https://valkey.io/commands/zunionstore/) for more details.
 
         Args:
             destination (TEncodable): The key of the destination sorted set.
@@ -4108,7 +4057,7 @@ class BaseTransaction:
         args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return self.append_command(RequestType.ZUnionStore, args)
 
-    def zrandmember(self: TTransaction, key: TEncodable) -> TTransaction:
+    def zrandmember(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns a random member from the sorted set stored at 'key'.
 
@@ -4124,9 +4073,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZRandMember, [key])
 
-    def zrandmember_count(
-        self: TTransaction, key: TEncodable, count: int
-    ) -> TTransaction:
+    def zrandmember_count(self: TBatch, key: TEncodable, count: int) -> TBatch:
         """
         Retrieves up to the absolute value of `count` random members from the sorted set stored at 'key'.
 
@@ -4146,9 +4093,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZRandMember, [key, str(count)])
 
-    def zrandmember_withscores(
-        self: TTransaction, key: TEncodable, count: int
-    ) -> TTransaction:
+    def zrandmember_withscores(self: TBatch, key: TEncodable, count: int) -> TBatch:
         """
         Retrieves up to the absolute value of `count` random members along with their scores from the sorted set
         stored at 'key'.
@@ -4173,11 +4118,11 @@ class BaseTransaction:
         )
 
     def zmpop(
-        self: TTransaction,
+        self: TBatch,
         keys: List[TEncodable],
         filter: ScoreFilter,
         count: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
         that they are given. The optional `count` argument can be used to specify the number of elements to pop, and is
@@ -4206,12 +4151,12 @@ class BaseTransaction:
         return self.append_command(RequestType.ZMPop, args)
 
     def bzmpop(
-        self: TTransaction,
+        self: TBatch,
         keys: List[TEncodable],
         modifier: ScoreFilter,
         timeout: float,
         count: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
         that they are given. Blocks the connection when there are no members to pop from any of the given sorted sets.
@@ -4252,8 +4197,8 @@ class BaseTransaction:
         return self.append_command(RequestType.BZMPop, args)
 
     def zintercard(
-        self: TTransaction, keys: List[TEncodable], limit: Optional[int] = None
-    ) -> TTransaction:
+        self: TBatch, keys: List[TEncodable], limit: Optional[int] = None
+    ) -> TBatch:
         """
         Returns the cardinality of the intersection of the sorted sets specified by `keys`. When provided with the
         optional `limit` argument, if the intersection cardinality reaches `limit` partway through the computation, the
@@ -4277,7 +4222,7 @@ class BaseTransaction:
 
         return self.append_command(RequestType.ZInterCard, args)
 
-    def dbsize(self: TTransaction) -> TTransaction:
+    def dbsize(self: TBatch) -> TBatch:
         """
         Returns the number of keys in the currently selected database.
 
@@ -4288,9 +4233,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.DBSize, [])
 
-    def pfadd(
-        self: TTransaction, key: TEncodable, elements: List[TEncodable]
-    ) -> TTransaction:
+    def pfadd(self: TBatch, key: TEncodable, elements: List[TEncodable]) -> TBatch:
         """
         Adds all elements to the HyperLogLog data structure stored at the specified `key`.
         Creates a new structure if the `key` does not exist.
@@ -4310,7 +4253,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.PfAdd, [key] + elements)
 
-    def pfcount(self: TTransaction, keys: List[TEncodable]) -> TTransaction:
+    def pfcount(self: TBatch, keys: List[TEncodable]) -> TBatch:
         """
         Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
         calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
@@ -4327,10 +4270,10 @@ class BaseTransaction:
         return self.append_command(RequestType.PfCount, keys)
 
     def pfmerge(
-        self: TTransaction,
+        self: TBatch,
         destination: TEncodable,
         source_keys: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
         of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
@@ -4347,10 +4290,10 @@ class BaseTransaction:
         return self.append_command(RequestType.PfMerge, [destination] + source_keys)
 
     def bitcount(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         options: Optional[OffsetOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Counts the number of set bits (population counting) in a string stored at `key`. The `options` argument can
         optionally be provided to count the number of bits in a specific string interval.
@@ -4374,9 +4317,7 @@ class BaseTransaction:
 
         return self.append_command(RequestType.BitCount, args)
 
-    def setbit(
-        self: TTransaction, key: TEncodable, offset: int, value: int
-    ) -> TTransaction:
+    def setbit(self: TBatch, key: TEncodable, offset: int, value: int) -> TBatch:
         """
         Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index,
         with `0` being the first element of the list, `1` being the next element, and so on. The `offset` must be less
@@ -4395,7 +4336,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SetBit, [key, str(offset), str(value)])
 
-    def getbit(self: TTransaction, key: TEncodable, offset: int) -> TTransaction:
+    def getbit(self: TBatch, key: TEncodable, offset: int) -> TBatch:
         """
         Returns the bit value at `offset` in the string value stored at `key`.
         `offset` should be greater than or equal to zero.
@@ -4414,11 +4355,11 @@ class BaseTransaction:
         return self.append_command(RequestType.GetBit, [key, str(offset)])
 
     def bitpos(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         bit: int,
         options: Optional[OffsetOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the position of the first bit matching the given `bit` value. The optional starting offset
         `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
@@ -4444,11 +4385,11 @@ class BaseTransaction:
         return self.append_command(RequestType.BitPos, args)
 
     def bitop(
-        self: TTransaction,
+        self: TBatch,
         operation: BitwiseOperation,
         destination: TEncodable,
         keys: List[TEncodable],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Perform a bitwise operation between multiple keys (containing string values) and store the result in the
         `destination`.
@@ -4468,10 +4409,10 @@ class BaseTransaction:
         )
 
     def bitfield(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         subcommands: List[BitFieldSubCommands],
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Reads or modifies the array of bits representing the string that is held at `key` based on the specified
         `subcommands`.
@@ -4502,8 +4443,8 @@ class BaseTransaction:
         return self.append_command(RequestType.BitField, args)
 
     def bitfield_read_only(
-        self: TTransaction, key: TEncodable, subcommands: List[BitFieldGet]
-    ) -> TTransaction:
+        self: TBatch, key: TEncodable, subcommands: List[BitFieldGet]
+    ) -> TBatch:
         """
         Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
 
@@ -4521,7 +4462,7 @@ class BaseTransaction:
         args = [key] + _create_bitfield_read_only_args(subcommands)
         return self.append_command(RequestType.BitFieldReadOnly, args)
 
-    def object_encoding(self: TTransaction, key: TEncodable) -> TTransaction:
+    def object_encoding(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns the internal encoding for the Valkey object stored at `key`.
 
@@ -4538,7 +4479,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ObjectEncoding, [key])
 
-    def object_freq(self: TTransaction, key: TEncodable) -> TTransaction:
+    def object_freq(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
 
@@ -4555,7 +4496,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ObjectFreq, [key])
 
-    def object_idletime(self: TTransaction, key: TEncodable) -> TTransaction:
+    def object_idletime(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns the time in seconds since the last access to the value stored at `key`.
 
@@ -4571,7 +4512,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ObjectIdleTime, [key])
 
-    def object_refcount(self: TTransaction, key: TEncodable) -> TTransaction:
+    def object_refcount(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns the reference count of the object stored at `key`.
 
@@ -4587,7 +4528,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ObjectRefCount, [key])
 
-    def srandmember(self: TTransaction, key: TEncodable) -> TTransaction:
+    def srandmember(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns a random element from the set value stored at 'key'.
 
@@ -4603,9 +4544,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SRandMember, [key])
 
-    def srandmember_count(
-        self: TTransaction, key: TEncodable, count: int
-    ) -> TTransaction:
+    def srandmember_count(self: TBatch, key: TEncodable, count: int) -> TBatch:
         """
         Returns one or more random elements from the set value stored at 'key'.
 
@@ -4625,9 +4564,7 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SRandMember, [key, str(count)])
 
-    def flushall(
-        self: TTransaction, flush_mode: Optional[FlushMode] = None
-    ) -> TTransaction:
+    def flushall(self: TBatch, flush_mode: Optional[FlushMode] = None) -> TBatch:
         """
         Deletes all the keys of all the existing databases. This command never fails.
 
@@ -4644,9 +4581,7 @@ class BaseTransaction:
             args.append(flush_mode.value)
         return self.append_command(RequestType.FlushAll, args)
 
-    def flushdb(
-        self: TTransaction, flush_mode: Optional[FlushMode] = None
-    ) -> TTransaction:
+    def flushdb(self: TBatch, flush_mode: Optional[FlushMode] = None) -> TBatch:
         """
         Deletes all the keys of the currently selected database. This command never fails.
 
@@ -4664,8 +4599,8 @@ class BaseTransaction:
         return self.append_command(RequestType.FlushDB, args)
 
     def getex(
-        self: TTransaction, key: TEncodable, expiry: Optional[ExpiryGetEx] = None
-    ) -> TTransaction:
+        self: TBatch, key: TEncodable, expiry: Optional[ExpiryGetEx] = None
+    ) -> TBatch:
         """
         Get the value of `key` and optionally set its expiration. GETEX is similar to GET.
 
@@ -4689,10 +4624,10 @@ class BaseTransaction:
         return self.append_command(RequestType.GetEx, args)
 
     def lolwut(
-        self: TTransaction,
+        self: TBatch,
         version: Optional[int] = None,
         parameters: Optional[List[int]] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Displays a piece of generative computer art and the Valkey version.
 
@@ -4716,7 +4651,7 @@ class BaseTransaction:
                 args.extend(str(var))
         return self.append_command(RequestType.Lolwut, args)
 
-    def random_key(self: TTransaction) -> TTransaction:
+    def random_key(self: TBatch) -> TBatch:
         """
         Returns a random existing key name.
 
@@ -4728,12 +4663,12 @@ class BaseTransaction:
         return self.append_command(RequestType.RandomKey, [])
 
     def sscan(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         cursor: TEncodable,
         match: Optional[TEncodable] = None,
         count: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Iterates incrementally over a set.
 
@@ -4767,13 +4702,13 @@ class BaseTransaction:
         return self.append_command(RequestType.SScan, args)
 
     def zscan(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         cursor: TEncodable,
         match: Optional[TEncodable] = None,
         count: Optional[int] = None,
         no_scores: bool = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Iterates incrementally over a sorted set.
 
@@ -4813,13 +4748,13 @@ class BaseTransaction:
         return self.append_command(RequestType.ZScan, args)
 
     def hscan(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         cursor: TEncodable,
         match: Optional[TEncodable] = None,
         count: Optional[int] = None,
         no_values: bool = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Iterates incrementally over a hash.
 
@@ -4859,10 +4794,10 @@ class BaseTransaction:
         return self.append_command(RequestType.HScan, args)
 
     def lcs(
-        self: TTransaction,
+        self: TBatch,
         key1: TEncodable,
         key2: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the longest common subsequence between strings stored at key1 and key2.
 
@@ -4891,10 +4826,10 @@ class BaseTransaction:
         return self.append_command(RequestType.LCS, args)
 
     def lcs_len(
-        self: TTransaction,
+        self: TBatch,
         key1: TEncodable,
         key2: TEncodable,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the length of the longest common subsequence between strings stored at key1 and key2.
 
@@ -4921,12 +4856,12 @@ class BaseTransaction:
         return self.append_command(RequestType.LCS, args)
 
     def lcs_idx(
-        self: TTransaction,
+        self: TBatch,
         key1: TEncodable,
         key2: TEncodable,
         min_match_len: Optional[int] = None,
         with_match_len: Optional[bool] = False,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
 
@@ -4968,10 +4903,10 @@ class BaseTransaction:
         return self.append_command(RequestType.LCS, args)
 
     def wait(
-        self: TTransaction,
+        self: TBatch,
         numreplicas: int,
         timeout: int,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the number of replicas that acknowledged the write commands sent by the current client
         before this command, both in the case where the specified number of replicas are reached, or
@@ -4990,13 +4925,13 @@ class BaseTransaction:
         return self.append_command(RequestType.Wait, args)
 
     def lpos(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         element: TEncodable,
         rank: Optional[int] = None,
         count: Optional[int] = None,
         max_len: Optional[int] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Returns the index or indexes of element(s) matching `element` in the `key` list. If no match is found,
         None is returned.
@@ -5034,14 +4969,14 @@ class BaseTransaction:
         return self.append_command(RequestType.LPos, args)
 
     def xclaim(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group: TEncodable,
         consumer: TEncodable,
         min_idle_time_ms: int,
         ids: List[TEncodable],
         options: Optional[StreamClaimOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Changes the ownership of a pending message.
 
@@ -5071,14 +5006,14 @@ class BaseTransaction:
         return self.append_command(RequestType.XClaim, args)
 
     def xclaim_just_id(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         group: TEncodable,
         consumer: TEncodable,
         min_idle_time_ms: int,
         ids: List[TEncodable],
         options: Optional[StreamClaimOptions] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Changes the ownership of a pending message. This function returns a List with
         only the message/entry IDs, and is equivalent to using JUSTID in the Valkey API.
@@ -5111,9 +5046,7 @@ class BaseTransaction:
 
         return self.append_command(RequestType.XClaim, args)
 
-    def pubsub_channels(
-        self: TTransaction, pattern: Optional[TEncodable] = None
-    ) -> TTransaction:
+    def pubsub_channels(self: TBatch, pattern: Optional[TEncodable] = None) -> TBatch:
         """
         Lists the currently active channels.
 
@@ -5133,7 +5066,7 @@ class BaseTransaction:
             RequestType.PubSubChannels, [pattern] if pattern else []
         )
 
-    def pubsub_numpat(self: TTransaction) -> TTransaction:
+    def pubsub_numpat(self: TBatch) -> TBatch:
         """
         Returns the number of unique patterns that are subscribed to by clients.
 
@@ -5149,8 +5082,8 @@ class BaseTransaction:
         return self.append_command(RequestType.PubSubNumPat, [])
 
     def pubsub_numsub(
-        self: TTransaction, channels: Optional[List[TEncodable]] = None
-    ) -> TTransaction:
+        self: TBatch, channels: Optional[List[TEncodable]] = None
+    ) -> TBatch:
         """
         Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
 
@@ -5171,14 +5104,14 @@ class BaseTransaction:
         )
 
     def sort(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort` command can be used to sort elements based on different criteria and apply transformations on sorted
@@ -5231,14 +5164,14 @@ class BaseTransaction:
         return self.append_command(RequestType.Sort, args)
 
     def sort_ro(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort_ro` command can be used to sort elements based on different criteria and apply transformations
@@ -5293,7 +5226,7 @@ class BaseTransaction:
         return self.append_command(RequestType.SortReadOnly, args)
 
     def sort_store(
-        self: TTransaction,
+        self: TBatch,
         key: TEncodable,
         destination: TEncodable,
         by_pattern: Optional[TEncodable] = None,
@@ -5301,7 +5234,7 @@ class BaseTransaction:
         get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> TBatch:
         """
         Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
         The `sort` command can be used to sort elements based on different criteria, apply transformations on sorted elements,
@@ -5357,26 +5290,48 @@ class BaseTransaction:
         return self.append_command(RequestType.Sort, args)
 
 
-class Transaction(BaseTransaction):
+class Batch(BaseBatch):
     """
-    Extends BaseTransaction class for standalone commands that are not supported in cluster mode.
+    Extends BaseBatch class for standalone commands that are not supported in cluster mode.
 
     Command Response:
         The response for each command depends on the executed command. Specific response types
         are documented alongside each method.
 
-    Example:
-        >>> transaction = Transaction()
+
+    Transaction vs Pipeline:
+        - Transactions (is_atomic=True) ensure that all commands are executed atomically.
+          In a transaction, all keys must belong to the same slot. This means if any key is in a different slot,
+          the transaction will not work.
+        - Pipelines (is_atomic=False) send multiple commands to the server without waiting for each command's
+          response. However, pipeline commands are not atomic and can be sent to different slots in a cluster,
+          meaning they are executed independently.
+
+    Note for Standalone Mode (Cluster Mode Disabled):
+        In standalone mode, pipeline commands are supported only on the primary connection.
+        They are not distributed to replica connections.
+
+    Transaction Example:
+        transaction = Batch(is_atomic=True)
         >>> transaction.set("key", "value")
         >>> transaction.select(1)  # Standalone command
         >>> transaction.get("key")
         >>> await client.exec(transaction)
         [OK , OK , None]
 
+    Pipeline Example:
+        pipeline = Batch(is_atomic=True)
+        >>> pipeline.set("key", "value")
+        >>> pipeline.select(1)  # Standalone command
+        >>> pipeline.get("key")
+        >>> await client.exec(pipeline)
+        [OK , OK , None]
+
+
     """
 
     # TODO: add SLAVEOF and all SENTINEL commands
-    def move(self, key: TEncodable, db_index: int) -> "Transaction":
+    def move(self, key: TEncodable, db_index: int) -> "Batch":
         """
         Move `key` from the currently selected database to the database specified by `db_index`.
 
@@ -5394,7 +5349,7 @@ class Transaction(BaseTransaction):
         """
         return self.append_command(RequestType.Move, [key, str(db_index)])
 
-    def select(self, index: int) -> "Transaction":
+    def select(self, index: int) -> "Batch":
         """
         Change the currently selected database.
 
@@ -5414,7 +5369,7 @@ class Transaction(BaseTransaction):
         destination: TEncodable,
         destinationDB: Optional[int] = None,
         replace: Optional[bool] = None,
-    ) -> "Transaction":
+    ) -> "Batch":
         """
         Copies the value stored at the `source` to the `destination` key. If `destinationDB`
         is specified, the value will be copied to the database specified by `destinationDB`,
@@ -5444,7 +5399,7 @@ class Transaction(BaseTransaction):
 
         return self.append_command(RequestType.Copy, args)
 
-    def publish(self, message: TEncodable, channel: TEncodable) -> "Transaction":
+    def publish(self, message: TEncodable, channel: TEncodable) -> "Batch":
         """
         Publish a message on pubsub channel.
 
@@ -5461,13 +5416,25 @@ class Transaction(BaseTransaction):
         return self.append_command(RequestType.Publish, [channel, message])
 
 
-class ClusterTransaction(BaseTransaction):
+class ClusterBatch(BaseBatch):
     """
-    Extends BaseTransaction class for cluster mode commands that are not supported in standalone.
+    Extends BaseBatch class for cluster mode commands that are not supported in standalone.
 
     Command Response:
         The response for each command depends on the executed command. Specific response types
         are documented alongside each method.
+
+    Transaction vs Pipeline:
+        - Transactions (is_atomic=True) ensure that all commands are executed atomically.
+          In a transaction, all keys must belong to the same slot. This means if any key is in a different slot,
+          the transaction will not work.
+        - Pipelines (is_atomic=False) send multiple commands to the server without waiting for each command's
+          response. However, pipeline commands are not atomic and can be sent to different slots in a cluster,
+          meaning they are executed independently.
+
+    Note for Cluster Mode:
+        When cluster mode is enabled and the client is configured to read from replicas, read commands
+        in a pipeline will be distributed in a round-robin manner across the replicas.
     """
 
     def copy(
@@ -5475,7 +5442,7 @@ class ClusterTransaction(BaseTransaction):
         source: TEncodable,
         destination: TEncodable,
         replace: Optional[bool] = None,
-    ) -> "ClusterTransaction":
+    ) -> "ClusterBatch":
         """
         Copies the value stored at the `source` to the `destination` key. When `replace` is True,
         removes the `destination` key first if it already exists, otherwise performs no action.
@@ -5502,14 +5469,13 @@ class ClusterTransaction(BaseTransaction):
 
     def publish(
         self, message: str, channel: str, sharded: bool = False
-    ) -> "ClusterTransaction":
+    ) -> "ClusterBatch":
         """
         Publish a message on pubsub channel.
         This command aggregates PUBLISH and SPUBLISH commands functionalities.
         The mode is selected using the 'sharded' parameter
 
-        See [PUBLISH](https://valkey.io/commands/publish) and [SPUBLISH](https://valkey.io/commands/spublish)
-        for more details.
+        See [valkey.io](https://valkey.io/commands/publish) and https://valkey.io/commands/spublish for more details.
 
         Args:
             message (str): Message to publish
@@ -5525,7 +5491,7 @@ class ClusterTransaction(BaseTransaction):
 
     def pubsub_shardchannels(
         self, pattern: Optional[TEncodable] = None
-    ) -> "ClusterTransaction":
+    ) -> "ClusterBatch":
         """
         Lists the currently active shard channels.
 
@@ -5545,7 +5511,7 @@ class ClusterTransaction(BaseTransaction):
 
     def pubsub_shardnumsub(
         self, channels: Optional[List[TEncodable]] = None
-    ) -> "ClusterTransaction":
+    ) -> "ClusterBatch":
         """
         Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
 
@@ -5566,3 +5532,15 @@ class ClusterTransaction(BaseTransaction):
         )
 
     # TODO: add all CLUSTER commands
+
+
+@deprecated(reason="Use ClusterBatch(is_atomic=True) instead.")
+class Transaction(Batch):
+    def __init__(self) -> None:
+        super().__init__(is_atomic=True)
+
+
+@deprecated(reason="Use ClusterBatch(is_atomic=True) instead.")
+class ClusterTransaction(ClusterBatch):
+    def __init__(self) -> None:
+        super().__init__(is_atomic=True)

@@ -39,8 +39,8 @@ excluded_symbol_list = [
     # python/python/glide/protobuf_codec.py
     "ProtobufCodec",  # ClassDef
     "PartialMessageException",  # Exception
-    # python/python/glide/async_commands/transaction.py
-    "BaseTransaction",  # ClassDef
+    # python/python/glide/async_commands/batch.py
+    "BaseBatch",  # ClassDef
     # python/python/glide/async_commands/standalone_commands.py
     "StandaloneCommands",  # ClassDef
     # python/python/glide/async_commands/cluster_commands.py
@@ -56,6 +56,9 @@ excluded_symbol_list = [
     "FtAggregateKeywords",  # ClassDef
     "FtProfileKeywords",  # ClassDef
     "AdvancedBaseClientConfiguration",  # ClassDef
+    # python/python/glide/async_commands/batch.py
+    "Transaction",  # ClassDef
+    "ClusterTransaction",  # ClassDef
 ]
 
 
