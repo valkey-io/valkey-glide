@@ -1018,15 +1018,10 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 	}
 }
 
-// Helper method to skip tests on versions lower than specified
-func (suite *GlideTestSuite) skipOnVersionLowerThan(version, reason string) {
-	if suite.serverVersion < version {
-		suite.T().Skipf("Skipping test: %s", reason)
-	}
-}
-
 func (suite *GlideTestSuite) TestFunctionKillNoWrite() {
-	suite.skipOnVersionLowerThan("7.0.0", "This feature added in version 7")
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
 
 	client := suite.defaultClient()
 	libName := "functionKill_no_write"
@@ -1090,7 +1085,9 @@ func (suite *GlideTestSuite) TestFunctionKillNoWrite() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKillWriteFunction() {
-	suite.skipOnVersionLowerThan("7.0.0", "This feature added in version 7")
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
 
 	client := suite.defaultClient()
 	libName := "functionKill_write_function"

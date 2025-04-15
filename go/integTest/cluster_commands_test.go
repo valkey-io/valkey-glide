@@ -1783,7 +1783,9 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKillNoWriteWithoutRoute() {
-	suite.skipOnVersionLowerThan("7.0.0", "This feature added in version 7")
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
 
 	client := suite.defaultClusterClient()
 	libName := "functionKill_no_write_without_route"
@@ -1870,7 +1872,9 @@ func (suite *GlideTestSuite) TestFunctionKillNoWriteWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKillNoWriteWithRoute() {
-	suite.skipOnVersionLowerThan("7.0.0", "This feature added in version 7")
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
 
 	client := suite.defaultClusterClient()
 	libName := "functionKill_no_write_with_route"
@@ -1957,7 +1961,9 @@ func (suite *GlideTestSuite) TestFunctionKillNoWriteWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
-	suite.skipOnVersionLowerThan("7.0.0", "This feature added in version 7")
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
 
 	client := suite.defaultClusterClient()
 	libName := "functionKill_key_based_write_function"
