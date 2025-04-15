@@ -52,32 +52,6 @@ func main() {
 		log.Fatal("error connecting to database: ", err)
 	}
 	fmt.Println(resultUnWatch)
-
-	resultDump, err := clientNormal.Dump("key123")
-	if err != nil {
-		log.Fatal("error connecting to database: ", err)
-	}
-	fmt.Println("resultdump", resultDump)
-
-	// resultDump, err = clientNormal.Dump("ssdsffigjdgf")
-	// if err != nil {
-	// 	log.Fatal("error connecting to database: ", err)
-	// }
-	// fmt.Println("resultdump", resultDump)
-
-	resultObjEnc, err := clientNormal.ObjectEncoding("key123")
-	if err != nil {
-		log.Fatal("error connecting to database: ", err)
-	}
-	fmt.Println("resultObjEnc", resultObjEnc)
-
-	clientNormal.LPush("keylist", []string{"1", "3", "2", "4", "5"})
-	resultLpop, err := clientNormal.LPop("keylist")
-	if err != nil {
-		log.Fatal("error connecting to database: ", err)
-	}
-	fmt.Println("resultLpop", resultLpop)
-
 	tx := api.NewTransaction(client)
 	tx.Set("key123", "Glide")
 	tx.Watch([]string{"key123"})
@@ -406,31 +380,130 @@ func main() {
 	tx.FunctionFlushAsync()
 
 	//Stream Commands
-	keyStream := "{testKey}-" + uuid.New().String()
+	keyStream := "key" + uuid.New().String()
 	tx.XAdd(
 		keyStream,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
 	)
+	tx.XTrim(keyStream, *options.NewXTrimOptionsWithMaxLen(0).SetExactTrimming())
+	tx.XLen(keyStream)
 
-	options := options.NewXAddOptions().
-		SetId("1000-50")
+	counter := 1234572
+	counter1 := 12347
+	counter++ // Increment counter by 1
+	counter1++
+	streamId := fmt.Sprintf("%d-%d", counter, counter1)
+	keyStream = "KeyStream-" + uuid.New().String()
+	optionsXAdd := options.NewXAddOptions().SetId(streamId)
 	values := [][]string{
 		{"key1", "value1"},
 		{"key2", "value2"},
 	}
-	tx.XAddWithOptions("mystream", values, *options)
+	tx.XAddWithOptions(keyStream, values, *optionsXAdd)
+	tx.XRead(map[string]string{keyStream: "0-0"})
+	tx.XTrim(keyStream, *options.NewXTrimOptionsWithMaxLen(0).SetExactTrimming())
+	tx.XInfoStream(keyStream)
+	optionsInforStream := options.NewXInfoStreamOptionsOptions().SetCount(2)
+	tx.XInfoStreamFullWithOptions(keyStream, optionsInforStream)
+	tx.XRange(keyStream,
+		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+		options.NewInfiniteStreamBoundary(options.PositiveInfinity))
+	tx.XRangeWithOptions(keyStream,
+		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
+		options.NewInfiniteStreamBoundary(options.PositiveInfinity),
+		*options.NewXRangeOptions().SetCount(1))
 
-	// // err = tx.Discard()
-	// // if err != nil {
-	// // 	log.Fatalf("Transaction Discard failed: %v", err)
-	// // } else {
-	// // 	fmt.Println("Transaction successfully discarded!")
-	// // }
+	counter++ // Increment counter by 1
+	counter1++
+	streamId1RevRange := fmt.Sprintf("%d-%d", counter, counter1)
+	counter++ // Increment counter by 1
+	counter1++
+	streamId2RevRange := fmt.Sprintf("%d-%d", counter, counter1)
+	tx.XAddWithOptions(keyStream, [][]string{{"field1", "value1"}},
+		*options.NewXAddOptions().SetId(streamId1RevRange))
+	tx.XAddWithOptions(keyStream, [][]string{{"field2", "value2"}},
+		*options.NewXAddOptions().SetId(streamId2RevRange))
+	tx.XRevRange(keyStream,
+		options.NewStreamBoundary(streamId1RevRange, true),
+		options.NewStreamBoundary(streamId2RevRange, true))
+
+	tx.XDel(keyStream, []string{"0-1", "0-2", "0-3"})
+
+	keyStreamGroup := "KeyStreamG-" + uuid.New().String()
+	group := "G" + uuid.New().String()
+	consumer := "c" + uuid.New().String()
+	counterG := 1234572
+	counter1G := 12347
+	counterG++ // Increment counter by 1
+	counter1G++
+	streamIdG := fmt.Sprintf("%d-%d", counterG, counter1G)
+
+	tx.XGroupCreateWithOptions(keyStreamGroup, group, "0",
+		*options.NewXGroupCreateOptions().SetMakeStream())
+	tx.XGroupCreateConsumer(keyStreamGroup, group, consumer)
+	tx.XInfoConsumers(keyStreamGroup, group)
+	tx.XGroupDelConsumer(keyStreamGroup, group, consumer)
+	tx.XAddWithOptions(
+		keyStreamGroup,
+		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+		*options.NewXAddOptions().SetId(streamIdG),
+	)
+	tx.XGroupSetId(keyStreamGroup, group, "0-0")
+	optsSetID := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(1)
+	tx.XGroupSetIdWithOptions(keyStreamGroup, group, "0-0", *optsSetID)
+	tx.XReadGroup(group, consumer, map[string]string{keyStreamGroup: ">"})
+	tx.XReadGroupWithOptions(group, consumer, map[string]string{keyStreamGroup: ">"},
+		*options.NewXReadGroupOptions().SetCount(1))
+	tx.XAutoClaim(keyStreamGroup, group, consumer, 0, "0-0")
+	optionsAutoClaim := options.NewXAutoClaimOptions().SetCount(1)
+	tx.XAutoClaimWithOptions(keyStreamGroup, group, consumer, 0, "0-0", *optionsAutoClaim)
+	tx.XAutoClaimJustId(keyStreamGroup, group, consumer, 0, "0-0")
+	optionsAutoClaim = options.NewXAutoClaimOptions().SetCount(1)
+	tx.XAutoClaimJustIdWithOptions(keyStreamGroup, group, consumer, 0, "0-1", *optionsAutoClaim)
+
+	//XGroupCreate
+	keyStreamGroup = "KeyStreamG-" + uuid.New().String()
+	counterG++ // Increment counter by 1
+	counter1G++
+	streamIdG = fmt.Sprintf("%d-%d", counterG, counter1G)
+	group = "G" + uuid.New().String()
+	tx.XAddWithOptions(
+		keyStreamGroup,
+		[][]string{{"field1", "value1"}, {"field2", "value2"}},
+		*options.NewXAddOptions().SetId(streamIdG),
+	) // This will create the stream if it does not exist
+	tx.XGroupCreate(keyStreamGroup, group, "0")
+	tx.XInfoGroups(keyStreamGroup)
+	tx.XPending(keyStreamGroup, group)
+	tx.XPendingWithOptions(
+		keyStreamGroup,
+		group,
+		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer),
+	)
+	tx.XGroupDestroy(keyStreamGroup, group)
+	tx.XAck(keyStreamGroup, group, []string{streamIdG})
+
+	//Hyperlog
+	sourceKey1 := uuid.New().String() + "{group}"
+	sourceKey2 := uuid.New().String() + "{group}"
+	destKey = uuid.New().String() + "{group}"
+	tx.PfAdd(sourceKey1, []string{"value1", "value2", "value3"})
+	tx.PfAdd(sourceKey2, []string{"value1", "value2", "value3"})
+	tx.PfCount([]string{uuid.New().String()})
+	tx.PfMerge(destKey, []string{sourceKey1, sourceKey2})
+
+	//Server Management commands
+	tx.ConfigSet(map[string]string{"timeout": "1000", "maxmemory": "1GB"})
+	tx.ConfigGet([]string{"timeout", "maxmemory"})
+	tx.Time()
+	tx.Info()
+	tx.Select(1)
+	tx.Time()
+	tx.Lolwut()
 	result, err := tx.Exec()
 	if err != nil {
 		log.Fatalf("Transaction failed: %v", err)
 	}
 	fmt.Println(result)
 	client.Close()
-
 }
