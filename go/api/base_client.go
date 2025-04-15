@@ -7619,6 +7619,64 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 	return handleAnyResponse(result)
 }
 
+// InvokeScript executes a Lua script on the server.
+//
+// Parameters:
+//
+//	script - The script to execute.
+//
+// Return value:
+//
+//	The result of the script execution.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/eval/
+func (client *baseClient) InvokeScript(script *options.Script) (any, error) {
+	response, err := client.executeScriptWithRoute(script.GetHash(), []string{}, []string{}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := handleAnyResponse(response)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// InvokeScriptWithOptions executes a Lua script on the server with additional options.
+//
+// Parameters:
+//
+//	script - The script to execute.
+//	scriptOptions - Options for script execution including keys and arguments.
+//
+// Return value:
+//
+//	The result of the script execution.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/eval/
+func (client *baseClient) InvokeScriptWithOptions(script *options.Script, scriptOptions *options.ScriptOptions) (any, error) {
+	keys := scriptOptions.GetKeys()
+	args := scriptOptions.GetArgs()
+
+	response, err := client.executeScriptWithRoute(script.GetHash(), keys, args, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := handleAnyResponse(response)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 // Publish posts a message to the specified channel. Returns the number of clients that received the message.
 //
 // Channel can be any string, but common patterns include using "." to create namespaces like
@@ -7638,4 +7696,97 @@ func (client *baseClient) Publish(channel string, message string) (int64, error)
 	}
 
 	return handleIntResponse(result)
+}
+
+// executeScriptWithRoute executes a Lua script with the given hash, keys, args, and routing information.
+//
+// Parameters:
+//
+//	hash - The SHA1 hash of the script to execute.
+//	keys - The keys that the script will access.
+//	args - The arguments to pass to the script.
+//	route - Optional routing information for the script execution.
+//
+// Return value:
+//
+//	A CommandResponse containing the result of the script execution.
+func (client *baseClient) executeScriptWithRoute(
+	hash string,
+	keys []string,
+	args []string,
+	route config.Route,
+) (*C.struct_CommandResponse, error) {
+	var cKeysPtr *C.uintptr_t = nil
+	var keysLengthsPtr *C.ulong = nil
+	if len(keys) > 0 {
+		cKeys, keysLengths := toCStrings(keys)
+		cKeysPtr = &cKeys[0]
+		keysLengthsPtr = &keysLengths[0]
+	}
+
+	var cArgsPtr *C.uintptr_t = nil
+	var argsLengthsPtr *C.ulong = nil
+	if len(args) > 0 {
+		cArgs, argsLengths := toCStrings(args)
+		cArgsPtr = &cArgs[0]
+		argsLengthsPtr = &argsLengths[0]
+	}
+
+	var routeBytesPtr *C.uchar = nil
+	var routeBytesCount C.uintptr_t = 0
+	if route != nil {
+		routeProto, err := routeToProtobuf(route)
+		if err != nil {
+			return nil, &errors.RequestError{Msg: "ExecuteScript failed due to invalid route"}
+		}
+		msg, err := proto.Marshal(routeProto)
+		if err != nil {
+			return nil, err
+		}
+
+		routeBytesCount = C.uintptr_t(len(msg))
+		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+	}
+
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "ExecuteScript failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+	C.invoke_script(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		C.CString(hash),
+		C.size_t(len(keys)),
+		cKeysPtr,
+		keysLengthsPtr,
+		C.size_t(len(args)),
+		cArgsPtr,
+		argsLengthsPtr,
+		routeBytesPtr,
+		routeBytesCount,
+	)
+	client.mu.Unlock()
+
+	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return nil, payload.error
+	}
+	return payload.value, nil
 }

@@ -9,6 +9,7 @@ use glide_core::connection_request;
 use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
+use glide_core::scripts_container;
 use glide_core::ConnectionRequest;
 use protobuf::Message;
 use redis::cluster_routing::{
@@ -31,6 +32,43 @@ use std::{
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
+
+/// Store a Lua script in the script cache and return its SHA1 hash.
+///
+/// # Parameters
+///
+/// * `script_bytes`: Pointer to the script bytes.
+/// * `script_len`: Length of the script in bytes.
+///
+/// # Returns
+///
+/// A C string containing the SHA1 hash of the script. The caller is responsible for freeing this memory.
+///
+/// # Safety
+///
+/// * `script_bytes` must point to `script_len` consecutive properly initialized bytes.
+/// * The returned C string must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn store_script(script_bytes: *const u8, script_len: usize) -> *mut c_char {
+    let script = unsafe { std::slice::from_raw_parts(script_bytes, script_len) };
+    let hash = scripts_container::add_script(script);
+    CString::new(hash).unwrap().into_raw()
+}
+
+/// Remove a script from the script cache.
+///
+/// # Parameters
+///
+/// * `hash`: The SHA1 hash of the script to remove.
+///
+/// # Safety
+///
+/// * `hash` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn drop_script(hash: *const c_char) {
+    let hash_str = unsafe { CStr::from_ptr(hash).to_str().unwrap_or("") };
+    scripts_container::remove_script(hash_str);
+}
 
 /// The struct represents the response of the command.
 ///
@@ -1264,13 +1302,13 @@ pub unsafe extern "C" fn update_connection_password(
 ///
 /// * `client_adapter_ptr`: Pointer to a valid `GlideClusterClient` returned from [`create_client`].
 /// * `channel`: Pointer to a valid payload buffer created in the calling language.
+/// * `hash`: SHA1 hash of the script for script caching.
 /// * `keys_count`: Number of keys in the keys array.
 /// * `keys`: Array of keys used by the script.
 /// * `keys_len`: Array of lengths for each key.
 /// * `args_count`: Number of arguments in the args array.
 /// * `args`: Array of arguments to pass to the script.
 /// * `args_len`: Array of lengths for each argument.
-/// * `hash`: SHA1 hash of the script for script caching.
 /// * `route_bytes`: Optional array of bytes for routing information.
 /// * `route_bytes_len`: Length of the route_bytes array.
 ///
@@ -1279,6 +1317,7 @@ pub unsafe extern "C" fn update_connection_password(
 /// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`].
 /// * `channel` must be valid until either `success_callback` or `failure_callback` is finished.
+/// * `hash` must be a valid null-terminated C string.
 /// * `keys` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `keys_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `keys_count` must be 0 if `keys` and `keys_len` are null.
@@ -1287,7 +1326,6 @@ pub unsafe extern "C" fn update_connection_password(
 /// * `args_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `args_count` must be 0 if `args` and `args_len` are null.
 /// * `args` and `args_len` must either be both null or be both not null.
-/// * `hash` must be a valid null-terminated C string.
 /// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
 /// * `route_bytes_len` must be 0 if `route_bytes` is null.
