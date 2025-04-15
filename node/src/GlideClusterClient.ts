@@ -1381,7 +1381,7 @@ export class GlideClusterClient extends BaseClient {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
-     * The command will be routed to all primary nodes, unless `route` is provided.
+     * The command will be routed to all nodes, unless `route` is provided.
      *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
