@@ -52,3 +52,6 @@ utils/TestUtils.js
 
 # java compiled files.
 *.class
+memory-bank/
+# Rust generated files
+generated/

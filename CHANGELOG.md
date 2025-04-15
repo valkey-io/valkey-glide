@@ -1,13 +1,28 @@
-## 1.3.2 (2025-04-06)
+# Releases
 
-#### Changes
+## 1.3.3 (2025-05-02)
+
+### Changes
+
+#### Features
 
 #### Breaking Changes
 
 #### Fixes
+
+* Core: Ensure UDS socket filename is truly unique. ([#3596](https://github.com/valkey-io/valkey-glide/pull/3596))
+
+## 1.3.2 (2025-04-06)
+
+### Changes
+
+#### Breaking Changes
+
+#### Fixes
+
 * Core: fix update_connection_password to use username for ACL usecase ([#3539](https://github.com/valkey-io/valkey-glide/pull/3539))
 * Python: Bump PyO3 version ([#3536](https://github.com/valkey-io/valkey-glide/pull/3536))
-* Node: Fix documentation for GlideJson.get method ([#3540] (https://github.com/valkey-io/valkey-glide/pull/3540))
+* Node: Fix documentation for GlideJson.get method ([#3540] (<https://github.com/valkey-io/valkey-glide/pull/3540>))
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
 * Node: Fix ZADD, enabling `+inf` and `-inf` as score ([#3370](https://github.com/valkey-io/valkey-glide/pull/3370))
 
@@ -20,6 +35,7 @@
 #### Breaking Changes
 
 #### Fixes
+
 * Go: Fix data race on the coreClient with `sync.Mutex` and a channel map ([#3292](https://github.com/valkey-io/valkey-glide/pull/3292))
 * Go: Fix channel passing from Go to Rust by using `runtime.Pinner` or `cgo.Handle` ([#3270](https://github.com/valkey-io/valkey-glide/pull/3270))
 
