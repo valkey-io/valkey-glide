@@ -1,5 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.Pipeline;
+
 using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
@@ -102,5 +104,17 @@ public class StandaloneClientTests
         _ = await client.CustomCommand(["xadd", key3, "0-2", "str-1-id-2-field-1", "str-1-id-2-value-1", "str-1-id-2-field-2", "str-1-id-2-value-2"]);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xread", "streams", key3, "stream", "0-1", "0-2"]))!);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xinfo", "stream", key3, "full"]))!);
+    }
+
+    [Fact]
+    public async Task Transaction()
+    {
+        BaseClient.LOG = msg => TestContext.Current.TestOutputHelper?.WriteLine(msg);
+        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+
+        Batch transaction = new Batch(true).Set("abc", "pewpew").Get("abc").CustomCommand(["ping", "ping"]);
+        var res = await client.Exec(transaction).WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True(res.Length == 3);
+        Assert.Equal(new object?[] { new gs("OK"), new gs("pewpew"), new gs("ping") }, res);
     }
 }

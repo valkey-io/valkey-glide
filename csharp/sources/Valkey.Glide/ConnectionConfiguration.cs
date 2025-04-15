@@ -2,56 +2,13 @@
 
 using System.Runtime.InteropServices;
 
+using static Valkey.Glide.Internals.FFI;
+
 namespace Valkey.Glide;
 
 public abstract class ConnectionConfiguration
 {
     #region Structs and Enums definitions
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct ConnectionRequest
-    {
-        public nuint AddressCount;
-        public IntPtr Addresses; // ** NodeAddress - array pointer
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasTlsMode;
-        public TlsMode TlsMode;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool ClusterMode;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasRequestTimeout;
-        public uint RequestTimeout;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasConnectionTimeout;
-        public uint ConnectionTimeout;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasReadFrom;
-        public ReadFrom ReadFrom;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasConnectionRetryStrategy;
-        public RetryStrategy ConnectionRetryStrategy;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasAuthenticationInfo;
-        public AuthenticationInfo AuthenticationInfo;
-        public uint DatabaseId;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasProtocol;
-        public Protocol Protocol;
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string? ClientName;
-        // TODO more config params, see ffi.rs
-    }
-
-    /// <summary>
-    /// Represents the address and port of a node in the cluster.
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct NodeAddress
-    {
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string Host;
-        public ushort Port;
-    }
-
     /// <summary>
     /// Represents the strategy used to determine how and when to reconnect, in case of connection
     /// failures. The time between attempts grows exponentially, to the formula <c>rand(0 ... factor *
@@ -77,21 +34,6 @@ public abstract class ConnectionConfiguration
         /// The exponent base configured for the strategy.
         /// </summary>
         public uint ExponentBase = exponentBase;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct AuthenticationInfo(string? username, string password)
-    {
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string? Username = username;
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string Password = password;
-    }
-
-    internal enum TlsMode : uint
-    {
-        NoTls = 0,
-        SecureTls = 2,
     }
 
     /// <summary>
@@ -455,7 +397,7 @@ public abstract class ConnectionConfiguration
 
         public void Dispose() => Clean();
 
-        private void Clean()
+        private void Clean() // TODO
         {
             if (Config.Addresses != IntPtr.Zero)
             {

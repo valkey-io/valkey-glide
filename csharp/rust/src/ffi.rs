@@ -2,19 +2,18 @@
 
 use std::{
     ffi::{c_char, c_void, CStr},
-    slice::from_raw_parts,
+    slice::from_raw_parts, sync::Arc,
 };
 
-use glide_core::client::{
+use glide_core::{client::{
     AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, NodeAddress,
     ReadFrom as coreReadFrom, TlsMode,
-};
+}, request_type::RequestType};
 use redis::{
-    cluster_routing::{
+    cluster::ClusterPipeline, cluster_routing::{
         MultipleNodeRoutingInfo, ResponsePolicy, Routable, Route, RoutingInfo,
         SingleNodeRoutingInfo, SlotAddr,
-    },
-    Cmd, Value,
+    }, Cmd, Pipeline, PipelineRetryStrategy, Value
 };
 
 /// Convert raw C string to a rust string.
@@ -260,7 +259,7 @@ pub struct RouteInfo {
 /// * `route_info` could be `null`, but if it is not `null`, it must be a valid pointer to a [`RouteInfo`] struct.
 /// * `slot_key` and `hostname` in dereferenced [`RouteInfo`] struct must contain valid string pointers when corresponding `route_type` is set.
 ///   See description of [`RouteInfo`] and the safety documentation of [`ptr_to_str`].
-pub(crate) unsafe fn create_route(route_info: *const RouteInfo, cmd: &Cmd) -> Option<RoutingInfo> {
+pub(crate) unsafe fn create_route(route_info: *const RouteInfo, cmd: Option<&Cmd>) -> Option<RoutingInfo> {
     if route_info.is_null() {
         return None;
     }
@@ -268,11 +267,11 @@ pub(crate) unsafe fn create_route(route_info: *const RouteInfo, cmd: &Cmd) -> Op
         RouteType::Random => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
         RouteType::AllNodes => Some(RoutingInfo::MultiNode((
             MultipleNodeRoutingInfo::AllNodes,
-            ResponsePolicy::for_command(&cmd.command().unwrap()),
+            cmd.and_then(|c| ResponsePolicy::for_command(&c.command().unwrap())),
         ))),
         RouteType::AllPrimaries => Some(RoutingInfo::MultiNode((
             MultipleNodeRoutingInfo::AllMasters,
-            ResponsePolicy::for_command(&cmd.command().unwrap()),
+            cmd.and_then(|c| ResponsePolicy::for_command(&c.command().unwrap())),
         ))),
         RouteType::SlotId => Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
@@ -305,15 +304,19 @@ pub(crate) unsafe fn create_route(route_info: *const RouteInfo, cmd: &Cmd) -> Op
 /// * The caller is responsible of freeing the allocated memory.
 pub(crate) unsafe fn convert_double_pointer_to_vec<'a>(
     data: *const *const c_void,
-    len: u32,
-    data_len: *const u32,
+    len: usize,
+    data_len: *const usize,
 ) -> Vec<&'a [u8]> {
-    let string_ptrs = unsafe { from_raw_parts(data, len as usize) };
-    let string_lengths = unsafe { from_raw_parts(data_len, len as usize) };
+    let string_ptrs = unsafe { from_raw_parts(data, len) };
+    let string_lengths = unsafe { from_raw_parts(data_len, len) };
     let mut result = Vec::<&[u8]>::with_capacity(string_ptrs.len());
     for (i, &str_ptr) in string_ptrs.iter().enumerate() {
-        let slice = unsafe { from_raw_parts(str_ptr as *const u8, string_lengths[i] as usize) };
+        let slice = unsafe { from_raw_parts(str_ptr as *const u8, string_lengths[i]) };
         result.push(slice);
+
+        dbg!(format!("Cmd.arg[{}]: 0x{:p} {}", i, str_ptr, string_lengths[i]));
+        //"Cmd.arg[{i}]: 0x{_argPtrs[i]:X} {_args[i].Length}"
+        // String::from_utf8_unchecked(command_arg.to_vec()))
     }
     result
 }
@@ -340,6 +343,7 @@ pub enum ValueType {
     Set = 7,
     BulkString = 8,
     OK = 9,
+    Error = 10,
 }
 
 /// Represents FFI-safe variant of [`Value`].
@@ -375,7 +379,7 @@ impl ResponseValue {
                 size: 0,
             },
             Value::BulkString(text) => {
-                let (vec_ptr, len) = convert_vec_to_pointer(text.clone());
+                let (vec_ptr, len) = convert_vec_to_pointer(text);
                 ResponseValue {
                     typ: ValueType::BulkString,
                     val: vec_ptr as i64,
@@ -385,7 +389,7 @@ impl ResponseValue {
             Value::Array(values) => {
                 let vec: Vec<ResponseValue> =
                     values.into_iter().map(ResponseValue::from_value).collect();
-                let (vec_ptr, len) = convert_vec_to_pointer(vec.clone());
+                let (vec_ptr, len) = convert_vec_to_pointer(vec);
                 ResponseValue {
                     typ: ValueType::Array,
                     val: vec_ptr as i64,
@@ -395,7 +399,7 @@ impl ResponseValue {
             Value::Set(values) => {
                 let vec: Vec<ResponseValue> =
                     values.into_iter().map(ResponseValue::from_value).collect();
-                let (vec_ptr, len) = convert_vec_to_pointer(vec.clone());
+                let (vec_ptr, len) = convert_vec_to_pointer(vec);
                 ResponseValue {
                     typ: ValueType::Set,
                     val: vec_ptr as i64,
@@ -413,7 +417,7 @@ impl ResponseValue {
                         vec![ResponseValue::from_value(k), ResponseValue::from_value(v)]
                     })
                     .collect();
-                let (vec_ptr, len) = convert_vec_to_pointer(vec.clone());
+                let (vec_ptr, len) = convert_vec_to_pointer(vec);
                 ResponseValue {
                     typ: ValueType::Map,
                     val: vec_ptr as i64,
@@ -431,13 +435,21 @@ impl ResponseValue {
                 size: 0,
             },
             Value::VerbatimString { format: _, text } | Value::SimpleString(text) => {
-                let (vec_ptr, len) = convert_vec_to_pointer(text.clone().into_bytes());
+                let (vec_ptr, len) = convert_vec_to_pointer(text.into_bytes());
                 ResponseValue {
                     typ: ValueType::String,
                     val: vec_ptr as i64,
                     size: len as u32,
                 }
-            }
+            },
+            Value::ServerError(err) => {
+                let (vec_ptr, len) = convert_vec_to_pointer(err.to_string().into_bytes());
+                ResponseValue {
+                    typ: ValueType::Error,
+                    val: vec_ptr as i64,
+                    size: len as u32,
+                }
+            },
             _ => todo!(), // push, bigint, attribute
         }
     }
@@ -462,7 +474,7 @@ impl ResponseValue {
                     unsafe { val.free_memory() };
                 }
             }
-            ValueType::String | ValueType::BulkString => {
+            ValueType::String | ValueType::BulkString | ValueType::Error => {
                 let _ = unsafe {
                     Vec::from_raw_parts(self.val as *mut u8, self.size as usize, self.size as usize)
                 };
@@ -470,4 +482,85 @@ impl ResponseValue {
             _ => (),
         }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct CmdInfo {
+    pub request_type: RequestType,
+    pub args: *const *mut c_char,
+    pub arg_count: usize,
+    pub args_len: *const usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct BatchInfo {
+    pub cmd_count: usize,
+    pub cmds: *const *const CmdInfo,
+    pub is_atomic: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct BatchOptionsInfo {
+    // two params from PipelineRetryStrategy
+    pub retry_server_error: bool,
+    pub retry_connection_error: bool,
+    pub raise_on_error: bool,
+    pub has_timeout: bool,
+    pub timeout: u32,
+    pub route_info: *const RouteInfo,
+}
+
+// TODO docs for the god of docs
+pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
+    let arg_vec =
+        unsafe { convert_double_pointer_to_vec((*ptr).args as *const *const c_void, (*ptr).arg_count, (*ptr).args_len) };
+    
+    let Some(mut cmd) = (*ptr).request_type.get_command() else {
+        return Err("Couldn't fetch command type".into());
+    };
+    for command_arg in arg_vec {
+        cmd.arg(command_arg);
+        dbg!(format!("Cmd.arg[i]: {}", String::from_utf8_unchecked(command_arg.to_vec())));
+        // "Cmd.arg[{i}]: 0x{_argPtrs[i]:X} {_args[i].Length}"
+    }
+
+    dbg!(format!("Cmd: args 0x{:p} lenghts 0x{:p} {}", (*ptr).args, (*ptr).args_len, (*ptr).arg_count));
+    Ok(cmd)
+}
+
+pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, String> {
+    let cmd_pointers = unsafe { std::slice::from_raw_parts((*ptr).cmds, (*ptr).cmd_count) };
+    let mut pipeline = Pipeline::with_capacity((*ptr).cmd_count);
+    for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
+        dbg!(format!("Batch: cmd[{}] 0x{:p}", i, *cmd_ptr));
+
+        match unsafe { create_cmd(*cmd_ptr) } {
+            Ok(cmd) => pipeline.add_command(cmd),
+            Err(err) => return Err(format!("Coudln't create {:?}'th command: {:?}", i, err)),
+        };
+    }
+    if (*ptr).is_atomic {
+        pipeline.atomic();
+    }
+
+    dbg!(format!("Batch: cmds 0x{:p} {} atomic {}", (*ptr).cmds, (*ptr).cmd_count, (*ptr).is_atomic));
+
+    Ok(pipeline)
+}
+
+pub(crate) unsafe fn get_pipeline_options(ptr: *const BatchOptionsInfo) -> (Option<RoutingInfo>, bool, Option<u32>, PipelineRetryStrategy) {
+    if ptr.is_null() {
+        return (None, false, None, PipelineRetryStrategy::new(false, false));
+    }
+    let timeout = if (*ptr).has_timeout {
+        Some((*ptr).timeout)
+    } else {
+        None
+    };
+    let route = unsafe { create_route((*ptr).route_info, None) };
+
+    (route, (*ptr).raise_on_error, timeout, PipelineRetryStrategy::new((*ptr).retry_server_error, (*ptr).retry_connection_error))
 }
