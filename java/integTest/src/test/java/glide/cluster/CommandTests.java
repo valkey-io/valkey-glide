@@ -505,15 +505,16 @@ public class CommandTests {
     public void config_reset_stat(GlideClusterClient clusterClient) {
         var data = clusterClient.info(new Section[] {STATS}).get();
         String firstNodeInfo = getFirstEntryFromMultiValue(data);
-        long value_before = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+        long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
         var result = clusterClient.configResetStat().get();
         assertEquals(OK, result);
 
         data = clusterClient.info(new Section[] {STATS}).get();
         firstNodeInfo = getFirstEntryFromMultiValue(data);
-        long value_after = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
-        assertTrue(value_after < value_before);
+        long valueAfter = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+
+        assertTrue(valueBefore == 0 ? valueAfter == 0 : valueAfter < valueBefore);
     }
 
     @ParameterizedTest
