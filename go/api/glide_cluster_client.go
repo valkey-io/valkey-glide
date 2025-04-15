@@ -1507,7 +1507,7 @@ func (client *GlideClusterClient) FunctionStatsWithRoute(
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *GlideClusterClient) FunctionDelete(libName string) (string, error) {
-	return FunctionDeleteWithRoute(libName, options.RouteOption{})
+	return client.FunctionDeleteWithRoute(libName, options.RouteOption{})
 }
 
 // Deletes a library and all its functions.
