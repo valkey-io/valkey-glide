@@ -959,7 +959,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 
         // delete missing lib returns a error
         deleteResult, err = client.FunctionDelete("anotherLib")
-	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFunctionStats() {
