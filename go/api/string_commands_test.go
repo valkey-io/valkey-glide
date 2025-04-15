@@ -663,3 +663,86 @@ func ExampleGlideClusterClient_GetDel() {
 	// my_value
 	// true
 }
+
+func ExampleGlideClient_LCSLen() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.Set("my_key1", "ohmytext")
+	client.Set("my_key2", "mynewtext")
+
+	result, err := client.LCSLen("my_key1", "my_key2")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
+	// Output: 3
+}
+
+func ExampleGlideClusterClient_LCSLen() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.Set("{my_key}1", "ohmytext")
+	client.Set("{my_key}2", "mynewtext")
+
+	result, err := client.LCSLen("{my_key}1", "{my_key}2")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// LCS is only available in 7.0 and above. It will fail in any release < 7.0
+	// Output: 3
+}
+
+func ExampleGlideClient_LCSWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.Set("my_key1", "ohmytext")
+	client.Set("my_key2", "mynewtext")
+
+	// Basic LCS IDX without additional options
+	opts := options.NewLCSIdxOptions()
+	result1, err := client.LCSWithOptions("my_key1", "my_key2", *opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println("Basic LCS result:", result1)
+
+	// LCS IDX with MINMATCHLEN = 4
+	optsWithMin := options.NewLCSIdxOptions()
+	optsWithMin.SetMinMatchLen(4)
+	result2, err := client.LCSWithOptions("my_key1", "my_key2", *optsWithMin)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println("With MinMatchLen 4:", result2)
+
+	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
+	// Output:
+	// Basic LCS result: map[len:3 matches:[[0 1 0 1] [6 7 4 5]]]
+	// With MinMatchLen 4: map[len:0 matches:[]]
+}
+
+func ExampleGlideClusterClient_LCSWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.Set("{my_key}1", "ohmytext")
+	client.Set("{my_key}2", "mynewtext")
+
+	// LCS IDX with MINMATCHLEN and WITHMATCHLEN
+	opts := options.NewLCSIdxOptions()
+	opts.SetMinMatchLen(2)
+	opts.SetWithMatchLen(true)
+	result, err := client.LCSWithOptions("{my_key}1", "{my_key}2", *opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println("Full result with both options:", result)
+
+	// LCS is only available in 7.0 and above. It will fail in any release < 7.0
+	// Output:
+	// Full result with both options: map[len:3 matches:[[0 1 0 1 2] [6 7 4 5 2]]]
+}

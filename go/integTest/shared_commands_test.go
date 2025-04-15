@@ -595,6 +595,127 @@ func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 	})
 }
 
+func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}" + uuid.New().String()
+		key2 := "{key}" + uuid.New().String()
+
+		res, err := client.LCSLen(key1, key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res)
+
+		suite.verifyOK(client.Set(key1, "ohmytext"))
+		suite.verifyOK(client.Set(key2, "mynewtext"))
+
+		res, err = client.LCSLen(key1, key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(6), res)
+	})
+}
+
+func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		_, err := client.Set("{lcs}key1", "ohmytext")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.Set("{lcs}key2", "mynewtext")
+		assert.Nil(suite.T(), err)
+
+		opts := options.NewLCSIdxOptions()
+		lcsIdxResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), lcsIdxResult)
+
+		assert.Equal(suite.T(), int64(6), lcsIdxResult["len"])
+
+		matches := lcsIdxResult["matches"].([]any)
+		assert.Len(suite.T(), matches, 2)
+
+		expectedMatches := []interface{}{
+			[]interface{}{
+				[]interface{}{int64(4), int64(7)},
+				[]interface{}{int64(5), int64(8)},
+			},
+			[]interface{}{
+				[]interface{}{int64(2), int64(3)},
+				[]interface{}{int64(0), int64(1)},
+			},
+		}
+		assert.Equal(suite.T(), expectedMatches, matches)
+	})
+}
+
+func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		_, err := client.Set("{lcs}key1", "ohmytext")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.Set("{lcs}key2", "mynewtext")
+		assert.Nil(suite.T(), err)
+
+		opts := options.NewLCSIdxOptions()
+		minMatchLen := int64(4)
+		opts.SetMinMatchLen(minMatchLen)
+
+		lcsIdxMinMatchResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), lcsIdxMinMatchResult)
+
+		assert.Equal(suite.T(), int64(6), lcsIdxMinMatchResult["len"])
+
+		matches := lcsIdxMinMatchResult["matches"].([]any)
+		assert.Len(suite.T(), matches, 1)
+
+		expectedMatch := []any{
+			[]interface{}{int64(4), int64(7)},
+			[]interface{}{int64(5), int64(8)},
+		}
+		assert.Equal(suite.T(), expectedMatch, matches[0])
+	})
+}
+
+func (suite *GlideTestSuite) TestLCS_WithMatchLengthOption() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		_, err := client.Set("{lcs}key1", "ohmytext")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.Set("{lcs}key2", "mynewtext")
+		assert.Nil(suite.T(), err)
+
+		opts := options.NewLCSIdxOptions()
+		minMatchLen := int64(4)
+		opts.SetMinMatchLen(minMatchLen)
+		opts.SetWithMatchLen(true)
+
+		lcsIdxFullOptionsResult, err := client.LCSWithOptions("{lcs}key1", "{lcs}key2", *opts)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), lcsIdxFullOptionsResult)
+
+		assert.Equal(suite.T(), int64(6), lcsIdxFullOptionsResult["len"])
+
+		matches := lcsIdxFullOptionsResult["matches"].([]any)
+		assert.Len(suite.T(), matches, 1)
+
+		expectedMatch := []any{
+			[]interface{}{int64(4), int64(7)},
+			[]interface{}{int64(5), int64(8)},
+			int64(4),
+		}
+		assert.Equal(suite.T(), expectedMatch, matches[0])
+	})
+}
+
 func (suite *GlideTestSuite) TestGetDel_ExistingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
@@ -3816,6 +3937,64 @@ func (suite *GlideTestSuite) TestPfCount_NoExistingKeys() {
 		resCount, err := client.PfCount([]string{key1, key2})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), resCount)
+	})
+}
+
+func (suite *GlideTestSuite) TestPfMerge() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		source1 := uuid.New().String() + "{group}"
+		source2 := uuid.New().String() + "{group}"
+		destination := uuid.New().String() + "{group}"
+
+		res, err := client.PfAdd(source1, []string{"a", "b", "c"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res)
+
+		res, err = client.PfAdd(source2, []string{"c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res)
+
+		result, err := client.PfMerge(destination, []string{source1, source2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		count, err := client.PfCount([]string{destination})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), count)
+	})
+}
+
+func (suite *GlideTestSuite) TestPfMerge_SingleSource() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		source := uuid.New().String() + "{group}"
+		destination := uuid.New().String() + "{group}"
+
+		res, err := client.PfAdd(source, []string{"a", "b", "c"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res)
+
+		result, err := client.PfMerge(destination, []string{source})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		count, err := client.PfCount([]string{destination})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), count)
+	})
+}
+
+func (suite *GlideTestSuite) TestPfMerge_NonExistentSource() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		nonExistentKey := uuid.New().String() + "{group}"
+		destination := uuid.New().String() + "{group}"
+
+		result, err := client.PfMerge(destination, []string{nonExistentKey})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		count, err := client.PfCount([]string{destination})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), count)
 	})
 }
 
@@ -9498,13 +9677,7 @@ func (suite *GlideTestSuite) TestGeoPos() {
 			assert.NotNil(t, coords)
 			assert.Equal(t, 2, len(coords))
 
-			// Check longitude
-			assert.InDelta(t, expected[i][0], coords[0], 1e-9,
-				"longitude mismatch for member %s", members[i])
-
-			// Check latitude
-			assert.InDelta(t, expected[i][1], coords[1], 1e-9,
-				"latitude mismatch for member %s", members[i])
+			assert.InDeltaSlice(t, expected[i], coords, 1e-6)
 		}
 
 		// Test error case with wrong key type
@@ -9595,8 +9768,14 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 		fullResults, err := client.GeoSearchWithFullOptions(key1, &searchOrigin, *searchShape, *resultOpts, *searchOpts)
 		assert.NoError(suite.T(), err)
 		// Verify structure of results - exact values may vary slightly due to floating-point precision
-		assert.Equal(suite.T(), 4, len(fullResults))
-		assert.Equal(suite.T(), expectedResults, fullResults)
+		assert.Equal(suite.T(), len(expectedResults), len(fullResults))
+		for i := range expectedResults {
+			assert.Equal(suite.T(), expectedResults[i].Name, fullResults[i].Name)
+			assert.Equal(suite.T(), expectedResults[i].Dist, fullResults[i].Dist)
+			assert.Equal(suite.T(), expectedResults[i].Hash, fullResults[i].Hash)
+			assert.InDelta(suite.T(), expectedResults[i].Coord.Latitude, fullResults[i].Coord.Latitude, 1e-6)
+			assert.InDelta(suite.T(), expectedResults[i].Coord.Longitude, fullResults[i].Coord.Longitude, 1e-6)
+		}
 
 		// Test with count limiting result to 1
 		resultOptsWithCount := options.NewGeoSearchResultOptions().
@@ -9718,7 +9897,13 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 				},
 			},
 		}
-		assert.Equal(suite.T(), expectedKmResults, kmResults)
+		for i := range expectedKmResults {
+			assert.Equal(suite.T(), expectedKmResults[i].Name, kmResults[i].Name)
+			assert.Equal(suite.T(), expectedKmResults[i].Dist, kmResults[i].Dist)
+			assert.Equal(suite.T(), expectedKmResults[i].Hash, kmResults[i].Hash)
+			assert.InDelta(suite.T(), expectedKmResults[i].Coord.Latitude, kmResults[i].Coord.Latitude, 1e-6)
+			assert.InDelta(suite.T(), expectedKmResults[i].Coord.Longitude, kmResults[i].Coord.Longitude, 1e-6)
+		}
 
 		// Test search with ANY option
 		expectedAnyResults := []options.Location{
@@ -9860,7 +10045,7 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		// Verify stored results with distance
 		zRangeResultWithDist, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), expectedMap2, zRangeResultWithDist)
+		assert.InDeltaMapValues(suite.T(), expectedMap2, zRangeResultWithDist, 1e-6)
 
 		// Test storing results of a box search, unit: kilometers, from a geospatial data point, with count
 		count, err = client.GeoSearchStoreWithResultOptions(

@@ -1559,7 +1559,7 @@ pub(crate) fn get_value_type<'a>(value: &Value) -> &'a str {
         Value::VerbatimString { .. } => "VerbatimString",
         Value::BigNumber(_) => "BigNumber",
         Value::Push { .. } => "Push",
-        // TODO Value::ServerError from https://github.com/redis-rs/redis-rs/pull/1093
+        Value::ServerError(_) => "ServerError",
     }
 }
 

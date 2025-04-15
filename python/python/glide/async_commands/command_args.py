@@ -11,7 +11,7 @@ class Limit:
     similar to the `LIMIT` clause in SQL (e.g., `SELECT LIMIT offset, count`).
 
     This class can be utilized in multiple commands that support limit options,
-    such as `ZRANGE <https://valkey.io/commands/zrange>`_, `SORT <https://valkey.io/commands/sort/>`_, and others.
+    such as [ZRANGE](https://valkey.io/commands/zrange), [SORT](https://valkey.io/commands/sort/) and others.
 
     Args:
         offset (int): The starting position of the range, zero based.

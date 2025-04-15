@@ -60,7 +60,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import command_request.CommandRequestOuterClass.CommandRequest;
-import glide.api.models.ClusterTransaction;
+import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
@@ -73,6 +73,8 @@ import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SortBaseOptions.Limit;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
+import glide.api.models.commands.batch.BatchRetryStrategy;
+import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
@@ -91,6 +93,8 @@ import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
@@ -285,22 +289,22 @@ public class GlideClusterClientTest {
     }
 
     @SneakyThrows
-    @Test
-    public void exec_without_routing() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void exec(boolean isAtomic) {
         // setup
         Object[] value = new Object[] {"PONG", "PONG"};
-        ClusterTransaction transaction = new ClusterTransaction().ping().ping();
+        ClusterBatch batch = new ClusterBatch(isAtomic).ping().ping();
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewTransaction(
-                        eq(transaction), eq(Optional.empty()), any()))
+        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.empty()), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(transaction);
+        CompletableFuture<Object[]> response = service.exec(batch);
         Object[] payload = response.get();
 
         // verify
@@ -309,23 +313,32 @@ public class GlideClusterClientTest {
     }
 
     @SneakyThrows
-    @Test
-    public void exec_with_routing() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void exec_with_options(boolean isAtomic) {
         // setup
         Object[] value = new Object[] {"PONG", "PONG"};
-        ClusterTransaction transaction = new ClusterTransaction().ping().ping();
+        ClusterBatch batch = new ClusterBatch(isAtomic).ping().ping();
         SingleNodeRoute route = RANDOM;
+
+        ClusterBatchOptions.ClusterBatchOptionsBuilder builder =
+                ClusterBatchOptions.builder().raiseOnError(true).timeout(1000).route(route);
+        if (!isAtomic) {
+            BatchRetryStrategy strategy =
+                    BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
+            builder.retryStrategy(strategy);
+        }
+        ClusterBatchOptions options = builder.build();
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewTransaction(
-                        eq(transaction), eq(Optional.of(route)), any()))
+        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.of(options)), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(transaction, route);
+        CompletableFuture<Object[]> response = service.exec(batch, options);
         Object[] payload = response.get();
 
         // verify

@@ -10,8 +10,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Hash Commands" group for standalone and cluster
- * clients.
+ * Supports commands for the "Hash Commands" group for standalone and cluster clients.
  *
  * @see <a href="https://valkey.io/commands/?group=hash">Hash Commands</a>
  */

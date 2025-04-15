@@ -19,10 +19,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
-import glide.api.models.ClusterTransaction;
+import glide.api.models.Batch;
+import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
-import glide.api.models.Transaction;
+import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.ChannelMode;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
@@ -975,7 +976,7 @@ public class PubSubTests {
         // using sharded channels from different slots in a transaction causes a cross slot error
         var clusterClient = (GlideClusterClient) createClient(false);
         var transaction =
-                new ClusterTransaction()
+                new ClusterBatch(true)
                         .publish("one", "abc", true)
                         .publish("two", "mnk", true)
                         .publish("three", "xyz", true);
@@ -1024,13 +1025,13 @@ public class PubSubTests {
 
         if (standalone) {
             var transaction =
-                    new Transaction()
+                    new Batch(true)
                             .publish(exactMessage.getMessage(), exactMessage.getChannel())
                             .publish(patternMessage.getMessage(), patternMessage.getChannel());
             ((GlideClient) sender).exec(transaction).get();
         } else {
             var transaction =
-                    new ClusterTransaction()
+                    new ClusterBatch(true)
                             .publish(shardedMessage.getMessage(), shardedMessage.getChannel(), true)
                             .publish(exactMessage.getMessage(), exactMessage.getChannel())
                             .publish(patternMessage.getMessage(), patternMessage.getChannel());
@@ -1462,16 +1463,18 @@ public class PubSubTests {
         String pattern = prefix + "test_*";
 
         var transaction =
-                (standalone ? new Transaction() : new ClusterTransaction())
+                (standalone ? new Batch(true) : new ClusterBatch(true))
                         .pubsubChannels()
                         .pubsubChannels(pattern)
                         .pubsubNumPat()
                         .pubsubNumSub(channels);
+        ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
+
         // no channels exists yet
         var result =
                 standalone
-                        ? ((GlideClient) client).exec((Transaction) transaction).get()
-                        : ((GlideClusterClient) client).exec((ClusterTransaction) transaction, route).get();
+                        ? ((GlideClient) client).exec((Batch) transaction).get()
+                        : ((GlideClusterClient) client).exec((ClusterBatch) transaction, options).get();
         assertDeepEquals(
                 new Object[] {
                     new String[0], // pubsubChannels()
@@ -1499,8 +1502,8 @@ public class PubSubTests {
 
         result =
                 standalone
-                        ? ((GlideClient) client).exec((Transaction) transaction).get()
-                        : ((GlideClusterClient) client).exec((ClusterTransaction) transaction, route).get();
+                        ? ((GlideClient) client).exec((Batch) transaction).get()
+                        : ((GlideClusterClient) client).exec((ClusterBatch) transaction, options).get();
 
         // convert arrays to sets, because we can't compare arrays - they received reordered
         result[0] = Set.of((Object[]) result[0]);

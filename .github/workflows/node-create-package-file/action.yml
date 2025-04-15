@@ -49,33 +49,50 @@ inputs:
 runs:
     using: "composite"
     steps:
+        - name: "Setup Environment Variables"
+          shell: bash
+          env:
+              TARGET: ${{ inputs.target }}
+              NAMED_OS: ${{ inputs.named_os }}
+              ARCH: ${{ inputs.arch }}
+              RELEASE_VERSION: ${{ inputs.release_version }}
+              NPM_SCOPE: ${{ inputs.npm_scope }}
+              OS: ${{ inputs.os }}
+          run: |
+              echo "TARGET=$TARGET" >> $GITHUB_ENV
+              echo "NAMED_OS=$NAMED_OS" >> $GITHUB_ENV
+              echo "ARCH=$ARCH" >> $GITHUB_ENV
+              echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+              echo "NPM_SCOPE=$NPM_SCOPE" >> $GITHUB_ENV
+              echo "OS=$OS" >> $GITHUB_ENV
+
         - name: Create package.json file
           shell: bash
           working-directory: ./node
           run: |
               # echo -musl if inputs.target is musl
-              export MUSL_FLAG=`if [[ "${{ inputs.target }}" =~ .*"musl".*  ]]; then echo "-musl"; fi`
+              export MUSL_FLAG=`if [[ "$TARGET" =~ .*"musl".*  ]]; then echo "-musl"; fi`
               # set the package name
               name="valkey-glide"
               # derive the OS and architecture from the inputs
-              export node_os="${{ inputs.named_os }}"
-              export node_arch="${{ inputs.arch }}"
+              export node_os="$NAMED_OS"
+              export node_arch="$ARCH"
               # set the version
-              export package_version="${{ inputs.release_version }}"
+              export package_version="$RELEASE_VERSION"
               # set the package name
               export pkg_name="${name}-${node_os}${MUSL_FLAG}-${node_arch}"
               # set the scope
-              export scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}/"; fi`
+              export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
               # set the registry scope
-              export registry_scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}:"; fi`
+              export registry_scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE:"; fi`
               # remove the current name section
-              if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then
+              if [[ "$OS" =~ .*"macos".*  ]]; then
                 sed '/"name":/d' ./package.json > temp.json && mv temp.json package.json
               else
                 sed -i '/"name":/d' ./package.json
               fi
               # Remove all `///` occurrences to enable the commented out sections
-              if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then
+              if [[ "$OS" =~ .*"macos".*  ]]; then
                 sed 's|///||g' package.json > temp.json && mv temp.json package.json
               else
                 sed -i 's|///||g' package.json
@@ -90,18 +107,10 @@ runs:
           working-directory: ./node/npm/glide
           run: |
               name="valkey-glide"
-              export node_os="${{ inputs.named_os }}"
-              export node_arch="${{ inputs.arch }}"
-              echo "The workflow is: ${{env.EVENT_NAME}}"
-              if ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
-                R_VERSION="${{ env.INPUT_VERSION }}"
-              else
-                R_VERSION=${GITHUB_REF:11}
-              fi
-              echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-              export package_version=${R_VERSION}
-              export scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}/"; fi`
-              export MUSL_FLAG=`if [[ "${{ inputs.target }}" =~ .*"musl".*  ]]; then echo "-musl"; fi`
+              export node_os="$NAMED_OS"
+              export node_arch="$ARCH"
+              export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
+              export MUSL_FLAG=`if [[ "$TARGET" =~ .*"musl".*  ]]; then echo "-musl"; fi`
               export pkg_name="${name}-${node_os}${MUSL_FLAG}-${node_arch}"
               export dev_dependency_name="${scope}${pkg_name}"
               # Create package.json and append devDependency

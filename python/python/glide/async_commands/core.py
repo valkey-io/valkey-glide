@@ -255,6 +255,11 @@ class ExpirySet:
     ) -> None:
         self.set_expiry_type_and_value(expiry_type, value)
 
+    def __eq__(self, other: "object") -> bool:
+        if not isinstance(other, ExpirySet):
+            return NotImplemented
+        return self.expiry_type == other.expiry_type and self.value == other.value
+
     def set_expiry_type_and_value(
         self, expiry_type: ExpiryType, value: Optional[Union[int, datetime, timedelta]]
     ):
@@ -372,7 +377,8 @@ class FlushMode(Enum):
 
     `FLUSHALL` command and `FUNCTION FLUSH` command.
 
-    See https://valkey.io/commands/flushall/ and https://valkey.io/commands/function-flush/ for details
+    See [FLUSHAL](https://valkey.io/commands/flushall/) and [FUNCTION-FLUSH](https://valkey.io/commands/function-flush/)
+    for details
 
     SYNC was introduced in version 6.2.0.
     """
@@ -513,7 +519,7 @@ class CoreCommands(Protocol):
         """
         Set the given key with the given value. Return value is dependent on the passed options.
 
-        See https://valkey.io/commands/set/ for more details.
+        See [valkey.io](https://valkey.io/commands/set/) for more details.
 
         Args:
             key (TEncodable): the key to store.
@@ -584,7 +590,7 @@ class CoreCommands(Protocol):
         """
         Get the value associated with the given key, or null if no such value exists.
 
-        See https://valkey.io/commands/get/ for details.
+        See [valkey.io](https://valkey.io/commands/get/) for details.
 
         Args:
             key (TEncodable): The key to retrieve from the database.
@@ -605,7 +611,7 @@ class CoreCommands(Protocol):
         """
         Gets a value associated with the given string `key` and deletes the key.
 
-        See https://valkey.io/commands/getdel for more details.
+        See [valkey.io](https://valkey.io/commands/getdel) for more details.
 
         Args:
             key (TEncodable): The `key` to retrieve from the database.
@@ -635,7 +641,7 @@ class CoreCommands(Protocol):
         If `key` does not exist, an empty byte string is returned. If `start` or `end`
         are out of range, returns the substring within the valid range of the value.
 
-        See https://valkey.io/commands/getrange/ for more details.
+        See [valkey.io](https://valkey.io/commands/getrange/) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -670,7 +676,7 @@ class CoreCommands(Protocol):
         If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to `SET` in this special
         case.
 
-        See https://valkey.io/commands/append for more details.
+        See [valkey.io](https://valkey.io/commands/append) for more details.
 
         Args:
             key (TEncodable): The key to which the value will be appended.
@@ -695,7 +701,7 @@ class CoreCommands(Protocol):
         """
         Get the length of the string value stored at `key`.
 
-        See https://valkey.io/commands/strlen/ for more details.
+        See [valkey.io](https://valkey.io/commands/strlen/) for more details.
 
         Args:
             key (TEncodable): The key to return its length.
@@ -718,7 +724,7 @@ class CoreCommands(Protocol):
         Renames `key` to `new_key`.
         If `newkey` already exists it is overwritten.
 
-        See https://valkey.io/commands/rename/ for more details.
+        See [valkey.io](https://valkey.io/commands/rename/) for more details.
 
         Note:
             When in cluster mode, both `key` and `newkey` must map to the same hash slot.
@@ -740,7 +746,7 @@ class CoreCommands(Protocol):
         """
         Renames `key` to `new_key` if `new_key` does not yet exist.
 
-        See https://valkey.io/commands/renamenx for more details.
+        See [valkey.io](https://valkey.io/commands/renamenx) for more details.
 
         Note:
             When in cluster mode, both `key` and `new_key` must map to the same hash slot.
@@ -767,7 +773,7 @@ class CoreCommands(Protocol):
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
 
-        See https://valkey.io/commands/del/ for details.
+        See [valkey.io](https://valkey.io/commands/del/) for details.
 
         Note:
             In cluster mode, if keys in `keys` map to different hash slots,
@@ -798,7 +804,7 @@ class CoreCommands(Protocol):
         Increments the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
         operation.
 
-        See https://valkey.io/commands/incr/ for more details.
+        See [valkey.io](https://valkey.io/commands/incr/) for more details.
 
         Args:
             key (TEncodable): The key to increment its value.
@@ -818,7 +824,7 @@ class CoreCommands(Protocol):
         Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation.
 
-        See https://valkey.io/commands/incrby/ for more details.
+        See [valkey.io](https://valkey.io/commands/incrby/) for more details.
 
         Args:
             key (TEncodable): The key to increment its value.
@@ -842,7 +848,7 @@ class CoreCommands(Protocol):
         By using a negative increment value, the value stored at the `key` is decremented.
         If the key does not exist, it is set to 0 before performing the operation.
 
-        See https://valkey.io/commands/incrbyfloat/ for more details.
+        See [valkey.io](https://valkey.io/commands/incrbyfloat/) for more details.
 
         Args:
             key (TEncodable): The key to increment its value.
@@ -869,7 +875,7 @@ class CoreCommands(Protocol):
         the string is padded with zero bytes to make `offset` fit. Creates the `key`
         if it doesn't exist.
 
-        See https://valkey.io/commands/setrange for more details.
+        See [valkey.io](https://valkey.io/commands/setrange) for more details.
 
         Args:
             key (TEncodable): The key of the string to update.
@@ -895,7 +901,7 @@ class CoreCommands(Protocol):
         """
         Set multiple keys to multiple values in a single atomic operation.
 
-        See https://valkey.io/commands/mset/ for more details.
+        See [valkey.io](https://valkey.io/commands/mset/) for more details.
 
         Note:
             In cluster mode, if keys in `key_value_map` map to different hash slots,
@@ -929,7 +935,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, all keys in `key_value_map` must map to the same hash slot.
 
-        See https://valkey.io/commands/msetnx/ for more details.
+        See [valkey.io](https://valkey.io/commands/msetnx/) for more details.
 
         Args:
             key_value_map (Mapping[TEncodable, TEncodable]): A key-value map consisting of keys and their respective values to
@@ -956,7 +962,7 @@ class CoreCommands(Protocol):
         """
         Retrieve the values of multiple keys.
 
-        See https://valkey.io/commands/mget/ for more details.
+        See [valkey.io](https://valkey.io/commands/mget/) for more details.
 
         Note:
             In cluster mode, if keys in `keys` map to different hash slots,
@@ -989,7 +995,7 @@ class CoreCommands(Protocol):
         Decrement the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
         operation.
 
-        See https://valkey.io/commands/decr/ for more details.
+        See [valkey.io](https://valkey.io/commands/decr/) for more details.
 
         Args:
             key (TEncodable): The key to increment its value.
@@ -1009,7 +1015,7 @@ class CoreCommands(Protocol):
         Decrements the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation.
 
-        See https://valkey.io/commands/decrby/ for more details.
+        See [valkey.io](https://valkey.io/commands/decrby/) for more details.
 
         Args:
             key (TEncodable): The key to decrement its value.
@@ -1031,7 +1037,7 @@ class CoreCommands(Protocol):
         """
         Updates the last access time of specified keys.
 
-        See https://valkey.io/commands/touch/ for details.
+        See [valkey.io](https://valkey.io/commands/touch/) for details.
 
         Note:
             In cluster mode, if keys in `key_value_map` map to different hash slots,
@@ -1064,7 +1070,7 @@ class CoreCommands(Protocol):
         """
         Sets the specified fields to their respective values in the hash stored at `key`.
 
-        See https://valkey.io/commands/hset/ for more details.
+        See [valkey.io](https://valkey.io/commands/hset/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1090,7 +1096,7 @@ class CoreCommands(Protocol):
         """
         Retrieves the value associated with `field` in the hash stored at `key`.
 
-        See https://valkey.io/commands/hget/ for more details.
+        See [valkey.io](https://valkey.io/commands/hget/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1124,7 +1130,7 @@ class CoreCommands(Protocol):
         If `key` does not exist, a new key holding a hash is created.
         If `field` already exists, this operation has no effect.
 
-        See https://valkey.io/commands/hsetnx/ for more details.
+        See [valkey.io](https://valkey.io/commands/hsetnx/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1153,7 +1159,7 @@ class CoreCommands(Protocol):
         By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
         If `field` or `key` does not exist, it is set to 0 before performing the operation.
 
-        See https://valkey.io/commands/hincrby/ for more details.
+        See [valkey.io](https://valkey.io/commands/hincrby/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1182,7 +1188,7 @@ class CoreCommands(Protocol):
         By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
         If `field` or `key` does not exist, it is set to 0 before performing the operation.
 
-        See https://valkey.io/commands/hincrbyfloat/ for more details.
+        See [valkey.io](https://valkey.io/commands/hincrbyfloat/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1208,7 +1214,7 @@ class CoreCommands(Protocol):
         """
         Check if a field exists in the hash stored at `key`.
 
-        See https://valkey.io/commands/hexists/ for more details.
+        See [valkey.io](https://valkey.io/commands/hexists/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1233,7 +1239,7 @@ class CoreCommands(Protocol):
         """
         Returns all fields and values of the hash stored at `key`.
 
-        See https://valkey.io/commands/hgetall/ for details.
+        See [valkey.io](https://valkey.io/commands/hgetall/) for details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1258,7 +1264,7 @@ class CoreCommands(Protocol):
         """
         Retrieve the values associated with specified fields in the hash stored at `key`.
 
-        See https://valkey.io/commands/hmget/ for details.
+        See [valkey.io](https://valkey.io/commands/hmget/) for details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1283,7 +1289,7 @@ class CoreCommands(Protocol):
         """
         Remove specified fields from the hash stored at `key`.
 
-        See https://valkey.io/commands/hdel/ for more details.
+        See [valkey.io](https://valkey.io/commands/hdel/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1304,7 +1310,7 @@ class CoreCommands(Protocol):
         """
         Returns the number of fields contained in the hash stored at `key`.
 
-        See https://valkey.io/commands/hlen/ for more details.
+        See [valkey.io](https://valkey.io/commands/hlen/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1326,7 +1332,7 @@ class CoreCommands(Protocol):
         """
         Returns all values in the hash stored at `key`.
 
-        See https://valkey.io/commands/hvals/ for more details.
+        See [valkey.io](https://valkey.io/commands/hvals/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1344,7 +1350,7 @@ class CoreCommands(Protocol):
         """
         Returns all field names in the hash stored at `key`.
 
-        See https://valkey.io/commands/hkeys/ for more details.
+        See [valkey.io](https://valkey.io/commands/hkeys/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1362,7 +1368,7 @@ class CoreCommands(Protocol):
         """
         Returns a random field name from the hash value stored at `key`.
 
-        See https://valkey.io/commands/hrandfield for more details.
+        See [valkey.io](https://valkey.io/commands/hrandfield) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1384,7 +1390,7 @@ class CoreCommands(Protocol):
         """
         Retrieves up to `count` random field names from the hash value stored at `key`.
 
-        See https://valkey.io/commands/hrandfield for more details.
+        See [valkey.io](https://valkey.io/commands/hrandfield) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1415,7 +1421,7 @@ class CoreCommands(Protocol):
         """
         Retrieves up to `count` random field names along with their values from the hash value stored at `key`.
 
-        See https://valkey.io/commands/hrandfield for more details.
+        See [valkey.io](https://valkey.io/commands/hrandfield) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1445,7 +1451,7 @@ class CoreCommands(Protocol):
         """
         Returns the string length of the value associated with `field` in the hash stored at `key`.
 
-        See https://valkey.io/commands/hstrlen/ for more details.
+        See [valkey.io](https://valkey.io/commands/hstrlen/) for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1472,7 +1478,7 @@ class CoreCommands(Protocol):
         `elements` are inserted one after the other to the head of the list, from the leftmost element
         to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
 
-        See https://valkey.io/commands/lpush/ for more details.
+        See [valkey.io](https://valkey.io/commands/lpush/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1496,7 +1502,7 @@ class CoreCommands(Protocol):
         Inserts all the specified values at the head of the list stored at `key`, only if `key` exists and holds a list.
         If `key` is not a list, this performs no operation.
 
-        See https://valkey.io/commands/lpushx/ for more details.
+        See [valkey.io](https://valkey.io/commands/lpushx/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1520,7 +1526,7 @@ class CoreCommands(Protocol):
         Remove and return the first elements of the list stored at `key`.
         The command pops a single element from the beginning of the list.
 
-        See https://valkey.io/commands/lpop/ for details.
+        See [valkey.io](https://valkey.io/commands/lpop/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1545,7 +1551,7 @@ class CoreCommands(Protocol):
         """
         Remove and return up to `count` elements from the list stored at `key`, depending on the list's length.
 
-        See https://valkey.io/commands/lpop/ for details.
+        See [valkey.io](https://valkey.io/commands/lpop/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1574,12 +1580,12 @@ class CoreCommands(Protocol):
         Pops an element from the head of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
 
-        See https://valkey.io/commands/blpop for details.
+        See [valkey.io](https://valkey.io/commands/blpop) for details.
 
         Note:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BLPOP` is a client blocking command, see
-               https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
                for more details and best practices.
 
         Args:
@@ -1613,7 +1619,7 @@ class CoreCommands(Protocol):
 
         When in cluster mode, all `keys` must map to the same hash slot.
 
-        See https://valkey.io/commands/lmpop/ for details.
+        See [valkey.io](https://valkey.io/commands/lmpop/) for details.
 
         Args:
             keys (List[TEncodable]): An array of keys of lists.
@@ -1658,10 +1664,10 @@ class CoreCommands(Protocol):
         Note:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BLMPOP` is a client blocking command, see
-               https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
                for more details and best practices.
 
-        See https://valkey.io/commands/blmpop/ for details.
+        See [valkey.io](https://valkey.io/commands/blmpop/) for details.
 
         Args:
             keys (List[TEncodable]): An array of keys of lists.
@@ -1700,7 +1706,7 @@ class CoreCommands(Protocol):
         element and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list,
         with -1 being the last element of the list, -2 being the penultimate, and so on.
 
-        See https://valkey.io/commands/lrange/ for details.
+        See [valkey.io](https://valkey.io/commands/lrange/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1743,7 +1749,7 @@ class CoreCommands(Protocol):
         Negative indices can be used to designate elements starting at the tail of the list.
         Here, -1 means the last element, -2 means the penultimate and so forth.
 
-        See https://valkey.io/commands/lindex/ for more details.
+        See [valkey.io](https://valkey.io/commands/lindex/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1773,7 +1779,7 @@ class CoreCommands(Protocol):
         Negative indices can be used to designate elements starting at the tail of the list.
         Here, `-1` means the last element, `-2` means the penultimate and so forth.
 
-        See https://valkey.io/commands/lset/ for details.
+        See [valkey.io](https://valkey.io/commands/lset/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1798,7 +1804,7 @@ class CoreCommands(Protocol):
         `elements` are inserted one after the other to the tail of the list, from the leftmost element
         to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
 
-        See https://valkey.io/commands/rpush/ for more details.
+        See [valkey.io](https://valkey.io/commands/rpush/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1822,7 +1828,7 @@ class CoreCommands(Protocol):
         Inserts all the specified values at the tail of the list stored at `key`, only if `key` exists and holds a list.
         If `key` is not a list, this performs no operation.
 
-        See https://valkey.io/commands/rpushx/ for more details.
+        See [valkey.io](https://valkey.io/commands/rpushx/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1846,7 +1852,7 @@ class CoreCommands(Protocol):
         Removes and returns the last elements of the list stored at `key`.
         The command pops a single element from the end of the list.
 
-        See https://valkey.io/commands/rpop/ for details.
+        See [valkey.io](https://valkey.io/commands/rpop/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1871,7 +1877,7 @@ class CoreCommands(Protocol):
         """
         Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
 
-        See https://valkey.io/commands/rpop/ for details.
+        See [valkey.io](https://valkey.io/commands/rpop/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1900,12 +1906,12 @@ class CoreCommands(Protocol):
         Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
 
-        See https://valkey.io/commands/brpop for details.
+        See [valkey.io](https://valkey.io/commands/brpop) for details.
 
         Notes:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BRPOP` is a client blocking command, see
-               https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
                for more details and best practices.
 
         Args:
@@ -1938,7 +1944,7 @@ class CoreCommands(Protocol):
         """
         Inserts `element` in the list at `key` either before or after the `pivot`.
 
-        See https://valkey.io/commands/linsert/ for details.
+        See [valkey.io](https://valkey.io/commands/linsert/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1979,7 +1985,7 @@ class CoreCommands(Protocol):
 
         When in cluster mode, both `source` and `destination` must map to the same hash slot.
 
-        See https://valkey.io/commands/lmove/ for details.
+        See [valkey.io](https://valkey.io/commands/lmove/) for details.
 
         Args:
             source (TEncodable): The key to the source list.
@@ -2031,10 +2037,10 @@ class CoreCommands(Protocol):
         Notes:
             1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
             2. `BLMOVE` is a client blocking command, see
-               https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
                for more details and best practices.
 
-        See https://valkey.io/commands/blmove/ for details.
+        See [valkey.io](https://valkey.io/commands/blmove/) for details.
 
         Args:
             source (TEncodable): The key to the source list.
@@ -2077,7 +2083,7 @@ class CoreCommands(Protocol):
         Specified members that are already a member of this set are ignored.
         If `key` does not exist, a new set is created before adding `members`.
 
-        See https://valkey.io/commands/sadd/ for more details.
+        See [valkey.io](https://valkey.io/commands/sadd/) for more details.
 
         Args:
             key (TEncodable): The key where members will be added to its set.
@@ -2097,7 +2103,7 @@ class CoreCommands(Protocol):
         Remove specified members from the set stored at `key`.
         Specified members that are not a member of this set are ignored.
 
-        See https://valkey.io/commands/srem/ for details.
+        See [valkey.io](https://valkey.io/commands/srem/) for details.
 
         Args:
             key (TEncodable): The key from which members will be removed.
@@ -2118,7 +2124,7 @@ class CoreCommands(Protocol):
         """
         Retrieve all the members of the set value stored at `key`.
 
-        See https://valkey.io/commands/smembers/ for details.
+        See [valkey.io](https://valkey.io/commands/smembers/) for details.
 
         Args:
             key (TEncodable): The key from which to retrieve the set members.
@@ -2140,7 +2146,7 @@ class CoreCommands(Protocol):
         """
         Retrieve the set cardinality (number of elements) of the set stored at `key`.
 
-        See https://valkey.io/commands/scard/ for details.
+        See [valkey.io](https://valkey.io/commands/scard/) for details.
 
         Args:
             key (TEncodable): The key from which to retrieve the number of set members.
@@ -2160,7 +2166,7 @@ class CoreCommands(Protocol):
         """
         Removes and returns one random member from the set stored at `key`.
 
-        See https://valkey-io.github.io/commands/spop/ for more details.
+        See [valkey.io](https://valkey-io.github.io/commands/spop/) for more details.
 
         To pop multiple members, see `spop_count`.
 
@@ -2186,7 +2192,7 @@ class CoreCommands(Protocol):
         """
         Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
 
-        See https://valkey-io.github.io/commands/spop/ for more details.
+        See [valkey.io](https://valkey-io.github.io/commands/spop/) for more details.
 
         To pop a single member, see `spop`.
 
@@ -2217,7 +2223,7 @@ class CoreCommands(Protocol):
         """
         Returns if `member` is a member of the set stored at `key`.
 
-        See https://valkey.io/commands/sismember/ for more details.
+        See [valkey.io](https://valkey.io/commands/sismember/) for more details.
 
         Args:
             key (TEncodable): The key of the set.
@@ -2249,7 +2255,7 @@ class CoreCommands(Protocol):
         Moves `member` from the set at `source` to the set at `destination`, removing it from the source set. Creates a
         new destination set if needed. The operation is atomic.
 
-        See https://valkey.io/commands/smove for more details.
+        See [valkey.io](https://valkey.io/commands/smove) for more details.
 
         Note:
             When in cluster mode, `source` and `destination` must map to the same hash slot.
@@ -2279,7 +2285,7 @@ class CoreCommands(Protocol):
         """
         Gets the union of all the given sets.
 
-        See https://valkey.io/commands/sunion for more details.
+        See [valkey.io](https://valkey.io/commands/sunion) for more details.
 
         Note:
             When in cluster mode, all `keys` must map to the same hash slot.
@@ -2310,7 +2316,7 @@ class CoreCommands(Protocol):
         """
         Stores the members of the union of all given sets specified by `keys` into a new set at `destination`.
 
-        See https://valkey.io/commands/sunionstore for more details.
+        See [valkey.io](https://valkey.io/commands/sunionstore) for more details.
 
         Note:
             When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
@@ -2338,7 +2344,7 @@ class CoreCommands(Protocol):
         Stores the difference between the first set and all the successive sets in `keys` into a new set at
         `destination`.
 
-        See https://valkey.io/commands/sdiffstore for more details.
+        See [valkey.io](https://valkey.io/commands/sdiffstore) for more details.
 
         Note:
             When in Cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
@@ -2365,7 +2371,7 @@ class CoreCommands(Protocol):
         """
         Gets the intersection of all the given sets.
 
-        See https://valkey.io/commands/sinter for more details.
+        See [valkey.io](https://valkey.io/commands/sinter) for more details.
 
         Note:
             When in cluster mode, all `keys` must map to the same hash slot.
@@ -2392,7 +2398,7 @@ class CoreCommands(Protocol):
         """
         Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
 
-        See https://valkey.io/commands/sinterstore for more details.
+        See [valkey.io](https://valkey.io/commands/sinterstore) for more details.
 
         Note:
             When in Cluster mode, all `keys` and `destination` must map to the same hash slot.
@@ -2425,7 +2431,7 @@ class CoreCommands(Protocol):
 
         When in cluster mode, all keys in `keys` must map to the same hash slot.
 
-        See https://valkey.io/commands/sintercard for more details.
+        See [valkey.io](https://valkey.io/commands/sintercard) for more details.
 
         Args:
             keys (List[TEncodable]): A list of keys representing the sets to intersect.
@@ -2457,7 +2463,7 @@ class CoreCommands(Protocol):
         """
         Computes the difference between the first set and all the successive sets in `keys`.
 
-        See https://valkey.io/commands/sdiff for more details.
+        See [valkey.io](https://valkey.io/commands/sdiff) for more details.
 
         Note:
             When in cluster mode, all `keys` must map to the same hash slot.
@@ -2487,7 +2493,7 @@ class CoreCommands(Protocol):
         """
         Checks whether each member is contained in the members of the set stored at `key`.
 
-        See https://valkey.io/commands/smismember for more details.
+        See [valkey.io](https://valkey.io/commands/smismember) for more details.
 
         Args:
             key (TEncodable): The key of the set to check.
@@ -2514,7 +2520,7 @@ class CoreCommands(Protocol):
         These offsets can also be negative numbers indicating offsets starting at the end of the list, with -1 being the last
         element of the list, -2 being the penultimate, and so on.
 
-        See https://valkey.io/commands/ltrim/ for more details.
+        See [valkey.io](https://valkey.io/commands/ltrim/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -2548,7 +2554,7 @@ class CoreCommands(Protocol):
         If `count` is 0 or greater than the occurrences of elements equal to `element`, it removes all elements
         equal to `element`.
 
-        See https://valkey.io/commands/lrem/ for more details.
+        See [valkey.io](https://valkey.io/commands/lrem/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -2573,7 +2579,7 @@ class CoreCommands(Protocol):
         """
         Get the length of the list stored at `key`.
 
-        See https://valkey.io/commands/llen/ for details.
+        See [valkey.io](https://valkey.io/commands/llen/) for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -2593,7 +2599,7 @@ class CoreCommands(Protocol):
         """
         Returns the number of keys in `keys` that exist in the database.
 
-        See https://valkey.io/commands/exists/ for more details.
+        See [valkey.io](https://valkey.io/commands/exists/) for more details.
 
         Note:
             In cluster mode, if keys in `keys` map to different hash slots,
@@ -2622,9 +2628,9 @@ class CoreCommands(Protocol):
         Unlink (delete) multiple keys from the database.
         A key is ignored if it does not exist.
         This command, similar to DEL, removes specified keys and ignores non-existent ones.
-        However, this command does not block the server, while `DEL <https://valkey.io/commands/del>`_ does.
+        However, this command does not block the server, while [DEL](https://valkey.io/commands/del) does.
 
-        See https://valkey.io/commands/unlink/ for more details.
+        See [valkey.io](https://valkey.io/commands/unlink/) for more details.
 
         Note:
             In cluster mode, if keys in `key_value_map` map to different hash slots,
@@ -2659,7 +2665,7 @@ class CoreCommands(Protocol):
         If `seconds` is a non-positive number, the key will be deleted rather than expired.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
 
-        See https://valkey.io/commands/expire/ for more details.
+        See [valkey.io](https://valkey.io/commands/expire/) for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -2695,7 +2701,7 @@ class CoreCommands(Protocol):
         If `key` already has an existing expire set, the time to live is updated to the new value.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
 
-        See https://valkey.io/commands/expireat/ for more details.
+        See [valkey.io](https://valkey.io/commands/expireat/) for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -2731,7 +2737,7 @@ class CoreCommands(Protocol):
         If `milliseconds` is a non-positive number, the key will be deleted rather than expired.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
 
-        See https://valkey.io/commands/pexpire/ for more details.
+        See [valkey.io](https://valkey.io/commands/pexpire/) for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -2769,7 +2775,7 @@ class CoreCommands(Protocol):
         If `key` already has an existing expire set, the time to live is updated to the new value.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
 
-        See https://valkey.io/commands/pexpireat/ for more details.
+        See [valkey.io](https://valkey.io/commands/pexpireat/) for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -2799,7 +2805,7 @@ class CoreCommands(Protocol):
         the given `key` will expire, in seconds.
         To get the expiration with millisecond precision, use `pexpiretime`.
 
-        See https://valkey.io/commands/expiretime/ for details.
+        See [valkey.io](https://valkey.io/commands/expiretime/) for details.
 
         Args:
             key (TEncodable): The `key` to determine the expiration value of.
@@ -2830,7 +2836,7 @@ class CoreCommands(Protocol):
         Returns the absolute Unix timestamp (since January 1, 1970) at which
         the given `key` will expire, in milliseconds.
 
-        See https://valkey.io/commands/pexpiretime/ for details.
+        See [valkey.io](https://valkey.io/commands/pexpiretime/) for details.
 
         Args:
             key (TEncodable): The `key` to determine the expiration value of.
@@ -2860,7 +2866,7 @@ class CoreCommands(Protocol):
         """
         Returns the remaining time to live of `key` that has a timeout.
 
-        See https://valkey.io/commands/ttl/ for more details.
+        See [valkey.io](https://valkey.io/commands/ttl/) for more details.
 
         Args:
             key (TEncodable): The key to return its timeout.
@@ -2889,7 +2895,7 @@ class CoreCommands(Protocol):
         """
         Returns the remaining time to live of `key` that has a timeout, in milliseconds.
 
-        See https://valkey.io/commands/pttl for more details.
+        See [valkey.io](https://valkey.io/commands/pttl) for more details.
 
         Args:
             key (TEncodable): The key to return its timeout.
@@ -2920,7 +2926,7 @@ class CoreCommands(Protocol):
         Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
         persistent (a key that will never expire as no timeout is associated).
 
-        See https://valkey.io/commands/persist/ for more details.
+        See [valkey.io](https://valkey.io/commands/persist/) for more details.
 
         Args:
             key (TEncodable): The key to remove the existing timeout on.
@@ -2943,7 +2949,7 @@ class CoreCommands(Protocol):
         """
         Returns the bytes string representation of the type of the value stored at `key`.
 
-        See https://valkey.io/commands/type/ for more details.
+        See [valkey.io](https://valkey.io/commands/type/) for more details.
 
         Args:
             key (TEncodable): The key to check its data type.
@@ -2972,7 +2978,7 @@ class CoreCommands(Protocol):
         """
         Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
 
-        See https://valkey.io/commands/xadd for more details.
+        See [valkey.io](https://valkey.io/commands/xadd) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3013,7 +3019,7 @@ class CoreCommands(Protocol):
         """
         Removes the specified entries by id from a stream, and returns the number of entries deleted.
 
-        See https://valkey.io/commands/xdel for more details.
+        See [valkey.io](https://valkey.io/commands/xdel) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3042,7 +3048,7 @@ class CoreCommands(Protocol):
         """
         Trims the stream stored at `key` by evicting older entries.
 
-        See https://valkey.io/commands/xtrim for more details.
+        See [valkey.io](https://valkey.io/commands/xtrim) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3068,7 +3074,7 @@ class CoreCommands(Protocol):
         """
         Returns the number of entries in the stream stored at `key`.
 
-        See https://valkey.io/commands/xlen for more details.
+        See [valkey.io](https://valkey.io/commands/xlen) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3099,7 +3105,7 @@ class CoreCommands(Protocol):
         """
         Returns stream entries matching a given range of IDs.
 
-        See https://valkey.io/commands/xrange for more details.
+        See [valkey.io](https://valkey.io/commands/xrange) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3153,7 +3159,7 @@ class CoreCommands(Protocol):
         Returns stream entries matching a given range of IDs in reverse order. Equivalent to `XRANGE` but returns the
         entries in reverse order.
 
-        See https://valkey.io/commands/xrevrange for more details.
+        See [valkey.io](https://valkey.io/commands/xrevrange) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3204,7 +3210,7 @@ class CoreCommands(Protocol):
         """
         Reads entries from the given streams.
 
-        See https://valkey.io/commands/xread for more details.
+        See [valkey.io](https://valkey.io/commands/xread) for more details.
 
         Note:
             When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
@@ -3256,7 +3262,7 @@ class CoreCommands(Protocol):
         """
         Creates a new consumer group uniquely identified by `group_name` for the stream stored at `key`.
 
-        See https://valkey.io/commands/xgroup-create for more details.
+        See [valkey.io](https://valkey.io/commands/xgroup-create) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3287,7 +3293,7 @@ class CoreCommands(Protocol):
         """
         Destroys the consumer group `group_name` for the stream stored at `key`.
 
-        See https://valkey.io/commands/xgroup-destroy for more details.
+        See [valkey.io](https://valkey.io/commands/xgroup-destroy) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3316,7 +3322,7 @@ class CoreCommands(Protocol):
         """
         Creates a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
 
-        See https://valkey.io/commands/xgroup-createconsumer for more details.
+        See [valkey.io](https://valkey.io/commands/xgroup-createconsumer) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3348,7 +3354,7 @@ class CoreCommands(Protocol):
         """
         Deletes a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
 
-        See https://valkey.io/commands/xgroup-delconsumer for more details.
+        See [valkey.io](https://valkey.io/commands/xgroup-delconsumer) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3379,7 +3385,7 @@ class CoreCommands(Protocol):
         """
         Set the last delivered ID for a consumer group.
 
-        See https://valkey.io/commands/xgroup-setid for more details.
+        See [valkey.io](https://valkey.io/commands/xgroup-setid) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3414,7 +3420,7 @@ class CoreCommands(Protocol):
         """
         Reads entries from the given streams owned by a consumer group.
 
-        See https://valkey.io/commands/xreadgroup for more details.
+        See [valkey.io](https://valkey.io/commands/xreadgroup) for more details.
 
         Note:
             When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
@@ -3466,7 +3472,7 @@ class CoreCommands(Protocol):
         This command should be called on pending messages so that such messages do not get processed again by the
         consumer group.
 
-        See https://valkey.io/commands/xack for more details.
+        See [valkey.io](https://valkey.io/commands/xack) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3503,7 +3509,7 @@ class CoreCommands(Protocol):
         """
         Returns stream message summary information for pending messages for the given consumer group.
 
-        See https://valkey.io/commands/xpending for more details.
+        See [valkey.io](https://valkey.io/commands/xpending) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3542,7 +3548,7 @@ class CoreCommands(Protocol):
         """
         Returns an extended form of stream message information for pending messages matching a given range of IDs.
 
-        See https://valkey.io/commands/xpending for more details.
+        See [valkey.io](https://valkey.io/commands/xpending) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3603,7 +3609,7 @@ class CoreCommands(Protocol):
         """
         Changes the ownership of a pending message.
 
-        See https://valkey.io/commands/xclaim for more details.
+        See [valkey.io](https://valkey.io/commands/xclaim) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3657,7 +3663,7 @@ class CoreCommands(Protocol):
         Changes the ownership of a pending message. This function returns a List with
         only the message/entry IDs, and is equivalent to using JUSTID in the Valkey API.
 
-        See https://valkey.io/commands/xclaim for more details.
+        See [valkey.io](https://valkey.io/commands/xclaim) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3713,7 +3719,7 @@ class CoreCommands(Protocol):
         """
         Transfers ownership of pending stream entries that match the specified criteria.
 
-        See https://valkey.io/commands/xautoclaim for more details.
+        See [valkey.io](https://valkey.io/commands/xautoclaim) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3800,7 +3806,7 @@ class CoreCommands(Protocol):
         argument to further specify that the return value should contain a list of claimed IDs without their
         field-value info.
 
-        See https://valkey.io/commands/xautoclaim for more details.
+        See [valkey.io](https://valkey.io/commands/xautoclaim) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3864,7 +3870,7 @@ class CoreCommands(Protocol):
         """
         Returns the list of all consumer groups and their attributes for the stream stored at `key`.
 
-        See https://valkey.io/commands/xinfo-groups for more details.
+        See [valkey.io](https://valkey.io/commands/xinfo-groups) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3909,7 +3915,7 @@ class CoreCommands(Protocol):
         Returns the list of all consumers and their attributes for the given consumer group of the stream stored at
         `key`.
 
-        See https://valkey.io/commands/xinfo-consumers for more details.
+        See [valkey.io](https://valkey.io/commands/xinfo-consumers) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3949,7 +3955,7 @@ class CoreCommands(Protocol):
         """
         Returns information about the stream stored at `key`. To get more detailed information, use `xinfo_stream_full`.
 
-        See https://valkey.io/commands/xinfo-stream for more details.
+        See [valkey.io](https://valkey.io/commands/xinfo-stream) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -3994,7 +4000,7 @@ class CoreCommands(Protocol):
         """
         Returns verbose information about the stream stored at `key`.
 
-        See https://valkey.io/commands/xinfo-stream for more details.
+        See [valkey.io](https://valkey.io/commands/xinfo-stream) for more details.
 
         Args:
             key (TEncodable): The key of the stream.
@@ -4093,7 +4099,7 @@ class CoreCommands(Protocol):
         Adds geospatial members with their positions to the specified sorted set stored at `key`.
         If a member is already a part of the sorted set, its position is updated.
 
-        See https://valkey.io/commands/geoadd for more details.
+        See [valkey.io](https://valkey.io/commands/geoadd) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4161,7 +4167,7 @@ class CoreCommands(Protocol):
         """
         Returns the distance between two members in the geospatial index stored at `key`.
 
-        See https://valkey.io/commands/geodist for more details.
+        See [valkey.io](https://valkey.io/commands/geodist) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4206,7 +4212,7 @@ class CoreCommands(Protocol):
         Returns the GeoHash bytes strings representing the positions of all the specified members in the sorted set stored at
         `key`.
 
-        See https://valkey.io/commands/geohash for more details.
+        See [valkey.io](https://valkey.io/commands/geohash) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4243,7 +4249,7 @@ class CoreCommands(Protocol):
         Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored
         at `key`.
 
-        See https://valkey.io/commands/geopos for more details.
+        See [valkey.io](https://valkey.io/commands/geopos) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4285,7 +4291,7 @@ class CoreCommands(Protocol):
         Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular
         area.
 
-        See https://valkey.io/commands/geosearch/ for more details.
+        See [valkey.io](https://valkey.io/commands/geosearch/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set representing geospatial data.
@@ -4485,7 +4491,7 @@ class CoreCommands(Protocol):
         Adds members with their scores to the sorted set stored at `key`.
         If a member is already a part of the sorted set, its score is updated.
 
-        See https://valkey.io/commands/zadd/ for more details.
+        See [valkey.io](https://valkey.io/commands/zadd/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4563,7 +4569,7 @@ class CoreCommands(Protocol):
         was 0.0).
         If `key` does not exist, a new sorted set with the specified member as its sole member is created.
 
-        See https://valkey.io/commands/zadd/ for more details.
+        See [valkey.io](https://valkey.io/commands/zadd/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4616,7 +4622,7 @@ class CoreCommands(Protocol):
         """
         Returns the cardinality (number of elements) of the sorted set stored at `key`.
 
-        See https://valkey.io/commands/zcard/ for more details.
+        See [valkey.io](https://valkey.io/commands/zcard/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4643,7 +4649,7 @@ class CoreCommands(Protocol):
         """
         Returns the number of members in the sorted set stored at `key` with scores between `min_score` and `max_score`.
 
-        See https://valkey.io/commands/zcount/ for more details.
+        See [valkey.io](https://valkey.io/commands/zcount/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4697,7 +4703,7 @@ class CoreCommands(Protocol):
         If `member` does not exist in the sorted set, it is added with `increment` as its score.
         If `key` does not exist, a new sorted set is created with the specified member as its sole member.
 
-        See https://valkey.io/commands/zincrby/ for more details.
+        See [valkey.io](https://valkey.io/commands/zincrby/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4731,7 +4737,7 @@ class CoreCommands(Protocol):
         If `count` is provided, up to `count` members with the highest scores are removed and returned.
         Otherwise, only one member with the highest score is removed and returned.
 
-        See https://valkey.io/commands/zpopmax for more details.
+        See [valkey.io](https://valkey.io/commands/zpopmax) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4771,10 +4777,10 @@ class CoreCommands(Protocol):
             1. When in cluster mode, all keys must map to the same hash slot.
             2. `BZPOPMAX` is the blocking variant of `ZPOPMAX`.
             3. `BZPOPMAX` is a client blocking command, see
-               https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
                for more details and best practices.
 
-        See https://valkey.io/commands/bzpopmax for more details.
+        See [valkey.io](https://valkey.io/commands/bzpopmax) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -4806,7 +4812,7 @@ class CoreCommands(Protocol):
         If `count` is provided, up to `count` members with the lowest scores are removed and returned.
         Otherwise, only one member with the lowest score is removed and returned.
 
-        See https://valkey.io/commands/zpopmin for more details.
+        See [valkey.io](https://valkey.io/commands/zpopmin) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4844,10 +4850,10 @@ class CoreCommands(Protocol):
             1. When in cluster mode, all keys must map to the same hash slot.
             2. `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
             3. `BZPOPMIN` is a client blocking command, see
-               https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
                for more details and best practices.
 
-        See https://valkey.io/commands/bzpopmin for more details.
+        See [valkey.io](https://valkey.io/commands/bzpopmin) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -4883,7 +4889,7 @@ class CoreCommands(Protocol):
 
         ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
 
-        See https://valkey.io/commands/zrange/ for more details.
+        See [valkey.io](https://valkey.io/commands/zrange/) for more details.
 
         To get the elements with their scores, see zrange_withscores.
 
@@ -4924,7 +4930,7 @@ class CoreCommands(Protocol):
         Returns the specified range of elements with their scores in the sorted set stored at `key`.
         Similar to ZRANGE but with a WITHSCORE flag.
 
-        See https://valkey.io/commands/zrange/ for more details.
+        See [valkey.io](https://valkey.io/commands/zrange/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4968,7 +4974,7 @@ class CoreCommands(Protocol):
         ZRANGESTORE can perform different types of range queries: by index (rank), by the score, or by lexicographical
         order.
 
-        See https://valkey.io/commands/zrangestore for more details.
+        See [valkey.io](https://valkey.io/commands/zrangestore) for more details.
 
         Note:
             When in Cluster mode, `source` and `destination` must map to the same hash slot.
@@ -5008,7 +5014,7 @@ class CoreCommands(Protocol):
         """
         Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
 
-        See https://valkey.io/commands/zrank for more details.
+        See [valkey.io](https://valkey.io/commands/zrank) for more details.
 
         To get the rank of `member` with its score, see `zrank_withscore`.
 
@@ -5040,7 +5046,7 @@ class CoreCommands(Protocol):
         Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
         lowest to highest.
 
-        See https://valkey.io/commands/zrank for more details.
+        See [valkey.io](https://valkey.io/commands/zrank) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5072,7 +5078,7 @@ class CoreCommands(Protocol):
 
         To get the rank of `member` with its score, see `zrevrank_withscore`.
 
-        See https://valkey.io/commands/zrevrank for more details.
+        See [valkey.io](https://valkey.io/commands/zrevrank) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5100,7 +5106,7 @@ class CoreCommands(Protocol):
         Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
         highest to lowest, starting from `0`.
 
-        See https://valkey.io/commands/zrevrank for more details.
+        See [valkey.io](https://valkey.io/commands/zrevrank) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5135,7 +5141,7 @@ class CoreCommands(Protocol):
         Removes the specified members from the sorted set stored at `key`.
         Specified members that are not a member of this set are ignored.
 
-        See https://valkey.io/commands/zrem/ for more details.
+        See [valkey.io](https://valkey.io/commands/zrem/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5166,7 +5172,7 @@ class CoreCommands(Protocol):
         """
         Removes all elements in the sorted set stored at `key` with a score between `min_score` and `max_score`.
 
-        See https://valkey.io/commands/zremrangebyscore/ for more details.
+        See [valkey.io](https://valkey.io/commands/zremrangebyscore/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5222,7 +5228,7 @@ class CoreCommands(Protocol):
         Removes all elements in the sorted set stored at `key` with a lexicographical order between `min_lex` and
         `max_lex`.
 
-        See https://valkey.io/commands/zremrangebylex/ for more details.
+        See [valkey.io](https://valkey.io/commands/zremrangebylex/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5272,7 +5278,7 @@ class CoreCommands(Protocol):
         Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
         These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
 
-        See https://valkey.io/commands/zremrangebyrank/ for more details.
+        See [valkey.io](https://valkey.io/commands/zremrangebyrank/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5312,7 +5318,7 @@ class CoreCommands(Protocol):
         Returns the number of members in the sorted set stored at `key` with lexicographical values between `min_lex` and
         `max_lex`.
 
-        See https://valkey.io/commands/zlexcount/ for more details.
+        See [valkey.io](https://valkey.io/commands/zlexcount/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5360,7 +5366,7 @@ class CoreCommands(Protocol):
         """
         Returns the score of `member` in the sorted set stored at `key`.
 
-        See https://valkey.io/commands/zscore/ for more details.
+        See [valkey.io](https://valkey.io/commands/zscore/) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5392,7 +5398,7 @@ class CoreCommands(Protocol):
         """
         Returns the scores associated with the specified `members` in the sorted set stored at `key`.
 
-        See https://valkey.io/commands/zmscore for more details.
+        See [valkey.io](https://valkey.io/commands/zmscore) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5420,7 +5426,7 @@ class CoreCommands(Protocol):
         Note:
             When in Cluster mode, all keys must map to the same hash slot.
 
-        See https://valkey.io/commands/zdiff for more details.
+        See [valkey.io](https://valkey.io/commands/zdiff) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -5452,7 +5458,7 @@ class CoreCommands(Protocol):
         Note:
             When in Cluster mode, all keys must map to the same hash slot.
 
-        See https://valkey.io/commands/zdiff for more details.
+        See [valkey.io](https://valkey.io/commands/zdiff) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -5487,7 +5493,7 @@ class CoreCommands(Protocol):
         Note:
             When in Cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
 
-        See https://valkey.io/commands/zdiffstore for more details.
+        See [valkey.io](https://valkey.io/commands/zdiffstore) for more details.
 
         Args:
             destination (TEncodable): The key for the resulting sorted set.
@@ -5525,7 +5531,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, all keys in `keys` must map to the same hash slot.
 
-        See https://valkey.io/commands/zinter/ for more details.
+        See [valkey.io](https://valkey.io/commands/zinter/) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -5560,7 +5566,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, all keys in `keys` must map to the same hash slot.
 
-        See https://valkey.io/commands/zinter/ for more details.
+        See [valkey.io](https://valkey.io/commands/zinter/) for more details.
 
         Args:
             keys (Union[List[TEncodable], List[Tuple[TEncodable, float]]]): The keys of the sorted sets with possible formats:
@@ -5603,7 +5609,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
-        See https://valkey.io/commands/zinterstore/ for more details.
+        See [valkey.io](https://valkey.io/commands/zinterstore/) for more details.
 
         Args:
             destination (TEncodable): The key of the destination sorted set.
@@ -5649,7 +5655,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, all keys in `keys` must map to the same hash slot.
 
-        See https://valkey.io/commands/zunion/ for more details.
+        See [valkey.io](https://valkey.io/commands/zunion/) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
@@ -5683,7 +5689,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, all keys in `keys` must map to the same hash slot.
 
-        See https://valkey.io/commands/zunion/ for more details.
+        See [valkey.io](https://valkey.io/commands/zunion/) for more details.
 
         Args:
             keys (Union[List[TEncodable], List[Tuple[TEncodable, float]]]): The keys of the sorted sets with possible formats:
@@ -5726,7 +5732,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
-        See https://valkey.io/commands/zunionstore/ for more details.
+        See [valkey.io](https://valkey.io/commands/zunionstore/) for more details.
 
         Args:
             destination (TEncodable): The key of the destination sorted set.
@@ -5764,7 +5770,7 @@ class CoreCommands(Protocol):
         """
         Returns a random member from the sorted set stored at 'key'.
 
-        See https://valkey.io/commands/zrandmember for more details.
+        See [valkey.io](https://valkey.io/commands/zrandmember) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5790,7 +5796,7 @@ class CoreCommands(Protocol):
         """
         Retrieves up to the absolute value of `count` random members from the sorted set stored at 'key'.
 
-        See https://valkey.io/commands/zrandmember for more details.
+        See [valkey.io](https://valkey.io/commands/zrandmember) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5824,7 +5830,7 @@ class CoreCommands(Protocol):
         Retrieves up to the absolute value of `count` random members along with their scores from the sorted set
         stored at 'key'.
 
-        See https://valkey.io/commands/zrandmember for more details.
+        See [valkey.io](https://valkey.io/commands/zrandmember) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -5869,7 +5875,7 @@ class CoreCommands(Protocol):
 
         The number of popped elements is the minimum from the sorted set's cardinality and `count`.
 
-        See https://valkey.io/commands/zmpop for more details.
+        See [valkey.io](https://valkey.io/commands/zmpop) for more details.
 
         Note:
             When in cluster mode, all `keys` must map to the same hash slot.
@@ -5921,12 +5927,12 @@ class CoreCommands(Protocol):
 
         `BZMPOP` is the blocking variant of `ZMPOP`.
 
-        See https://valkey.io/commands/bzmpop for more details.
+        See [valkey.io](https://valkey.io/commands/bzmpop) for more details.
 
         Notes:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BZMPOP` is a client blocking command, see
-               https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
                for more details and best practices.
 
         Args:
@@ -5972,7 +5978,7 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, all `keys` must map to the same hash slot.
 
-        See https://valkey.io/commands/zintercard for more details.
+        See [valkey.io](https://valkey.io/commands/zintercard) for more details.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets to intersect.
@@ -6006,7 +6012,7 @@ class CoreCommands(Protocol):
         """
         Returns the original source code of a script in the script cache.
 
-        See https://valkey.io/commands/script-show for more details.
+        See [valkey.io](https://valkey.io/commands/script-show) for more details.
 
         Args:
             sha1 (TEncodable): The SHA1 digest of the script.
@@ -6030,7 +6036,7 @@ class CoreCommands(Protocol):
         Creates a new structure if the `key` does not exist.
         When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
 
-        See https://valkey.io/commands/pfadd/ for more details.
+        See [valkey.io](https://valkey.io/commands/pfadd/) for more details.
 
         Args:
             key (TEncodable): The key of the HyperLogLog data structure to add elements into.
@@ -6058,7 +6064,7 @@ class CoreCommands(Protocol):
         Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
         calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
 
-        See https://valkey.io/commands/pfcount for more details.
+        See [valkey.io](https://valkey.io/commands/pfcount) for more details.
 
         Note:
             When in Cluster mode, all `keys` must map to the same hash slot.
@@ -6087,7 +6093,7 @@ class CoreCommands(Protocol):
         Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
         of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
 
-        See https://valkey.io/commands/pfmerge for more details.
+        See [valkey.io](https://valkey.io/commands/pfmerge) for more details.
 
         Note:
             When in Cluster mode, all keys in `source_keys` and `destination` must map to the same hash slot.
@@ -6121,7 +6127,7 @@ class CoreCommands(Protocol):
         Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
         optionally be provided to count the number of bits in a specific string interval.
 
-        See https://valkey.io/commands/bitcount for more details.
+        See [valkey.io](https://valkey.io/commands/bitcount) for more details.
 
         Args:
             key (TEncodable): The key for the string to count the set bits of.
@@ -6162,7 +6168,7 @@ class CoreCommands(Protocol):
         than `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to
         `value` and the preceding bits are set to `0`.
 
-        See https://valkey.io/commands/setbit for more details.
+        See [valkey.io](https://valkey.io/commands/setbit) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -6188,7 +6194,7 @@ class CoreCommands(Protocol):
         Returns the bit value at `offset` in the string value stored at `key`.
         `offset` should be greater than or equal to zero.
 
-        See https://valkey.io/commands/getbit for more details.
+        See [valkey.io](https://valkey.io/commands/getbit) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -6222,7 +6228,7 @@ class CoreCommands(Protocol):
         are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
         specified, `start=0` and `end=2` means to look at the first three bytes.
 
-        See https://valkey.io/commands/bitpos for more details.
+        See [valkey.io](https://valkey.io/commands/bitpos) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -6269,7 +6275,7 @@ class CoreCommands(Protocol):
         Perform a bitwise operation between multiple keys (containing string values) and store the result in the
         `destination`.
 
-        See https://valkey.io/commands/bitop for more details.
+        See [valkey.io](https://valkey.io/commands/bitop) for more details.
 
         Note:
             When in cluster mode, `destination` and all `keys` must map to the same hash slot.
@@ -6304,7 +6310,7 @@ class CoreCommands(Protocol):
         Reads or modifies the array of bits representing the string that is held at `key` based on the specified
         `subcommands`.
 
-        See https://valkey.io/commands/bitfield for more details.
+        See [valkey.io](https://valkey.io/commands/bitfield) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -6347,7 +6353,7 @@ class CoreCommands(Protocol):
         """
         Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
 
-        See https://valkey.io/commands/bitfield_ro for more details.
+        See [valkey.io](https://valkey.io/commands/bitfield_ro) for more details.
 
         Args:
             key (TEncodable): The key of the string.
@@ -6373,7 +6379,7 @@ class CoreCommands(Protocol):
         """
         Returns the internal encoding for the Valkey object stored at `key`.
 
-        See https://valkey.io/commands/object-encoding for more details.
+        See [valkey.io](https://valkey.io/commands/object-encoding) for more details.
 
         Args:
             key (TEncodable): The `key` of the object to get the internal encoding of.
@@ -6397,7 +6403,7 @@ class CoreCommands(Protocol):
         """
         Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
 
-        See https://valkey.io/commands/object-freq for more details.
+        See [valkey.io](https://valkey.io/commands/object-freq) for more details.
 
         Args:
             key (TEncodable): The key of the object to get the logarithmic access frequency counter of.
@@ -6421,7 +6427,7 @@ class CoreCommands(Protocol):
         """
         Returns the time in seconds since the last access to the value stored at `key`.
 
-        See https://valkey.io/commands/object-idletime for more details.
+        See [valkey.io](https://valkey.io/commands/object-idletime) for more details.
 
         Args:
             key (TEncodable): The key of the object to get the idle time of.
@@ -6444,7 +6450,7 @@ class CoreCommands(Protocol):
         """
         Returns the reference count of the object stored at `key`.
 
-        See https://valkey.io/commands/object-refcount for more details.
+        See [valkey.io](https://valkey.io/commands/object-refcount) for more details.
 
         Args:
             key (TEncodable): The key of the object to get the reference count of.
@@ -6467,7 +6473,7 @@ class CoreCommands(Protocol):
         """
         Returns a random element from the set value stored at 'key'.
 
-        See https://valkey.io/commands/srandmember for more details.
+        See [valkey.io](https://valkey.io/commands/srandmember) for more details.
 
         Args:
             key (TEncodable): The key from which to retrieve the set member.
@@ -6494,7 +6500,7 @@ class CoreCommands(Protocol):
         """
         Returns one or more random elements from the set value stored at 'key'.
 
-        See https://valkey.io/commands/srandmember for more details.
+        See [valkey.io](https://valkey.io/commands/srandmember) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -6528,7 +6534,7 @@ class CoreCommands(Protocol):
         """
         Get the value of `key` and optionally set its expiration. `GETEX` is similar to `GET`.
 
-        See https://valkey.io/commands/getex for more details.
+        See [valkey.io](https://valkey.io/commands/getex) for more details.
 
         Args:
             key (TEncodable): The key to get.
@@ -6568,7 +6574,7 @@ class CoreCommands(Protocol):
         """
         Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
 
-        See https://valkey.io/commands/dump for more details.
+        See [valkey.io](https://valkey.io/commands/dump) for more details.
 
         Args:
             key (TEncodable): The `key` to serialize.
@@ -6603,7 +6609,7 @@ class CoreCommands(Protocol):
         Create a `key` associated with a `value` that is obtained by deserializing the provided
         serialized `value` obtained via `dump`.
 
-        See https://valkey.io/commands/restore for more details.
+        See [valkey.io](https://valkey.io/commands/restore) for more details.
 
         Note:
             `IDLETIME` and `FREQ` modifiers cannot be set at the same time.
@@ -6657,7 +6663,7 @@ class CoreCommands(Protocol):
         """
         Iterates incrementally over a set.
 
-        See https://valkey.io/commands/sscan for more details.
+        See [valkey.io](https://valkey.io/commands/sscan) for more details.
 
         Args:
             key (TEncodable): The key of the set.
@@ -6719,7 +6725,7 @@ class CoreCommands(Protocol):
         """
         Iterates incrementally over a sorted set.
 
-        See https://valkey.io/commands/zscan for more details.
+        See [valkey.io](https://valkey.io/commands/zscan) for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -6805,7 +6811,7 @@ class CoreCommands(Protocol):
         """
         Iterates incrementally over a hash.
 
-        See https://valkey.io/commands/hscan for more details.
+        See [valkey.io](https://valkey.io/commands/hscan) for more details.
 
         Args:
             key (TEncodable): The key of the set.
@@ -6889,7 +6895,7 @@ class CoreCommands(Protocol):
         """
         Invokes a previously loaded function.
 
-        See https://valkey.io/commands/fcall/ for more details.
+        See [valkey.io](https://valkey.io/commands/fcall/) for more details.
 
         Note:
             When in cluster mode, all keys in `keys` must map to the same hash slot.
@@ -6932,7 +6938,7 @@ class CoreCommands(Protocol):
         """
         Invokes a previously loaded read-only function.
 
-        See https://valkey.io/commands/fcall_ro for more details.
+        See [valkey.io](https://valkey.io/commands/fcall_ro) for more details.
 
         Note:
             When in cluster mode, all keys in `keys` must map to the same hash slot.
@@ -6973,7 +6979,7 @@ class CoreCommands(Protocol):
         will only execute commands if the watched keys are not modified before execution of the
         transaction.
 
-        See https://valkey.io/commands/watch for more details.
+        See [valkey.io](https://valkey.io/commands/watch) for more details.
 
         Note:
             In cluster mode, if keys in `key_value_map` map to different hash slots,
@@ -7034,7 +7040,7 @@ class CoreCommands(Protocol):
             1. No pubsub subscriptions are configured for the client
             2. Callback is configured with the pubsub subsciptions
 
-        See https://valkey.io/docs/topics/pubsub/ for more details.
+        See [valkey.io](https://valkey.io/docs/topics/pubsub/) for more details.
 
         Returns:
             PubSubMsg: The next pubsub message
@@ -7052,7 +7058,7 @@ class CoreCommands(Protocol):
             1. No pubsub subscriptions are configured for the client
             2. Callback is configured with the pubsub subsciptions
 
-        See https://valkey.io/docs/topics/pubsub/ for more details.
+        See [valkey.io](https://valkey.io/docs/topics/pubsub/) for more details.
 
         Returns:
             Optional[PubSubMsg]: The next pubsub message or None
@@ -7077,7 +7083,7 @@ class CoreCommands(Protocol):
             For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
             from left to right, the longest common set of characters is composed of the first "f" and then the "o".
 
-        See https://valkey.io/commands/lcs for more details.
+        See [valkey.io](https://valkey.io/commands/lcs) for more details.
 
         Args:
             key1 (TEncodable): The key that stores the first string.
@@ -7118,7 +7124,7 @@ class CoreCommands(Protocol):
             For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
             from left to right, the longest common set of characters is composed of the first "f" and then the "o".
 
-        See https://valkey.io/commands/lcs for more details.
+        See [valkey.io](https://valkey.io/commands/lcs) for more details.
 
         Args:
             key1 (TEncodable): The key that stores the first string value.
@@ -7159,7 +7165,7 @@ class CoreCommands(Protocol):
             For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
             from left to right, the longest common set of characters is composed of the first "f" and then the "o".
 
-        See https://valkey.io/commands/lcs for more details.
+        See [valkey.io](https://valkey.io/commands/lcs) for more details.
 
         Args:
             key1 (TEncodable): The key that stores the first string value.
@@ -7249,7 +7255,7 @@ class CoreCommands(Protocol):
         Returns the index or indexes of element(s) matching `element` in the `key` list. If no match is found,
         None is returned.
 
-        See https://valkey.io/commands/lpos for more details.
+        See [valkey.io](https://valkey.io/commands/lpos) for more details.
 
         Args:
             key (TEncodable): The name of the list.
@@ -7304,7 +7310,7 @@ class CoreCommands(Protocol):
         Lists the currently active channels.
         The command is routed to all nodes, and aggregates the response to a single array.
 
-        See https://valkey.io/commands/pubsub-channels for more details.
+        See [valkey.io](https://valkey.io/commands/pubsub-channels) for more details.
 
         Args:
             pattern (Optional[TEncodable]): A glob-style pattern to match active channels.
@@ -7340,7 +7346,7 @@ class CoreCommands(Protocol):
 
             The command is routed to all nodes, and aggregates the response the sum of all pattern subscriptions.
 
-        See https://valkey.io/commands/pubsub-numpat for more details.
+        See [valkey.io](https://valkey.io/commands/pubsub-numpat) for more details.
 
         Returns:
             int: The number of unique patterns.
@@ -7363,7 +7369,7 @@ class CoreCommands(Protocol):
             The command is routed to all nodes, and aggregates the response to a single map of the channels and their number
             of subscriptions.
 
-        See https://valkey.io/commands/pubsub-numsub for more details.
+        See [valkey.io](https://valkey.io/commands/pubsub-numsub) for more details.
 
         Args:
             channels (Optional[List[TEncodable]]): The list of channels to query for the number of subscribers.
@@ -7407,7 +7413,7 @@ class CoreCommands(Protocol):
             must map to the same hash slot. The use of `by_pattern` and `get_patterns` in cluster mode is supported
             only since Valkey version 8.0.
 
-        See https://valkey.io/commands/sort for more details.
+        See [valkey.io](https://valkey.io/commands/sort) for more details.
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
@@ -7478,7 +7484,7 @@ class CoreCommands(Protocol):
         sorted elements.
         This command is routed depending on the client's `ReadFrom` strategy.
 
-        See https://valkey.io/commands/sort for more details.
+        See [valkey.io](https://valkey.io/commands/sort) for more details.
 
         Note:
             When in cluster mode, `key`, and any patterns specified in `by_pattern` or `get_patterns`
@@ -7557,7 +7563,7 @@ class CoreCommands(Protocol):
         and store the result in a new key.
         To get the sort result without storing it into a key, see `sort`.
 
-        See https://valkey.io/commands/sort for more details.
+        See [valkey.io](https://valkey.io/commands/sort) for more details.
 
         Note:
             When in cluster mode, `key`, `destination`, and any patterns specified in `by_pattern` or `get_patterns`

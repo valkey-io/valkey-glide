@@ -115,21 +115,13 @@ Before starting this step, make sure you've installed all software requirements.
     make install-build-tools
     ```
 
-3. If on CentOS or Ubuntu, add the glide-rs library to LD_LIBRARY_PATH:
-
-    ```bash
-    # Replace "<path to valkey-glide>" with the path to the valkey-glide root, eg "$HOME/Projects/valkey-glide"
-    GLIDE_ROOT_FOLDER_PATH=<path to valkey-glide>
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GLIDE_ROOT_FOLDER_PATH/go/target/release/deps/
-    ```
-
-4. Build the Go wrapper:
+3. Build the Go wrapper:
 
     ```bash
     make build
     ```
 
-5. Run tests:
+4. Run tests:
     1. Ensure that you have installed valkey-server and valkey-cli on your host. You can find the Valkey installation guide at the following link: [Valkey Installation Guide](https://valkey.io/topics/installation/).
     2. Execute the following command from the go folder:
 
@@ -137,13 +129,10 @@ Before starting this step, make sure you've installed all software requirements.
         go test -race ./...
         ```
 
-6. Install Go development tools with:
+5. Install Go development tools with:
 
     ```bash
-    # For go1.22:
     make install-dev-tools
-    # For go1.20:
-    make install-dev-tools-go1.20
     ```
 
 ### Test
@@ -207,10 +196,7 @@ Development on the Go wrapper may involve changes in either the Go or Rust code.
 Run from the main `/go` folder
 
 ```bash
-# For go1.22:
 make install-dev-tools
-# For go1.22:
-make install-dev-tools-go1.22
 
 make lint
 ```

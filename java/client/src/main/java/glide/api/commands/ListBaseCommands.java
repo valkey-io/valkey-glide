@@ -10,8 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 
 /**
- * Supports commands and transactions for the "List Commands" group for standalone and cluster
- * clients.
+ * Supports commands for the "List Commands" group for standalone and cluster clients.
  *
  * @see <a href="https://valkey.io/commands/?group=list">List Commands</a>
  */

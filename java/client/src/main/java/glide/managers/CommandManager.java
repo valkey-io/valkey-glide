@@ -13,10 +13,13 @@ import command_request.CommandRequestOuterClass.ScriptInvocationPointers;
 import command_request.CommandRequestOuterClass.SimpleRoutes;
 import command_request.CommandRequestOuterClass.SlotTypes;
 import command_request.CommandRequestOuterClass.UpdateConnectionPassword;
-import glide.api.models.ClusterTransaction;
+import glide.api.models.Batch;
+import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
-import glide.api.models.Transaction;
+import glide.api.models.commands.batch.BaseBatchOptions;
+import glide.api.models.commands.batch.BatchOptions;
+import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
@@ -135,16 +138,17 @@ public class CommandManager {
     }
 
     /**
-     * Build a Transaction and send.
+     * Build a Batch and send.
      *
-     * @param transaction Transaction request with multiple commands
+     * @param batch Batch request with multiple commands
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
-    public <T> CompletableFuture<T> submitNewTransaction(
-            Transaction transaction, GlideExceptionCheckedFunction<Response, T> responseHandler) {
-
-        CommandRequest.Builder command = prepareCommandRequest(transaction);
+    public <T> CompletableFuture<T> submitNewBatch(
+            Batch batch,
+            Optional<BatchOptions> options,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        CommandRequest.Builder command = prepareCommandRequest(batch, options);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -186,19 +190,18 @@ public class CommandManager {
     }
 
     /**
-     * Build a Cluster Transaction and send.
+     * Build a Cluster Batch and send.
      *
-     * @param transaction Transaction request with multiple commands
-     * @param route Transaction routing parameters
+     * @param batch Batch request with multiple commands
+     * @param options Batch options
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
-    public <T> CompletableFuture<T> submitNewTransaction(
-            ClusterTransaction transaction,
-            Optional<Route> route,
+    public <T> CompletableFuture<T> submitNewBatch(
+            ClusterBatch batch,
+            Optional<ClusterBatchOptions> options,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-
-        CommandRequest.Builder command = prepareCommandRequest(transaction, route);
+        CommandRequest.Builder command = prepareCommandRequest(batch, options);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -306,14 +309,26 @@ public class CommandManager {
     }
 
     /**
-     * Build a protobuf transaction request object with routing options.
+     * Build a protobuf Batch request object.
      *
-     * @param transaction Valkey transaction with commands
+     * @param batch Valkey batch with commands
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected CommandRequest.Builder prepareCommandRequest(Transaction transaction) {
-        return CommandRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+    protected CommandRequest.Builder prepareCommandRequest(
+            Batch batch, Optional<BatchOptions> options) {
+        CommandRequest.Builder builder = CommandRequest.newBuilder();
+
+        if (options.isPresent()) {
+            BatchOptions opts = options.get();
+            var batchBuilder = prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
+
+            builder.setBatch(batchBuilder.build());
+        } else {
+            builder.setBatch(batch.getProtobufBatch().build());
+        }
+
+        return builder;
     }
 
     /**
@@ -377,20 +392,41 @@ public class CommandManager {
     }
 
     /**
-     * Build a protobuf transaction request object with routing options.
+     * Build a protobuf Batch request object with options.
      *
-     * @param transaction Valkey transaction with commands
-     * @param route Command routing parameters
+     * @param batch Valkey batch with commands
+     * @param options Batch options
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
     protected CommandRequest.Builder prepareCommandRequest(
-            ClusterTransaction transaction, Optional<Route> route) {
+            ClusterBatch batch, Optional<ClusterBatchOptions> options) {
 
-        CommandRequest.Builder builder =
-                CommandRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+        CommandRequest.Builder builder = CommandRequest.newBuilder();
 
-        return route.isPresent() ? prepareCommandRequestRoute(builder, route.get()) : builder;
+        if (options.isPresent()) {
+            ClusterBatchOptions opts = options.get();
+            CommandRequestOuterClass.Batch.Builder batchBuilder =
+                    prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
+
+            if (opts.getRetryStrategy() != null) {
+                if (batchBuilder.getIsAtomic()) {
+                    throw new RequestException("Retry strategy is not supported for atomic batches.");
+                }
+                batchBuilder.setRetryServerError(opts.getRetryStrategy().isRetryServerError());
+                batchBuilder.setRetryConnectionError(opts.getRetryStrategy().isRetryConnectionError());
+            }
+
+            builder.setBatch(batchBuilder.build());
+
+            if (opts.getRoute() != null) {
+                return prepareCommandRequestRoute(builder, opts.getRoute());
+            }
+        } else {
+            builder.setBatch(batch.getProtobufBatch().build());
+        }
+
+        return builder;
     }
 
     /**
@@ -467,6 +503,19 @@ public class CommandManager {
 
         return CommandRequest.newBuilder()
                 .setSingleCommand(commandBuilder.setRequestType(requestType).build());
+    }
+
+    private CommandRequestOuterClass.Batch.Builder prepareCommandRequestBatchOptions(
+            CommandRequestOuterClass.Batch.Builder batchBuilder, BaseBatchOptions options) {
+        if (options.getTimeout() != null) {
+            batchBuilder.setTimeout(options.getTimeout());
+        }
+
+        if (options.getRaiseOnError() != null) {
+            batchBuilder.setRaiseOnError(options.getRaiseOnError());
+        }
+
+        return batchBuilder;
     }
 
     private CommandRequest.Builder prepareCommandRequestRoute(

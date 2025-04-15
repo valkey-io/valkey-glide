@@ -29,25 +29,13 @@ install-build-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
 	cargo install cbindgen
 
-install-dev-tools-go1.20:
-	go install github.com/vakenbolt/go-test-report@v0.9.3
-	go install mvdan.cc/gofumpt@v0.4.0
-	go install github.com/segmentio/golines@v0.11.0
-	go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
-
-install-dev-tools-go1.22:
+install-dev-tools:
 	go install github.com/vakenbolt/go-test-report@v0.9.3
 	go install mvdan.cc/gofumpt@v0.6.0
 	go install github.com/segmentio/golines@v0.12.2
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 
-install-dev-tools: install-dev-tools-go1.22
-
-install-tools-go1.20: install-build-tools install-dev-tools-go1.20
-
-install-tools-go1.22: install-build-tools install-dev-tools-go1.22
-
-install-tools: install-tools-go1.22
+install-tools: install-build-tools install-dev-tools
 
 build: build-glide-client generate-protobuf
 	go build ./...
@@ -62,20 +50,22 @@ clean:
 	rm -f lib.h
 	rm -f benchmarks/benchmarks
 	rm -rf protobuf
-	rm -rf target
+	rm -rf $(GLIDE_FFI_FOLDER)/target
 	rm -rf reports
 
 
 # Release build
-build-glide-client: BUILD_FLAGS=--release
+build-glide-client: BUILD_FLAGS=--release --crate-type staticlib
+build-glide-client: TARGET_SUBDIR=release
 build-glide-client: build-glide-ffi
 
 # Debug build (no --release flag)
-build-glide-client-debug: BUILD_FLAGS=
+build-glide-client-debug: BUILD_FLAGS=--crate-type staticlib
+build-glide-client-debug: TARGET_SUBDIR=debug
 build-glide-client-debug: build-glide-ffi
 
 libglide_ffi:
-	cd $(GLIDE_FFI_FOLDER) && cargo build $(BUILD_FLAGS)
+	cd $(GLIDE_FFI_FOLDER) && cargo rustc $(BUILD_FLAGS)
 
 build-glide-ffi: gen-c-bindings
 
@@ -83,8 +73,8 @@ gen-c-bindings: libglide_ffi
 	cd $(GLIDE_FFI_FOLDER) && \
 	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)/lib.h --lang c
 	echo $(TARGET_FOLDER)
-	$(STRIP_CMD) $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a
-	cp $(GLIDE_FFI_FOLDER)/target/release/libglide_ffi.a $(TARGET_FOLDER)
+	$(STRIP_CMD) $(GLIDE_FFI_FOLDER)/target/$(TARGET_SUBDIR)/libglide_ffi.a
+	cp $(GLIDE_FFI_FOLDER)/target/$(TARGET_SUBDIR)/libglide_ffi.a $(TARGET_FOLDER)
 
 generate-protobuf:
 	rm -rf protobuf
@@ -121,12 +111,10 @@ format:
 	golines -w --shorten-comments -m 127 .
 
 # unit tests - skip complete IT suite (including MT), and examples
-# due to a bug in go 1.20 and 1.21, we need to use -run flag to get -skip flag to work
 unit-test:
 	mkdir -p reports
 	set -o pipefail; \
-	LD_LIBRARY_PATH=$(shell find . -name libglide_ffi.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
-	go test -v ./... -skip 'Example|TestGlideTestSuite' -run Test $(if $(test-filter), -run $(test-filter)) \
+	go test -v ./... -skip 'Example|TestGlideTestSuite' $(if $(test-filter), -run $(test-filter)) \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
 
 # example tests - skip complete IT suite (including MT)
@@ -140,7 +128,6 @@ example-test:
 	CLUSTER_OUTPUT=$$(python3 ../utils/cluster_manager.py start --cluster-mode); \
 	GLIDE_CLUSTER_NODES=$$(echo "$$CLUSTER_OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
 	echo "GLIDE_CLUSTER_NODES=$$GLIDE_CLUSTER_NODES"; \
-	LD_LIBRARY_PATH=$(shell find . -name libglide_ffi.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v ./api -skip Test $(if $(test-filter), -run $(test-filter)) -clusternodes $$GLIDE_CLUSTER_NODES -standalonenode $$GLIDE_NODE \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/api \
 	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
@@ -156,7 +143,6 @@ modules-test: __it
 __it:
 	mkdir -p reports
 	set -o pipefail; \
-	LD_LIBRARY_PATH=$(shell find . -name libglide_ffi.a|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v ./integTest/... \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \

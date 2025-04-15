@@ -194,8 +194,9 @@ export type AdvancedGlideClientConfiguration =
 
 /**
  * Client used for connection to standalone servers.
+ * Use {@link createClient} to request a client.
  *
- * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone|Valkey Glide Wiki}.
+ * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone | Valkey Glide Wiki}.
  */
 export class GlideClient extends BaseClient {
     /**
@@ -218,14 +219,16 @@ export class GlideClient extends BaseClient {
 
         return configuration;
     }
+
     /**
-     * Creates a new `GlideClient` instance and establishes a connection to a standalone Valkey Glide server.
+     * Creates a new `GlideClient` instance and establishes a connection to a standalone Valkey server.
      *
      * @param options - The configuration options for the client, including server addresses, authentication credentials, TLS settings, database selection, reconnection strategy, and Pub/Sub subscriptions.
      * @returns A promise that resolves to a connected `GlideClient` instance.
      *
      * @remarks
-     * Use this static method to create and connect a `GlideClient` to a standalone Valkey Glide server. The client will automatically handle connection establishment, including any authentication and TLS configurations.
+     * Use this static method to create and connect a `GlideClient` to a standalone Valkey server.
+     * The client will automatically handle connection establishment, including any authentication and TLS configurations.
      *
      * @example
      * ```typescript
