@@ -25,11 +25,11 @@ func (suite *PubSubTestSuite) TestSubscriptionReconnection() {
 		WithSubscription(api.ExactChannelMode, "test-reconnect-channel").
 		WithCallback(callback, nil)
 
-	subscriber := suite.createClientWithSubscriptions("subscriber", subscriptionConfig)
+	subscriber := suite.createDefaultNamedClientWithSubscriptions("subscriber", subscriptionConfig)
 	assert.NotNil(suite.T(), subscriber)
 
 	// Create a publisher client
-	publisher := suite.createDefaultClient("publisher")
+	publisher := suite.createDefaultNamedClient("publisher")
 	assert.NotNil(suite.T(), publisher)
 
 	// Allow time for subscription to be established
