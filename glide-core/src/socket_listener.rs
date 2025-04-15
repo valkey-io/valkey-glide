@@ -37,6 +37,7 @@ use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
 use tokio::task;
 use tokio_util::task::LocalPoolHandle;
+use uuid::Uuid;
 use ClosingReason::*;
 use PipeListeningResult::*;
 
@@ -829,8 +830,17 @@ pub fn get_socket_path_from_name(socket_name: String) -> String {
 
 /// Get the socket path as a string
 pub fn get_socket_path() -> String {
-    let socket_name = format!("{}-{}", SOCKET_FILE_NAME, std::process::id());
-    get_socket_path_from_name(socket_name)
+    // Ensure the socket name is unique by appending the process ID and a random UUID
+    // to the socket name. The UUID is used to ensure that the socket name is unique for situations in which PID can be resused such as with dockers.
+    static SOCKET_NAME: Lazy<String> = Lazy::new(|| {
+        format!(
+            "{}-{}-{}.sock",
+            SOCKET_FILE_NAME,
+            std::process::id(),
+            Uuid::new_v4(),
+        )
+    });
+    get_socket_path_from_name(SOCKET_NAME.clone())
 }
 
 /// This function is exposed only for the sake of testing with a nonstandard `socket_path`.
