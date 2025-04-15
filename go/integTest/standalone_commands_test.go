@@ -958,7 +958,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
         assert.Equal(suite.T(), "OK", deleteResult)
 
         // delete missing lib returns a error
-        deleteResult, err = client.FunctionDelete("anotherLib")
+        _, err = client.FunctionDelete("anotherLib")
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 

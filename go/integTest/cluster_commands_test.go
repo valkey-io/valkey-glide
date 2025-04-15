@@ -1500,7 +1500,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
         assert.Equal(suite.T(), "OK", deleteResult)
 
         // delete missing lib returns a error
-        deleteResult, err = client.FunctionDeleteWithRoute("anotherLib", route)
+        _, err = client.FunctionDeleteWithRoute("anotherLib", route)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 	// Test with all primaries route
@@ -1555,7 +1555,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
         assert.Equal(suite.T(), "OK", deleteResult)
 
         // delete missing lib returns a error
-        deleteResult, err = client.FunctionDeleteWithRoute("anotherLib", route)
+        _, err = client.FunctionDeleteWithRoute("anotherLib", route)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
@@ -1618,7 +1618,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
         assert.Equal(suite.T(), "OK", deleteResult)
 
         // delete missing lib returns a error
-        deleteResult, err = client.FunctionDelete("anotherLib")
+        _, err = client.FunctionDelete("anotherLib")
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
