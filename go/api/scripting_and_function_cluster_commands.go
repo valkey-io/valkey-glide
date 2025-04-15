@@ -36,4 +36,12 @@ type ScriptingAndFunctionClusterCommands interface {
 	FunctionStats() (map[string]FunctionStatsResult, error)
 
 	FunctionStatsWithRoute(route options.RouteOption) (ClusterValue[FunctionStatsResult], error)
+
+	InvokeScript(script *options.Script) (ClusterValue[any], error)
+
+	InvokeScriptWithOptions(script *options.Script, scriptOptions *options.ScriptOptions) (ClusterValue[any], error)
+
+	InvokeScriptWithRoute(script *options.Script, route options.RouteOption) (ClusterValue[any], error)
+
+	InvokeScriptWithOptionsAndRoute(script *options.Script, scriptOptions *options.ScriptOptions, route options.RouteOption) (ClusterValue[any], error)
 }
