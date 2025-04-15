@@ -1418,6 +1418,33 @@ func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[st
 	return mapResult, nil
 }
 
+func handleMapOfStringMapResponse(response *C.struct_CommandResponse) (map[string]map[string]string, error) {
+	defer C.free_command_response(response)
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := mapConverter[map[string]string]{
+		next:     mapConverter[string]{},
+		canBeNil: false,
+	}.convert(data)
+	if err != nil {
+		return nil, err
+	}
+	mapResult, ok := result.(map[string]map[string]string)
+	if !ok {
+		return nil, &errors.RequestError{Msg: "Unexpected conversion result type"}
+	}
+
+	return mapResult, nil
+}
+
 func handleTimeClusterResponse(response *C.struct_CommandResponse) (ClusterValue[[]string], error) {
 	// Handle multi-node response
 	if err := checkResponseType(response, C.Map, true); err == nil {
