@@ -25,7 +25,8 @@ import (
 
 type Transaction struct {
 	*baseClient // Embed baseClient to inherit all methods like Get
-	commands    []Cmder
+	*GlideClient
+	commands []Cmder
 }
 
 type Cmder interface {
@@ -62,12 +63,6 @@ func (t *Transaction) ExecuteCommand(requestType C.RequestType, args []string) (
 
 // Exec executes all queued commands as a transaction
 func (t *Transaction) Exec() ([]any, error) {
-	// Add MULTI and EXEC to the command queue
-	//t.commands = append([]Cmder{NewMultiCommand()}, t.commands...)
-	// t.commands = append(t.commands, &GenericCommand{C.Get, []string{"apples"}})
-	//t.commands = append(t.commands, NewExecCommand())
-	// Execute all commands
-	fmt.Println("FunctionFlus exec before")
 	result, err := t.baseClient.executeTransactionCommand(t.commands) // Use BaseClient for execution
 	if err != nil {
 		return nil, err
@@ -80,7 +75,6 @@ func (client *baseClient) executeTransactionCommand(commands []Cmder) (*C.Comman
 }
 
 func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (*C.struct_CommandResponse, error) {
-	fmt.Println("ExecuteTransaction entered")
 	if len(cmds) == 0 {
 		return nil, &errors.RequestError{Msg: "Transaction must contain at least one command"}
 	}
@@ -98,7 +92,6 @@ func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (
 		defer C.free(cArgsArray)
 
 		cArgs := (*[1 << 30]*C.char)(cArgsArray)[:len(cmd.Args()):len(cmd.Args())]
-		fmt.Println("cmd.Args len", len(cmd.Args()))
 
 		for j, arg := range cmd.Args() {
 			cArgs[j] = C.CString(arg)
@@ -106,14 +99,12 @@ func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (
 		}
 		//Check cArgs
 		var cArgsPtr **C.char
-		fmt.Println("cArgs value", cArgs)
+
 		if len(cmd.Args()) > 0 {
 			if len(cArgs) > 0 {
-				fmt.Println("&cArgs[0]", (**C.char)(unsafe.Pointer(&cArgs[0])))
 				cArgsPtr = (**C.char)(unsafe.Pointer(&cArgs[0]))
 			}
 		}
-		fmt.Println("cArgsPtr Final value", cArgsPtr)
 		cCmders[i] = C.Cmder{
 			request_type: C.enum_RequestType(cmd.Name()),
 			args_count:   C.uintptr_t(len(cmd.Args())),
@@ -161,7 +152,6 @@ func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (
 		return nil, &errors.ClosingError{Msg: "Transaction failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
-	fmt.Println("FunctionFlus exec result1")
 	C.execute_transaction(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
@@ -183,7 +173,6 @@ func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (
 	if payload.error != nil {
 		return nil, payload.error
 	}
-	fmt.Println("FunctionFlus exec result")
 	return payload.value, nil
 }
 
@@ -195,8 +184,9 @@ func NewTransaction(client GlideClientCommands) *Transaction {
 	}
 
 	tx := &Transaction{
-		baseClient: glideCli.baseClient, // Access baseClient directly
-		commands:   []Cmder{},
+		baseClient:  glideCli.baseClient, // Access baseClient directly
+		GlideClient: glideCli,
+		commands:    []Cmder{},
 	}
 
 	// Set the executor to the transaction instance itself
@@ -214,7 +204,6 @@ func (client *baseClient) Watch(keys []string) (string, error) {
 }
 
 func (client *baseClient) Unwatch() (string, error) {
-	fmt.Println("Unwatch")
 	result, err := client.executeCommand(C.UnWatch, []string{})
 	if err != nil {
 		return DefaultStringResponse, err

@@ -3381,6 +3381,9 @@ func (client *baseClient) PfMerge(destination string, sourceKeys []string) (stri
 	if err != nil {
 		return DefaultStringResponse, err
 	}
+	if result == nil {
+		return DefaultStringResponse, err
+	}
 
 	return handleStringResponse(result)
 }
@@ -3629,12 +3632,13 @@ func (client *baseClient) XReadWithOptions(
 	if err != nil {
 		return nil, err
 	}
-
 	result, err := client.executor.ExecuteCommand(C.XRead, args)
 	if err != nil {
 		return nil, err
 	}
-
+	if result == nil {
+		return make(map[string]map[string][][]string), err
+	}
 	return handleXReadResponse(result)
 }
 
@@ -3702,7 +3706,9 @@ func (client *baseClient) XReadGroupWithOptions(
 	if err != nil {
 		return nil, err
 	}
-
+	if result == nil {
+		return make(map[string]map[string][][]string), err
+	}
 	return handleXReadGroupResponse(result)
 }
 
@@ -4865,6 +4871,9 @@ func (client *baseClient) XPending(key string, group string) (XPendingSummary, e
 	if err != nil {
 		return XPendingSummary{}, err
 	}
+	if result == nil {
+		return XPendingSummary{}, err
+	}
 
 	return handleXPendingSummaryResponse(result)
 }
@@ -4951,6 +4960,9 @@ func (client *baseClient) XGroupCreateWithOptions(
 	args := append([]string{key, group, id}, optionArgs...)
 	result, err := client.executor.ExecuteCommand(C.XGroupCreate, args)
 	if err != nil {
+		return DefaultStringResponse, err
+	}
+	if result == nil {
 		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
@@ -5628,6 +5640,9 @@ func (client *baseClient) XGroupCreateConsumer(
 	if err != nil {
 		return false, err
 	}
+	if result == nil {
+		return false, err
+	}
 	return handleBoolResponse(result)
 }
 
@@ -6154,6 +6169,9 @@ func (client *baseClient) XRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
+	if result == nil {
+		return make([]XRangeResponse, 0, 0), err
+	}
 	return handleXRangeResponse(result)
 }
 
@@ -6225,6 +6243,10 @@ func (client *baseClient) XRevRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
+	if result == nil {
+		return make([]XRangeResponse, 0, 0), err
+	}
+
 	return handleXRevRangeResponse(result)
 }
 
