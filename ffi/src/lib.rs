@@ -628,6 +628,10 @@ pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
     // This will bring the strong count down to 0 once all client requests are done.
     unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const ClientAdapter) };
+
+    if client_adapter_ptr.is_null() {
+        // TODO: log this error
+    };
 }
 
 /// Deallocates a `ConnectionResponse`.
