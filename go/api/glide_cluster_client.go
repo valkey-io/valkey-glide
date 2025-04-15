@@ -1470,7 +1470,7 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script *options.Script, 
 	}
 
 	if route.Route != nil && route.Route.IsMultiNode() {
-		data, err := handleStringToAnyMapResponse(result)
+		data, err := handleStringToAnyMapResponse(response)
 		if err != nil {
 			return createEmptyClusterValue[any](), err
 		}
@@ -1510,7 +1510,7 @@ func (client *GlideClusterClient) InvokeScriptWithOptionsAndRoute(script *option
 	}
 
 	if route.Route != nil && route.Route.IsMultiNode() {
-		data, err := handleStringToAnyMapResponse(result)
+		data, err := handleStringToAnyMapResponse(response)
 		if err != nil {
 			return createEmptyClusterValue[any](), err
 		}
