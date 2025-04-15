@@ -95,8 +95,6 @@ public class TestConfiguration : IDisposable
         TestConsoleWriteLine($"Server version = {SERVER_VERSION}");
     }
 
-    ~TestConfiguration() => Dispose();
-
     public void Dispose()
     {
         // Stop all

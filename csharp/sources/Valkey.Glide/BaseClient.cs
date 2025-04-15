@@ -181,7 +181,6 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         _ = Task.Run(() => _messageContainer.GetMessage((int)index).SetException(Create(errType, str)));
     }
 
-    ~BaseClient() => Dispose();
     #endregion private methods
 
     #region private fields

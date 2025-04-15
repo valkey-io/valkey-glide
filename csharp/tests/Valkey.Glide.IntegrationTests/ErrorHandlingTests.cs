@@ -18,7 +18,7 @@ public class ErrorHandlingTests
     [Fact]
     public async Task ErrorIfTimedOut()
     {
-        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+        using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
         TestContext.Current.TestOutputHelper?.WriteLine($"{client} {DateTime.Now:O}");
         _ = await Assert.ThrowsAsync<TimeoutException>(async () =>
             await client.CustomCommand(["debug", "sleep", "1"])
