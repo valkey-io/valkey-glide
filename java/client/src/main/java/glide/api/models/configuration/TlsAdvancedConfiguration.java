@@ -23,6 +23,13 @@ public class TlsAdvancedConfiguration {
      * connection to ignore the certificate's validity and succeed.
      *
      * <p>This is useful for when CNAMEs are used to point to a server/cluster.
+     *
+     * <p>`useInsecureTLS` cannot be enabled while `useTLS` is enabled inside the
+     * BaseClientConfiguration, and will throw an ConfigurationError exception
+     *
+     * <p>NOTE: While there may be cases where bypassing certificate validation is acceptable for
+     * testing purposes, this option is discouraged for production use to avoid potential security
+     * risks like man-in-the-middle attacks.
      */
     @Builder.Default private final boolean useInsecureTLS = false;
 }

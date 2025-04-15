@@ -435,18 +435,11 @@ public class ConnectionTests {
     @ParameterizedTest
     @CsvSource(value = {"true, true", "true, false", "false, true", "false, false"})
     public void test_connection_tls_mode(String clusterMode, String insecureTls) {
-        BaseClient client =
-                createClientWithTLSMode(Boolean.getBoolean(clusterMode), Boolean.getBoolean(insecureTls));
-
-        try {
+        try (BaseClient client =
+                createClientWithTLSMode(Boolean.getBoolean(clusterMode), Boolean.getBoolean(insecureTls))) {
             assertEquals("OK", client.set("key", "val").get());
             assertEquals("val", client.get("key").get());
             assertEquals(1, client.del(new String[] {"key"}).get());
-        } finally {
-            // Clean up the main client
-            if (client != null) {
-                client.close();
-            }
         }
     }
 }

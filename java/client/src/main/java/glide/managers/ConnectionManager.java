@@ -214,9 +214,12 @@ public class ConnectionManager {
 
         connectionRequestBuilder.setConnectionTimeout(advancedConfiguration.getConnectionTimeout());
 
-        if (connectionRequestBuilder.getTlsMode() == TlsMode.SecureTls
-                && advancedConfiguration.getTlsAdvancedConfiguration().isUseInsecureTLS()) {
-            connectionRequestBuilder.setTlsMode(TlsMode.InsecureTls);
+        if (advancedConfiguration.getTlsAdvancedConfiguration().isUseInsecureTLS()) {
+            if (connectionRequestBuilder.getTlsMode() == TlsMode.NoTls) {
+                throw new ConfigurationError("`insecureTlS` cannot be enabled when  `useTLS` is disabled.");
+            } else {
+                connectionRequestBuilder.setTlsMode(TlsMode.InsecureTls);
+            }
         }
 
         return connectionRequestBuilder;

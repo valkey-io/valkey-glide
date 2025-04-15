@@ -6,10 +6,7 @@ import static glide.api.models.configuration.NodeAddress.DEFAULT_HOST;
 import static glide.api.models.configuration.NodeAddress.DEFAULT_PORT;
 import static glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode.EXACT;
 import static glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode.PATTERN;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -513,6 +510,28 @@ public class ConnectionManagerTest {
         // verify
         assertNull(result.get());
         verify(channel).connect(eq(expectedProtobufConnectionRequest));
+    }
+
+    @SneakyThrows
+    @Test
+    public void connection_request_use_insecure_tls_throws_when_no_tls() {
+        // setup
+        GlideClusterClientConfiguration glideClusterClientConfiguration =
+                GlideClusterClientConfiguration.builder()
+                        .useTLS(false)
+                        .advancedConfiguration(
+                                AdvancedGlideClusterClientConfiguration.builder()
+                                        .tlsAdvancedConfiguration(
+                                                TlsAdvancedConfiguration.builder().useInsecureTLS(true).build())
+                                        .build())
+                        .build();
+
+        // verify
+        Exception ex =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> connectionManager.connectToValkey(glideClusterClientConfiguration));
+        assertEquals("`insecureTlS` cannot be enabled when  `useTLS` is disabled.", ex.getMessage());
     }
 
     private ConnectionRequestOuterClass.ReadFrom mapReadFrom(ReadFrom readFrom) {
