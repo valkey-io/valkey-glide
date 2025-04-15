@@ -24,7 +24,7 @@ public class TlsAdvancedConfiguration {
      *
      * <p>This is useful for when CNAMEs are used to point to a server/cluster.
      *
-     * <p>`useInsecureTLS` cannot be enabled while `useTLS` is enabled inside the
+     * <p>`useInsecureTLS` cannot be enabled while `useTLS` is disabled inside the
      * BaseClientConfiguration, and will throw an ConfigurationError exception
      *
      * <p>NOTE: While there may be cases where bypassing certificate validation is acceptable for
