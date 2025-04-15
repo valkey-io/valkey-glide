@@ -14,7 +14,7 @@ import (
 // TestBasicPubSubWithGlideClient tests basic publish and subscribe functionality with GlideClient
 func (suite *PubSubTestSuite) TestBasicPubSubWithGlideClient() {
 	// Create a publisher client
-	publisher := suite.createDefaultClient("publisher")
+	publisher := suite.createDefaultNamedClient("publisher")
 
 	// Create a subscriber client with subscription configuration
 	messageReceived := make(chan *api.PubSubMessage, 1)
@@ -30,7 +30,7 @@ func (suite *PubSubTestSuite) TestBasicPubSubWithGlideClient() {
 		WithSubscription(api.ExactChannelMode, "test-channel").
 		WithCallback(callback, &messageContext)
 
-	suite.createClientWithSubscriptions("subscriber", subscriptionConfig)
+	suite.createDefaultNamedClientWithSubscriptions("subscriber", subscriptionConfig)
 
 	// Give some time for subscription to be established
 	time.Sleep(100 * time.Millisecond)
@@ -38,7 +38,7 @@ func (suite *PubSubTestSuite) TestBasicPubSubWithGlideClient() {
 	// Publish a message
 	testMessage := "hello world"
 	result, err := publisher.Publish("test-channel", testMessage)
-	// result, err := publisher.CustomCommand([]string{"PUBLISH", "test-channel", testMessage})
+
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), result)
 
@@ -61,7 +61,7 @@ func (suite *PubSubTestSuite) TestBasicPubSubWithGlideClient() {
 // TestMultipleSubscribersWithGlideClient tests message delivery to multiple subscribers
 func (suite *PubSubTestSuite) TestMultipleSubscribersWithGlideClient() {
 	// Create a publisher client
-	publisher := suite.createDefaultClient("publisher")
+	publisher := suite.createDefaultNamedClient("publisher")
 
 	// Create channels for message tracking
 	messages1 := make(chan *api.PubSubMessage, 10)
@@ -85,8 +85,8 @@ func (suite *PubSubTestSuite) TestMultipleSubscribersWithGlideClient() {
 		WithSubscription(api.ExactChannelMode, "test-channel-multi").
 		WithCallback(callback2, nil)
 
-	suite.createClientWithSubscriptions("subscriber1", subscriptionConfig1)
-	suite.createClientWithSubscriptions("subscriber2", subscriptionConfig2)
+	suite.createDefaultNamedClientWithSubscriptions("subscriber1", subscriptionConfig1)
+	suite.createDefaultNamedClientWithSubscriptions("subscriber2", subscriptionConfig2)
 
 	// Give time for subscriptions to be established
 	time.Sleep(500 * time.Millisecond)
@@ -175,7 +175,7 @@ func (suite *PubSubTestSuite) TestUnsubscribeWithGlideClient() {
 	suite.T().Skip("Skipping unsubscribe test due to Rust implementation limitation - not yet implemented in lib.rs:574")
 
 	// Create a publisher client
-	publisher := suite.createDefaultClient("publisher")
+	publisher := suite.createDefaultNamedClient("publisher")
 
 	// Create a subscriber client with subscription configuration
 	messageReceived := make(chan *api.PubSubMessage, 10)
@@ -187,7 +187,7 @@ func (suite *PubSubTestSuite) TestUnsubscribeWithGlideClient() {
 		WithSubscription(api.ExactChannelMode, "test-channel-unsub").
 		WithCallback(callback, nil)
 
-	subscriber := suite.createClientWithSubscriptions("subscriber", subscriptionConfig)
+	subscriber := suite.createDefaultNamedClientWithSubscriptions("subscriber", subscriptionConfig)
 
 	// Give some time for subscription to be established
 	time.Sleep(100 * time.Millisecond)
@@ -230,7 +230,7 @@ func (suite *PubSubTestSuite) TestUnsubscribeWithGlideClient() {
 // TestPatternSubscribeWithGlideClient tests message pattern matching with PSUBSCRIBE
 func (suite *PubSubTestSuite) TestPatternSubscribeWithGlideClient() {
 	// Create a publisher client
-	publisher := suite.createDefaultClient("publisher")
+	publisher := suite.createDefaultNamedClient("publisher")
 
 	// Create a subscriber client with pattern subscription
 	messageReceived := make(chan *api.PubSubMessage, 10)
@@ -246,7 +246,7 @@ func (suite *PubSubTestSuite) TestPatternSubscribeWithGlideClient() {
 		WithSubscription(api.PatternChannelMode, "test-pattern-*").
 		WithCallback(callback, nil)
 
-	suite.createClientWithSubscriptions("subscriber", subscriptionConfig)
+	suite.createDefaultNamedClientWithSubscriptions("subscriber", subscriptionConfig)
 
 	// Give some time for subscription to be established
 	time.Sleep(100 * time.Millisecond)

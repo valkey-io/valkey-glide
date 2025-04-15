@@ -16,13 +16,12 @@ import (
 // PubSubTestSuite is a test suite specifically for PubSub functionality
 type PubSubTestSuite struct {
 	suite.Suite
-	standaloneHosts []api.NodeAddress
-	clusterHosts    []api.NodeAddress
-	tls             bool
-	serverVersion   string
-	clients         map[string]api.GlideClientCommands
-	clusterClients  map[string]api.GlideClusterClientCommands
-	coverageCleanup func()
+	standaloneHosts     []api.NodeAddress
+	clusterHosts        []api.NodeAddress
+	tls                 bool
+	serverVersion       string
+	namedClients        map[string]api.GlideClientCommands
+	namedClusterClients map[string]api.GlideClusterClientCommands
 }
 
 // Implement PubSubServerVersionGetter interface
@@ -39,9 +38,6 @@ func (suite *PubSubTestSuite) GetTLS() bool {
 }
 
 func (suite *PubSubTestSuite) SetupSuite() {
-	// Setup coverage reporting
-	suite.coverageCleanup = SetupCoverage(suite.T())
-
 	// Initialize the test suite directly instead of trying to reuse GlideTestSuite
 	// Stop cluster in case previous test run was interrupted or crashed and didn't stop.
 	// If an error occurs, we ignore it in case the servers actually were stopped before running this.
@@ -94,29 +90,24 @@ func (suite *PubSubTestSuite) SetupSuite() {
 	suite.T().Logf("Detected server version = %s", suite.serverVersion)
 
 	// Initialize client maps
-	suite.clients = make(map[string]api.GlideClientCommands)
-	suite.clusterClients = make(map[string]api.GlideClusterClientCommands)
+	suite.namedClients = make(map[string]api.GlideClientCommands)
+	suite.namedClusterClients = make(map[string]api.GlideClusterClientCommands)
 }
 
 func (suite *PubSubTestSuite) TearDownSuite() {
-	// Cleanup coverage reporting
-	if suite.coverageCleanup != nil {
-		suite.coverageCleanup()
-	}
-
 	pubsubRunClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, false)
 }
 
 func (suite *PubSubTestSuite) TearDownTest() {
-	for _, client := range suite.clients {
+	for _, client := range suite.namedClients {
 		client.Close()
 	}
-	suite.clients = make(map[string]api.GlideClientCommands)
+	suite.namedClients = make(map[string]api.GlideClientCommands)
 
-	for _, client := range suite.clusterClients {
+	for _, client := range suite.namedClusterClients {
 		client.Close()
 	}
-	suite.clusterClients = make(map[string]api.GlideClusterClientCommands)
+	suite.namedClusterClients = make(map[string]api.GlideClusterClientCommands)
 }
 
 func (suite *PubSubTestSuite) defaultClientConfig() *api.GlideClientConfiguration {
@@ -126,27 +117,27 @@ func (suite *PubSubTestSuite) defaultClientConfig() *api.GlideClientConfiguratio
 		WithRequestTimeout(5000)
 }
 
-func (suite *PubSubTestSuite) createClient(name string, config *api.GlideClientConfiguration) api.GlideClientCommands {
+func (suite *PubSubTestSuite) createNamedClient(name string, config *api.GlideClientConfiguration) api.GlideClientCommands {
 	client, err := api.NewGlideClient(config)
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
 
-	suite.clients[name] = client
+	suite.namedClients[name] = client
 	return client
 }
 
-func (suite *PubSubTestSuite) createDefaultClient(name string) api.GlideClientCommands {
+func (suite *PubSubTestSuite) createDefaultNamedClient(name string) api.GlideClientCommands {
 	config := suite.defaultClientConfig()
-	return suite.createClient(name, config)
+	return suite.createNamedClient(name, config)
 }
 
-func (suite *PubSubTestSuite) createClientWithSubscriptions(
+func (suite *PubSubTestSuite) createDefaultNamedClientWithSubscriptions(
 	name string,
 	subscriptionConfig *api.StandaloneSubscriptionConfig,
 ) api.GlideClientCommands {
 	config := suite.defaultClientConfig().
 		WithSubscriptionConfig(subscriptionConfig)
-	return suite.createClient(name, config)
+	return suite.createNamedClient(name, config)
 }
 
 func TestPubSubTestSuite(t *testing.T) {

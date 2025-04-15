@@ -14,7 +14,7 @@ import (
 // and processes published messages with correct context and channel information
 func (suite *PubSubTestSuite) TestMessageHandlerReceivesPublishedMessages() {
 	// Create a publisher client
-	publisher := suite.createDefaultClient("publisher")
+	publisher := suite.createDefaultNamedClient("publisher")
 
 	// Create message tracking channels
 	messageReceived := make(chan bool, 1)
@@ -52,7 +52,7 @@ func (suite *PubSubTestSuite) TestMessageHandlerReceivesPublishedMessages() {
 		WithCallback(callback, ctx)
 
 	// Create subscriber with the subscription configuration
-	suite.createClientWithSubscriptions("subscriber", subscriptionConfig)
+	suite.createDefaultNamedClientWithSubscriptions("subscriber", subscriptionConfig)
 
 	// Allow time for subscription to be established
 	time.Sleep(100 * time.Millisecond)
@@ -85,7 +85,7 @@ func (suite *PubSubTestSuite) TestMessageHandlerReceivesPublishedMessages() {
 // properly receive and process messages from multiple subscribed channels
 func (suite *PubSubTestSuite) TestMessageHandlerWithMultipleChannels() {
 	// Create a publisher client
-	publisher := suite.createDefaultClient("publisher")
+	publisher := suite.createDefaultNamedClient("publisher")
 
 	// Create channels to track messages from different channels
 	messages := make(chan *api.PubSubMessage, 2)
@@ -125,7 +125,7 @@ func (suite *PubSubTestSuite) TestMessageHandlerWithMultipleChannels() {
 		WithCallback(callback, ctx)
 
 	// Create subscriber with the subscription configuration
-	suite.createClientWithSubscriptions("subscriber", subscriptionConfig)
+	suite.createDefaultNamedClientWithSubscriptions("subscriber", subscriptionConfig)
 
 	// Allow time for subscriptions to be established
 	time.Sleep(100 * time.Millisecond)
@@ -183,7 +183,7 @@ func (suite *PubSubTestSuite) TestMessageHandlerWithMultipleChannels() {
 // processes messages from pattern-based subscriptions
 func (suite *PubSubTestSuite) TestMessageHandlerWithPatternSubscriptions() {
 	// Create a publisher client
-	publisher := suite.createDefaultClient("publisher")
+	publisher := suite.createDefaultNamedClient("publisher")
 
 	// Create channels to track messages for different patterns
 	messagesByPattern := make(map[string][]*api.PubSubMessage)
@@ -225,7 +225,7 @@ func (suite *PubSubTestSuite) TestMessageHandlerWithPatternSubscriptions() {
 		WithCallback(callback, ctx)
 
 	// Create subscriber with the subscription configuration
-	suite.createClientWithSubscriptions("subscriber", subscriptionConfig)
+	suite.createDefaultNamedClientWithSubscriptions("subscriber", subscriptionConfig)
 
 	// Allow time for subscriptions to be established
 	time.Sleep(100 * time.Millisecond)
@@ -299,7 +299,7 @@ func (suite *PubSubTestSuite) TestMessageHandlerWithPatternSubscriptions() {
 // errors and panics in the callback function
 func (suite *PubSubTestSuite) TestMessageHandlerErrorHandling() {
 	// Create a publisher client
-	publisher := suite.createDefaultClient("publisher")
+	publisher := suite.createDefaultNamedClient("publisher")
 
 	// Create channels to track message processing
 	messageProcessed := make(chan bool, 1)
@@ -340,7 +340,7 @@ func (suite *PubSubTestSuite) TestMessageHandlerErrorHandling() {
 		WithCallback(callback, ctx)
 
 	// Create subscriber with the subscription configuration
-	suite.createClientWithSubscriptions("subscriber", subscriptionConfig)
+	suite.createDefaultNamedClientWithSubscriptions("subscriber", subscriptionConfig)
 
 	// Allow time for subscription to be established
 	time.Sleep(100 * time.Millisecond)
