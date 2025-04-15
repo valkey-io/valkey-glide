@@ -693,7 +693,7 @@ func ExampleGlideClusterClient_FunctionDeleteWithRoute() {
 	}
 
 	// Delete function with route
-	result, err := client.FunctionDelete("mylib", opts)
+	result, err := client.FunctionDeleteWithRoute("mylib", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
