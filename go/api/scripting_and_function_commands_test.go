@@ -645,7 +645,7 @@ func ExampleGlideClient_FunctionDelete() {
 	}
 
 	// Delete function
-	result, err := client.FunctionDelete()
+	result, err := client.FunctionDelete("mylib")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -667,7 +667,7 @@ func ExampleGlideClusterClient_FunctionDelete() {
 	}
 
 	// Delete function
-	result, err := client.FunctionDelete()
+	result, err := client.FunctionDelete("mylib")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -693,7 +693,7 @@ func ExampleGlideClusterClient_FunctionDeleteWithRoute() {
 	}
 
 	// Delete function with route
-	result, err := client.FunctionDelete(opts)
+	result, err := client.FunctionDelete("mylib", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
