@@ -188,11 +188,9 @@ public class ConnectionManager {
             connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
         }
 
-        if (configuration.getAdvancedConfiguration() != null) {
-            connectionRequestBuilder =
-                    setupConnectionRequestBuilderAdvancedBaseConfiguration(
-                            connectionRequestBuilder, configuration.getAdvancedConfiguration());
-        }
+        connectionRequestBuilder =
+                setupConnectionRequestBuilderAdvancedBaseConfiguration(
+                        connectionRequestBuilder, configuration.getAdvancedConfiguration());
 
         return connectionRequestBuilder;
     }
@@ -202,14 +200,21 @@ public class ConnectionManager {
      * AdvancedBaseClientConfiguration}.
      *
      * @param connectionRequestBuilder The builder for the {@link ConnectionRequest}.
-     * @param configuration The advanced configuration settings.
+     * @param advancedConfiguration The advanced configuration settings.
      * @return The updated {@link ConnectionRequest.Builder}.
      */
     private ConnectionRequest.Builder setupConnectionRequestBuilderAdvancedBaseConfiguration(
             ConnectionRequest.Builder connectionRequestBuilder,
-            AdvancedBaseClientConfiguration configuration) {
-        if (configuration.getConnectionTimeout() != null) {
-            connectionRequestBuilder.setConnectionTimeout(configuration.getConnectionTimeout());
+            AdvancedBaseClientConfiguration advancedConfiguration) {
+
+        connectionRequestBuilder.setConnectionTimeout(advancedConfiguration.getConnectionTimeout());
+
+        if (advancedConfiguration.getTlsAdvancedConfiguration().isUseInsecureTLS()) {
+            if (connectionRequestBuilder.getTlsMode() == TlsMode.NoTls) {
+                throw new ConfigurationError("`insecureTlS` cannot be enabled when  `useTLS` is disabled.");
+            } else {
+                connectionRequestBuilder.setTlsMode(TlsMode.InsecureTls);
+            }
         }
 
         return connectionRequestBuilder;
@@ -243,11 +248,9 @@ public class ConnectionManager {
             connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
         }
 
-        if (configuration.getAdvancedConfiguration() != null) {
-            connectionRequestBuilder =
-                    setupConnectionRequestBuilderAdvancedBaseConfiguration(
-                            connectionRequestBuilder, configuration.getAdvancedConfiguration());
-        }
+        connectionRequestBuilder =
+                setupConnectionRequestBuilderAdvancedBaseConfiguration(
+                        connectionRequestBuilder, configuration.getAdvancedConfiguration());
 
         return connectionRequestBuilder;
     }
