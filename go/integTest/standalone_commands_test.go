@@ -1017,3 +1017,139 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 		assert.Equal(suite.T(), int64(0), nodeStats.Engines["LUA"].FunctionCount)
 	}
 }
+
+// Helper method to skip tests on versions lower than specified
+func (suite *GlideTestSuite) skipOnVersionLowerThan(version, reason string) {
+	if suite.serverVersion < version {
+		suite.T().Skipf("Skipping test: %s", reason)
+	}
+}
+
+func (suite *GlideTestSuite) TestFunctionKillNoWrite() {
+	suite.skipOnVersionLowerThan("7.0.0", "This feature added in version 7")
+
+	client := suite.defaultClient()
+	libName := "functionKill_no_write"
+	funcName := "deadlock"
+	key := libName
+	code := createLuaLibWithLongRunningFunction(libName, funcName, 6, true)
+
+	// Flush all functions
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Load the lib
+	result, err = client.FunctionLoad(code, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	testConfig := suite.defaultClientConfig().WithRequestTimeout(10000)
+	testClient := suite.client(testConfig)
+	defer testClient.Close()
+
+	// Channel to signal when function is killed
+	killed := make(chan bool)
+
+	// Start a goroutine to kill the function
+	go func() {
+		defer close(killed)
+		timeout := time.After(4 * time.Second)
+		killTicker := time.NewTicker(100 * time.Millisecond) // interval of 100ms for kill attempts
+		defer killTicker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				killed <- false
+				return
+			case <-killTicker.C:
+				result, err = client.FunctionKill()
+				if err == nil {
+					// A successful kill returns "OK"
+					killed <- result == "OK"
+					return
+				}
+			}
+		}
+	}()
+
+	// Call the function - this should block until killed and return a script kill error
+	_, err = testClient.FCallWithKeysAndArgs(funcName, []string{key}, []string{})
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "script killed"))
+
+	// Wait for kill confirmation
+	functionKilled := <-killed
+	assert.True(suite.T(), functionKilled, "Function Kill did not return OK")
+}
+
+func (suite *GlideTestSuite) TestFunctionKillWriteFunction() {
+	suite.skipOnVersionLowerThan("7.0.0", "This feature added in version 7")
+
+	client := suite.defaultClient()
+	libName := "functionKill_write_function"
+	funcName := "deadlock_write_function"
+	key := libName
+	code := createLuaLibWithLongRunningFunction(libName, funcName, 6, false)
+
+	// Flush all functions
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Load the lib
+	result, err = client.FunctionLoad(code, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	testConfig := suite.defaultClientConfig().WithRequestTimeout(10000)
+	testClient := suite.client(testConfig)
+	defer testClient.Close()
+
+	// Channel to signal when unkillable is found
+	unkillable := make(chan bool)
+
+	// Start a goroutine to attempt killing the function
+	go func() {
+		defer close(unkillable)
+		timeout := time.After(4 * time.Second)
+		killTicker := time.NewTicker(100 * time.Millisecond)
+		defer killTicker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				unkillable <- false
+				return
+			case <-killTicker.C:
+				_, err = client.FunctionKill()
+				if err != nil && strings.Contains(strings.ToLower(err.Error()), "unkillable") {
+					unkillable <- true
+					return
+				}
+			}
+		}
+	}()
+
+	// Calling the function should block until timeout since it's a write function
+	_, err = testClient.FCallWithKeysAndArgs(funcName, []string{key}, []string{})
+	assert.NoError(suite.T(), err)
+
+	// Wait for unkillable confirmation
+	foundUnkillable := <-unkillable
+	assert.True(suite.T(), foundUnkillable, "Function should have been unkillable")
+
+	// Wait for the function to complete
+	time.Sleep(6 * time.Second)
+}

@@ -1487,3 +1487,35 @@ func (client *GlideClusterClient) FunctionStatsWithRoute(
 	// For multi-node routes, return the map of node addresses to FunctionStatsResult
 	return createClusterMultiValue[FunctionStatsResult](stats), nil
 }
+
+// Kills a function that is currently executing.
+//
+// `FUNCTION KILL` terminates read-only functions only.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	`OK` if function is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/function-kill/
+func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(
+		C.FunctionKill,
+		[]string{},
+		route.Route,
+	)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
