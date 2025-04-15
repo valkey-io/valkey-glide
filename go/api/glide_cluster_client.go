@@ -1409,41 +1409,6 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []
 	return client.FCallReadOnlyWithArgsWithRoute(function, args, options.RouteOption{})
 }
 
-// InvokeScript executes a Lua script on the server.
-//
-// Parameters:
-//
-//	script - The script to execute.
-//
-// Return value:
-//
-//	The result of the script execution.
-//
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/eval/
-func (client *GlideClusterClient) InvokeScript(script *options.Script) (ClusterValue[any], error) {
-	return client.InvokeScriptWithRoute(script, options.RouteOption{})
-}
-
-// InvokeScriptWithOptions executes a Lua script on the server with additional options.
-//
-// Parameters:
-//
-//	script - The script to execute.
-//	scriptOptions - Options for script execution including keys and arguments.
-//
-// Return value:
-//
-//	The result of the script execution.
-//
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/eval/
-func (client *GlideClusterClient) InvokeScriptWithOptions(script *options.Script, scriptOptions *options.ScriptOptions) (ClusterValue[any], error) {
-	return client.InvokeScriptWithOptionsAndRoute(script, scriptOptions, options.RouteOption{})
-}
-
 // InvokeScriptWithRoute executes a Lua script on the server with routing information.
 //
 // Parameters:
