@@ -10,4 +10,6 @@ package api
 // [valkey.io]: https://valkey.io/commands/?group=scripting
 type ScriptingAndFunctionStandaloneCommands interface {
 	FunctionStats() (map[string]FunctionStatsResult, error)
+
+	FunctionDelete(libName string) (string, error)
 }
