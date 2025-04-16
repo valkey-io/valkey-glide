@@ -277,3 +277,4 @@ dump.rdb
 
 # benchmark file with local configuration
 install_and_test_local_env.sh
+*/data/

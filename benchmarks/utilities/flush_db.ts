@@ -21,7 +21,7 @@ async function flush_database(
 ): Promise<void> {
     const clientClass = isCluster ? GlideClusterClient : GlideClient;
     const client = await clientClass.createClient({
-        addresses: [{ host, port: port}],
+        addresses: [{ host, port: port }],
         useTLS: tls,
     });
     await client.flushall();
