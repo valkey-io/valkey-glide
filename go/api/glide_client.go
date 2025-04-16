@@ -516,6 +516,9 @@ func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.Sca
 	if err != nil {
 		return DefaultStringResponse, nil, err
 	}
+	if res == nil {
+		return DefaultStringResponse, nil, err
+	}
 	return handleScanResponse(res)
 }
 
@@ -544,6 +547,9 @@ func (client *GlideClient) ConfigRewrite() (string, error) {
 func (client *GlideClient) RandomKey() (Result[string], error) {
 	result, err := client.executor.ExecuteCommand(C.RandomKey, []string{})
 	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	if result == nil {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)

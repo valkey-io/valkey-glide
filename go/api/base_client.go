@@ -515,6 +515,9 @@ func (client *baseClient) SetWithOptions(key string, value string, options optio
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
+	if result == nil {
+		return CreateNilStringResult(), err
+	}
 
 	return handleStringOrNilResponse(result)
 }
@@ -565,6 +568,9 @@ func (client *baseClient) GetEx(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
+	if result == nil {
+		return CreateNilStringResult(), err
+	}
 
 	return handleStringOrNilResponse(result)
 }
@@ -591,6 +597,10 @@ func (client *baseClient) GetExWithOptions(key string, options options.GetExOpti
 
 	result, err := client.executor.ExecuteCommand(C.GetEx, append([]string{key}, optionArgs...))
 	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	if result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -1027,6 +1037,9 @@ func (client *baseClient) GetDel(key string) (Result[string], error) {
 
 	result, err := client.executor.ExecuteCommand(C.GetDel, []string{key})
 	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	if result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -5532,6 +5545,7 @@ func (client *baseClient) SortReadOnlyWithOptions(key string, options options.So
 	if err != nil {
 		return nil, err
 	}
+
 	return handleStringOrNilArrayResponse(result)
 }
 
