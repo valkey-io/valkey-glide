@@ -27,7 +27,7 @@ public static class MainClass
         public int DataSize { get; set; } = 100;
 
         [Option('c', "concurrentTasks", Required = false, HelpText = "The number of concurrent operations to perform.", Default = new[] { 1, 10, 100, 1000 })]
-        public IEnumerable<int> ConcurrentTasks { get; set; } = new List<int>();
+        public IEnumerable<int> ConcurrentTasks { get; set; } = [];
 
         [Option('l', "clients", Required = false, HelpText = "Which clients should run")]
         public string ClientsToRun { get; set; } = "all";
@@ -39,7 +39,7 @@ public static class MainClass
         public ushort Port { get; set; } = 6379;
 
         [Option('C', "clientCount", Required = false, HelpText = "Number of clients to run concurrently", Default = new[] { 1 })]
-        public IEnumerable<int> ClientCount { get; set; } = new List<int>();
+        public IEnumerable<int> ClientCount { get; set; } = [];
 
         [Option('t', "tls", HelpText = "Should benchmark a TLS server")]
         public bool Tls { get; set; } = false;
@@ -96,7 +96,7 @@ public static class MainClass
         }
     }
 
-    private static double CalculateLatency(IEnumerable<double> latency_list, double percentile_point) => Math.Round(Percentile(latency_list.ToArray(), percentile_point), 2);
+    private static double CalculateLatency(IEnumerable<double> latency_list, double percentile_point) => Math.Round(Percentile([.. latency_list], percentile_point), 2);
 
     private static void PrintResults(string resultsFile)
     {

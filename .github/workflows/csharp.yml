@@ -100,6 +100,8 @@ jobs:
                   dotnet-version: | # install latest dotnet too to use language features
                       9
                       ${{ matrix.dotnet }}
+              env:
+                  DOTNET_INSTALL_DIR: ~/.dotnet
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
