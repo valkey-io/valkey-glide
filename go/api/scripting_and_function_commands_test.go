@@ -883,3 +883,64 @@ func ExampleGlideClusterClient_InvokeScriptWithOptionsAndRoute() {
 	// Code: 200
 	// Data: test data
 }
+
+func ExampleGlideClient_ScriptExists() {
+	client := getExampleGlideClient()
+
+	// Invoke a script
+	script := options.NewScript("return 'Hello World!'", false)
+	client.InvokeScript(script)
+
+	response, err := client.ScriptExists([]string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println(response)
+
+	// Cleanup
+	script.Close()
+
+	// Output: [true]
+}
+
+func ExampleGlideClusterClient_ScriptExists() {
+	client := getExampleGlideClusterClient()
+
+	// Invoke a script
+	script := options.NewScript("return 'Hello World!'", false)
+	client.InvokeScript(script)
+
+	response, err := client.ScriptExists([]string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println(response)
+
+	// Cleanup
+	script.Close()
+
+	// Output: [true]
+}
+
+func ExampleGlideClusterClient_ScriptExistsWithRoute() {
+	client := getExampleGlideClusterClient()
+	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
+
+	// Invoke a script
+	script := options.NewScript("return 'Hello World!'", false)
+	client.InvokeScriptWithRoute(script, route)
+
+	response, err := client.ScriptExistsWithRoute([]string{script.GetHash()}, route)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println(response)
+
+	// Cleanup
+	script.Close()
+
+	// Output: [true]
+}

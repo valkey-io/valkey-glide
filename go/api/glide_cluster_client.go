@@ -1663,3 +1663,58 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 	}
 	return handleStringResponse(result)
 }
+
+// Checks existence of scripts in the script cache by their SHA1 digest.
+//
+// Note:
+//
+//	The command will be routed to all primary nodes by default.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	sha1s - SHA1 digests of Lua scripts to be checked.
+//
+// Return value:
+//
+//	An array of boolean values indicating the existence of each script.
+//
+// [valkey.io]: https://valkey.io/commands/script-exists
+func (client *GlideClusterClient) ScriptExists(
+	sha1s []string,
+) ([]bool, error) {
+	response, err := client.executeCommand(C.ScriptExists, sha1s)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleBoolArrayResponse(response)
+}
+
+// Checks existence of scripts in the script cache by their SHA1 digest.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	sha1s - SHA1 digests of Lua scripts to be checked.
+//	route - Specifies the routing configuration for the command. The client will route the
+//		    command to the nodes defined by `route`.
+//
+// Return value:
+//
+//	An array of boolean values indicating the existence of each script.
+//
+// [valkey.io]: https://valkey.io/commands/script-exists
+func (client *GlideClusterClient) ScriptExistsWithRoute(
+	sha1s []string,
+	route options.RouteOption,
+) ([]bool, error) {
+	response, err := client.executeCommandWithRoute(C.ScriptExists, sha1s, route.Route)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleBoolArrayResponse(response)
+}

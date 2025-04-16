@@ -7837,3 +7837,27 @@ func (client *baseClient) FunctionKill() (string, error) {
 	}
 	return handleStringResponse(result)
 }
+
+// Checks existence of scripts in the script cache by their SHA1 digest.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	sha1s - SHA1 digests of Lua scripts to be checked.
+//
+// Return value:
+//
+//	An array of boolean values indicating the existence of each script.
+//
+// [valkey.io]: https://valkey.io/commands/script-exists
+func (client *baseClient) ScriptExists(
+	sha1s []string,
+) ([]bool, error) {
+	response, err := client.executeCommand(C.ScriptExists, sha1s)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleBoolArrayResponse(response)
+}

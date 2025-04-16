@@ -1921,3 +1921,85 @@ func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
+
+func (suite *GlideTestSuite) TestScriptExistsWithoutRoute() {
+	client := suite.defaultClusterClient()
+
+	// Test regular scripts
+	script1 := options.NewScript("return 'Hello'", false)
+	script2 := options.NewScript("return 'World'", false)
+
+	// Test binary scripts
+	script1_bin := options.NewScript("return 'Binary Hello'", true)
+	script2_bin := options.NewScript("return 'Binary World'", true)
+
+	// Load script1 and script2_bin
+	client.InvokeScript(script1)
+	client.InvokeScript(script2_bin)
+
+	expected := []bool{true, false, false, true, false}
+
+	// Get the SHA1 digests of the scripts
+	sha1_1 := script1.GetHash()
+	sha1_bin1 := script1_bin.GetHash()
+	sha1_2 := script2.GetHash()
+	sha1_bin2 := script2_bin.GetHash()
+	nonExistentSha1 := strings.Repeat("0", 40)
+
+	// Ensure scripts exist
+	response, err := client.ScriptExists([]string{sha1_1, sha1_bin1, sha1_2, sha1_bin2, nonExistentSha1})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expected, response)
+
+	script1.Close()
+	script1_bin.Close()
+	script2.Close()
+	script2_bin.Close()
+}
+
+func (suite *GlideTestSuite) TestScriptExistsWithRoute() {
+	client := suite.defaultClusterClient()
+	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, uuid.New().String())}
+
+	// Test regular scripts
+	script1 := options.NewScript("return 'Hello'", false)
+	script2 := options.NewScript("return 'World'", false)
+	script3 := options.NewScript("return 'Hello World'", false)
+
+	// Test binary scripts
+	script1_bin := options.NewScript("return 'Binary Hello'", true)
+	script2_bin := options.NewScript("return 'Binary World'", true)
+
+	// Load script1 and script2_bin
+	client.InvokeScript(script1)
+	client.InvokeScriptWithRoute(script3, route)
+	client.InvokeScriptWithRoute(script2_bin, route)
+
+	expected := []bool{true, false, false, true, true, false}
+
+	// Get the SHA1 digests of the scripts
+	sha1_1 := script1.GetHash()
+	sha1_bin1 := script1_bin.GetHash()
+	sha1_2 := script2.GetHash()
+	sha1_bin2 := script2_bin.GetHash()
+	sha1_3 := script3.GetHash()
+	nonExistentSha1 := strings.Repeat("0", 40)
+
+	// Ensure scripts exist
+	response, err := client.ScriptExists([]string{sha1_1, sha1_bin1, sha1_2, sha1_bin2, sha1_3, nonExistentSha1})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expected, response)
+
+	routeResponse, err := client.ScriptExistsWithRoute(
+		[]string{sha1_1, sha1_bin1, sha1_2, sha1_bin2, sha1_3, nonExistentSha1},
+		route,
+	)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expected, routeResponse)
+
+	script1.Close()
+	script1_bin.Close()
+	script2.Close()
+	script2_bin.Close()
+	script3.Close()
+}

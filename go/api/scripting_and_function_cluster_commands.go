@@ -50,4 +50,8 @@ type ScriptingAndFunctionClusterCommands interface {
 		scriptOptions options.ScriptOptions,
 		route options.RouteOption,
 	) (ClusterValue[any], error)
+
+	ScriptExists(sha1s []string) ([]bool, error)
+
+	ScriptExistsWithRoute(sha1s []string, route options.RouteOption) ([]bool, error)
 }
