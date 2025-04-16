@@ -39,8 +39,5 @@ jobs:
                     mkdocs-breadcrumbs-plugin \
                     mkdocs-material \
 
-            - name: Make script executable
-              run: chmod +x ./docs/build-docs.sh
-
             - name: build docs
               run: ./docs/build-docs.sh gh-deploy --force

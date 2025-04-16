@@ -32,7 +32,7 @@
         "copy-protobuf-type": "cp src/ProtobufMessage.d.ts build-ts/src/ProtobufMessage.d.ts",
         "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../glide-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
         "clean": "rm -rf build-ts rust-client/target docs glide-logs rust-client/glide-rs.*.node rust-client/index.* src/ProtobufMessage.*",
-        "docs": "npm run build && ./build-docs",
+        "docs": "npm run build && ./docs/build-docs",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
         "test": "npm run build-test-utils && jest --verbose --testPathIgnorePatterns='ServerModules'",
         "test-local": "npm run build-test-utils && jest --verbose --testPathIgnorePatterns='Validation of Exported Symbols' --testPathIgnorePatterns='ServerModules'",
