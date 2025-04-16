@@ -25,8 +25,7 @@ impl fmt::Debug for SpanExporterFile {
 }
 
 impl SpanExporterFile {
-    pub fn new(mut path: PathBuf) -> Self {
-        path.push("spans.json");
+    pub fn new(path: PathBuf) -> Self {
         SpanExporterFile {
             resource: Resource::default(),
             is_shutdown: atomic::AtomicBool::new(false),

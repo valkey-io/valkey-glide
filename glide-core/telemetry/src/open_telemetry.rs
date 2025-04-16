@@ -91,33 +91,50 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
 
             let path_buf = PathBuf::from(path);
 
-            // Check if the directory exists and is a directory
-            match path_buf.try_exists() {
-                Ok(exists) => {
-                    if !exists {
-                        return Err(Error::new(
-                            ErrorKind::InvalidInput,
-                            format!("Path does not exist: {}", path),
-                        ));
-                    }
+            // Determine if this is a directory path or a file path
+            let final_path = if path_buf.is_dir() || path_buf.extension().is_none() {
+                // If it's a directory or doesn't have an extension, treat it as a directory
+                // and append the default filename
+                path_buf.join("spans.json")
+            } else {
+                path_buf
+            };
 
-                    // Check if it's a directory
-                    if !path_buf.is_dir() {
+            // Check if the parent directory exists and is a directory
+            if let Some(parent_dir) = final_path.parent() {
+                match parent_dir.try_exists() {
+                    Ok(exists) => {
+                        if !exists {
+                            // Try to create the parent directory if it doesn't exist
+                            if let Err(e) = std::fs::create_dir_all(parent_dir) {
+                                return Err(Error::new(
+                                    ErrorKind::InvalidInput,
+                                    format!(
+                                        "Parent directory does not exist and could not be created: {} - {}",
+                                        parent_dir.display(), e
+                                    ),
+                                ));
+                            }
+                        } else if !parent_dir.is_dir() {
+                            return Err(Error::new(
+                                ErrorKind::InvalidInput,
+                                format!(
+                                    "Parent path exists but is not a directory: {}",
+                                    parent_dir.display()
+                                ),
+                            ));
+                        }
+                    }
+                    Err(e) => {
                         return Err(Error::new(
                             ErrorKind::InvalidInput,
-                            format!("Path exists but is not a directory: {}", path),
+                            format!("Error checking if parent directory exists: {}", e),
                         ));
                     }
-                }
-                Err(e) => {
-                    return Err(Error::new(
-                        ErrorKind::InvalidInput,
-                        format!("Error checking if path exists: {}", e),
-                    ));
                 }
             }
 
-            Ok(GlideOpenTelemetryTraceExporter::File(path_buf))
+            Ok(GlideOpenTelemetryTraceExporter::File(final_path))
         } // file endpoint
         _ => Err(Error::new(ErrorKind::InvalidInput, endpoint)),
     }

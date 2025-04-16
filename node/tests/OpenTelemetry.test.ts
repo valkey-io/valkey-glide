@@ -18,8 +18,58 @@ import {
     parseEndpoints,
 } from "./TestUtilities";
 
+/**
+ * Reads and parses a span file, extracting span data and names.
+ *
+ * @param path - The path to the span file
+ * @returns An object containing the raw span data, array of spans, and array of span names
+ * @throws Error if the file cannot be read or parsed
+ */
+function readAndParseSpanFile(path: string): {
+    spanData: string;
+    spans: string[];
+    spanNames: string[];
+} {
+    let spanData: string;
+
+    try {
+        spanData = fs.readFileSync(path, "utf8");
+    } catch (error: unknown) {
+        throw new Error(
+            `Failed to read or validate span file: ${error instanceof Error ? error.message : String(error)}`,
+        );
+    }
+
+    const spans = spanData
+        .split("\n")
+        .filter((line: string) => line.trim() !== "");
+
+    // Check that we have spans
+    if (spans.length === 0) {
+        throw new Error("No spans found in the span file");
+    }
+
+    // Parse and extract span names
+    const spanNames = spans
+        .map((line: string) => {
+            try {
+                const span = JSON.parse(line);
+                return span.name;
+            } catch {
+                return null;
+            }
+        })
+        .filter((name: string | null) => name !== null);
+
+    return {
+        spanData,
+        spans,
+        spanNames,
+    };
+}
+
 const TIMEOUT = 50000;
-const VALID_ENDPOINT_TRACES = "file:///tmp/";
+const VALID_ENDPOINT_TRACES = "file:///tmp/spans.json";
 const VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics";
 
 //cluster tests
@@ -119,6 +169,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
             if (fs.existsSync("/tmp/spans.json")) {
                 fs.unlinkSync("/tmp/spans.json");
             }
+
             const transaction = new ClusterTransaction();
 
             transaction.set("test_key", "foo");
@@ -167,9 +218,11 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 },
             });
 
+            const path = "/tmp/spans.json";
+
             // Remove the span file if it exists
-            if (fs.existsSync("/tmp/spans.json")) {
-                fs.unlinkSync("/tmp/spans.json");
+            if (fs.existsSync(path)) {
+                fs.unlinkSync(path);
             }
 
             const transaction = new ClusterTransaction();
@@ -189,36 +242,8 @@ describe("OpenTelemetry GlideClusterClient", () => {
             // Wait for spans to be flushed to file
             await new Promise((resolve) => setTimeout(resolve, 5000));
 
-            // Read and check span names from the file
-            let spanData: string;
-
-            try {
-                spanData = fs.readFileSync("/tmp/spans.json", "utf8");
-            } catch (error: unknown) {
-                // Fail the test if we can't read the span file
-                throw new Error(
-                    `Failed to read or validate span file: ${error instanceof Error ? error.message : String(error)}`,
-                );
-            }
-
-            const spans = spanData
-                .split("\n")
-                .filter((line: string) => line.trim() !== "");
-
-            // Check that we have spans
-            expect(spans.length).toBeGreaterThan(0);
-
-            // Parse and check span names
-            const spanNames = spans
-                .map((line: string) => {
-                    try {
-                        const span = JSON.parse(line);
-                        return span.name;
-                    } catch {
-                        return null;
-                    }
-                })
-                .filter((name: string | null) => name !== null);
+            // Read and check span names from the file using the helper function
+            const { spanNames } = readAndParseSpanFile(path);
 
             // Check for expected span names - these checks will fail the test if not found
             expect(spanNames).toContain("Batch");
@@ -293,7 +318,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     advancedConfiguration: {
                         openTelemetryConfig: {
                             tracesCollectorEndPoint:
-                                "file:///no-exits-path/v1/traces",
+                                "file:///no-exits-path/v1/traces.json",
                             metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
                             flushIntervalMs: 400,
                         },
@@ -305,29 +330,59 @@ describe("OpenTelemetry GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "opentelemetry file path instead of folder path config_%p",
+        "opentelemetry folder path config_%p",
         async (protocol) => {
-            const path = "/tmp/traces.json";
-            fs.createWriteStream(path);
-            await expect(
-                GlideClusterClient.createClient({
-                    ...getClientConfigurationOption(
-                        cluster.getAddresses(),
-                        protocol,
-                    ),
-                    advancedConfiguration: {
-                        openTelemetryConfig: {
-                            tracesCollectorEndPoint: "file://" + path,
-                            metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
-                            flushIntervalMs: 400,
-                        },
-                    },
-                }),
-            ).rejects.toThrow(/InvalidInput/i);
+            const path = "/tmp/";
+            const file = path + "spans.json";
+
             // Remove the span file if it exists
-            if (fs.existsSync(path)) {
-                fs.unlinkSync(path);
+            if (fs.existsSync(file)) {
+                fs.unlinkSync(file);
             }
+
+            const client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+                advancedConfiguration: {
+                    openTelemetryConfig: {
+                        tracesCollectorEndPoint: "file://" + path,
+                        metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                        flushIntervalMs: 400,
+                    },
+                },
+            });
+            await client.set("test_key", "foo");
+            await client.get("test_key");
+
+            // Wait for spans to be flushed to file
+            await new Promise((resolve) => setTimeout(resolve, 400));
+
+            const { spanNames } = readAndParseSpanFile(file);
+            expect(spanNames).toContain("Set");
+            expect(spanNames).toContain("Get");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry txt file path config_%p",
+        async (protocol) => {
+            const path = "/tmp/traces.txt";
+            await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+                advancedConfiguration: {
+                    openTelemetryConfig: {
+                        tracesCollectorEndPoint: "file://" + path,
+                        metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                        flushIntervalMs: 400,
+                    },
+                },
+            });
         },
         TIMEOUT,
     );
@@ -407,7 +462,6 @@ describe("OpenTelemetry GlideClient", () => {
 
             // Remove the span file if it exists
             if (fs.existsSync("/tmp/spans.json")) {
-                console.log("Removing existing spans.json file");
                 fs.unlinkSync("/tmp/spans.json");
             }
 
