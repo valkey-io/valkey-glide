@@ -586,3 +586,28 @@ func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, erro
 	}
 	return handleFunctionStatsResponse(response)
 }
+
+// Deletes a library and all its functions.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	libName - The library name to delete.
+//
+// Return value:
+//
+//	"OK" if the library exists, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/function-delete/
+func (client *GlideClient) FunctionDelete(libName string) (string, error) {
+	result, err := client.executeCommand(C.FunctionDelete, []string{libName})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
