@@ -97,7 +97,8 @@ jobs:
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
-                  dotnet-version: | # install latest dotnet too to use language features
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
                       9
                       ${{ matrix.dotnet }}
               env:
@@ -175,7 +176,8 @@ jobs:
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
-                  dotnet-version: | # install latest dotnet too to use language features
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
                       9
                       ${{ matrix.dotnet }}
 
@@ -217,7 +219,8 @@ jobs:
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
-                  dotnet-version: | # install latest dotnet too to use language features
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
                       9
                       ${{ matrix.dotnet }}
 
