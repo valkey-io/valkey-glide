@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -1779,4 +1780,252 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].FunctionCount)
 		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].LibraryCount)
 	}
+}
+
+func (suite *GlideTestSuite) TestFunctionKillNoWriteWithoutRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	libName := "functionKill_no_write_without_route"
+	funcName := "deadlock_without_route"
+	code := createLuaLibWithLongRunningFunction(libName, funcName, 6, true)
+
+	// Flush before setup
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing loaded, nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Load the lib
+	result, err = client.FunctionLoad(code, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10000)
+	testClient := suite.clusterClient(testConfig)
+	defer testClient.Close()
+
+	// Channel to signal when function is killed
+	killed := make(chan bool)
+
+	// key for routing to a primary node
+	randomKey := uuid.NewString()
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, randomKey),
+	}
+
+	// Start a goroutine to kill the function
+	go func() {
+		defer close(killed)
+		timeout := time.After(4 * time.Second)
+		killTicker := time.NewTicker(100 * time.Millisecond) // 100ms interval
+		defer killTicker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				killed <- false
+				return
+			case <-killTicker.C:
+				result, err = client.FunctionKill()
+				if err == nil {
+					// successful kill
+					killed <- result == "OK"
+					return
+				}
+			}
+		}
+	}()
+
+	// Call the function - blocking until killed and return a script kill error
+	_, err = testClient.FCallWithRoute(funcName, route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "script killed"))
+
+	// Wait for kill confirmation
+	functionKilled := <-killed
+	assert.True(suite.T(), functionKilled, "Function kill should have returned OK")
+
+	// Wait for function kill to return not busy
+	notBusyTimeout := time.After(2 * time.Second)
+	notBusyTicker := time.NewTicker(100 * time.Millisecond)
+	defer notBusyTicker.Stop()
+
+	for {
+		select {
+		case <-notBusyTimeout:
+			suite.T().Fatal("Timed out waiting for function to be not busy")
+			return
+		case <-notBusyTicker.C:
+			_, err = client.FunctionKill()
+			if err != nil && strings.Contains(strings.ToLower(err.Error()), "notbusy") {
+				return
+			}
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestFunctionKillNoWriteWithRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	libName := "functionKill_no_write_with_route"
+	funcName := "deadlock_with_route"
+	code := createLuaLibWithLongRunningFunction(libName, funcName, 6, true)
+
+	// key for routing to a primary node
+	randomKey := uuid.NewString()
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, randomKey),
+	}
+
+	// Flush all functions with route
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKillWithRoute(route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Load the lib
+	result, err = client.FunctionLoadWithRoute(code, true, route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10000)
+	testClient := suite.clusterClient(testConfig)
+	defer testClient.Close()
+
+	// Channel to signal when function is killed
+	killed := make(chan bool)
+
+	// Start a goroutine to kill the function
+	go func() {
+		defer close(killed)
+		timeout := time.After(4 * time.Second)
+		killTicker := time.NewTicker(500 * time.Millisecond) // 500ms interval
+		defer killTicker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				killed <- false
+				return
+			case <-killTicker.C:
+				result, err = client.FunctionKillWithRoute(route)
+				if err == nil {
+					// successful kill
+					killed <- result == "OK"
+					return
+				}
+			}
+		}
+	}()
+
+	// Call the function - blocking until killed and return a script kill error
+	_, err = testClient.FCallWithRoute(funcName, route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "script killed"))
+
+	// Wait for kill confirmation
+	functionKilled := <-killed
+	assert.True(suite.T(), functionKilled, "Function kill should have returned OK")
+
+	// Wait for function kill to return not busy
+	notBusyTimeout := time.After(2 * time.Second)
+	notBusyTicker := time.NewTicker(100 * time.Millisecond)
+	defer notBusyTicker.Stop()
+
+	for {
+		select {
+		case <-notBusyTimeout:
+			suite.T().Fatal("Timed out waiting for function to be not busy")
+			return
+		case <-notBusyTicker.C:
+			_, err = client.FunctionKillWithRoute(route)
+			if err != nil && strings.Contains(strings.ToLower(err.Error()), "notbusy") {
+				return
+			}
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	libName := "functionKill_key_based_write_function"
+	funcName := "deadlock_write_function_with_key_based_route"
+	key := libName
+	code := createLuaLibWithLongRunningFunction(libName, funcName, 6, false)
+
+	// Create route using the key
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, key),
+	}
+
+	// Flush all functions with route
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKillWithRoute(route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Load the lib
+	result, err = client.FunctionLoadWithRoute(code, true, route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10000)
+	testClient := suite.clusterClient(testConfig)
+	defer testClient.Close()
+
+	// Channel to signal when unkillable error is found
+	unkillable := make(chan bool)
+
+	// Start a goroutine to attempt killing the function
+	go func() {
+		defer close(unkillable)
+		timeout := time.After(4 * time.Second)
+		killTicker := time.NewTicker(500 * time.Millisecond) // 500ms interval
+		defer killTicker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				unkillable <- false
+				return
+			case <-killTicker.C:
+				_, err = client.FunctionKillWithRoute(route)
+				// Look for unkillable error
+				if err != nil && strings.Contains(strings.ToLower(err.Error()), "unkillable") {
+					unkillable <- true
+					return
+				}
+			}
+		}
+	}()
+
+	// Call the function with the key - this will block until completion
+	testClient.FCallWithKeysAndArgs(funcName, []string{key}, []string{})
+	// Function completed as expected
+
+	// Wait for unkillable confirmation
+	foundUnkillable := <-unkillable
+	assert.True(suite.T(), foundUnkillable, "Function should be unkillable")
 }

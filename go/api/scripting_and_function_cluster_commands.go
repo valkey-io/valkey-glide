@@ -36,4 +36,6 @@ type ScriptingAndFunctionClusterCommands interface {
 	FunctionStats() (map[string]FunctionStatsResult, error)
 
 	FunctionStatsWithRoute(route options.RouteOption) (ClusterValue[FunctionStatsResult], error)
+
+	FunctionKillWithRoute(route options.RouteOption) (string, error)
 }
