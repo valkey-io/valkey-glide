@@ -14355,8 +14355,13 @@ public class SharedCommandTests {
                     Arrays.stream((Object[]) result[resultCollectionIndex]).collect(Collectors.toSet());
 
             for (Object item : resultItems) {
-                System.out.println(
-                        "first result " + item + ": Was it seen before? " + secondResultValues.contains(item));
+                if (secondResultValues.contains(item)) {
+                    System.out.println(
+                            "first result "
+                                    + item
+                                    + ": Was it seen before? "
+                                    + secondResultValues.contains(item));
+                }
             }
 
             secondResultValues.addAll(resultItems);
@@ -14386,8 +14391,13 @@ public class SharedCommandTests {
                     Arrays.stream((Object[]) secondResult[resultCollectionIndex]).collect(Collectors.toSet());
 
             for (Object item : secondResultItems) {
-                System.out.println(
-                        "secondResult " + item + ": Was it seen before? " + secondResultValues.contains(item));
+                if (secondResultValues.contains(item)) {
+                    System.out.println(
+                            "secondResult "
+                                    + item
+                                    + ": Was it seen before? "
+                                    + secondResultValues.contains(item));
+                }
             }
 
             secondResultValues.addAll(secondResultItems);
@@ -14566,8 +14576,13 @@ public class SharedCommandTests {
                     Arrays.stream((Object[]) result[resultCollectionIndex]).collect(Collectors.toSet());
 
             for (Object item : resultItems) {
-                System.out.println(
-                        "first result " + item + ": Was it seen before? " + secondResultValues.contains(item));
+                if (secondResultValues.contains(item)) {
+                    System.out.println(
+                            "first result "
+                                    + item
+                                    + ": Was it seen before? "
+                                    + secondResultValues.contains(item));
+                }
             }
 
             secondResultValues.addAll(resultItems);
@@ -14597,8 +14612,13 @@ public class SharedCommandTests {
                     Arrays.stream((Object[]) secondResult[resultCollectionIndex]).collect(Collectors.toSet());
 
             for (Object item : secondResultItems) {
-                System.out.println(
-                        "second result " + item + ": Was it seen before? " + secondResultValues.contains(item));
+                if (secondResultValues.contains(item)) {
+                    System.out.println(
+                            "second result "
+                                    + item
+                                    + ": Was it seen before? "
+                                    + secondResultValues.contains(item));
+                }
             }
 
             secondResultValues.addAll(secondResultItems);
@@ -14806,9 +14826,8 @@ public class SharedCommandTests {
             resultCursor = result[resultCursorIndex].toString();
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
             for (int i = 0; i < resultEntry.length; i += 2) {
-                System.out.println(resultEntry[i] + " " + resultEntry[i + 1]);
                 if (secondResultAllKeys.contains(resultEntry[i])) {
-                    System.out.println("Already seen");
+                    System.out.println(resultEntry[i] + " " + resultEntry[i + 1] + " already seen");
                 }
                 secondResultAllKeys.add(resultEntry[i]);
                 secondResultAllValues.add(resultEntry[i + 1]);
@@ -14838,9 +14857,9 @@ public class SharedCommandTests {
                             ArrayUtils.toArray(secondResult[resultCollectionIndex])));
 
             for (int i = 0; i < secondResultEntry.length; i += 2) {
-                System.out.println(secondResultEntry[i] + " " + secondResultEntry[i + 1]);
                 if (secondResultAllKeys.contains(secondResultEntry[i])) {
-                    System.out.println("Already seen");
+                    System.out.println(
+                            secondResultEntry[i] + " " + secondResultEntry[i + 1] + " already seen");
                 }
                 secondResultAllKeys.add(secondResultEntry[i]);
                 secondResultAllValues.add(secondResultEntry[i + 1]);
@@ -15077,9 +15096,8 @@ public class SharedCommandTests {
             resultCursor = gs(result[resultCursorIndex].toString());
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
             for (int i = 0; i < resultEntry.length; i += 2) {
-                System.out.println(resultEntry[i] + " " + resultEntry[i + 1]);
                 if (secondResultAllKeys.contains(resultEntry[i])) {
-                    System.out.println("Already seen");
+                    System.out.println(resultEntry[i] + " " + resultEntry[i + 1] + " already seen");
                 }
                 secondResultAllKeys.add(resultEntry[i]);
                 secondResultAllValues.add(resultEntry[i + 1]);
@@ -15109,9 +15127,9 @@ public class SharedCommandTests {
                             ArrayUtils.toArray(secondResult[resultCollectionIndex])));
 
             for (int i = 0; i < secondResultEntry.length; i += 2) {
-                System.out.println(secondResultEntry[i] + " " + secondResultEntry[i + 1]);
                 if (secondResultAllKeys.contains(secondResultEntry[i])) {
-                    System.out.println("Already seen");
+                    System.out.println(
+                            secondResultEntry[i] + " " + secondResultEntry[i + 1] + " already seen");
                 }
                 secondResultAllKeys.add(secondResultEntry[i]);
                 secondResultAllValues.add(secondResultEntry[i + 1]);
@@ -15341,9 +15359,8 @@ public class SharedCommandTests {
             resultCursor = result[resultCursorIndex].toString();
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
             for (int i = 0; i < resultEntry.length; i += 2) {
-                System.out.println(resultEntry[i] + " " + resultEntry[i + 1]);
                 if (secondResultAllKeys.contains(resultEntry[i])) {
-                    System.out.println("Already seen");
+                    System.out.println(resultEntry[i] + " " + resultEntry[i + 1] + " already seen");
                 }
                 secondResultAllKeys.add(resultEntry[i]);
                 secondResultAllValues.add(resultEntry[i + 1]);
@@ -15373,9 +15390,9 @@ public class SharedCommandTests {
                             ArrayUtils.toArray(secondResult[resultCollectionIndex])));
 
             for (int i = 0; i < secondResultEntry.length; i += 2) {
-                System.out.println(secondResultEntry[i] + " " + secondResultEntry[i + 1]);
                 if (secondResultAllKeys.contains(secondResultEntry[i])) {
-                    System.out.println("Already seen");
+                    System.out.println(
+                            secondResultEntry[i] + " " + secondResultEntry[i + 1] + " already seen");
                 }
                 secondResultAllKeys.add(secondResultEntry[i]);
                 secondResultAllValues.add(secondResultEntry[i + 1]);
@@ -15592,9 +15609,8 @@ public class SharedCommandTests {
             resultCursor = gs(result[resultCursorIndex].toString());
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
             for (int i = 0; i < resultEntry.length; i += 2) {
-                System.out.println(resultEntry[i] + " " + resultEntry[i + 1]);
                 if (secondResultAllKeys.contains(resultEntry[i])) {
-                    System.out.println("Already seen");
+                    System.out.println(resultEntry[i] + " " + resultEntry[i + 1] + " already seen");
                 }
                 secondResultAllKeys.add(resultEntry[i]);
                 secondResultAllValues.add(resultEntry[i + 1]);
@@ -15624,9 +15640,9 @@ public class SharedCommandTests {
                             ArrayUtils.toArray(secondResult[resultCollectionIndex])));
 
             for (int i = 0; i < secondResultEntry.length; i += 2) {
-                System.out.println(secondResultEntry[i] + " " + secondResultEntry[i + 1]);
                 if (secondResultAllKeys.contains(secondResultEntry[i])) {
-                    System.out.println("Already seen");
+                    System.out.println(
+                            secondResultEntry[i] + " " + secondResultEntry[i + 1] + " already seen");
                 }
                 secondResultAllKeys.add(secondResultEntry[i]);
                 secondResultAllValues.add(secondResultEntry[i + 1]);
