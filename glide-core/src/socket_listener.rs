@@ -314,9 +314,7 @@ async fn send_command(
         .send_command(&cmd, routing)
         .await
         .map_err(|err| err.into());
-    if let Some(child_span) = child_span {
-        child_span.end();
-    }
+    child_span.map(|c| c.end());
     res
 }
 
@@ -379,22 +377,21 @@ async fn invoke_script(
 
 /// Creates a child span for telemetry if telemetry is enabled
 fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Option<GlideSpan> {
-    if let Some(span) = span {
-        match span.add_span(name) {
-            Ok(child_span) => Some(child_span),
-            Err(error_msg) => {
-                log_error(
-                    "OpenTelemetry error",
-                    format!(
-                        "The child span `{:?}` was failed to create with error: {:?}",
-                        name, error_msg
-                    ),
-                );
-                None
-            }
+    // Early return if no parent span is provided
+    let parent_span = span?;
+
+    match parent_span.add_span(name) {
+        Ok(child_span) => Some(child_span),
+        Err(error_msg) => {
+            log_error(
+                "OpenTelemetry error",
+                format!(
+                    "The child span `{:?}` was failed to create with error: {:?}",
+                    name, error_msg
+                ),
+            );
+            None
         }
-    } else {
-        None
     }
 }
 
@@ -439,9 +436,7 @@ async fn send_batch(
             .await
             .map_err(|err| err.into()),
     };
-    if let Some(child_span) = child_span {
-        child_span.end();
-    }
+    child_span.map(|c| c.end());
     res
 }
 
