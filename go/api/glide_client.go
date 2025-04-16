@@ -600,7 +600,7 @@ func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, erro
 //	libName - The library name to delete.
 //
 // Return value:
-// 
+//
 //	"OK" if the library exists, otherwise an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/

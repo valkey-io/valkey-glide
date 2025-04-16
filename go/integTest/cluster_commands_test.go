@@ -1490,17 +1490,17 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 	}
 
 	// load new lib and delete it with single node route - first lib remains loaded
-        anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
-        result, err = client.FunctionLoadWithRoute(anotherLib, true, route)
+	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoadWithRoute(anotherLib, true, route)
 	assert.NoError(suite.T(), err)
-        assert.Equal(suite.T(), "anotherLib", result)
+	assert.Equal(suite.T(), "anotherLib", result)
 
-        deleteResult, err := client.FunctionDeleteWithRoute("anotherLib", route)
+	deleteResult, err := client.FunctionDeleteWithRoute("anotherLib", route)
 	assert.NoError(suite.T(), err)
-        assert.Equal(suite.T(), "OK", deleteResult)
+	assert.Equal(suite.T(), "OK", deleteResult)
 
-        // delete missing lib returns a error
-        _, err = client.FunctionDeleteWithRoute("anotherLib", route)
+	// delete missing lib returns a error
+	_, err = client.FunctionDeleteWithRoute("anotherLib", route)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 	// Test with all primaries route
@@ -1545,17 +1545,17 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 	}
 
 	// load new lib and delete it with all primaries route - first lib remains loaded
-        anotherLib = GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
-        result, err = client.FunctionLoadWithRoute(anotherLib, true, route)
+	anotherLib = GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoadWithRoute(anotherLib, true, route)
 	assert.NoError(suite.T(), err)
-        assert.Equal(suite.T(), "anotherLib", result)
+	assert.Equal(suite.T(), "anotherLib", result)
 
-        deleteResult, err = client.FunctionDeleteWithRoute("anotherLib", route)
+	deleteResult, err = client.FunctionDeleteWithRoute("anotherLib", route)
 	assert.NoError(suite.T(), err)
-        assert.Equal(suite.T(), "OK", deleteResult)
+	assert.Equal(suite.T(), "OK", deleteResult)
 
-        // delete missing lib returns a error
-        _, err = client.FunctionDeleteWithRoute("anotherLib", route)
+	// delete missing lib returns a error
+	_, err = client.FunctionDeleteWithRoute("anotherLib", route)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
@@ -1608,17 +1608,17 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
 	}
 
 	// load new lib and delete it - first lib remains loaded
-        anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
-        result, err = client.FunctionLoad(anotherLib, true)
+	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoad(anotherLib, true)
 	assert.NoError(suite.T(), err)
-        assert.Equal(suite.T(), "anotherLib", result)
+	assert.Equal(suite.T(), "anotherLib", result)
 
-        deleteResult, err := client.FunctionDelete("anotherLib")
+	deleteResult, err := client.FunctionDelete("anotherLib")
 	assert.NoError(suite.T(), err)
-        assert.Equal(suite.T(), "OK", deleteResult)
+	assert.Equal(suite.T(), "OK", deleteResult)
 
-        // delete missing lib returns a error
-        _, err = client.FunctionDelete("anotherLib")
+	// delete missing lib returns a error
+	_, err = client.FunctionDelete("anotherLib")
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
