@@ -6,7 +6,7 @@
     <AssemblyName>Valkey.Glide</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <LangVersion>10.0</LangVersion>
+    <LangVersion>preview</LangVersion>
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
     <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
     <EnableNETAnalyzers>false</EnableNETAnalyzers>
@@ -17,7 +17,7 @@
 
   <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
   <PropertyGroup Condition="'$(Configuration)' == 'Lint'">
-    <LangVersion>10.0</LangVersion>
+    <LangVersion>preview</LangVersion>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>

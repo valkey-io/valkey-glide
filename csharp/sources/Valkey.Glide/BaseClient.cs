@@ -16,10 +16,10 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 {
     #region public methods
     public async Task<string> Set(GlideString key, GlideString value)
-        => await Command(RequestType.Set, new[] { key, value }, HandleOk);
+        => await Command(RequestType.Set, [key, value], HandleOk);
 
     public async Task<GlideString?> Get(GlideString key)
-        => await Command(RequestType.Get, new[] { key }, response => HandleServerResponse<GlideString>(response, true));
+        => await Command(RequestType.Get, [key], response => HandleServerResponse<GlideString>(response, true));
 
     public void Dispose()
     {

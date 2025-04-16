@@ -57,7 +57,7 @@ internal class ResponseHandler
     private static Dictionary<GlideString, object?> CreateMap(GlideValue value)
     {
         object?[] values = CreateArray(value);
-        Dictionary<GlideString, object?> res = new();
+        Dictionary<GlideString, object?> res = [];
         for (int i = 0; i < values.Length; i += 2)
         {
             res[(GlideString)values[i]!] = values[i + 1];

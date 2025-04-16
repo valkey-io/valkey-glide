@@ -77,26 +77,13 @@ public abstract class Route
     /// Request routing configuration overrides the <see cref="ReadFromStrategy"/> connection configuration.<br />
     /// If <see cref="SlotType.Replica"/> is used, the request will be routed to a replica, even if the strategy is <see cref="ReadFromStrategy.Primary"/>.
     /// </summary>
-    public class SlotIdRoute : Route, ISingleNodeRoute
+    /// <param name="slotId">Slot number. There are 16384 slots in a Valkey cluster, and each shard manages a slot range.
+    /// Unless the slot is known, it's better to route using <see cref="SlotKeyRoute"/>.</param>
+    /// <param name="slotType">Defines type of the node being addressed.</param>
+    public class SlotIdRoute(int slotId, SlotType slotType) : Route, ISingleNodeRoute
     {
-        /// <inheritdoc cref="SlotIdRoute"/>
-        /// <param name="slotId"><inheritdoc cref="SlotId" path="/summary" /></param>
-        /// <param name="slotType"><inheritdoc cref="SlotType" path="/summary" /></param>
-        public SlotIdRoute(int slotId, SlotType slotType)
-        {
-            SlotId = slotId;
-            SlotType = slotType;
-        }
-
-        /// <summary>
-        /// Slot number. There are 16384 slots in a Valkey cluster, and each shard manages a slot range.
-        /// Unless the slot is known, it's better to route using <see cref="SlotKeyRoute"/>.
-        /// </summary>
-        public readonly int SlotId;
-        /// <summary>
-        /// Defines type of the node being addressed.
-        /// </summary>
-        public new readonly SlotType SlotType;
+        public readonly int SlotId = slotId;
+        public new readonly SlotType SlotType = slotType;
 
         internal override RouteInfo ToFfi() => ToFfi(RouteType.SlotId, slotIdInfo: (SlotId, SlotType));
     }
@@ -105,25 +92,12 @@ public abstract class Route
     /// Request routing configuration overrides the <see cref="ReadFromStrategy"/> connection configuration.<br />
     /// If <see cref="SlotType.Replica"/> is used, the request will be routed to a replica, even if the strategy is <see cref="ReadFromStrategy.Primary"/>.
     /// </summary>
-    public class SlotKeyRoute : Route, ISingleNodeRoute
+    /// <param name="slotKey">The request will be sent to nodes managing this key.</param>
+    /// <param name="slotType">Defines type of the node being addressed.</param>
+    public class SlotKeyRoute(string slotKey, SlotType slotType) : Route, ISingleNodeRoute
     {
-        /// <inheritdoc cref="SlotKeyRoute" />
-        /// <param name="slotKey"><inheritdoc cref="SlotKey" path="/summary" /></param>
-        /// <param name="slotType"><inheritdoc cref="SlotType" path="/summary" /></param>
-        public SlotKeyRoute(string slotKey, SlotType slotType)
-        {
-            SlotKey = slotKey;
-            SlotType = slotType;
-        }
-
-        /// <summary>
-        /// The request will be sent to nodes managing this key.
-        /// </summary>
-        public readonly string SlotKey;
-        /// <summary>
-        /// Defines type of the node being addressed.
-        /// </summary>
-        public new readonly SlotType SlotType;
+        public readonly string SlotKey = slotKey;
+        public new readonly SlotType SlotType = slotType;
 
         internal override RouteInfo ToFfi() => ToFfi(RouteType.SlotId, slotKeyInfo: (SlotKey, SlotType));
     }

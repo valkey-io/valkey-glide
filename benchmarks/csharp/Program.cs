@@ -63,7 +63,7 @@ public static class MainClass
 
     private static readonly Random Randomizer = new();
     private static long s_started_tasks_counter = 0;
-    private static readonly List<Dictionary<string, object>> BenchJsonResults = new();
+    private static readonly List<Dictionary<string, object>> BenchJsonResults = [];
 
     private static string GenerateValue(int size) => new('0', size);
 
@@ -149,7 +149,7 @@ public static class MainClass
     {
         s_started_tasks_counter = 0;
         Stopwatch stopwatch = Stopwatch.StartNew();
-        List<Task> running_tasks = new();
+        List<Task> running_tasks = [];
         for (int i = 0; i < num_of_concurrent_tasks; i++)
         {
             running_tasks.Add(

@@ -15,8 +15,8 @@ public class TestConfiguration : IDisposable
 {
     public static bool IsMacOs => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
-    public static List<(string host, ushort port)> STANDALONE_HOSTS { get; internal set; } = new();
-    public static List<(string host, ushort port)> CLUSTER_HOSTS { get; internal set; } = new();
+    public static List<(string host, ushort port)> STANDALONE_HOSTS { get; internal set; } = [];
+    public static List<(string host, ushort port)> CLUSTER_HOSTS { get; internal set; } = [];
     public static Version SERVER_VERSION { get; internal set; } = new();
 
     public static StandaloneClientConfigurationBuilder DefaultClientConfig() =>
@@ -31,23 +31,21 @@ public class TestConfiguration : IDisposable
     public static GlideClient DefaultStandaloneClient() => new(DefaultClientConfig().Build());
     public static GlideClusterClient DefaultClusterClient() => new(DefaultClusterClientConfig().Build());
 
-    private static TheoryData<BaseClient> s_testClients = new();
-
     public static TheoryData<BaseClient> TestClients
     {
         get
         {
-            if (s_testClients.Count == 0)
+            if (field.Count == 0)
             {
-                s_testClients = new() { (BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient() };
+                field = [(BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient()];
             }
-            return s_testClients;
+            return field;
         }
 
-        private set => s_testClients = value;
-    }
+        private set;
+    } = [];
 
-    public static void ResetTestClients() => s_testClients = new();
+    public static void ResetTestClients() => TestClients = [];
 
     public TestConfiguration()
     {
@@ -140,7 +138,7 @@ public class TestConfiguration : IDisposable
 
     private static List<(string host, ushort port)> ParseHostsFromOutput(string output)
     {
-        List<(string host, ushort port)> hosts = new();
+        List<(string host, ushort port)> hosts = [];
         foreach (string line in output.Split("\n"))
         {
             if (!line.StartsWith("CLUSTER_NODES="))

@@ -1,15 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 namespace Valkey.Glide.IntegrationTests;
-
-public class SharedCommandTests
+public class SharedCommandTests(TestConfiguration config)
 {
-    public SharedCommandTests(TestConfiguration config)
-    {
-        Config = config;
-    }
-
-    public TestConfiguration Config { get; }
+    public TestConfiguration Config { get; } = config;
 
     internal static async Task GetAndSetValues(BaseClient client, string key, string value)
     {
@@ -25,12 +19,12 @@ public class SharedCommandTests
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
-    [MemberData("TestClients", MemberType = typeof(TestConfiguration))]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task GetReturnsLastSet(BaseClient client) =>
         await GetAndSetRandomValues(client);
 
     [Theory(DisableDiscoveryEnumeration = true)]
-    [MemberData("TestClients", MemberType = typeof(TestConfiguration))]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task GetAndSetCanHandleNonASCIIUnicode(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
@@ -39,12 +33,12 @@ public class SharedCommandTests
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
-    [MemberData("TestClients", MemberType = typeof(TestConfiguration))]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task GetReturnsNull(BaseClient client) =>
         Assert.Null(await client.Get(Guid.NewGuid().ToString()));
 
     [Theory(DisableDiscoveryEnumeration = true)]
-    [MemberData("TestClients", MemberType = typeof(TestConfiguration))]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task GetReturnsEmptyString(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();

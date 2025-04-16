@@ -6,18 +6,15 @@ namespace Valkey.Glide.IntegrationTests;
 
 public class ClusterClientTests
 {
-    // Syntax sugar - use `Args(a, b, c)` instead of `new GlideString[] { a, b, c }`
-    internal static GlideString[] Args(params GlideString[] args) => args;
-
     [Fact]
     public async Task CustomCommandWithRandomRoute()
     {
         GlideClusterClient client = TestConfiguration.DefaultClusterClient();
         // if a command isn't routed in 100 tries to different nodes, you are a lucker or have a bug
-        SortedSet<string> ports = new();
+        SortedSet<string> ports = [];
         foreach (int i in Enumerable.Range(0, 100))
         {
-            string res = ((await client.CustomCommand(Args("info", "server"), Route.Random))! as GlideString)!;
+            string res = ((await client.CustomCommand(["info", "server"], Route.Random))! as GlideString)!;
             foreach (string line in res!.Split("\r\n"))
             {
                 if (line.Contains("tcp_port"))
@@ -39,19 +36,19 @@ public class ClusterClientTests
     {
         GlideClusterClient client = TestConfiguration.DefaultClusterClient();
 
-        string res = (await client.CustomCommand(Args("info", "replication"), new SlotKeyRoute("abc", SlotType.Primary))! as GlideString)!;
+        string res = (await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Primary))! as GlideString)!;
         Assert.Contains("role:master", res);
 
-        res = (await client.CustomCommand(Args("info", "replication"), new SlotKeyRoute("abc", SlotType.Replica))! as GlideString)!;
+        res = (await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Replica))! as GlideString)!;
         Assert.Contains("role:slave", res);
 
-        res = (await client.CustomCommand(Args("info", "replication"), new SlotIdRoute(42, SlotType.Primary))! as GlideString)!;
+        res = (await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Primary))! as GlideString)!;
         Assert.Contains("role:master", res);
 
-        res = (await client.CustomCommand(Args("info", "replication"), new SlotIdRoute(42, SlotType.Replica))! as GlideString)!;
+        res = (await client.CustomCommand(["info", "replication"], new SlotIdRoute(42, SlotType.Replica))! as GlideString)!;
         Assert.Contains("role:slave", res);
 
-        res = (await client.CustomCommand(Args("info", "replication"), new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port))! as GlideString)!;
+        res = (await client.CustomCommand(["info", "replication"], new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port))! as GlideString)!;
         Assert.Contains("# Replication", res);
     }
 
@@ -63,7 +60,7 @@ public class ClusterClientTests
         _ = await client.Set("klm", "klm");
         _ = await client.Set("xyz", "xyz");
 
-        long res = (long)(await client.CustomCommand(Args("dbsize"), AllPrimaries))!;
+        long res = (long)(await client.CustomCommand(["dbsize"], AllPrimaries))!;
         Assert.True(res >= 3);
     }
 }

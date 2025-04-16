@@ -7,11 +7,11 @@ public class GildeStringTests
     [Fact]
     public void Sorting()
     {
-        GlideString[] arr = new GlideString[] { "abc", "abcd", "abcde", "abd", "abb", "ab1" };
+        GlideString[] arr = ["abc", "abcd", "abcde", "abd", "abb", "ab1"];
 #if NET8_0_OR_GREATER
-        Assert.Equal(new GlideString[] { "ab1", "abb", "abc", "abd", "abcd", "abcde" }, arr.Order().ToArray());
+        Assert.Equal(new GlideString[] { "ab1", "abb", "abc", "abd", "abcd", "abcde" }, [.. arr.Order()]);
 #endif
-        Assert.Equal(new GlideString[] { "ab1", "abb", "abc", "abd", "abcd", "abcde" }, arr.OrderBy(s => s).ToArray());
+        Assert.Equal(new GlideString[] { "ab1", "abb", "abc", "abd", "abcd", "abcde" }, [.. arr.OrderBy(s => s)]);
     }
 
     [Fact]
@@ -19,7 +19,7 @@ public class GildeStringTests
     {
         Assert.Equal(new GlideString("abc"), new GlideString("abc"));
         Assert.NotEqual(new GlideString("abc"), new GlideString("abd"));
-        Assert.Equal(new GlideString("abc"), new GlideString("abc".ToCharArray().Select(c => (byte)c).ToArray()));
+        Assert.Equal(new GlideString("abc"), new GlideString([.. "abc".ToCharArray().Select(c => (byte)c)]));
         Assert.Equal(new GlideString("abc123"), new GlideString("abc") + "123");
         Assert.Equal(new GlideString("abc123"), "abc" + new GlideString("123"));
     }
