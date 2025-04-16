@@ -108,6 +108,16 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.TARGET }}-go
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
+
             - name: Install & build & test
               working-directory: go
               run: |
@@ -152,6 +162,16 @@ jobs:
               uses: ./.github/workflows/install-rust-and-protoc
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: x86_64-unknown-linux-gnu-go
+                  restore-keys: |
+                      x86_64-unknown-linux-gnu-glide-core
+                      x86_64-unknown-linux-gnu
 
             - name: Install and run linters
               working-directory: go
@@ -214,6 +234,14 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.IMAGE }}-go
+                  restore-keys: ${{ matrix.host.IMAGE }}
+
             - name: Install & build & test
               working-directory: go
               run: |
@@ -248,6 +276,16 @@ jobs:
               with:
                   go-version: ${{ env.BASE_GO_VERSION }}
                   cache-dependency-path: go/go.sum
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: aarch64-unknown-linux-gnu-go
+                  restore-keys: |
+                      aarch64-unknown-linux-gnu-glide-core
+                      aarch64-unknown-linux-gnu
 
             - name: Build and test
               working-directory: ./go
