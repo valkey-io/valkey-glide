@@ -6,7 +6,7 @@ This directory contains everything needed to build and deploy the MkDocs-based d
 
 The documentation is built and deployed using the [`./build-docs.sh`](./build-docs.sh) script. 
 
-- **Python documentation** is generated using the [`mkdocstrings`](https://mkdocstrings.github.io/) plugin for MkDocs.
+- **Python documentation** is generated using the [`mkdocstrings`](https://mkdocstrings.github.io/) plugin for MkDocs. See more about the Python documentation [here](https://github.com/valkey-io/valkey-glide/blob/main/python/DEVELOPER.md#documentation).
 - **Node.js documentation** is generated using [`TypeDoc`](https://typedoc.org/), which produces Markdown files that are then processed by MkDocs.
 
 ## Building and Serving Locally
