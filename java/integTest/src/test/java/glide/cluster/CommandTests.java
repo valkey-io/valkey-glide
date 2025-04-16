@@ -53,7 +53,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
 import glide.api.GlideClusterClient;
-import glide.api.models.ClusterTransaction;
+import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
@@ -67,6 +67,7 @@ import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoSearchOrigin;
 import glide.api.models.commands.geospatial.GeoSearchResultOptions;
@@ -504,15 +505,16 @@ public class CommandTests {
     public void config_reset_stat(GlideClusterClient clusterClient) {
         var data = clusterClient.info(new Section[] {STATS}).get();
         String firstNodeInfo = getFirstEntryFromMultiValue(data);
-        long value_before = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+        long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
         var result = clusterClient.configResetStat().get();
         assertEquals(OK, result);
 
         data = clusterClient.info(new Section[] {STATS}).get();
         firstNodeInfo = getFirstEntryFromMultiValue(data);
-        long value_after = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
-        assertTrue(value_after < value_before);
+        long valueAfter = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+
+        assertTrue(valueBefore == 0 ? valueAfter == 0 : valueAfter < valueBefore);
     }
 
     @ParameterizedTest
@@ -1660,14 +1662,15 @@ public class CommandTests {
         assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
 
         var transaction =
-                new ClusterTransaction()
+                new ClusterBatch(true)
                         .fcall(funcName, new String[] {key + 1, key + 2}, new String[0])
                         .fcallReadOnly(funcName, new String[] {key + 1, key + 2}, new String[0]);
 
+        ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
         // check response from a routed transaction request
         assertDeepEquals(
                 new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-                clusterClient.exec(transaction, route).get());
+                clusterClient.exec(transaction, options).get());
         // if no route given, GLIDE should detect it automatically
         assertDeepEquals(
                 new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
@@ -1707,15 +1710,16 @@ public class CommandTests {
         assertArrayEquals(new Object[] {binaryString}, (Object[]) functionResult);
 
         var transaction =
-                new ClusterTransaction()
+                new ClusterBatch(true)
                         .withBinaryOutput()
                         .fcall(funcName, new GlideString[] {gs(key)}, new GlideString[] {binaryString})
                         .fcallReadOnly(funcName, new GlideString[] {gs(key)}, new GlideString[] {binaryString});
 
+        ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
         // check response from a routed transaction request
         assertDeepEquals(
                 new Object[][] {{binaryString}, {binaryString}},
-                clusterClient.exec(transaction, route).get());
+                clusterClient.exec(transaction, options).get());
         // if no route given, GLIDE should detect it automatically
         assertDeepEquals(
                 new Object[][] {{binaryString}, {binaryString}}, clusterClient.exec(transaction).get());

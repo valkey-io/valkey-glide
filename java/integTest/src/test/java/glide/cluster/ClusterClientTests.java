@@ -312,6 +312,10 @@ public class ClusterClientTests {
 
             // Delete the user (which will cause reconnection) and reset it with the new password
             deleteAclUser(adminClient, username);
+
+            // Give some time for the delete to fully complete
+            Thread.sleep(1000);
+
             setNewAclUserPassword(adminClient, username, newPwd);
 
             // Sleep to ensure password change in server and client reconnection
