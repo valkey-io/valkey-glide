@@ -316,7 +316,7 @@ class TestPubSub:
             # assert there are no messages to read
             with pytest.raises(TimeoutError):
                 with anyio.fail_after(3):
-                    listening_client.get_pubsub_message()
+                    await listening_client.get_pubsub_message()
 
             assert listening_client.try_get_pubsub_message() is None
         finally:
@@ -605,7 +605,7 @@ class TestPubSub:
             # assert there are no messages to read
             with pytest.raises(TimeoutError):
                 with anyio.fail_after(3):
-                    listening_client.get_pubsub_message()
+                    await listening_client.get_pubsub_message()
 
             assert listening_client.try_get_pubsub_message() is None
         finally:
