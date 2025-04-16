@@ -14806,17 +14806,11 @@ public class SharedCommandTests {
             resultCursor = result[resultCursorIndex].toString();
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
             for (int i = 0; i < resultEntry.length; i += 2) {
-                System.out.println(
-                        "result "
-                                + resultEntry[i]
-                                + " is seen already? "
-                                + secondResultAllKeys.contains(resultEntry[i]));
+                System.out.println(resultEntry[i] + " " + resultEntry[i + 1]);
+                if (secondResultAllKeys.contains(resultEntry[i])) {
+                    System.out.println("Already seen");
+                }
                 secondResultAllKeys.add(resultEntry[i]);
-                System.out.println(
-                        "result "
-                                + resultEntry[i + 1]
-                                + " is seen already? "
-                                + secondResultAllValues.contains(resultEntry[i + 1]));
                 secondResultAllValues.add(resultEntry[i + 1]);
             }
 
@@ -14844,17 +14838,11 @@ public class SharedCommandTests {
                             ArrayUtils.toArray(secondResult[resultCollectionIndex])));
 
             for (int i = 0; i < secondResultEntry.length; i += 2) {
-                System.out.println(
-                        "SecondResult "
-                                + secondResultEntry[i]
-                                + " is seen already? "
-                                + secondResultAllKeys.contains(secondResultEntry[i]));
+                System.out.println(secondResultEntry[i] + " " + secondResultEntry[i + 1]);
+                if (secondResultAllKeys.contains(secondResultEntry[i])) {
+                    System.out.println("Already seen");
+                }
                 secondResultAllKeys.add(secondResultEntry[i]);
-                System.out.println(
-                        "SecondResult "
-                                + secondResultEntry[i + 1]
-                                + " is seen already? "
-                                + secondResultAllValues.contains(secondResultEntry[i + 1]));
                 secondResultAllValues.add(secondResultEntry[i + 1]);
             }
         } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
@@ -15089,17 +15077,11 @@ public class SharedCommandTests {
             resultCursor = gs(result[resultCursorIndex].toString());
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
             for (int i = 0; i < resultEntry.length; i += 2) {
-                System.out.println(
-                        "result "
-                                + resultEntry[i]
-                                + " is seen already? "
-                                + secondResultAllKeys.contains(resultEntry[i]));
+                System.out.println(resultEntry[i] + " " + resultEntry[i + 1]);
+                if (secondResultAllKeys.contains(resultEntry[i])) {
+                    System.out.println("Already seen");
+                }
                 secondResultAllKeys.add(resultEntry[i]);
-                System.out.println(
-                        "result "
-                                + resultEntry[i + 1]
-                                + " is seen already? "
-                                + secondResultAllValues.contains(resultEntry[i + 1]));
                 secondResultAllValues.add(resultEntry[i + 1]);
             }
 
@@ -15127,17 +15109,11 @@ public class SharedCommandTests {
                             ArrayUtils.toArray(secondResult[resultCollectionIndex])));
 
             for (int i = 0; i < secondResultEntry.length; i += 2) {
-                System.out.println(
-                        "secondresult "
-                                + secondResultEntry[i]
-                                + " is seen already? "
-                                + secondResultAllKeys.contains(secondResultEntry[i]));
+                System.out.println(secondResultEntry[i] + " " + secondResultEntry[i + 1]);
+                if (secondResultAllKeys.contains(secondResultEntry[i])) {
+                    System.out.println("Already seen");
+                }
                 secondResultAllKeys.add(secondResultEntry[i]);
-                System.out.println(
-                        "secondresult "
-                                + secondResultEntry[i + 1]
-                                + " is seen already? "
-                                + secondResultAllValues.contains(secondResultEntry[i + 1]));
                 secondResultAllValues.add(secondResultEntry[i + 1]);
             }
         } while (!resultCursor.equals(gs("0"))); // 0 is returned for the cursor of the last iteration.
@@ -15365,17 +15341,11 @@ public class SharedCommandTests {
             resultCursor = result[resultCursorIndex].toString();
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
             for (int i = 0; i < resultEntry.length; i += 2) {
-                System.out.println(
-                        "result"
-                                + resultEntry[i]
-                                + " is seen already? "
-                                + secondResultAllKeys.contains(resultEntry[i]));
+                System.out.println(resultEntry[i] + " " + resultEntry[i + 1]);
+                if (secondResultAllKeys.contains(resultEntry[i])) {
+                    System.out.println("Already seen");
+                }
                 secondResultAllKeys.add(resultEntry[i]);
-                System.out.println(
-                        "result"
-                                + resultEntry[i + 1]
-                                + " is seen already? "
-                                + secondResultAllValues.contains(resultEntry[i + 1]));
                 secondResultAllValues.add(resultEntry[i + 1]);
             }
 
@@ -15403,17 +15373,11 @@ public class SharedCommandTests {
                             ArrayUtils.toArray(secondResult[resultCollectionIndex])));
 
             for (int i = 0; i < secondResultEntry.length; i += 2) {
-                System.out.println(
-                        "secondresult"
-                                + secondResultEntry[i]
-                                + " is seen already? "
-                                + secondResultAllKeys.contains(secondResultEntry[i]));
+                System.out.println(secondResultEntry[i] + " " + secondResultEntry[i + 1]);
+                if (secondResultAllKeys.contains(secondResultEntry[i])) {
+                    System.out.println("Already seen");
+                }
                 secondResultAllKeys.add(secondResultEntry[i]);
-                System.out.println(
-                        "secondresult"
-                                + secondResultEntry[i + 1]
-                                + " is seen already? "
-                                + secondResultAllValues.contains(secondResultEntry[i + 1]));
                 secondResultAllValues.add(secondResultEntry[i + 1]);
             }
         } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
@@ -15628,17 +15592,11 @@ public class SharedCommandTests {
             resultCursor = gs(result[resultCursorIndex].toString());
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
             for (int i = 0; i < resultEntry.length; i += 2) {
-                System.out.println(
-                        "result"
-                                + resultEntry[i]
-                                + " is seen already? "
-                                + secondResultAllKeys.contains(resultEntry[i]));
+                System.out.println(resultEntry[i] + " " + resultEntry[i + 1]);
+                if (secondResultAllKeys.contains(resultEntry[i])) {
+                    System.out.println("Already seen");
+                }
                 secondResultAllKeys.add(resultEntry[i]);
-                System.out.println(
-                        "result"
-                                + resultEntry[i + 1]
-                                + " is seen already? "
-                                + secondResultAllValues.contains(resultEntry[i + 1]));
                 secondResultAllValues.add(resultEntry[i + 1]);
             }
 
@@ -15666,17 +15624,11 @@ public class SharedCommandTests {
                             ArrayUtils.toArray(secondResult[resultCollectionIndex])));
 
             for (int i = 0; i < secondResultEntry.length; i += 2) {
-                System.out.println(
-                        "secondresult"
-                                + secondResultEntry[i]
-                                + " is seen already? "
-                                + secondResultAllKeys.contains(secondResultEntry[i]));
+                System.out.println(secondResultEntry[i] + " " + secondResultEntry[i + 1]);
+                if (secondResultAllKeys.contains(secondResultEntry[i])) {
+                    System.out.println("Already seen");
+                }
                 secondResultAllKeys.add(secondResultEntry[i]);
-                System.out.println(
-                        "secondresult"
-                                + secondResultEntry[i + 1]
-                                + " is seen already? "
-                                + secondResultAllValues.contains(secondResultEntry[i + 1]));
                 secondResultAllValues.add(secondResultEntry[i + 1]);
             }
         } while (!resultCursor.equals(gs("0"))); // 0 is returned for the cursor of the last iteration.
