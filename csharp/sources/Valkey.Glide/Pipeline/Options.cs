@@ -48,8 +48,8 @@ public class Options
 
     public class ClusterBatchOptions : BaseBatchOptions
     {
-        private readonly SingleNodeRoute? _route;
-        private readonly BatchRetryStrategy? _retryStrategy;
+        internal SingleNodeRoute? _route { get; private set; }
+        internal BatchRetryStrategy? _retryStrategy { get; private set; }
 
         public ClusterBatchOptions(uint? timeout = null, bool? raiseOnError = null, SingleNodeRoute? route = null, BatchRetryStrategy? retryStrategy = null) : base(timeout, raiseOnError)
         {

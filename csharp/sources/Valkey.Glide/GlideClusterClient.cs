@@ -15,9 +15,15 @@ public sealed class GlideClusterClient(ClusterClientConfiguration config) : Base
         => await Command(FFI.RequestType.CustomCommand, args, resp => HandleServerResponse<object?>(resp, true), route);
 
     // TODO to interface?
-    public async Task<object?[]?> Exec(Batch batch)
+    public async Task<object?[]?> Exec(ClusterBatch batch)
         => await Batch(batch);
 
-    public async Task<object?[]?> Exec(Batch batch, ClusterBatchOptions options)
-        => await Batch(batch, options);
+    public async Task<object?[]?> Exec(ClusterBatch batch, ClusterBatchOptions options)
+    {
+        if (batch._isAtomic && options._retryStrategy is not null)
+        {
+            throw new Exception("Retry strategy is not supported for atomic batches (transactions)."); // TODO request exception
+        }
+        return await Batch(batch, options);
+    }
 }

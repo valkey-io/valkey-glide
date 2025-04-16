@@ -10,7 +10,8 @@ namespace Valkey.Glide.Pipeline;
 public abstract class BaseBatch<T> where T : BaseBatch<T>
 {
     private readonly List<FFI.Cmd> _commands = new();
-    private readonly bool _isAtomic;
+
+    internal bool _isAtomic { get; private set; }
 
     public BaseBatch(bool isAtomic)
     {
