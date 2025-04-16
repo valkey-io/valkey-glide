@@ -37,6 +37,14 @@ Visit our [wiki](https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper) 
 
 Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/valkey-io/valkey-glide/blob/main/node/DEVELOPER.md#build-from-source) file.
 
+# Quick Start
+
+## Installation
+
+```bash
+npm i @valkey/valkey-glide
+```
+
 ## Basic Examples
 
 #### Standalone Mode:
