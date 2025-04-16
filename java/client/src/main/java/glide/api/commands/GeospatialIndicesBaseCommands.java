@@ -17,8 +17,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Geospatial Indices Commands" group for standalone and
- * cluster clients.
+ * Supports commands for the "Geospatial Indices Commands" group for standalone and cluster clients.
  *
  * @see <a href="https://valkey.io/commands/?group=geo">Geospatial Indices Commands</a>
  */

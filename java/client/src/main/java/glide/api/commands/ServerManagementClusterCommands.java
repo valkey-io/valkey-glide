@@ -10,8 +10,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Server Management Commands" group for a cluster
- * client.
+ * Supports commands for the "Server Management Commands" group for a cluster client.
  *
  * @see <a href="https://valkey.io/commands/?group=server">Server Management Commands</a>
  */

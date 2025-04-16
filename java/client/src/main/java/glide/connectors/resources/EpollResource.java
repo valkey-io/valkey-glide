@@ -9,7 +9,7 @@ import io.netty.util.concurrent.DefaultThreadFactory;
  * Implementation of ThreadPoolResource for Epoll-based systems. Enabling custom/default
  * configurations.
  */
-public class EpollResource extends ThreadPoolResource {
+class EpollResource extends ThreadPoolResource {
     private static final String EPOLL_EVENT_LOOP_IDENTIFIER = "glide-channel-epoll-elg";
 
     public EpollResource() {

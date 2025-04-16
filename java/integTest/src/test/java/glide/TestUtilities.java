@@ -24,7 +24,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import java.security.SecureRandom;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.NonNull;
 import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
@@ -88,7 +89,20 @@ public class TestUtilities {
                                 parts -> parts[0],
                                 parts -> parts[1],
                                 (existingValue, newValue) -> newValue,
-                                HashMap::new));
+                                LinkedHashMap::new));
+    }
+
+    // copied from glide.utils.ArrayTransformUtils.concatenateArrays, because it is not exported
+    /**
+     * Concatenates multiple arrays of type T and returns a single concatenated array.
+     *
+     * @param arrays Varargs parameter for arrays to be concatenated.
+     * @param <T> The type of the elements in the arrays.
+     * @return A concatenated array of type T.
+     */
+    @SafeVarargs
+    public static <T> T[] concatenateArrays(T[]... arrays) {
+        return Stream.of(arrays).flatMap(Stream::of).toArray(size -> Arrays.copyOf(arrays[0], size));
     }
 
     public static GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?>

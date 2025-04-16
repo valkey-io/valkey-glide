@@ -282,7 +282,7 @@ import glide.managers.ConnectionManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.EnumSet;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -358,11 +358,8 @@ public abstract class BaseClient
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
         try {
-            ThreadPoolResource threadPoolResource = config.getThreadPoolResource();
-            if (threadPoolResource == null) {
-                threadPoolResource =
-                        ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
-            }
+            ThreadPoolResource threadPoolResource =
+                    ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
             MessageHandler messageHandler = buildMessageHandler(config);
             ChannelHandler channelHandler = buildChannelHandler(threadPoolResource, messageHandler);
             ConnectionManager connectionManager = buildConnectionManager(channelHandler);
@@ -392,7 +389,7 @@ public abstract class BaseClient
      * @return Return a {@link Map} that contains the statistics collected internally by GLIDE core
      */
     public Map<String, String> getStatistics() {
-        return (HashMap<String, String>) StatisticsResolver.getStatistics();
+        return StatisticsResolver.getStatistics();
     }
 
     /**
@@ -4723,12 +4720,12 @@ public abstract class BaseClient
             o =
                     map.entrySet().stream()
                             .collect(
-                                    HashMap::new,
+                                    LinkedHashMap::new,
                                     (m, e) ->
                                             m.put(
                                                     convertByteArrayToGlideString(e.getKey()),
                                                     convertByteArrayToGlideString(e.getValue())),
-                                    HashMap::putAll);
+                                    LinkedHashMap::putAll);
         }
         return o;
     }
