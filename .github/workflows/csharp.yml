@@ -214,6 +214,13 @@ jobs:
                   cargo-toml-folder: csharp/rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Set up dotnet ${{ matrix.dotnet }}
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: | # install latest dotnet too to use language features
+                      9
+                      ${{ matrix.dotnet }}
+
             - name: Format
               working-directory: csharp
               run: |
