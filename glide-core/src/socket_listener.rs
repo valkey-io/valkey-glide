@@ -24,11 +24,13 @@ use redis::{
 };
 use std::cell::Cell;
 use std::collections::HashSet;
+use std::fs;
+use std::io;
+use std::os::unix::fs::PermissionsExt;
 use std::ptr::from_mut;
 use std::rc::Rc;
 use std::sync::RwLock;
-use std::{env, str};
-use std::{io, thread};
+use std::{str, thread};
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
@@ -43,6 +45,7 @@ use PipeListeningResult::*;
 
 /// The socket file name
 const SOCKET_FILE_NAME: &str = "glide-socket";
+const UNIX_SOCKER_DIR: &str = "/tmp";
 
 /// The maximum length of a request's arguments to be passed as a vector of
 /// strings instead of a pointer
@@ -810,16 +813,14 @@ struct ClosingError {
 /// The socket file name will contain the process ID and will try to be saved into the user's runtime directory
 /// (e.g. /run/user/1000) in Unix systems. If the runtime dir isn't found, the socket file will be saved to the temp dir.
 /// For Windows, the socket file will be saved to %AppData%\Local.
+/// We add a UUID to ensure uniqueness in environments where PIDs can be reused (like containers).
+/// We use /tmp because it is short and has a static size, which helps avoid issues with socket path length limits.
 pub fn get_socket_path_from_name(socket_name: String) -> String {
     let base_dirs = BaseDirs::new().expect("Failed to create BaseDirs");
-    let tmp_dir;
     let folder = if cfg!(windows) {
-        base_dirs.data_local_dir()
+        base_dirs.data_local_dir().to_path_buf()
     } else {
-        base_dirs.runtime_dir().unwrap_or({
-            tmp_dir = env::temp_dir();
-            tmp_dir.as_path()
-        })
+        UNIX_SOCKER_DIR.into()
     };
     folder
         .join(socket_name)
@@ -907,6 +908,8 @@ pub fn start_socket_listener_internal<InitCallback>(
                         }
                         Ok(listener_socket) => listener_socket,
                     };
+                    // Restrict permissions: rw------- (owner only)
+                    fs::set_permissions(&socket_path_cloned, fs::Permissions::from_mode(0o600))?;
 
                     // Signal initialization is successful.
                     // IMPORTANT:
