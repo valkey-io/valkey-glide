@@ -335,7 +335,6 @@ func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
 }
 
 func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(client api.BaseClient)) {
-
 	for _, client := range clients {
 		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
 			test(client)
@@ -396,41 +395,27 @@ func (suite *GlideTestSuite) GenerateLargeUuid() string {
 
 // --- PubSub Test Helpers ---
 
-func (suite *GlideTestSuite) createStandaloneClientWithSubscriptions(config *api.StandaloneSubscriptionConfig) api.GlideClientCommands {
+func (suite *GlideTestSuite) createStandaloneClientWithSubscriptions(
+	config *api.StandaloneSubscriptionConfig,
+) api.GlideClientCommands {
 	clientConfig := suite.defaultClientConfig().WithSubscriptionConfig(config)
 	return suite.client(clientConfig)
 }
 
-func (suite *GlideTestSuite) createClusterClientWithSubscriptions(config *api.ClusterSubscriptionConfig) api.GlideClusterClientCommands {
+func (suite *GlideTestSuite) createClusterClientWithSubscriptions(
+	config *api.ClusterSubscriptionConfig,
+) api.GlideClusterClientCommands {
 	clientConfig := suite.defaultClusterClientConfig().WithSubscriptionConfig(config)
 	return suite.clusterClient(clientConfig)
-}
-
-func (suite *GlideTestSuite) createPubSubClients() []api.BaseClient {
-	clients := []api.BaseClient{}
-
-	if len(suite.standaloneHosts) > 0 {
-		// Standalone
-		standalone := suite.defaultClient()
-		clients = append(clients, standalone)
-	}
-
-	if len(suite.clusterHosts) > 0 {
-		// Cluster
-		cluster := suite.defaultClusterClient()
-		clients = append(clients, cluster)
-	}
-
-	return clients
 }
 
 func (suite *GlideTestSuite) runWithPubSubClients(test func(c api.BaseClient)) {
 	if *pubsub != true {
 		suite.T().Skip("skipping pubsub tests")
 	}
-	clients := suite.createPubSubClients()
+	clients := suite.getDefaultClients()
 	for _, client := range clients {
-		suite.T().Run(fmt.Sprintf("%T", client), func(t *testing.T) {
+		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
 			test(client)
 		})
 		client.Close()
@@ -476,7 +461,6 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 	callback func(message *api.PubSubMessage, ctx any),
 	ctx any,
 ) {
-
 	switch client.(type) {
 	case api.GlideClientCommands:
 		sConfig := api.NewStandaloneSubscriptionConfig()
@@ -484,7 +468,9 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 			mode := api.PubSubChannelMode(channel.Mode)
 			sConfig = sConfig.WithSubscription(mode, channel.Channel)
 		}
-		sConfig = sConfig.WithCallback(callback, ctx)
+		if callback != nil {
+			sConfig = sConfig.WithCallback(callback, ctx)
+		}
 		suite.createStandaloneClientWithSubscriptions(sConfig)
 	case api.GlideClusterClientCommands:
 		cConfig := api.NewClusterSubscriptionConfig()
@@ -492,8 +478,9 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 			mode := api.PubSubClusterChannelMode(channel.Mode)
 			cConfig = cConfig.WithSubscription(mode, channel.Channel)
 		}
-		cConfig = cConfig.WithCallback(callback, ctx)
-
+		if callback != nil {
+			cConfig = cConfig.WithCallback(callback, ctx)
+		}
 		suite.createClusterClientWithSubscriptions(cConfig)
 	default:
 		assert.Fail(suite.T(), "Unsupported client type")
