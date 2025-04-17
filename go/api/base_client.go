@@ -7680,7 +7680,7 @@ func (client *baseClient) InvokeScript(script options.Script) (any, error) {
 //
 // [LOAD]: https://valkey.io/commands/script-load/
 // [EVALSHA]: https://valkey.io/commands/evalsha/
-func (client *baseClient) InvokeScriptWithOptions(script *options.Script, scriptOptions *options.ScriptOptions) (any, error) {
+func (client *baseClient) InvokeScriptWithOptions(script options.Script, scriptOptions options.ScriptOptions) (any, error) {
 	keys := scriptOptions.GetKeys()
 	args := scriptOptions.GetArgs()
 

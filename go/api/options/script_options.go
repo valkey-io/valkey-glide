@@ -64,7 +64,7 @@ func NewScript(code interface{}) *Script {
 }
 
 // GetHash returns the hash of the script
-func (s *Script) getHash() string {
+func (s *Script) GetHash() string {
 	return s.hash
 }
 
