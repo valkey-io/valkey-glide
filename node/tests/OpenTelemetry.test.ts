@@ -36,7 +36,7 @@ function readAndParseSpanFile(path: string): {
         spanData = fs.readFileSync(path, "utf8");
     } catch (error: unknown) {
         throw new Error(
-            `Failed to read or validate span file: ${error instanceof Error ? error.message : String(error)}`,
+            `Failed to read or validate file: ${error instanceof Error ? error.message : String(error)}`,
         );
     }
 
@@ -118,8 +118,8 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint: VALID_ENDPOINT_TRACES,
-                        metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                        tracesCollectorEndpoint: VALID_ENDPOINT_TRACES,
+                        metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
                     },
                 },
             });
@@ -158,8 +158,8 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint: VALID_ENDPOINT_TRACES,
-                        metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                        tracesCollectorEndpoint: VALID_ENDPOINT_TRACES,
+                        metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
                         flushIntervalMs: 100,
                     },
                 },
@@ -211,8 +211,8 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint: VALID_ENDPOINT_TRACES,
-                        metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                        tracesCollectorEndpoint: VALID_ENDPOINT_TRACES,
+                        metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
                         flushIntervalMs: 100,
                     },
                 },
@@ -272,8 +272,8 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     ),
                     advancedConfiguration: {
                         openTelemetryConfig: {
-                            tracesCollectorEndPoint: VALID_ENDPOINT_TRACES,
-                            metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                            tracesCollectorEndpoint: VALID_ENDPOINT_TRACES,
+                            metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
                             flushIntervalMs: -400,
                         },
                     },
@@ -294,9 +294,9 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     ),
                     advancedConfiguration: {
                         openTelemetryConfig: {
-                            tracesCollectorEndPoint:
+                            tracesCollectorEndpoint:
                                 "file:invalid-path/v1/traces.json",
-                            metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                            metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
                             flushIntervalMs: 400,
                         },
                     },
@@ -317,9 +317,9 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     ),
                     advancedConfiguration: {
                         openTelemetryConfig: {
-                            tracesCollectorEndPoint:
+                            tracesCollectorEndpoint:
                                 "file:///no-exits-path/v1/traces.json",
-                            metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                            metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
                             flushIntervalMs: 400,
                         },
                     },
@@ -332,17 +332,17 @@ describe("OpenTelemetry GlideClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "opentelemetry folder path config_%p",
         async (protocol) => {
-            const path = "./tmp/";
+            const path = "/tmp/glide-test/";
             const file = path + "signals.json";
-
-            // Create the directory if it doesn't exist
-            if (!fs.existsSync(path)) {
-                fs.mkdirSync(path, { recursive: true });
-            }
 
             // Remove the span file if it exists
             if (fs.existsSync(file)) {
                 fs.unlinkSync(file);
+            }
+
+            // Create the directory if it doesn't exist
+            if (!fs.existsSync(path)) {
+                fs.mkdirSync(path, { recursive: true });
             }
 
             const client = await GlideClusterClient.createClient({
@@ -352,8 +352,8 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint: "file://" + path,
-                        metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                        tracesCollectorEndpoint: "file://" + path,
+                        metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
                         flushIntervalMs: 400,
                     },
                 },
@@ -375,19 +375,28 @@ describe("OpenTelemetry GlideClusterClient", () => {
         "opentelemetry txt file path config_%p",
         async (protocol) => {
             const path = "/tmp/traces.txt";
-            await GlideClusterClient.createClient({
+            const client = await GlideClusterClient.createClient({
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
                     protocol,
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint: "file://" + path,
-                        metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                        tracesCollectorEndpoint: "file://" + path,
+                        metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
                         flushIntervalMs: 400,
                     },
                 },
             });
+            await client.set("test_key", "foo");
+            await client.get("test_key");
+
+            // Wait for spans to be flushed to file
+            await new Promise((resolve) => setTimeout(resolve, 400));
+
+            const { spanNames } = readAndParseSpanFile(path);
+            expect(spanNames).toContain("Set");
+            expect(spanNames).toContain("Get");
         },
         TIMEOUT,
     );
@@ -403,8 +412,8 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     ),
                     advancedConfiguration: {
                         openTelemetryConfig: {
-                            tracesCollectorEndPoint: "wrong.endpoint",
-                            metricsCollectorEndPoint: "wrong.endpoint",
+                            tracesCollectorEndpoint: "wrong.endpoint",
+                            metricsCollectorEndpoint: "wrong.endpoint",
                             flushIntervalMs: 400,
                         },
                     },
@@ -458,8 +467,8 @@ describe("OpenTelemetry GlideClient", () => {
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint: VALID_ENDPOINT_TRACES,
-                        metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                        tracesCollectorEndpoint: VALID_ENDPOINT_TRACES,
+                        metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
                         flushIntervalMs: 400,
                     },
                 },
@@ -497,8 +506,8 @@ describe("OpenTelemetry GlideClient", () => {
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint: VALID_ENDPOINT_TRACES,
-                        metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                        tracesCollectorEndpoint: VALID_ENDPOINT_TRACES,
+                        metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
                         flushIntervalMs: 400,
                     },
                 },
@@ -523,8 +532,8 @@ describe("OpenTelemetry GlideClient", () => {
                 ),
                 advancedConfiguration: {
                     openTelemetryConfig: {
-                        tracesCollectorEndPoint: VALID_ENDPOINT_TRACES,
-                        metricsCollectorEndPoint: VALID_ENDPOINT_METRICS,
+                        tracesCollectorEndpoint: VALID_ENDPOINT_TRACES,
+                        metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
                         flushIntervalMs: 400,
                     },
                 },
@@ -569,8 +578,8 @@ describe("OpenTelemetry GlideClient", () => {
                     ),
                     advancedConfiguration: {
                         openTelemetryConfig: {
-                            tracesCollectorEndPoint: "wrong.endpoint",
-                            metricsCollectorEndPoint: "wrong.endpoint",
+                            tracesCollectorEndpoint: "wrong.endpoint",
+                            metricsCollectorEndpoint: "wrong.endpoint",
                             flushIntervalMs: 400,
                         },
                     },

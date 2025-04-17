@@ -691,9 +691,9 @@ export interface BaseClientConfiguration {
  * ### OpenTelemetry
  *
  * - **openTelemetryConfig**: Use the `openTelemetryConfig` property to specify the endpoint of the collector to export the measurments.
- *   - **Traces Collector EndPoint**: Set `tracesCollectorEndPoint` to specify the endpoint path of the collector to export the traces measurments.
- *   - **Metrics Collector EndPoint**: Set `metricsCollectorEndPoint` to specify the endpoint path of the collector to export the metrics data.
- *   - **Flush Interval Ms**: Set `flushIntervalMs` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 5000 will be used.
+ *   - **Traces Collector Endpoint**: Set `tracesCollectorEndpoint` to specify the endpoint path of the collector to export the traces measurments.
+ *   - **Metrics Collector Endpoint**: Set `metricsCollectorEndpoint` to specify the endpoint path of the collector to export the metrics data.
+ *   - **Flush Interval Ms**: Set `flushIntervalMs` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 5000ms will be used.
  *
  * The collector endpoints support multiple protocols:
  * - HTTP: Use `http://` prefix (e.g., `http://localhost:4318`)
@@ -711,8 +711,8 @@ export interface BaseClientConfiguration {
  * const config: AdvancedBaseClientConfiguration = {
  *   connectionTimeout: 5000, // 5 seconds
  *   openTelemetryConfig: {
- *      tracesCollectorEndPoint: 'https://127.0.0.1/v1/traces.json',
- *      metricsCollectorEndPoint: 'https://127.0.0.1/v1/metrics.json',
+ *      tracesCollectorEndpoint: 'https://127.0.0.1/v1/traces.json',
+ *      metricsCollectorEndpoint: 'https://127.0.0.1/v1/metrics.json',
  *      flushIntervalMs: 5000, // 5 seconds
  *   },
  * };
@@ -733,11 +733,11 @@ export interface AdvancedBaseClientConfiguration {
         /**
          * The client collector address to export the traces measurments.
          */
-        tracesCollectorEndPoint: string;
+        tracesCollectorEndpoint: string;
         /**
          * The client collector address to export the metrics.
          */
-        metricsCollectorEndPoint: string;
+        metricsCollectorEndpoint: string;
         /**
          * The duration in milliseconds the data will exported to the collector.
          * If interval is not specified, 5000 will be used.
@@ -971,7 +971,7 @@ export class BaseClient {
         }
     }
 
-    private dropCommandSpan(spanPtr: number | ProtoLong | null | undefined) {
+    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
         if (spanPtr === null || spanPtr === undefined) return;
 
         if (typeof spanPtr === "number") {
@@ -1127,12 +1127,13 @@ export class BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
 
-            const commandObj = Array.isArray(command)
-                ? "Batch"
-                : JSON.parse(JSON.stringify(command)).requestType;
             //TODO: creates the span only if the otel config exits - https://github.com/valkey-io/valkey-glide/issues/3309
             //TODO: Add a condition to create a span statistic,
             // such as only 1% of the requests. This will be configurable - https://github.com/valkey-io/valkey-glide/issues/3452
+            const commandObj =
+                command instanceof command_request.Command
+                    ? JSON.parse(JSON.stringify(command)).requestType
+                    : "Batch";
             const pair = createLeakedOtelSpan(commandObj);
             const spanPtr = new Long(pair[0], pair[1]);
 
@@ -7783,9 +7784,9 @@ export class BaseClient {
         if (options.openTelemetryConfig) {
             request.opentelemetryConfig = {
                 tracesCollectorEndpoint:
-                    options.openTelemetryConfig.tracesCollectorEndPoint,
+                    options.openTelemetryConfig.tracesCollectorEndpoint,
                 metricsCollectorEndpoint:
-                    options.openTelemetryConfig.metricsCollectorEndPoint,
+                    options.openTelemetryConfig.metricsCollectorEndpoint,
                 flushInterval: options.openTelemetryConfig.flushIntervalMs,
             };
         }
