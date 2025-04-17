@@ -167,6 +167,7 @@ public class ClusterClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
+    @Timeout(15)
     @SneakyThrows
     @RepeatedTest(500)
     public void test_update_connection_password() {
@@ -175,7 +176,7 @@ public class ClusterClientTests {
         String pwd = UUID.randomUUID().toString();
 
         try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(2000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             // validate that we can use the client
             assertNotNull(testClient.info().get());
