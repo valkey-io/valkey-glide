@@ -23,7 +23,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -167,9 +167,8 @@ public class ClusterClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
-    @Disabled("flaky test: re-enable once fixed, or remove based on PR #3311")
     @SneakyThrows
-    @Test
+    @RepeatedTest(500)
     public void test_update_connection_password() {
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
