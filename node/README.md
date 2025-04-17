@@ -31,6 +31,7 @@ Node.js 16.20 or higher.
 
 ## Documentation
 
+See GLIDE's [documentation site](https://valkey.io/valkey-glide/).
 Visit our [wiki](https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
 
 ### Building & Testing
