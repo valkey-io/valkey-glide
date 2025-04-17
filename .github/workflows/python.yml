@@ -109,6 +109,16 @@ jobs:
                   python -m pip install --upgrade pip
                   pip install mypy-protobuf
 
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      python/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.TARGET }}-python
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
+
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
@@ -177,6 +187,16 @@ jobs:
               uses: actions/setup-python@v5
               with:
                   python-version: ${{ matrix.python }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      python/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.TARGET }}-python
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -304,6 +324,14 @@ jobs:
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
 
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      python/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.IMAGE }}-python
+                  restore-keys: ${{ matrix.host.IMAGE }}
+
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
@@ -339,12 +367,21 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      python/target
+                      glide-core/src/generated
+                  key: aarch64-unknown-linux-gnu-python
+                  restore-keys: |
+                      aarch64-unknown-linux-gnu-glide-core
+                      aarch64-unknown-linux-gnu
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -352,6 +389,7 @@ jobs:
                   os: ubuntu
                   target: aarch64-unknown-linux-gnu
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
             - name: Test with pytest
               working-directory: ./python
               run: |

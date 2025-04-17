@@ -14,9 +14,14 @@ package api
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
 // void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
+// void pubSubCallback(void *clientPtr, enum PushKind kind,
+//                     const uint8_t *message, int64_t message_len,
+//                     const uint8_t *channel, int64_t channel_len,
+//                     const uint8_t *pattern, int64_t pattern_len);
 import "C"
 
 import (
+	goErr "errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -43,6 +48,8 @@ type BaseClient interface {
 	GenericBaseCommands
 	BitmapCommands
 	GeoSpatialCommands
+	ScriptingAndFunctionBaseCommands
+	PubSubCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -54,29 +61,25 @@ type payload struct {
 	error error
 }
 
-//export successCallback
-func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandResponse) {
-	response := cResponse
-	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
-	resultChannel <- payload{value: response, error: nil}
-}
-
-//export failureCallback
-func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
-	defer C.free_error_message(cErrorMessage)
-	msg := C.GoString(cErrorMessage)
-	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
-	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
-}
-
 type clientConfiguration interface {
 	toProtobuf() (*protobuf.ConnectionRequest, error)
 }
 
 type baseClient struct {
-	pending    map[unsafe.Pointer]struct{}
-	coreClient unsafe.Pointer
-	mu         sync.Mutex
+	pending        map[unsafe.Pointer]struct{}
+	coreClient     unsafe.Pointer
+	mu             sync.Mutex
+	messageHandler *MessageHandler
+}
+
+// setMessageHandler assigns a message handler to the client for processing pub/sub messages
+func (client *baseClient) setMessageHandler(handler *MessageHandler) {
+	client.messageHandler = handler
+}
+
+// getMessageHandler returns the currently assigned message handler
+func (client *baseClient) getMessageHandler() *MessageHandler {
+	return client.messageHandler
 }
 
 // buildAsyncClientType safely initializes a C.ClientType with an AsyncClient_Body.
@@ -152,23 +155,29 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, &errors.ClosingError{Msg: err.Error()}
 	}
+	client := &baseClient{pending: make(map[unsafe.Pointer]struct{})}
 
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
 			&clientType,
+			(C.PubSubCallback)(unsafe.Pointer(C.pubSubCallback)),
 		),
 	)
 	defer C.free_connection_response(cResponse)
-
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
 		return nil, &errors.ConnectionError{Msg: message}
 	}
 
-	return &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}, nil
+	client.coreClient = cResponse.conn_ptr
+
+	// Register the client in our registry using the pointer value from C
+	registerClient(client, uintptr(cResponse.conn_ptr))
+
+	return client, nil
 }
 
 // Close terminates the client by closing all associated resources.
@@ -179,6 +188,8 @@ func (client *baseClient) Close() {
 	if client.coreClient == nil {
 		return
 	}
+
+	unregisterClient(uintptr(client.coreClient))
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
@@ -916,6 +927,74 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	}
 
 	return handleStringResponse(result)
+}
+
+// Returns the longest common subsequence between strings stored at key1 and key2.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// Note:
+//
+//	When in cluster mode, `key1` and `key2` must map to the same hash slot.
+//
+// Parameters:
+//
+//	key1 - The key that stores the first string.
+//	key2 - The key that stores the second string.
+//
+// Return value:
+//
+//	The total length of all the longest common subsequences the 2 strings.
+//
+// [valkey.io]: https://valkey.io/commands/lcs/
+func (client *baseClient) LCSLen(key1, key2 string) (int64, error) {
+	result, err := client.executeCommand(C.LCS, []string{key1, key2, options.LCSLenCommand})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// Returns the longest common subsequence between strings stored at key1 and key2.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// Note:
+//
+//	When in cluster mode, `key1` and `key2` must map to the same hash slot.
+//
+// Parameters:
+//
+//	key1 - The key that stores the first string.
+//	key2 - The key that stores the second string.
+//	opts - The [LCSIdxOptions] type.
+//
+// Return value:
+//
+//	A Map containing the indices of the longest common subsequence between the 2 strings
+//	and the total length of all the longest common subsequences. The resulting map contains
+//	two keys, "matches" and "len":
+//	  - "len" is mapped to the total length of the all longest common subsequences between
+//	     the 2 strings.
+//	  - "matches" is mapped to a array that stores pairs of indices that represent the location
+//	     of the common subsequences in the strings held by key1 and key2.
+//
+// [valkey.io]: https://valkey.io/commands/lcs/
+func (client *baseClient) LCSWithOptions(key1, key2 string, opts options.LCSIdxOptions) (map[string]interface{}, error) {
+	optArgs, err := opts.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	response, err := client.executeCommand(C.LCS, append([]string{key1, key2}, optArgs...))
+	if err != nil {
+		return nil, err
+	}
+	return handleStringToAnyMapResponse(response)
 }
 
 // GetDel gets the value associated with the given key and deletes the key.
@@ -3226,6 +3305,33 @@ func (client *baseClient) PfCount(keys []string) (int64, error) {
 	}
 
 	return handleIntResponse(result)
+}
+
+// PfMerge merges multiple HyperLogLog values into a unique value.
+// If the destination variable exists, it is treated as one of the source HyperLogLog data sets,
+// otherwise a new HyperLogLog is created.
+//
+// Note:
+//
+//	When in cluster mode, `sourceKeys` and `destination` must map to the same hash slot.
+//
+// Parameters:
+//
+//	destination - The key of the destination HyperLogLog where the merged data sets will be stored.
+//	sourceKeys - An array of sourceKeys of the HyperLogLog structures to be merged.
+//
+// Return value:
+//
+//	If the HyperLogLog values is successfully merged  it returns "OK".
+//
+// [valkey.io]: https://valkey.io/commands/pfmerge/
+func (client *baseClient) PfMerge(destination string, sourceKeys []string) (string, error) {
+	result, err := client.executeCommand(C.PfMerge, append([]string{destination}, sourceKeys...))
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+
+	return handleStringResponse(result)
 }
 
 // Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
@@ -5899,9 +6005,6 @@ func (client *baseClient) CopyWithOptions(
 //	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
-//	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
-//	fmt.Println(res) // map[key:[["field1", "entry1"]]
-//
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(
 	key string,
@@ -7289,4 +7392,250 @@ func (client *baseClient) GeoSearchStoreWithInfoOptions(
 		*options.NewGeoSearchResultOptions(),
 		infoOptions,
 	)
+}
+
+// Loads a library to Valkey.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	libraryCode - The source code that implements the library.
+//	replace - Whether the given library should overwrite a library with the same name if it
+//	already exists.
+//
+// Return value:
+//
+//	The library name that was loaded.
+//
+// [valkey.io]: https://valkey.io/commands/function-load/
+func (client *baseClient) FunctionLoad(libraryCode string, replace bool) (string, error) {
+	args := []string{}
+	if replace {
+		args = append(args, options.ReplaceKeyword)
+	}
+	args = append(args, libraryCode)
+	result, err := client.executeCommand(C.FunctionLoad, args)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all function libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-flush/
+func (client *baseClient) FunctionFlush() (string, error) {
+	result, err := client.executeCommand(C.FunctionFlush, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all function libraries in synchronous mode.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-flush/
+func (client *baseClient) FunctionFlushSync() (string, error) {
+	result, err := client.executeCommand(C.FunctionFlush, []string{string(options.SYNC)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all function libraries in asynchronous mode.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-flush/
+func (client *baseClient) FunctionFlushAsync() (string, error) {
+	result, err := client.executeCommand(C.FunctionFlush, []string{string(options.ASYNC)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Invokes a previously loaded function.
+// The command will be routed to a primary random node.
+// To route to a replica please refer to [FCallReadOnly].
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall/
+func (client *baseClient) FCall(function string) (any, error) {
+	result, err := client.executeCommand(C.FCall, []string{function, utils.IntToString(0)})
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
+}
+
+// Invokes a previously loaded read-only function.
+// This command is routed depending on the client's {@link ReadFrom} strategy.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall_ro/
+func (client *baseClient) FCallReadOnly(function string) (any, error) {
+	result, err := client.executeCommand(C.FCallReadOnly, []string{function, utils.IntToString(0)})
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
+}
+
+// Invokes a previously loaded function.
+// This command is routed to primary nodes only.
+// To route to a replica please refer to [FCallReadOnly].
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//	keys - An `array` of keys accessed by the function. To ensure the correct
+//	   execution of functions, both in standalone and clustered deployments, all names of keys
+//	   that a function accesses must be explicitly provided as `keys`.
+//	arguments - An `array` of `function` arguments. `arguments` should not represent names of keys.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall/
+func (client *baseClient) FCallWithKeysAndArgs(
+	function string,
+	keys []string,
+	args []string,
+) (any, error) {
+	cmdArgs := []string{function, utils.IntToString(int64(len(keys)))}
+	cmdArgs = append(cmdArgs, keys...)
+	cmdArgs = append(cmdArgs, args...)
+	result, err := client.executeCommand(C.FCall, cmdArgs)
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
+}
+
+// Invokes a previously loaded read-only function.
+// This command is routed depending on the client's {@link ReadFrom} strategy.
+//
+// Note: When in cluster mode, all `keys` must map to the same hash slot.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//	keys - An `array` of keys accessed by the function. To ensure the correct
+//	   execution of functions, both in standalone and clustered deployments, all names of keys
+//	   that a function accesses must be explicitly provided as `keys`.
+//	arguments - An `array` of `function` arguments. `arguments` should not represent names of keys.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall_ro/
+func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
+	function string,
+	keys []string,
+	args []string,
+) (any, error) {
+	cmdArgs := []string{function, utils.IntToString(int64(len(keys)))}
+	cmdArgs = append(cmdArgs, keys...)
+	cmdArgs = append(cmdArgs, args...)
+	result, err := client.executeCommand(C.FCallReadOnly, cmdArgs)
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
+}
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *baseClient) Publish(channel string, message string) (int64, error) {
+	if message == "" || channel == "" {
+		return 0, goErr.New("both message and channel are required for Publish command")
+	}
+	args := []string{channel, message}
+	result, err := client.executeCommand(C.Publish, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
 }

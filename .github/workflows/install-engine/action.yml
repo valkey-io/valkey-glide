@@ -23,36 +23,61 @@ env:
 runs:
     using: "composite"
 
-    # TODO: self-hosted runners are actually cloning the repo, using the cache from the previous run
-    # will not work as expected. We need to find a way to cache the valkey repo on the runner itself.
     steps:
-        - name: Cache Valkey for non self hosted runners
-          if: ${{!contains(inputs.target, 'aarch64-unknown') }}
-          uses: actions/cache@v4
+        - name: "Setup Environment Variables"
+          shell: bash
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+          run: |
+              echo "ENGINE_VERSION=$ENGINE_VERSION" >> $GITHUB_ENV
+
+        - name: Prepare Valkey sources
+          shell: bash
+          run: |
+              echo "Cloning and checking out Valkey $ENGINE_VERSION"
+              if [[ -d valkey ]]; then
+                  echo "Removing existing valkey directory..."
+                  rm -fR valkey
+              fi
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey/src
+              git checkout $ENGINE_VERSION
+              SOURCES_VERSION=`grep ' VALKEY_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'` || :
+              if [[ -z $SOURCES_VERSION ]]; then
+                  SOURCES_VERSION=`grep ' REDIS_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'`
+              fi
+              echo "SOURCES_VERSION=$SOURCES_VERSION" >> $GITHUB_ENV
+
+        - uses: actions/cache@v4
           id: cache-valkey
           with:
               path: |
-                  ~/valkey
-              key: valkey-${{ inputs.engine-version }}-${{ inputs.target }}
+                  valkey/src/valkey-server
+                  valkey/src/valkey-cli
+              key: valkey-${{ env.SOURCES_VERSION }}-${{ inputs.target }}
 
-        - name: Prepare Valkey sources
+        # Manual install, because makefile target rebuilds everything, we want to avoid that
+        - name: Install cached engine
+          if: ${{ steps.cache-valkey.outputs.cache-hit == 'true' }}
+          shell: bash
+          run: |
+              cd valkey/src
+              if command -v sudo &> /dev/null
+              then
+                  echo "sudo command exists"
+                  SUDO=sudo
+              fi
+              $SUDO cp valkey-server valkey-cli redis-server redis-cli /usr/local/bin/ 2>/dev/null || :
+              if [[ ! -e /usr/local/bin/redis-server ]]; then
+                  $SUDO cp valkey-server /usr/local/bin/redis-server
+              fi
+              echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
+
+        - name: Build and install engine
           if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
           shell: bash
           run: |
-              echo "Cloning and checking out Valkey ${{ inputs.engine-version }}"
-              cd ~/
-              if [[ -d valkey ]]; then
-                echo "Removing existing valkey directory..."
-                rm -fR valkey
-              fi
-              git clone https://github.com/valkey-io/valkey.git
               cd valkey
-              git checkout ${{ inputs.engine-version }}
-
-        - name: Build and install engine
-          shell: bash
-          run: |
-              cd ~/valkey
               make BUILD_TLS=yes
               if command -v sudo &> /dev/null
               then
@@ -73,10 +98,9 @@ runs:
               # In Valkey releases, the engine is built with symlinks from valkey-server and valkey-cli
               # to redis-server and redis-cli. This step ensures that the engine is properly installed
               # with the expected version and that Valkey symlinks are correctly created.
-              EXPECTED_VERSION=`echo ${{ inputs.engine-version }} | sed -e "s/^redis-//"`
-              INSTALLED_VER=$(redis-server -v)
-              if [[ $INSTALLED_VER != *"${EXPECTED_VERSION}"* ]]; then
-                  echo "Wrong version has been installed. Expected: $EXPECTED_VERSION, Installed: $INSTALLED_VER"
+              INSTALLED_VER=$(redis-server -v) || INSTALLED_VER=$(valkey-server -v)
+              if [[ $INSTALLED_VER != *"${ENGINE_VERSION}"* ]]; then
+                  echo "Wrong version has been installed. Expected: $ENGINE_VERSION, Installed: $INSTALLED_VER"
                   exit 1
               else
                   echo "Successfully installed the server: $INSTALLED_VER"

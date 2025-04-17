@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"time"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/errors"
@@ -286,6 +287,12 @@ func convertStringArray(response *C.struct_CommandResponse, isNilable bool) ([]s
 		slice = append(slice, res.Value())
 	}
 	return slice, nil
+}
+
+func handleAnyResponse(response *C.struct_CommandResponse) (any, error) {
+	defer C.free_command_response(response)
+
+	return parseInterface(response)
 }
 
 func convertAnyArray(response *C.struct_CommandResponse, isNilable bool) ([]any, error) {
@@ -1411,6 +1418,33 @@ func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[st
 	return mapResult, nil
 }
 
+func handleMapOfStringMapResponse(response *C.struct_CommandResponse) (map[string]map[string]string, error) {
+	defer C.free_command_response(response)
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := mapConverter[map[string]string]{
+		next:     mapConverter[string]{},
+		canBeNil: false,
+	}.convert(data)
+	if err != nil {
+		return nil, err
+	}
+	mapResult, ok := result.(map[string]map[string]string)
+	if !ok {
+		return nil, &errors.RequestError{Msg: "Unexpected conversion result type"}
+	}
+
+	return mapResult, nil
+}
+
 func handleTimeClusterResponse(response *C.struct_CommandResponse) (ClusterValue[[]string], error) {
 	// Handle multi-node response
 	if err := checkResponseType(response, C.Map, true); err == nil {
@@ -1457,5 +1491,61 @@ func handleStringIntMapResponse(response *C.struct_CommandResponse) (map[string]
 	if !ok {
 		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of map: %T", converted)}
 	}
+	return result, nil
+}
+
+func handleFunctionStatsResponse(response *C.struct_CommandResponse) (map[string]FunctionStatsResult, error) {
+	if err := checkResponseType(response, C.Map, false); err != nil {
+		return nil, err
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]FunctionStatsResult)
+
+	// Process all nodes in the response
+	for nodeAddr, nodeData := range data.(map[string]interface{}) {
+		nodeMap, ok := nodeData.(map[string]interface{})
+		if !ok {
+			continue // Skip if nodeData is not a map, e.g. when there isn't a running script
+		}
+
+		// Process engines
+		engines := make(map[string]Engine)
+		if enginesMap, ok := nodeMap["engines"].(map[string]interface{}); ok {
+			for engineName, engineData := range enginesMap {
+				if engineMap, ok := engineData.(map[string]interface{}); ok {
+					engine := Engine{
+						Language:      engineName,
+						FunctionCount: engineMap["functions_count"].(int64),
+						LibraryCount:  engineMap["libraries_count"].(int64),
+					}
+					engines[engineName] = engine
+				}
+			}
+		}
+
+		// Process running script
+		var runningScript RunningScript
+		if scriptData := nodeMap["running_script"]; scriptData != nil {
+			if scriptMap, ok := scriptData.(map[string]interface{}); ok {
+				runningScript = RunningScript{
+					Name:     scriptMap["name"].(string),
+					Cmd:      scriptMap["command"].(string),
+					Args:     scriptMap["arguments"].([]string),
+					Duration: time.Duration(scriptMap["duration_ms"].(int64)) * time.Millisecond,
+				}
+			}
+		}
+
+		result[nodeAddr] = FunctionStatsResult{
+			Engines:       engines,
+			RunningScript: runningScript,
+		}
+	}
+
 	return result, nil
 }

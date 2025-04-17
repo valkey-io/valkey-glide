@@ -885,3 +885,149 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 	assert.GreaterOrEqual(t, len(resCursor), 1)
 	assert.GreaterOrEqual(t, len(resCollection), 1)
 }
+
+func (suite *GlideTestSuite) TestConfigRewrite() {
+	client := suite.defaultClient()
+	t := suite.T()
+	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
+	response, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	lines := strings.Split(response, "\n")
+	var configFile string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "config_file:") {
+			configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+			break
+		}
+	}
+	if len(configFile) > 0 {
+		suite.verifyOK(client.ConfigRewrite())
+	}
+}
+
+func (suite *GlideTestSuite) TestRandomKey() {
+	client := suite.defaultClient()
+	// Test 1: Check if the command return random key
+	t := suite.T()
+	result, err := client.RandomKey()
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+}
+
+func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+
+	// Flush all functions with SYNC option
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Generate and load function
+	libName := "mylib1c"
+	funcName := "myfunc1c"
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, true)
+	result, err = client.FunctionLoad(code, false)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	// Test FCALL
+	functionResult, err := client.FCallWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "one", functionResult)
+
+	// Test FCALL_RO
+	functionResult, err = client.FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "one", functionResult)
+
+	// load new lib and delete it - first lib remains loaded
+	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoad(anotherLib, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "anotherLib", result)
+
+	deleteResult, err := client.FunctionDelete("anotherLib")
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", deleteResult)
+
+	// delete missing lib returns a error
+	_, err = client.FunctionDelete("anotherLib")
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+}
+
+func (suite *GlideTestSuite) TestFunctionStats() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+
+	// Flush all functions with SYNC option
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Load first function
+	libName := "functionStats"
+	funcName := libName
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, false)
+	result, err = client.FunctionLoad(code, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	// Check stats after loading first function
+	stats, err := client.FunctionStats()
+	assert.NoError(suite.T(), err)
+	for _, nodeStats := range stats {
+		assert.Empty(suite.T(), nodeStats.RunningScript.Name)
+		assert.Equal(suite.T(), 1, len(nodeStats.Engines))
+		assert.Equal(suite.T(), int64(1), nodeStats.Engines["LUA"].LibraryCount)
+		assert.Equal(suite.T(), int64(1), nodeStats.Engines["LUA"].FunctionCount)
+	}
+
+	// Load second function with multiple functions
+	libName2 := libName + "_2"
+	functions2 := map[string]string{
+		funcName + "_2": "return 'OK'",
+		funcName + "_3": "return 42",
+	}
+	code2 := GenerateLuaLibCode(libName2, functions2, false)
+	result, err = client.FunctionLoad(code2, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName2, result)
+
+	// Check stats after loading second function
+	stats, err = client.FunctionStats()
+	assert.NoError(suite.T(), err)
+	for _, nodeStats := range stats {
+		assert.Empty(suite.T(), nodeStats.RunningScript.Name)
+		assert.Equal(suite.T(), 1, len(nodeStats.Engines))
+		assert.Equal(suite.T(), int64(2), nodeStats.Engines["LUA"].LibraryCount)
+		assert.Equal(suite.T(), int64(3), nodeStats.Engines["LUA"].FunctionCount)
+	}
+
+	// Flush all functions
+	result, err = client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Check stats after flushing
+	stats, err = client.FunctionStats()
+	assert.NoError(suite.T(), err)
+	for _, nodeStats := range stats {
+		assert.Empty(suite.T(), nodeStats.RunningScript.Name)
+		assert.Equal(suite.T(), 1, len(nodeStats.Engines))
+		assert.Equal(suite.T(), int64(0), nodeStats.Engines["LUA"].LibraryCount)
+		assert.Equal(suite.T(), int64(0), nodeStats.Engines["LUA"].FunctionCount)
+	}
+}

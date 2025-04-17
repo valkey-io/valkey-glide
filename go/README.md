@@ -18,7 +18,10 @@ The release of Valkey GLIDE was tested on the following platforms:
 
 Linux:
 
-- Ubuntu 24.04.1 (x86_64/amd64 and arm64/aarch64)
+- Ubuntu 22.04.5 (x86_64/amd64 and arm64/aarch64)
+- Amazon Linux 2023 (AL2023) (x86_64)
+
+**Note: Currently Alpine Linux / MUSL is NOT supported.**
 
 macOS:
 
@@ -27,10 +30,7 @@ macOS:
 
 ## GO supported versions
 
-| Go Version     |
-|----------------|
-| 1.20           |
-| 1.22           |
+Valkey GLIDE Go support Go version 1.22 and above.
 
 ## Installation and Setup
 

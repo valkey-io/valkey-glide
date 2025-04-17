@@ -3,6 +3,7 @@ use crate::cmd::{cmd, Cmd};
 use crate::types::{
     from_owned_redis_value, ErrorKind, FromRedisValue, HashSet, RedisResult, ToRedisArgs, Value,
 };
+use std::sync::Arc;
 
 pub(crate) const UNROUTABLE_ERROR: (ErrorKind, &str) = (
     ErrorKind::ClientError,
@@ -44,7 +45,7 @@ fn is_illegal_cmd(cmd: &str) -> bool {
 /// Represents a Redis Cluster command pipeline.
 #[derive(Clone)]
 pub struct ClusterPipeline {
-    commands: Vec<Cmd>,
+    commands: Vec<Arc<Cmd>>,
     ignored_commands: HashSet<usize>,
 }
 
@@ -84,7 +85,7 @@ impl ClusterPipeline {
         }
     }
 
-    pub(crate) fn commands(&self) -> &Vec<Cmd> {
+    pub(crate) fn commands(&self) -> &Vec<Arc<Cmd>> {
         &self.commands
     }
 
@@ -121,7 +122,7 @@ impl ClusterPipeline {
         from_owned_redis_value(if self.commands.is_empty() {
             Value::Array(vec![])
         } else {
-            self.make_pipeline_results(con.execute_pipeline(self)?)
+            self.make_pipeline_results(con.execute_pipeline(self)?)?
         })
     }
 

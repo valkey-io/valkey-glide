@@ -42,7 +42,11 @@ type ServerManagementClusterCommands interface {
 
 	ConfigSetWithOptions(parameters map[string]string, routeOption options.RouteOption) (string, error)
 
-	ConfigGet(parameters []string) (ClusterValue[interface{}], error)
+	ConfigGet(parameters []string) (map[string]string, error)
 
-	ConfigGetWithOptions(parameters []string, routeOption options.RouteOption) (ClusterValue[interface{}], error)
+	ConfigGetWithOptions(parameters []string, routeOption options.RouteOption) (ClusterValue[map[string]string], error)
+
+	ConfigRewrite() (string, error)
+
+	ConfigRewriteWithOptions(routeOption options.RouteOption) (string, error)
 }

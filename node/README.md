@@ -14,8 +14,8 @@ The release of Valkey GLIDE was tested on the following platforms:
 
 Linux:
 
-- Ubuntu 22.04.1 (x86_64 and aarch64)
-- Amazon Linux 2023 (AL2023) (x86_64)
+- Ubuntu 22.04.5 (x86_64/amd64 and arm64/aarch64)
+- Amazon Linux 2023 (AL2023) (x86_64/amd64 and arm64/aarch64)
 
 macOS:
 
@@ -24,7 +24,7 @@ macOS:
 
 Alpine:
 
-- node:alpine (default on aarch64 and x86_64)
+- node:alpine (x86_64/amd64 and arm64/aarch64)
 
 ## NodeJS supported version
 
@@ -37,6 +37,14 @@ Visit our [wiki](https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper) 
 ### Building & Testing
 
 Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/valkey-io/valkey-glide/blob/main/node/DEVELOPER.md#build-from-source) file.
+
+# Quick Start
+
+## Installation
+
+```bash
+npm i @valkey/valkey-glide
+```
 
 ## Basic Examples
 
