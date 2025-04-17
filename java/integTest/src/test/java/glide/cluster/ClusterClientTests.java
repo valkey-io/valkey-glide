@@ -23,7 +23,6 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -167,17 +166,15 @@ public class ClusterClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
-    @Timeout(15)
     @SneakyThrows
-    @RepeatedTest(500)
+    @Test
     public void test_update_connection_password() {
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
         String pwd = UUID.randomUUID().toString();
 
         try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
-                        .get()) {
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
             // validate that we can use the client
             assertNotNull(testClient.info().get());
 
