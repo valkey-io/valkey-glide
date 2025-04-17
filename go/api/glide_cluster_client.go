@@ -1441,7 +1441,7 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []
 //
 // [LOAD]: https://valkey.io/commands/script-load/
 // [EVALSHA]: https://valkey.io/commands/evalsha/
-func (client *GlideClusterClient) InvokeScriptWithRoute(script *options.Script, route options.RouteOption) (ClusterValue[any], error) {
+func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, route options.RouteOption) (ClusterValue[any], error) {
 	response, err := client.baseClient.executeScriptWithRoute(script.GetHash(), []string{}, []string{}, route.Route)
 	if err != nil {
 		return createEmptyClusterValue[any](), err
@@ -1490,7 +1490,7 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script *options.Script, 
 //
 // [LOAD]: https://valkey.io/commands/script-load/
 // [EVALSHA]: https://valkey.io/commands/evalsha/
-func (client *GlideClusterClient) InvokeScriptWithOptionsAndRoute(script *options.Script, scriptOptions *options.ScriptOptions, route options.RouteOption) (ClusterValue[any], error) {
+func (client *GlideClusterClient) InvokeScriptWithOptionsAndRoute(script options.Script, scriptOptions options.ScriptOptions, route options.RouteOption) (ClusterValue[any], error) {
 	keys := scriptOptions.GetKeys()
 	args := scriptOptions.GetArgs()
 
