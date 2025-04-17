@@ -27,7 +27,7 @@ type ScriptingAndFunctionBaseCommands interface {
 
 	FCallReadOnlyWithKeysAndArgs(function string, keys []string, args []string) (any, error)
 
-	InvokeScript(script *options.Script) (any, error)
+	InvokeScript(script options.Script) (any, error)
 
-	InvokeScriptWithOptions(script *options.Script, scriptOptions *options.ScriptOptions) (any, error)
+	InvokeScriptWithOptions(script *options.Script, scriptOptions options.ScriptOptions) (any, error)
 }
