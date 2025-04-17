@@ -29,5 +29,5 @@ type ScriptingAndFunctionBaseCommands interface {
 
 	InvokeScript(script options.Script) (any, error)
 
-	InvokeScriptWithOptions(script *options.Script, scriptOptions options.ScriptOptions) (any, error)
+	InvokeScriptWithOptions(script options.Script, scriptOptions options.ScriptOptions) (any, error)
 }
