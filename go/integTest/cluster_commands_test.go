@@ -34,6 +34,38 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 	assert.Equal(suite.T(), "GO GLIDE GO", result.SingleValue().(string))
 }
 
+func (suite *GlideTestSuite) TestClusterCustomCommandDbSize() {
+	client := suite.defaultClusterClient()
+	// DBSIZE result is always a single number regardless of route
+	result, err := client.CustomCommand([]string{"dbsize"})
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+
+	result, err = client.CustomCommandWithRoute([]string{"dbsize"}, config.AllPrimaries)
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+
+	result, err = client.CustomCommandWithRoute([]string{"dbsize"}, config.RandomRoute)
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+}
+
+func (suite *GlideTestSuite) TestClusterCustomCommandConfigGet() {
+	client := suite.defaultClusterClient()
+
+	// CONFIG GET returns a map, but with a single node route it is handled as a single value
+	result, err := client.CustomCommandWithRoute([]string{"CONFIG", "GET", "*file"}, config.RandomRoute)
+	assert.NoError(suite.T(), err)
+	assert.Greater(suite.T(), len(result.SingleValue().(map[string]any)), 0)
+
+	result, err = client.CustomCommandWithRoute([]string{"CONFIG", "GET", "*file"}, config.AllPrimaries)
+	assert.NoError(suite.T(), err)
+	assert.Greater(suite.T(), len(result.MultiValue()), 0)
+	for _, val := range result.MultiValue() {
+		assert.Greater(suite.T(), len(val.(map[string]any)), 0)
+	}
+}
+
 func (suite *GlideTestSuite) TestInfoCluster() {
 	DEFAULT_INFO_SECTIONS := []string{
 		"Server",
