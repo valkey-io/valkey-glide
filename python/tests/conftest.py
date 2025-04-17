@@ -5,6 +5,7 @@ import sys
 from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
+
 from glide.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -21,7 +22,6 @@ from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
 from glide.routes import AllNodes
-
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
     check_if_server_version_lt,

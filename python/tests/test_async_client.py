@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
 import anyio
 import pytest
+
 from glide import ClosingError, RequestError, Script
 from glide.async_commands.batch import Batch, ClusterBatch
 from glide.async_commands.bitmap import (
@@ -84,7 +85,6 @@ from glide.routes import (
     SlotKeyRoute,
     SlotType,
 )
-
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_function_list_response,

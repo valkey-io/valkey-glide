@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
 import anyio
 import sniffio
 from anyio import to_thread
-from anyio.abc import ByteStream
 
 from glide.async_commands.cluster_commands import ClusterCommands
 from glide.async_commands.command_args import ObjectType
@@ -121,8 +120,6 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[Response] = list()
 
-        self._stream: Optional[ByteStream] = None
-
     @classmethod
     async def create(cls, config: BaseClientConfiguration) -> Self:
         """Creates a Glide client.
@@ -232,7 +229,9 @@ class BaseClient(CoreCommands):
         try:
             # Open an UDS connection
             with anyio.fail_after(DEFAULT_TIMEOUT_IN_MILLISECONDS):
-                self._stream = await anyio.connect_unix(path=self.socket_path)
+                self._stream = await anyio.connect_unix(
+                    path=cast(str, self.socket_path)
+                )
         except Exception as e:
             raise ClosingError("Failed to create UDS connection") from e
 
@@ -261,7 +260,6 @@ class BaseClient(CoreCommands):
                 self._pubsub_lock.release()
 
             await self._stream.aclose()
-            await anyio.lowlevel.checkpoint()
 
     def _get_future(self, callback_idx: int) -> Future:
         response_future: Future = Future()
@@ -291,8 +289,12 @@ class BaseClient(CoreCommands):
             except Exception as e:
                 # trio system tasks cannot raise exceptions, so gracefully propagate
                 # any error to the pending future instead
-                res_future = self._available_futures.pop(request.callback_idx, None)
-                res_future.set_exception(e)
+                res_future = self._available_futures.pop(
+                    request.callback_idx if isinstance(request, CommandRequest) else 0,
+                    None,
+                )
+                if res_future:
+                    res_future.set_exception(e)
             finally:
                 self._writer_lock.release()
 
