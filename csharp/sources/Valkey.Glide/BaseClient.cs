@@ -18,8 +18,6 @@ namespace Valkey.Glide;
 
 public abstract class BaseClient : IDisposable, IStringBaseCommands
 {
-    public static Action<string> LOG = (str) => Trace.WriteLine(str);
-
     #region public methods
     public async Task<string> Set(GlideString key, GlideString value)
         => await Command(RequestType.Set, [key, value], HandleOk);

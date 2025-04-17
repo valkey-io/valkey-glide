@@ -313,10 +313,6 @@ pub(crate) unsafe fn convert_double_pointer_to_vec<'a>(
     for (i, &str_ptr) in string_ptrs.iter().enumerate() {
         let slice = unsafe { from_raw_parts(str_ptr as *const u8, string_lengths[i]) };
         result.push(slice);
-
-        dbg!(format!("Cmd.arg[{}]: 0x{:p} {}", i, str_ptr, string_lengths[i]));
-        //"Cmd.arg[{i}]: 0x{_argPtrs[i]:X} {_args[i].Length}"
-        // String::from_utf8_unchecked(command_arg.to_vec()))
     }
     result
 }
@@ -443,7 +439,7 @@ impl ResponseValue {
                 }
             },
             Value::ServerError(err) => {
-                let (vec_ptr, len) = convert_vec_to_pointer(err.to_string().into_bytes());
+                let (vec_ptr, len) = convert_vec_to_pointer(err.details().unwrap().as_bytes().to_vec());
                 ResponseValue {
                     typ: ValueType::Error,
                     val: vec_ptr as i64,
@@ -523,11 +519,7 @@ pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
     };
     for command_arg in arg_vec {
         cmd.arg(command_arg);
-        dbg!(format!("Cmd.arg[i]: {}", String::from_utf8_unchecked(command_arg.to_vec())));
-        // "Cmd.arg[{i}]: 0x{_argPtrs[i]:X} {_args[i].Length}"
     }
-
-    dbg!(format!("Cmd: args 0x{:p} lenghts 0x{:p} {}", (*ptr).args, (*ptr).args_len, (*ptr).arg_count));
     Ok(cmd)
 }
 
@@ -535,8 +527,6 @@ pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, 
     let cmd_pointers = unsafe { std::slice::from_raw_parts((*ptr).cmds, (*ptr).cmd_count) };
     let mut pipeline = Pipeline::with_capacity((*ptr).cmd_count);
     for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
-        dbg!(format!("Batch: cmd[{}] 0x{:p}", i, *cmd_ptr));
-
         match unsafe { create_cmd(*cmd_ptr) } {
             Ok(cmd) => pipeline.add_command(cmd),
             Err(err) => return Err(format!("Coudln't create {:?}'th command: {:?}", i, err)),
@@ -545,8 +535,6 @@ pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, 
     if (*ptr).is_atomic {
         pipeline.atomic();
     }
-
-    dbg!(format!("Batch: cmds 0x{:p} {} atomic {}", (*ptr).cmds, (*ptr).cmd_count, (*ptr).is_atomic));
 
     Ok(pipeline)
 }

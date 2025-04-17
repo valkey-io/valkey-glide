@@ -2,6 +2,8 @@
 
 using Valkey.Glide.Pipeline;
 
+using static Valkey.Glide.Pipeline.Options;
+
 using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
@@ -109,12 +111,15 @@ public class StandaloneClientTests
     [Fact]
     public async Task Transaction()
     {
-        BaseClient.LOG = msg => TestContext.Current.TestOutputHelper?.WriteLine(msg);
         GlideClient client = TestConfiguration.DefaultStandaloneClient();
 
         Batch transaction = new Batch(true).Set("abc", "pewpew").Get("abc").CustomCommand(["ping", "ping"]);
         var res = await client.Exec(transaction).WaitAsync(TimeSpan.FromSeconds(1));
         Assert.True(res.Length == 3);
         Assert.Equal(new object?[] { new gs("OK"), new gs("pewpew"), new gs("ping") }, res);
+
+        transaction = new Batch(true).Get("abc").CustomCommand(["ping", "pong", "pang"]).CustomCommand(["llen", "abc"]);
+        res = await client.Exec(transaction, new BatchOptions(raiseOnError: false));
+        Assert.True(res.Length == 3);
     }
 }

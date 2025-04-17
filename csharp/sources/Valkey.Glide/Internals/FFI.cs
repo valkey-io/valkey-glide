@@ -81,8 +81,6 @@ internal class FFI
                 Marshal.Copy(_args[i].Bytes, 0, _argPtrs[i], _args[i].Length);
                 // 2.2 Copy arg's len
                 _lengths[i] = (nuint)_args[i].Length;
-
-                BaseClient.LOG($"Cmd.arg[{i}]: 0x{_argPtrs[i]:X} {_args[i].Length}");
             }
 
             // 3. Pin it
@@ -91,8 +89,6 @@ internal class FFI
             _cmd.Args = _pinnedArgs.AddrOfPinnedObject();
             _pinnedLengths = GCHandle.Alloc(_lengths, GCHandleType.Pinned);
             _cmd.ArgLengths = _pinnedLengths.AddrOfPinnedObject();
-
-            BaseClient.LOG($"Cmd: args 0x{_cmd.Args:X} lenghts 0x{_cmd.ArgLengths:X} {_args.Length}");
 
             return StructToPtr(_cmd);
         }
@@ -128,15 +124,11 @@ internal class FFI
             for (int i = 0; i < _cmds.Length; i++)
             {
                 _cmdPtrs[i] = _cmds[i].ToPtr();
-
-                BaseClient.LOG($"Batch: cmd[{i}] 0x{_cmdPtrs[i]:X}");
             }
 
             // 2. Pin it
             _pinnedCmds = GCHandle.Alloc(_cmdPtrs, GCHandleType.Pinned);
             _batch.Cmds = _pinnedCmds.AddrOfPinnedObject();
-
-            BaseClient.LOG($"Batch: cmds 0x{_batch.Cmds:X} {_cmds.Length} atomic {_batch.IsAtomic}");
 
             return StructToPtr(_batch);
         }
