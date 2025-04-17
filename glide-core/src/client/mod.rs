@@ -956,10 +956,31 @@ impl Client {
             let config = GlideOpenTelemetryConfigBuilder::default()
                 .with_flush_interval(std::time::Duration::from_millis(
                     request
-                        .otel_span_flush_interval_ms
+                        .otel_flush_interval_ms
                         .unwrap_or(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
                 ))
                 .with_trace_exporter(trace_exporter)
+                .build();
+
+            let _ = GlideOpenTelemetry::initialise(config).map_err(|e| {
+                log_error(
+                    "OpenTelemetry initialization",
+                    format!("OpenTelemetry initialization failed: {}", e),
+                )
+            });
+        };
+
+        if let Some(endpoint_str) = &request.otel_metrics_endpoint {
+            let metrics_exporter =
+                GlideOpenTelemetrySignalsExporter::from_str(endpoint_str.as_str())
+                    .map_err(ConnectionError::IoError)?;
+            let config = GlideOpenTelemetryConfigBuilder::default()
+                .with_flush_interval(std::time::Duration::from_millis(
+                    request
+                        .otel_flush_interval_ms
+                        .unwrap_or(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
+                ))
+                .with_metrics_exporter(metrics_exporter)
                 .build();
 
             let _ = GlideOpenTelemetry::initialise(config).map_err(|e| {

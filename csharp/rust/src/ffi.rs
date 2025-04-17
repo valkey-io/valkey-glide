@@ -73,7 +73,7 @@ pub struct ConnectionConfig {
     pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
     pub inflight_requests_limit: Option<u32>,
     pub otel_endpoint: Option<String>,
-    pub otel_span_flush_interval_ms: Option<u64>,
+    pub otel_flush_interval_ms: Option<u64>,
     */
 }
 
@@ -148,7 +148,7 @@ pub(crate) unsafe fn create_connection_request(
         inflight_requests_limit: None,
         otel_traces_endpoint: None,
         otel_metrics_endpoint: None,
-        otel_span_flush_interval_ms: None,
+        otel_flush_interval_ms: None,
     }
 }
 
