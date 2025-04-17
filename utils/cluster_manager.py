@@ -818,9 +818,8 @@ def is_address_already_in_use(
             # write slightly different error messages when a port is already in use
 
             # Also write the server log
-            with open(log_file, "r") as log_file, open("server_log.txt", "w") as output_file:
-                output_file.write(log_file.read()
-                                      )
+            with open(log_file, "r") as log_file_handle, open("server_log.txt", "w") as output_file:
+                output_file.write(log_file_handle.read())
 
             if "Address already in use" in server_log or "Address in use" in server_log or "address in use" in server_log:
                 logging.debug(f"Address is already bind for server {server}")
