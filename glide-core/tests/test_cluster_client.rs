@@ -325,8 +325,9 @@ mod cluster_client_tests {
             connection_request.addresses = addresses.iter().map(get_address_info).collect();
 
             let mut op = OpenTelemetryConfig::new();
-            op.collector_end_point = "http://valid-url.com".into();
-            op.span_flush_interval = Some(300);
+            op.traces_collector_endpoint = "http://valid-url.com".into();
+            op.metrics_collector_endpoint = "http://valid-url.com".into();
+            op.flush_interval = Some(300);
 
             connection_request.opentelemetry_config = protobuf::MessageField::from_option(Some(op));
 

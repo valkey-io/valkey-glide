@@ -146,8 +146,9 @@ pub(crate) unsafe fn create_connection_request(
         periodic_checks: None,
         pubsub_subscriptions: None,
         inflight_requests_limit: None,
-        otel_endpoint: None,
-        otel_span_flush_interval_ms: None,
+        otel_traces_endpoint: None,
+        otel_metrics_endpoint: None,
+        otel_flush_interval_ms: None,
     }
 }
 
