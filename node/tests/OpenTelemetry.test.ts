@@ -333,7 +333,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
         "opentelemetry folder path config_%p",
         async (protocol) => {
             const path = "/tmp/";
-            const file = path + "spans.json";
+            const file = path + "signals.json";
 
             // Remove the span file if it exists
             if (fs.existsSync(file)) {

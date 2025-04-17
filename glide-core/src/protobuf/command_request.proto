@@ -531,5 +531,5 @@ message CommandRequest {
         UpdateConnectionPassword update_connection_password = 7;
     }
     Routes route = 8;
-    optional uint64 span_command = 9;
+    optional uint64 root_span_ptr = 9;
 }

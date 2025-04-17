@@ -16,7 +16,7 @@ pub struct Pipeline {
     transaction_mode: bool,
     ignored_commands: HashSet<usize>,
     /// The OpenTelemtry span command, to measure the lifetime of the pipeline.
-    span_command_otel: Option<GlideSpan>,
+    otel_command_span: Option<GlideSpan>,
 }
 
 /// A pipeline allows you to send multiple commands in one go to the
@@ -53,19 +53,19 @@ impl Pipeline {
             commands: Vec::with_capacity(capacity),
             transaction_mode: false,
             ignored_commands: HashSet::new(),
-            span_command_otel: None,
+            otel_command_span: None,
         }
     }
 
     /// Set the pipeline span
     pub fn set_pipeline_span(&mut self, span: Option<GlideSpan>) {
-        self.span_command_otel = span;
+        self.otel_command_span = span;
     }
 
     /// Return this command span
     #[inline]
     pub fn span(&self) -> Option<GlideSpan> {
-        self.span_command_otel.clone()
+        self.otel_command_span.clone()
     }
 
     /// This enables atomic mode.  In atomic mode the whole pipeline is

@@ -55,8 +55,8 @@ message PubSubSubscriptions
 
 message OpenTelemetryConfig
 {
-    string traces_collector_end_point = 1;
-    string metrics_collector_end_point = 2;
+    string traces_collector_endpoint = 1;
+    string metrics_collector_endpoint = 2;
     optional uint32 flush_interval = 3;
 }
 

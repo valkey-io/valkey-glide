@@ -184,12 +184,12 @@ async fn write_result(
     resp_result: ClientUsageResult<Value>,
     callback_index: u32,
     writer: &Rc<Writer>,
-    span_command_ptr: Option<u64>,
+    command_span_ptr: Option<u64>,
 ) -> Result<(), io::Error> {
     let mut response = Response::new();
     response.callback_idx = callback_index;
     response.is_push = false;
-    response.span_command = span_command_ptr;
+    response.root_span_ptr = command_span_ptr;
     response.value = match resp_result {
         Ok(Value::Okay) => Some(response::response::Value::ConstantResponse(
             response::ConstantResponse::OK.into(),
@@ -314,7 +314,10 @@ async fn send_command(
         .send_command(&cmd, routing)
         .await
         .map_err(|err| err.into());
-    child_span.map(|c| c.end());
+
+    if let Some(c) = child_span {
+        c.end()
+    };
     res
 }
 
@@ -386,7 +389,7 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Option<GlideSpan> 
             log_error(
                 "OpenTelemetry error",
                 format!(
-                    "The child span `{:?}` was failed to create with error: {:?}",
+                    "Failed to create child span with name `{}`. Error: {:?}",
                     name, error_msg
                 ),
             );
@@ -399,10 +402,10 @@ async fn send_batch(
     request: Batch,
     client: &mut Client,
     routing: Option<RoutingInfo>,
-    span_command: Option<GlideSpan>,
+    command_span: Option<GlideSpan>,
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
-    pipeline.set_pipeline_span(span_command);
+    pipeline.set_pipeline_span(command_span);
     let child_span = create_child_span(pipeline.span().as_ref(), "send_batch");
 
     if request.is_atomic {
@@ -436,7 +439,10 @@ async fn send_batch(
             .await
             .map_err(|err| err.into()),
     };
-    child_span.map(|c| c.end());
+
+    if let Some(c) = child_span {
+        c.end()
+    };
     res
 }
 
@@ -533,7 +539,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                         match get_redis_command(&command) {
                             Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
                                 Ok(routes) => {
-                                    cmd.set_span(get_unsafe_span_from_ptr(request.span_command));
+                                    cmd.set_span(get_unsafe_span_from_ptr(request.root_span_ptr));
                                     send_command(cmd, client, routes).await
                                 }
                                 Err(e) => Err(e),
@@ -544,8 +550,9 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                     command_request::Command::Batch(batch) => {
                         match get_route(request.route.0, None) {
                             Ok(routes) => {
-                                let span_command = get_unsafe_span_from_ptr(request.span_command);
-                                send_batch(batch, &mut client, routes, span_command).await
+                                let otel_command_span =
+                                    get_unsafe_span_from_ptr(request.root_span_ptr);
+                                send_batch(batch, &mut client, routes, otel_command_span).await
                             }
                             Err(e) => Err(e),
                         }
@@ -611,7 +618,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
             client_clone.release_inflight_request();
         }
 
-        let _res = write_result(result, request.callback_idx, &writer, request.span_command).await;
+        let _res = write_result(result, request.callback_idx, &writer, request.root_span_ptr).await;
     });
 }
 
@@ -642,16 +649,16 @@ async fn handle_requests(
 ///
 /// # Arguments
 ///
-/// * `span_command` - An optional raw pointer (as u64) to a GlideSpan
+/// * `command_span` - An optional raw pointer (as u64) to a GlideSpan
 ///
 /// # Returns
 ///
 /// * `Some(GlideSpan)` - A cloned GlideSpan if the pointer is valid
 /// * `None` - If the pointer is None
-fn get_unsafe_span_from_ptr(span_command: Option<u64>) -> Option<GlideSpan> {
-    span_command.map(|span_command| unsafe {
-        Arc::increment_strong_count(span_command as *const GlideSpan);
-        (*Arc::from_raw(span_command as *const GlideSpan)).clone()
+fn get_unsafe_span_from_ptr(command_span: Option<u64>) -> Option<GlideSpan> {
+    command_span.map(|command_span| unsafe {
+        Arc::increment_strong_count(command_span as *const GlideSpan);
+        (*Arc::from_raw(command_span as *const GlideSpan)).clone()
     })
 }
 

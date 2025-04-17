@@ -8,9 +8,10 @@ use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use url::Url;
 
@@ -36,6 +37,9 @@ pub enum GlideOTELError {
 
 /// Default interval in milliseconds for flushing open telemetry data to the collector.
 pub const DEFAULT_FLUSH_SIGNAL_INTERVAL_MS: u32 = 5000;
+
+/// Default filename for the open telemetry data file.
+pub const DEFAULT_SIGNAL_FILENAME: &str = "signals.json";
 
 pub enum GlideSpanStatus {
     Ok,
@@ -95,7 +99,7 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
             let final_path = if path_buf.is_dir() || path_buf.extension().is_none() {
                 // If it's a directory or doesn't have an extension, treat it as a directory
                 // and append the default filename
-                path_buf.join("spans.json")
+                path_buf.join(DEFAULT_SIGNAL_FILENAME)
             } else {
                 path_buf
             };
@@ -104,22 +108,11 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
             if let Some(parent_dir) = final_path.parent() {
                 match parent_dir.try_exists() {
                     Ok(exists) => {
-                        if !exists {
-                            // Try to create the parent directory if it doesn't exist
-                            if let Err(e) = std::fs::create_dir_all(parent_dir) {
-                                return Err(Error::new(
-                                    ErrorKind::InvalidInput,
-                                    format!(
-                                        "Parent directory does not exist and could not be created: {} - {}",
-                                        parent_dir.display(), e
-                                    ),
-                                ));
-                            }
-                        } else if !parent_dir.is_dir() {
+                        if !exists || !parent_dir.is_dir() {
                             return Err(Error::new(
                                 ErrorKind::InvalidInput,
                                 format!(
-                                    "Parent path exists but is not a directory: {}",
+                                    "The directory does not exist or is not a directory: {}",
                                     parent_dir.display()
                                 ),
                             ));
@@ -409,8 +402,8 @@ fn build_exporter(
 #[derive(Clone)]
 pub struct GlideOpenTelemetry {}
 
-/// Static mutex to track initialization state
-static OTEL_INITIALIZED: Mutex<bool> = Mutex::new(false);
+/// Static atomic boolean to track initialization state
+static OTEL_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 /// Our interface to OpenTelemetry
 impl GlideOpenTelemetry {
@@ -420,11 +413,7 @@ impl GlideOpenTelemetry {
     /// If OpenTelemetry is already initialized, this method will return Ok(()) without reinitializing
     pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
         // Check if already initialized
-        let mut initialized = OTEL_INITIALIZED.lock().map_err(|_| {
-            GlideOTELError::Other("Failed to acquire initialization lock".to_string())
-        })?;
-
-        if *initialized {
+        if OTEL_INITIALIZED.load(Ordering::SeqCst) {
             return Ok(());
         }
 
@@ -463,7 +452,7 @@ impl GlideOpenTelemetry {
         global::set_tracer_provider(provider);
 
         // Mark as initialized
-        *initialized = true;
+        OTEL_INITIALIZED.store(true, Ordering::SeqCst);
 
         Ok(())
     }

@@ -228,9 +228,9 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
 
         let otel_traces_endpoint =
-            chars_to_string_option(&value.opentelemetry_config.traces_collector_end_point);
+            chars_to_string_option(&value.opentelemetry_config.traces_collector_endpoint);
         let otel_metrics_endpoint =
-            chars_to_string_option(&value.opentelemetry_config.metrics_collector_end_point);
+            chars_to_string_option(&value.opentelemetry_config.metrics_collector_endpoint);
         let otel_flush_interval_ms = value.opentelemetry_config.flush_interval;
 
         ConnectionRequest {

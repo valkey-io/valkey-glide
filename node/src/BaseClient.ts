@@ -1031,7 +1031,7 @@ export class BaseClient {
             resolve(null);
         }
 
-        this.dropCommandSpan(message.spanCommand);
+        this.dropCommandSpan(message.rootSpanPtr);
     }
 
     processPush(response: response.Response) {
@@ -1208,7 +1208,7 @@ export class BaseClient {
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
-        spanCommand?: number | Long | null,
+        commandSpanPtr?: number | Long | null,
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
@@ -1219,13 +1219,13 @@ export class BaseClient {
                       // TODO: add support for timeout, raiseOnError and retryStrategy
                   }),
                   route,
-                  spanCommand,
+                  rootSpanPtr: commandSpanPtr,
               })
             : command_request.CommandRequest.create({
                   callbackIdx,
                   singleCommand: command,
                   route,
-                  spanCommand,
+                  rootSpanPtr: commandSpanPtr,
               });
 
         this.writeOrBufferRequest(
@@ -7782,9 +7782,9 @@ export class BaseClient {
 
         if (options.openTelemetryConfig) {
             request.opentelemetryConfig = {
-                tracesCollectorEndPoint:
+                tracesCollectorEndpoint:
                     options.openTelemetryConfig.tracesCollectorEndPoint,
-                metricsCollectorEndPoint:
+                metricsCollectorEndpoint:
                     options.openTelemetryConfig.metricsCollectorEndPoint,
                 flushInterval: options.openTelemetryConfig.flushIntervalMs,
             };
