@@ -234,6 +234,10 @@ Run from the main `/python` folder
 # Documentation
 ---
 
+> **NOTE:**  We are currently in process of switching our documentation tool from `sphinx` to `mkdocs`. Currently the files located in `python/docs` are required for `sphinx`'s CI validation step (`docs-test`) as they are the configuration files for how `sphinx` works in documenting Valkey GLIDE. Once we switch to `mkdocs`, `sphinx` related files and validation should be removed, and `mkdocs`'s files and validation should be used instead.
+
+> By default, `mkdocs` should still be using Google's Python Docstring Style so the "Documentation Style" section below will still be valid.
+
 We follow the [Google Style Python Docstrings format](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) in our documentation. For our documentation tool, we use `sphinx`. 
 
 **Note:** `docs/index.rst` has manual modifications to it and should NOT be deleted. Modify this file with caution.

@@ -17,7 +17,7 @@ import (
 // GlideClusterClient interface compliance check.
 var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
 
-// GlideClusterClientCommands is a client used for connection in cluster mode.
+// All commands that can be executed by GlideClusterClient.
 type GlideClusterClientCommands interface {
 	BaseClient
 	GenericClusterCommands
@@ -26,13 +26,38 @@ type GlideClusterClientCommands interface {
 	ScriptingAndFunctionClusterCommands
 }
 
-// GlideClusterClient implements cluster mode operations by extending baseClient functionality.
+// Client used for connection to cluster servers.
+// Use [NewGlideClusterClient] to request a client.
+//
+// For full documentation refer to [Valkey Glide Wiki].
+//
+// [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#cluster
 type GlideClusterClient struct {
 	*baseClient
 }
 
-// NewGlideClusterClient creates a [GlideClusterClientCommands] in cluster mode using the given
-// [GlideClusterClientConfiguration].
+// Creates a new `GlideClusterClient` instance and establishes a connection to a Valkey Cluster.
+//
+// Parameters:
+//
+//	config - The configuration options for the client, including cluster addresses, authentication credentials, TLS settings,
+//	   periodic checks, and Pub/Sub subscriptions.
+//
+// Return value:
+//
+//	A connected `GlideClusterClient` instance.
+//
+// Remarks:
+//
+//	Use this static method to create and connect a `GlideClusterClient` to a Valkey Cluster.
+//	The client will automatically handle connection establishment, including cluster topology discovery and handling
+//	    of authentication and TLS configurations.
+//
+//	  - **Cluster Topology Discovery**: The client will automatically discover the cluster topology
+//	      based on the seed addresses provided.
+//	  - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
+//	      using the specified username and password.
+//	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
 func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
@@ -44,8 +69,7 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
-// the executed
-// command.
+// the executed command.
 //
 // The command will be routed automatically based on the passed command's default request policy.
 //
@@ -812,16 +836,16 @@ func (client *GlideClusterClient) ConfigSetWithOptions(
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClusterClient) ConfigGet(
 	parameters []string,
-) (ClusterValue[interface{}], error) {
+) (map[string]string, error) {
 	res, err := client.executeCommand(C.ConfigGet, parameters)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return nil, err
 	}
-	data, err := handleInterfaceResponse(res)
+	data, err := handleStringToStringMapResponse(res)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return nil, err
 	}
-	return createClusterValue[interface{}](data), nil
+	return data, nil
 }
 
 // Get the values of configuration parameters.
@@ -840,16 +864,23 @@ func (client *GlideClusterClient) ConfigGet(
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClusterClient) ConfigGetWithOptions(
 	parameters []string, opts options.RouteOption,
-) (ClusterValue[interface{}], error) {
+) (ClusterValue[map[string]string], error) {
 	res, err := client.executeCommandWithRoute(C.ConfigGet, parameters, opts.Route)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return createEmptyClusterValue[map[string]string](), err
 	}
-	data, err := handleInterfaceResponse(res)
+	if opts.Route == nil || !opts.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(res)
+		if err != nil {
+			return createEmptyClusterValue[map[string]string](), err
+		}
+		return createClusterSingleValue[map[string]string](data), nil
+	}
+	data, err := handleMapOfStringMapResponse(res)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return createEmptyClusterValue[map[string]string](), err
 	}
-	return createClusterValue[interface{}](data), nil
+	return createClusterMultiValue[map[string]string](data), nil
 }
 
 // Set the name of the current connection.
@@ -1383,4 +1414,132 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
 func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []string) (ClusterValue[any], error) {
 	return client.FCallReadOnlyWithArgsWithRoute(function, args, options.RouteOption{})
+}
+
+// FunctionStats returns information about the function that's currently running and information about the
+// available execution engines.
+// The command will be routed to all nodes by default.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	A map of node addresses to their function statistics represented by
+//	[FunctionStatsResult] object containing the following information:
+//	running_script - Information about the running script.
+//	engines - Information about available engines and their stats.
+//
+// [valkey.io]: https://valkey.io/commands/function-stats/
+func (client *GlideClusterClient) FunctionStats() (
+	map[string]FunctionStatsResult, error,
+) {
+	response, err := client.executeCommand(C.FunctionStats, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	stats, err := handleFunctionStatsResponse(response)
+	if err != nil {
+		return nil, err
+	}
+
+	// For multi-node routes, return the map of node addresses to FunctionStatsResult
+	return stats, nil
+}
+
+// FunctionStatsWithRoute returns information about the function that's currently running and information about the
+// available execution engines.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	       command to the nodes defined by route. If no route is specified, the command
+//	       will be routed to all nodes.
+//
+// Return value:
+//
+//	A [ClusterValue] containing a map of node addresses to their function statistics.
+//
+// [valkey.io]: https://valkey.io/commands/function-stats/
+func (client *GlideClusterClient) FunctionStatsWithRoute(
+	opts options.RouteOption,
+) (ClusterValue[FunctionStatsResult], error) {
+	response, err := client.executeCommandWithRoute(C.FunctionStats, []string{}, opts.Route)
+	if err != nil {
+		return createEmptyClusterValue[FunctionStatsResult](), err
+	}
+
+	stats, err := handleFunctionStatsResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[FunctionStatsResult](), err
+	}
+
+	// single node routes return a single stat response
+	if len(stats) == 1 {
+		for _, result := range stats {
+			return createClusterSingleValue[FunctionStatsResult](result), nil
+		}
+	}
+
+	// For multi-node routes, return the map of node addresses to FunctionStatsResult
+	return createClusterMultiValue[FunctionStatsResult](stats), nil
+}
+
+// Deletes a library and all its functions.
+// The command will be routed to all primary nodes.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	libName - The library name to delete.
+//
+// Return value:
+//
+//	"OK" if the library exists, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/function-delete/
+func (client *GlideClusterClient) FunctionDelete(libName string) (string, error) {
+	return client.FunctionDeleteWithRoute(libName, options.RouteOption{})
+}
+
+// Deletes a library and all its functions.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	libName - The library name to delete.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	    command to the nodes defined by `route`.
+//
+// Return value:
+//
+//	"OK" if the library exists, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/function-delete/
+func (client *GlideClusterClient) FunctionDeleteWithRoute(libName string, route options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(C.FunctionDelete, []string{libName}, route.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
 }

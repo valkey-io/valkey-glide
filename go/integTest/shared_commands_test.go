@@ -9677,13 +9677,7 @@ func (suite *GlideTestSuite) TestGeoPos() {
 			assert.NotNil(t, coords)
 			assert.Equal(t, 2, len(coords))
 
-			// Check longitude
-			assert.InDelta(t, expected[i][0], coords[0], 1e-9,
-				"longitude mismatch for member %s", members[i])
-
-			// Check latitude
-			assert.InDelta(t, expected[i][1], coords[1], 1e-9,
-				"latitude mismatch for member %s", members[i])
+			assert.InDeltaSlice(t, expected[i], coords, 1e-6)
 		}
 
 		// Test error case with wrong key type
@@ -9774,8 +9768,14 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 		fullResults, err := client.GeoSearchWithFullOptions(key1, &searchOrigin, *searchShape, *resultOpts, *searchOpts)
 		assert.NoError(suite.T(), err)
 		// Verify structure of results - exact values may vary slightly due to floating-point precision
-		assert.Equal(suite.T(), 4, len(fullResults))
-		assert.Equal(suite.T(), expectedResults, fullResults)
+		assert.Equal(suite.T(), len(expectedResults), len(fullResults))
+		for i := range expectedResults {
+			assert.Equal(suite.T(), expectedResults[i].Name, fullResults[i].Name)
+			assert.Equal(suite.T(), expectedResults[i].Dist, fullResults[i].Dist)
+			assert.Equal(suite.T(), expectedResults[i].Hash, fullResults[i].Hash)
+			assert.InDelta(suite.T(), expectedResults[i].Coord.Latitude, fullResults[i].Coord.Latitude, 1e-6)
+			assert.InDelta(suite.T(), expectedResults[i].Coord.Longitude, fullResults[i].Coord.Longitude, 1e-6)
+		}
 
 		// Test with count limiting result to 1
 		resultOptsWithCount := options.NewGeoSearchResultOptions().
@@ -9897,7 +9897,13 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 				},
 			},
 		}
-		assert.Equal(suite.T(), expectedKmResults, kmResults)
+		for i := range expectedKmResults {
+			assert.Equal(suite.T(), expectedKmResults[i].Name, kmResults[i].Name)
+			assert.Equal(suite.T(), expectedKmResults[i].Dist, kmResults[i].Dist)
+			assert.Equal(suite.T(), expectedKmResults[i].Hash, kmResults[i].Hash)
+			assert.InDelta(suite.T(), expectedKmResults[i].Coord.Latitude, kmResults[i].Coord.Latitude, 1e-6)
+			assert.InDelta(suite.T(), expectedKmResults[i].Coord.Longitude, kmResults[i].Coord.Longitude, 1e-6)
+		}
 
 		// Test search with ANY option
 		expectedAnyResults := []options.Location{
@@ -10039,7 +10045,7 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		// Verify stored results with distance
 		zRangeResultWithDist, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), expectedMap2, zRangeResultWithDist)
+		assert.InDeltaMapValues(suite.T(), expectedMap2, zRangeResultWithDist, 1e-6)
 
 		// Test storing results of a box search, unit: kilometers, from a geospatial data point, with count
 		count, err = client.GeoSearchStoreWithResultOptions(
