@@ -63,7 +63,7 @@ pub unsafe extern "C" fn store_script(script_bytes: *const u8, script_len: usize
 ///
 /// # Safety
 ///
-/// * `hash` must be a valid null-terminated C string.
+/// * `hash` must be a valid null-terminated C string created by [`store_script`].
 #[no_mangle]
 pub unsafe extern "C" fn drop_script(hash: *const c_char) {
     let hash_str = unsafe { CStr::from_ptr(hash).to_str().unwrap_or("") };

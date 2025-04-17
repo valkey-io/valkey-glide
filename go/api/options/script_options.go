@@ -7,14 +7,6 @@ import (
 	"unsafe"
 )
 
-// #cgo LDFLAGS: -lglide_ffi
-// #cgo !windows LDFLAGS: -lm
-// #cgo darwin LDFLAGS: -framework Security
-// #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
-// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../../rustbin/x86_64-unknown-linux-gnu
-// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../../rustbin/aarch64-unknown-linux-gnu
-// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../../rustbin/aarch64-apple-darwin
-// #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/../../rustbin/x86_64-apple-darwin
 // #include "../../lib.h"
 import "C"
 
@@ -56,31 +48,24 @@ func (o *ScriptOptions) GetArgs() []string {
 
 // Script represents a Lua script stored in Valkey/Redis
 type Script struct {
-	hash         string
-	binaryOutput bool
-	isDropped    bool
-	mu           sync.Mutex
+	hash      string
+	isDropped bool
+	mu        sync.Mutex
 }
 
 // NewScript creates a new Script object
-func NewScript(code interface{}, binaryOutput bool) *Script {
+func NewScript(code interface{}) *Script {
 	// In Go implementation, we'd convert code to bytes and store the script
 	hash := storeScript(glideStringOf(code).getBytes())
 	return &Script{
-		hash:         hash,
-		binaryOutput: binaryOutput,
-		isDropped:    false,
+		hash:      hash,
+		isDropped: false,
 	}
 }
 
 // GetHash returns the hash of the script
 func (s *Script) GetHash() string {
 	return s.hash
-}
-
-// GetBinaryOutput returns whether the script can return binary data
-func (s *Script) GetBinaryOutput() bool {
-	return s.binaryOutput
 }
 
 // Close drops the script from memory

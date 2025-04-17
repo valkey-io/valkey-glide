@@ -1411,18 +1411,29 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []
 
 // InvokeScriptWithRoute executes a Lua script on the server with routing information.
 //
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading and execution will all be handled internally. If
+// the script has not already been loaded, it will be loaded automatically using the
+// `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA`
+// command.
+//
+// Note:
+//
+//	The command will be routed to a random node, unless `route` is provided.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
 // Parameters:
 //
-//	script - The script to execute.
+//	script - The Lua script to execute.
 //	route - Routing information for the script execution.
 //
 // Return value:
 //
 //	The result of the script execution.
 //
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/eval/
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
 func (client *GlideClusterClient) InvokeScriptWithRoute(script *options.Script, route options.RouteOption) (ClusterValue[any], error) {
 	response, err := client.baseClient.executeScriptWithRoute(script.GetHash(), []string{}, []string{}, route.Route)
 	if err != nil {
@@ -1447,6 +1458,19 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script *options.Script, 
 
 // InvokeScriptWithOptionsAndRoute executes a Lua script on the server with additional options and routing information.
 //
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading, argument preparation, and execution will all be
+// handled internally. If the script has not already been loaded, it will be loaded automatically
+// using the `SCRIPT LOAD` command. After that, it will be invoked using the
+// `EVALSHA` command.
+//
+// Note:
+//
+//   - all `keys` in `scriptOptions` must map to the same hash slot.
+//   - the command will be routed to a random node, unless `route` is provided.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
 // Parameters:
 //
 //	script - The script to execute.
@@ -1457,9 +1481,8 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script *options.Script, 
 //
 //	The result of the script execution.
 //
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/eval/
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
 func (client *GlideClusterClient) InvokeScriptWithOptionsAndRoute(script *options.Script, scriptOptions *options.ScriptOptions, route options.RouteOption) (ClusterValue[any], error) {
 	keys := scriptOptions.GetKeys()
 	args := scriptOptions.GetArgs()

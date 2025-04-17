@@ -7621,18 +7621,25 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 
 // InvokeScript executes a Lua script on the server.
 //
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading and execution will all be handled internally. If
+// the script has not already been loaded, it will be loaded automatically using the
+// `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA`
+// command.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
 // Parameters:
 //
-//	script - The script to execute.
+//	script - The Lua script to execute.
 //
 // Return value:
 //
 //	The result of the script execution.
 //
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/eval/
-func (client *baseClient) InvokeScript(script *options.Script) (any, error) {
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
+func (client *baseClient) InvokeScript(script options.Script) (any, error) {
 	response, err := client.executeScriptWithRoute(script.GetHash(), []string{}, []string{}, nil)
 	if err != nil {
 		return nil, err
@@ -7648,18 +7655,31 @@ func (client *baseClient) InvokeScript(script *options.Script) (any, error) {
 
 // InvokeScriptWithOptions executes a Lua script on the server with additional options.
 //
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading, argument preparation, and execution will all be
+// handled internally. If the script has not already been loaded, it will be loaded automatically
+// using the `SCRIPT LOAD` command. After that, it will be invoked using the
+// `EVALSHA` command.
+//
+// Note:
+//
+//	When in cluster mode:
+//	- all `keys` in `scriptOptions` must map to the same hash slot.
+//	- if no `keys` are given, command will be routed to a random primary node.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
 // Parameters:
 //
-//	script - The script to execute.
+//	script - The Lua script to execute.
 //	scriptOptions - Options for script execution including keys and arguments.
 //
 // Return value:
 //
 //	The result of the script execution.
 //
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/eval/
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
 func (client *baseClient) InvokeScriptWithOptions(script *options.Script, scriptOptions *options.ScriptOptions) (any, error) {
 	keys := scriptOptions.GetKeys()
 	args := scriptOptions.GetArgs()
