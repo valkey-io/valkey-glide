@@ -6,6 +6,7 @@ package api
 import "C"
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
@@ -88,9 +89,13 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClusterClient) Info() (map[string]string, error) {
-	result, err := client.executeCommand(C.Info, []string{})
+	fmt.Println("Infor Cluster")
+	result, err := client.executor.ExecuteCommand(C.Info, []string{})
 	if err != nil {
 		return nil, err
+	}
+	if result == nil {
+		return make(map[string]string), err
 	}
 
 	return handleStringToStringMapResponse(result)
@@ -127,6 +132,9 @@ func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOpt
 		if err != nil {
 			return createEmptyClusterValue[string](), err
 		}
+		if response == nil {
+			return createEmptyClusterValue[string](), err
+		}
 		return createClusterMultiValue[string](data), nil
 	}
 	response, err := client.executeCommandWithRoute(C.Info, optionArgs, options.Route)
@@ -142,6 +150,9 @@ func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOpt
 	}
 	data, err := handleStringResponse(response)
 	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if response == nil {
 		return createEmptyClusterValue[string](), err
 	}
 	return createClusterSingleValue[string](data), nil
@@ -188,8 +199,12 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) Ping() (string, error) {
-	result, err := client.executeCommand(C.Ping, []string{})
+	fmt.Println("Ping Cluster command")
+	result, err := client.executor.ExecuteCommand(C.Ping, []string{})
 	if err != nil {
+		return DefaultStringResponse, err
+	}
+	if result == nil {
 		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
@@ -224,11 +239,17 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 		if err != nil {
 			return DefaultStringResponse, err
 		}
+		if response == nil {
+			return DefaultStringResponse, err
+		}
 		return handleStringResponse(response)
 	}
 
 	response, err := client.executeCommandWithRoute(C.Ping, args, pingOptions.Route)
 	if err != nil {
+		return DefaultStringResponse, err
+	}
+	if response == nil {
 		return DefaultStringResponse, err
 	}
 

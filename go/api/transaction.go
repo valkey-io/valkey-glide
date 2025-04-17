@@ -26,6 +26,7 @@ import (
 type Transaction struct {
 	*baseClient // Embed baseClient to inherit all methods like Get
 	*GlideClient
+	*GlideClusterClient
 	commands []Cmder
 }
 
@@ -187,6 +188,24 @@ func NewTransaction(client GlideClientCommands) *Transaction {
 		baseClient:  glideCli.baseClient, // Access baseClient directly
 		GlideClient: glideCli,
 		commands:    []Cmder{},
+	}
+
+	// Set the executor to the transaction instance itself
+	tx.baseClient.executor = tx
+
+	return tx
+}
+
+func NewClusterTransaction(client GlideClusterClientCommands) *Transaction {
+	glideClusterCli, ok := client.(*GlideClusterClient)
+	if !ok {
+		panic("client is not of type *glideClusterClient")
+	}
+
+	tx := &Transaction{
+		baseClient:         glideClusterCli.baseClient, // Access baseClient directly
+		GlideClusterClient: glideClusterCli,
+		commands:           []Cmder{},
 	}
 
 	// Set the executor to the transaction instance itself
