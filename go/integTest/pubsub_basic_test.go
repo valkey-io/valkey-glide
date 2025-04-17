@@ -56,7 +56,6 @@ func (suite *GlideTestSuite) TestPubSub_Basic() {
 // TestMultipleSubscribersWithGlideClient tests message delivery to multiple subscribers
 func (suite *GlideTestSuite) TestPubSub_MultipleSubscribers() {
 	suite.runWithPubSubClients(func(publisher api.BaseClient) {
-
 		// Create channels for message tracking
 		messages1 := make(chan *api.PubSubMessage, 10)
 		messages2 := make(chan *api.PubSubMessage, 10)
