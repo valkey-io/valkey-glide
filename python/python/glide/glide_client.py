@@ -3,7 +3,7 @@
 import sys
 import threading
 from functools import partial
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
+from typing import Any, Awaitable, Dict, List, Optional, Set, Tuple, Type, Union, cast
 
 import anyio
 import sniffio
@@ -61,21 +61,6 @@ def get_request_error_class(
     return RequestError
 
 
-def create_task(task, *args, **kwargs):
-    """framework agnostic free-floating task shim"""
-    framework = sniffio.current_async_library()
-    if framework == "trio":
-        import trio
-
-        return trio.lowlevel.spawn_system_task(partial(task, *args, **kwargs))
-    elif framework == "asyncio":
-        import asyncio
-
-        return asyncio.create_task(task(*args, **kwargs))
-
-    raise RuntimeError(f"Unsupported async framework {framework}")
-
-
 class Future:
     """anyio shim for Future-like functionality"""
 
@@ -119,6 +104,34 @@ class BaseClient(CoreCommands):
         self._pubsub_futures: List[Future] = []
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[Response] = list()
+
+        self._pending_tasks: Optional[Set[Awaitable[None]]] = None
+        """asyncio-only to avoid gc on pending write tasks"""
+
+    def _create_task(self, task, *args, **kwargs):
+        """framework agnostic free-floating task shim"""
+        framework = sniffio.current_async_library()
+        if framework == "trio":
+            import trio
+
+            return trio.lowlevel.spawn_system_task(partial(task, *args, **kwargs))
+        elif framework == "asyncio":
+            import asyncio
+
+            # the asyncio event loop holds weak refs to tasks, so it's recommended to
+            # hold strong refs to them during their lifetime to prevent garbage
+            # collection
+            t = asyncio.create_task(task(*args, **kwargs))
+
+            if self._pending_tasks is None:
+                self._pending_tasks = set()
+
+            self._pending_tasks.add(t)
+            t.add_done_callback(self._pending_tasks.discard)
+
+            return t
+
+        raise RuntimeError(f"Unsupported async framework {framework}")
 
     @classmethod
     async def create(cls, config: BaseClientConfiguration) -> Self:
@@ -218,7 +231,7 @@ class BaseClient(CoreCommands):
         await self._create_uds_connection()
 
         # Start the reader loop as a background task
-        self._reader_task = create_task(self._reader_loop)
+        self._reader_task = self._create_task(self._reader_loop)
 
         # Set the client configurations
         await self._set_connection_configurations()
@@ -278,7 +291,7 @@ class BaseClient(CoreCommands):
             raise ClosingError(res)
 
     def _create_write_task(self, request: TRequest):
-        create_task(self._write_or_buffer_request, request)
+        self._create_task(self._write_or_buffer_request, request)
 
     async def _write_or_buffer_request(self, request: TRequest):
         self._buffered_requests.append(request)
