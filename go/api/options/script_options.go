@@ -56,7 +56,7 @@ type Script struct {
 // NewScript creates a new Script object
 func NewScript(code interface{}) *Script {
 	// In Go implementation, we'd convert code to bytes and store the script
-	hash := storeScript(glideStringOf(code).getBytes())
+	hash := storeScript(getBytes(stringOf(code)))
 	return &Script{
 		hash:      hash,
 		isDropped: false,
@@ -64,7 +64,7 @@ func NewScript(code interface{}) *Script {
 }
 
 // GetHash returns the hash of the script
-func (s *Script) GetHash() string {
+func (s *Script) getHash() string {
 	return s.hash
 }
 
@@ -80,26 +80,21 @@ func (s *Script) Close() error {
 	return nil
 }
 
-// glideString represents a string that can be converted to bytes
-type glideString struct {
-	value string
-}
-
-// glideStringOf converts an interface to a glideString
-func glideStringOf(value interface{}) glideString {
+// stringOf converts an interface to a string
+func stringOf(value interface{}) string {
 	switch v := value.(type) {
 	case string:
-		return glideString{value: v}
+		return v
 	case []byte:
-		return glideString{value: string(v)}
+		return string(v)
 	default:
-		return glideString{value: ""}
+		return ""
 	}
 }
 
 // getBytes returns the bytes representation of the string
-func (s glideString) getBytes() []byte {
-	return []byte(s.value)
+func getBytes(s string) []byte {
+	return []byte(s)
 }
 
 // storeScript stores a Lua script in the script cache and returns its SHA1 hash
