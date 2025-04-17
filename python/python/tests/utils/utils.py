@@ -4,6 +4,8 @@ import string
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
 import pytest
+from packaging import version
+
 from glide.async_commands.core import InfoSection
 from glide.constants import (
     TClusterResponse,
@@ -13,7 +15,6 @@ from glide.constants import (
 )
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import AllNodes
-from packaging import version
 
 T = TypeVar("T")
 

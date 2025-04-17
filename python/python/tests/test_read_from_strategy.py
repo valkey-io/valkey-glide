@@ -4,12 +4,12 @@ import re
 from typing import Mapping, cast
 
 import pytest
+
 from glide.async_commands.core import InfoSection
 from glide.config import ProtocolVersion, ReadFrom
 from glide.constants import OK
 from glide.glide_client import GlideClusterClient
 from glide.routes import AllNodes, SlotIdRoute, SlotType
-
 from tests.conftest import create_client
 from tests.utils.utils import get_first_result
 
@@ -279,9 +279,9 @@ class TestAZAffinity:
                     route=SlotIdRoute(SlotType.PRIMARY, 12182),
                 ),
             )
-            assert primary_az[b"availability-zone"].decode() == az, (
-                f"Primary for slot 12182 is not in the expected AZ {az}"
-            )
+            assert (
+                primary_az[b"availability-zone"].decode() == az
+            ), f"Primary for slot 12182 is not in the expected AZ {az}"
 
             # Create test client AFTER configuration
             client_for_testing_az = await create_client(
@@ -333,9 +333,9 @@ class TestAZAffinity:
                 "Exactly one primary in AZ should handle all calls. "
                 f"Matching entries: {matching_entries_count}, Total GET calls: {total_get_calls}"
             )
-            assert total_get_calls == GET_CALLS, (
-                f"Total GET calls mismatch, expected {GET_CALLS}, got {total_get_calls}"
-            )
+            assert (
+                total_get_calls == GET_CALLS
+            ), f"Total GET calls mismatch, expected {GET_CALLS}, got {total_get_calls}"
 
         finally:
             if client_for_testing_az:
