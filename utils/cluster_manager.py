@@ -816,7 +816,13 @@ def is_address_already_in_use(
             server_log = f.read()
             # Check for both error message variants because different C libraries (musl vs glibc)
             # write slightly different error messages when a port is already in use
-            if "Address already in use" in server_log or "Address in use" in server_log:
+
+            # Also write the server log
+            with open(log_file, "r") as log_file, open("server_log.txt", "w") as output_file:
+                output_file.write(log_file.read()
+                                      )
+
+            if "Address already in use" in server_log or "Address in use" in server_log or "address in use" in server_log:
                 logging.debug(f"Address is already bind for server {server}")
                 return True
             elif "Ready" in server_log:

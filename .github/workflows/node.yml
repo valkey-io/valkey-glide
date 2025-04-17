@@ -146,6 +146,8 @@ jobs:
                       node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
+                      ./server_log.txt
+                      **/server_log.txt
 
     lint-rust:
         timeout-minutes: 15
@@ -246,6 +248,8 @@ jobs:
                       node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
+                      ./server_log.txt
+                      **/server_log.txt
 
     test-modules:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
@@ -286,3 +290,5 @@ jobs:
                   name: test-report-node-modules-ubuntu
                   path: |
                       node/test-report*.html
+                      ./server_log.txt
+                      **/server_log.txt
