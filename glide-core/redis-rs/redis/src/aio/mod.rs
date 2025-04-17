@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Adds async IO support to redis.
 use crate::cmd::{cmd, Cmd};
 use crate::connection::{

@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use std::io::{BufRead, Error, ErrorKind as IOErrorKind};
 
 use rustls::RootCertStore;

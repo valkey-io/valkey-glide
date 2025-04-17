@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 #![cfg(feature = "script")]
 use sha1_smol::Sha1;
 

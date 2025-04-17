@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 #![allow(clippy::unit_arg)] // want to allow this for `black_box()`
 #![cfg(feature = "cluster")]
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};

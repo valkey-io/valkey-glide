@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use crate::aio::ConnectionLike;
 use crate::cluster_async::ClusterConnInner;
 use crate::cluster_async::Connect;
