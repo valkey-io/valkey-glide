@@ -4,7 +4,7 @@ use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
 use crate::cluster_scan_container::get_cluster_scan_cursor;
 use crate::command_request::{
-    command, command_request, ClusterScan, Command, CommandRequest, Routes, SlotTypes, Transaction,
+    command, command_request, Batch, ClusterScan, Command, CommandRequest, Routes, SlotTypes,
 };
 use crate::connection_request::ConnectionRequest;
 use crate::errors::{error_message, error_type, RequestErrorType};
@@ -19,7 +19,9 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::{ClusterScanArgs, Cmd, PushInfo, RedisError, ScanStateRC, Value};
+use redis::{
+    ClusterScanArgs, Cmd, PipelineRetryStrategy, PushInfo, RedisError, ScanStateRC, Value,
+};
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::ptr::from_mut;
@@ -35,6 +37,7 @@ use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
 use tokio::task;
 use tokio_util::task::LocalPoolHandle;
+use uuid::Uuid;
 use ClosingReason::*;
 use PipeListeningResult::*;
 
@@ -371,21 +374,43 @@ async fn invoke_script(
         .map_err(|err| err.into())
 }
 
-async fn send_transaction(
-    request: Transaction,
+async fn send_batch(
+    request: Batch,
     client: &mut Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
-    pipeline.atomic();
+    if request.is_atomic {
+        pipeline.atomic();
+    }
     for command in request.commands {
         pipeline.add_command(get_redis_command(&command)?);
     }
 
-    client
-        .send_transaction(&pipeline, routing)
-        .await
-        .map_err(|err| err.into())
+    match request.is_atomic {
+        true => client
+            .send_transaction(
+                &pipeline,
+                routing,
+                request.timeout,
+                request.raise_on_error.unwrap_or_default(),
+            )
+            .await
+            .map_err(|err| err.into()),
+        false => client
+            .send_pipeline(
+                &pipeline,
+                routing,
+                request.raise_on_error.unwrap_or_default(),
+                request.timeout,
+                PipelineRetryStrategy {
+                    retry_server_error: request.retry_server_error.unwrap_or_default(),
+                    retry_connection_error: request.retry_connection_error.unwrap_or_default(),
+                },
+            )
+            .await
+            .map_err(|err| err.into()),
+    }
 }
 
 fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageResult<SlotAddr> {
@@ -485,12 +510,13 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                             Err(e) => Err(e),
                         }
                     }
-                    command_request::Command::Transaction(transaction) => {
+                    command_request::Command::Batch(batch) => {
                         match get_route(request.route.0, None) {
-                            Ok(routes) => send_transaction(transaction, &mut client, routes).await,
+                            Ok(routes) => send_batch(batch, &mut client, routes).await,
                             Err(e) => Err(e),
                         }
                     }
+
                     command_request::Command::ScriptInvocation(script) => {
                         match get_route(request.route.0, None) {
                             Ok(routes) => {
@@ -804,8 +830,17 @@ pub fn get_socket_path_from_name(socket_name: String) -> String {
 
 /// Get the socket path as a string
 pub fn get_socket_path() -> String {
-    let socket_name = format!("{}-{}", SOCKET_FILE_NAME, std::process::id());
-    get_socket_path_from_name(socket_name)
+    // Ensure the socket name is unique by appending the process ID and a random UUID
+    // to the socket name. The UUID is used to ensure that the socket name is unique for situations in which PID can be resused such as with dockers.
+    static SOCKET_NAME: Lazy<String> = Lazy::new(|| {
+        format!(
+            "{}-{}-{}.sock",
+            SOCKET_FILE_NAME,
+            std::process::id(),
+            Uuid::new_v4(),
+        )
+    });
+    get_socket_path_from_name(SOCKET_NAME.clone())
 }
 
 /// This function is exposed only for the sake of testing with a nonstandard `socket_path`.

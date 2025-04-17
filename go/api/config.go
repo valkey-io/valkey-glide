@@ -16,7 +16,7 @@ const (
 // NodeAddress represents the host address and port of a node in the cluster.
 type NodeAddress struct {
 	Host string // If not supplied, api.DefaultHost will be used.
-	Port int    // If not supplied, api.DefaultPost will be used.
+	Port int    // If not supplied, api.DefaultPort will be used.
 }
 
 func (addr *NodeAddress) toProtobuf() *protobuf.NodeAddress {
@@ -174,8 +174,9 @@ func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy 
 // GlideClientConfiguration represents the configuration settings for a Standalone client.
 type GlideClientConfiguration struct {
 	baseClientConfiguration
-	reconnectStrategy *BackoffStrategy
-	databaseId        int
+	reconnectStrategy  *BackoffStrategy
+	databaseId         int
+	subscriptionConfig *StandaloneSubscriptionConfig
 	AdvancedGlideClientConfiguration
 }
 
@@ -198,6 +199,9 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 	if config.databaseId != 0 {
 		request.DatabaseId = uint32(config.databaseId)
 	}
+	if config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0 {
+		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
+	}
 
 	if config.AdvancedGlideClientConfiguration.connectionTimeout != 0 {
 		request.ConnectionTimeout = uint32(config.AdvancedGlideClientConfiguration.connectionTimeout)
@@ -215,9 +219,9 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 //
 //	config := NewGlideClientConfiguration().
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPost}).
+//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPost})
+//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPort})
 func (config *GlideClientConfiguration) WithAddress(address *NodeAddress) *GlideClientConfiguration {
 	config.addresses = append(config.addresses, *address)
 	return config
@@ -287,11 +291,20 @@ func (config *GlideClientConfiguration) WithAdvancedConfiguration(
 	return config
 }
 
+// WithSubscriptionConfig sets the subscription configuration for the client.
+func (config *GlideClientConfiguration) WithSubscriptionConfig(
+	subscriptionConfig *StandaloneSubscriptionConfig,
+) *GlideClientConfiguration {
+	config.subscriptionConfig = subscriptionConfig
+	return config
+}
+
 // GlideClusterClientConfiguration represents the configuration settings for a Cluster Glide client.
 // Note: Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff with fixed values is
 // used.
 type GlideClusterClientConfiguration struct {
 	baseClientConfiguration
+	subscriptionConfig *ClusterSubscriptionConfig
 	AdvancedGlideClusterClientConfiguration
 }
 
@@ -309,6 +322,7 @@ func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.Connectio
 	if err != nil {
 		return nil, err
 	}
+
 	request.ClusterModeEnabled = true
 	if (config.AdvancedGlideClusterClientConfiguration.connectionTimeout) != 0 {
 		request.ConnectionTimeout = uint32(config.AdvancedGlideClusterClientConfiguration.connectionTimeout)
@@ -325,9 +339,9 @@ func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.Connectio
 //
 //	config := NewGlideClusterClientConfiguration().
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPost}).
+//	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{
-//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPost})
+//	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPort})
 func (config *GlideClusterClientConfiguration) WithAddress(address *NodeAddress) *GlideClusterClientConfiguration {
 	config.addresses = append(config.addresses, *address)
 	return config
@@ -383,6 +397,14 @@ func (config *GlideClusterClientConfiguration) WithAdvancedConfiguration(
 	advancedConfig *AdvancedGlideClusterClientConfiguration,
 ) *GlideClusterClientConfiguration {
 	config.AdvancedGlideClusterClientConfiguration = *advancedConfig
+	return config
+}
+
+// WithSubscriptionConfig sets the subscription configuration for the client.
+func (config *GlideClusterClientConfiguration) WithSubscriptionConfig(
+	subscriptionConfig *ClusterSubscriptionConfig,
+) *GlideClusterClientConfiguration {
+	config.subscriptionConfig = subscriptionConfig
 	return config
 }
 

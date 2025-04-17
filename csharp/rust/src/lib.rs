@@ -31,9 +31,6 @@ pub struct Client {
     core: Arc<CommandExecutionCore>,
 }
 
-// TODO safety
-// TODO: merge with #3395 https://github.com/valkey-io/valkey-glide/pull/3395
-
 /// Success callback that is called when a command succeeds.
 ///
 /// The success callback needs to copy the given data synchronously, since it will be dropped by Rust once the callback returns.
@@ -64,7 +61,6 @@ struct CommandExecutionCore {
     failure_callback: FailureCallback,
 }
 
-// TODO make this async if possible
 /// Creates a new client with the given configuration.
 /// The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns.
 /// All callbacks should be offloaded to separate threads in order not to exhaust the client's thread pool.
@@ -124,7 +120,6 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
     unsafe { Arc::decrement_strong_count(client_ptr as *const Client) };
 }
 
-// TODO handle panic if possible
 /// Execute a command.
 /// Expects that arguments will be kept valid until the callback is called.
 ///

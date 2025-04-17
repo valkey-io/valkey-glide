@@ -223,10 +223,10 @@ import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArrayValueF
 import static glide.utils.ArrayTransformUtils.flattenNestedArrayToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 
+import command_request.CommandRequestOuterClass.Batch;
 import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
-import command_request.CommandRequestOuterClass.Transaction;
 import glide.api.commands.StringBaseCommands;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
@@ -308,24 +308,28 @@ import lombok.NonNull;
 
 /**
  * Base class encompassing shared commands for both standalone and cluster server installations.
- * Transactions allow the execution of a group of commands in a single step.
+ * Batches allow the execution of a group of commands in a single step.
  *
- * <p>Transaction Response: An <code>array</code> of command responses is returned by the client
- * <code>exec</code> command, in the order they were given. Each element in the array represents a
- * command given to the transaction. The response for each command depends on the executed Valkey
- * command. Specific response types are documented alongside each method.
+ * <p>Batch Response: An <code>array</code> of command responses is returned by the client <code>
+ * exec</code> command, in the order they were given. Each element in the array represents a command
+ * given to the batch. The response for each command depends on the executed Valkey command.
+ * Specific response types are documented alongside each method.
+ *
+ * <p><strong>isAtomic:</strong> Determines whether the batch is atomic or non-atomic. If {@code
+ * true}, the batch will be executed as an atomic transaction. If {@code false}, the batch will be
+ * executed as a non-atomic pipeline.
  *
  * @param <T> child typing for chaining method calls.
  */
 @Getter
-public abstract class BaseTransaction<T extends BaseTransaction<T>> {
+public abstract class BaseBatch<T extends BaseBatch<T>> {
     /** Command class to send a single request to Valkey. */
-    protected final Transaction.Builder protobufTransaction = Transaction.newBuilder();
+    protected final Batch.Builder protobufBatch;
 
     /**
-     * Flag whether transaction commands may return binary data.<br>
-     * If set to <code>true</code>, all commands in this transaction return {@link GlideString}
-     * instead of {@link String}.
+     * Flag whether batch commands may return binary data.<br>
+     * If set to <code>true</code>, all commands in this batch return {@link GlideString} instead of
+     * {@link String}.
      */
     protected boolean binaryOutput = false;
 
@@ -333,6 +337,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T withBinaryOutput() {
         binaryOutput = true;
         return getThis();
+    }
+
+    protected BaseBatch(boolean isAtomic) {
+        this.protobufBatch = Batch.newBuilder().setIsAtomic(isAtomic);
     }
 
     protected abstract T getThis();
@@ -351,7 +359,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T customCommand(ArgType[] args) {
         checkTypeOrThrow(args);
-        protobufTransaction.addCommands(buildCommand(CustomCommand, newArgsBuilder().add(args)));
+        protobufBatch.addCommands(buildCommand(CustomCommand, newArgsBuilder().add(args)));
         return getThis();
     }
 
@@ -366,7 +374,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T echo(@NonNull ArgType message) {
         checkTypeOrThrow(message);
-        protobufTransaction.addCommands(buildCommand(Echo, newArgsBuilder().add(message)));
+        protobufBatch.addCommands(buildCommand(Echo, newArgsBuilder().add(message)));
         return getThis();
     }
 
@@ -377,7 +385,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A response from the server with a <code>String</code>.
      */
     public T ping() {
-        protobufTransaction.addCommands(buildCommand(Ping));
+        protobufBatch.addCommands(buildCommand(Ping));
         return getThis();
     }
 
@@ -392,7 +400,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T ping(@NonNull ArgType msg) {
         checkTypeOrThrow(msg);
-        protobufTransaction.addCommands(buildCommand(Ping, newArgsBuilder().add(msg)));
+        protobufBatch.addCommands(buildCommand(Ping, newArgsBuilder().add(msg)));
         return getThis();
     }
 
@@ -403,7 +411,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>String</code> with server info.
      */
     public T info() {
-        protobufTransaction.addCommands(buildCommand(Info));
+        protobufBatch.addCommands(buildCommand(Info));
         return getThis();
     }
 
@@ -417,7 +425,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>String</code> containing the requested {@link Section}s.
      */
     public T info(@NonNull Section[] sections) {
-        protobufTransaction.addCommands(buildCommand(Info, newArgsBuilder().add(sections)));
+        protobufBatch.addCommands(buildCommand(Info, newArgsBuilder().add(sections)));
         return getThis();
     }
 
@@ -433,7 +441,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T del(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(buildCommand(Del, newArgsBuilder().add(keys)));
+        protobufBatch.addCommands(buildCommand(Del, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -449,7 +457,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T get(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Get, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(Get, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -465,7 +473,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T getdel(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(GetDel, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(GetDel, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -482,7 +490,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T getex(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(GetEx, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(GetEx, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -500,8 +508,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T getex(@NonNull ArgType key, @NonNull GetExOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(GetEx, newArgsBuilder().add(key).add(options.toArgs())));
+        protobufBatch.addCommands(buildCommand(GetEx, newArgsBuilder().add(key).add(options.toArgs())));
         return getThis();
     }
 
@@ -517,7 +524,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T set(@NonNull ArgType key, @NonNull ArgType value) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Set, newArgsBuilder().add(key).add(value)));
+        protobufBatch.addCommands(buildCommand(Set, newArgsBuilder().add(key).add(value)));
         return getThis();
     }
 
@@ -539,7 +546,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T set(
             @NonNull ArgType key, @NonNull ArgType value, @NonNull SetOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(Set, newArgsBuilder().add(key).add(value).add(options.toArgs())));
         return getThis();
     }
@@ -558,7 +565,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T append(@NonNull ArgType key, @NonNull ArgType value) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Append, newArgsBuilder().add(key).add(value)));
+        protobufBatch.addCommands(buildCommand(Append, newArgsBuilder().add(key).add(value)));
         return getThis();
     }
 
@@ -576,7 +583,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T mget(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(buildCommand(MGet, newArgsBuilder().add(keys)));
+        protobufBatch.addCommands(buildCommand(MGet, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -589,7 +596,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T mset(@NonNull Map<?, ?> keyValueMap) {
         GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
-        protobufTransaction.addCommands(buildCommand(MSet, newArgsBuilder().add(args)));
+        protobufBatch.addCommands(buildCommand(MSet, newArgsBuilder().add(args)));
         return getThis();
     }
 
@@ -604,7 +611,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T msetnx(@NonNull Map<?, ?> keyValueMap) {
         GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
-        protobufTransaction.addCommands(buildCommand(MSetNX, newArgsBuilder().add(args)));
+        protobufBatch.addCommands(buildCommand(MSetNX, newArgsBuilder().add(args)));
         return getThis();
     }
 
@@ -620,7 +627,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T incr(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Incr, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(Incr, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -637,7 +644,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T incrBy(@NonNull ArgType key, long amount) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(IncrBy, newArgsBuilder().add(key).add(amount)));
+        protobufBatch.addCommands(buildCommand(IncrBy, newArgsBuilder().add(key).add(amount)));
         return getThis();
     }
 
@@ -656,8 +663,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T incrByFloat(@NonNull ArgType key, double amount) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(IncrByFloat, newArgsBuilder().add(key).add(amount)));
+        protobufBatch.addCommands(buildCommand(IncrByFloat, newArgsBuilder().add(key).add(amount)));
         return getThis();
     }
 
@@ -673,7 +679,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T decr(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Decr, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(Decr, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -690,7 +696,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T decrBy(@NonNull ArgType key, long amount) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(DecrBy, newArgsBuilder().add(key).add(amount)));
+        protobufBatch.addCommands(buildCommand(DecrBy, newArgsBuilder().add(key).add(amount)));
         return getThis();
     }
 
@@ -707,7 +713,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T strlen(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Strlen, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(Strlen, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -729,7 +735,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T setrange(@NonNull ArgType key, int offset, @NonNull ArgType value) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(SetRange, newArgsBuilder().add(key).add(offset).add(value)));
         return getThis();
     }
@@ -750,7 +756,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T getrange(@NonNull ArgType key, int start, int end) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(GetRange, newArgsBuilder().add(key).add(start).add(end)));
         return getThis();
     }
@@ -768,7 +774,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hget(@NonNull ArgType key, @NonNull ArgType field) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HGet, newArgsBuilder().add(key).add(field)));
+        protobufBatch.addCommands(buildCommand(HGet, newArgsBuilder().add(key).add(field)));
         return getThis();
     }
 
@@ -785,7 +791,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hset(@NonNull ArgType key, @NonNull Map<ArgType, ArgType> fieldValueMap) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         HSet, newArgsBuilder().add(key).add(flattenMapToGlideStringArray(fieldValueMap))));
         return getThis();
@@ -808,7 +814,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hsetnx(@NonNull ArgType key, @NonNull ArgType field, @NonNull ArgType value) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(HSetNX, newArgsBuilder().add(key).add(field).add(value)));
         return getThis();
     }
@@ -828,7 +834,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hdel(@NonNull ArgType key, @NonNull ArgType[] fields) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HDel, newArgsBuilder().add(key).add(fields)));
+        protobufBatch.addCommands(buildCommand(HDel, newArgsBuilder().add(key).add(fields)));
         return getThis();
     }
 
@@ -845,7 +851,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hlen(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HLen, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(HLen, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -861,7 +867,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hvals(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HVals, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(HVals, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -881,7 +887,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hmget(@NonNull ArgType key, @NonNull ArgType[] fields) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HMGet, newArgsBuilder().add(key).add(fields)));
+        protobufBatch.addCommands(buildCommand(HMGet, newArgsBuilder().add(key).add(fields)));
         return getThis();
     }
 
@@ -899,7 +905,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hexists(@NonNull ArgType key, @NonNull ArgType field) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HExists, newArgsBuilder().add(key).add(field)));
+        protobufBatch.addCommands(buildCommand(HExists, newArgsBuilder().add(key).add(field)));
         return getThis();
     }
 
@@ -916,7 +922,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hgetall(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HGetAll, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(HGetAll, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -939,7 +945,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hincrBy(@NonNull ArgType key, @NonNull ArgType field, long amount) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(HIncrBy, newArgsBuilder().add(key).add(field).add(amount)));
         return getThis();
     }
@@ -964,7 +970,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hincrByFloat(@NonNull ArgType key, @NonNull ArgType field, double amount) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(HIncrByFloat, newArgsBuilder().add(key).add(field).add(amount)));
         return getThis();
     }
@@ -981,7 +987,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hkeys(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HKeys, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(HKeys, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -999,7 +1005,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hstrlen(@NonNull ArgType key, @NonNull ArgType field) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HStrlen, newArgsBuilder().add(key).add(field)));
+        protobufBatch.addCommands(buildCommand(HStrlen, newArgsBuilder().add(key).add(field)));
         return getThis();
     }
 
@@ -1016,7 +1022,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hrandfield(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HRandField, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(HRandField, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1037,7 +1043,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hrandfieldWithCount(@NonNull ArgType key, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HRandField, newArgsBuilder().add(key).add(count)));
+        protobufBatch.addCommands(buildCommand(HRandField, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -1060,7 +1066,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hrandfieldWithCountWithValues(@NonNull ArgType key, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(HRandField, newArgsBuilder().add(key).add(count).add(WITH_VALUES_VALKEY_API)));
         return getThis();
     }
@@ -1080,7 +1086,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lpush(@NonNull ArgType key, @NonNull ArgType[] elements) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(LPush, newArgsBuilder().add(key).add(elements)));
+        protobufBatch.addCommands(buildCommand(LPush, newArgsBuilder().add(key).add(elements)));
         return getThis();
     }
 
@@ -1097,7 +1103,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lpop(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(LPop, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(LPop, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1116,7 +1122,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lpos(@NonNull ArgType key, @NonNull ArgType element) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(LPos, newArgsBuilder().add(key).add(element)));
+        protobufBatch.addCommands(buildCommand(LPos, newArgsBuilder().add(key).add(element)));
         return getThis();
     }
 
@@ -1137,7 +1143,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T lpos(
             @NonNull ArgType key, @NonNull ArgType element, @NonNull LPosOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(LPos, newArgsBuilder().add(key).add(element).add(options.toArgs())));
         return getThis();
     }
@@ -1157,7 +1163,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lposCount(@NonNull ArgType key, @NonNull ArgType element, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         LPos, newArgsBuilder().add(key).add(element).add(COUNT_VALKEY_API).add(count)));
         return getThis();
@@ -1181,7 +1187,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T lposCount(
             @NonNull ArgType key, @NonNull ArgType element, long count, @NonNull LPosOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         LPos,
                         newArgsBuilder()
@@ -1208,7 +1214,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lpopCount(@NonNull ArgType key, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(LPop, newArgsBuilder().add(key).add(count)));
+        protobufBatch.addCommands(buildCommand(LPop, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -1235,8 +1241,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lrange(@NonNull ArgType key, long start, long end) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(LRange, newArgsBuilder().add(key).add(start).add(end)));
+        protobufBatch.addCommands(buildCommand(LRange, newArgsBuilder().add(key).add(start).add(end)));
         return getThis();
     }
 
@@ -1259,7 +1264,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lindex(@NonNull ArgType key, long index) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(LIndex, newArgsBuilder().add(key).add(index)));
+        protobufBatch.addCommands(buildCommand(LIndex, newArgsBuilder().add(key).add(index)));
         return getThis();
     }
 
@@ -1287,8 +1292,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T ltrim(@NonNull ArgType key, long start, long end) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(LTrim, newArgsBuilder().add(key).add(start).add(end)));
+        protobufBatch.addCommands(buildCommand(LTrim, newArgsBuilder().add(key).add(start).add(end)));
         return getThis();
     }
 
@@ -1305,7 +1309,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T llen(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(LLen, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(LLen, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1330,7 +1334,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lrem(@NonNull ArgType key, long count, @NonNull ArgType element) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(LRem, newArgsBuilder().add(key).add(count).add(element)));
         return getThis();
     }
@@ -1350,7 +1354,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T rpush(@NonNull ArgType key, @NonNull ArgType[] elements) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(RPush, newArgsBuilder().add(key).add(elements)));
+        protobufBatch.addCommands(buildCommand(RPush, newArgsBuilder().add(key).add(elements)));
         return getThis();
     }
 
@@ -1367,7 +1371,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T rpop(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(RPop, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(RPop, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1385,7 +1389,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T rpopCount(@NonNull ArgType key, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(RPop, newArgsBuilder().add(key).add(count)));
+        protobufBatch.addCommands(buildCommand(RPop, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -1405,7 +1409,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sadd(@NonNull ArgType key, @NonNull ArgType[] members) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(SAdd, newArgsBuilder().add(key).add(members)));
+        protobufBatch.addCommands(buildCommand(SAdd, newArgsBuilder().add(key).add(members)));
         return getThis();
     }
 
@@ -1423,7 +1427,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sismember(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(SIsMember, newArgsBuilder().add(key).add(member)));
+        protobufBatch.addCommands(buildCommand(SIsMember, newArgsBuilder().add(key).add(member)));
         return getThis();
     }
 
@@ -1443,7 +1447,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T srem(@NonNull ArgType key, @NonNull ArgType[] members) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(SRem, newArgsBuilder().add(key).add(members)));
+        protobufBatch.addCommands(buildCommand(SRem, newArgsBuilder().add(key).add(members)));
         return getThis();
     }
 
@@ -1459,7 +1463,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T smembers(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(SMembers, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(SMembers, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1475,7 +1479,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T scard(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(SCard, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(SCard, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1492,7 +1496,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sdiff(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(buildCommand(SDiff, newArgsBuilder().add(keys)));
+        protobufBatch.addCommands(buildCommand(SDiff, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -1509,8 +1513,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T smismember(@NonNull ArgType key, @NonNull ArgType[] members) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(SMIsMember, newArgsBuilder().add(key).add(members)));
+        protobufBatch.addCommands(buildCommand(SMIsMember, newArgsBuilder().add(key).add(members)));
         return getThis();
     }
 
@@ -1527,7 +1530,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sdiffstore(@NonNull ArgType destination, @NonNull ArgType[] keys) {
         checkTypeOrThrow(destination);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(SDiffStore, newArgsBuilder().add(destination).add(keys)));
         return getThis();
     }
@@ -1549,7 +1552,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T smove(
             @NonNull ArgType source, @NonNull ArgType destination, @NonNull ArgType member) {
         checkTypeOrThrow(source);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(SMove, newArgsBuilder().add(source).add(destination).add(member)));
         return getThis();
     }
@@ -1567,7 +1570,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sinter(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(buildCommand(SInter, newArgsBuilder().add(keys)));
+        protobufBatch.addCommands(buildCommand(SInter, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -1584,7 +1587,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sinterstore(@NonNull ArgType destination, @NonNull ArgType[] keys) {
         checkTypeOrThrow(destination);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(SInterStore, newArgsBuilder().add(destination).add(keys)));
         return getThis();
     }
@@ -1602,7 +1605,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sintercard(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(SInterCard, newArgsBuilder().add(keys.length).add(keys)));
         return getThis();
     }
@@ -1622,7 +1625,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sintercard(@NonNull ArgType[] keys, long limit) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         SInterCard,
                         newArgsBuilder().add(keys.length).add(keys).add(SET_LIMIT_VALKEY_API).add(limit)));
@@ -1642,7 +1645,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sunionstore(@NonNull ArgType destination, @NonNull ArgType[] keys) {
         checkTypeOrThrow(destination);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(SUnionStore, newArgsBuilder().add(destination).add(keys)));
         return getThis();
     }
@@ -1661,7 +1664,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T configGet(@NonNull ArgType[] parameters) {
         checkTypeOrThrow(parameters);
-        protobufTransaction.addCommands(buildCommand(ConfigGet, newArgsBuilder().add(parameters)));
+        protobufBatch.addCommands(buildCommand(ConfigGet, newArgsBuilder().add(parameters)));
         return getThis();
     }
 
@@ -1675,10 +1678,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param parameters A <code>map</code> consisting of configuration parameters and their
      *     respective values to set.
      * @return Command response - <code>OK</code> if all configurations have been successfully set.
-     *     Otherwise, the transaction fails with an error.
+     *     Otherwise, the command fails with an error.
      */
     public <ArgType> T configSet(@NonNull Map<ArgType, ArgType> parameters) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(ConfigSet, newArgsBuilder().add(flattenMapToGlideStringArray(parameters))));
         return getThis();
     }
@@ -1695,7 +1698,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T exists(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(buildCommand(Exists, newArgsBuilder().add(keys)));
+        protobufBatch.addCommands(buildCommand(Exists, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -1713,7 +1716,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T unlink(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(buildCommand(Unlink, newArgsBuilder().add(keys)));
+        protobufBatch.addCommands(buildCommand(Unlink, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -1737,7 +1740,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T expire(@NonNull ArgType key, long seconds) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Expire, newArgsBuilder().add(key).add(seconds)));
+        protobufBatch.addCommands(buildCommand(Expire, newArgsBuilder().add(key).add(seconds)));
         return getThis();
     }
 
@@ -1764,7 +1767,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T expire(
             @NonNull ArgType key, long seconds, @NonNull ExpireOptions expireOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(Expire, newArgsBuilder().add(key).add(seconds).add(expireOptions.toArgs())));
         return getThis();
     }
@@ -1789,8 +1792,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T expireAt(@NonNull ArgType key, long unixSeconds) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(ExpireAt, newArgsBuilder().add(key).add(unixSeconds)));
+        protobufBatch.addCommands(buildCommand(ExpireAt, newArgsBuilder().add(key).add(unixSeconds)));
         return getThis();
     }
 
@@ -1817,7 +1819,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T expireAt(
             @NonNull ArgType key, long unixSeconds, @NonNull ExpireOptions expireOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ExpireAt, newArgsBuilder().add(key).add(unixSeconds).add(expireOptions.toArgs())));
         return getThis();
@@ -1843,8 +1845,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T pexpire(@NonNull ArgType key, long milliseconds) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(PExpire, newArgsBuilder().add(key).add(milliseconds)));
+        protobufBatch.addCommands(buildCommand(PExpire, newArgsBuilder().add(key).add(milliseconds)));
         return getThis();
     }
 
@@ -1871,7 +1872,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T pexpire(
             @NonNull ArgType key, long milliseconds, @NonNull ExpireOptions expireOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         PExpire, newArgsBuilder().add(key).add(milliseconds).add(expireOptions.toArgs())));
         return getThis();
@@ -1897,7 +1898,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T pexpireAt(@NonNull ArgType key, long unixMilliseconds) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(PExpireAt, newArgsBuilder().add(key).add(unixMilliseconds)));
         return getThis();
     }
@@ -1925,7 +1926,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T pexpireAt(
             @NonNull ArgType key, long unixMilliseconds, @NonNull ExpireOptions expireOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         PExpireAt,
                         newArgsBuilder().add(key).add(unixMilliseconds).add(expireOptions.toArgs())));
@@ -1944,7 +1945,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T ttl(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(TTL, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(TTL, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1964,7 +1965,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T expiretime(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ExpireTime, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(ExpireTime, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1984,7 +1985,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T pexpiretime(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(PExpireTime, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(PExpireTime, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1995,7 +1996,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command response - The id of the client.
      */
     public T clientId() {
-        protobufTransaction.addCommands(buildCommand(ClientId));
+        protobufBatch.addCommands(buildCommand(ClientId));
         return getThis();
     }
 
@@ -2007,7 +2008,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>null</code> if no name is assigned.
      */
     public T clientGetName() {
-        protobufTransaction.addCommands(buildCommand(ClientGetName));
+        protobufBatch.addCommands(buildCommand(ClientGetName));
         return getThis();
     }
 
@@ -2016,10 +2017,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
      * @return Command Response - <code>OK</code> is returned when the configuration was rewritten
-     *     properly. Otherwise, the transaction fails with an error.
+     *     properly. Otherwise, the command fails with an error.
      */
     public T configRewrite() {
-        protobufTransaction.addCommands(buildCommand(ConfigRewrite));
+        protobufBatch.addCommands(buildCommand(ConfigRewrite));
         return getThis();
     }
 
@@ -2033,7 +2034,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     reset.
      */
     public T configResetStat() {
-        protobufTransaction.addCommands(buildCommand(ConfigResetStat));
+        protobufBatch.addCommands(buildCommand(ConfigResetStat));
         return getThis();
     }
 
@@ -2064,7 +2065,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             args.add("CH");
         }
         args.add(flattenMapToGlideStringArrayValueFirst(membersScoresMap));
-        protobufTransaction.addCommands(buildCommand(ZAdd, args));
+        protobufBatch.addCommands(buildCommand(ZAdd, args));
         return getThis();
     }
 
@@ -2147,7 +2148,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             double increment,
             @NonNull ZAddOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZAdd,
                         newArgsBuilder()
@@ -2195,7 +2196,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zrem(@NonNull ArgType key, @NonNull ArgType[] members) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZRem, newArgsBuilder().add(key).add(members)));
+        protobufBatch.addCommands(buildCommand(ZRem, newArgsBuilder().add(key).add(members)));
         return getThis();
     }
 
@@ -2212,7 +2213,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zcard(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZCard, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(ZCard, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -2234,7 +2235,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zpopmin(@NonNull ArgType key, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZPopMin, newArgsBuilder().add(key).add(count)));
+        protobufBatch.addCommands(buildCommand(ZPopMin, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -2252,7 +2253,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zpopmin(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZPopMin, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(ZPopMin, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -2269,7 +2270,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zrandmember(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZRandMember, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(ZRandMember, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -2289,8 +2290,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zrandmemberWithCount(@NonNull ArgType key, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(ZRandMember, newArgsBuilder().add(key).add(count)));
+        protobufBatch.addCommands(buildCommand(ZRandMember, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -2313,7 +2313,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zrandmemberWithCountWithScores(ArgType key, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZRandMember, newArgsBuilder().add(key).add(count).add(WITH_SCORES_VALKEY_API)));
         return getThis();
@@ -2336,7 +2336,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zincrby(@NonNull ArgType key, double increment, @NonNull ArgType member) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(ZIncrBy, newArgsBuilder().add(key).add(increment).add(member)));
         return getThis();
     }
@@ -2363,8 +2363,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T bzpopmin(@NonNull ArgType[] keys, double timeout) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
-                buildCommand(BZPopMin, newArgsBuilder().add(keys).add(timeout)));
+        protobufBatch.addCommands(buildCommand(BZPopMin, newArgsBuilder().add(keys).add(timeout)));
         return getThis();
     }
 
@@ -2386,7 +2385,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zpopmax(@NonNull ArgType key, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZPopMax, newArgsBuilder().add(key).add(count)));
+        protobufBatch.addCommands(buildCommand(ZPopMax, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -2404,7 +2403,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zpopmax(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZPopMax, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(ZPopMax, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -2430,8 +2429,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T bzpopmax(@NonNull ArgType[] keys, double timeout) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
-                buildCommand(BZPopMax, newArgsBuilder().add(keys).add(timeout)));
+        protobufBatch.addCommands(buildCommand(BZPopMax, newArgsBuilder().add(keys).add(timeout)));
         return getThis();
     }
 
@@ -2449,7 +2447,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zscore(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZScore, newArgsBuilder().add(key).add(member)));
+        protobufBatch.addCommands(buildCommand(ZScore, newArgsBuilder().add(key).add(member)));
         return getThis();
     }
 
@@ -2469,7 +2467,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zrank(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZRank, newArgsBuilder().add(key).add(member)));
+        protobufBatch.addCommands(buildCommand(ZRank, newArgsBuilder().add(key).add(member)));
         return getThis();
     }
 
@@ -2489,7 +2487,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zrankWithScore(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(ZRank, newArgsBuilder().add(key).add(member).add(WITH_SCORE_VALKEY_API)));
         return getThis();
     }
@@ -2511,7 +2509,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zrevrank(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZRevRank, newArgsBuilder().add(key).add(member)));
+        protobufBatch.addCommands(buildCommand(ZRevRank, newArgsBuilder().add(key).add(member)));
         return getThis();
     }
 
@@ -2532,7 +2530,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zrevrankWithScore(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(ZRevRank, newArgsBuilder().add(key).add(member).add(WITH_SCORE_VALKEY_API)));
         return getThis();
     }
@@ -2552,7 +2550,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zmscore(@NonNull ArgType key, @NonNull ArgType[] members) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZMScore, newArgsBuilder().add(key).add(members)));
+        protobufBatch.addCommands(buildCommand(ZMScore, newArgsBuilder().add(key).add(members)));
         return getThis();
     }
 
@@ -2572,8 +2570,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zdiff(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
-                buildCommand(ZDiff, newArgsBuilder().add(keys.length).add(keys)));
+        protobufBatch.addCommands(buildCommand(ZDiff, newArgsBuilder().add(keys.length).add(keys)));
         return getThis();
     }
 
@@ -2592,7 +2589,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zdiffWithScores(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZDiff, newArgsBuilder().add(keys.length).add(keys).add(WITH_SCORES_VALKEY_API)));
         return getThis();
@@ -2614,7 +2611,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zdiffstore(@NonNull ArgType destination, @NonNull ArgType[] keys) {
         checkTypeOrThrow(destination);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(ZDiffStore, newArgsBuilder().add(destination).add(keys.length).add(keys)));
         return getThis();
     }
@@ -2641,7 +2638,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zcount(
             @NonNull ArgType key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZCount, newArgsBuilder().add(key).add(minScore.toArgs()).add(maxScore.toArgs())));
         return getThis();
@@ -2668,7 +2665,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zremrangebyrank(@NonNull ArgType key, long start, long end) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(ZRemRangeByRank, newArgsBuilder().add(key).add(start).add(end)));
         return getThis();
     }
@@ -2700,7 +2697,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull RangeQuery rangeQuery,
             boolean reverse) {
         checkTypeOrThrow(destination);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZRangeStore,
                         newArgsBuilder()
@@ -2757,7 +2754,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zremrangebylex(
             @NonNull ArgType key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZRemRangeByLex, newArgsBuilder().add(key).add(minLex.toArgs()).add(maxLex.toArgs())));
         return getThis();
@@ -2785,7 +2782,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zremrangebyscore(
             @NonNull ArgType key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZRemRangeByScore,
                         newArgsBuilder().add(key).add(minScore.toArgs()).add(maxScore.toArgs())));
@@ -2814,7 +2811,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zlexcount(
             @NonNull ArgType key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZLexCount, newArgsBuilder().add(key).add(minLex.toArgs()).add(maxLex.toArgs())));
         return getThis();
@@ -2843,7 +2840,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull String destination,
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZUnionStore,
                         newArgsBuilder()
@@ -2876,7 +2873,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GlideString destination,
             @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZUnionStore,
                         newArgsBuilder()
@@ -2904,7 +2901,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zunionstore(
             @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZUnionStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
         return getThis();
@@ -2928,7 +2925,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zunionstore(
             @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZUnionStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
         return getThis();
@@ -2957,7 +2954,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull String destination,
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZInterStore,
                         newArgsBuilder()
@@ -2990,7 +2987,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GlideString destination,
             @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZInterStore,
                         newArgsBuilder()
@@ -3012,7 +3009,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zintercard(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(ZInterCard, newArgsBuilder().add(keys.length).add(keys)));
         return getThis();
     }
@@ -3034,7 +3031,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zintercard(@NonNull ArgType[] keys, long limit) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZInterCard,
                         newArgsBuilder().add(keys.length).add(keys).add(LIMIT_VALKEY_API).add(limit)));
@@ -3061,7 +3058,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zinterstore(
             @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZInterStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
         return getThis();
@@ -3087,7 +3084,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zinterstore(
             @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZInterStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
         return getThis();
@@ -3103,7 +3100,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The resulting sorted set from the union.
      */
     public T zunion(@NonNull KeyArray keys) {
-        protobufTransaction.addCommands(buildCommand(ZUnion, newArgsBuilder().add(keys.toArgs())));
+        protobufBatch.addCommands(buildCommand(ZUnion, newArgsBuilder().add(keys.toArgs())));
         return getThis();
     }
 
@@ -3117,7 +3114,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The resulting sorted set from the union.
      */
     public T zunion(@NonNull KeyArrayBinary keys) {
-        protobufTransaction.addCommands(buildCommand(ZUnion, newArgsBuilder().add(keys.toArgs())));
+        protobufBatch.addCommands(buildCommand(ZUnion, newArgsBuilder().add(keys.toArgs())));
         return getThis();
     }
 
@@ -3139,7 +3136,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zunionWithScores(
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZUnion,
                         newArgsBuilder()
@@ -3167,7 +3164,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zunionWithScores(
             @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZUnion,
                         newArgsBuilder()
@@ -3194,7 +3191,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The resulting sorted set from the union.
      */
     public T zunionWithScores(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZUnion, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
@@ -3217,7 +3214,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The resulting sorted set from the union.
      */
     public T zunionWithScores(@NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZUnion, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
@@ -3234,7 +3231,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The resulting sorted set from the intersection.
      */
     public T zinter(@NonNull KeyArray keys) {
-        protobufTransaction.addCommands(buildCommand(ZInter, newArgsBuilder().add(keys.toArgs())));
+        protobufBatch.addCommands(buildCommand(ZInter, newArgsBuilder().add(keys.toArgs())));
         return getThis();
     }
 
@@ -3249,7 +3246,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The resulting sorted set from the intersection.
      */
     public T zinter(@NonNull KeyArrayBinary keys) {
-        protobufTransaction.addCommands(buildCommand(ZInter, newArgsBuilder().add(keys.toArgs())));
+        protobufBatch.addCommands(buildCommand(ZInter, newArgsBuilder().add(keys.toArgs())));
         return getThis();
     }
 
@@ -3269,7 +3266,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The resulting sorted set from the intersection.
      */
     public T zinterWithScores(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZInter, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
@@ -3291,7 +3288,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The resulting sorted set from the intersection.
      */
     public T zinterWithScores(@NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZInter, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
@@ -3315,7 +3312,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zinterWithScores(
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZInter,
                         newArgsBuilder()
@@ -3343,7 +3340,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zinterWithScores(
             @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZInter,
                         newArgsBuilder()
@@ -3405,7 +3402,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull Map<ArgType, ArgType> values,
             @NonNull StreamAddOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XAdd,
                         newArgsBuilder()
@@ -3433,7 +3430,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T xadd(
             @NonNull ArgType key, @NonNull ArgType[][] values, @NonNull StreamAddOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XAdd,
                         newArgsBuilder()
@@ -3473,7 +3470,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T xread(
             @NonNull Map<ArgType, ArgType> keysAndIds, @NonNull StreamReadOptions options) {
         checkTypeOrThrow(keysAndIds);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XRead,
                         newArgsBuilder()
@@ -3494,8 +3491,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T xtrim(@NonNull ArgType key, @NonNull StreamTrimOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(XTrim, newArgsBuilder().add(key).add(options.toArgs())));
+        protobufBatch.addCommands(buildCommand(XTrim, newArgsBuilder().add(key).add(options.toArgs())));
         return getThis();
     }
 
@@ -3511,7 +3507,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T xlen(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(XLen, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(XLen, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -3529,7 +3525,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T xdel(@NonNull ArgType key, @NonNull ArgType[] ids) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(XDel, newArgsBuilder().add(key).add(ids)));
+        protobufBatch.addCommands(buildCommand(XDel, newArgsBuilder().add(key).add(ids)));
         return getThis();
     }
 
@@ -3563,7 +3559,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T xrange(
             @NonNull ArgType key, @NonNull StreamRange start, @NonNull StreamRange end) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(XRange, newArgsBuilder().add(key).add(StreamRange.toArgs(start, end))));
         return getThis();
     }
@@ -3599,7 +3595,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T xrange(
             @NonNull ArgType key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(XRange, newArgsBuilder().add(key).add(StreamRange.toArgs(start, end, count))));
         return getThis();
     }
@@ -3636,7 +3632,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T xrevrange(
             @NonNull ArgType key, @NonNull StreamRange end, @NonNull StreamRange start) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(XRevRange, newArgsBuilder().add(key).add(StreamRange.toArgs(end, start))));
         return getThis();
     }
@@ -3674,7 +3670,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T xrevrange(
             @NonNull ArgType key, @NonNull StreamRange end, @NonNull StreamRange start, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XRevRange, newArgsBuilder().add(key).add(StreamRange.toArgs(end, start, count))));
         return getThis();
@@ -3697,7 +3693,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T xgroupCreate(
             @NonNull ArgType key, @NonNull ArgType groupName, @NonNull ArgType id) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(XGroupCreate, newArgsBuilder().add(key).add(groupName).add(id)));
         return getThis();
     }
@@ -3723,7 +3719,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType id,
             @NonNull StreamGroupOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XGroupCreate, newArgsBuilder().add(key).add(groupName).add(id).add(options.toArgs())));
         return getThis();
@@ -3742,7 +3738,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T xgroupDestroy(@NonNull ArgType key, @NonNull ArgType groupName) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(XGroupDestroy, newArgsBuilder().add(key).add(groupName)));
         return getThis();
     }
@@ -3763,7 +3759,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T xgroupCreateConsumer(
             @NonNull ArgType key, @NonNull ArgType group, @NonNull ArgType consumer) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(XGroupCreateConsumer, newArgsBuilder().add(key).add(group).add(consumer)));
         return getThis();
     }
@@ -3783,7 +3779,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T xgroupDelConsumer(
             @NonNull ArgType key, @NonNull ArgType group, @NonNull ArgType consumer) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(XGroupDelConsumer, newArgsBuilder().add(key).add(group).add(consumer)));
         return getThis();
     }
@@ -3803,7 +3799,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T xgroupSetId(
             @NonNull ArgType key, @NonNull ArgType groupName, @NonNull ArgType id) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(XGroupSetId, newArgsBuilder().add(key).add(groupName).add(id)));
         return getThis();
     }
@@ -3825,7 +3821,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T xgroupSetId(
             @NonNull ArgType key, @NonNull ArgType groupName, @NonNull ArgType id, long entriesRead) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XGroupSetId,
                         newArgsBuilder()
@@ -3884,7 +3880,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType consumer,
             @NonNull StreamReadGroupOptions options) {
         checkTypeOrThrow(group);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XReadGroup,
                         newArgsBuilder()
@@ -3907,8 +3903,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T xack(@NonNull ArgType key, @NonNull ArgType group, @NonNull ArgType[] ids) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(XAck, newArgsBuilder().add(key).add(group).add(ids)));
+        protobufBatch.addCommands(buildCommand(XAck, newArgsBuilder().add(key).add(group).add(ids)));
         return getThis();
     }
 
@@ -3935,7 +3930,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T xpending(@NonNull ArgType key, @NonNull ArgType group) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(XPending, newArgsBuilder().add(key).add(group)));
+        protobufBatch.addCommands(buildCommand(XPending, newArgsBuilder().add(key).add(group)));
         return getThis();
     }
 
@@ -4030,7 +4025,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             long count,
             @NonNull StreamPendingOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XPending, newArgsBuilder().add(key).add(group).add(options.toArgs(start, end, count))));
         return getThis();
@@ -4048,7 +4043,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </code>.
      */
     public <ArgType> T xinfoStream(@NonNull ArgType key) {
-        protobufTransaction.addCommands(buildCommand(XInfoStream, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(XInfoStream, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -4064,7 +4059,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>key</code>.
      */
     public <ArgType> T xinfoStreamFull(@NonNull ArgType key) {
-        protobufTransaction.addCommands(buildCommand(XInfoStream, newArgsBuilder().add(key).add(FULL)));
+        protobufBatch.addCommands(buildCommand(XInfoStream, newArgsBuilder().add(key).add(FULL)));
         return getThis();
     }
 
@@ -4082,7 +4077,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>key</code>.
      */
     public <ArgType> T xinfoStreamFull(@NonNull ArgType key, int count) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XInfoStream,
                         newArgsBuilder().add(key).add(FULL).add(COUNT).add(Integer.toString(count))));
@@ -4110,7 +4105,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             long minIdleTime,
             @NonNull ArgType[] ids) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XClaim, newArgsBuilder().add(key).add(group).add(consumer).add(minIdleTime).add(ids)));
         return getThis();
@@ -4139,7 +4134,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType[] ids,
             @NonNull StreamClaimOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XClaim,
                         newArgsBuilder()
@@ -4173,7 +4168,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             long minIdleTime,
             @NonNull ArgType[] ids) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XClaim,
                         newArgsBuilder()
@@ -4209,7 +4204,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType[] ids,
             @NonNull StreamClaimOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XClaim,
                         newArgsBuilder()
@@ -4233,7 +4228,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     represents the attributes of a consumer group for the stream at <code>key</code>.
      */
     public <ArgType> T xinfoGroups(@NonNull ArgType key) {
-        protobufTransaction.addCommands(buildCommand(XInfoGroups, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(XInfoGroups, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -4249,7 +4244,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     key</code>.
      */
     public <ArgType> T xinfoConsumers(@NonNull ArgType key, @NonNull ArgType groupName) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(XInfoConsumers, newArgsBuilder().add(key).add(groupName)));
         return getThis();
     }
@@ -4286,7 +4281,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType consumer,
             long minIdleTime,
             @NonNull ArgType start) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XAutoClaim,
                         newArgsBuilder().add(key).add(group).add(consumer).add(minIdleTime).add(start)));
@@ -4327,7 +4322,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             long minIdleTime,
             @NonNull ArgType start,
             long count) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XAutoClaim,
                         newArgsBuilder()
@@ -4373,7 +4368,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType consumer,
             long minIdleTime,
             @NonNull ArgType start) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XAutoClaim,
                         newArgsBuilder()
@@ -4420,7 +4415,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             long minIdleTime,
             @NonNull ArgType start,
             long count) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         XAutoClaim,
                         newArgsBuilder()
@@ -4447,7 +4442,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T pttl(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(PTTL, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(PTTL, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -4465,7 +4460,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T persist(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Persist, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(Persist, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -4479,7 +4474,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </code> format.
      */
     public T time() {
-        protobufTransaction.addCommands(buildCommand(Time));
+        protobufBatch.addCommands(buildCommand(Time));
         return getThis();
     }
 
@@ -4491,7 +4486,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>UNIX TIME</code> of the last DB save executed with success.
      */
     public T lastsave() {
-        protobufTransaction.addCommands(buildCommand(LastSave));
+        protobufBatch.addCommands(buildCommand(LastSave));
         return getThis();
     }
 
@@ -4502,7 +4497,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>OK</code>.
      */
     public T flushall() {
-        protobufTransaction.addCommands(buildCommand(FlushAll));
+        protobufBatch.addCommands(buildCommand(FlushAll));
         return getThis();
     }
 
@@ -4515,7 +4510,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>OK</code>.
      */
     public T flushall(FlushMode mode) {
-        protobufTransaction.addCommands(buildCommand(FlushAll, newArgsBuilder().add(mode)));
+        protobufBatch.addCommands(buildCommand(FlushAll, newArgsBuilder().add(mode)));
         return getThis();
     }
 
@@ -4526,7 +4521,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>OK</code>.
      */
     public T flushdb() {
-        protobufTransaction.addCommands(buildCommand(FlushDB));
+        protobufBatch.addCommands(buildCommand(FlushDB));
         return getThis();
     }
 
@@ -4539,7 +4534,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>OK</code>.
      */
     public T flushdb(FlushMode mode) {
-        protobufTransaction.addCommands(buildCommand(FlushDB, newArgsBuilder().add(mode)));
+        protobufBatch.addCommands(buildCommand(FlushDB, newArgsBuilder().add(mode)));
         return getThis();
     }
 
@@ -4551,7 +4546,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     version.
      */
     public T lolwut() {
-        protobufTransaction.addCommands(buildCommand(Lolwut));
+        protobufBatch.addCommands(buildCommand(Lolwut));
         return getThis();
     }
 
@@ -4572,7 +4567,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     version.
      */
     public T lolwut(int @NonNull [] parameters) {
-        protobufTransaction.addCommands(buildCommand(Lolwut, newArgsBuilder().add(parameters)));
+        protobufBatch.addCommands(buildCommand(Lolwut, newArgsBuilder().add(parameters)));
         return getThis();
     }
 
@@ -4586,7 +4581,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     version.
      */
     public T lolwut(int version) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(Lolwut, newArgsBuilder().add(VERSION_VALKEY_API).add(version)));
         return getThis();
     }
@@ -4608,7 +4603,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     version.
      */
     public T lolwut(int version, int @NonNull [] parameters) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         Lolwut, newArgsBuilder().add(VERSION_VALKEY_API).add(version).add(parameters)));
         return getThis();
@@ -4621,7 +4616,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of keys in the currently selected database.
      */
     public T dbsize() {
-        protobufTransaction.addCommands(buildCommand(DBSize));
+        protobufBatch.addCommands(buildCommand(DBSize));
         return getThis();
     }
 
@@ -4637,7 +4632,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T type(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Type, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(Type, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -4648,7 +4643,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A random <code>key</code> from the database.
      */
     public T randomKey() {
-        protobufTransaction.addCommands(buildCommand(RandomKey));
+        protobufBatch.addCommands(buildCommand(RandomKey));
         return getThis();
     }
 
@@ -4662,11 +4657,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The <code>key</code> to rename.
      * @param newKey The new name of the <code>key</code>.
      * @return Command Response - If the <code>key</code> was successfully renamed, returns <code>OK
-     *     </code>. If <code>key</code> does not exist, the transaction fails with an error.
+     *     </code>. If <code>key</code> does not exist, the command fails with an error.
      */
     public <ArgType> T rename(@NonNull ArgType key, @NonNull ArgType newKey) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Rename, newArgsBuilder().add(key).add(newKey)));
+        protobufBatch.addCommands(buildCommand(Rename, newArgsBuilder().add(key).add(newKey)));
         return getThis();
     }
 
@@ -4683,7 +4678,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T renamenx(@NonNull ArgType key, @NonNull ArgType newKey) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(RenameNX, newArgsBuilder().add(key).add(newKey)));
+        protobufBatch.addCommands(buildCommand(RenameNX, newArgsBuilder().add(key).add(newKey)));
         return getThis();
     }
 
@@ -4709,7 +4704,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType pivot,
             @NonNull ArgType element) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(LInsert, newArgsBuilder().add(key).add(position).add(pivot).add(element)));
         return getThis();
     }
@@ -4735,7 +4730,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T brpop(@NonNull ArgType[] keys, double timeout) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(buildCommand(BRPop, newArgsBuilder().add(keys).add(timeout)));
+        protobufBatch.addCommands(buildCommand(BRPop, newArgsBuilder().add(keys).add(timeout)));
         return getThis();
     }
 
@@ -4753,7 +4748,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lpushx(@NonNull ArgType key, @NonNull ArgType[] elements) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(LPushX, newArgsBuilder().add(key).add(elements)));
+        protobufBatch.addCommands(buildCommand(LPushX, newArgsBuilder().add(key).add(elements)));
         return getThis();
     }
 
@@ -4771,7 +4766,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T rpushx(@NonNull ArgType key, @NonNull ArgType[] elements) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(RPushX, newArgsBuilder().add(key).add(elements)));
+        protobufBatch.addCommands(buildCommand(RPushX, newArgsBuilder().add(key).add(elements)));
         return getThis();
     }
 
@@ -4796,7 +4791,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T blpop(@NonNull ArgType[] keys, double timeout) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(buildCommand(BLPop, newArgsBuilder().add(keys).add(timeout)));
+        protobufBatch.addCommands(buildCommand(BLPop, newArgsBuilder().add(keys).add(timeout)));
         return getThis();
     }
 
@@ -4825,7 +4820,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zrange(@NonNull ArgType key, @NonNull RangeQuery rangeQuery, boolean reverse) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZRange,
                         newArgsBuilder()
@@ -4882,7 +4877,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zrangeWithScores(
             @NonNull ArgType key, @NonNull ScoredRangeQuery rangeQuery, boolean reverse) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZRange,
                         newArgsBuilder()
@@ -4931,7 +4926,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zmpop(@NonNull ArgType[] keys, @NonNull ScoreFilter modifier) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(ZMPop, newArgsBuilder().add(keys.length).add(keys).add(modifier)));
         return getThis();
     }
@@ -4955,7 +4950,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zmpop(@NonNull ArgType[] keys, @NonNull ScoreFilter modifier, long count) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         ZMPop,
                         newArgsBuilder()
@@ -4992,7 +4987,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T bzmpop(
             @NonNull ArgType[] keys, @NonNull ScoreFilter modifier, double timeout) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         BZMPop, newArgsBuilder().add(timeout).add(keys.length).add(keys).add(modifier)));
         return getThis();
@@ -5025,7 +5020,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T bzmpop(
             @NonNull ArgType[] keys, @NonNull ScoreFilter modifier, double timeout, long count) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         BZMPop,
                         newArgsBuilder()
@@ -5059,7 +5054,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T pfadd(@NonNull ArgType key, @NonNull ArgType[] elements) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(PfAdd, newArgsBuilder().add(key).add(elements)));
+        protobufBatch.addCommands(buildCommand(PfAdd, newArgsBuilder().add(key).add(elements)));
         return getThis();
     }
 
@@ -5077,7 +5072,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T pfcount(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(buildCommand(PfCount, newArgsBuilder().add(keys)));
+        protobufBatch.addCommands(buildCommand(PfCount, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -5096,7 +5091,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T pfmerge(@NonNull ArgType destination, @NonNull ArgType[] sourceKeys) {
         checkTypeOrThrow(destination);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(PfMerge, newArgsBuilder().add(destination).add(sourceKeys)));
         return getThis();
     }
@@ -5114,7 +5109,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T objectEncoding(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ObjectEncoding, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(ObjectEncoding, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -5132,7 +5127,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T objectFreq(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ObjectFreq, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(ObjectFreq, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -5148,7 +5143,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T objectIdletime(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ObjectIdleTime, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(ObjectIdleTime, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -5165,7 +5160,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T objectRefcount(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ObjectRefCount, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(ObjectRefCount, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -5180,7 +5175,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T touch(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(buildCommand(Touch, newArgsBuilder().add(keys)));
+        protobufBatch.addCommands(buildCommand(Touch, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -5201,7 +5196,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T copy(@NonNull ArgType source, @NonNull ArgType destination, boolean replace) {
         checkTypeOrThrow(source);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         Copy,
                         newArgsBuilder().add(source).add(destination).addIf(REPLACE_VALKEY_API, replace)));
@@ -5238,7 +5233,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T dump(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Dump, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(Dump, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -5258,8 +5253,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T restore(@NonNull ArgType key, long ttl, @NonNull byte[] value) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(Restore, newArgsBuilder().add(key).add(ttl).add(value)));
+        protobufBatch.addCommands(buildCommand(Restore, newArgsBuilder().add(key).add(ttl).add(value)));
         return getThis();
     }
 
@@ -5285,7 +5279,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull byte[] value,
             @NonNull RestoreOptions restoreOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(Restore, newArgsBuilder().add(key).add(ttl).add(value).add(restoreOptions)));
         return getThis();
     }
@@ -5302,7 +5296,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T bitcount(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(BitCount, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(BitCount, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -5322,7 +5316,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T bitcount(@NonNull ArgType key, long start) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(BitCount, newArgsBuilder().add(key).add(start)));
+        protobufBatch.addCommands(buildCommand(BitCount, newArgsBuilder().add(key).add(start)));
         return getThis();
     }
 
@@ -5346,7 +5340,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T bitcount(@NonNull ArgType key, long start, long end) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(BitCount, newArgsBuilder().add(key).add(start).add(end)));
         return getThis();
     }
@@ -5375,7 +5369,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T bitcount(
             @NonNull ArgType key, long start, long end, @NonNull BitmapIndexType options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(BitCount, newArgsBuilder().add(key).add(start).add(end).add(options)));
         return getThis();
     }
@@ -5402,7 +5396,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull Map<ArgType, GeospatialData> membersToGeospatialData,
             @NonNull GeoAddOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         GeoAdd,
                         newArgsBuilder()
@@ -5448,7 +5442,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T geopos(@NonNull ArgType key, @NonNull ArgType[] members) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(GeoPos, newArgsBuilder().add(key).add(members)));
+        protobufBatch.addCommands(buildCommand(GeoPos, newArgsBuilder().add(key).add(members)));
         return getThis();
     }
 
@@ -5472,7 +5466,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType member2,
             @NonNull GeoUnit geoUnit) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         GeoDist,
                         newArgsBuilder().add(key).add(member1).add(member2).add(geoUnit.getValkeyAPI())));
@@ -5496,7 +5490,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T geodist(
             @NonNull ArgType key, @NonNull ArgType member1, @NonNull ArgType member2) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(GeoDist, newArgsBuilder().add(key).add(member1).add(member2)));
         return getThis();
     }
@@ -5516,7 +5510,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T geohash(@NonNull ArgType key, @NonNull ArgType[] members) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(GeoHash, newArgsBuilder().add(key).add(members)));
+        protobufBatch.addCommands(buildCommand(GeoHash, newArgsBuilder().add(key).add(members)));
         return getThis();
     }
 
@@ -5534,7 +5528,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T functionLoad(@NonNull ArgType libraryCode, boolean replace) {
         checkTypeOrThrow(libraryCode);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(FunctionLoad, newArgsBuilder().addIf(REPLACE, replace).add(libraryCode)));
         return getThis();
     }
@@ -5548,7 +5542,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - Info about all libraries and their functions.
      */
     public T functionList(boolean withCode) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(FunctionList, newArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode)));
         return getThis();
     }
@@ -5566,7 +5560,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T functionList(@NonNull ArgType libNamePattern, boolean withCode) {
         checkTypeOrThrow(libNamePattern);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         FunctionList,
                         newArgsBuilder()
@@ -5594,7 +5588,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T fcall(
             @NonNull ArgType function, @NonNull ArgType[] keys, @NonNull ArgType[] arguments) {
         checkTypeOrThrow(function);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         FCall, newArgsBuilder().add(function).add(keys.length).add(keys).add(arguments)));
         return getThis();
@@ -5634,7 +5628,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T fcallReadOnly(
             @NonNull ArgType function, @NonNull ArgType[] keys, @NonNull ArgType[] arguments) {
         checkTypeOrThrow(function);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         FCallReadOnly,
                         newArgsBuilder().add(function).add(keys.length).add(keys).add(arguments)));
@@ -5670,7 +5664,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </ul>
      */
     public T functionStats() {
-        protobufTransaction.addCommands(buildCommand(FunctionStats));
+        protobufBatch.addCommands(buildCommand(FunctionStats));
         return getThis();
     }
 
@@ -5683,7 +5677,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The serialized payload of all loaded libraries.
      */
     public T functionDump() {
-        protobufTransaction.addCommands(buildCommand(FunctionDump));
+        protobufBatch.addCommands(buildCommand(FunctionDump));
         return getThis();
     }
 
@@ -5697,7 +5691,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>OK</code>.
      */
     public T functionRestore(@NonNull byte[] payload) {
-        protobufTransaction.addCommands(buildCommand(FunctionRestore, newArgsBuilder().add(payload)));
+        protobufBatch.addCommands(buildCommand(FunctionRestore, newArgsBuilder().add(payload)));
         return getThis();
     }
 
@@ -5712,7 +5706,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>OK</code>.
      */
     public T functionRestore(@NonNull byte[] payload, @NonNull FunctionRestorePolicy policy) {
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(FunctionRestore, newArgsBuilder().add(payload).add(policy)));
         return getThis();
     }
@@ -5736,7 +5730,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T setbit(@NonNull ArgType key, long offset, long value) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(SetBit, newArgsBuilder().add(key).add(offset).add(value)));
         return getThis();
     }
@@ -5755,7 +5749,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T getbit(@NonNull ArgType key, long offset) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(GetBit, newArgsBuilder().add(key).add(offset)));
+        protobufBatch.addCommands(buildCommand(GetBit, newArgsBuilder().add(key).add(offset)));
         return getThis();
     }
 
@@ -5787,7 +5781,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull Long count,
             double timeout) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         BLMPop,
                         newArgsBuilder()
@@ -5824,7 +5818,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T blmpop(
             @NonNull ArgType[] keys, @NonNull ListDirection direction, double timeout) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         BLMPop, newArgsBuilder().add(timeout).add(keys.length).add(keys).add(direction)));
         return getThis();
@@ -5844,7 +5838,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T bitpos(@NonNull ArgType key, long bit) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(BitPos, newArgsBuilder().add(key).add(bit)));
+        protobufBatch.addCommands(buildCommand(BitPos, newArgsBuilder().add(key).add(bit)));
         return getThis();
     }
 
@@ -5867,8 +5861,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T bitpos(@NonNull ArgType key, long bit, long start) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(BitPos, newArgsBuilder().add(key).add(bit).add(start)));
+        protobufBatch.addCommands(buildCommand(BitPos, newArgsBuilder().add(key).add(bit).add(start)));
         return getThis();
     }
 
@@ -5892,7 +5885,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T bitpos(@NonNull ArgType key, long bit, long start, long end) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(BitPos, newArgsBuilder().add(key).add(bit).add(start).add(end)));
         return getThis();
     }
@@ -5924,7 +5917,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T bitpos(
             @NonNull ArgType key, long bit, long start, long end, @NonNull BitmapIndexType offsetType) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         BitPos, newArgsBuilder().add(key).add(bit).add(start).add(end).add(offsetType)));
         return getThis();
@@ -5947,7 +5940,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType destination,
             @NonNull ArgType[] keys) {
         checkTypeOrThrow(destination);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(BitOp, newArgsBuilder().add(bitwiseOperation).add(destination).add(keys)));
         return getThis();
     }
@@ -5970,7 +5963,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T lmpop(
             @NonNull ArgType[] keys, @NonNull ListDirection direction, @NonNull Long count) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         LMPop,
                         newArgsBuilder()
@@ -5997,7 +5990,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lmpop(@NonNull ArgType[] keys, @NonNull ListDirection direction) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(LMPop, newArgsBuilder().add(keys.length).add(keys).add(direction)));
         return getThis();
     }
@@ -6018,7 +6011,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lset(@NonNull ArgType key, long index, @NonNull ArgType element) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(LSet, newArgsBuilder().add(key).add(index).add(element)));
         return getThis();
     }
@@ -6045,7 +6038,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ListDirection whereFrom,
             @NonNull ListDirection whereTo) {
         checkTypeOrThrow(source);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         LMove, newArgsBuilder().add(source).add(destination).add(whereFrom).add(whereTo)));
         return getThis();
@@ -6082,7 +6075,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ListDirection whereTo,
             double timeout) {
         checkTypeOrThrow(source);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         BLMove,
                         newArgsBuilder()
@@ -6106,7 +6099,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T srandmember(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(SRandMember, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(SRandMember, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -6125,8 +6118,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T srandmember(@NonNull ArgType key, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(SRandMember, newArgsBuilder().add(key).add(count)));
+        protobufBatch.addCommands(buildCommand(SRandMember, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -6142,7 +6134,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T spop(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(SPop, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(SPop, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -6161,7 +6153,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T spopCount(@NonNull ArgType key, long count) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(SPop, newArgsBuilder().add(key).add(count)));
+        protobufBatch.addCommands(buildCommand(SPop, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -6196,7 +6188,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T bitfield(@NonNull ArgType key, @NonNull BitFieldSubCommands[] subCommands) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(BitField, newArgsBuilder().add(key).add(createBitFieldArgs(subCommands))));
         return getThis();
     }
@@ -6218,7 +6210,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T bitfieldReadOnly(
             @NonNull ArgType key, @NonNull BitFieldReadOnlySubCommands[] subCommands) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         BitFieldReadOnly, newArgsBuilder().add(key).add(createBitFieldArgs(subCommands))));
         return getThis();
@@ -6232,7 +6224,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>OK</code>.
      */
     public T functionFlush() {
-        protobufTransaction.addCommands(buildCommand(FunctionFlush));
+        protobufBatch.addCommands(buildCommand(FunctionFlush));
         return getThis();
     }
 
@@ -6246,7 +6238,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>OK</code>.
      */
     public T functionFlush(@NonNull FlushMode mode) {
-        protobufTransaction.addCommands(buildCommand(FunctionFlush, newArgsBuilder().add(mode)));
+        protobufBatch.addCommands(buildCommand(FunctionFlush, newArgsBuilder().add(mode)));
         return getThis();
     }
 
@@ -6262,7 +6254,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T functionDelete(@NonNull ArgType libName) {
         checkTypeOrThrow(libName);
-        protobufTransaction.addCommands(buildCommand(FunctionDelete, newArgsBuilder().add(libName)));
+        protobufBatch.addCommands(buildCommand(FunctionDelete, newArgsBuilder().add(libName)));
         return getThis();
     }
 
@@ -6282,7 +6274,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lcs(@NonNull ArgType key1, @NonNull ArgType key2) {
         checkTypeOrThrow(key1);
-        protobufTransaction.addCommands(buildCommand(LCS, newArgsBuilder().add(key1).add(key2)));
+        protobufBatch.addCommands(buildCommand(LCS, newArgsBuilder().add(key1).add(key2)));
         return getThis();
     }
 
@@ -6301,7 +6293,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lcsLen(@NonNull ArgType key1, @NonNull ArgType key2) {
         checkTypeOrThrow(key1);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(LCS, newArgsBuilder().add(key1).add(key2).add(LEN_VALKEY_API)));
         return getThis();
     }
@@ -6318,8 +6310,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T publish(@NonNull ArgType message, @NonNull ArgType channel) {
         checkTypeOrThrow(channel);
-        protobufTransaction.addCommands(
-                buildCommand(Publish, newArgsBuilder().add(channel).add(message)));
+        protobufBatch.addCommands(buildCommand(Publish, newArgsBuilder().add(channel).add(message)));
         return getThis();
     }
 
@@ -6332,7 +6323,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command response - An <code>Array</code> of all active channels.
      */
     public T pubsubChannels() {
-        protobufTransaction.addCommands(buildCommand(PubSubChannels));
+        protobufBatch.addCommands(buildCommand(PubSubChannels));
         return getThis();
     }
 
@@ -6350,7 +6341,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T pubsubChannels(@NonNull ArgType pattern) {
         checkTypeOrThrow(pattern);
-        protobufTransaction.addCommands(buildCommand(PubSubChannels, newArgsBuilder().add(pattern)));
+        protobufBatch.addCommands(buildCommand(PubSubChannels, newArgsBuilder().add(pattern)));
         return getThis();
     }
 
@@ -6369,7 +6360,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command response - The number of unique patterns.
      */
     public T pubsubNumPat() {
-        protobufTransaction.addCommands(buildCommand(PubSubNumPat));
+        protobufBatch.addCommands(buildCommand(PubSubNumPat));
         return getThis();
     }
 
@@ -6388,7 +6379,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T pubsubNumSub(@NonNull ArgType[] channels) {
         checkTypeOrThrow(channels);
-        protobufTransaction.addCommands(buildCommand(PubSubNumSub, newArgsBuilder().add(channels)));
+        protobufBatch.addCommands(buildCommand(PubSubNumSub, newArgsBuilder().add(channels)));
         return getThis();
     }
 
@@ -6404,7 +6395,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sunion(@NonNull ArgType[] keys) {
         checkTypeOrThrow(keys);
-        protobufTransaction.addCommands(buildCommand(SUnion, newArgsBuilder().add(keys)));
+        protobufBatch.addCommands(buildCommand(SUnion, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -6432,7 +6423,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lcsIdx(@NonNull ArgType key1, @NonNull ArgType key2) {
         checkTypeOrThrow(key1);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(LCS, newArgsBuilder().add(key1).add(key2).add(IDX_COMMAND_STRING)));
         return getThis();
     }
@@ -6463,7 +6454,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lcsIdx(@NonNull ArgType key1, @NonNull ArgType key2, long minMatchLen) {
         checkTypeOrThrow(key1);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         LCS,
                         newArgsBuilder()
@@ -6500,7 +6491,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lcsIdxWithMatchLen(@NonNull ArgType key1, @NonNull ArgType key2) {
         checkTypeOrThrow(key1);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         LCS,
                         newArgsBuilder()
@@ -6538,7 +6529,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T lcsIdxWithMatchLen(
             @NonNull ArgType key1, @NonNull ArgType key2, long minMatchLen) {
         checkTypeOrThrow(key1);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         LCS,
                         newArgsBuilder()
@@ -6566,7 +6557,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sort(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(Sort, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(Sort, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -6589,7 +6580,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sort(@NonNull ArgType key, @NonNull SortOptions sortOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(Sort, newArgsBuilder().add(key).add(sortOptions.toArgs())));
         return getThis();
     }
@@ -6609,7 +6600,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sortReadOnly(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(SortReadOnly, newArgsBuilder().add(key)));
+        protobufBatch.addCommands(buildCommand(SortReadOnly, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -6632,7 +6623,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sortReadOnly(@NonNull ArgType key, @NonNull SortOptions sortOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(SortReadOnly, newArgsBuilder().add(key).add(sortOptions.toArgs())));
         return getThis();
     }
@@ -6655,7 +6646,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sortStore(@NonNull ArgType key, @NonNull ArgType destination) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(Sort, newArgsBuilder().add(key).add(STORE_COMMAND_STRING).add(destination)));
         return getThis();
     }
@@ -6688,7 +6679,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T sortStore(
             @NonNull ArgType key, @NonNull ArgType destination, @NonNull SortOptions sortOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         Sort,
                         newArgsBuilder()
@@ -6728,7 +6719,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T geosearch(
             @NonNull ArgType key, @NonNull SearchOrigin searchFrom, @NonNull GeoSearchShape searchBy) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         GeoSearch, newArgsBuilder().add(key).add(searchFrom.toArgs()).add(searchBy.toArgs())));
         return getThis();
@@ -6768,7 +6759,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchResultOptions resultOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         GeoSearch,
                         newArgsBuilder()
@@ -6820,7 +6811,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchOptions options) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         GeoSearch,
                         newArgsBuilder()
@@ -6875,7 +6866,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchOptions options,
             @NonNull GeoSearchResultOptions resultOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         GeoSearch,
                         newArgsBuilder()
@@ -6923,7 +6914,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy) {
         checkTypeOrThrow(destination);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         GeoSearchStore,
                         newArgsBuilder()
@@ -6973,7 +6964,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchResultOptions resultOptions) {
         checkTypeOrThrow(destination);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         GeoSearchStore,
                         newArgsBuilder()
@@ -7023,7 +7014,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchStoreOptions options) {
         checkTypeOrThrow(destination);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         GeoSearchStore,
                         newArgsBuilder()
@@ -7076,7 +7067,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchStoreOptions options,
             @NonNull GeoSearchResultOptions resultOptions) {
         checkTypeOrThrow(destination);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(
                         GeoSearchStore,
                         newArgsBuilder()
@@ -7105,7 +7096,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sscan(@NonNull ArgType key, @NonNull ArgType cursor) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(SScan, newArgsBuilder().add(key).add(cursor)));
+        protobufBatch.addCommands(buildCommand(SScan, newArgsBuilder().add(key).add(cursor)));
         return getThis();
     }
 
@@ -7127,7 +7118,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T sscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull SScanOptions sScanOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(SScan, newArgsBuilder().add(key).add(cursor).add(sScanOptions.toArgs())));
         return getThis();
     }
@@ -7150,7 +7141,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zscan(@NonNull ArgType key, @NonNull ArgType cursor) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(ZScan, newArgsBuilder().add(key).add(cursor)));
+        protobufBatch.addCommands(buildCommand(ZScan, newArgsBuilder().add(key).add(cursor)));
         return getThis();
     }
 
@@ -7176,7 +7167,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull ZScanOptions zScanOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(ZScan, newArgsBuilder().add(key).add(cursor).add(zScanOptions.toArgs())));
         return getThis();
     }
@@ -7199,7 +7190,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hscan(@NonNull ArgType key, @NonNull ArgType cursor) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(buildCommand(HScan, newArgsBuilder().add(key).add(cursor)));
+        protobufBatch.addCommands(buildCommand(HScan, newArgsBuilder().add(key).add(cursor)));
         return getThis();
     }
 
@@ -7225,7 +7216,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T hscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull HScanOptions hScanOptions) {
         checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
+        protobufBatch.addCommands(
                 buildCommand(HScan, newArgsBuilder().add(key).add(cursor).add(hScanOptions.toArgs())));
         return getThis();
     }
@@ -7242,8 +7233,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     context of the current connection.
      */
     public T wait(long numReplicas, long timeout) {
-        protobufTransaction.addCommands(
-                buildCommand(Wait, newArgsBuilder().add(numReplicas).add(timeout)));
+        protobufBatch.addCommands(buildCommand(Wait, newArgsBuilder().add(numReplicas).add(timeout)));
         return getThis();
     }
 

@@ -300,7 +300,6 @@ class TestGlideClients:
         cluster_mode: bool,
         protocol: ProtocolVersion,
     ):
-
         client = await create_client(
             request,
             cluster_mode,
@@ -9476,7 +9475,6 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_unwatch(self, glide_client: GlideClient):
-
         # watched key unwatched before transaction execution even if changed
         # outside of transaction, transaction will still execute
         assert await glide_client.set("key1", "original_value") == OK
@@ -9735,6 +9733,18 @@ class TestCommandsUnitTests:
         with pytest.raises(ValueError):
             ExpirySet(ExpiryType.SEC, 5.5)
 
+    def test_expiry_equality(self):
+        assert ExpirySet(ExpiryType.SEC, 2) == ExpirySet(ExpiryType.SEC, 2)
+        assert ExpirySet(
+            ExpiryType.UNIX_SEC,
+            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
+        ) == ExpirySet(
+            ExpiryType.UNIX_SEC,
+            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
+        )
+
+        assert not ExpirySet(ExpiryType.SEC, 1) == 1
+
     def test_is_single_response(self):
         assert is_single_response("This is a string value", "")
         assert is_single_response(["value", "value"], [""])
@@ -9819,7 +9829,8 @@ class TestClusterRoutes:
         route_class = SlotKeyRoute if is_slot_key else SlotIdRoute
         route_second_arg = "foo" if is_slot_key else 4000
         primary_res = await glide_client.custom_command(
-            ["CLUSTER", "NODES"], route_class(SlotType.PRIMARY, route_second_arg)  # type: ignore
+            ["CLUSTER", "NODES"],
+            route_class(SlotType.PRIMARY, route_second_arg),  # type: ignore
         )
         assert isinstance(primary_res, bytes)
         primary_res = primary_res.decode()
@@ -9832,7 +9843,8 @@ class TestClusterRoutes:
                 expected_primary_node_id = node_line.split(" ")[0]
 
         replica_res = await glide_client.custom_command(
-            ["CLUSTER", "NODES"], route_class(SlotType.REPLICA, route_second_arg)  # type: ignore
+            ["CLUSTER", "NODES"],
+            route_class(SlotType.REPLICA, route_second_arg),  # type: ignore
         )
         assert isinstance(replica_res, bytes)
         replica_res = replica_res.decode()
@@ -10213,7 +10225,8 @@ class TestClusterRoutes:
         assert result[result_cursor_index] == initial_cursor.encode()
         assert len(result_collection) == len(char_map) * 2
         assert convert_list_to_dict(result_collection) == cast(
-            dict, convert_string_to_bytes_object(char_map)  # type: ignore
+            dict,
+            convert_string_to_bytes_object(char_map),  # type: ignore
         )
 
         result = await glide_client.hscan(key1, initial_cursor, match="field a")

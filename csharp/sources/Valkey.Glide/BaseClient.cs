@@ -37,6 +37,10 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         }
     }
 
+    public override string ToString() => $"{GetType().Name} {{ 0x{_clientPointer:X} }}";
+
+    public override int GetHashCode() => (int)_clientPointer;
+
     #endregion public methods
 
     #region protected methods
