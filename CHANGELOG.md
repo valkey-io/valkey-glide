@@ -1,5 +1,5 @@
 #### Changes
-
+* Core: Ensure UDS socket filename is truly unique. ([#3596](https://github.com/valkey-io/valkey-glide/pull/3596))
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
 * Core: Add `opentelemetry` protocols support ([#3191](https://github.com/valkey-io/valkey-glide/pull/3191))
 * Node: Fix ZADD, enabling `+inf` and `-inf` as score ([#3370](https://github.com/valkey-io/valkey-glide/pull/3370))
@@ -36,8 +36,9 @@
 * Go: Add `LastSave` ([#3086](https://github.com/valkey-io/valkey-glide/pull/3086))
 * Go: Add `Config Reset Stat` ([#3121](https://github.com/valkey-io/valkey-glide/pull/3121))
 * Go: Add `GeoSearch` and `GeoSearchStore` ([#3385](https://github.com/valkey-io/valkey-glide/pull/3385))
-* Go: Add `Cluster Config Set & Get` ([#3274](https://github.com/valkey-io/valkey-glide/pull/3274))
-* Go: Add `Client Set & Get` ([#3302](https://github.com/valkey-io/valkey-glide/pull/3302))* Go: Add `Move` ([#3369](https://github.com/valkey-io/valkey-glide/pull/3369))
+* Go: Add `ConfigSet` & `ConfigGet` for cluster client ([#3274](https://github.com/valkey-io/valkey-glide/pull/3274), [#3594](https://github.com/valkey-io/valkey-glide/pull/3594))
+* Go: Add `ClientSetName` & `ClientGetName` ([#3302](https://github.com/valkey-io/valkey-glide/pull/3302))
+* Go: Add `Move` ([#3369](https://github.com/valkey-io/valkey-glide/pull/3369))
 * Go: Add `Scan` ([#3378](https://github.com/valkey-io/valkey-glide/pull/3378))
 * Go: Add `LCS` ([#3475](https://github.com/valkey-io/valkey-glide/pull/3475))
 * Core/FFI/Go: Add Support for Async and Sync Client Types in FFI ([#3451](https://github.com/valkey-io/valkey-glide/pull/3451))
@@ -50,6 +51,7 @@
 * Python: Add equallity check to `ExpirySet` ([#3554](https://github.com/valkey-io/valkey-glide/issues/3554))
 * Java: Add Batches support ([#3561](https://github.com/valkey-io/valkey-glide/pull/3561))
 * Go: Add Function Stats ([#3526](https://github.com/valkey-io/valkey-glide/pull/3526))
+* Go: Add Function Delete ([#3603](https://github.com/valkey-io/valkey-glide/pull/3603))
 
 #### Breaking Changes
 

@@ -1,0 +1,43 @@
+name: Deploy mkdocs website to GitHub Pages
+
+on:
+    push:
+        branches:
+            - "main"
+        paths:
+            - python/**
+            - node/**
+            - docs/**
+            - .github/workflows/mkdocs-deploy.yml
+    workflow_dispatch:
+
+jobs:
+    build-and-deploy-docs:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout your branch
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - name: Install protoc
+              uses: ./.github/workflows/install-rust-and-protoc
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install mkdocs + plugins
+              run: |
+                  python3 -m pip install --upgrade pip
+                  pip install --break-system-packages \
+                    mkdocs \
+                    mkdocstrings-python==1.13.0 \
+                    pymdown-extensions \
+                    mkdocs-breadcrumbs-plugin \
+                    mkdocs-material \
+
+            - name: build docs
+              run: ./docs/build-docs.sh gh-deploy --force

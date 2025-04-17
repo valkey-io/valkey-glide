@@ -37,6 +37,10 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	FunctionStatsWithRoute(route options.RouteOption) (ClusterValue[FunctionStatsResult], error)
 
+	FunctionDelete(libName string) (string, error)
+
+	FunctionDeleteWithRoute(libName string, route options.RouteOption) (string, error)
+  
 	InvokeScriptWithRoute(script *options.Script, route options.RouteOption) (ClusterValue[any], error)
 
 	InvokeScriptWithOptionsAndRoute(script *options.Script, scriptOptions *options.ScriptOptions, route options.RouteOption) (ClusterValue[any], error)
