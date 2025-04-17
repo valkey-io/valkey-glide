@@ -59,3 +59,5 @@ generated/
 # docs
 docs/markdown/node/**
 docs/site/**
+
+.github/copilot.yml
