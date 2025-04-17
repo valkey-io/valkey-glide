@@ -230,8 +230,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let otel_traces_endpoint =
             chars_to_string_option(&value.opentelemetry_config.traces_collector_endpoint);
         let otel_metrics_endpoint =
-            chars_to_string_option(&value.opentelemetry_config.metrics_collector_endpoint);
-        let otel_flush_interval_ms = value.opentelemetry_config.flush_interval;
+            chars_to_string_option(&value.opentelemetry_config.metrics_collector_end_point);
+        let otel_flush_interval_ms = value.opentelemetry_config.flush_interval_ms;
 
         ConnectionRequest {
             read_from,
