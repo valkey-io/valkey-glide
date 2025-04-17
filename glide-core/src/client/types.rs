@@ -9,7 +9,7 @@ use std::time::Duration;
 #[cfg(feature = "proto")]
 use crate::connection_request as protobuf;
 
-#[derive(Default)]
+#[derive(Default, Clone, Debug)]
 pub struct ConnectionRequest {
     pub read_from: Option<ReadFrom>,
     pub client_name: Option<String>,
@@ -29,12 +29,13 @@ pub struct ConnectionRequest {
     pub otel_span_flush_interval_ms: Option<u64>,
 }
 
+#[derive(PartialEq, Eq, Clone, Default, Debug)]
 pub struct AuthenticationInfo {
     pub username: Option<String>,
     pub password: Option<String>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Clone, Copy, Debug)]
 pub enum PeriodicCheck {
     #[default]
     Enabled,
@@ -42,7 +43,7 @@ pub enum PeriodicCheck {
     ManualInterval(Duration),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct NodeAddress {
     pub host: String,
     pub port: u16,
@@ -54,7 +55,7 @@ impl ::std::fmt::Display for NodeAddress {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Default)]
+#[derive(PartialEq, Eq, Clone, Default, Debug)]
 pub enum ReadFrom {
     #[default]
     Primary,
@@ -63,7 +64,7 @@ pub enum ReadFrom {
     AZAffinityReplicasAndPrimary(String),
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
 #[repr(C)]
 pub enum TlsMode {
     #[default]
@@ -72,7 +73,7 @@ pub enum TlsMode {
     SecureTls,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 #[repr(C)]
 pub struct ConnectionRetryStrategy {
     pub exponent_base: u32,
