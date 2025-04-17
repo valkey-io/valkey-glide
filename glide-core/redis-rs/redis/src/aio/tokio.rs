@@ -49,7 +49,17 @@ async fn connect_tcp(addr: &SocketAddr) -> io::Result<TcpStreamTokio> {
         //these are useless error that not going to happen
         let std_socket = socket.into_std()?;
         let socket2: socket2::Socket = std_socket.into();
+        
+        // Set socket options
         socket2.set_tcp_keepalive(&KEEP_ALIVE)?;
+        socket2.set_reuse_address(true)?;
+        #[cfg(unix)]
+        socket2.set_reuse_port(true)?;
+        
+        // Set TCP FIN timeout to 5 seconds
+        #[cfg(target_os = "linux")]
+        socket2.set_linger(Some(Duration::from_secs(5)))?;
+        
         // TCP_USER_TIMEOUT configuration isn't supported across all operation systems
         #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
         {
@@ -62,7 +72,19 @@ async fn connect_tcp(addr: &SocketAddr) -> io::Result<TcpStreamTokio> {
 
     #[cfg(not(feature = "keep-alive"))]
     {
-        Ok(socket)
+        // Also set socket options when keep-alive is not enabled
+        let std_socket = socket.into_std()?;
+        let socket2: socket2::Socket = std_socket.into();
+        
+        socket2.set_reuse_address(true)?;
+        #[cfg(unix)]
+        socket2.set_reuse_port(true)?;
+        
+        // Set TCP FIN timeout to 5 seconds
+        #[cfg(target_os = "linux")]
+        socket2.set_linger(Some(Duration::from_secs(5)))?;
+        
+        Ok(TcpStreamTokio::from_std(socket2.into())?)
     }
 }
 
