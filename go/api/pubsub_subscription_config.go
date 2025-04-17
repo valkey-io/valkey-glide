@@ -3,7 +3,6 @@
 package api
 
 import (
-	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/protobuf"
 )
 
@@ -91,7 +90,7 @@ func (config *StandaloneSubscriptionConfig) WithSubscription(
 type PubSubClusterChannelMode int
 
 const (
-	ExactClusterChannelMode PubSubChannelMode = iota
+	ExactClusterChannelMode PubSubClusterChannelMode = iota
 	PatternClusterChannelMode
 	ShardedClusterChannelMode
 )
