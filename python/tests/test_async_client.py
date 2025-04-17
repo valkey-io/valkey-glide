@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-# import asyncio
 import math
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -1353,7 +1352,7 @@ class TestCommands:
         async def endless_blpop_call():
             await glide_client.blpop(["non_existent_key"], 0)
 
-        # blpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # blpop is called against a non-existing key with no timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         with pytest.raises(TimeoutError):
             with anyio.fail_after(3):
@@ -1432,7 +1431,7 @@ class TestCommands:
         with pytest.raises(RequestError):
             await glide_client.blmpop([key4], ListDirection.LEFT, 0.1, 1)
 
-        # BLMPOP is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # BLMPOP is called against a non-existing key with no timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         async def endless_blmpop_call():
             await glide_client.blmpop([key3], ListDirection.LEFT, 0, 1)
@@ -1528,7 +1527,7 @@ class TestCommands:
         async def endless_brpop_call():
             await glide_client.brpop(["non_existent_key"], 0)
 
-        # brpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # brpop is called against a non-existing key with no timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         with pytest.raises(TimeoutError):
             with anyio.fail_after(3):
@@ -1740,7 +1739,7 @@ class TestCommands:
                 key1, key3, ListDirection.LEFT, ListDirection.LEFT, 0.1
             )
 
-        # BLMOVE is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # BLMOVE is called against a non-existing key with no timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         async def endless_blmove_call():
             await glide_client.blmove(
@@ -3955,7 +3954,7 @@ class TestCommands:
         async def endless_bzpopmin_call():
             await glide_client.bzpopmin(["non_existent_key"], 0)
 
-        # bzpopmin is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # bzpopmin is called against a non-existing key with no timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         with pytest.raises(TimeoutError):
             with anyio.fail_after(0.5):
@@ -4015,7 +4014,7 @@ class TestCommands:
         async def endless_bzpopmax_call():
             await glide_client.bzpopmax(["non_existent_key"], 0)
 
-        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         with pytest.raises(TimeoutError):
             with anyio.fail_after(0.5):
@@ -4697,7 +4696,7 @@ class TestCommands:
         async def endless_bzmpop_call():
             await glide_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
 
-        # bzmpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # bzmpop is called against a non-existing key with no timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         with pytest.raises(TimeoutError):
             with anyio.fail_after(0.5):
