@@ -27,10 +27,8 @@ classifiers = [
 
 [tool.isort]
 profile = "black"
-skip = [
-    ".env",
-    "python/glide/protobuf"
-]
+skip = [".env", "python/glide/protobuf"]
+known_first_party = ["glide", "tests"]
 
 [tool.black]
 target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
