@@ -1831,7 +1831,7 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 
 	// Test simple script that returns a string
 	script1 := options.NewScript("return 'Hello'")
-	response1, err := client.InvokeScriptWithRoute(script1, routeOption)
+	response1, err := client.InvokeScriptWithRoute(*script1, routeOption)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "Hello", response1.MultiValue())
 	script1.Close()
@@ -1839,13 +1839,13 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 	// Test script that sets a key with value
 	script2 := options.NewScript("return redis.call('SET', KEYS[1], ARGV[1])")
 	scriptOpts1 := options.NewScriptOptions().WithKeys([]string{key1}).WithArgs([]string{"value1"})
-	setResponse1, err := client.InvokeScriptWithOptionsAndRoute(script2, scriptOpts1, routeOption)
+	setResponse1, err := client.InvokeScriptWithOptionsAndRoute(*script2, *scriptOpts1, routeOption)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", setResponse1.MultiValue())
 
 	// Set another key with the same script
 	scriptOpts2 := options.NewScriptOptions().WithKeys([]string{key2}).WithArgs([]string{"value2"})
-	setResponse2, err := client.InvokeScriptWithOptionsAndRoute(script2, scriptOpts2, routeOption)
+	setResponse2, err := client.InvokeScriptWithOptionsAndRoute(*script2, *scriptOpts2, routeOption)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", setResponse2.MultiValue())
 	script2.Close()
@@ -1853,13 +1853,13 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 	// Test script that gets a key's value
 	script3 := options.NewScript("return redis.call('GET', KEYS[1])")
 	scriptOpts3 := options.NewScriptOptions().WithKeys([]string{key1})
-	getResponse1, err := client.InvokeScriptWithOptionsAndRoute(script3, scriptOpts3, routeOption)
+	getResponse1, err := client.InvokeScriptWithOptionsAndRoute(*script3, *scriptOpts3, routeOption)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "value1", getResponse1.MultiValue())
 
 	// Get another key's value
 	scriptOpts4 := options.NewScriptOptions().WithKeys([]string{key2})
-	getResponse2, err := client.InvokeScriptWithOptionsAndRoute(script3, scriptOpts4, routeOption)
+	getResponse2, err := client.InvokeScriptWithOptionsAndRoute(*script3, *scriptOpts4, routeOption)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "value2", getResponse2.MultiValue())
 	script3.Close()
