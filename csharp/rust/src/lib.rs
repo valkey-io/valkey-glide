@@ -120,7 +120,7 @@ pub unsafe extern "C" fn command(
 
     let cmd = match unsafe { create_cmd(cmd_ptr) } {
         Ok(cmd) => cmd,
-        Err(err) => {
+        Err(_err) => {
             unsafe {
                 (core.failure_callback)(callback_index); // TODO - report errors
                 return;
