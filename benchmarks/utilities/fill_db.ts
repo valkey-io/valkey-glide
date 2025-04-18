@@ -2,36 +2,56 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { GlideClient, GlideClusterClient } from "@valkey/valkey-glide";
+import process from "node:process";
 import {
+    PORT,
     SIZE_SET_KEYSPACE,
-    createRedisClient,
     generateValue,
     receivedOptions,
-} from "./utils";
+} from "./utils.js";
 
 async function fill_database(
     data_size: number,
     host: string,
     isCluster: boolean,
     tls: boolean,
-    port: number,
+    port: number = PORT,
 ) {
-    const client = await createRedisClient(host, isCluster, tls, port);
+    const clientClass = isCluster ? GlideClusterClient : GlideClient;
+    const client = await clientClass.createClient({
+        addresses: [{ host, port: port }],
+        useTLS: tls,
+        requestTimeout: 1000,
+    });
     const data = generateValue(data_size);
-    await client.connect();
-
     const CONCURRENT_SETS = 1000;
-    const sets = Array.from(Array(CONCURRENT_SETS).keys()).map(
-        async (index) => {
-            for (let i = 0; i < SIZE_SET_KEYSPACE / CONCURRENT_SETS; ++i) {
-                const key = (i * CONCURRENT_SETS + index).toString();
-                await client.set(key, data);
-            }
-        },
-    );
+    const BATCH_SIZE = 100;
+    const KEYS_PER_WORKER = Math.floor(SIZE_SET_KEYSPACE / CONCURRENT_SETS);
 
-    await Promise.all(sets);
-    await client.quit();
+    // Process each worker one at a time
+    for (let index = 0; index < CONCURRENT_SETS; index++) {
+        // Calculate start and end keys for this worker
+        const startKey = index * KEYS_PER_WORKER;
+        const endKey = startKey + KEYS_PER_WORKER;
+
+        // Process in batches
+        for (let i = startKey; i < endKey; i += BATCH_SIZE) {
+            const keyValuePairs: Record<string, string> = {};
+
+            // Calculate end of this batch
+            const batchEnd = Math.min(i + BATCH_SIZE, endKey);
+
+            // Create batch of key-value pairs
+            for (let key = i; key < batchEnd; key++) {
+                keyValuePairs[key.toString()] = data;
+            }
+
+            await client.mset(keyValuePairs);
+        }
+    }
+
+    client.close();
 }
 
 Promise.resolve()
