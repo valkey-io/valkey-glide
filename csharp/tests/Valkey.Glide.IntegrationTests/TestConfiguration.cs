@@ -97,9 +97,12 @@ public class TestConfiguration : IDisposable
 
     ~TestConfiguration() => Dispose();
 
-    public void Dispose() =>
+    public void Dispose()
+    {
+        ResetTestClients();
         // Stop all
         StopServer(true);
+    }
 
     private readonly string _scriptDir;
 

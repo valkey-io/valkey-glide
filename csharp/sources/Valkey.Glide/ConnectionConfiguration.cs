@@ -4,8 +4,6 @@ using System.Runtime.InteropServices;
 
 using Valkey.Glide.Internals;
 
-//using static Valkey.Glide.Internals.FFI;
-
 namespace Valkey.Glide;
 
 public abstract class ConnectionConfiguration
