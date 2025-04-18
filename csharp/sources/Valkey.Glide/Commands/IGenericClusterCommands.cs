@@ -25,7 +25,7 @@ public interface IGenericClusterCommands
     /// <remarks>
     /// This API returns all <see langword="string" /> data as <see cref="GlideString" />.
     /// </remarks>
-    /// <param name="args">A list including the command name and arguments for the custom command.</param>
+    /// <param name="args">A list includes the command name and arguments for the custom command.</param>
     /// <returns>The returning value depends on the executed command.</returns>
     Task<ClusterValue<object?>> CustomCommand(GlideString[] args);
 
