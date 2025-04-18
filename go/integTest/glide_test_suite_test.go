@@ -73,11 +73,11 @@ func (suite *GlideTestSuite) SetupSuite() {
 	}
 	if startServer {
 		// Start standalone instance
-		clusterManagerOutput := runClusterManager(suite, append(cmd, "start", "-r", "3"), true)
+		clusterManagerOutput := runClusterManager(suite, append(cmd, "start", "-r", "3"), false)
 		suite.standaloneHosts = extractAddresses(suite, clusterManagerOutput)
 
 		// Start cluster
-		clusterManagerOutput = runClusterManager(suite, append(cmd, "start", "--cluster-mode", "-r", "3"), true)
+		clusterManagerOutput = runClusterManager(suite, append(cmd, "start", "--cluster-mode", "-r", "3"), false)
 		suite.clusterHosts = extractAddresses(suite, clusterManagerOutput)
 	}
 
