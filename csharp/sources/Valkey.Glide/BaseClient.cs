@@ -1,18 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using System.Buffers;
 using System.Runtime.InteropServices;
 
-using Valkey.Glide.Pipeline;
 using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
 
-using static Valkey.Glide.Pipeline.Options;
 using static Valkey.Glide.ConnectionConfiguration;
 using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Internals.ResponseHandler;
-using static Valkey.Glide.Route;
-using System.Diagnostics;
 
 namespace Valkey.Glide;
 
@@ -53,22 +48,22 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(_successCallbackDelegate);
         _failureCallbackDelegate = FailureCallback;
         nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(_failureCallbackDelegate);
-        nint configPtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(ConnectionRequest)));
-        Marshal.StructureToPtr(config.ToRequest(), configPtr, false);
-        _clientPointer = CreateClientFfi(configPtr, successCallbackPointer, failureCallbackPointer);
-        Marshal.FreeHGlobal(configPtr);
+
+        FFI.ConnectionConfig request = config.Request.ToFfi();
+        _clientPointer = CreateClientFfi(request.ToPtr(), successCallbackPointer, failureCallbackPointer);
+        request.Dispose();
         if (_clientPointer == IntPtr.Zero)
         {
             throw new Exception("Failed creating a client");
         }
     }
 
-    internal protected delegate T ResponseHandler<T>(IntPtr response);
+    protected internal delegate T ResponseHandler<T>(IntPtr response);
 
     internal async Task<T> Command<T>(RequestType requestType, GlideString[] arguments, ResponseHandler<T> responseHandler, Route? route = null) where T : class?
     {
         // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
-        FFI.Cmd cmd = new(requestType, arguments);
+        Cmd cmd = new(requestType, arguments);
 
         // 2. Allocate memory for route
         FFI.Route? ffiRoute = route?.ToFfi();
@@ -87,30 +82,10 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         return responseHandler(await message);
     }
 
-    protected async Task<object?[]?> Batch<T>(BaseBatch<T> batch, BaseBatchOptions? options = null) where T : BaseBatch<T>
-    {
-        FFI.Batch ffiBatch = batch.ToFFI();
-
-        // 2. Allocate memory for options
-        FFI.BatchOptions? ffiOptions = options?.ToFfi();
-
-        // 3. Sumbit request to the rust part
-        Message message = _messageContainer.GetMessageForCall();
-        BatchFfi(_clientPointer, (ulong)message.Index, ffiBatch.ToPtr(), ffiOptions?.ToPtr() ?? IntPtr.Zero);
-
-        // 4. Free memories allocated
-        ffiOptions?.Dispose();
-
-        ffiBatch.Dispose();
-
-        // 5. Get a response and Handle it
-        return HandleServerResponse<object?[]?>(await message, true);
-    }
-
-    internal protected static string HandleOk(IntPtr response)
+    protected internal static string HandleOk(IntPtr response)
         => HandleServerResponse<GlideString, string>(response, false, gs => gs.GetString());
 
-    internal protected static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
+    protected internal static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
         => HandleServerResponse<T, T>(response, isNullable, o => o);
 
     /// <summary>
@@ -123,7 +98,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     /// <param name="converter">Optional converted to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
-    internal protected static T HandleServerResponse<R, T>(IntPtr response, bool isNullable, Func<R, T> converter) where T : class? where R : class?
+    protected internal static T HandleServerResponse<R, T>(IntPtr response, bool isNullable, Func<R, T> converter) where T : class? where R : class?
     {
         try
         {
@@ -174,7 +149,6 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     /// Raw pointer to the underlying native client.
     private IntPtr _clientPointer;
     private readonly MessageContainer _messageContainer = new();
-    private readonly ArrayPool<IntPtr> _arrayPool = ArrayPool<IntPtr>.Shared;
     private readonly object _lock = new();
 
     #endregion private fields
@@ -186,9 +160,6 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "command")]
     private static extern void CommandFfi(IntPtr client, ulong index, IntPtr cmdInfo, IntPtr routeInfo);
-
-    [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "batch")]
-    private static extern void BatchFfi(IntPtr client, ulong index, IntPtr batch, IntPtr opts);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "free_respose")]
     private static extern void FreeResponse(IntPtr response);

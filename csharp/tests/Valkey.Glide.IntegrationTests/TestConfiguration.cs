@@ -47,7 +47,14 @@ public class TestConfiguration : IDisposable
         private set => s_testClients = value;
     }
 
-    public static void ResetTestClients() => s_testClients = [];
+    public static void ResetTestClients()
+    {
+        foreach (TheoryDataRow<BaseClient> data in s_testClients)
+        {
+            data.Data.Dispose();
+        }
+        s_testClients = [];
+    }
 
     public TestConfiguration()
     {

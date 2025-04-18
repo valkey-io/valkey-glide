@@ -4,12 +4,11 @@ using System.Buffers;
 using System.Runtime.InteropServices;
 
 using static Valkey.Glide.ConnectionConfiguration;
-using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Route;
 
 namespace Valkey.Glide.Internals;
 
-// TODO docs for the god of docs
+// FFI-ready structs, helper methods and wrappers
 internal class FFI
 {
     internal abstract class Marshallable : IDisposable
@@ -40,13 +39,14 @@ internal class FFI
         protected abstract void FreeMemory();
     }
 
+    // A wrapper for a command, resposible for marshalling (allocating and freeing) the required data
     internal class Cmd : Marshallable
     {
-        private IntPtr[] _argPtrs;
+        private IntPtr[] _argPtrs = [];
         private GCHandle _pinnedArgs;
-        private nuint[] _lengths;
+        private nuint[] _lengths = [];
         private GCHandle _pinnedLengths;
-        private GlideString[] _args;
+        private readonly GlideString[] _args;
         private CmdInfo _cmd;
 
         public Cmd(RequestType requestType, GlideString[] arguments)
@@ -94,50 +94,11 @@ internal class FFI
         }
     }
 
-    internal class Batch : Marshallable
-    {
-        private readonly Cmd[] _cmds;
-        private IntPtr[] _cmdPtrs;
-        private GCHandle _pinnedCmds;
-        private BatchInfo _batch;
-
-        public Batch(Cmd[] cmds, bool isAtomic)
-        {
-            _cmds = cmds;
-            _batch = new() { IsAtomic = isAtomic, CmdCount = (nuint)cmds.Length };
-        }
-
-        protected override void FreeMemory()
-        {
-            for (int i = 0; i < _cmds.Length; i++)
-            {
-                _cmds[i].Dispose();
-            }
-            _pinnedCmds.Free();
-            ArrayPool<IntPtr>.Shared.Return(_cmdPtrs);
-        }
-
-        protected override IntPtr AllocateAndCopy()
-        {
-            // 1. Allocate memory for commands and marshal them
-            _cmdPtrs = ArrayPool<IntPtr>.Shared.Rent(_cmds.Length);
-            for (int i = 0; i < _cmds.Length; i++)
-            {
-                _cmdPtrs[i] = _cmds[i].ToPtr();
-            }
-
-            // 2. Pin it
-            _pinnedCmds = GCHandle.Alloc(_cmdPtrs, GCHandleType.Pinned);
-            _batch.Cmds = _pinnedCmds.AddrOfPinnedObject();
-
-            return StructToPtr(_batch);
-        }
-    }
-
+    // A wrapper for a route
     internal class Route : Marshallable
     {
         private readonly RouteInfo _info;
-        private IntPtr _ptr = IntPtr.Zero;
+        private readonly IntPtr _ptr = IntPtr.Zero;
 
         public Route(
             RouteType requestType,
@@ -156,67 +117,76 @@ internal class FFI
             };
         }
 
-        protected override void FreeMemory()
-        {
-            FreeStructPtr(_ptr);
-        }
+        protected override void FreeMemory() => FreeStructPtr(_ptr);
 
-        protected override IntPtr AllocateAndCopy()
-        {
-            return StructToPtr(_info);
-        }
+        protected override IntPtr AllocateAndCopy() => StructToPtr(_info);
     }
 
-    internal class BatchOptions : Marshallable
+    // A wrapper for connection request
+    internal class ConnectionConfig : Marshallable
     {
-        private BatchOptionsInfo _info;
-        private readonly Route? _route;
-        private IntPtr _ptr = IntPtr.Zero;
+        private ConnectionRequest _request;
+        private readonly List<NodeAddress> _addresses;
 
-        public BatchOptions(
-            bool? retryServerError = false,
-            bool? retryConnectionError = false,
-            bool? raiseOnError = false,
-            uint? timeout = null,
-            Route? route = null
-            )
+        public ConnectionConfig(
+            List<NodeAddress> addresses,
+            TlsMode? tlsMode,
+            bool clusterMode,
+            uint? requestTimeout,
+            uint? connectionTimeout,
+            ReadFrom? readFrom,
+            RetryStrategy? retryStrategy,
+            AuthenticationInfo? authenticationInfo,
+            uint databaseId,
+            Protocol? protocol,
+            string? clientName)
         {
-            _route = route;
-            _info = new()
+            _addresses = addresses;
+            _request = new()
             {
-                RetryServerError = retryServerError ?? false,
-                RetryConnectionError = retryConnectionError ?? false,
-                RaiseOnError = raiseOnError ?? false,
-                HasTimeout = timeout is not null,
-                Timeout = timeout ?? 0,
-                Route = IntPtr.Zero,
+                AddressCount = (nuint)addresses.Count,
+                HasTlsMode = tlsMode.HasValue,
+                TlsMode = tlsMode ?? default,
+                ClusterMode = clusterMode,
+                HasRequestTimeout = requestTimeout.HasValue,
+                RequestTimeout = requestTimeout ?? default,
+                HasConnectionTimeout = connectionTimeout.HasValue,
+                ConnectionTimeout = connectionTimeout ?? default,
+                HasReadFrom = readFrom.HasValue,
+                ReadFrom = readFrom ?? default,
+                HasConnectionRetryStrategy = retryStrategy.HasValue,
+                ConnectionRetryStrategy = retryStrategy ?? default,
+                HasAuthenticationInfo = authenticationInfo.HasValue,
+                AuthenticationInfo = authenticationInfo ?? default,
+                DatabaseId = databaseId,
+                HasProtocol = protocol.HasValue,
+                Protocol = protocol ?? default,
+                ClientName = clientName,
             };
         }
 
-        protected override void FreeMemory()
-        {
-            _route?.Dispose();
-            FreeStructPtr(_ptr);
-        }
+        protected override void FreeMemory() => Marshal.FreeHGlobal(_request.Addresses);
 
         protected override IntPtr AllocateAndCopy()
         {
-            _info.Route = _route?.ToPtr() ?? IntPtr.Zero;
-            return StructToPtr(_info);
+            int addressSize = Marshal.SizeOf(typeof(NodeAddress));
+            _request.Addresses = Marshal.AllocHGlobal(addressSize * (int)_request.AddressCount);
+            for (int i = 0; i < (int)_request.AddressCount; i++)
+            {
+                Marshal.StructureToPtr(_addresses[i], _request.Addresses + (i * addressSize), false);
+            }
+            return StructToPtr(_request);
         }
     }
 
-    private static IntPtr StructToPtr<T>(T @struct)
+    private static IntPtr StructToPtr<T>(T @struct) where T : struct
     {
         IntPtr result = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(T)));
         Marshal.StructureToPtr(@struct, result, false);
         return result;
     }
 
-    private static void FreeStructPtr(IntPtr ptr)
-    {
-        Marshal.FreeHGlobal(ptr);
-    }
+    private static void FreeStructPtr(IntPtr ptr) => Marshal.FreeHGlobal(ptr);
 
     private static T[] PoolRent<T>(int len) => ArrayPool<T>.Shared.Rent(len);
 
@@ -229,30 +199,6 @@ internal class FFI
         public IntPtr Args;
         public nuint ArgCount;
         public IntPtr ArgLengths;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BatchInfo
-    {
-        public nuint CmdCount;
-        public IntPtr Cmds;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool IsAtomic;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BatchOptionsInfo
-    {
-        [MarshalAs(UnmanagedType.U1)]
-        public bool RetryServerError;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool RetryConnectionError;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool RaiseOnError;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasTimeout;
-        public uint Timeout;
-        public IntPtr Route;
     }
 
     // TODO: generate this with a bindings generator
@@ -288,7 +234,7 @@ internal class FFI
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct ConnectionRequest
+    private struct ConnectionRequest
     {
         public nuint AddressCount;
         public IntPtr Addresses; // ** NodeAddress - array pointer
@@ -319,28 +265,5 @@ internal class FFI
         [MarshalAs(UnmanagedType.LPStr)]
         public string? ClientName;
         // TODO more config params, see ffi.rs
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct NodeAddress
-    {
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string Host;
-        public ushort Port;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct AuthenticationInfo(string? username, string password)
-    {
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string? Username = username;
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string Password = password;
-    }
-
-    internal enum TlsMode : uint
-    {
-        NoTls = 0,
-        SecureTls = 2,
     }
 }

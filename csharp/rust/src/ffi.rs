@@ -1,19 +1,23 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use std::{
-    ffi::{c_char, c_void, CStr},
-    slice::from_raw_parts, sync::Arc,
+    ffi::{c_char, CStr},
+    slice::from_raw_parts,
 };
 
-use glide_core::{client::{
-    AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, NodeAddress,
-    ReadFrom as coreReadFrom, TlsMode,
-}, request_type::RequestType};
+use glide_core::{
+    client::{
+        AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, NodeAddress,
+        ReadFrom as coreReadFrom, TlsMode,
+    },
+    request_type::RequestType,
+};
 use redis::{
-    cluster::ClusterPipeline, cluster_routing::{
+    cluster_routing::{
         MultipleNodeRoutingInfo, ResponsePolicy, Routable, Route, RoutingInfo,
         SingleNodeRoutingInfo, SlotAddr,
-    }, Cmd, Pipeline, PipelineRetryStrategy, Value
+    },
+    Cmd, Value,
 };
 
 /// Convert raw C string to a rust string.
@@ -259,7 +263,10 @@ pub struct RouteInfo {
 /// * `route_info` could be `null`, but if it is not `null`, it must be a valid pointer to a [`RouteInfo`] struct.
 /// * `slot_key` and `hostname` in dereferenced [`RouteInfo`] struct must contain valid string pointers when corresponding `route_type` is set.
 ///   See description of [`RouteInfo`] and the safety documentation of [`ptr_to_str`].
-pub(crate) unsafe fn create_route(route_info: *const RouteInfo, cmd: Option<&Cmd>) -> Option<RoutingInfo> {
+pub(crate) unsafe fn create_route(
+    route_info: *const RouteInfo,
+    cmd: Option<&Cmd>,
+) -> Option<RoutingInfo> {
     if route_info.is_null() {
         return None;
     }
@@ -303,15 +310,15 @@ pub(crate) unsafe fn create_route(route_info: *const RouteInfo, cmd: Option<&Cmd
 ///   See the safety documentation of [`from_raw_parts`].
 /// * The caller is responsible of freeing the allocated memory.
 pub(crate) unsafe fn convert_double_pointer_to_vec<'a>(
-    data: *const *const c_void,
+    data: *const *const u8,
     len: usize,
     data_len: *const usize,
 ) -> Vec<&'a [u8]> {
     let string_ptrs = unsafe { from_raw_parts(data, len) };
     let string_lengths = unsafe { from_raw_parts(data_len, len) };
-    let mut result = Vec::<&[u8]>::with_capacity(string_ptrs.len());
+    let mut result = Vec::with_capacity(string_ptrs.len());
     for (i, &str_ptr) in string_ptrs.iter().enumerate() {
-        let slice = unsafe { from_raw_parts(str_ptr as *const u8, string_lengths[i]) };
+        let slice = unsafe { from_raw_parts(str_ptr, string_lengths[i]) };
         result.push(slice);
     }
     result
@@ -437,15 +444,16 @@ impl ResponseValue {
                     val: vec_ptr as i64,
                     size: len as u32,
                 }
-            },
+            }
             Value::ServerError(err) => {
-                let (vec_ptr, len) = convert_vec_to_pointer(err.details().unwrap().as_bytes().to_vec());
+                let (vec_ptr, len) =
+                    convert_vec_to_pointer(err.details().unwrap().as_bytes().to_vec());
                 ResponseValue {
                     typ: ValueType::Error,
                     val: vec_ptr as i64,
                     size: len as u32,
                 }
-            },
+            }
             _ => todo!(), // push, bigint, attribute
         }
     }
@@ -481,39 +489,25 @@ impl ResponseValue {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Copy)]
+#[derive(Debug)]
 pub struct CmdInfo {
     pub request_type: RequestType,
-    pub args: *const *mut c_char,
+    pub args: *const *const u8,
     pub arg_count: usize,
     pub args_len: *const usize,
 }
 
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct BatchInfo {
-    pub cmd_count: usize,
-    pub cmds: *const *const CmdInfo,
-    pub is_atomic: bool,
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct BatchOptionsInfo {
-    // two params from PipelineRetryStrategy
-    pub retry_server_error: bool,
-    pub retry_connection_error: bool,
-    pub raise_on_error: bool,
-    pub has_timeout: bool,
-    pub timeout: u32,
-    pub route_info: *const RouteInfo,
-}
-
-// TODO docs for the god of docs
+/// Convert [`CmdInfo`] to a [`Cmd`].
+///
+/// # Safety
+/// * `cmd_ptr` must be able to be safely casted to a valid [`CmdInfo`]
+/// * `args` and `args_len` in a referred [`CmdInfo`] structure must not be `null`.
+/// * `data` in a referred [`CmdInfo`] structure must point to `arg_count` consecutive string pointers.
+/// * `args_len` in a referred [`CmdInfo`] structure must point to `arg_count` consecutive string lengths. See the safety documentation of [`convert_double_pointer_to_vec`].
 pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
     let arg_vec =
-        unsafe { convert_double_pointer_to_vec((*ptr).args as *const *const c_void, (*ptr).arg_count, (*ptr).args_len) };
-    
+        unsafe { convert_double_pointer_to_vec((*ptr).args, (*ptr).arg_count, (*ptr).args_len) };
+
     let Some(mut cmd) = (*ptr).request_type.get_command() else {
         return Err("Couldn't fetch command type".into());
     };
@@ -521,34 +515,4 @@ pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
         cmd.arg(command_arg);
     }
     Ok(cmd)
-}
-
-pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, String> {
-    let cmd_pointers = unsafe { std::slice::from_raw_parts((*ptr).cmds, (*ptr).cmd_count) };
-    let mut pipeline = Pipeline::with_capacity((*ptr).cmd_count);
-    for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
-        match unsafe { create_cmd(*cmd_ptr) } {
-            Ok(cmd) => pipeline.add_command(cmd),
-            Err(err) => return Err(format!("Coudln't create {:?}'th command: {:?}", i, err)),
-        };
-    }
-    if (*ptr).is_atomic {
-        pipeline.atomic();
-    }
-
-    Ok(pipeline)
-}
-
-pub(crate) unsafe fn get_pipeline_options(ptr: *const BatchOptionsInfo) -> (Option<RoutingInfo>, bool, Option<u32>, PipelineRetryStrategy) {
-    if ptr.is_null() {
-        return (None, false, None, PipelineRetryStrategy::new(false, false));
-    }
-    let timeout = if (*ptr).has_timeout {
-        Some((*ptr).timeout)
-    } else {
-        None
-    };
-    let route = unsafe { create_route((*ptr).route_info, None) };
-
-    (route, (*ptr).raise_on_error, timeout, PipelineRetryStrategy::new((*ptr).retry_server_error, (*ptr).retry_connection_error))
 }

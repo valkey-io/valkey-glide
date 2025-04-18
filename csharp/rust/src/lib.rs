@@ -2,9 +2,10 @@
 
 mod ffi;
 use ffi::{
-    convert_double_pointer_to_vec, create_cmd, create_connection_request, create_pipeline, create_route, get_pipeline_options, BatchInfo, BatchOptionsInfo, CmdInfo, ConnectionConfig, ResponseValue, RouteInfo
+    create_cmd, create_connection_request, create_route, CmdInfo, ConnectionConfig, ResponseValue,
+    RouteInfo,
 };
-use glide_core::{client::Client as GlideClient, request_type::RequestType};
+use glide_core::client::Client as GlideClient;
 use redis::RedisResult;
 use std::{
     ffi::{c_char, c_void, CStr},
@@ -100,16 +101,14 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
 /// * `client_ptr` must not be `null`.
 /// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
 /// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
-/// * `args` and `args_len` must not be `null`.
-/// * `data` must point to `arg_count` consecutive string pointers.
-/// * `args_len` must point to `arg_count` consecutive string lengths. See the safety documentation of [`convert_double_pointer_to_vec`].
+/// * `cmd_ptr` must not be `null`. See the safety documentation of [`create_cmd`].
 /// * `route_info` could be `null`, but if it is not `null`, it must be a valid [`RouteInfo`] pointer. See the safety documentation of [`create_route`].
 #[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_ptr: *const c_void,
     callback_index: usize,
-    cmd_ptr: *const CmdInfo, // TODO update safety
+    cmd_ptr: *const CmdInfo,
     route_info: *const RouteInfo,
 ) {
     let client = unsafe {
@@ -126,66 +125,13 @@ pub unsafe extern "C" fn command(
                 (core.failure_callback)(callback_index); // TODO - report errors
                 return;
             }
-        },
+        }
     };
 
     let route = unsafe { create_route(route_info, Some(&cmd)) };
 
     client.runtime.spawn(async move {
         let result = core.client.clone().send_command(&cmd, route).await;
-        unsafe {
-            match result {
-                Ok(value) => {
-                    let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
-                    (core.success_callback)(callback_index, ptr);
-                }
-                Err(err) => {
-                    dbg!(err); // TODO - report errors
-                    (core.failure_callback)(callback_index)
-                }
-            };
-        };
-    });
-}
-
-// TODO docs for the god of docs
-#[no_mangle]
-pub unsafe extern "C" fn batch(
-    client_ptr: *const c_void,
-    callback_index: usize,
-    batch_ptr: *const BatchInfo,
-    options_ptr: *const BatchOptionsInfo,
-) {
-    let client = unsafe {
-        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
-        Arc::increment_strong_count(client_ptr);
-        Arc::from_raw(client_ptr as *mut Client)
-    };
-    let core = client.core.clone();
-
-    let pipeline = match unsafe { create_pipeline(batch_ptr) } {
-        Ok(pipeline) => pipeline,
-        Err(err) => {
-            unsafe {
-                (core.failure_callback)(callback_index); // TODO - report errors
-                return;
-            }
-        },
-    };
-
-    dbg!(&pipeline);
-
-    let (route, raise_on_error, pipeline_timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
-
-    dbg!(&route, &raise_on_error, &pipeline_timeout, &pipeline_retry_strategy);
-
-    client.runtime.spawn(async move {
-        let result = if pipeline.is_atomic() {
-            core.client.clone().send_transaction(&pipeline, route, pipeline_timeout, raise_on_error).await
-        } else {
-            core.client.clone().send_pipeline(&pipeline, route, raise_on_error, pipeline_timeout, pipeline_retry_strategy).await
-        };
-        dbg!(&result);
         unsafe {
             match result {
                 Ok(value) => {
