@@ -3,17 +3,23 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
 
+using Valkey.Glide.Pipeline;
 using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
 
+using static Valkey.Glide.Pipeline.Options;
 using static Valkey.Glide.ConnectionConfiguration;
+using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Internals.ResponseHandler;
 using static Valkey.Glide.Route;
+using System.Diagnostics;
 
 namespace Valkey.Glide;
 
 public abstract class BaseClient : IDisposable, IStringBaseCommands
 {
+    public static Action<string> LOG = (str) => Trace.WriteLine(str);
+
     #region public methods
     public async Task<string> Set(GlideString key, GlideString value)
         => await Command(RequestType.Set, [key, value], HandleOk);
@@ -59,68 +65,54 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         }
     }
 
-    protected delegate T ResponseHandler<T>(IntPtr response);
+    internal protected delegate T ResponseHandler<T>(IntPtr response);
 
-    protected async Task<T> Command<T>(RequestType requestType, GlideString[] arguments, ResponseHandler<T> responseHandler, Route? route = null) where T : class?
+    internal async Task<T> Command<T>(RequestType requestType, GlideString[] arguments, ResponseHandler<T> responseHandler, Route? route = null) where T : class?
     {
-        // 1. Allocate memory for arguments and marshal them
-        IntPtr[] args = _arrayPool.Rent(arguments.Length);
-        for (int i = 0; i < arguments.Length; i++)
-        {
-            args[i] = Marshal.AllocHGlobal(arguments[i].Length);
-            Marshal.Copy(arguments[i].Bytes, 0, args[i], arguments[i].Length);
-        }
+        // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
+        FFI.Cmd cmd = new(requestType, arguments);
 
-        // 2. Pin it
-        // We need to pin the array in place, in order to ensure that the GC doesn't move it while the operation is running.
-        GCHandle pinnedArgs = GCHandle.Alloc(args, GCHandleType.Pinned);
-        IntPtr argsPointer = pinnedArgs.AddrOfPinnedObject();
+        // 2. Allocate memory for route
+        FFI.Route? ffiRoute = route?.ToFfi();
 
-        // 3. Allocate memory for arguments' lenghts and pin it too
-        int[] lengths = ArrayPool<int>.Shared.Rent(arguments.Length);
-        for (int i = 0; i < arguments.Length; i++)
-        {
-            lengths[i] = arguments[i].Length;
-        }
-        GCHandle pinnedLengths = GCHandle.Alloc(lengths, GCHandleType.Pinned);
-        IntPtr lengthsPointer = pinnedLengths.AddrOfPinnedObject();
-
-        // 4. Allocate memory for route
-        IntPtr routePtr = IntPtr.Zero;
-        if (route is not null)
-        {
-            routePtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(RouteInfo)));
-            Marshal.StructureToPtr(route.ToFfi(), routePtr, false);
-        }
-
-        // 5. Sumbit request to the rust part
+        // 3. Sumbit request to the rust part
         Message message = _messageContainer.GetMessageForCall();
-        CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, argsPointer, (uint)arguments.Length, lengthsPointer, routePtr);
+        CommandFfi(_clientPointer, (ulong)message.Index, cmd.ToPtr(), ffiRoute?.ToPtr() ?? IntPtr.Zero);
         // All data must be copied in sync manner, so we
 
-        // 6. Free memories allocated
-        if (route is not null)
-        {
-            Marshal.FreeHGlobal(routePtr);
-        }
+        // 4. Free memories allocated
+        ffiRoute?.Dispose();
 
-        for (int i = 0; i < arguments.Length; i++)
-        {
-            Marshal.FreeHGlobal(args[i]);
-        }
-        pinnedArgs.Free();
-        _arrayPool.Return(args);
-        pinnedLengths.Free();
-        ArrayPool<int>.Shared.Return(lengths);
+        cmd.Dispose();
 
-        // 7. Get a response and Handle it
+        // 5. Get a response and Handle it
         return responseHandler(await message);
     }
 
-    protected static string HandleOk(IntPtr response)
+    protected async Task<object?[]?> Batch<T>(BaseBatch<T> batch, BaseBatchOptions? options = null) where T : BaseBatch<T>
+    {
+        FFI.Batch ffiBatch = batch.ToFFI();
+
+        // 2. Allocate memory for options
+        FFI.BatchOptions? ffiOptions = options?.ToFfi();
+
+        // 3. Sumbit request to the rust part
+        Message message = _messageContainer.GetMessageForCall();
+        BatchFfi(_clientPointer, (ulong)message.Index, ffiBatch.ToPtr(), ffiOptions?.ToPtr() ?? IntPtr.Zero);
+
+        // 4. Free memories allocated
+        ffiOptions?.Dispose();
+
+        ffiBatch.Dispose();
+
+        // 5. Get a response and Handle it
+        return HandleServerResponse<object?[]?>(await message, true);
+    }
+
+    internal protected static string HandleOk(IntPtr response)
         => HandleServerResponse<GlideString, string>(response, false, gs => gs.GetString());
 
-    protected static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
+    internal protected static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
         => HandleServerResponse<T, T>(response, isNullable, o => o);
 
     /// <summary>
@@ -133,7 +125,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     /// <param name="converter">Optional converted to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
-    protected static T HandleServerResponse<R, T>(IntPtr response, bool isNullable, Func<R, T> converter) where T : class? where R : class?
+    internal protected static T HandleServerResponse<R, T>(IntPtr response, bool isNullable, Func<R, T> converter) where T : class? where R : class?
     {
         try
         {
@@ -195,7 +187,10 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     private delegate void FailureAction(ulong index);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "command")]
-    private static extern void CommandFfi(IntPtr client, ulong index, int requestType, IntPtr args, uint argCount, IntPtr argLengths, IntPtr routeInfo);
+    private static extern void CommandFfi(IntPtr client, ulong index, IntPtr cmdInfo, IntPtr routeInfo);
+
+    [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "batch")]
+    private static extern void BatchFfi(IntPtr client, ulong index, IntPtr batch, IntPtr opts);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "free_respose")]
     private static extern void FreeResponse(IntPtr response);
@@ -205,19 +200,6 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_client")]
     private static extern void CloseClientFfi(IntPtr client);
-
-    #endregion
-
-    #region RequestType
-
-    // TODO: generate this with a bindings generator
-    protected enum RequestType
-    {
-        InvalidRequest = 0,
-        CustomCommand = 1,
-        Get = 1504,
-        Set = 1517,
-    }
 
     #endregion
 }

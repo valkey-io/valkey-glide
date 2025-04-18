@@ -94,7 +94,7 @@ public sealed class GlideString : IComparable<GlideString>
     /// <summary>
     /// Create a <see cref="GlideString" /> initiated by a <see langword="string" />.<br />
     /// </summary>
-    /// <param name="string">A <see langword="byte[]" /> to store.</param>
+    /// <param name="string">A <see langword="string" /> to store.</param>
     public GlideString(string @string)
     {
         _canConvertToString = true;

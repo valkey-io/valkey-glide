@@ -2,8 +2,7 @@
 
 mod ffi;
 use ffi::{
-    convert_double_pointer_to_vec, create_connection_request, create_route, ConnectionConfig,
-    ResponseValue, RouteInfo,
+    convert_double_pointer_to_vec, create_cmd, create_connection_request, create_pipeline, create_route, get_pipeline_options, BatchInfo, BatchOptionsInfo, CmdInfo, ConnectionConfig, ResponseValue, RouteInfo
 };
 use glide_core::{client::Client as GlideClient, request_type::RequestType};
 use redis::RedisResult;
@@ -110,10 +109,7 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
 pub unsafe extern "C" fn command(
     client_ptr: *const c_void,
     callback_index: usize,
-    request_type: RequestType,
-    args: *const *mut c_char,
-    arg_count: u32,
-    args_len: *const u32,
+    cmd_ptr: *const CmdInfo, // TODO update safety
     route_info: *const RouteInfo,
 ) {
     let client = unsafe {
@@ -123,24 +119,73 @@ pub unsafe extern "C" fn command(
     };
     let core = client.core.clone();
 
-    let arg_vec =
-        unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) };
-
-    // Create the command outside of the task to ensure that the command arguments passed are still valid
-    let Some(mut cmd) = request_type.get_command() else {
-        unsafe {
-            (core.failure_callback)(callback_index); // TODO - report errors
-            return;
-        }
+    let cmd = match unsafe { create_cmd(cmd_ptr) } {
+        Ok(cmd) => cmd,
+        Err(err) => {
+            unsafe {
+                (core.failure_callback)(callback_index); // TODO - report errors
+                return;
+            }
+        },
     };
-    for command_arg in arg_vec {
-        cmd.arg(command_arg);
-    }
 
-    let route = create_route(route_info, &cmd);
+    let route = unsafe { create_route(route_info, Some(&cmd)) };
 
     client.runtime.spawn(async move {
         let result = core.client.clone().send_command(&cmd, route).await;
+        unsafe {
+            match result {
+                Ok(value) => {
+                    let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
+                    (core.success_callback)(callback_index, ptr);
+                }
+                Err(err) => {
+                    dbg!(err); // TODO - report errors
+                    (core.failure_callback)(callback_index)
+                }
+            };
+        };
+    });
+}
+
+// TODO docs for the god of docs
+#[no_mangle]
+pub unsafe extern "C" fn batch(
+    client_ptr: *const c_void,
+    callback_index: usize,
+    batch_ptr: *const BatchInfo,
+    options_ptr: *const BatchOptionsInfo,
+) {
+    let client = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_ptr);
+        Arc::from_raw(client_ptr as *mut Client)
+    };
+    let core = client.core.clone();
+
+    let pipeline = match unsafe { create_pipeline(batch_ptr) } {
+        Ok(pipeline) => pipeline,
+        Err(err) => {
+            unsafe {
+                (core.failure_callback)(callback_index); // TODO - report errors
+                return;
+            }
+        },
+    };
+
+    dbg!(&pipeline);
+
+    let (route, raise_on_error, pipeline_timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
+
+    dbg!(&route, &raise_on_error, &pipeline_timeout, &pipeline_retry_strategy);
+
+    client.runtime.spawn(async move {
+        let result = if pipeline.is_atomic() {
+            core.client.clone().send_transaction(&pipeline, route, pipeline_timeout, raise_on_error).await
+        } else {
+            core.client.clone().send_pipeline(&pipeline, route, raise_on_error, pipeline_timeout, pipeline_retry_strategy).await
+        };
+        dbg!(&result);
         unsafe {
             match result {
                 Ok(value) => {
