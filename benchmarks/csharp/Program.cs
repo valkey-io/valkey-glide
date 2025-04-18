@@ -100,7 +100,11 @@ public static class MainClass
 
     private static void PrintResults(string resultsFile)
     {
-        _ = Directory.CreateDirectory(Path.GetDirectoryName(resultsFile)!);
+        string? dir = Path.GetDirectoryName(resultsFile);
+        if (dir is not null && dir?.Length > 0)
+        {
+            _ = Directory.CreateDirectory(dir);
+        }
         using FileStream createStream = File.Create(resultsFile);
         JsonSerializer.Serialize(createStream, BenchJsonResults);
     }
