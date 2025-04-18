@@ -12,7 +12,7 @@
     "napi": {
         "name": "glide-rs",
         "triples": {
-            "defaults": true,
+            "default": false,
             "additional": [
                 "x86_64-unknown-linux-musl",
                 "x86_64-unknown-linux-gnu",
@@ -33,7 +33,8 @@
     "scripts": {
         "artifacts": "napi artifacts",
         "build": "npm install && napi build --features testing_utilities --platform --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:release": "npm install && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release": "npm install --production && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release:gnu": "npm install --production && napi build --platform --release --strip --zig --zig-abi-suffix=2.17 --pipe \"prettier -w\" $npm_config_build_flags",
         "build:benchmark": "npm install && napi build --features testing_utilities --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
         "format": "run-p format:prettier format:rs",
         "format:prettier": "prettier . -w",
@@ -42,10 +43,10 @@
         "version": "napi version"
     },
     "devDependencies": {
-        "@napi-rs/cli": "^2",
-        "lint-staged": "^15",
-        "npm-run-all": "^4",
-        "prettier": "^3"
+        "@napi-rs/cli": "^2.18.4",
+        "lint-staged": "^15.5.1",
+        "npm-run-all": "^4.1.5",
+        "prettier": "^3.5.3"
     },
     "lint-staged": {
         "*.@(js|ts|tsx)": [

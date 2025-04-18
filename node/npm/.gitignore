@@ -132,4 +132,6 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-package.json.tmpl
+**/glide-rs.*
+**/index.*
+**/src/

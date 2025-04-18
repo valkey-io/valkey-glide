@@ -1,4 +1,3 @@
-// @ts-check
 import eslint from "@eslint/js";
 import prettierConfig from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
@@ -7,7 +6,7 @@ export default tseslint.config(
     eslint.configs.recommended,
     ...tseslint.configs.recommended,
     ...tseslint.configs.stylistic,
-    { files: [ "**/*.js" ], ...tseslint.configs.disableTypeChecked },
+    { files: ["**/*.js"], ...tseslint.configs.disableTypeChecked },
     {
         ignores: [
             "*/ProtobufMessage.*",
@@ -22,6 +21,7 @@ export default tseslint.config(
     {
         rules: {
             "import/no-unresolved": "off",
+            "tslint-detected": "off",
             "padding-line-between-statements": [
                 "error",
                 {
@@ -63,10 +63,10 @@ export default tseslint.config(
                     ObjectExpression: 1,
                     FunctionDeclaration: { parameters: "first" },
                     FunctionExpression: { parameters: "first" },
-                    ignoredNodes: [ "TSTypeParameterInstantiation" ],
+                    ignoredNodes: ["TSTypeParameterInstantiation"],
                 },
             ],
         },
     },
-    prettierConfig
+    prettierConfig,
 );
