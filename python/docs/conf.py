@@ -39,6 +39,8 @@ autodoc_default_options = {
     "ignore-module-all": True,  # Prevents duplicate warnings with methods in parent module and its submodules
 }
 
+suppress_warnings = ["autodoc"]
+
 
 def avoid_duplicate(app, what, name, obj, skip, options):
     # We skip some special refs and PubSub duplicate warning messages that

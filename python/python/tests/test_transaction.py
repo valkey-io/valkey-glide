@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional, Union, cast
 
 import pytest
+
 from glide import RequestError
 from glide.async_commands.bitmap import (
     BitFieldGet,
@@ -947,9 +948,8 @@ async def helper1(
     args.append(False)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestTransaction:
-
     async def exec_transaction(
         self,
         glide_client: TGlideClient,

@@ -6,6 +6,7 @@ import uuid
 from typing import List, Mapping, Union, cast
 
 import pytest
+
 from glide.async_commands.command_args import OrderBy
 from glide.async_commands.server_modules import ft
 from glide.async_commands.server_modules import glide_json as GlideJson
@@ -43,7 +44,7 @@ from glide.exceptions import RequestError
 from glide.glide_client import GlideClusterClient
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestFt:
     SearchResultField = Mapping[
         TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]

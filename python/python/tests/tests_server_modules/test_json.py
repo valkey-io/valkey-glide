@@ -7,6 +7,7 @@ import typing
 from typing import List, Optional
 
 import pytest
+
 from glide.async_commands.core import ConditionalChange
 from glide.async_commands.server_modules import glide_json as json
 from glide.async_commands.server_modules import json_batch
@@ -36,7 +37,7 @@ def get_random_value(value_type="str"):
         return None
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestJson:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
