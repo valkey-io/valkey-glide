@@ -29,7 +29,7 @@ public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGe
     ///     .WithTls()
     ///     .WithConnectionRetryStrategy(5, 100, 2)
     ///     .Build();
-    /// GlideClient client = await GlideClient.CreateClient(config);
+    /// using GlideClient client = await GlideClient.CreateClient(config);
     /// </code>
     /// </example>
     /// </summary>
