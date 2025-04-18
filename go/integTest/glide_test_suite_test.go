@@ -38,6 +38,7 @@ var (
 	tls             = flag.Bool("tls", false, "one")
 	clusterHosts    = flag.String("cluster-endpoints", "", "two")
 	standaloneHosts = flag.String("standalone-endpoints", "", "three")
+	pubsub          = flag.Bool("pubsub", false, "Run PubSub tests if true, otherwise, skip the test")
 )
 
 func (suite *GlideTestSuite) SetupSuite() {
@@ -213,7 +214,7 @@ func TestGlideTestSuite(t *testing.T) {
 }
 
 func (suite *GlideTestSuite) TearDownSuite() {
-	runClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, false)
+	runClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, true)
 }
 
 func (suite *GlideTestSuite) TearDownTest() {
@@ -390,4 +391,98 @@ func (suite *GlideTestSuite) GenerateLargeUuid() string {
 		id += uuid.New().String()
 	}
 	return id
+}
+
+// --- PubSub Test Helpers ---
+
+func (suite *GlideTestSuite) createStandaloneClientWithSubscriptions(
+	config *api.StandaloneSubscriptionConfig,
+) api.GlideClientCommands {
+	clientConfig := suite.defaultClientConfig().WithSubscriptionConfig(config)
+	return suite.client(clientConfig)
+}
+
+func (suite *GlideTestSuite) createClusterClientWithSubscriptions(
+	config *api.ClusterSubscriptionConfig,
+) api.GlideClusterClientCommands {
+	clientConfig := suite.defaultClusterClientConfig().WithSubscriptionConfig(config)
+	return suite.clusterClient(clientConfig)
+}
+
+func (suite *GlideTestSuite) runWithPubSubClients(test func(c api.BaseClient)) {
+	if *pubsub != true {
+		suite.T().Skip("skipping pubsub tests")
+	}
+	clients := suite.getDefaultClients()
+	for _, client := range clients {
+		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
+			test(client)
+		})
+		client.Close()
+	}
+}
+
+type TestChannelMode int
+
+const (
+	ExactMode TestChannelMode = iota
+	PatternMode
+)
+
+type ChannelDefn struct {
+	Mode    TestChannelMode
+	Channel string
+}
+
+// CreatePubSubReceiver sets up a Pub/Sub receiver for the provided client.
+// It supports both standalone and cluster client types and configures the
+// subscription based on the provided parameters.
+//
+// Parameters:
+//   - client: The Pub/Sub client implementing either api.GlideClientCommands
+//     or api.GlideClusterClientCommands.
+//   - channels: A slice of ChannelDefn objects, each containing:
+//   - SMode: The subscription mode for standalone clients.
+//   - CMode: The subscription mode for cluster clients.
+//   - Channel: The name of the Pub/Sub channel to subscribe to.
+//   - callback: A function to handle incoming Pub/Sub messages.
+//   - ctx: A context object passed to the callback function.
+//
+// Behavior:
+//   - For standalone clients (api.GlideClientCommands), it creates a standalone
+//     subscription using the provided subscription modes, channels, callback, and ctx.
+//   - For cluster clients (api.GlideClusterClientCommands), it creates a cluster
+//     subscription using the provided subscription modes, channels, callback, and ctx.
+//   - If the client type is unsupported, the function will fail the test with
+//     an appropriate error message.
+func (suite *GlideTestSuite) CreatePubSubReceiver(
+	client api.BaseClient,
+	channels []ChannelDefn,
+	callback func(message *api.PubSubMessage, ctx any),
+	ctx any,
+) {
+	switch client.(type) {
+	case api.GlideClientCommands:
+		sConfig := api.NewStandaloneSubscriptionConfig()
+		for _, channel := range channels {
+			mode := api.PubSubChannelMode(channel.Mode)
+			sConfig = sConfig.WithSubscription(mode, channel.Channel)
+		}
+		if callback != nil {
+			sConfig = sConfig.WithCallback(callback, ctx)
+		}
+		suite.createStandaloneClientWithSubscriptions(sConfig)
+	case api.GlideClusterClientCommands:
+		cConfig := api.NewClusterSubscriptionConfig()
+		for _, channel := range channels {
+			mode := api.PubSubClusterChannelMode(channel.Mode)
+			cConfig = cConfig.WithSubscription(mode, channel.Channel)
+		}
+		if callback != nil {
+			cConfig = cConfig.WithCallback(callback, ctx)
+		}
+		suite.createClusterClientWithSubscriptions(cConfig)
+	default:
+		assert.Fail(suite.T(), "Unsupported client type")
+	}
 }

@@ -3,18 +3,10 @@
 package api
 
 import (
-	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/protobuf"
 )
 
 // *** BaseSubscriptionConfig ***
-
-type ChannelMode interface {
-	String() string
-	Command() string
-	UnsubscribeCommand() string
-}
-
 type MessageCallback func(message *PubSubMessage, ctx any)
 
 type BaseSubscriptionConfig struct {
@@ -46,15 +38,6 @@ func (config *BaseSubscriptionConfig) toProtobuf() *protobuf.PubSubSubscriptions
 		}
 	}
 	return &request
-}
-
-func (config *BaseSubscriptionConfig) Validate() error {
-	if config.context != nil && config.callback == nil {
-		return &errors.ConfigurationError{
-			Msg: "PubSub subscriptions with a context requires a callback function to be configured",
-		}
-	}
-	return nil
 }
 
 // *** StandaloneSubscriptionConfig ***
@@ -102,16 +85,12 @@ func (config *StandaloneSubscriptionConfig) WithSubscription(
 	return config
 }
 
-func (config *StandaloneSubscriptionConfig) Validate() error {
-	return config.BaseSubscriptionConfig.Validate()
-}
-
 // *** ClusterSubscriptionConfig ***
 
 type PubSubClusterChannelMode int
 
 const (
-	ExactClusterChannelMode PubSubChannelMode = iota
+	ExactClusterChannelMode PubSubClusterChannelMode = iota
 	PatternClusterChannelMode
 	ShardedClusterChannelMode
 )
@@ -148,8 +127,4 @@ func (config *ClusterSubscriptionConfig) WithSubscription(
 
 	config.subscriptions[modeKey] = append(channels, channelOrPattern)
 	return config
-}
-
-func (config *ClusterSubscriptionConfig) Validate() error {
-	return config.BaseSubscriptionConfig.Validate()
 }
