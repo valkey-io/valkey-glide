@@ -35,14 +35,6 @@
         "esm": true
     },
     "compileOnSave": false,
-    "include": [
-        "./*.ts",
-        "src/*.ts",
-        "src/*.js",
-        "glide-rs.js"
-    ],
-    "exclude": [
-        "node_modules",
-        "npm/valkey-glide/build-ts"
-    ]
+    "include": ["./*.ts", "src/*.ts", "src/*.js", "glide-rs.js"],
+    "exclude": ["node_modules", "npm/valkey-glide/build-ts"]
 }

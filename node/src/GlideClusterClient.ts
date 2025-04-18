@@ -65,7 +65,6 @@ import { ClusterScanCursor, Script } from "./NativeBindingResolver";
 import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
-
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const _ensureScriptImport = Script;
 
@@ -646,7 +645,7 @@ export class GlideClusterClient extends BaseClient {
         // @ts-expect-error: 'ClusterScanCursor' refers to a value, but is being used as a type here
         cursor: ClusterScanCursor,
         options?: ClusterScanOptions & DecoderOption,
-    // @ts-expect-error: 'ClusterScanCursor' refers to a value, but is being used as a type here
+        // @ts-expect-error: 'ClusterScanCursor' refers to a value, but is being used as a type here
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         this.ensureClientIsOpen();
         // separate decoder option from scan options

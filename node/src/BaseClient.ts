@@ -3871,7 +3871,7 @@ export class BaseClient {
      * ```
      */
     public async invokeScript(
-       // @ts-expect-error: 'Script' refers to a value, but is being used as a type here
+        // @ts-expect-error: 'Script' refers to a value, but is being used as a type here
         script: Script,
         options?: {
             keys?: GlideString[];
