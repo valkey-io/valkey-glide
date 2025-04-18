@@ -1,3 +1,5 @@
+::: glide.config.GlideClientConfiguration
+::: glide.config.GlideClusterClientConfiguration
 ::: glide.config.NodeAddress
 ::: glide.config.ReadFrom
 ::: glide.config.ProtocolVersion
@@ -6,5 +8,3 @@
 ::: glide.config.PeriodicChecksManualInterval
 ::: glide.config.PeriodicChecksStatus
 ::: glide.config.BaseClientConfiguration
-::: glide.config.GlideClientConfiguration
-::: glide.config.GlideClusterClientConfiguration

@@ -6805,6 +6805,10 @@ func (client *baseClient) ZLexCount(key string, rangeQuery *options.RangeByLex) 
 //
 // When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
 //
+// Note :
+//
+// When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
 // Parameters:
 //
 //	keys - An array of keys to check for elements.
@@ -6835,6 +6839,10 @@ func (client *baseClient) BZPopMax(
 // among the provided `keys`, based on the specified `scoreFilter` criteria.
 //
 // See [valkey.io] for details.
+//
+// Note :
+//
+// When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
 //
 // Parameters:
 //
@@ -6880,6 +6888,10 @@ func (client *baseClient) ZMPopWithOptions(
 // with the given keys being checked in the order provided.
 //
 // See [valkey.io] for details.
+//
+// Note :
+//
+// When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
 //
 // Parameters:
 //
