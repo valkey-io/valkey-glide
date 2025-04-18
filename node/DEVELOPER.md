@@ -98,7 +98,7 @@ Before starting this step, make sure you've installed all software requirments.
     npm run build
     ```
 
-    Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
+    Once building completed, you'll find the compiled JavaScript code in the`./npm/valkey-glide` folder.
 
 4. Run tests:
 
@@ -120,7 +120,7 @@ Before starting this step, make sure you've installed all software requirments.
 - If your modifications are limited to the Rust code, execute `npm run build-internal` to build the internal package and generate TypeScript code.
 - To generate Node's protobuf files, execute `npm run build-protobuf`. Keep in mind that protobuf files are generated as part of full builds (e.g., `build`, `build:release`, etc.).
 
-> Note: Once building completed, you'll find the compiled JavaScript code in the `node/build-ts` folder.
+> Note: Once building completed, you'll find the compiled JavaScript code in the `node/npm/valkey-glide` folder.
 
 ### Troubleshooting
 

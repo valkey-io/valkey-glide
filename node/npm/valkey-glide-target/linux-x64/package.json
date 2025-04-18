@@ -2,9 +2,9 @@
     "name": "@valkey/valkey-glide-linux-x64",
     "version": "${package_version}",
     "description": "General Language Independent Driver for the Enterprise (GLIDE) for Valkey",
-    "main": "build-ts/index.js",
-    "module": "build-ts/index.js",
-    "types": "./build-ts/index.d.ts",
+    "main": "npm/valkey-glide/index.js",
+    "module": "npm/valkey-glide/index.js",
+    "types": "./npm/valkey-glide/index.d.ts",
     "type": "commonjs",
     "repository": {
         "type": "git",

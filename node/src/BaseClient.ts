@@ -1,15 +1,6 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-import {
-    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
-    Script,
-    StartSocketConnection,
-    getStatistics,
-    valueFromSplitPointer,
-} from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
 import {
@@ -248,11 +239,21 @@ import {
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
 import {
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    Script,
+    StartSocketConnection,
+    getStatistics,
+    valueFromSplitPointer,
+} from "./NativeBindingResolver";
+import {
     command_request,
     connection_request,
     response,
 } from "./ProtobufMessage";
-
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _ensureScriptImport = Script;
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -3870,6 +3871,7 @@ export class BaseClient {
      * ```
      */
     public async invokeScript(
+       // @ts-expect-error: 'Script' refers to a value, but is being used as a type here
         script: Script,
         options?: {
             keys?: GlideString[];

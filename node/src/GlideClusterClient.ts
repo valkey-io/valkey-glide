@@ -2,7 +2,6 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
 import { Writer } from "protobufjs";
 import {
@@ -62,8 +61,13 @@ import {
     createTime,
     createUnWatch,
 } from "./Commands";
+import { ClusterScanCursor, Script } from "./NativeBindingResolver";
 import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
+
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _ensureScriptImport = Script;
 
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
@@ -639,8 +643,10 @@ export class GlideClusterClient extends BaseClient {
      * @internal
      */
     protected createClusterScanPromise(
+        // @ts-expect-error: 'ClusterScanCursor' refers to a value, but is being used as a type here
         cursor: ClusterScanCursor,
         options?: ClusterScanOptions & DecoderOption,
+    // @ts-expect-error: 'ClusterScanCursor' refers to a value, but is being used as a type here
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         this.ensureClientIsOpen();
         // separate decoder option from scan options
@@ -651,6 +657,7 @@ export class GlideClusterClient extends BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIdx = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIdx] = [
+                // @ts-expect-error: 'ClusterScanCursor' refers to a value, but is being used as a type here
                 (resolveAns: [ClusterScanCursor, GlideString[]]) => {
                     try {
                         resolve([
@@ -739,8 +746,10 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async scan(
+        // @ts-expect-error: 'ClusterScanCursor' refers to a value, but is being used as a type here
         cursor: ClusterScanCursor,
         options?: ClusterScanOptions & DecoderOption,
+        // @ts-expect-error: 'ClusterScanCursor' refers to a value, but is being used as a type here
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         return this.createClusterScanPromise(cursor, options);
     }
@@ -1665,7 +1674,7 @@ export class GlideClusterClient extends BaseClient {
      * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
      *
      * @see {@link https://valkey.io/commands/pubsub-shardnumsub/|valkey.io} for details.
-     * @remarks The command is routed to all nodes, and aggregates the response into a single list.
+     * @remarks The command is routed to all nodes, and aggregates the response to a single array.
      *
      * @param channels - The list of shard channels to query for the number of subscribers.
      * @param options - (Optional) see {@link DecoderOption}.
@@ -1794,6 +1803,7 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async invokeScriptWithRoute(
+        // @ts-expect-error: 'Script' refers to a value, but is being used as a type here
         script: Script,
         options?: { args?: GlideString[] } & DecoderOption & RouteOption,
     ): Promise<ClusterResponse<GlideReturnType>> {

@@ -2,8 +2,9 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { InitInternalLogger, Level, log } from "glide-rs";
+import { InitInternalLogger, Level, log } from "./NativeBindingResolver";
 
+// @ts-expect-error: Level is an enum value but used as a type here
 const LEVEL = new Map<LevelOptions | undefined, Level | undefined>([
     ["error", Level.Error],
     ["warn", Level.Warn],

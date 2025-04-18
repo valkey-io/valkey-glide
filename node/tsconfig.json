@@ -23,7 +23,7 @@
         "lib": [
             "esnext"
         ] /* Specify a set of bundled library declaration files that describe the target runtime environment. */,
-        "outDir": "npm/valkey-glide" /* Specify an output folder for all emitted files.*/
+        "outDir": "./build-ts" /* Specify an output folder for all emitted files.*/
     },
     "ts-node": {
         "transpileOnly": true,

@@ -57,7 +57,7 @@ function runPythonBenchmark(){
 function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/../node
   npm install
-  rm -rf build-ts
+  npm run clean-valkey-glide
   npm run build:benchmark
   cd ${BENCH_FOLDER}/node
   npm install

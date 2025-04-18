@@ -3,6 +3,15 @@
     "version": "0.1.0",
     "description": "Valkey client",
     "main": "index.js",
+    "types": "./index.d.ts",
+    "type": "commonjs",
+    "module": "index.js",
+    "exports": {
+        ".": {
+            "import": "./index.js",
+            "require": "./index.js"
+        }
+    },
     "license": "Apache-2.0",
     "files": [
         "index.d.ts",
