@@ -1,7 +1,7 @@
 /* eslint-disable no-var */
 import { beforeAll } from "@jest/globals";
 import minimist from "minimist";
-import { Logger } from "../build-ts";
+import { Logger } from "..";
 
 beforeAll(() => {
     Logger.init("error", "log.log");

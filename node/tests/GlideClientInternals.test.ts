@@ -4,15 +4,6 @@
 
 import { describe, expect, it } from "@jest/globals";
 import fs from "fs";
-import {
-    createLeakedArray,
-    createLeakedAttribute,
-    createLeakedBigint,
-    createLeakedDouble,
-    createLeakedMap,
-    createLeakedString,
-    MAX_REQUEST_ARGS_LEN,
-} from "glide-rs";
 import Long from "long";
 import net from "net";
 import os from "os";
@@ -23,6 +14,12 @@ import {
     ClosingError,
     ClusterTransaction,
     convertGlideRecordToRecord,
+    createLeakedArray,
+    createLeakedAttribute,
+    createLeakedBigint,
+    createLeakedDouble,
+    createLeakedMap,
+    createLeakedString,
     Decoder,
     GlideClient,
     GlideClientConfiguration,
@@ -32,6 +29,7 @@ import {
     GlideReturnType,
     InfoOptions,
     isGlideRecord,
+    MAX_REQUEST_ARGS_LEN,
     RequestError,
     SlotKeyTypes,
     TimeUnit,

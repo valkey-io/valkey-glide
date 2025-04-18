@@ -1,0 +1,48 @@
+{
+    "name": "@valkey/valkey-glide-linux-arm64",
+    "version": "${package_version}",
+    "description": "General Language Independent Driver for the Enterprise (GLIDE) for Valkey",
+    "main": "npm/valkey-glide/index.js",
+    "module": "npm/valkey-glide/index.js",
+    "types": "./npm/valkey-glide/index.d.ts",
+    "type": "commonjs",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/valkey-io/valkey-glide.git"
+    },
+    "homepage": "https://github.com/valkey-io/valkey-glide#readme",
+    "keywords": [
+        "valkey",
+        "glide",
+        "stability",
+        "reliability",
+        "valkey-glide",
+        "valkey-glide-linux-arm64",
+        "valkey-client",
+        "performance",
+        "fault-tolerance"
+    ],
+    "files": [
+        "index.d.ts",
+        "index.js",
+        "glide-rs.linux-arm64-gnu.node"
+    ],
+    "author": "Valkey GLIDE Maintainers",
+    "license": "Apache-2.0",
+    "publishConfig": {
+        "${registry_scope}registry": "https://registry.npmjs.org/",
+        "access": "public"
+    },
+    "engines": {
+        "node": ">=16"
+    },
+    "cpu": [
+        "arm64"
+    ],
+    "os": [
+        "linux"
+    ],
+    "libc": [
+        "glibc"
+    ]
+}

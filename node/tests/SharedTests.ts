@@ -23,6 +23,7 @@ import {
     ClusterTransaction,
     ConditionalChange,
     Decoder,
+    ElementAndScore,
     ExpireOptions,
     FlushMode,
     GeoUnit,
@@ -39,6 +40,7 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
+    Score,
     ScoreFilter,
     Script,
     SignedEncoding,
@@ -53,8 +55,6 @@ import {
     convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
-    Score,
-    ElementAndScore,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
@@ -1505,7 +1505,7 @@ export function runBaseTests(config: {
 
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex]).toEqual(
-                    ["a", "0"].map(Buffer.from),
+                    ["a", "0"].map((str) => Buffer.from(str)),
                 );
 
                 // Set up testing data with the numberMap set to be used for the next set test keys and test results.
@@ -2082,8 +2082,10 @@ export function runBaseTests(config: {
                 const data = { "f 1": "v 1", "f 2": "v 2", "f 3": "v 3" };
                 const fields = Object.keys(data);
                 const entries = Object.entries(data);
-                const encodedFields = fields.map(Buffer.from);
-                const encodedEntries = entries.map((e) => e.map(Buffer.from));
+                const encodedFields = fields.map((str) => Buffer.from(str));
+                const encodedEntries = entries.map((e) =>
+                    e.map((str) => Buffer.from(str)),
+                );
                 expect(await client.hset(key1, data)).toEqual(3);
 
                 expect(fields).toContain(await client.hrandfield(key1));
@@ -5833,7 +5835,7 @@ export function runBaseTests(config: {
                                 decoder: Decoder.Bytes,
                             })
                         ).sort(),
-                    ).toEqual(expectedZunion.map(Buffer.from));
+                    ).toEqual(expectedZunion.map((str) => Buffer.from(str)));
                 },
                 protocol,
             );
@@ -9835,7 +9837,7 @@ export function runBaseTests(config: {
                         expectedCharMapArray.length,
                     );
                     expect(result[resultCollectionIndex]).toEqual(
-                        expectedCharMapArray.map(Buffer.from),
+                        expectedCharMapArray.map((str) => Buffer.from(str)),
                     );
 
                     result = await client.zscan(
@@ -10247,7 +10249,7 @@ export function runBaseTests(config: {
                 );
                 // using set to compare, because results are reordrered
                 expect(new Set(searchResult)).toEqual(
-                    new Set(members.map((m) => Buffer.from(m))),
+                    new Set(members.map((m) => Buffer.from(String(m)))),
                 );
                 // repeat geosearch with string decoder
                 searchResult = await client.geosearch(

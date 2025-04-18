@@ -3,6 +3,15 @@
     "version": "0.1.0",
     "description": "Valkey client",
     "main": "index.js",
+    "types": "./index.d.ts",
+    "type": "commonjs",
+    "module": "index.js",
+    "exports": {
+        ".": {
+            "import": "./index.js",
+            "require": "./index.js"
+        }
+    },
     "license": "Apache-2.0",
     "files": [
         "index.d.ts",
@@ -12,16 +21,14 @@
     "napi": {
         "name": "glide-rs",
         "triples": {
-            "defaults": true,
+            "default": false,
             "additional": [
                 "x86_64-unknown-linux-musl",
+                "x86_64-unknown-linux-gnu",
                 "aarch64-unknown-linux-gnu",
-                "armv7-unknown-linux-gnueabihf",
                 "aarch64-apple-darwin",
-                "aarch64-linux-android",
-                "x86_64-unknown-freebsd",
-                "aarch64-unknown-linux-musl",
-                "armv7-linux-androideabi"
+                "x86_64-apple-darwin",
+                "aarch64-unknown-linux-musl"
             ]
         }
     },
@@ -35,7 +42,8 @@
     "scripts": {
         "artifacts": "napi artifacts",
         "build": "npm install && napi build --features testing_utilities --platform --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:release": "npm install && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release": "npm install --production && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release:gnu": "npm install --production && napi build --platform --release --strip --zig --zig-abi-suffix=2.17 --pipe \"prettier -w\" $npm_config_build_flags",
         "build:benchmark": "npm install && napi build --features testing_utilities --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
         "format": "run-p format:prettier format:rs",
         "format:prettier": "prettier . -w",
@@ -45,9 +53,9 @@
     },
     "devDependencies": {
         "@napi-rs/cli": "^2.18.4",
-        "lint-staged": "^15.2.10",
+        "lint-staged": "^15.5.1",
         "npm-run-all": "^4.1.5",
-        "prettier": "^3.3.3"
+        "prettier": "^3.5.3"
     },
     "lint-staged": {
         "*.@(js|ts|tsx)": [
@@ -63,8 +71,5 @@
         "trailingComma": "all",
         "singleQuote": true,
         "arrowParens": "always"
-    },
-    "dependencies": {
-        "save": "^2.9.0"
     }
 }

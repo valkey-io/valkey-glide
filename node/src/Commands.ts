@@ -2,19 +2,22 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
+import {
+    createLeakedStringVec,
+    MAX_REQUEST_ARGS_LEN,
+} from "./NativeBindingResolver";
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     convertRecordToGlideRecord,
+    ElementAndScore,
     GlideRecord,
     GlideString,
     HashDataType,
-    Score,
     ObjectType,
+    Score,
     SortedSetDataType,
-    ElementAndScore,
 } from "./BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "./GlideClient";

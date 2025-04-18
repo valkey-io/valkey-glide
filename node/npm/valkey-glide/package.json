@@ -1,0 +1,48 @@
+{
+    "name": "@valkey/valkey-glide",
+    "types": "index.d.ts",
+    "version": "${package_version}",
+    "description": "General Language Independent Driver for the Enterprise (GLIDE) for Valkey",
+    "main": "index.js",
+    "module": "index.js",
+    "type": "commonjs",
+    "files": [
+        "src",
+        "index.js",
+        "index.d.ts",
+        "index.js.map",
+        "glide-rs.js",
+        "README.md"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/valkey-io/valkey-glide.git"
+    },
+    "keywords": [
+        "valkey",
+        "glide",
+        "stability",
+        "reliability",
+        "valkey-glide",
+        "valkey-glide-darwin-arm64",
+        "valkey-client",
+        "performance",
+        "fault-tolerance",
+        "valkeyClient",
+        "client"
+    ],
+    "author": "Valkey GLIDE Maintainers",
+    "license": "Apache-2.0",
+    "bugs": {
+        "url": "https://github.com/valkey-io/valkey-glide/issues"
+    },
+    "homepage": "https://github.com/valkey-io/valkey-glide#readme",
+    "optionalDependencies": {
+        "@valkey/valkey-glide-darwin-arm64": "${package_version}",
+        "@valkey/valkey-glide-darwin-x64": "${package_version}",
+        "@valkey/valkey-glide-linux-arm64": "${package_version}",
+        "@valkey/valkey-glide-linux-x64": "${package_version}",
+        "@valkey/valkey-glide-linux-musl-arm64": "${package_version}",
+        "@valkey/valkey-glide-linux-musl-x64": "${package_version}"
+    }
+}
