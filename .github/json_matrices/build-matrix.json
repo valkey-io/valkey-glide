@@ -28,6 +28,16 @@
         "languages": ["python", "node", "java", "go", "dotnet"]
     },
     {
+        "OS": "macos",
+        "NAMED_OS": "darwin",
+        "RUNNER": "macos-13",
+        "ARCH": "x64",
+        "TARGET": "x86_64-apple-darwin",
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
+        "languages": [],
+        "comment": "Tests for all clients (CI) are skipped for that platform due to instability, but CD pipelines still run on it. See PR #3482 for details."
+    },
+    {
         "OS": "ubuntu",
         "NAMED_OS": "linux",
         "ARCH": "arm64",

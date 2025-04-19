@@ -20,6 +20,7 @@ Linux:
 macOS:
 
 - macOS 14.7 (Apple silicon/aarch_64)
+- macOS 13.7 (x86_64/amd64)
 
 Alpine:
 
@@ -109,4 +110,4 @@ Currently, the package is tested on:
 | Operation systems | C lib                | Architecture      |
 | ----------------- | -------------------- | ----------------- |
 | `Linux`           | `glibc`, `musl libc` | `x86_64`, `arm64` |
-| `macOS`           | `Darwin`             | `arm64`           |
+| `macOS`           | `Darwin`             | `x86_64`, `arm64` |
