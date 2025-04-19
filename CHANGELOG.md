@@ -58,6 +58,8 @@
 * Go: Drop support for Go 1.20 ([#3513](https://github.com/valkey-io/valkey-glide/pull/3513))
 * Java: Deprecate `Transaction` and `ClusterTransaction` ([#3561](https://github.com/valkey-io/valkey-glide/pull/3561))
 
+* Java: Shadow netty dependencies. ([#3004](https://github.com/valkey-io/valkey-glide/pull/3004))
+
 #### Fixes
 
 #### Operational Enhancements
