@@ -814,7 +814,7 @@ struct ClosingError {
 /// avoiding issues with the ~100-character limit on Unix domain socket paths.
 /// While placing the socket in /tmp has known security concerns, they are less relevant here since the socket is used for intraprocess communication only.
 /// To further enhance security, we include a UUID in the socket filename and restrict socket permissions to the owner after binding.
-/// 
+///
 /// For Windows, the socket file will be saved to %AppData%\Local.
 pub fn get_socket_path_from_name(socket_name: String) -> String {
     let base_dirs = BaseDirs::new().expect("Failed to create BaseDirs");
