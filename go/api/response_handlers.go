@@ -185,27 +185,10 @@ func handleOkResponse(response *C.struct_CommandResponse) (string, error) {
 	return "OK", nil
 }
 
-func handleOkOrNilResponse(response *C.struct_CommandResponse) (Result[string], error) {
-	defer C.free_command_response(response)
-
-	typeErr := checkResponseType(response, C.Ok, true)
-	if typeErr != nil {
-		return CreateNilStringResult(), typeErr
-	}
-
-	actualType := C.GoString(C.get_response_type_string(response.response_type))
-	if actualType == "Ok" {
-		return CreateStringResult("OK"), nil
-	}
-
-	return CreateNilStringResult(), nil
-}
-
 func handleOkOrStringOrNilResponse(response *C.struct_CommandResponse) (Result[string], error) {
 	defer C.free_command_response(response)
 
-	actualType := C.GoString(C.get_response_type_string(response.response_type))
-	if actualType == "Ok" {
+	if response.response_type == uint32(C.Ok) {
 		return CreateStringResult("OK"), nil
 	}
 

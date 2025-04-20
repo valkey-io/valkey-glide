@@ -403,7 +403,11 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 		return CreateNilStringResult(), payload.error
 	}
 
-	return handleOkOrNilResponse(payload.value)
+	result, err := handleOkResponse(payload.value)
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return CreateStringResult(result), nil
 }
 
 // Update the current connection with a new password.
@@ -4926,7 +4930,11 @@ func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleOkOrNilResponse(result)
+	response, err := handleOkResponse(result)
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return CreateStringResult(response), nil
 }
 
 // Serialize the value stored at key in a Valkey-specific format and return it to the user.
