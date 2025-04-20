@@ -810,11 +810,12 @@ struct ClosingError {
 }
 
 /// Get the socket full path.
-/// The socket file name will contain the process ID and will try to be saved into the user's runtime directory
-/// (e.g. /run/user/1000) in Unix systems. If the runtime dir isn't found, the socket file will be saved to the temp dir.
+/// On Unix-based systems, we use the /tmp directory for the socket file to ensure a predictable and short path,
+/// avoiding issues with the ~100-character limit on Unix domain socket paths.
+/// While placing the socket in /tmp has known security concerns, they are less relevant here since the socket is used for intraprocess communication only.
+/// To further enhance security, we include a UUID in the socket filename and restrict socket permissions to the owner after binding.
+/// 
 /// For Windows, the socket file will be saved to %AppData%\Local.
-/// We add a UUID to ensure uniqueness in environments where PIDs can be reused (like containers).
-/// We use /tmp because it is short and has a static size, which helps avoid issues with socket path length limits.
 pub fn get_socket_path_from_name(socket_name: String) -> String {
     let base_dirs = BaseDirs::new().expect("Failed to create BaseDirs");
     let folder = if cfg!(windows) {
