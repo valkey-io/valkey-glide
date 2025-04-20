@@ -818,7 +818,7 @@ struct ClosingError {
 /// For Windows, the socket file will be saved to %AppData%\Local.
 pub fn get_socket_path_from_name(socket_name: String) -> String {
     let base_dirs = BaseDirs::new().expect("Failed to create BaseDirs");
-    let folder: &std::path::Path = if cfg!(windows) {
+    let folder = if cfg!(windows) {
         base_dirs.data_local_dir()
     } else {
         std::path::Path::new(UNIX_SOCKER_DIR)
