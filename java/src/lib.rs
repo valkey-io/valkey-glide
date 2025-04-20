@@ -12,8 +12,8 @@ use glide_core::STREAM as TYPE_STREAM;
 use glide_core::STRING as TYPE_STRING;
 use glide_core::ZSET as TYPE_ZSET;
 
-// Telemetry required for getStatistics
-use glide_core::Telemetry;
+// Telemetry and OpenTelemetry imports
+use glide_core::{GlideOpenTelemetry, GlideSpan, Telemetry};
 
 use bytes::Bytes;
 use jni::errors::Error as JniError;
@@ -22,6 +22,7 @@ use jni::sys::{jint, jlong, jsize};
 use jni::JNIEnv;
 use redis::Value;
 use std::sync::mpsc;
+use std::sync::Arc;
 
 mod errors;
 mod linked_hashmap;
@@ -649,4 +650,56 @@ fn safe_create_jstring<'local>(
         function_name,
     )
     .unwrap_or(JString::<'_>::default())
+}
+
+/// Creates an OpenTelemetry span with the given name and returns a pointer to the span.
+///
+/// This function is meant to be invoked by Java using JNI.
+///
+/// * `env`     - The JNI environment.
+/// * `_class`  - The class object. Not used.
+/// * `name`    - The name of the span to create.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createOtelSpan<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    name: JString<'local>,
+) -> jlong {
+    handle_panics(
+        move || {
+            fn create_otel_span<'a>(
+                env: &mut JNIEnv<'a>,
+                name: JString<'a>,
+            ) -> Result<jlong, FFIError> {
+                let name_str: String = env.get_string(&name)?.into();
+                let span = GlideOpenTelemetry::new_span(&name_str);
+                let span_ptr = Arc::into_raw(Arc::new(span)) as *mut GlideSpan as jlong;
+                Ok(span_ptr)
+            }
+            let result = create_otel_span(&mut env, name);
+            handle_errors(&mut env, result)
+        },
+        "createOtelSpan",
+    )
+    .unwrap_or(0)
+}
+
+/// Drops an OpenTelemetry span that was previously created.
+///
+/// This function is meant to be invoked by Java using JNI.
+///
+/// * `_env`    - The JNI environment. Not used.
+/// * `_class`  - The class object. Not used.
+/// * `span_ptr` - The pointer to the span to drop.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dropOtelSpan<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    span_ptr: jlong,
+) {
+    if span_ptr != 0 {
+        unsafe {
+            Arc::from_raw(span_ptr as *const GlideSpan);
+        }
+    }
 }

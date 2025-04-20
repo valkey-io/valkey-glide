@@ -19,4 +19,12 @@ public abstract class AdvancedBaseClientConfiguration {
      * pipeline. If not explicitly set, a default value of 250 milliseconds will be used.
      */
     private final Integer connectionTimeout;
+
+    /**
+     * OpenTelemetry configuration options.
+     * <p>
+     * Use this to configure OpenTelemetry integration, including traces and metrics collection.
+     * If not set, OpenTelemetry integration will be disabled.
+     */
+    private final OpenTelemetryConfig openTelemetryConfig;
 }

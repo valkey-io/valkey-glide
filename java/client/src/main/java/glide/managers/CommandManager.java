@@ -258,12 +258,43 @@ public class CommandManager {
             return errorFuture;
         }
 
+        // Create a span for the command if OpenTelemetry is configured
+        // TODO: Only create spans if OpenTelemetry config exists
+        // TODO: Add a condition to create a span statistic, such as only 1% of the requests
+        String commandName = determineCommandName(command);
+        long spanPtr = SpanManager.createSpan(commandName);
+        
+        // Add the span pointer to the command
+        command.setSpanCommand(spanPtr);
+
         // write command request to channel
         // when complete, convert the response to our expected type T using the given responseHandler
         return channel
                 .write(command, true)
                 .exceptionally(this::exceptionHandler)
                 .thenApplyAsync(responseHandler::apply);
+    }
+    
+    /**
+     * Determines a meaningful name for the command for telemetry purposes.
+     *
+     * @param command The command request builder
+     * @return A string representing the command type
+     */
+    private String determineCommandName(CommandRequest.Builder command) {
+        if (command.hasSingleCommand()) {
+            return command.getSingleCommand().getRequestType().name();
+        } else if (command.hasBatch()) {
+            return "Batch";
+        } else if (command.hasScriptInvocation() || command.hasScriptInvocationPointers()) {
+            return "Script";
+        } else if (command.hasClusterScan()) {
+            return "ClusterScan";
+        } else if (command.hasUpdateConnectionPassword()) {
+            return "UpdateConnectionPassword";
+        } else {
+            return "Unknown";
+        }
     }
 
     /**

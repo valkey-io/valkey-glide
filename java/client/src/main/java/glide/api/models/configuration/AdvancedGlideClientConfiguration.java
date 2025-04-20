@@ -12,8 +12,29 @@ import lombok.experimental.SuperBuilder;
  *
  * @example
  *     <pre>{@code
+ * // Basic configuration with connection timeout
  * AdvancedGlideClientConfiguration config = AdvancedGlideClientConfiguration.builder()
  *     .connectionTimeout(500)
+ *     .build();
+ *     
+ * // Configuration with OpenTelemetry enabled
+ * AdvancedGlideClientConfiguration configWithOtel = AdvancedGlideClientConfiguration.builder()
+ *     .connectionTimeout(500)
+ *     .openTelemetryConfig(OpenTelemetryConfig.builder()
+ *         .tracesCollectorEndPoint("https://collector.example.com:4318/v1/traces")
+ *         .metricsCollectorEndPoint("https://collector.example.com:4318/v1/metrics")
+ *         .flushIntervalMs(5000)
+ *         .build())
+ *     .build();
+ *     
+ * // Configuration with OpenTelemetry using file output
+ * AdvancedGlideClientConfiguration configWithFileOtel = AdvancedGlideClientConfiguration.builder()
+ *     .connectionTimeout(500)
+ *     .openTelemetryConfig(OpenTelemetryConfig.builder()
+ *         .tracesCollectorEndPoint("file:///tmp/traces/")
+ *         .metricsCollectorEndPoint("file:///tmp/metrics/")
+ *         .flushIntervalMs(1000)
+ *         .build())
  *     .build();
  * }</pre>
  */

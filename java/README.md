@@ -170,6 +170,65 @@ module playground {
 }
 ```
 
+## OpenTelemetry Support
+
+Valkey GLIDE supports OpenTelemetry for distributed tracing and metrics collection. This allows you to monitor and analyze the performance of your Valkey operations.
+
+### Configuration
+
+To enable OpenTelemetry, configure it in the advanced configuration section when creating a client:
+
+```java
+// For standalone client
+GlideClientConfiguration config = GlideClientConfiguration.builder()
+    .address(NodeAddress.builder().host(host).port(port).build())
+    .useTLS(useSsl)
+    .advancedConfiguration(AdvancedGlideClientConfiguration.builder()
+        .openTelemetryConfig(OpenTelemetryConfig.builder()
+            .tracesCollectorEndPoint("https://collector.example.com:4318/v1/traces")
+            .metricsCollectorEndPoint("https://collector.example.com:4318/v1/metrics")
+            .flushIntervalMs(5000)
+            .build())
+        .build())
+    .build();
+
+// For cluster client
+GlideClusterClientConfiguration config = GlideClusterClientConfiguration.builder()
+    .address(NodeAddress.builder().host(host).port(port).build())
+    .useTLS(useSsl)
+    .advancedConfiguration(AdvancedGlideClusterClientConfiguration.builder()
+        .openTelemetryConfig(OpenTelemetryConfig.builder()
+            .tracesCollectorEndPoint("https://collector.example.com:4318/v1/traces")
+            .metricsCollectorEndPoint("https://collector.example.com:4318/v1/metrics")
+            .flushIntervalMs(5000)
+            .build())
+        .build())
+    .build();
+```
+
+### Collector Endpoint Formats
+
+The collector endpoints support multiple protocols:
+
+- **HTTP/HTTPS**: Use `http://` or `https://` prefix
+  ```
+  https://collector.example.com:4318/v1/traces
+  ```
+
+- **gRPC**: Use `grpc://` prefix
+  ```
+  grpc://localhost:4317
+  ```
+
+- **File**: Use `file://` prefix followed by the directory path
+  ```
+  file:///tmp/traces/
+  ```
+
+### Flush Interval
+
+The `flushIntervalMs` parameter controls how often data is sent to the collector. If not specified, a default value of 5000ms (5 seconds) is used.
+
 ## Basic Examples
 
 ### Standalone Valkey:
@@ -301,4 +360,4 @@ The following arguments are accepted:
 * `tls`: Valkey TLS configured
 
 ### Known issues
-* Conflict in netty and protobuf internal valkey glide dependencies with project dependencies using valkey glide. Issue link: https://github.com/valkey-io/valkey-glide/issues/3402. Workarounds mentioned in this issue: https://github.com/valkey-io/valkey-glide/issues/3367 
+* Conflict in netty and protobuf internal valkey glide dependencies with project dependencies using valkey glide. Issue link: https://github.com/valkey-io/valkey-glide/issues/3402. Workarounds mentioned in this issue: https://github.com/valkey-io/valkey-glide/issues/3367

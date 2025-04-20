@@ -4,6 +4,7 @@ package glide.managers;
 import static glide.api.BaseClient.OK;
 
 import glide.api.models.exceptions.GlideException;
+import glide.api.models.telemetry.SpanManager;
 import lombok.AllArgsConstructor;
 import response.ResponseOuterClass.Response;
 
@@ -22,18 +23,25 @@ public class BaseResponseResolver implements GlideExceptionCheckedFunction<Respo
      * @return A generic Object with the Response or null if the response is empty
      */
     public Object apply(Response response) throws GlideException {
-        // Note: errors are already handled before in CallbackDispatcher
-        assert !response.hasClosingError() : "Unhandled response closing error";
-        assert !response.hasRequestError() : "Unhandled response request error";
+        try {
+            // Note: errors are already handled before in CallbackDispatcher
+            assert !response.hasClosingError() : "Unhandled response closing error";
+            assert !response.hasRequestError() : "Unhandled response request error";
 
-        if (response.hasConstantResponse()) {
-            return OK;
+            if (response.hasConstantResponse()) {
+                return OK;
+            }
+            if (response.hasRespPointer()) {
+                // Return the shared value - which may be a null value
+                return respPointerResolver.apply(response.getRespPointer());
+            }
+            // if no response payload is provided, assume null
+            return null;
+        } finally {
+            // Clean up the span if one was created
+            if (response.hasSpanCommand()) {
+                SpanManager.closeSpan(response.getSpanCommand());
+            }
         }
-        if (response.hasRespPointer()) {
-            // Return the shared value - which may be a null value
-            return respPointerResolver.apply(response.getRespPointer());
-        }
-        // if no response payload is provided, assume null
-        return null;
     }
 }
