@@ -403,7 +403,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 		return CreateNilStringResult(), payload.error
 	}
 
-	return handleStringOrNilResponse(payload.value)
+	return handleOkOrNilResponse(payload.value)
 }
 
 // Update the current connection with a new password.
@@ -474,7 +474,7 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
@@ -509,7 +509,7 @@ func (client *baseClient) SetWithOptions(key string, value string, options optio
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNilResponse(result)
+	return handleOkOrStringOrNilResponse(result)
 }
 
 // Get string value associated with the given key, or api.CreateNilStringResult() is returned if no such value
@@ -612,7 +612,7 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or more keys already exist,
@@ -2278,7 +2278,7 @@ func (client *baseClient) LTrim(key string, start int64, end int64) (string, err
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Returns the length of the list stored at key.
@@ -2758,7 +2758,7 @@ func (client *baseClient) LSet(key string, index int64, element string) (string,
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Atomically pops and removes the left/right-most element to the list stored at source depending on whereFrom, and pushes
@@ -3331,7 +3331,7 @@ func (client *baseClient) PfMerge(destination string, sourceKeys []string) (stri
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
@@ -3436,7 +3436,7 @@ func (client *baseClient) Rename(key string, newKey string) (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Renames key to newkey if newKey does not yet exist.
@@ -4876,7 +4876,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Create a key associated with a value that is obtained by
@@ -4926,7 +4926,7 @@ func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringOrNilResponse(result)
+	return handleOkOrNilResponse(result)
 }
 
 // Serialize the value stored at key in a Valkey-specific format and return it to the user.
@@ -5062,7 +5062,7 @@ func (client *baseClient) XGroupSetIdWithOptions(
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Removes all elements in the sorted set stored at `key` with a lexicographical order
@@ -7444,7 +7444,7 @@ func (client *baseClient) FunctionFlush() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all function libraries in synchronous mode.
@@ -7465,7 +7465,7 @@ func (client *baseClient) FunctionFlushSync() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all function libraries in asynchronous mode.
@@ -7486,7 +7486,7 @@ func (client *baseClient) FunctionFlushAsync() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Invokes a previously loaded function.

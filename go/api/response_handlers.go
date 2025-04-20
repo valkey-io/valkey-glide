@@ -91,6 +91,8 @@ func parseInterface(response *C.struct_CommandResponse) (interface{}, error) {
 		return parseMap(response)
 	case C.Sets:
 		return parseSet(response)
+	case C.Ok:
+		return "OK", nil
 	}
 
 	return nil, &errors.RequestError{Msg: "Unexpected return type from Valkey"}
@@ -168,6 +170,44 @@ func handleStringResponse(response *C.struct_CommandResponse) (string, error) {
 
 func handleStringOrNilResponse(response *C.struct_CommandResponse) (Result[string], error) {
 	defer C.free_command_response(response)
+
+	return convertCharArrayToString(response, true)
+}
+
+func handleOkResponse(response *C.struct_CommandResponse) (string, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Ok, false)
+	if typeErr != nil {
+		return CreateNilStringResult().Value(), typeErr
+	}
+
+	return "OK", nil
+}
+
+func handleOkOrNilResponse(response *C.struct_CommandResponse) (Result[string], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Ok, true)
+	if typeErr != nil {
+		return CreateNilStringResult(), typeErr
+	}
+
+	actualType := C.GoString(C.get_response_type_string(response.response_type))
+	if actualType == "Ok" {
+		return CreateStringResult("OK"), nil
+	}
+
+	return CreateNilStringResult(), nil
+}
+
+func handleOkOrStringOrNilResponse(response *C.struct_CommandResponse) (Result[string], error) {
+	defer C.free_command_response(response)
+
+	actualType := C.GoString(C.get_response_type_string(response.response_type))
+	if actualType == "Ok" {
+		return CreateStringResult("OK"), nil
+	}
 
 	return convertCharArrayToString(response, true)
 }
