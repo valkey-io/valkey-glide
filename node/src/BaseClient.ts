@@ -1132,7 +1132,7 @@ export class BaseClient {
             // such as only 1% of the requests. This will be configurable - https://github.com/valkey-io/valkey-glide/issues/3452
             const commandObj =
                 command instanceof command_request.Command
-                    ? JSON.parse(JSON.stringify(command)).requestType
+                    ? command_request.RequestType[command.requestType]
                     : "Batch";
             const pair = createLeakedOtelSpan(commandObj);
             const spanPtr = new Long(pair[0], pair[1]);
@@ -7773,15 +7773,17 @@ export class BaseClient {
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
 
-        // Validate flushIntervalMs is not negative
-        if (
-            options.openTelemetryConfig?.flushIntervalMs !== undefined &&
-            options.openTelemetryConfig.flushIntervalMs < 0
-        ) {
-            throw new Error("InvalidInput: flushIntervalMs cannot be negative");
-        }
-
         if (options.openTelemetryConfig) {
+            // Validate flushIntervalMs is not negative
+            if (
+                options.openTelemetryConfig.flushIntervalMs !== undefined &&
+                options.openTelemetryConfig.flushIntervalMs < 0
+            ) {
+                throw new ConfigurationError(
+                    "InvalidInput: flushIntervalMs cannot be negative",
+                );
+            }
+
             request.opentelemetryConfig = {
                 tracesCollectorEndpoint:
                     options.openTelemetryConfig.tracesCollectorEndpoint,

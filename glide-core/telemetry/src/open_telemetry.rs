@@ -8,10 +8,9 @@ use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use thiserror::Error;
 use url::Url;
 
@@ -402,8 +401,8 @@ fn build_exporter(
 #[derive(Clone)]
 pub struct GlideOpenTelemetry {}
 
-/// Static atomic boolean to track initialization state
-static OTEL_INITIALIZED: AtomicBool = AtomicBool::new(false);
+/// Static mutex to track initialization state
+static OTEL_INITIALIZED: Mutex<bool> = Mutex::new(false);
 
 /// Our interface to OpenTelemetry
 impl GlideOpenTelemetry {
@@ -413,7 +412,11 @@ impl GlideOpenTelemetry {
     /// If OpenTelemetry is already initialized, this method will return Ok(()) without reinitializing
     pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
         // Check if already initialized
-        if OTEL_INITIALIZED.load(Ordering::SeqCst) {
+        let mut initialized = OTEL_INITIALIZED.lock().map_err(|_| {
+            GlideOTELError::Other("Failed to acquire initialization lock".to_string())
+        })?;
+
+        if *initialized {
             return Ok(());
         }
 
@@ -452,7 +455,7 @@ impl GlideOpenTelemetry {
         global::set_tracer_provider(provider);
 
         // Mark as initialized
-        OTEL_INITIALIZED.store(true, Ordering::SeqCst);
+        *initialized = true;
 
         Ok(())
     }

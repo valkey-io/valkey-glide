@@ -425,18 +425,23 @@ pub fn create_leaked_otel_span(name: String) -> [u32; 2] {
 
 #[napi]
 pub fn drop_otel_span(span_ptr: BigInt) {
-    let (is_negative, span_ptr, _) = span_ptr.get_u64();
-    if is_negative {
-        log(
-            Level::Error,
-            "OpenTelemetry".to_string(),
-            "Failed to drop span. Received a negative pointer value".to_string(),
-        );
-        return;
-    }
-    if span_ptr != 0 {
+    let (is_negative, span_ptr, lossless) = span_ptr.get_u64();
+    let error_msg = if is_negative {
+        "Received a negative pointer value."
+    } else if !lossless {
+        "Some data was lost in the conversion to u64."
+    } else if span_ptr == 0 {
+        "Received a zero pointer value."
+    } else {
         unsafe { Arc::from_raw(span_ptr as *const GlideSpan) };
-    }
+        return;
+    };
+
+    log(
+        Level::Error,
+        "OpenTelemetry".to_string(),
+        format!("Failed to drop span. {}", error_msg),
+    );
 }
 
 #[napi]
