@@ -1,4 +1,5 @@
 #### Changes
+* Core: Move UDS Socket Filename to tmp ([#3615](https://github.com/valkey-io/valkey-glide/pull/3615))
 * Core: Ensure UDS socket filename is truly unique. ([#3596](https://github.com/valkey-io/valkey-glide/pull/3596))
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
 * Core: Add `opentelemetry` protocols support ([#3191](https://github.com/valkey-io/valkey-glide/pull/3191))
