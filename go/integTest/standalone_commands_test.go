@@ -1031,3 +1031,21 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 		assert.Equal(suite.T(), int64(0), nodeStats.Engines["LUA"].FunctionCount)
 	}
 }
+
+func (suite *GlideTestSuite) TestFunctionKill() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+
+	// Flush all functions
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}

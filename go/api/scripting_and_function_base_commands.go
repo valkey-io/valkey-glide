@@ -24,4 +24,6 @@ type ScriptingAndFunctionBaseCommands interface {
 	FCallWithKeysAndArgs(function string, keys []string, args []string) (any, error)
 
 	FCallReadOnlyWithKeysAndArgs(function string, keys []string, args []string) (any, error)
+
+	FunctionKill() (string, error)
 }
