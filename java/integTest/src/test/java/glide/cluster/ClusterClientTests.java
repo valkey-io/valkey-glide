@@ -23,7 +23,6 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -167,7 +166,6 @@ public class ClusterClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
-    @Disabled("flaky test: re-enable once fixed, or remove based on PR #3311")
     @SneakyThrows
     @Test
     public void test_update_connection_password() {
@@ -190,6 +188,9 @@ public class ClusterClientTests {
             // Kill all other clients to force reconnection
             assertEquals("OK", adminClient.configSet(Map.of("requirepass", pwd)).get());
             adminClient.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
+
+            // Give some time for it to go through
+            Thread.sleep(1000);
 
             // Verify client auto-reconnects with new password
             assertNotNull(testClient.info().get());
