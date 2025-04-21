@@ -1446,12 +1446,6 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, r
 	if err != nil {
 		return createEmptyClusterValue[any](), err
 	}
-
-	result, err := handleAnyResponse(response)
-	if err != nil {
-		return createEmptyClusterValue[any](), err
-	}
-
 	if route.Route != nil && route.Route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(response)
 		if err != nil {
@@ -1460,7 +1454,7 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, r
 		return createClusterMultiValue[any](data), nil
 	}
 
-	return createClusterSingleValue[any](result), nil
+	return createClusterSingleValue[any](response), nil
 }
 
 // InvokeScriptWithOptionsAndRoute executes a Lua script on the server with additional options and routing information.

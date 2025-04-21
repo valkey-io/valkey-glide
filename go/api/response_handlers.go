@@ -1383,7 +1383,6 @@ func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[strin
 	if typeErr != nil {
 		return nil, typeErr
 	}
-
 	result, err := parseMap(response)
 	if err != nil {
 		return nil, err

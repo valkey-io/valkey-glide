@@ -50,7 +50,7 @@ func (o *ScriptOptions) GetArgs() []string {
 type Script struct {
 	hash      string
 	isDropped bool
-	mu        sync.Mutex
+	mu        *sync.Mutex
 }
 
 // NewScript creates a new Script object
@@ -60,6 +60,7 @@ func NewScript(code interface{}) *Script {
 	return &Script{
 		hash:      hash,
 		isDropped: false,
+		mu:        new(sync.Mutex),
 	}
 }
 

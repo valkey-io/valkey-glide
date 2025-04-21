@@ -43,6 +43,7 @@ use tokio::runtime::Runtime;
 /// # Returns
 ///
 /// A C string containing the SHA1 hash of the script. The caller is responsible for freeing this memory.
+/// We can free the memory using [`drop_script`].
 ///
 /// # Safety
 ///
