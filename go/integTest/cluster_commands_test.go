@@ -1926,16 +1926,16 @@ func (suite *GlideTestSuite) TestScriptExistsWithoutRoute() {
 	client := suite.defaultClusterClient()
 
 	// Test regular scripts
-	script1 := options.NewScript("return 'Hello'", false)
-	script2 := options.NewScript("return 'World'", false)
+	script1 := options.NewScript("return 'Hello'")
+	script2 := options.NewScript("return 'World'")
 
 	// Test binary scripts
-	script1_bin := options.NewScript("return 'Binary Hello'", true)
-	script2_bin := options.NewScript("return 'Binary World'", true)
+	script1_bin := options.NewScript("return 'Binary Hello'")
+	script2_bin := options.NewScript("return 'Binary World'")
 
 	// Load script1 and script2_bin
-	client.InvokeScript(script1)
-	client.InvokeScript(script2_bin)
+	client.InvokeScript(*script1)
+	client.InvokeScript(*script2_bin)
 
 	expected := []bool{true, false, false, true, false}
 
@@ -1962,18 +1962,18 @@ func (suite *GlideTestSuite) TestScriptExistsWithRoute() {
 	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, uuid.New().String())}
 
 	// Test regular scripts
-	script1 := options.NewScript("return 'Hello'", false)
-	script2 := options.NewScript("return 'World'", false)
-	script3 := options.NewScript("return 'Hello World'", false)
+	script1 := options.NewScript("return 'Hello'")
+	script2 := options.NewScript("return 'World'")
+	script3 := options.NewScript("return 'Hello World'")
 
 	// Test binary scripts
-	script1_bin := options.NewScript("return 'Binary Hello'", true)
-	script2_bin := options.NewScript("return 'Binary World'", true)
+	script1_bin := options.NewScript("return 'Binary Hello'")
+	script2_bin := options.NewScript("return 'Binary World'")
 
 	// Load script1 and script2_bin
-	client.InvokeScript(script1)
-	client.InvokeScriptWithRoute(script3, route)
-	client.InvokeScriptWithRoute(script2_bin, route)
+	client.InvokeScript(*script1)
+	client.InvokeScriptWithRoute(*script3, route)
+	client.InvokeScriptWithRoute(*script2_bin, route)
 
 	expected := []bool{true, false, false, true, true, false}
 

@@ -1054,16 +1054,16 @@ func (suite *GlideTestSuite) TestScriptExists() {
 	client := suite.defaultClient()
 
 	// Test regular scripts
-	script1 := options.NewScript("return 'Hello'", false)
-	script2 := options.NewScript("return 'World'", false)
+	script1 := options.NewScript("return 'Hello'")
+	script2 := options.NewScript("return 'World'")
 
 	// Test binary scripts
-	script1_bin := options.NewScript("return 'Binary Hello'", true)
-	script2_bin := options.NewScript("return 'Binary World'", true)
+	script1_bin := options.NewScript("return 'Binary Hello'")
+	script2_bin := options.NewScript("return 'Binary World'")
 
 	// Load script1 and script2_bin
-	client.InvokeScript(script1)
-	client.InvokeScript(script2_bin)
+	client.InvokeScript(*script1)
+	client.InvokeScript(*script2_bin)
 
 	expected := []bool{true, false, false, true, false}
 
