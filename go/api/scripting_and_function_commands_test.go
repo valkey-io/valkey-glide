@@ -703,3 +703,46 @@ func ExampleGlideClusterClient_FunctionDeleteWithRoute() {
 	// Output:
 	// OK
 }
+
+func ExampleGlideClient_FunctionKill() {
+	client := getExampleGlideClient()
+
+	// Try to kill when no function is running
+	_, err := client.FunctionKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_FunctionKill() {
+	client := getExampleGlideClusterClient()
+
+	// Try to kill when no function is running
+	_, err := client.FunctionKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_FunctionKillWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Try to kill with route when no function is running
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{
+		Route: route,
+	}
+	_, err := client.FunctionKillWithRoute(opts)
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
