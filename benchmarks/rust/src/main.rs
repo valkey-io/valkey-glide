@@ -240,72 +240,12 @@ async fn get_connection(args: &Args) -> Client {
         .unwrap()
 }
 
-// async fn single_benchmark_task(
-//     connections: &[Client],
-//     counter: Arc<AtomicUsize>,
-//     number_of_operations: usize,
-//     number_of_concurrent_tasks: usize,
-//     data_size: usize,
-// ) -> HashMap<ChosenAction, Vec<Duration>> {
-//     let mut buffer = itoa::Buffer::new();
-//     let mut results = HashMap::new();
-//     results.insert(
-//         ChosenAction::GetNonExisting,
-//         Vec::with_capacity(number_of_operations / number_of_concurrent_tasks),
-//     );
-//     results.insert(
-//         ChosenAction::GetExisting,
-//         Vec::with_capacity(number_of_operations / number_of_concurrent_tasks),
-//     );
-//     results.insert(
-//         ChosenAction::Set,
-//         Vec::with_capacity(number_of_operations / number_of_concurrent_tasks),
-//     );
-//     loop {
-//         let current_op = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-//         if current_op >= number_of_operations {
-//             return results;
-//         }
-//         let index = current_op % connections.len();
-//         let mut connection = connections[index].clone();
-//         let start = Instant::now();
-//         let action = perform_operation(&mut connection, &mut buffer, data_size).await;
-//         let elapsed = start.elapsed();
-//         results.get_mut(&action).unwrap().push(elapsed);
-//     }
-// }
-
-// async fn perform_operation(
-//     connection: &mut Client,
-//     buffer: &mut itoa::Buffer,
-//     data_size: usize,
-// ) -> ChosenAction {
-//     let mut cmd = redis::Cmd::new();
-//     let action = if rand::thread_rng().gen_bool(PROB_GET) {
-//         if rand::thread_rng().gen_bool(PROB_GET_EXISTING_KEY) {
-//             cmd.arg("GET")
-//                 .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)));
-//             ChosenAction::GetExisting
-//         } else {
-//             cmd.arg("GET")
-//                 .arg(buffer.format(thread_rng().gen_range(SIZE_SET_KEYSPACE..SIZE_GET_KEYSPACE)));
-//             ChosenAction::GetNonExisting
-//         }
-//     } else {
-//         cmd.arg("SET")
-//             .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)))
-//             .arg(generate_random_string(data_size));
-//         ChosenAction::Set
-//     };
-//     connection.send_command(&cmd, None).await.unwrap();
-//     action
-// }
-
 async fn perform_operation(
     connection: &mut Client,
     buffer: &mut itoa::Buffer,
     data_size: usize,
     is_burst: bool,
+    value: String,
 ) -> ChosenAction {
     let mut cmd = redis::Cmd::new();
     let action = if is_burst {
@@ -321,14 +261,17 @@ async fn perform_operation(
                 ChosenAction::GetExisting
             } else {
                 cmd.arg("GET").arg(
-                    buffer.format(thread_rng().gen_range(SIZE_SET_KEYSPACE..SIZE_GET_KEYSPACE)),
+                    buffer.format(
+                        thread_rng()
+                            .gen_range(SIZE_SET_KEYSPACE..(SIZE_GET_KEYSPACE + SIZE_SET_KEYSPACE)),
+                    ),
                 );
                 ChosenAction::GetNonExisting
             }
         } else {
             cmd.arg("SET")
                 .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)))
-                .arg(generate_random_string(data_size));
+                .arg(value);
             // .arg("PX") // TTL in milliseconds
             // .arg(10_000); // 10 seconds
             ChosenAction::Set
@@ -362,7 +305,7 @@ async fn single_benchmark_task(
 
     let mut last_burst = Instant::now();
     let burst_interval = Duration::from_secs(120); // every 2 minutes
-
+    let value = generate_random_string(data_size);
     loop {
         let current_op = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if current_op >= number_of_operations {
@@ -379,7 +322,14 @@ async fn single_benchmark_task(
         }
 
         let start = Instant::now();
-        let action = perform_operation(&mut connection, &mut buffer, data_size, is_burst).await;
+        let action = perform_operation(
+            &mut connection,
+            &mut buffer,
+            data_size,
+            is_burst,
+            value.clone(),
+        )
+        .await;
         let elapsed = start.elapsed();
         results.get_mut(&action).unwrap().push(elapsed);
     }
