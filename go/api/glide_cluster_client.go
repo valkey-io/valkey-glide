@@ -1493,11 +1493,6 @@ func (client *GlideClusterClient) InvokeScriptWithOptionsAndRoute(script options
 		return createEmptyClusterValue[any](), err
 	}
 
-	result, err := handleAnyResponse(response)
-	if err != nil {
-		return createEmptyClusterValue[any](), err
-	}
-
 	if route.Route != nil && route.Route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(response)
 		if err != nil {
@@ -1506,7 +1501,7 @@ func (client *GlideClusterClient) InvokeScriptWithOptionsAndRoute(script options
 		return createClusterMultiValue[any](data), nil
 	}
 
-	return createClusterSingleValue[any](result), nil
+	return createClusterSingleValue[any](response), nil
 }
 
 // FunctionStats returns information about the function that's currently running and information about the
