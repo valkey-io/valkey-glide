@@ -2,7 +2,9 @@
 
 package integTest
 
-import "strings"
+import (
+	"strings"
+)
 
 // check if sliceA is a subset of sliceB
 func isSubset[T comparable](sliceA []T, sliceB []T) bool {
