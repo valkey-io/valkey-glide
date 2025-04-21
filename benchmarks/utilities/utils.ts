@@ -12,8 +12,8 @@ import {
 
 export const PORT = 6379;
 
-export const SIZE_SET_KEYSPACE = 500000; // 3 million
-export const SIZE_GET_KEYSPACE = 500000; // 3.75 million
+export const SIZE_SET_KEYSPACE = 100000; // 3 million
+export const SIZE_GET_KEYSPACE = 100000; // 3.75 million
 
 export function getAddress(host: string, tls: boolean, port: number): string {
     const protocol = tls ? "rediss" : "redis";

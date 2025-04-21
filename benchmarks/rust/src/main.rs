@@ -59,10 +59,10 @@ struct Args {
 const PORT: u32 = 6379;
 
 // Benchmark constants - adjusting these will change the meaning of the benchmark.
-const PROB_GET: f64 = 0.9;
-const PROB_GET_EXISTING_KEY: f64 = 1.0;
-const SIZE_GET_KEYSPACE: u32 = 500_000;
-const SIZE_SET_KEYSPACE: u32 = 500_000;
+const PROB_GET: f64 = 0.8;
+const PROB_GET_EXISTING_KEY: f64 = 0.1;
+const SIZE_GET_KEYSPACE: u32 = 100_000;
+const SIZE_SET_KEYSPACE: u32 = 100_000;
 
 #[derive(Eq, PartialEq, Hash)]
 enum ChosenAction {
@@ -328,9 +328,9 @@ async fn perform_operation(
         } else {
             cmd.arg("SET")
                 .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)))
-                .arg(generate_random_string(data_size))
-                .arg("PX") // TTL in milliseconds
-                .arg(10_000); // 10 seconds
+                .arg(generate_random_string(data_size));
+            // .arg("PX") // TTL in milliseconds
+            // .arg(10_000); // 10 seconds
             ChosenAction::Set
         }
     };
