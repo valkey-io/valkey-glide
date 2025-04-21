@@ -36,9 +36,10 @@ class ClusterCommands(CoreCommands):
         See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
-            @example - Return a list of all pub/sub clients from all nodes:
+            For example - Return a list of all pub/sub clients from all nodes::
 
                 connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], AllNodes())
+
         Args:
             command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
@@ -61,13 +62,14 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[bytes]:
         """
         Get information and statistics about the server.
-        See https://valkey.io/commands/info/ for details.
+
+        See [valkey.io](https://valkey.io/commands/info/) for details.
 
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
-            information to retrieve. When no parameter is provided, the default option is assumed.
+                information to retrieve. When no parameter is provided, the default option is assumed.
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided, in which
-            case the client will route the command to the nodes defined by `route`. Defaults to None.
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
             TClusterResponse[bytes]: If a single node route is requested, returns a bytes string containing the information for
@@ -89,7 +91,8 @@ class ClusterCommands(CoreCommands):
     ) -> Optional[List[TResult]]:
         """
         Execute a transaction by processing the queued commands.
-        See https://valkey.io/docs/topics/transactions/ for details on Transactions.
+
+        See [valkey.io](https://valkey.io/docs/topics/transactions/) for details on Transactions.
 
         Args:
             transaction (ClusterTransaction): A `ClusterTransaction` object containing a list of commands to be executed.
@@ -99,9 +102,10 @@ class ClusterCommands(CoreCommands):
 
         Returns:
             Optional[List[TResult]]: A list of results corresponding to the execution of each command
-                in the transaction. If a command returns a value, it will be included in the list. If a command
-                doesn't return a value, the list entry will be `None`.
-                If the transaction failed due to a WATCH command, `exec` will return `None`.
+            in the transaction. If a command returns a value, it will be included in the list. If a command
+            doesn't return a value, the list entry will be `None`.
+
+            If the transaction failed due to a WATCH command, `exec` will return `None`.
         """
         commands = transaction.commands[:]
         return await self._execute_transaction(commands, route)
@@ -112,7 +116,8 @@ class ClusterCommands(CoreCommands):
     ) -> TOK:
         """
         Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
-        See https://valkey.io/commands/config-resetstat/ for details.
+
+        See [valkey.io](https://valkey.io/commands/config-resetstat/) for details.
 
         Args:
             route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
@@ -131,11 +136,12 @@ class ClusterCommands(CoreCommands):
     ) -> TOK:
         """
         Rewrite the configuration file with the current configuration.
-        See https://valkey.io/commands/config-rewrite/ for details.
+
+        See [valkey.io](https://valkey.io/commands/config-rewrite/) for details.
 
         Args:
             route (Optional[TRoute]): The command will be routed automatically to all nodes, unless `route` is provided, in
-            which case the client will route the command to the nodes defined by `route`. Defaults to None.
+                which case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
             OK: OK is returned when the configuration was rewritten properly. Otherwise an error is raised.
@@ -154,15 +160,18 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[int]:
         """
         Returns the current connection id.
-        See https://valkey.io/commands/client-id/ for more information.
+
+        See [valkey.io](https://valkey.io/commands/client-id/) for more information.
 
         Args:
             route (Optional[Route]): The command will be sent to a random node, unless `route` is provided, in which
-            case the client will route the command to the nodes defined by `route`.
+                case the client will route the command to the nodes defined by `route`.
 
         Returns:
             TClusterResponse[int]: The id of the client.
+
             If a single node route is requested, returns a int representing the client's id.
+
             Otherwise, returns a dict of [byte , int] where each key contains the address of
             the queried node and the value contains the client's id.
         """
@@ -176,14 +185,14 @@ class ClusterCommands(CoreCommands):
     ) -> bytes:
         """
         Ping the server.
-        See https://valkey.io/commands/ping/ for more details.
+
+        See [valkey.io](https://valkey.io/commands/ping/) for more details.
 
         Args:
             message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
-            the server will respond with b"PONG". If provided, the server will respond with a copy of the message.
-
+                the server will respond with b"PONG". If provided, the server will respond with a copy of the message.
             route (Optional[Route]): The command will be sent to all primaries, unless `route` is provided, in which
-            case the client will route the command to the nodes defined by `route`
+                case the client will route the command to the nodes defined by `route`
 
         Returns:
            bytes: b'PONG' if `message` is not provided, otherwise return a copy of `message`.
@@ -205,19 +214,21 @@ class ClusterCommands(CoreCommands):
         """
         Get the values of configuration parameters.
         Starting from server version 7, command supports multiple parameters.
-        See https://valkey.io/commands/config-get/ for details.
+
+        See [valkey.io](https://valkey.io/commands/config-get/) for details.
 
         Args:
             parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
-
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
-            in which case the client will route the command to the nodes defined by `route`.
+                in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
             TClusterResponse[Dict[bytes, bytes]]: A dictionary of values corresponding to the
             configuration parameters.
-            When specifying a route other than a single node, response will be :
+            When specifying a route other than a single node, response will be::
+
                 {Address (bytes) : response (Dict[bytes, bytes]) , ... }
+
             with type of Dict[bytes, Dict[bytes, bytes]].
 
         Examples:
@@ -239,14 +250,14 @@ class ClusterCommands(CoreCommands):
         """
         Set configuration parameters to the specified values.
         Starting from server version 7, command supports multiple parameters.
-        See https://valkey.io/commands/config-set/ for details.
+
+        See [valkey.io](https://valkey.io/commands/config-set/) for details.
 
         Args:
             parameters_map (Mapping[TEncodable, TEncodable]): A map consisting of configuration
-            parameters and their respective values to set.
-
+                parameters and their respective values to set.
             route (Optional[Route]): The command will be routed to all nodes, unless `route` is provided,
-            in which case the client will route the command to the nodes defined by `route`.
+                in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
             OK: Returns OK if all configurations have been successfully set. Otherwise, raises an error.
@@ -268,17 +279,22 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[Optional[bytes]]:
         """
         Get the name of the connection to which the request is routed.
-        See https://valkey.io/commands/client-getname/ for more details.
+
+        See [valkey.io](https://valkey.io/commands/client-getname/) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
-            in which case the client will route the command to the nodes defined by `route`.
+                in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
             TClusterResponse[Optional[bytes]]: The name of the client connection as a bytes string if a name is set,
             or None if no name is assigned.
-            When specifying a route other than a single node, response will be:
-            {Address (bytes) : response (Optional[bytes]) , ... } with type of Dict[str, Optional[str]].
+
+            When specifying a route other than a single node, response will be::
+
+                {Address (bytes) : response (Optional[bytes]) , ... }
+
+            with type of Dict[str, Optional[str]].
 
         Examples:
             >>> await client.client_getname()
@@ -294,14 +310,16 @@ class ClusterCommands(CoreCommands):
     async def dbsize(self, route: Optional[Route] = None) -> int:
         """
         Returns the number of keys in the database.
-        See https://valkey.io/commands/dbsize for more details.
+
+        See [valkey.io](https://valkey.io/commands/dbsize) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
-            in which case the client will route the command to the nodes defined by `route`.
+                in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
             int: The number of keys in the database.
+
             In the case of routing the query to multiple nodes, returns the aggregated number of keys across the
             different nodes.
 
@@ -317,17 +335,21 @@ class ClusterCommands(CoreCommands):
         """
         Echoes the provided `message` back.
 
-        See https://valkey.io/commands/echo for more details.
+        See [valkey.io](https://valkey.io/commands/echo) for more details.
 
         Args:
             message (TEncodable): The message to be echoed back.
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
-            in which case the client will route the command to the nodes defined by `route`.
+                in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
             TClusterResponse[bytes]: The provided `message`.
-            When specifying a route other than a single node, response will be:
-            {Address (bytes) : response (bytes) , ... } with type of Dict[bytes, bytes].
+
+            When specifying a route other than a single node, response will be::
+
+                {Address (bytes) : response (bytes) , ... }
+
+            with type of Dict[bytes, bytes].
 
         Examples:
             >>> await client.echo(b"Valkey GLIDE")
@@ -349,7 +371,7 @@ class ClusterCommands(CoreCommands):
         """
         Loads a library to Valkey.
 
-        See https://valkey.io/commands/function-load/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-load/) for more details.
 
         Args:
             library_code (TEncodable): The source code that implements the library.
@@ -362,7 +384,7 @@ class ClusterCommands(CoreCommands):
             bytes: The library name that was loaded.
 
         Examples:
-            >>> code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+            >>> code = "#!lua name=mylib \\n redis.register_function('myfunc', function(keys, args) return args[1] end)"
             >>> await client.function_load(code, True, RandomNode())
                 b"mylib"
 
@@ -386,7 +408,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns information about the functions and libraries.
 
-        See https://valkey.io/commands/function-list/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-list/) for more details.
 
         Args:
             library_name_pattern (Optional[TEncodable]):  A wildcard pattern for matching library names.
@@ -408,8 +430,9 @@ class ClusterCommands(CoreCommands):
                         b"description": None,
                         b"flags": {b"no-writes"},
                     }],
-                    b"library_code": b"#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) " \\
-                                     b"return args[1] end)"
+                    b"library_code":
+                        b"#!lua name=mylib \\n redis.register_function('myfunc', function(keys, args) " \\
+                        b"return args[1] end)"
                 }]
 
         Since: Valkey 7.0.0.
@@ -434,7 +457,7 @@ class ClusterCommands(CoreCommands):
         """
         Deletes all function libraries.
 
-        See https://valkey.io/commands/function-flush/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-flush/) for more details.
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -465,10 +488,10 @@ class ClusterCommands(CoreCommands):
         """
         Deletes a library and all its functions.
 
-        See https://valkey.io/commands/function-delete/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-delete/) for more details.
 
         Args:
-            library_code (TEncodable): The library name to delete
+            library_name (TEncodable): The library name to delete
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
                 in which case the client will route the command to the nodes defined by `route`.
 
@@ -495,7 +518,7 @@ class ClusterCommands(CoreCommands):
         Kills a function that is currently executing.
         This command only terminates read-only functions.
 
-        See https://valkey.io/commands/function-kill/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-kill/) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to all nodes, unless `route` is provided,
@@ -527,7 +550,8 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[TResult]:
         """
         Invokes a previously loaded function.
-        See https://valkey.io/commands/fcall/ for more details.
+
+        See [valkey.io](https://valkey.io/commands/fcall/) for more details.
 
         Args:
             function (TEncodable): The function name.
@@ -537,10 +561,11 @@ class ClusterCommands(CoreCommands):
                 case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
-            TClusterResponse[TResult]:
-                If a single node route is requested, returns a Optional[TResult] representing the function's return value.
-                Otherwise, returns a dict of [bytes , Optional[TResult]] where each key contains the address of
-                the queried node and the value contains the function's return value.
+            TClusterResponse[TResult]: If a single node route is requested,
+            returns a Optional[TResult] representing the function's return value.
+
+            Otherwise, returns a dict of [bytes , Optional[TResult]] where each key contains the address of
+            the queried node and the value contains the function's return value.
 
         Example:
             >>> await client.fcall(
@@ -569,7 +594,7 @@ class ClusterCommands(CoreCommands):
         """
         Invokes a previously loaded read-only function.
 
-        See https://valkey.io/commands/fcall_ro for more details.
+        See [valkey.io](https://valkey.io/commands/fcall_ro) for more details.
 
         Args:
             function (TEncodable): The function name.
@@ -602,7 +627,7 @@ class ClusterCommands(CoreCommands):
         Returns information about the function that's currently running and information about the
         available execution engines.
 
-        See https://valkey.io/commands/function-stats/ for more details
+        See [valkey.io](https://valkey.io/commands/function-stats/) for more details
 
         Args:
             route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
@@ -610,9 +635,11 @@ class ClusterCommands(CoreCommands):
 
         Returns:
             TClusterResponse[TFunctionStatsSingleNodeResponse]: A `Mapping` with two keys:
+
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
-                See example for more details.
+
+            See example for more details.
 
         Examples:
             >>> await client.function_stats(RandomNode())
@@ -643,7 +670,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns the serialized payload of all loaded libraries.
 
-        See https://valkey.io/commands/function-dump/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-dump/) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless
@@ -676,7 +703,7 @@ class ClusterCommands(CoreCommands):
         """
         Restores libraries from the serialized payload returned by the `function_dump` command.
 
-        See https://valkey.io/commands/function-restore/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-restore/) for more details.
 
         Args:
             payload (bytes): The serialized data from the `function_dump` command.
@@ -713,18 +740,22 @@ class ClusterCommands(CoreCommands):
         """
         Returns the server time.
 
-        See https://valkey.io/commands/time/ for more details.
+        See [valkey.io](https://valkey.io/commands/time/) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
-            in which case the client will route the command to the nodes defined by `route`.
+                in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
             TClusterResponse[Optional[bytes]]:  The current server time as a two items `array`:
             A Unix timestamp and the amount of microseconds already elapsed in the current second.
             The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
-            When specifying a route other than a single node, response will be:
-            {Address (bytes) : response (List[bytes]) , ... } with type of Dict[bytes, List[bytes]].
+
+            When specifying a route other than a single node, response will be::
+
+                {Address (bytes) : response (List[bytes]) , ... }
+
+            with type of Dict[bytes, List[bytes]].
 
         Examples:
             >>> await client.time()
@@ -745,7 +776,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
 
-        See https://valkey.io/commands/lastsave for more details.
+        See [valkey.io](https://valkey.io/commands/lastsave) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
@@ -753,9 +784,12 @@ class ClusterCommands(CoreCommands):
 
         Returns:
             TClusterResponse[int]: The Unix time of the last successful DB save.
-                If no route is provided, or a single node route is requested, returns an int representing the Unix time
-                of the last successful DB save. Otherwise, returns a dict of [bytes , int] where each key contains the
-                address of the queried node and the value contains the Unix time of the last successful DB save.
+
+            If no route is provided, or a single node route is requested, returns an int representing the Unix time
+            of the last successful DB save.
+
+            Otherwise, returns a dict of [bytes , int] where each key contains the
+            address of the queried node and the value contains the Unix time of the last successful DB save.
 
         Examples:
             >>> await client.lastsave()
@@ -780,7 +814,9 @@ class ClusterCommands(CoreCommands):
         This command aggregates PUBLISH and SPUBLISH commands functionalities.
         The mode is selected using the 'sharded' parameter.
         For both sharded and non-sharded mode, request is routed using hashed channel as key.
-        See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
+
+        See [PUBLISH](https://valkey.io/commands/publish) and [SPUBLISH](https://valkey.io/commands/spublish)
+        for more details.
 
         Args:
             message (TEncodable): Message to publish.
@@ -808,15 +844,15 @@ class ClusterCommands(CoreCommands):
         Lists the currently active shard channels.
         The command is routed to all nodes, and aggregates the response to a single array.
 
-        See https://valkey.io/commands/pubsub-shardchannels for more details.
+        See [valkey.io](https://valkey.io/commands/pubsub-shardchannels) for more details.
 
         Args:
             pattern (Optional[TEncodable]): A glob-style pattern to match active shard channels.
-                                If not provided, all active shard channels are returned.
+                If not provided, all active shard channels are returned.
 
         Returns:
             List[bytes]: A list of currently active shard channels matching the given pattern.
-                    If no pattern is specified, all active shard channels are returned.
+            If no pattern is specified, all active shard channels are returned.
 
         Examples:
             >>> await client.pubsub_shardchannels()
@@ -841,11 +877,11 @@ class ClusterCommands(CoreCommands):
         The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of
         subscriptions.
 
-        See https://valkey.io/commands/pubsub-shardnumsub for more details.
+        See [valkey.io](https://valkey.io/commands/pubsub-shardnumsub) for more details.
 
         Args:
             channels (Optional[List[TEncodable]]): The list of shard channels to query for the number of subscribers.
-                                            If not provided, returns an empty map.
+                If not provided, returns an empty map.
 
         Returns:
             Mapping[bytes, int]: A map where keys are the shard channel names and values are the number of subscribers.
@@ -870,7 +906,7 @@ class ClusterCommands(CoreCommands):
         """
         Deletes all the keys of all the existing databases. This command never fails.
 
-        See https://valkey.io/commands/flushall for more details.
+        See [valkey.io](https://valkey.io/commands/flushall) for more details.
 
         Args:
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -901,7 +937,7 @@ class ClusterCommands(CoreCommands):
         """
         Deletes all the keys of the currently selected database. This command never fails.
 
-        See https://valkey.io/commands/flushdb for more details.
+        See [valkey.io](https://valkey.io/commands/flushdb) for more details.
 
         Args:
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -938,7 +974,7 @@ class ClusterCommands(CoreCommands):
         Copies the value stored at the `source` to the `destination` key. When `replace` is True,
         removes the `destination` key first if it already exists, otherwise performs no action.
 
-        See https://valkey.io/commands/copy for more details.
+        See [valkey.io](https://valkey.io/commands/copy) for more details.
 
         Note:
             Both `source` and `destination` must map to the same hash slot.
@@ -977,20 +1013,26 @@ class ClusterCommands(CoreCommands):
         """
         Displays a piece of generative computer art and the Valkey version.
 
-        See https://valkey.io/commands/lolwut for more details.
+        See [valkey.io](https://valkey.io/commands/lolwut) for more details.
 
         Args:
             version (Optional[int]): Version of computer art to generate.
             parameters (Optional[List[int]]): Additional set of arguments in order to change the output:
-                For version `5`, those are length of the line, number of squares per row, and number of squares per column.
-                For version `6`, those are number of columns and number of lines.
+
+                - For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+                - For version `6`, those are number of columns and number of lines.
+
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
             TClusterResponse[bytes]: A piece of generative computer art along with the current Valkey version.
-            When specifying a route other than a single node, response will be:
-            {Address (bytes) : response (bytes) , ... } with type of Dict[bytes, bytes].
+
+            When specifying a route other than a single node, response will be::
+
+                {Address (bytes) : response (bytes) , ... }
+
+            with type of Dict[bytes, bytes].
 
         Examples:
             >>> await client.lolwut(6, [40, 20], RandomNode());
@@ -1011,7 +1053,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns a random existing key name.
 
-        See https://valkey.io/commands/randomkey for more details.
+        See [valkey.io](https://valkey.io/commands/randomkey) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
@@ -1040,13 +1082,13 @@ class ClusterCommands(CoreCommands):
         and acknowledged by at least `numreplicas` of replicas. If `timeout` is
         reached, the command returns even if the specified number of replicas were not yet reached.
 
-        See https://valkey.io/commands/wait for more details.
+        See [valkey.io](https://valkey.io/commands/wait) for more details.
 
         Args:
             numreplicas (int): The number of replicas to reach.
             timeout (int): The timeout value specified in milliseconds. A value of 0 will block indefinitely.
             route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
-            in which case the client will route the command to the nodes defined by `route`.
+                in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
             int: The number of replicas reached by all the writes performed in the context of the current connection.
@@ -1054,7 +1096,7 @@ class ClusterCommands(CoreCommands):
         Examples:
             >>> await client.set("key", "value");
             >>> await client.wait(1, 1000);
-            // return 1 when a replica is reached or 0 if 1000ms is reached.
+            # return 1 when a replica is reached or 0 if 1000ms is reached.
         """
         args: List[TEncodable] = [str(numreplicas), str(timeout)]
         return cast(
@@ -1067,7 +1109,7 @@ class ClusterCommands(CoreCommands):
         Flushes all the previously watched keys for a transaction. Executing a transaction will
         automatically flush all previously watched keys.
 
-        See https://valkey.io/commands/unwatch for more details.
+        See [valkey.io](https://valkey.io/commands/unwatch) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
@@ -1107,7 +1149,7 @@ class ClusterCommands(CoreCommands):
         returning all keys the database has from when the scan started until the scan ends.
         The same key can be returned in multiple scan iterations.
 
-        See https://valkey.io/commands/scan/ for more details.
+        See [valkey.io](https://valkey.io/commands/scan/) for more details.
 
         Args:
             cursor (ClusterScanCursor): The cursor object that wraps the scan state.
@@ -1125,7 +1167,7 @@ class ClusterCommands(CoreCommands):
 
         Returns:
             List[Union[ClusterScanCursor, List[TEncodable]]]: A list containing the next cursor and a list of keys,
-                formatted as [ClusterScanCursor, [key1, key2, ...]].
+            formatted as [ClusterScanCursor, [key1, key2, ...]].
 
         Examples:
             >>> # Iterate over all keys in the cluster.
@@ -1180,7 +1222,7 @@ class ClusterCommands(CoreCommands):
         """
         Check existence of scripts in the script cache by their SHA1 digest.
 
-        See https://valkey.io/commands/script-exists for more details.
+        See [valkey.io](https://valkey.io/commands/script-exists) for more details.
 
         Args:
             sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
@@ -1206,7 +1248,7 @@ class ClusterCommands(CoreCommands):
         """
         Flush the Lua scripts cache.
 
-        See https://valkey.io/commands/script-flush for more details.
+        See [valkey.io](https://valkey.io/commands/script-flush) for more details.
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -1236,12 +1278,14 @@ class ClusterCommands(CoreCommands):
         Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
         The command is routed to all nodes, and aggregates the response to a single array.
 
-        See https://valkey.io/commands/script-kill for more details.
+        See [valkey.io](https://valkey.io/commands/script-kill) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
+                which case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
             TOK: A simple `OK` response.
-            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
-                which case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Examples:
             >>> await client.script_kill()
@@ -1262,9 +1306,11 @@ class ClusterCommands(CoreCommands):
         If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
         After that, it will be invoked using the `EVALSHA` command.
 
-        When in cluster mode, `key`s must map to the same hash slot.
+        Note:
+            When in cluster mode, each `key` must map to the same hash slot.
 
-        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+        See [SCRIPT LOAD](https://valkey.io/commands/script-load/) and [EVALSHA](https://valkey.io/commands/evalsha/)
+        for more details.
 
         Args:
             script (Script): The Lua script to execute.
@@ -1295,7 +1341,8 @@ class ClusterCommands(CoreCommands):
         If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
         After that, it will be invoked using the `EVALSHA` command.
 
-        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+        See [SCRIPT LOAD](https://valkey.io/commands/script-load/) and [EVALSHA](https://valkey.io/commands/evalsha/)
+        for more details.
 
         Args:
             script (Script): The Lua script to execute.

@@ -4,7 +4,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { GLIBC, familySync } from "detect-libc";
+import { MUSL, familySync } from "detect-libc";
 import { arch, platform } from "process";
 
 let globalObject = global as unknown;
@@ -14,7 +14,7 @@ function loadNativeBinding() {
     let nativeStr = process.env.native_binding;
 
     if (nativeStr == undefined) {
-        const prefix = familySync() == GLIBC ? "" : "-musl";
+        const prefix = familySync() == MUSL ? "-musl" : "";
         nativeStr = `${platform}${prefix}-${arch}`;
 
         if (
@@ -191,6 +191,8 @@ function initialize() {
         ReturnTypeAttribute,
         ReturnTypeJson,
         UniversalReturnTypeJson,
+        Score,
+        ElementAndScore,
     } = nativeBinding;
 
     module.exports = {
@@ -340,6 +342,8 @@ function initialize() {
         ReturnTypeAttribute,
         ReturnTypeJson,
         UniversalReturnTypeJson,
+        Score,
+        ElementAndScore,
     };
 
     globalObject = Object.assign(global, nativeBinding);

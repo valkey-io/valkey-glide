@@ -10,7 +10,7 @@ The release of Valkey GLIDE was tested on the following platforms:
 
 Linux:
 
--   Ubuntu 22.04.1 (x86_64 and aarch64)
+-   Ubuntu 22.04.5 (x86_64/amd64 and arm64/aarch64)
 -   Amazon Linux 2023 (AL2023) (x86_64)
 
 **Note: Currently Alpine Linux / MUSL is NOT supported due to an incompatibility with a native Java component.**
@@ -299,3 +299,6 @@ The following arguments are accepted:
 * `host`: Valkey server host url
 * `port`: Valkey server port number
 * `tls`: Valkey TLS configured
+
+### Known issues
+* Conflict in netty and protobuf internal valkey glide dependencies with project dependencies using valkey glide. Issue link: https://github.com/valkey-io/valkey-glide/issues/3402. Workarounds mentioned in this issue: https://github.com/valkey-io/valkey-glide/issues/3367 

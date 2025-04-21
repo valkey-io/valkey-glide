@@ -15,14 +15,18 @@ class InfBound(Enum):
     POS_INF = {"score_arg": "+inf", "lex_arg": "+"}
     """
     Positive infinity bound for sorted set.
-        score_arg: represents numeric positive infinity (+inf).
-        lex_arg: represents lexicographic positive infinity (+).
+
+    `score_arg`: represents numeric positive infinity (+inf).
+
+    `lex_arg`: represents lexicographic positive infinity (+).
     """
     NEG_INF = {"score_arg": "-inf", "lex_arg": "-"}
     """
     Negative infinity bound for sorted set.
-        score_arg: represents numeric negative infinity (-inf).
-        lex_arg: represents lexicographic negative infinity (-).
+
+    `score_arg`: represents numeric negative infinity (-inf).
+
+    `lex_arg`: represents lexicographic negative infinity (-).
     """
 
 
@@ -49,8 +53,8 @@ class ScoreFilter(Enum):
     """
     Defines which elements to pop from a sorted set.
 
-    ScoreFilter is a mandatory option for ZMPOP (https://valkey.io/commands/zmpop)
-    and BZMPOP (https://valkey.io/commands/bzmpop).
+    ScoreFilter is a mandatory option for [ZMPOP](https://valkey.io/commands/zmpop)
+    and [BZMPOP](https://valkey.io/commands/bzmpop).
     """
 
     MIN = "MIN"
@@ -97,7 +101,7 @@ class RangeByIndex:
 
     The `start` and `end` arguments represent zero-based indexes.
 
-    Args:
+    Attributes:
         start (int): The start index of the range.
         end (int): The end index of the range.
     """
@@ -113,7 +117,7 @@ class RangeByScore:
 
     The `start` and `end` arguments represent score boundaries.
 
-    Args:
+    Attributes:
         start (Union[InfBound, ScoreBoundary]): The start score boundary.
         end (Union[InfBound, ScoreBoundary]): The end score boundary.
         limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit`
@@ -139,7 +143,7 @@ class RangeByLex:
 
     The `start` and `end` arguments represent lexicographical boundaries.
 
-    Args:
+    Attributes:
         start (Union[InfBound, LexBoundary]): The start lexicographic boundary.
         end (Union[InfBound, LexBoundary]): The end lexicographic boundary.
         limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class
@@ -160,18 +164,20 @@ class RangeByLex:
 
 
 class GeospatialData:
+    """
+    Represents a geographic position defined by longitude and latitude.
+
+    The exact limits, as specified by EPSG:900913 / EPSG:3785 / OSGEO:41001 are the following:
+
+        - Valid longitudes are from -180 to 180 degrees.
+        - Valid latitudes are from -85.05112878 to 85.05112878 degrees.
+
+    Attributes:
+        longitude (float): The longitude coordinate.
+        latitude (float): The latitude coordinate.
+    """
+
     def __init__(self, longitude: float, latitude: float):
-        """
-        Represents a geographic position defined by longitude and latitude.
-
-        The exact limits, as specified by EPSG:900913 / EPSG:3785 / OSGEO:41001 are the following:
-            - Valid longitudes are from -180 to 180 degrees.
-            - Valid latitudes are from -85.05112878 to 85.05112878 degrees.
-
-        Args:
-            longitude (float): The longitude coordinate.
-            latitude (float): The latitude coordinate.
-        """
         self.longitude = longitude
         self.latitude = latitude
 
@@ -203,7 +209,7 @@ class GeoSearchByRadius:
     """
     Represents search criteria of searching within a certain radius from a specified point.
 
-    Args:
+    Attributes:
         radius (float): Radius of the search area.
         unit (GeoUnit): Unit of the radius. See `GeoUnit`.
     """
@@ -229,7 +235,7 @@ class GeoSearchByBox:
     """
     Represents search criteria of searching within a specified rectangular area.
 
-    Args:
+    Attributes:
         width (float): Width of the bounding box.
         height (float): Height of the bounding box
         unit (GeoUnit): Unit of the radius. See `GeoUnit`.
@@ -257,10 +263,10 @@ class GeoSearchCount:
     """
     Represents the count option for limiting the number of results in a GeoSearch.
 
-    Args:
+    Attributes:
         count (int): The maximum number of results to return.
         any_option (bool): Whether to allow returning as enough matches are found.
-        This means that the results returned may not be the ones closest to the specified point. Default to False.
+            This means that the results returned may not be the ones closest to the specified point. Default to False.
     """
 
     def __init__(self, count: int, any_option: bool = False):

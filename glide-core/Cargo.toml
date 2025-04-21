@@ -8,6 +8,7 @@ authors = ["Valkey GLIDE Maintainers"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+uuid = { version = "1.3", features = ["v4", "fast-rng"] }
 bytes = "1"
 futures = "^0.3"
 redis = { path = "./redis-rs/redis", features = [
@@ -44,11 +45,12 @@ serde = { version = "1", features = ["derive"] }
 versions = "6.3"
 
 [features]
+proto = ["protobuf"]
 socket-layer = [
+    "proto",
     "directories",
     "integer-encoding",
     "num_cpus",
-    "protobuf",
     "tokio-util",
 ]
 standalone_heartbeat = []

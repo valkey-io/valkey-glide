@@ -19,6 +19,9 @@ const (
 	ABSTTLKeyword     string = "ABSTTL"     // Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
 	StoreKeyword      string = "STORE"
 	DbKeyword         string = "DB"
+	TypeKeyword       string = "TYPE"
+	ChangedKeyword    string = "CH"   // Valkey API keyword used to return total number of elements changed
+	IncrKeyword       string = "INCR" // Valkey API keyword to make zadd act like ZINCRBY.
 	/// Valkey API keywords for stream commands
 	IdleKeyword         string = "IDLE"       // ValKey API string to designate IDLE time in milliseconds
 	TimeKeyword         string = "TIME"       // ValKey API string to designate TIME time in unix-milliseconds
@@ -175,4 +178,57 @@ const (
 	Default Section = "default"
 	// EVERYTHING: Includes all and modules
 	Everything Section = "everything"
+)
+
+// Identifies Scan Type of ClusterScan command
+type ObjectType string
+
+const (
+	// Represents a string data type
+	ObjectTypeString ObjectType = "string"
+	// Represents a list data type
+	ObjectTypeList ObjectType = "list"
+	// Represents a set data type
+	ObjectTypeSet ObjectType = "set"
+	// Represents a sorted set data type
+	ObjectTypeZSet ObjectType = "zset"
+	// Represents a hash data type
+	ObjectTypeHash ObjectType = "hash"
+	// Represents a stream data type
+	ObjectTypeStream ObjectType = "stream"
+)
+
+// The unit of measurement for the geospatial data
+type GeoUnit string
+
+const (
+	// Represents distance in kilometers
+	GeoUnitKilometers GeoUnit = "km"
+	// Represents distance in meters
+	GeoUnitMeters GeoUnit = "m"
+	// Represents distance in miles
+	GeoUnitMiles GeoUnit = "mi"
+	// Represents distance in feet
+	GeoUnitFeet GeoUnit = "ft"
+)
+
+// Valkey API keywords for the `GeoSearch` command
+const (
+	WithCoordValkeyApi = "WITHCOORD"
+	WithDistValkeyApi  = "WITHDIST"
+	WithHashValkeyApi  = "WITHHASH"
+)
+
+// The search origin API keyword for the `GeoCoordOrigin`
+const (
+	GeoCoordOriginAPIKeyword  = "FROMLONLAT"
+	GeoMemberOriginAPIKeyword = "FROMMEMBER"
+)
+
+// The shape of the search area for the `GeoSearch` command
+type SearchShape string
+
+const (
+	BYRADIUS SearchShape = "BYRADIUS"
+	BYBOX    SearchShape = "BYBOX"
 )

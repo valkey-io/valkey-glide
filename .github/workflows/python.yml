@@ -80,6 +80,7 @@ jobs:
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
 
     test-python:
+        name: Python Tests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
         timeout-minutes: 35
@@ -92,6 +93,11 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
+
             - name: Set up Python
               uses: actions/setup-python@v5
               with:
@@ -102,6 +108,16 @@ jobs:
               run: |
                   python -m pip install --upgrade pip
                   pip install mypy-protobuf
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      python/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.TARGET }}-python
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -120,12 +136,12 @@ jobs:
                   pytest -v --asyncio-mode=auto --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.12' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}
               with:
                   language-flag: -python
 
             - name: Type check with mypy
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.12' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}
               working-directory: ./python
               run: |
                   # The type check should run inside the virtual env to get
@@ -149,6 +165,7 @@ jobs:
 
     # run pubsub tests in another job - they take too much time
     test-pubsub-python:
+        name: Python PubSubTests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
         timeout-minutes: 35
@@ -161,10 +178,25 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
+
             - name: Set up Python
               uses: actions/setup-python@v5
               with:
                   python-version: ${{ matrix.python }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      python/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.TARGET }}-python
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -230,6 +262,25 @@ jobs:
               run: |
                   black --check --diff .
 
+    docs-test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install dependencies
+              working-directory: ./python
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install sphinx sphinx-rtd-theme
+
+            - name: Build docs
+              working-directory: ./python/docs
+              run: |
+                  sphinx-apidoc -o . ../python/glide
+                  make clean
+                  make html SPHINXOPTS="-W --keep-going"
+
     get-containers:
         runs-on: ubuntu-latest
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
@@ -273,6 +324,14 @@ jobs:
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
 
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      python/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.IMAGE }}-python
+                  restore-keys: ${{ matrix.host.IMAGE }}
+
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
@@ -308,12 +367,21 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      python/target
+                      glide-core/src/generated
+                  key: aarch64-unknown-linux-gnu-python
+                  restore-keys: |
+                      aarch64-unknown-linux-gnu-glide-core
+                      aarch64-unknown-linux-gnu
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -321,6 +389,7 @@ jobs:
                   os: ubuntu
                   target: aarch64-unknown-linux-gnu
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
             - name: Test with pytest
               working-directory: ./python
               run: |

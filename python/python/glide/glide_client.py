@@ -81,11 +81,70 @@ class BaseClient(CoreCommands):
         """Creates a Glide client.
 
         Args:
-            config (ClientConfiguration): The client configurations.
-                If no configuration is provided, a default client to "localhost":6379 will be created.
+            config (ClientConfiguration): The configuration options for the client, including cluster addresses,
+            authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
 
         Returns:
-            Self: a Glide Client instance.
+            Self: A promise that resolves to a connected client instance.
+
+        Examples:
+            # Connecting to a Standalone Server
+            >>> from glide import GlideClientConfiguration, NodeAddress, GlideClient, ServerCredentials, BackoffStrategy
+            >>> config = GlideClientConfiguration(
+            ...     [
+            ...         NodeAddress('primary.example.com', 6379),
+            ...         NodeAddress('replica1.example.com', 6379),
+            ...     ],
+            ...     use_tls = True,
+            ...     database_id = 1,
+            ...     credentials = ServerCredentials(username = 'user1', password = 'passwordA'),
+            ...     reconnect_strategy = BackoffStrategy(num_of_retries = 5, factor = 1000, exponent_base = 2),
+            ...     pubsub_subscriptions = GlideClientConfiguration.PubSubSubscriptions(
+            ...         channels_and_patterns = {GlideClientConfiguration.PubSubChannelModes.Exact: {'updates'}},
+            ...         callback = lambda message,context : print(message),
+            ...     ),
+            ... )
+            >>> client = await GlideClient.create(config)
+
+            # Connecting to a Cluster
+            >>> from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient,
+            ... PeriodicChecksManualInterval
+            >>> config = GlideClusterClientConfiguration(
+            ...     [
+            ...         NodeAddress('address1.example.com', 6379),
+            ...         NodeAddress('address2.example.com', 6379),
+            ...     ],
+            ...     use_tls = True,
+            ...     periodic_checks = PeriodicChecksManualInterval(duration_in_sec = 30),
+            ...     credentials = ServerCredentials(username = 'user1', password = 'passwordA'),
+            ...     reconnect_strategy = BackoffStrategy(num_of_retries = 5, factor = 1000, exponent_base = 2),
+            ...     pubsub_subscriptions = GlideClusterClientConfiguration.PubSubSubscriptions(
+            ...         channels_and_patterns = {
+            ...             GlideClusterClientConfiguration.PubSubChannelModes.Exact: {'updates'},
+            ...             GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {'sharded_channel'},
+            ...         },
+            ...         callback = lambda message,context : print(message),
+            ...     ),
+            ... )
+            >>> client = await GlideClusterClient.create(config)
+
+        Remarks:
+            Use this static method to create and connect a client to a Valkey server.
+            The client will automatically handle connection establishment, including cluster topology discovery and
+            handling of authentication and TLS configurations.
+
+                - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based
+                  on the seed addresses provided.
+                - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
+                  using the specified username and password.
+                - **TLS**: If `use_tls` is set to `true`, the client will establish secure connections using TLS.
+                - **Periodic Checks**: The `periodic_checks` setting allows you to configure how often the client
+                  checks for cluster topology changes.
+                - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to
+                  reconnect in case of disconnections.
+                - **Pub/Sub Subscriptions**: Any channels or patterns specified in `PubSubSubscriptions` will be
+                  subscribed to upon connection.
+
         """
         config = config
         self = cls(config)
@@ -295,7 +354,9 @@ class BaseClient(CoreCommands):
             else:
                 command.args_vec_pointer = create_leaked_bytes_vec(encoded_args)
             transaction_commands.append(command)
-        request.transaction.commands.extend(transaction_commands)
+        request.batch.commands.extend(transaction_commands)
+        request.batch.is_atomic = True
+        # TODO: add support for timeout, raise on error and retry strategy
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -557,8 +618,9 @@ class BaseClient(CoreCommands):
 class GlideClusterClient(BaseClient, ClusterCommands):
     """
     Client used for connection to cluster servers.
+    Use :func:`~BaseClient.create` to request a client.
     For full documentation, see
-    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster
+    [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster)
     """
 
     async def _cluster_scan(
@@ -597,8 +659,9 @@ class GlideClusterClient(BaseClient, ClusterCommands):
 class GlideClient(BaseClient, StandaloneCommands):
     """
     Client used for connection to standalone servers.
+    Use :func:`~BaseClient.create` to request a client.
     For full documentation, see
-    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone
+    [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone)
     """
 
 

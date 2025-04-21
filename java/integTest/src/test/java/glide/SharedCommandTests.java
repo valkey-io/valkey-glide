@@ -33,6 +33,9 @@ import static org.junit.jupiter.api.Named.named;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.BaseBatch;
+import glide.api.models.Batch;
+import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
@@ -60,6 +63,9 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeysBinary;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.batch.BaseBatchOptions;
+import glide.api.models.commands.batch.BatchOptions;
+import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldIncrby;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow;
@@ -169,6 +175,13 @@ public class SharedCommandTests {
         for (var client : clients) {
             ((Named<BaseClient>) client.get()[0]).getPayload().close();
         }
+    }
+
+    @SneakyThrows
+    public static Stream<Arguments> getClientsWithAtomic() {
+        return clients.stream()
+                .flatMap(
+                        args -> Stream.of(true, false).map(isAtomic -> Arguments.of(args.get()[0], isAtomic)));
     }
 
     @SneakyThrows
@@ -14253,6 +14266,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, requestException2.getCause());
     }
 
+    @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -14393,6 +14407,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -14544,6 +14559,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -14737,6 +14753,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    @Timeout(30) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -14948,6 +14965,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -15130,6 +15148,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -15493,5 +15512,111 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(ExecutionException.class, () -> client.xinfoStreamFull(stringKey).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    public void batch_timeout(BaseClient client, boolean isAtomic) {
+        boolean isCluster = client instanceof GlideClusterClient;
+        String key = UUID.randomUUID().toString();
+
+        BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        BaseBatchOptions initialOptions =
+                isCluster
+                        ? ClusterBatchOptions.builder().timeout(100).build()
+                        : BatchOptions.builder().timeout(100).build();
+
+        batch.customCommand(new String[] {"DEBUG", "sleep", "0.5"});
+
+        // Expect a timeout exception on short timeout
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> {
+                            if (isCluster) {
+                                GlideClusterClient clusterClient = (GlideClusterClient) client;
+                                ClusterBatch clusterBatch = (ClusterBatch) batch;
+                                ClusterBatchOptions options = (ClusterBatchOptions) initialOptions;
+                                clusterClient.exec(clusterBatch, options).get();
+                            } else {
+                                GlideClient standaloneClient = (GlideClient) client;
+                                Batch standaloneBatch = (Batch) batch;
+                                BatchOptions options = (BatchOptions) initialOptions;
+                                standaloneClient.exec(standaloneBatch, options).get();
+                            }
+                        });
+        assertInstanceOf(
+                glide.api.models.exceptions.TimeoutException.class, executionException.getCause());
+
+        // Ensures that the debug sleep has completed before proceeding.
+        Thread.sleep(500);
+
+        // Retry with a longer timeout and expect [null]
+        BaseBatchOptions options2 =
+                isCluster
+                        ? ClusterBatchOptions.builder().timeout(1000).build()
+                        : BatchOptions.builder().timeout(1000).build();
+
+        Object[] result =
+                isCluster
+                        ? ((GlideClusterClient) client)
+                                .exec((ClusterBatch) batch, (ClusterBatchOptions) options2)
+                                .get()
+                        : ((GlideClient) client).exec((Batch) batch, (BatchOptions) options2).get();
+
+        assertEquals(1, result.length);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    public void batch_raise_on_error(BaseClient client, boolean isAtomic) {
+        boolean isCluster = client instanceof GlideClusterClient;
+        String key = UUID.randomUUID().toString();
+        String key2 = "{" + key + "}" + UUID.randomUUID();
+
+        BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+
+        batch.set(key, "hello").lpop(key).del(new String[] {key}).rename(key, key2);
+        BaseBatchOptions raiseFalse =
+                isCluster
+                        ? ClusterBatchOptions.builder().raiseOnError(false).build()
+                        : BatchOptions.builder().raiseOnError(false).build();
+
+        Object[] result =
+                isCluster
+                        ? ((GlideClusterClient) client)
+                                .exec((ClusterBatch) batch, (ClusterBatchOptions) raiseFalse)
+                                .get()
+                        : ((GlideClient) client).exec((Batch) batch, (BatchOptions) raiseFalse).get();
+
+        assertEquals(4, result.length);
+        assertEquals(result[0], "OK");
+        assertEquals(result[2], 1L);
+        assertInstanceOf(RequestException.class, result[1]);
+        assertTrue(((RequestException) result[1]).getMessage().contains("WRONGTYPE"));
+        assertInstanceOf(RequestException.class, result[3]);
+        assertTrue(((RequestException) result[3]).getMessage().contains("no such key"));
+
+        BaseBatchOptions raiseTrue =
+                isCluster
+                        ? ClusterBatchOptions.builder().raiseOnError(true).build()
+                        : BatchOptions.builder().raiseOnError(true).build();
+
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> {
+                            if (isCluster) {
+                                ((GlideClusterClient) client)
+                                        .exec((ClusterBatch) batch, (ClusterBatchOptions) raiseTrue)
+                                        .get();
+                            } else {
+                                ((GlideClient) client).exec((Batch) batch, (BatchOptions) raiseTrue).get();
+                            }
+                        });
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getCause().getMessage().contains("WRONGTYPE"));
     }
 }
