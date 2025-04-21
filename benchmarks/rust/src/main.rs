@@ -9,7 +9,7 @@ static GLOBAL: Jemalloc = Jemalloc;
 
 use clap::Parser;
 use futures::{self, future::join_all, stream, StreamExt};
-use glide_core::client::{Client, ConnectionRequest, NodeAddress, TlsMode};
+use glide_core::client::{Client, ConnectionRequest, NodeAddress, ReadFrom, TlsMode};
 use rand::{thread_rng, Rng};
 use serde_json::Value;
 use std::{
@@ -59,10 +59,10 @@ struct Args {
 const PORT: u32 = 6379;
 
 // Benchmark constants - adjusting these will change the meaning of the benchmark.
-const PROB_GET: f64 = 0.8;
-const PROB_GET_EXISTING_KEY: f64 = 0.8;
-const SIZE_GET_KEYSPACE: u32 = 3_750_000;
-const SIZE_SET_KEYSPACE: u32 = 3_000_000;
+const PROB_GET: f64 = 0.9;
+const PROB_GET_EXISTING_KEY: f64 = 1.0;
+const SIZE_GET_KEYSPACE: u32 = 500_000;
+const SIZE_SET_KEYSPACE: u32 = 500_000;
 
 #[derive(Eq, PartialEq, Hash)]
 enum ChosenAction {
@@ -101,7 +101,7 @@ async fn perform_benchmark(args: Args) {
         let number_of_operations = if args.minimal {
             1000
         } else {
-            max(100000, concurrent_tasks_count * 10000)
+            max(100000, concurrent_tasks_count * 100000)
         };
 
         let connections = stream::iter(0..args.client_count)
@@ -225,7 +225,8 @@ async fn get_connection(args: &Args) -> Client {
     let connection_request = ConnectionRequest {
         addresses: vec![address_info],
         cluster_mode_enabled: args.cluster_mode_enabled,
-        request_timeout: Some(2000),
+        read_from: Some(ReadFrom::PreferReplica),
+        request_timeout: Some(5000),
         tls_mode: if args.tls {
             Some(TlsMode::SecureTls)
         } else {
@@ -237,6 +238,104 @@ async fn get_connection(args: &Args) -> Client {
     glide_core::client::Client::new(connection_request, None)
         .await
         .unwrap()
+}
+
+// async fn single_benchmark_task(
+//     connections: &[Client],
+//     counter: Arc<AtomicUsize>,
+//     number_of_operations: usize,
+//     number_of_concurrent_tasks: usize,
+//     data_size: usize,
+// ) -> HashMap<ChosenAction, Vec<Duration>> {
+//     let mut buffer = itoa::Buffer::new();
+//     let mut results = HashMap::new();
+//     results.insert(
+//         ChosenAction::GetNonExisting,
+//         Vec::with_capacity(number_of_operations / number_of_concurrent_tasks),
+//     );
+//     results.insert(
+//         ChosenAction::GetExisting,
+//         Vec::with_capacity(number_of_operations / number_of_concurrent_tasks),
+//     );
+//     results.insert(
+//         ChosenAction::Set,
+//         Vec::with_capacity(number_of_operations / number_of_concurrent_tasks),
+//     );
+//     loop {
+//         let current_op = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+//         if current_op >= number_of_operations {
+//             return results;
+//         }
+//         let index = current_op % connections.len();
+//         let mut connection = connections[index].clone();
+//         let start = Instant::now();
+//         let action = perform_operation(&mut connection, &mut buffer, data_size).await;
+//         let elapsed = start.elapsed();
+//         results.get_mut(&action).unwrap().push(elapsed);
+//     }
+// }
+
+// async fn perform_operation(
+//     connection: &mut Client,
+//     buffer: &mut itoa::Buffer,
+//     data_size: usize,
+// ) -> ChosenAction {
+//     let mut cmd = redis::Cmd::new();
+//     let action = if rand::thread_rng().gen_bool(PROB_GET) {
+//         if rand::thread_rng().gen_bool(PROB_GET_EXISTING_KEY) {
+//             cmd.arg("GET")
+//                 .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)));
+//             ChosenAction::GetExisting
+//         } else {
+//             cmd.arg("GET")
+//                 .arg(buffer.format(thread_rng().gen_range(SIZE_SET_KEYSPACE..SIZE_GET_KEYSPACE)));
+//             ChosenAction::GetNonExisting
+//         }
+//     } else {
+//         cmd.arg("SET")
+//             .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)))
+//             .arg(generate_random_string(data_size));
+//         ChosenAction::Set
+//     };
+//     connection.send_command(&cmd, None).await.unwrap();
+//     action
+// }
+
+async fn perform_operation(
+    connection: &mut Client,
+    buffer: &mut itoa::Buffer,
+    data_size: usize,
+    is_burst: bool,
+) -> ChosenAction {
+    let mut cmd = redis::Cmd::new();
+    let action = if is_burst {
+        // Always GET during bursts (random key, may exist or not)
+        cmd.arg("GET")
+            .arg(buffer.format(thread_rng().gen_range(0..SIZE_GET_KEYSPACE)));
+        ChosenAction::GetExisting
+    } else {
+        if rand::thread_rng().gen_bool(PROB_GET) {
+            if rand::thread_rng().gen_bool(PROB_GET_EXISTING_KEY) {
+                cmd.arg("GET")
+                    .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)));
+                ChosenAction::GetExisting
+            } else {
+                cmd.arg("GET").arg(
+                    buffer.format(thread_rng().gen_range(SIZE_SET_KEYSPACE..SIZE_GET_KEYSPACE)),
+                );
+                ChosenAction::GetNonExisting
+            }
+        } else {
+            cmd.arg("SET")
+                .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)))
+                .arg(generate_random_string(data_size))
+                .arg("PX") // TTL in milliseconds
+                .arg(10_000); // 10 seconds
+            ChosenAction::Set
+        }
+    };
+    connection.send_command(&cmd, None).await.unwrap();
+    action
 }
 
 async fn single_benchmark_task(
@@ -260,42 +359,28 @@ async fn single_benchmark_task(
         ChosenAction::Set,
         Vec::with_capacity(number_of_operations / number_of_concurrent_tasks),
     );
+
+    let mut last_burst = Instant::now();
+    let burst_interval = Duration::from_secs(120); // every 2 minutes
+
     loop {
         let current_op = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if current_op >= number_of_operations {
             return results;
         }
+
         let index = current_op % connections.len();
         let mut connection = connections[index].clone();
+
+        let now = Instant::now();
+        let is_burst = now.duration_since(last_burst) <= Duration::from_secs(10); // burst lasts 30s
+        if now.duration_since(last_burst) > burst_interval {
+            last_burst = now;
+        }
+
         let start = Instant::now();
-        let action = perform_operation(&mut connection, &mut buffer, data_size).await;
+        let action = perform_operation(&mut connection, &mut buffer, data_size, is_burst).await;
         let elapsed = start.elapsed();
         results.get_mut(&action).unwrap().push(elapsed);
     }
-}
-
-async fn perform_operation(
-    connection: &mut Client,
-    buffer: &mut itoa::Buffer,
-    data_size: usize,
-) -> ChosenAction {
-    let mut cmd = redis::Cmd::new();
-    let action = if rand::thread_rng().gen_bool(PROB_GET) {
-        if rand::thread_rng().gen_bool(PROB_GET_EXISTING_KEY) {
-            cmd.arg("GET")
-                .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)));
-            ChosenAction::GetExisting
-        } else {
-            cmd.arg("GET")
-                .arg(buffer.format(thread_rng().gen_range(SIZE_SET_KEYSPACE..SIZE_GET_KEYSPACE)));
-            ChosenAction::GetNonExisting
-        }
-    } else {
-        cmd.arg("SET")
-            .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)))
-            .arg(generate_random_string(data_size));
-        ChosenAction::Set
-    };
-    connection.send_command(&cmd, None).await.unwrap();
-    action
 }

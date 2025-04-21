@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #remove comment to print the lines running.
-#set -x
+set -x
 
 set -e
 
@@ -101,7 +101,9 @@ function flushDB() {
 }
 
 function fillDB(){
-  flushDB
+  cd $utilitiesDir
+  npm install
+  npx tsc
   npm run fill -- --dataSize $1 --host $host $tlsFlag $clusterFlag $portFlag
 }
 
@@ -257,7 +259,6 @@ do
     if [ -n "$minimalFlag" ];
     then
         echo "Minimal run, not filling database"
-        flushDB
     else
         fillDB $currentDataSize
     fi
@@ -305,7 +306,6 @@ do
     fi
 done
 
-flushDB
 
 if [ $writeResultsCSV == 1 ];
 then
