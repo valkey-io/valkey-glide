@@ -8,7 +8,9 @@ use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, RwLock};
 use thiserror::Error;
 use url::Url;
 
@@ -33,14 +35,16 @@ pub enum GlideOTELError {
 }
 
 /// Default interval in milliseconds for flushing open telemetry data to the collector.
-pub const DEFAULT_FLUSH_SPAN_INTERVAL_MS: u64 = 5000;
+pub const DEFAULT_FLUSH_SIGNAL_INTERVAL_MS: u32 = 5000;
+
+/// Default filename for the open telemetry data file.
+pub const DEFAULT_SIGNAL_FILENAME: &str = "signals.json";
 
 pub enum GlideSpanStatus {
     Ok,
     Error(String),
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 /// Defines the method that exporter connects to the collector. It can be:
 /// gRPC or HTTP. The third type (i.e. "File") defines an exporter that does not connect to a collector
@@ -68,21 +72,62 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
         .map_err(|_| Error::new(ErrorKind::InvalidInput, format!("Parse error. {endpoint}")))?;
 
     match url.scheme() {
-        "http" => Ok(GlideOpenTelemetryTraceExporter::Http(format!(
-            "{}:{}",
-            url.host_str().unwrap_or("127.0.0.1"),
-            url.port().unwrap_or(80)
-        ))), // HTTP endpoint
-        "https" => Ok(GlideOpenTelemetryTraceExporter::Http(format!(
-            "{}:{}",
-            url.host_str().unwrap_or("127.0.0.1"),
-            url.port().unwrap_or(443)
-        ))), // HTTPS endpoint
-        "grpc" => Ok(GlideOpenTelemetryTraceExporter::Grpc(format!(
-            "{}:{}",
-            url.host_str().unwrap_or("127.0.0.1"),
-            url.port().unwrap_or(80)
-        ))), // gRPC endpoint
+        "http" | "https" => Ok(GlideOpenTelemetryTraceExporter::Http(endpoint.to_string())), // HTTP/HTTPS endpoint
+        "grpc" => Ok(GlideOpenTelemetryTraceExporter::Grpc(endpoint.to_string())), // gRPC endpoint
+        "file" => {
+            // For file, we need to extract the path without the 'file://' prefix
+            let file_prefix = "file://";
+            if !endpoint.starts_with(file_prefix) {
+                return Err(Error::new(
+                    ErrorKind::InvalidInput,
+                    "File path must start with 'file://'",
+                ));
+            }
+
+            // Extract the path by removing the 'file://' prefix
+            let path = endpoint.strip_prefix(file_prefix).ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    "Failed to extract path from file URL",
+                )
+            })?;
+
+            let path_buf = PathBuf::from(path);
+
+            // Determine if this is a directory path or a file path
+            let final_path = if path_buf.is_dir() || path_buf.extension().is_none() {
+                // If it's a directory or doesn't have an extension, treat it as a directory
+                // and append the default filename
+                path_buf.join(DEFAULT_SIGNAL_FILENAME)
+            } else {
+                path_buf
+            };
+
+            // Check if the parent directory exists and is a directory
+            if let Some(parent_dir) = final_path.parent() {
+                match parent_dir.try_exists() {
+                    Ok(exists) => {
+                        if !exists || !parent_dir.is_dir() {
+                            return Err(Error::new(
+                                ErrorKind::InvalidInput,
+                                format!(
+                                    "The directory does not exist or is not a directory: {}",
+                                    parent_dir.display()
+                                ),
+                            ));
+                        }
+                    }
+                    Err(e) => {
+                        return Err(Error::new(
+                            ErrorKind::InvalidInput,
+                            format!("Error checking if parent directory exists: {}", e),
+                        ));
+                    }
+                }
+            }
+
+            Ok(GlideOpenTelemetryTraceExporter::File(final_path))
+        } // file endpoint
         _ => Err(Error::new(ErrorKind::InvalidInput, endpoint)),
     }
 }
@@ -90,6 +135,8 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetryTraceExporter, Err
 #[derive(Clone, Debug)]
 struct GlideSpanInner {
     span: Arc<RwLock<opentelemetry::global::BoxedSpan>>,
+    #[cfg(test)]
+    reference_count: Arc<AtomicUsize>,
 }
 
 impl GlideSpanInner {
@@ -102,15 +149,20 @@ impl GlideSpanInner {
                 .with_kind(SpanKind::Client)
                 .start(&tracer),
         ));
-        GlideSpanInner { span }
+
+        GlideSpanInner {
+            span,
+            #[cfg(test)]
+            reference_count: Arc::new(AtomicUsize::new(1)),
+        }
     }
 
-    /// Create new span as a child of `parent`.
-    pub fn new_with_parent(name: &str, parent: &GlideSpanInner) -> Self {
+    /// Create new span as a child of `parent`, returning an error if the parent span lock is poisoned.
+    pub fn new_with_parent(name: &str, parent: &GlideSpanInner) -> Result<Self, TraceError> {
         let parent_span_ctx = parent
             .span
             .read()
-            .expect(SPAN_READ_LOCK_ERR)
+            .map_err(|_| TraceError::from(SPAN_READ_LOCK_ERR))?
             .span_context()
             .clone();
 
@@ -124,7 +176,11 @@ impl GlideSpanInner {
                 .with_kind(SpanKind::Client)
                 .start_with_context(&tracer, &parent_context),
         ));
-        GlideSpanInner { span }
+        Ok(GlideSpanInner {
+            span,
+            #[cfg(test)]
+            reference_count: Arc::new(AtomicUsize::new(1)),
+        })
     }
 
     /// Attach event with name and list of attributes to this span.
@@ -164,17 +220,21 @@ impl GlideSpanInner {
         }
     }
 
-    /// Create new span, add it as a child to this span and return it
-    pub fn add_span(&self, name: &str) -> GlideSpanInner {
-        let child = GlideSpanInner::new_with_parent(name, self);
+    /// Create new span, add it as a child to this span and return it.
+    /// Returns an error if the child span creation fails.
+    pub fn add_span(&self, name: &str) -> Result<GlideSpanInner, TraceError> {
+        let child = GlideSpanInner::new_with_parent(name, self)?;
         {
-            let child_span = child.span.read().expect(SPAN_WRITE_LOCK_ERR);
+            let child_span = child
+                .span
+                .read()
+                .map_err(|_| TraceError::from(SPAN_READ_LOCK_ERR))?;
             self.span
                 .write()
                 .expect(SPAN_WRITE_LOCK_ERR)
                 .add_link(child_span.span_context().clone(), Vec::default());
         }
-        child
+        Ok(child)
     }
 
     /// Return the span ID
@@ -190,6 +250,34 @@ impl GlideSpanInner {
     /// Finishes the `Span`.
     pub fn end(&self) {
         self.span.write().expect(SPAN_READ_LOCK_ERR).end()
+    }
+
+    #[cfg(test)]
+    pub fn get_reference_count(&self) -> usize {
+        self.reference_count.load(Ordering::SeqCst)
+    }
+
+    #[cfg(test)]
+    pub fn increment_reference_count(&self) {
+        self.reference_count.fetch_add(1, Ordering::SeqCst);
+    }
+
+    #[cfg(test)]
+    pub fn decrement_reference_count(&self) {
+        self.reference_count.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+#[cfg(test)]
+impl Drop for GlideSpanInner {
+    fn drop(&mut self) {
+        // Only print debug info if the reference count is non-zero
+        let current_count = self.reference_count.load(Ordering::SeqCst);
+        if current_count > 0 {
+            self.decrement_reference_count();
+        } else {
+            panic!("Span reference count is 0");
+        }
     }
 }
 
@@ -220,10 +308,12 @@ impl GlideSpan {
     }
 
     /// Add child span to this span and return it
-    pub fn add_span(&self, name: &str) -> GlideSpan {
-        GlideSpan {
-            inner: self.inner.add_span(name),
-        }
+    pub fn add_span(&self, name: &str) -> Result<GlideSpan, opentelemetry::trace::TraceError> {
+        let inner_span = self.inner.add_span(name).map_err(|err| {
+            TraceError::from(format!("Failed to create child span '{}': {}", name, err))
+        })?;
+
+        Ok(GlideSpan { inner: inner_span })
     }
 
     pub fn id(&self) -> String {
@@ -233,6 +323,16 @@ impl GlideSpan {
     /// Finishes the `Span`.
     pub fn end(&self) {
         self.inner.end()
+    }
+
+    #[cfg(test)]
+    pub fn add_reference(&self) {
+        self.inner.increment_reference_count();
+    }
+
+    #[cfg(test)]
+    pub fn get_reference_count(&self) -> usize {
+        self.inner.get_reference_count()
     }
 }
 
@@ -262,7 +362,9 @@ pub struct GlideOpenTelemetryConfigBuilder {
 impl Default for GlideOpenTelemetryConfigBuilder {
     fn default() -> Self {
         GlideOpenTelemetryConfigBuilder {
-            span_flush_interval: std::time::Duration::from_millis(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
+            span_flush_interval: std::time::Duration::from_millis(
+                DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as u64,
+            ),
             trace_exporter: GlideOpenTelemetryTraceExporter::File(std::env::temp_dir()),
         }
     }
@@ -299,12 +401,25 @@ fn build_exporter(
 #[derive(Clone)]
 pub struct GlideOpenTelemetry {}
 
+/// Static mutex to track initialization state
+static OTEL_INITIALIZED: Mutex<bool> = Mutex::new(false);
+
 /// Our interface to OpenTelemetry
 impl GlideOpenTelemetry {
     /// Initialise the open telemetry library with a file system exporter
     ///
     /// This method should be called once for the given **process**
+    /// If OpenTelemetry is already initialized, this method will return Ok(()) without reinitializing
     pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
+        // Check if already initialized
+        let mut initialized = OTEL_INITIALIZED.lock().map_err(|_| {
+            GlideOTELError::Other("Failed to acquire initialization lock".to_string())
+        })?;
+
+        if *initialized {
+            return Ok(());
+        }
+
         let batch_config = opentelemetry_sdk::trace::BatchConfigBuilder::default()
             .with_scheduled_delay(config.span_flush_interval)
             .build();
@@ -338,6 +453,10 @@ impl GlideOpenTelemetry {
             .with_span_processor(trace_exporter)
             .build();
         global::set_tracer_provider(provider);
+
+        // Mark as initialized
+        *initialized = true;
+
         Ok(())
     }
 
@@ -371,7 +490,7 @@ mod tests {
         span.add_event("Event1");
         span.set_status(GlideSpanStatus::Ok);
 
-        let child1 = span.add_span("Network_Span");
+        let child1 = span.add_span("Network_Span").unwrap();
 
         // Simulate some work
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -469,6 +588,30 @@ mod tests {
                 .with_trace_exporter(GlideOpenTelemetryTraceExporter::Grpc(
                     "grpc://test.com".to_string(),
                 ))
+                .build();
+            let _ = GlideOpenTelemetry::initialise(config);
+            create_test_spans().await;
+        });
+    }
+
+    #[test]
+    fn test_span_reference_count() {
+        let span = GlideOpenTelemetry::new_span("Root_Span_1");
+        span.add_reference();
+        assert_eq!(span.get_reference_count(), 2);
+        drop(span);
+    }
+
+    #[test]
+    fn test_span_transaction() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let config = GlideOpenTelemetryConfigBuilder::default()
+                .with_flush_interval(std::time::Duration::from_millis(100))
+                .with_trace_exporter(GlideOpenTelemetryTraceExporter::File(PathBuf::from("/tmp")))
                 .build();
             let _ = GlideOpenTelemetry::initialise(config);
             create_test_spans().await;

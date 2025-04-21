@@ -950,25 +950,26 @@ impl Client {
             inflight_requests_limit.try_into().unwrap(),
         ));
 
-        if let Some(endpoint_str) = &request.otel_endpoint {
+        // initilaize open telemetry traces exporter
+        if let Some(endpoint_str) = &request.otel_traces_endpoint {
             let trace_exporter = GlideOpenTelemetryTraceExporter::from_str(endpoint_str.as_str())
                 .map_err(ConnectionError::IoError)?;
             let config = GlideOpenTelemetryConfigBuilder::default()
                 .with_flush_interval(std::time::Duration::from_millis(
                     request
-                        .otel_span_flush_interval_ms
-                        .unwrap_or(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
+                        .otel_flush_interval_ms
+                        .unwrap_or(DEFAULT_FLUSH_SIGNAL_INTERVAL_MS) as u64,
                 ))
                 .with_trace_exporter(trace_exporter)
                 .build();
 
-            let _ = GlideOpenTelemetry::initialise(config).map_err(|e| {
+            if let Err(e) = GlideOpenTelemetry::initialise(config) {
                 log_error(
                     "OpenTelemetry initialization",
                     format!("OpenTelemetry initialization failed: {}", e),
-                )
-            });
-        };
+                );
+            }
+        }
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             let internal_client = if request.cluster_mode_enabled {

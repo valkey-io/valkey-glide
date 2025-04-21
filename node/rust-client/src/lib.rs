@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use glide_core::Telemetry;
+use glide_core::{GlideOpenTelemetry, GlideSpan, Telemetry};
 use redis::GlideConnectionOptions;
 
 #[cfg(not(target_env = "msvc"))]
@@ -14,7 +14,6 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
 use glide_core::start_socket_listener;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
-#[cfg(feature = "testing_utilities")]
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
 use napi::bindgen_prelude::Uint8Array;
@@ -26,6 +25,7 @@ use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
 use std::collections::HashMap;
 use std::ptr::from_mut;
 use std::str;
+use std::sync::Arc;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
 pub enum Level {
@@ -413,6 +413,35 @@ pub fn create_leaked_bigint(big_int: BigInt) -> [u32; 2] {
 pub fn create_leaked_double(float: f64) -> [u32; 2] {
     let pointer = from_mut(Box::leak(Box::new(Value::Double(float))));
     split_pointer(pointer)
+}
+
+/// Creates an open telemetry span with the given name and returns a pointer to the span
+#[napi(ts_return_type = "[number, number]")]
+pub fn create_leaked_otel_span(name: String) -> [u32; 2] {
+    let span = GlideOpenTelemetry::new_span(&name);
+    let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
+    split_pointer(s)
+}
+
+#[napi]
+pub fn drop_otel_span(span_ptr: BigInt) {
+    let (is_negative, span_ptr, lossless) = span_ptr.get_u64();
+    let error_msg = if is_negative {
+        "Received a negative pointer value."
+    } else if !lossless {
+        "Some data was lost in the conversion to u64."
+    } else if span_ptr == 0 {
+        "Received a zero pointer value."
+    } else {
+        unsafe { Arc::from_raw(span_ptr as *const GlideSpan) };
+        return;
+    };
+
+    log(
+        Level::Error,
+        "OpenTelemetry".to_string(),
+        format!("Failed to drop span. {}", error_msg),
+    );
 }
 
 #[napi]

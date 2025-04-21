@@ -7,11 +7,20 @@ import {
     DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
+    createLeakedOtelSpan,
+    dropOtelSpan,
     getStatistics,
     valueFromSplitPointer,
 } from "glide-rs";
+import Long from "long";
 import * as net from "net";
-import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
+import {
+    Buffer,
+    BufferWriter,
+    Long as ProtoLong,
+    Reader,
+    Writer,
+} from "protobufjs";
 import {
     AggregationType,
     BaseScanOptions,
@@ -477,14 +486,14 @@ export function convertRecordToGlideRecord<T>(
  * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
  */
 class PointerResponse {
-    pointer: number | Long | null;
+    pointer: number | ProtoLong | null;
     // As Javascript does not support 64-bit integers,
     // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
     high: number | undefined;
     low: number | undefined;
 
     constructor(
-        pointer: number | Long | null,
+        pointer: number | ProtoLong | null,
         high?: number | undefined,
         low?: number | undefined,
     ) {
@@ -679,10 +688,33 @@ export interface BaseClientConfiguration {
  *
  * - **Connection Timeout**: The `connectionTimeout` property specifies the duration (in milliseconds) the client should wait for a connection to be established.
  *
+ * ### OpenTelemetry
+ *
+ * - **openTelemetryConfig**: Use the `openTelemetryConfig` property to specify the endpoint of the collector to export the measurments.
+ *   - **Traces Collector Endpoint**: Set `tracesCollectorEndpoint` to specify the endpoint path of the collector to export the traces measurments.
+ *   - **Metrics Collector Endpoint**: Set `metricsCollectorEndpoint` to specify the endpoint path of the collector to export the metrics data.
+ *   - **Flush Interval Ms**: Set `flushIntervalMs` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 5000ms will be used.
+ *
+ * The collector endpoints support multiple protocols:
+ * - HTTP: Use `http://` prefix (e.g., `http://localhost:4318`)
+ * - HTTPS: Use `https://` prefix (e.g., `https://collector.example.com:4318`)
+ * - gRPC: Use `grpc://` prefix (e.g., `grpc://localhost:4317`)
+ * - File: Use file:// followed by a full path to export the signals to a local file.
+ *   - The file:// endpoint supports both directory paths and explicit file paths:
+ *     - If the path is a directory or lacks a file extension (e.g., file:///tmp/otel), it will default to writing to a file named spans.json in that directory (e.g., /tmp/otel/spans.json).
+ *     - If the path includes a filename with an extension (e.g., file:///tmp/otel/traces.json), the specified file will be used as-is.
+ *     - The parent directory must already exist. If it does not, the client will fail to initialize with an InvalidInput error.
+ *     - If the target file already exists, new data will be appended to it (the file will not be overwritten).
+ *
  * @example
  * ```typescript
  * const config: AdvancedBaseClientConfiguration = {
  *   connectionTimeout: 5000, // 5 seconds
+ *   openTelemetryConfig: {
+ *      tracesCollectorEndpoint: 'https://127.0.0.1/v1/traces.json',
+ *      metricsCollectorEndpoint: 'https://127.0.0.1/v1/metrics.json',
+ *      flushIntervalMs: 5000, // 5 seconds
+ *   },
  * };
  * ```
  */
@@ -694,6 +726,24 @@ export interface AdvancedBaseClientConfiguration {
      * If not explicitly set, a default value of 250 milliseconds will be used.
      */
     connectionTimeout?: number;
+    /**
+     * Configartion for OpenTelemetry if exits.
+     */
+    openTelemetryConfig?: {
+        /**
+         * The client collector address to export the traces measurments.
+         */
+        tracesCollectorEndpoint: string;
+        /**
+         * The client collector address to export the metrics.
+         */
+        metricsCollectorEndpoint: string;
+        /**
+         * The duration in milliseconds the data will exported to the collector.
+         * If interval is not specified, 5000 will be used.
+         */
+        flushIntervalMs?: number;
+    };
 }
 
 /**
@@ -921,6 +971,16 @@ export class BaseClient {
         }
     }
 
+    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
+        if (spanPtr === null || spanPtr === undefined) return;
+
+        if (typeof spanPtr === "number") {
+            return dropOtelSpan(BigInt(spanPtr)); // Convert number to BigInt
+        } else if (spanPtr instanceof Long) {
+            return dropOtelSpan(BigInt(spanPtr.toString())); // Convert Long to BigInt via string
+        }
+    }
+
     processResponse(message: response.Response) {
         if (message.closingError != null) {
             this.close(message.closingError);
@@ -970,6 +1030,8 @@ export class BaseClient {
         } else {
             resolve(null);
         }
+
+        this.dropCommandSpan(message.rootSpanPtr);
     }
 
     processPush(response: response.Response) {
@@ -1064,12 +1126,28 @@ export class BaseClient {
         const route = this.toProtobufRoute(options?.route);
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
+
+            //TODO: creates the span only if the otel config exits - https://github.com/valkey-io/valkey-glide/issues/3309
+            //TODO: Add a condition to create a span statistic,
+            // such as only 1% of the requests. This will be configurable - https://github.com/valkey-io/valkey-glide/issues/3452
+            const commandObj =
+                command instanceof command_request.Command
+                    ? command_request.RequestType[command.requestType]
+                    : "Batch";
+            const pair = createLeakedOtelSpan(commandObj);
+            const spanPtr = new Long(pair[0], pair[1]);
+
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
                 options?.decoder,
             ];
-            this.writeOrBufferCommandRequest(callbackIndex, command, route);
+            this.writeOrBufferCommandRequest(
+                callbackIndex,
+                command,
+                route,
+                spanPtr,
+            );
         });
     }
 
@@ -1131,6 +1209,7 @@ export class BaseClient {
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
+        commandSpanPtr?: number | Long | null,
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
@@ -1141,11 +1220,13 @@ export class BaseClient {
                       // TODO: add support for timeout, raiseOnError and retryStrategy
                   }),
                   route,
+                  rootSpanPtr: commandSpanPtr,
               })
             : command_request.CommandRequest.create({
                   callbackIdx,
                   singleCommand: command,
                   route,
+                  rootSpanPtr: commandSpanPtr,
               });
 
         this.writeOrBufferRequest(
@@ -7691,6 +7772,26 @@ export class BaseClient {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
+
+        if (options.openTelemetryConfig) {
+            // Validate flushIntervalMs is not negative
+            if (
+                options.openTelemetryConfig.flushIntervalMs !== undefined &&
+                options.openTelemetryConfig.flushIntervalMs < 0
+            ) {
+                throw new ConfigurationError(
+                    "InvalidInput: flushIntervalMs cannot be negative",
+                );
+            }
+
+            request.opentelemetryConfig = {
+                tracesCollectorEndpoint:
+                    options.openTelemetryConfig.tracesCollectorEndpoint,
+                metricsCollectorEndpoint:
+                    options.openTelemetryConfig.metricsCollectorEndpoint,
+                flushInterval: options.openTelemetryConfig.flushIntervalMs,
+            };
+        }
     }
 
     /**
