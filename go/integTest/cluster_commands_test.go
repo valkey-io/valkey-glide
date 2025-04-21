@@ -1879,3 +1879,45 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 	// assert.Equal(suite.T(), "value2", getResponse2.MultiValue())
 	// script3.Close()
 }
+
+func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+
+	// Flush before setup
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing loaded, nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+
+	// key for routing to a primary node
+	randomKey := uuid.NewString()
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, randomKey),
+	}
+
+	// Flush all functions with route
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKillWithRoute(route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}

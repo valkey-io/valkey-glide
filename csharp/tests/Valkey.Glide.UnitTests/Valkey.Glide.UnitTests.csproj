@@ -6,7 +6,7 @@
     <RootNamespace>Valkey.Glide.UnitTests</RootNamespace>
     <AssemblyName>Valkey.Glide.UnitTests</AssemblyName>
     <Nullable>enable</Nullable>
-    <LangVersion>12.0</LangVersion>
+    <LangVersion>preview</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
@@ -21,7 +21,7 @@
 
   <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
   <PropertyGroup Condition="'$(Configuration)' == 'Lint'">
-    <LangVersion>12.0</LangVersion>
+    <LangVersion>preview</LangVersion>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
