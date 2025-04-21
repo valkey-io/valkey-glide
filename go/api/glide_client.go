@@ -13,25 +13,54 @@ import (
 // GlideClient interface compliance check.
 var _ GlideClientCommands = (*GlideClient)(nil)
 
-// GlideClientCommands is a client used for connection in Standalone mode.
+// All commands that can be executed by GlideClient.
 type GlideClientCommands interface {
 	BaseClient
 	GenericCommands
 	ServerManagementCommands
 	BitmapCommands
 	ConnectionManagementCommands
+	ScriptingAndFunctionStandaloneCommands
 }
 
-// GlideClient implements standalone mode operations by extending baseClient functionality.
+// Client used for connection to standalone servers.
+// Use [NewGlideClient] to request a client.
+//
+// For full documentation refer to [Valkey Glide Wiki].
+//
+// [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#standalone
 type GlideClient struct {
 	*baseClient
 }
 
-// NewGlideClient creates a [GlideClientCommands] in standalone mode using the given [GlideClientConfiguration].
+// Creates a new `GlideClient` instance and establishes a connection to a standalone Valkey server.
+//
+// Parameters:
+//
+//	config - The configuration options for the client, including server addresses, authentication credentials,
+//	    TLS settings, database selection, reconnection strategy, and Pub/Sub subscriptions.
+//
+// Return value:
+//
+//	A connected `GlideClient` instance.
+//
+// Remarks:
+//
+//	Use this static method to create and connect a `GlideClient` to a standalone Valkey server.
+//	The client will automatically handle connection establishment, including any authentication and TLS configurations.
+//
+//	  - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
+//	      using the specified username and password.
+//	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
+//	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
+//	      in case of disconnections.
 func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err
+	}
+	if config.subscriptionConfig != nil {
+		client.setMessageHandler(NewMessageHandler(config.subscriptionConfig.callback, config.subscriptionConfig.context))
 	}
 
 	return &GlideClient{client}, nil
@@ -39,8 +68,7 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
-// the executed
-// command.
+// the executed command.
 //
 // See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
 //
@@ -233,6 +261,351 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 		return DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Ping, optionArgs)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// FlushAll deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *GlideClient) FlushAll() (string, error) {
+	result, err := client.executeCommand(C.FlushAll, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(C.FlushAll, []string{string(mode)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (client *GlideClient) FlushDB() (string, error) {
+	result, err := client.executeCommand(C.FlushDB, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all the keys of the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(C.FlushDB, []string{string(mode)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *GlideClient) Lolwut() (string, error) {
+	result, err := client.executeCommand(C.Lolwut, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// Parameters:
+//
+//	opts - The [LolwutOptions] type.
+//
+// Return value:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string, error) {
+	commandArgs, err := opts.ToArgs()
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	result, err := client.executeCommand(C.Lolwut, commandArgs)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Gets the current connection id.
+//
+// Return value:
+//
+//	The id of the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-id/
+func (client *GlideClient) ClientId() (int64, error) {
+	result, err := client.executeCommand(C.ClientId, []string{})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
+//
+// Return value:
+//
+//	UNIX TIME of the last DB save executed with success.
+//
+// [valkey.io]: https://valkey.io/commands/lastsave/
+func (client *GlideClient) LastSave() (int64, error) {
+	response, err := client.executeCommand(C.LastSave, []string{})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(response)
+}
+
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
+//
+// Return value:
+//
+//	OK to confirm that the statistics were successfully reset.
+//
+// [valkey.io]: https://valkey.io/commands/config-resetstat/
+func (client *GlideClient) ConfigResetStat() (string, error) {
+	response, err := client.executeCommand(C.ConfigResetStat, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Gets the name of the current connection.
+//
+// Return value:
+//
+//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//
+// [valkey.io]: https://valkey.io/commands/client-getname/
+func (client *GlideClient) ClientGetName() (string, error) {
+	result, err := client.executeCommand(C.ClientGetName, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Set the name of the current connection.
+//
+// Parameters:
+//
+//	connectionName - Connection name of the current connection.
+//
+// Return value:
+//
+//	OK - when connection name is set
+//
+// [valkey.io]: https://valkey.io/commands/client-setname/
+func (client *GlideClient) ClientSetName(connectionName string) (string, error) {
+	result, err := client.executeCommand(C.ClientSetName, []string{connectionName})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Move key from the currently selected database to the database specified by dbIndex.
+//
+// Parameters:
+//
+//	key - The key to move.
+//	dbIndex -  The index of the database to move key to.
+//
+// Return value:
+//
+//	Returns "OK".
+//
+// [valkey.io]: https://valkey.io/commands/move/
+func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
+	result, err := client.executeCommand(C.Move, []string{key, utils.IntToString(dbIndex)})
+	if err != nil {
+		return defaultBoolResponse, err
+	}
+
+	return handleBoolResponse(result)
+}
+
+// Iterates incrementally over a database for matching keys.
+//
+// Parameters:
+//
+//	cursor - The cursor that points to the next iteration of results. A value of 0
+//			 indicates the start of the search.
+//
+// Return value:
+//
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
+	res, err := client.executeCommand(C.Scan, []string{utils.IntToString(cursor)})
+	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	return handleScanResponse(res)
+}
+
+// Iterates incrementally over a database for matching keys.
+//
+// Parameters:
+//
+//	 cursor - The cursor that points to the next iteration of results. A value of 0
+//				 indicates the start of the search.
+//	 scanOptions - Additional command parameters, see [ScanOptions] for more details.
+//
+// Return value:
+//
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string, error) {
+	optionArgs, err := scanOptions.ToArgs()
+	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	res, err := client.executeCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
+	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	return handleScanResponse(res)
+}
+
+// Rewrites the configuration file with the current configuration.
+//
+// Return value:
+//
+//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/config-rewrite/
+func (client *GlideClient) ConfigRewrite() (string, error) {
+	response, err := client.executeCommand(C.ConfigRewrite, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Returns a random existing key name from the currently selected database.
+//
+// Return value:
+//
+//	A random existing key name from the currently selected database.
+//
+// [valkey.io]: https://valkey.io/commands/randomkey/
+func (client *GlideClient) RandomKey() (Result[string], error) {
+	result, err := client.executeCommand(C.RandomKey, []string{})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+// Returns information about the function that's currently running and information about the
+// available execution engines.
+// `FUNCTION STATS` runs on all nodes of the server, including primary and replicas.
+// The response includes a mapping from node address to the command response for that node.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	A map of node addresses to their function statistics represented by
+//	[FunctionStatsResult] object containing the following information:
+//	running_script - Information about the running script.
+//	engines - Information about available engines and their stats.
+//
+// [valkey.io]: https://valkey.io/commands/function-stats/
+func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, error) {
+	response, err := client.executeCommand(C.FunctionStats, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleFunctionStatsResponse(response)
+}
+
+// Deletes a library and all its functions.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	libName - The library name to delete.
+//
+// Return value:
+//
+//	"OK" if the library exists, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/function-delete/
+func (client *GlideClient) FunctionDelete(libName string) (string, error) {
+	result, err := client.executeCommand(C.FunctionDelete, []string{libName})
 	if err != nil {
 		return DefaultStringResponse, err
 	}

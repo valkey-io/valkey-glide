@@ -469,7 +469,7 @@ where
         }
     }
 
-    fn map_cmds_to_nodes(&self, cmds: &[Cmd]) -> RedisResult<Vec<NodeCmd>> {
+    fn map_cmds_to_nodes(&self, cmds: &[Arc<Cmd>]) -> RedisResult<Vec<NodeCmd>> {
         let mut cmd_map: HashMap<String, NodeCmd> = HashMap::new();
 
         for (idx, cmd) in cmds.iter().enumerate() {
@@ -711,7 +711,7 @@ where
                 let (addr, conn) = if let Some(redirected) = redirected.take() {
                     let (addr, is_asking) = match redirected {
                         Redirect::Moved(addr) => (addr, false),
-                        Redirect::Ask(addr) => (addr, true),
+                        Redirect::Ask(addr, should_exec_asking) => (addr, should_exec_asking),
                     };
                     let conn = self.get_connection_by_addr(&mut connections, &addr)?;
                     if is_asking {
@@ -752,7 +752,7 @@ where
                         RetryMethod::AskRedirect => {
                             redirected = err
                                 .redirect_node()
-                                .map(|(node, _slot)| Redirect::Ask(node.to_string()));
+                                .map(|(node, _slot)| Redirect::Ask(node.to_string(), true));
                         }
                         RetryMethod::MovedRedirect => {
                             // Refresh slots.
@@ -790,7 +790,7 @@ where
         }
     }
 
-    fn send_recv_and_retry_cmds(&self, cmds: &[Cmd]) -> RedisResult<Vec<Value>> {
+    fn send_recv_and_retry_cmds(&self, cmds: &[Arc<Cmd>]) -> RedisResult<Vec<Value>> {
         // Vector to hold the results, pre-populated with `Nil` values. This allows the original
         // cmd ordering to be re-established by inserting the response directly into the result
         // vector (e.g., results[10] = response).
@@ -818,7 +818,7 @@ where
     }
 
     // Build up a pipeline per node, then send it
-    fn send_all_commands(&self, cmds: &[Cmd]) -> RedisResult<Vec<NodeCmd>> {
+    fn send_all_commands(&self, cmds: &[Arc<Cmd>]) -> RedisResult<Vec<NodeCmd>> {
         let mut connections = self.connections.borrow_mut();
 
         let node_cmds = self.map_cmds_to_nodes(cmds)?;
@@ -874,7 +874,7 @@ impl<C: Connect + ConnectionLike> ConnectionLike for ClusterConnection<C> {
         } else {
             cmd
         };
-        let value = parse_redis_value(actual_cmd)?;
+        let value = parse_redis_value(actual_cmd).and_then(|v| v.extract_error())?;
         self.request(Input::Slice {
             cmd,
             routable: value,

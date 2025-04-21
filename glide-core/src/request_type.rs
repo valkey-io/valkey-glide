@@ -2,11 +2,11 @@
 
 use redis::{cmd, Cmd};
 
-#[cfg(feature = "socket-layer")]
+#[cfg(feature = "proto")]
 use crate::command_request::RequestType as ProtobufRequestType;
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum RequestType {
     /// Invalid request type
     InvalidRequest = 0,
@@ -431,7 +431,7 @@ fn get_two_word_command(first: &str, second: &str) -> Cmd {
     cmd
 }
 
-#[cfg(feature = "socket-layer")]
+#[cfg(feature = "proto")]
 impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
     fn from(value: ::protobuf::EnumOrUnknown<ProtobufRequestType>) -> Self {
         match value.enum_value_or(ProtobufRequestType::InvalidRequest) {

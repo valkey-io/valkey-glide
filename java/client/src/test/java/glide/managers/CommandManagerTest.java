@@ -22,8 +22,11 @@ import com.google.protobuf.ByteString;
 import command_request.CommandRequestOuterClass.CommandRequest;
 import command_request.CommandRequestOuterClass.SimpleRoutes;
 import command_request.CommandRequestOuterClass.SlotTypes;
-import glide.api.models.ClusterTransaction;
-import glide.api.models.Transaction;
+import glide.api.models.Batch;
+import glide.api.models.ClusterBatch;
+import glide.api.models.commands.batch.BatchOptions;
+import glide.api.models.commands.batch.BatchRetryStrategy;
+import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
@@ -43,6 +46,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import response.ResponseOuterClass.Response;
 
@@ -275,14 +279,16 @@ public class CommandManagerTest {
     }
 
     @SneakyThrows
-    @Test
-    public void submitNewCommand_with_Transaction_sends_protobuf_request() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void submitNewCommand_with_Batch_sends_protobuf_request(boolean isAtomic) {
         // setup
         String[] arg1 = new String[] {"GETSTRING", "one"};
         String[] arg2 = new String[] {"GETSTRING", "two"};
         String[] arg3 = new String[] {"GETSTRING", "three"};
-        Transaction trans = new Transaction();
-        trans.customCommand(arg1).customCommand(arg2).customCommand(arg3);
+        Batch batch = new Batch(isAtomic);
+        BatchOptions options = BatchOptions.builder().timeout(1000).raiseOnError(false).build();
+        batch.customCommand(arg1).customCommand(arg2).customCommand(arg3);
 
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
@@ -292,38 +298,51 @@ public class CommandManagerTest {
                 ArgumentCaptor.forClass(CommandRequest.Builder.class);
 
         // exercise
-        service.submitNewTransaction(trans, r -> null);
+        service.submitNewBatch(batch, Optional.of(options), r -> null);
 
         // verify
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
         // verify
-        assertTrue(requestBuilder.hasTransaction());
-        assertEquals(3, requestBuilder.getTransaction().getCommandsCount());
+        assertTrue(requestBuilder.hasBatch());
+        assertEquals(3, requestBuilder.getBatch().getCommandsCount());
+        assertEquals(isAtomic, requestBuilder.getBatch().getIsAtomic());
+        assertEquals(options.getTimeout(), requestBuilder.getBatch().getTimeout());
+        assertEquals(options.getRaiseOnError(), requestBuilder.getBatch().getRaiseOnError());
 
         LinkedList<ByteString> resultPayloads = new LinkedList<>();
         resultPayloads.add(ByteString.copyFromUtf8("one"));
         resultPayloads.add(ByteString.copyFromUtf8("two"));
         resultPayloads.add(ByteString.copyFromUtf8("three"));
         for (command_request.CommandRequestOuterClass.Command command :
-                requestBuilder.getTransaction().getCommandsList()) {
+                requestBuilder.getBatch().getCommandsList()) {
             assertEquals(CustomCommand, command.getRequestType());
             assertEquals(ByteString.copyFromUtf8("GETSTRING"), command.getArgsArray().getArgs(0));
             assertEquals(resultPayloads.pop(), command.getArgsArray().getArgs(1));
         }
     }
 
+    @SneakyThrows
     @ParameterizedTest
-    @MethodSource("getEnumRoutes")
-    public void submitNewCommand_with_ClusterTransaction_with_route_sends_protobuf_request(
-            Route routeType) {
+    @ValueSource(booleans = {true, false})
+    public void submitNewCommand_with_ClusterBatch_with_options_sends_protobuf_request(
+            boolean isAtomic) {
 
         String[] arg1 = new String[] {"GETSTRING", "one"};
         String[] arg2 = new String[] {"GETSTRING", "two"};
-        String[] arg3 = new String[] {"GETSTRING", "two"};
-        ClusterTransaction trans =
-                new ClusterTransaction().customCommand(arg1).customCommand(arg2).customCommand(arg3);
+        String[] arg3 = new String[] {"GETSTRING", "three"};
+        ClusterBatch batch =
+                new ClusterBatch(isAtomic).customCommand(arg1).customCommand(arg2).customCommand(arg3);
+
+        ClusterBatchOptions.ClusterBatchOptionsBuilder optionsBuilder =
+                ClusterBatchOptions.builder().raiseOnError(false).timeout(1000).route(RANDOM);
+        if (!isAtomic) {
+            BatchRetryStrategy strategy =
+                    BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
+            optionsBuilder.retryStrategy(strategy);
+        }
+        ClusterBatchOptions options = optionsBuilder.build();
 
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
@@ -332,24 +351,61 @@ public class CommandManagerTest {
         ArgumentCaptor<CommandRequest.Builder> captor =
                 ArgumentCaptor.forClass(CommandRequest.Builder.class);
 
-        service.submitNewTransaction(trans, Optional.of(routeType), r -> null);
+        service.submitNewBatch(batch, Optional.of(options), r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
-        var protobufToClientRouteMapping =
-                Map.of(
-                        SimpleRoutes.AllNodes, ALL_NODES,
-                        SimpleRoutes.AllPrimaries, ALL_PRIMARIES,
-                        SimpleRoutes.Random, RANDOM);
+        // verify
+        assertTrue(requestBuilder.hasBatch());
+        assertEquals(3, requestBuilder.getBatch().getCommandsCount());
+        assertEquals(isAtomic, requestBuilder.getBatch().getIsAtomic());
+        assertEquals(options.getTimeout(), requestBuilder.getBatch().getTimeout());
+        assertEquals(options.getRaiseOnError(), requestBuilder.getBatch().getRaiseOnError());
+        assertTrue(requestBuilder.hasRoute());
+        assertTrue(requestBuilder.getRoute().hasSimpleRoutes());
+        assertEquals(requestBuilder.getRoute().getSimpleRoutes(), SimpleRoutes.Random);
+        if (!isAtomic) {
+            assertTrue(requestBuilder.getBatch().getRetryConnectionError());
+            assertTrue(requestBuilder.getBatch().getRetryServerError());
+        } else {
+            assertFalse(requestBuilder.getBatch().getRetryConnectionError());
+            assertFalse(requestBuilder.getBatch().getRetryServerError());
+        }
 
-        assertAll(
-                () -> assertTrue(requestBuilder.hasRoute()),
-                () -> assertTrue(requestBuilder.getRoute().hasSimpleRoutes()),
-                () ->
-                        assertEquals(
-                                routeType,
-                                protobufToClientRouteMapping.get(requestBuilder.getRoute().getSimpleRoutes())),
-                () -> assertFalse(requestBuilder.getRoute().hasSlotIdRoute()),
-                () -> assertFalse(requestBuilder.getRoute().hasSlotKeyRoute()));
+        LinkedList<ByteString> resultPayloads = new LinkedList<>();
+        resultPayloads.add(ByteString.copyFromUtf8("one"));
+        resultPayloads.add(ByteString.copyFromUtf8("two"));
+        resultPayloads.add(ByteString.copyFromUtf8("three"));
+        for (command_request.CommandRequestOuterClass.Command command :
+                requestBuilder.getBatch().getCommandsList()) {
+            assertEquals(CustomCommand, command.getRequestType());
+            assertEquals(ByteString.copyFromUtf8("GETSTRING"), command.getArgsArray().getArgs(0));
+            assertEquals(resultPayloads.pop(), command.getArgsArray().getArgs(1));
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void submitNewCommand_with_ClusterBatch_with_options_raise_error() {
+
+        String[] arg1 = new String[] {"GETSTRING", "one"};
+        String[] arg2 = new String[] {"GETSTRING", "two"};
+        String[] arg3 = new String[] {"GETSTRING", "three"};
+        ClusterBatch batch =
+                new ClusterBatch(true).customCommand(arg1).customCommand(arg2).customCommand(arg3);
+
+        BatchRetryStrategy strategy =
+                BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
+
+        ClusterBatchOptions.ClusterBatchOptionsBuilder optionsBuilder =
+                ClusterBatchOptions.builder()
+                        .retryStrategy(strategy); // Should not be used with atomic batch
+
+        ClusterBatchOptions options = optionsBuilder.build();
+
+        assertThrows(
+                RequestException.class,
+                () -> service.submitNewBatch(batch, Optional.of(options), r -> null),
+                "Retry strategy should not be used with atomic batches");
     }
 }

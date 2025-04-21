@@ -611,6 +611,10 @@ where
             }
             Ok(())
         }
+        Value::ServerError(ref err) => match err.details() {
+            Some(details) => write!(writer, "-{} {details}\r\n", err.err_code()),
+            None => write!(writer, "-{}\r\n", err.err_code()),
+        },
     }
 }
 
@@ -867,4 +871,17 @@ pub fn build_simple_pipeline_for_invalidation() -> Pipeline {
         .arg(42)
         .ignore();
     pipe
+}
+
+use std::sync::Once;
+
+static INIT_LOGGER: Once = Once::new();
+
+pub fn init_logger() {
+    INIT_LOGGER.call_once(|| {
+        tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env()) // Read `RUST_LOG` from the environment
+        .with_test_writer() // Ensure logs are captured and outputted for tests
+        .init();
+    });
 }

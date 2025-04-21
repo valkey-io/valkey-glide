@@ -1,8 +1,0 @@
-[env]
-GLIDE_NAME = { value = "GlideGo", force = true }
-GLIDE_VERSION = "0.1.0"
-# Suppress error
-# > ... was built for newer 'macOS' version (14.5) than being linked (14.0)
-# See https://github.com/valkey-io/valkey-glide/issues/3177 and https://github.com/valkey-io/valkey-glide/pull/3178
-# TODO: set env var for specific target only https://github.com/rust-lang/cargo/issues/8801
-MACOSX_DEPLOYMENT_TARGET = "10.12"
