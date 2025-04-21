@@ -112,6 +112,14 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - uses: actions/cache@v4
+              with:
+                  path: csharp/rust/target
+                  key: ${{ matrix.host.TARGET }}-csharp
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
+
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
               run: dotnet test --configuration Debug --framework net${{ matrix.dotnet }} --logger "html;LogFileName=TestReport.html" --logger "console;verbosity=detailed" --results-directory .
@@ -188,6 +196,12 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: csharp/rust/target
+                  key: ${{ matrix.host.IMAGE }}-csharp
+                  restore-keys: ${{ matrix.host.IMAGE }}
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp

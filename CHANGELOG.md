@@ -1,4 +1,5 @@
 #### Changes
+* Core: Move UDS Socket Filename to tmp ([#3615](https://github.com/valkey-io/valkey-glide/pull/3615))
 * Core: Ensure UDS socket filename is truly unique. ([#3596](https://github.com/valkey-io/valkey-glide/pull/3596))
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
 * Core: Add `opentelemetry` protocols support ([#3191](https://github.com/valkey-io/valkey-glide/pull/3191))
@@ -51,6 +52,7 @@
 * Python: Add equallity check to `ExpirySet` ([#3554](https://github.com/valkey-io/valkey-glide/issues/3554))
 * Java: Add Batches support ([#3561](https://github.com/valkey-io/valkey-glide/pull/3561))
 * Go: Add Function Stats ([#3526](https://github.com/valkey-io/valkey-glide/pull/3526))
+* Go: Add Function Delete ([#3603](https://github.com/valkey-io/valkey-glide/pull/3603))
 
 #### Breaking Changes
 
