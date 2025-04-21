@@ -31,23 +31,21 @@ public class TestConfiguration : IDisposable
     public static GlideClient DefaultStandaloneClient() => new(DefaultClientConfig().Build());
     public static GlideClusterClient DefaultClusterClient() => new(DefaultClusterClientConfig().Build());
 
-    private static TheoryData<BaseClient> s_testClients = [];
-
     public static TheoryData<BaseClient> TestClients
     {
         get
         {
-            if (s_testClients.Count == 0)
+            if (field.Count == 0)
             {
-                s_testClients = [(BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient()];
+                field = [(BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient()];
             }
-            return s_testClients;
+            return field;
         }
 
-        private set => s_testClients = value;
-    }
+        private set;
+    } = [];
 
-    public static void ResetTestClients() => s_testClients = [];
+    public static void ResetTestClients() => TestClients = [];
 
     public TestConfiguration()
     {
