@@ -13,48 +13,22 @@ import (
 // TestMessageHandlerReceivesPublishedMessages verifies that the message handler properly receives
 // and processes published messages with correct context and channel information
 func (suite *GlideTestSuite) TestPubSub_MessageHandler_ReceivesMessages() {
-	suite.runWithPubSubClients(func(publisher api.BaseClient) {
-		// Create message tracking channels
+	suite.runWithPubSubClients(func(clientType ClientType) {
+		publisher := suite.createAnyClient(clientType, nil) // Create message tracking channels
 		messageReceived := make(chan bool, 1)
 		messageContent := make(chan *api.PubSubMessage, 1)
 
-		// Test context with verification fields
-		type testContext struct {
-			channelName string
-			received    bool
-			mu          sync.Mutex
-		}
-		ctx := &testContext{
-			channelName: "test-handler-channel",
-			received:    false,
-		}
-
-		// Create message handler callback
-		callback := func(message *api.PubSubMessage, context any) {
-			if tc, ok := context.(*testContext); ok {
-				tc.mu.Lock()
-				defer tc.mu.Unlock()
-
-				// Verify message matches expected channel
-				if message.Channel == tc.channelName {
-					tc.received = true
-					messageReceived <- true
-					messageContent <- message
-				}
-			}
-		}
-
 		channels := []ChannelDefn{
-			{Channel: ctx.channelName, Mode: ExactMode},
+			{Channel: "ctx.channelName", Mode: ExactMode},
 		}
-		suite.CreatePubSubReceiver(publisher, channels, callback, ctx)
+		suite.CreatePubSubReceiver(clientType, channels, 1, true)
 
 		// Allow time for subscription to be established
 		time.Sleep(100 * time.Millisecond)
 
 		// Publish test message
 		testMessage := "test handler message"
-		_, err := publisher.Publish(ctx.channelName, testMessage)
+		_, err := publisher.Publish("ctx.channelName", testMessage)
 		assert.NoError(suite.T(), err)
 
 		// Wait for message handler to process the message
@@ -65,12 +39,8 @@ func (suite *GlideTestSuite) TestPubSub_MessageHandler_ReceivesMessages() {
 
 			// Verify message content
 			assert.Equal(suite.T(), testMessage, msg.Message)
-			assert.Equal(suite.T(), ctx.channelName, msg.Channel)
+			assert.Equal(suite.T(), "ctx.channelName", msg.Channel)
 
-			// Verify context was updated
-			ctx.mu.Lock()
-			assert.True(suite.T(), ctx.received)
-			ctx.mu.Unlock()
 		case <-time.After(2 * time.Second):
 			assert.Fail(suite.T(), "Message handler did not receive the message within timeout")
 		}
@@ -80,8 +50,8 @@ func (suite *GlideTestSuite) TestPubSub_MessageHandler_ReceivesMessages() {
 // TestMessageHandlerWithMultipleChannels verifies that a single message handler can
 // properly receive and process messages from multiple subscribed channels
 func (suite *GlideTestSuite) TestPubSub_MessageHandler_WithMultipleChannels() {
-	suite.runWithPubSubClients(func(publisher api.BaseClient) {
-		// Create channels to track messages from different channels
+	suite.runWithPubSubClients(func(clientType ClientType) {
+		publisher := suite.createAnyClient(clientType, nil) // Create channels to track messages from different channels
 		messages := make(chan *api.PubSubMessage, 2)
 		var wg sync.WaitGroup
 		wg.Add(2) // Expect one message from each channel
@@ -98,25 +68,11 @@ func (suite *GlideTestSuite) TestPubSub_MessageHandler_WithMultipleChannels() {
 			},
 		}
 
-		// Create message handler callback that processes messages from both channels
-		callback := func(message *api.PubSubMessage, context any) {
-			if tc, ok := context.(*testContext); ok {
-				tc.mu.Lock()
-				defer tc.mu.Unlock()
-
-				if _, exists := tc.channels[message.Channel]; exists {
-					tc.channels[message.Channel] = true
-					messages <- message
-					wg.Done()
-				}
-			}
-		}
-
 		channels := []ChannelDefn{
 			{Channel: "test-handler-channel-1", Mode: ExactMode},
 			{Channel: "test-handler-channel-2", Mode: ExactMode},
 		}
-		suite.CreatePubSubReceiver(publisher, channels, callback, ctx)
+		suite.CreatePubSubReceiver(clientType, channels, 1, true)
 
 		// Allow time for subscriptions to be established
 		time.Sleep(100 * time.Millisecond)
@@ -174,8 +130,8 @@ func (suite *GlideTestSuite) TestPubSub_MessageHandler_WithMultipleChannels() {
 // TestMessageHandlerWithPatternSubscriptions verifies that the message handler correctly
 // processes messages from pattern-based subscriptions
 func (suite *GlideTestSuite) TestPubSub_MessageHandler_WithPatternSubscriptions() {
-	suite.runWithPubSubClients(func(publisher api.BaseClient) {
-		// Create channels to track messages for different patterns
+	suite.runWithPubSubClients(func(clientType ClientType) {
+		publisher := suite.createAnyClient(clientType, nil) // Create channels to track messages for different patterns
 		messagesByPattern := make(map[string][]*api.PubSubMessage)
 		var mu sync.Mutex
 		var wg sync.WaitGroup
@@ -192,27 +148,11 @@ func (suite *GlideTestSuite) TestPubSub_MessageHandler_WithPatternSubscriptions(
 			},
 		}
 
-		// Create message handler callback for pattern subscriptions
-		callback := func(message *api.PubSubMessage, context any) {
-			if tc, ok := context.(*testContext); ok {
-				pattern := message.Pattern.Value()
-				mu.Lock()
-				// Update pattern received status
-				if _, exists := tc.patterns[pattern]; exists {
-					tc.patterns[pattern] = true
-					// Track message by pattern
-					messagesByPattern[pattern] = append(messagesByPattern[pattern], message)
-				}
-				mu.Unlock()
-				wg.Done()
-			}
-		}
-
 		channels := []ChannelDefn{
 			{Channel: "test-news-*", Mode: PatternMode},
 			{Channel: "test-weather-*", Mode: PatternMode},
 		}
-		suite.CreatePubSubReceiver(publisher, channels, callback, ctx)
+		suite.CreatePubSubReceiver(clientType, channels, 1, true)
 
 		// Allow time for subscriptions to be established
 		time.Sleep(100 * time.Millisecond)
@@ -286,8 +226,8 @@ func (suite *GlideTestSuite) TestPubSub_MessageHandler_WithPatternSubscriptions(
 // TestMessageHandlerErrorHandling verifies that the message handler properly handles
 // errors and panics in the callback function
 func (suite *GlideTestSuite) TestPubSub_MessageHandler_ErrorHandling() {
-	suite.runWithPubSubClients(func(publisher api.BaseClient) {
-		// Create channels to track message processing
+	suite.runWithPubSubClients(func(clientType ClientType) {
+		publisher := suite.createAnyClient(clientType, nil) // Create channels to track message processing
 		messageProcessed := make(chan bool, 1)
 		secondMessageProcessed := make(chan bool, 1)
 
@@ -300,30 +240,10 @@ func (suite *GlideTestSuite) TestPubSub_MessageHandler_ErrorHandling() {
 			shouldPanic: true,
 		}
 
-		// Create callback that will panic on first message but succeed on second
-		callback := func(message *api.PubSubMessage, context any) {
-			if tc, ok := context.(*testContext); ok {
-				tc.mu.Lock()
-				shouldPanic := tc.shouldPanic
-				tc.mu.Unlock()
-
-				if shouldPanic {
-					tc.mu.Lock()
-					tc.shouldPanic = false
-					tc.mu.Unlock()
-					messageProcessed <- true
-					panic("intentional panic in message handler")
-				}
-
-				// Second message should process normally
-				secondMessageProcessed <- true
-			}
-		}
-
 		channels := []ChannelDefn{
 			{Channel: "test-error-channel", Mode: ExactMode},
 		}
-		suite.CreatePubSubReceiver(publisher, channels, callback, ctx)
+		suite.CreatePubSubReceiver(clientType, channels, 1, true)
 
 		// Allow time for subscription to be established
 		time.Sleep(100 * time.Millisecond)

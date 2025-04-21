@@ -50,6 +50,7 @@ type BaseClient interface {
 	GeoSpatialCommands
 	ScriptingAndFunctionBaseCommands
 	PubSubCommands
+	PubSubHandler
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -80,6 +81,14 @@ func (client *baseClient) setMessageHandler(handler *MessageHandler) {
 // getMessageHandler returns the currently assigned message handler
 func (client *baseClient) getMessageHandler() *MessageHandler {
 	return client.messageHandler
+}
+
+func (client *baseClient) GetQueue() (*PubSubMessageQueue, error) {
+	// MessageHandler is only configured when a subscription is defined
+	if client.getMessageHandler() == nil {
+		return nil, &errors.RequestError{Msg: "No subscriptions configured for this client"}
+	}
+	return client.getMessageHandler().GetQueue(), nil
 }
 
 // buildAsyncClientType safely initializes a C.ClientType with an AsyncClient_Body.

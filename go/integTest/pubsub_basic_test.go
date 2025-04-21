@@ -12,20 +12,17 @@ import (
 )
 
 // TestBasicPubSubWithGlideClient tests basic publish and subscribe functionality with GlideClient
-func (suite *GlideTestSuite) TestPubSub_Basic() {
-	suite.runWithPubSubClients(func(publisher api.BaseClient) {
+func (suite *GlideTestSuite) TestPubSub_Basic_WithCallback() {
+	suite.runWithPubSubClients(func(clientType ClientType) {
+		publisher := suite.createAnyClient(clientType, nil)
 		// Create a subscriber client with subscription configuration
 		messageReceived := make(chan *api.PubSubMessage, 1)
-
-		callback := func(message *api.PubSubMessage, ctx any) {
-			messageReceived <- message
-		}
 
 		// Create a client with a subscription and a callback
 		channels := []ChannelDefn{
 			{Channel: "test-channel", Mode: ExactMode},
 		}
-		suite.CreatePubSubReceiver(publisher, channels, callback, nil)
+		suite.CreatePubSubReceiver(clientType, channels, 1, true)
 		// Give some time for subscription to be established
 		time.Sleep(100 * time.Millisecond)
 
@@ -54,27 +51,18 @@ func (suite *GlideTestSuite) TestPubSub_Basic() {
 }
 
 // TestMultipleSubscribersWithGlideClient tests message delivery to multiple subscribers
-func (suite *GlideTestSuite) TestPubSub_MultipleSubscribers() {
-	suite.runWithPubSubClients(func(publisher api.BaseClient) {
-		// Create channels for message tracking
+func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
+	suite.runWithPubSubClients(func(clientType ClientType) {
+		publisher := suite.createAnyClient(clientType, nil) // Create channels for message tracking
 		messages1 := make(chan *api.PubSubMessage, 10)
 		messages2 := make(chan *api.PubSubMessage, 10)
-
-		// Create subscriber clients with different channels
-		callback1 := func(message *api.PubSubMessage, ctx any) {
-			messages1 <- message
-		}
-
-		callback2 := func(message *api.PubSubMessage, ctx any) {
-			messages2 <- message
-		}
 
 		// Subscribe to different channels
 		channels := []ChannelDefn{
 			{Channel: "test-channel-multi", Mode: ExactMode},
 		}
-		suite.CreatePubSubReceiver(publisher, channels, callback1, nil)
-		suite.CreatePubSubReceiver(publisher, channels, callback2, nil)
+		suite.CreatePubSubReceiver(clientType, channels, 1, true)
+		suite.CreatePubSubReceiver(clientType, channels, 2, true)
 
 		// Give time for subscriptions to be established
 		time.Sleep(500 * time.Millisecond)
@@ -160,22 +148,17 @@ func (suite *GlideTestSuite) TestPubSub_MultipleSubscribers() {
 }
 
 // TestPatternSubscribeWithGlideClient tests message pattern matching with PSUBSCRIBE
-func (suite *GlideTestSuite) TestPubSub_PatternSubscription() {
-	suite.runWithPubSubClients(func(publisher api.BaseClient) {
-		// Create a subscriber client with pattern subscription
+func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
+	suite.runWithPubSubClients(func(clientType ClientType) {
+		publisher := suite.createAnyClient(clientType, nil) // Create a subscriber client with pattern subscription
 		messageReceived := make(chan *api.PubSubMessage, 10)
 		var wg sync.WaitGroup
 		wg.Add(2) // Expect 2 messages
 
-		callback := func(message *api.PubSubMessage, ctx any) {
-			messageReceived <- message
-			wg.Done()
-		}
-
 		channels := []ChannelDefn{
 			{Channel: "test-pattern-*", Mode: PatternMode},
 		}
-		suite.CreatePubSubReceiver(publisher, channels, callback, nil)
+		suite.CreatePubSubReceiver(clientType, channels, 1, true)
 
 		// Give some time for subscription to be established
 		time.Sleep(100 * time.Millisecond)
@@ -218,5 +201,72 @@ func (suite *GlideTestSuite) TestPubSub_PatternSubscription() {
 		assert.Equal(suite.T(), 2, len(receivedMessages))
 		assert.Equal(suite.T(), "message to pattern 1", receivedMessages["test-pattern-1"])
 		assert.Equal(suite.T(), "message to pattern 2", receivedMessages["test-pattern-2"])
+	})
+}
+
+// TestPubSub_Basic_WithQueue tests basic publish and subscribe functionality using the message queue
+// instead of a callback function for receiving messages
+func (suite *GlideTestSuite) TestPubSub_Basic_WithQueue() {
+	suite.runWithPubSubClients(func(clientType ClientType) {
+		publisher := suite.createAnyClient(clientType, nil) // Create a subscriber client without a callback (will use queue instead)
+		channels := []ChannelDefn{
+			{Channel: "test-queue-channel", Mode: ExactMode},
+		}
+
+		// Create a receiver without a callback (nil callback will use the queue)
+		receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false)
+
+		// Give some time for subscription to be established
+		time.Sleep(100 * time.Millisecond)
+
+		// Get message handler directly using the getMessageHandler method
+		queue, err := receiver.GetQueue()
+		assert.Nil(suite.T(), err)
+
+		// Set up a signal channel to be notified of new messages
+		signalCh := make(chan struct{}, 1)
+		queue.RegisterSignalChannel(signalCh)
+		defer queue.UnregisterSignalChannel(signalCh)
+
+		// Publish a message
+		testMessage := "hello queue world"
+		result, err := publisher.Publish("test-queue-channel", testMessage)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), result)
+
+		// Wait for the message to arrive using WaitForMessage method
+		var receivedMessage *api.PubSubMessage
+
+		// Set up timeout
+		timeoutDuration := 5 * time.Second
+		timeout := time.After(timeoutDuration)
+
+		// Wait for a message to arrive in the queue
+		select {
+		case <-signalCh:
+			// A message was pushed to the queue, try to pop it
+			receivedMessage = queue.Pop()
+		case <-timeout:
+			assert.Fail(suite.T(), "Timed out waiting for message in queue")
+		}
+
+		// Alternative method using WaitForMessage (this creates a channel specifically for this message)
+		if receivedMessage == nil {
+			// If we didn't get a message via signalCh, try WaitForMessage
+			select {
+			case receivedMessage = <-queue.WaitForMessage():
+				// Successfully received a message
+			case <-time.After(timeoutDuration):
+				assert.Fail(suite.T(), "Timed out waiting for message via WaitForMessage")
+			}
+		}
+
+		// Verify the message content
+		if receivedMessage != nil {
+			assert.Equal(suite.T(), testMessage, receivedMessage.Message)
+			assert.Equal(suite.T(), "test-queue-channel", receivedMessage.Channel)
+			assert.True(suite.T(), receivedMessage.Pattern.IsNil())
+		}
 	})
 }
