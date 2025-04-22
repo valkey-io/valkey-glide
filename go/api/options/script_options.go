@@ -79,9 +79,9 @@ type Script struct {
 }
 
 // NewScript creates a new Script object
-func NewScript(code interface{}) *Script {
+func NewScript(code string) *Script {
 	// In Go implementation, we'd convert code to bytes and store the script
-	hash := storeScript(getBytes(stringOf(code)))
+	hash := storeScript(getBytes(code))
 	return &Script{
 		hash:      hash,
 		isDropped: false,
@@ -104,18 +104,6 @@ func (s *Script) Close() error {
 		s.isDropped = true
 	}
 	return nil
-}
-
-// stringOf converts an interface to a string
-func stringOf(value interface{}) string {
-	switch v := value.(type) {
-	case string:
-		return v
-	case []byte:
-		return string(v)
-	default:
-		return ""
-	}
 }
 
 // getBytes returns the bytes representation of the string
