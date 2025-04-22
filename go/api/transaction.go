@@ -69,10 +69,10 @@ func (t *Transaction) Exec() ([]any, error) {
 }
 
 func (client *baseClient) executeTransactionCommand(commands []Cmder) (*C.CommandResponse, error) {
-	return client.ExecuteTransaction(commands, nil)
+	return client.executeTransactionWithRoute(commands, nil)
 }
 
-func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (*C.struct_CommandResponse, error) {
+func (client *baseClient) executeTransactionWithRoute(cmds []Cmder, route config.Route) (*C.struct_CommandResponse, error) {
 	if len(cmds) == 0 {
 		return nil, &errors.RequestError{Msg: "Transaction must contain at least one command"}
 	}

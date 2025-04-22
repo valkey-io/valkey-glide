@@ -14,9 +14,9 @@ func main() {
 	// port := 7005
 
 	configg := api.NewGlideClusterClientConfiguration().
-		WithAddress(&api.NodeAddress{Host: "localhost", Port: 7006}).
 		WithAddress(&api.NodeAddress{Host: "localhost", Port: 7007}).
-		WithAddress(&api.NodeAddress{Host: "localhost", Port: 7008})
+		WithAddress(&api.NodeAddress{Host: "localhost", Port: 7008}).
+		WithAddress(&api.NodeAddress{Host: "localhost", Port: 7009})
 
 	// config := api.NewGlideClusterClientConfiguration().
 	// 	WithAddress(&api.NodeAddress{Host: host, Port: port})

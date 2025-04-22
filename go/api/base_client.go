@@ -347,6 +347,7 @@ func (client *baseClient) executeCommandWithRoute(
 		routeBytesPtr,
 		routeBytesCount,
 	)
+
 	client.mu.Unlock()
 
 	payload := <-resultChannel

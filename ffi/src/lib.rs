@@ -828,10 +828,6 @@ pub unsafe extern "C" fn execute_transaction(
     for i in 0..transaction.cmd_count {
         let cmder = unsafe { &*transaction.commands.add(i as usize) };
 
-        // if cmder.args.is_null() {
-        //     panic!("Cmder args pointer is NULL at index {}", i);
-        // }
-
         let mut cmd = cmder
             .request_type
             .get_command()
