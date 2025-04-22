@@ -7789,7 +7789,7 @@ export class BaseClient {
                     options.openTelemetryConfig.tracesCollectorEndpoint,
                 metricsCollectorEndpoint:
                     options.openTelemetryConfig.metricsCollectorEndpoint,
-                flushInterval: options.openTelemetryConfig.flushIntervalMs,
+                flushIntervalMs: options.openTelemetryConfig.flushIntervalMs,
             };
         }
     }

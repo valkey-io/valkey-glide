@@ -229,16 +229,7 @@ async fn write_result(
                 type_: match error_type(&err) {
                     RequestErrorType::Unspecified => response::RequestErrorType::Unspecified,
                     RequestErrorType::ExecAbort => response::RequestErrorType::ExecAbort,
-                    RequestErrorType::Timeout => {
-                        // Record timeout error metric
-                        if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
-                            log_error(
-                                "OpenTelemetry:timeout_error",
-                                format!("Failed to record timeout error: {}", e),
-                            );
-                        }
-                        response::RequestErrorType::Timeout
-                    }
+                    RequestErrorType::Timeout => response::RequestErrorType::Timeout,
                     RequestErrorType::Disconnect => response::RequestErrorType::Disconnect,
                 }
                 .into(),
