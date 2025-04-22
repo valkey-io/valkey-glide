@@ -77,10 +77,15 @@ type clientConfiguration interface {
 
 type CommandExecutor interface {
 	ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error)
+	ExecuteCommandWithRoute(requestType C.RequestType, args []string, route config.Route) (*C.struct_CommandResponse, error)
 }
 
 func (client *baseClient) ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
 	return client.executeCommand(requestType, args)
+}
+
+func (client *baseClient) ExecuteCommandWithRoute(requestType C.RequestType, args []string, route config.Route) (*C.struct_CommandResponse, error) {
+	return client.executeCommandWithRoute(requestType, args, route)
 }
 
 type baseClient struct {
@@ -3394,9 +3399,9 @@ func (client *baseClient) PfMerge(destination string, sourceKeys []string) (stri
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	if result == nil {
-		return DefaultStringResponse, err
-	}
+	// if result == nil {
+	// 	return DefaultStringResponse, err
+	// }
 
 	return handleStringResponse(result)
 }
@@ -5054,6 +5059,7 @@ func (client *baseClient) Dump(key string) (Result[string], error) {
 	if result == nil {
 		return CreateNilStringResult(), err
 	}
+	// fmt.Println(result)
 	return handleStringOrNilResponse(result)
 }
 

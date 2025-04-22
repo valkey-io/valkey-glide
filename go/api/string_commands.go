@@ -18,6 +18,8 @@ type StringCommands interface {
 
 	Get(key string) (Result[string], error)
 
+	GetEx(key string) (Result[string], error)
+
 	GetExWithOptions(key string, options options.GetExOptions) (Result[string], error)
 
 	MSet(keyValueMap map[string]string) (string, error)

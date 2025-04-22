@@ -1,15 +1,6 @@
 package api
 
-// #cgo LDFLAGS: -lglide_ffi
-// #cgo !windows LDFLAGS: -lm
-// #cgo darwin LDFLAGS: -framework Security
-// #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
-// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
-// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
-// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
-// #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-apple-darwin
 // #include "../lib.h"
-//
 // void successCallback(void *channelPtr, struct CommandResponse *message);
 // void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
 import "C"
@@ -36,8 +27,9 @@ type Cmder interface {
 }
 
 type GenericCommand struct {
-	name C.RequestType
-	args []string
+	name  C.RequestType
+	args  []string
+	route config.Route
 }
 
 func (cmd *GenericCommand) Name() C.RequestType {
@@ -60,6 +52,11 @@ func NewExecCommand() Cmder {
 func (t *Transaction) ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
 	t.commands = append(t.commands, &GenericCommand{name: requestType, args: args})
 	return nil, nil // Queue the command instead of executing immediately
+}
+
+func (t *Transaction) ExecuteCommandWithRoute(requestType C.RequestType, args []string, route config.Route) (*C.struct_CommandResponse, error) {
+	t.commands = append(t.commands, &GenericCommand{name: requestType, args: args, route: route})
+	return nil, nil
 }
 
 // Exec executes all queued commands as a transaction
@@ -111,12 +108,6 @@ func (client *baseClient) ExecuteTransaction(cmds []Cmder, route config.Route) (
 			args_count:   C.uintptr_t(len(cmd.Args())),
 			args:         cArgsPtr,
 		}
-
-		// cCmders[i] = C.Cmder{
-		// 	request_type: C.enum_RequestType(cmd.Name()),
-		// 	args_count:   C.uintptr_t(len(cmd.Args())),
-		// 	args:         (**C.char)(unsafe.Pointer(&cArgs[0]),
-		// }
 	}
 	transaction := C.Transaction{
 		cmd_count: C.uintptr_t(len(cmds)),
