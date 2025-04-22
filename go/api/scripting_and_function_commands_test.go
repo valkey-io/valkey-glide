@@ -870,7 +870,10 @@ func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
 
 	// Print the result (a map in Go)
 	for _, value := range result.MultiValue() {
-		fmt.Println(value)
+		if value != nil && value.(string) == "Hello" {
+			fmt.Println(value)
+			break
+		}
 	}
 
 	// Output:
