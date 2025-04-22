@@ -746,3 +746,140 @@ func ExampleGlideClusterClient_FunctionKillWithRoute() {
 	// Output:
 	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
 }
+
+func ExampleGlideClient_InvokeScript() {
+	client := getExampleGlideClient()
+
+	// Create a simple Lua script that returns a string
+	script := options.NewScript("return 'Hello from Lua'")
+
+	// Execute the script
+	result, err := client.InvokeScript(*script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// Hello from Lua
+}
+
+func ExampleGlideClusterClient_InvokeScript() {
+	client := getExampleGlideClusterClient()
+
+	// Create a simple Lua script that returns a number
+	script := options.NewScript("return 123")
+
+	// Execute the script
+	result, err := client.InvokeScript(*script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// 123
+}
+
+func ExampleGlideClient_InvokeScriptWithOptions() {
+	client := getExampleGlideClient()
+
+	// Create a Lua script that uses keys and arguments
+	scriptText := `
+		local key = KEYS[1]
+		local value = ARGV[1]
+		redis.call('SET', key, value)
+		return redis.call('GET', key)
+	`
+	script := options.NewScript(scriptText)
+
+	// Create a unique key for testing
+	testKey := "test-key-" + uuid.New().String()
+
+	// Set up script options with keys and arguments
+	scriptOptions := options.NewScriptOptions().
+		WithKeys([]string{testKey}).
+		WithArgs([]string{"Hello World"})
+
+	// Execute the script with options
+	result, err := client.InvokeScriptWithOptions(*script, *scriptOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// Hello World
+}
+
+func ExampleGlideClusterClient_InvokeScriptWithOptions() {
+	client := getExampleGlideClusterClient()
+
+	// Create a Lua script that performs calculations with arguments
+	scriptText := `
+		local a = tonumber(ARGV[1])
+		local b = tonumber(ARGV[2])
+		return a + b
+	`
+	script := options.NewScript(scriptText)
+
+	// Set up script options with arguments
+	scriptOptions := options.NewScriptOptions().
+		WithArgs([]string{"10", "20"})
+
+	// Execute the script with options
+	result, err := client.InvokeScriptWithOptions(*script, *scriptOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// 30
+}
+
+func ExampleGlideClusterClient_InvokeScriptWithOptionsAndRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Create a Lua script that returns a table
+	scriptText := `
+		return {status="success", code=200, data="test data"}
+	`
+	script := options.NewScript(scriptText)
+
+	// Set up script options
+	scriptOptions := options.NewScriptOptions()
+
+	// Set up routing options
+	route := config.Route(config.RandomRoute)
+	routeOpts := options.RouteOption{
+		Route: route,
+	}
+
+	// Execute the script with options and route
+	result, err := client.InvokeScriptWithOptionsAndRoute(*script, *scriptOptions, routeOpts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Print the result (a map in Go)
+	if resultMap, ok := result.SingleValue().(map[string]interface{}); ok {
+		fmt.Println("Status:", resultMap["status"])
+		fmt.Println("Code:", resultMap["code"])
+		fmt.Println("Data:", resultMap["data"])
+	}
+
+	// Output:
+	// Status: success
+	// Code: 200
+	// Data: test data
+}
