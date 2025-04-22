@@ -1457,7 +1457,7 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, r
 	return createClusterSingleValue[any](response), nil
 }
 
-// InvokeScriptWithOptionsAndRoute executes a Lua script on the server with additional options and routing information.
+// InvokeScriptWithClusterOptions executes a Lua script on the server with cluster script options.
 //
 // This function simplifies the process of invoking scripts on the server by using an object that
 // represents a Lua script. The script loading, argument preparation, and execution will all be
@@ -1467,16 +1467,15 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, r
 //
 // Note:
 //
-//   - all `keys` in `scriptOptions` must map to the same hash slot.
-//   - the command will be routed to a random node, unless `route` is provided.
+//   - all `keys` in `clusterScriptOptions` must map to the same hash slot.
+//   - the command will be routed based on the Route specified in clusterScriptOptions.
 //
 // See [LOAD] and [EVALSHA] for details.
 //
 // Parameters:
 //
 //	script - The script to execute.
-//	scriptOptions - Options for script execution including keys and arguments.
-//	route - Routing information for the script execution.
+//	clusterScriptOptions - Combined options for script execution including keys, arguments, and routing information.
 //
 // Return value:
 //
@@ -1484,16 +1483,17 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, r
 //
 // [LOAD]: https://valkey.io/commands/script-load/
 // [EVALSHA]: https://valkey.io/commands/evalsha/
-func (client *GlideClusterClient) InvokeScriptWithOptionsAndRoute(script options.Script, scriptOptions options.ScriptOptions, route options.RouteOption) (ClusterValue[any], error) {
-	keys := scriptOptions.GetKeys()
-	args := scriptOptions.GetArgs()
+func (client *GlideClusterClient) InvokeScriptWithClusterOptions(script options.Script, clusterScriptOptions options.ClusterScriptOptions) (ClusterValue[any], error) {
+	keys := clusterScriptOptions.GetKeys()
+	args := clusterScriptOptions.GetArgs()
+	route := clusterScriptOptions.Route
 
-	response, err := client.baseClient.executeScriptWithRoute(script.GetHash(), keys, args, route.Route)
+	response, err := client.baseClient.executeScriptWithRoute(script.GetHash(), keys, args, route)
 	if err != nil {
 		return createEmptyClusterValue[any](), err
 	}
 
-	if route.Route != nil && route.Route.IsMultiNode() {
+	if route != nil && route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(response)
 		if err != nil {
 			return createEmptyClusterValue[any](), err

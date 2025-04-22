@@ -846,7 +846,7 @@ func ExampleGlideClusterClient_InvokeScriptWithOptions() {
 	// 30
 }
 
-func ExampleGlideClusterClient_InvokeScriptWithOptionsAndRoute() {
+func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
 	client := getExampleGlideClusterClient()
 
 	// Create a Lua script that returns a table
@@ -855,17 +855,15 @@ func ExampleGlideClusterClient_InvokeScriptWithOptionsAndRoute() {
 	`
 	script := options.NewScript(scriptText)
 
-	// Set up script options
-	scriptOptions := options.NewScriptOptions()
+	// Set up cluster script options
+	clusterScriptOptions := options.NewClusterScriptOptions()
 
-	// Set up routing options
+	// Set the route
 	route := config.Route(config.RandomRoute)
-	routeOpts := options.RouteOption{
-		Route: route,
-	}
+	clusterScriptOptions.Route = route
 
-	// Execute the script with options and route
-	result, err := client.InvokeScriptWithOptionsAndRoute(*script, *scriptOptions, routeOpts)
+	// Execute the script with cluster options
+	result, err := client.InvokeScriptWithClusterOptions(*script, *clusterScriptOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return

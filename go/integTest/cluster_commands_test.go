@@ -1846,16 +1846,24 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 
 	// Test script that sets a key with value
 	script2 := options.NewScript("return redis.call('SET', KEYS[1], ARGV[1])")
-	scriptOptions := options.NewScriptOptions().WithKeys([]string{key1}).WithArgs([]string{"value1"})
-	clusterSetResponse, err := clusterClient.InvokeScriptWithOptionsAndRoute(*script2, *scriptOptions, routeOption)
+	
+	// Create ClusterScriptOptions for setting key1
+	clusterScriptOptions1 := options.NewClusterScriptOptions()
+	clusterScriptOptions1.WithKeys([]string{key1}).WithArgs([]string{"value1"})
+	clusterScriptOptions1.Route = config.AllPrimaries
+	
+	clusterSetResponse, err := clusterClient.InvokeScriptWithClusterOptions(*script2, *clusterScriptOptions1)
 	assert.Nil(suite.T(), err)
 	for _, value := range clusterSetResponse.MultiValue() {
 		assert.Equal(suite.T(), "OK", value)
 	}
 
 	// Set another key with the same script
-	scriptOptions2 := options.NewScriptOptions().WithKeys([]string{key2}).WithArgs([]string{"value2"})
-	clusterSetResponse2, err := clusterClient.InvokeScriptWithOptionsAndRoute(*script2, *scriptOptions2, routeOption)
+	clusterScriptOptions2 := options.NewClusterScriptOptions()
+	clusterScriptOptions2.WithKeys([]string{key2}).WithArgs([]string{"value2"})
+	clusterScriptOptions2.Route = config.AllPrimaries
+	
+	clusterSetResponse2, err := clusterClient.InvokeScriptWithClusterOptions(*script2, *clusterScriptOptions2)
 	assert.Nil(suite.T(), err)
 	for _, value := range clusterSetResponse2.MultiValue() {
 		assert.Equal(suite.T(), "OK", value)
@@ -1864,15 +1872,24 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 
 	// Test script that gets a key's value
 	script3 := options.NewScript("return redis.call('GET', KEYS[1])")
-	scriptOptions3 := options.NewScriptOptions().WithKeys([]string{key1})
-	getResponse1, err := clusterClient.InvokeScriptWithOptionsAndRoute(*script3, *scriptOptions3, routeOption)
+	
+	// Create ClusterScriptOptions for getting key1
+	clusterScriptOptions3 := options.NewClusterScriptOptions()
+	clusterScriptOptions3.WithKeys([]string{key1})
+	clusterScriptOptions3.Route = config.AllPrimaries
+	
+	getResponse1, err := clusterClient.InvokeScriptWithClusterOptions(*script3, *clusterScriptOptions3)
 	assert.Nil(suite.T(), err)
 	for _, value := range getResponse1.MultiValue() {
 		assert.Equal(suite.T(), "value1", value)
 	}
+	
 	// Get another key's value
-	scriptOpts4 := options.NewScriptOptions().WithKeys([]string{key2})
-	getResponse2, err := clusterClient.InvokeScriptWithOptionsAndRoute(*script3, *scriptOpts4, routeOption)
+	clusterScriptOptions4 := options.NewClusterScriptOptions()
+	clusterScriptOptions4.WithKeys([]string{key2})
+	clusterScriptOptions4.Route = config.AllPrimaries
+	
+	getResponse2, err := clusterClient.InvokeScriptWithClusterOptions(*script3, *clusterScriptOptions4)
 	assert.Nil(suite.T(), err)
 	for _, value := range getResponse2.MultiValue() {
 		assert.Equal(suite.T(), "value2", value)

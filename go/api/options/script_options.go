@@ -46,6 +46,31 @@ func (o *ScriptOptions) GetArgs() []string {
 	return o.args
 }
 
+type ClusterScriptOptions struct {
+	*ScriptOptions
+	*RouteOption
+}
+
+// NewClusterScriptOptions creates a new ClusterScriptOptions with default values
+func NewClusterScriptOptions() *ClusterScriptOptions {
+	return &ClusterScriptOptions{
+		ScriptOptions: NewScriptOptions(),
+		RouteOption:   &RouteOption{},
+	}
+}
+
+// WithRouteOptions sets the route options for the cluster script
+func (o *ClusterScriptOptions) WithRouteOptions(routeOption *RouteOption) *ClusterScriptOptions {
+	o.RouteOption = routeOption
+	return o
+}
+
+// WithScriptOptions sets the script options for the cluster script
+func (o *ClusterScriptOptions) WithScriptOptions(scriptOptions *ScriptOptions) *ClusterScriptOptions {
+	o.ScriptOptions = scriptOptions
+	return o
+}
+
 // Script represents a Lua script stored in Valkey/Redis
 type Script struct {
 	hash      string
