@@ -3400,9 +3400,9 @@ func (client *baseClient) PfMerge(destination string, sourceKeys []string) (stri
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	// if result == nil {
-	// 	return DefaultStringResponse, err
-	// }
+	if result == nil {
+		return DefaultStringResponse, err
+	}
 
 	return handleStringResponse(result)
 }

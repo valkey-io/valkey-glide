@@ -23,8 +23,9 @@ var (
 )
 
 var (
-	standaloneClient *GlideClient
-	standaloneOnce   sync.Once
+	standaloneClient            *GlideClient
+	standaloneOnce              sync.Once
+	standaloneTransactionClient *Transaction
 )
 
 var initOnce sync.Once
@@ -110,4 +111,37 @@ func parseHosts(addresses string) []NodeAddress {
 		}
 	}
 	return result
+}
+
+func getExampleTransactionGlideClient() *Transaction {
+	standaloneOnce.Do(func() {
+		initFlags()
+		addresses := parseHosts(*standaloneNode)
+		config := NewGlideClientConfiguration().
+			WithAddress(&addresses[0]) // use default address
+
+		client, err := NewGlideClient(config)
+		if err != nil {
+			fmt.Println("error connecting to database: ", err)
+		}
+		// Flush the database before each test to ensure a clean state.
+		_, errFlush := client.CustomCommand([]string{"FLUSHALL"})
+		if errFlush != nil {
+			fmt.Println("error flushing database: ", err)
+		}
+		clientTx := NewTransaction(client)
+
+		standaloneTransactionClient = clientTx
+
+	})
+
+	// cmd := standaloneTransactionClient.GlideClient
+	// cmd.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
+	// _, err := standaloneTransactionClient.Exec()
+
+	// if err != nil {
+	// 	fmt.Println("error flushing database: ", err)
+	// }
+
+	return standaloneTransactionClient
 }
