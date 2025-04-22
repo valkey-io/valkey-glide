@@ -366,7 +366,7 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	return cStrings, stringLengths
 }
 
-func (client *baseClient) submitConnectionPasswordUpdate(password string, immediateAuth bool) (Result[string], error) {
+func (client *baseClient) submitConnectionPasswordUpdate(password string, immediateAuth bool) (string, error) {
 	// Create a channel to receive the result
 	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
@@ -378,7 +378,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return CreateNilStringResult(), &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
+		return DefaultStringResponse, &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
@@ -400,14 +400,10 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 	client.mu.Unlock()
 
 	if payload.error != nil {
-		return CreateNilStringResult(), payload.error
+		return DefaultStringResponse, payload.error
 	}
 
-	result, err := handleOkResponse(payload.value)
-	if err != nil {
-		return CreateNilStringResult(), err
-	}
-	return CreateStringResult(result), nil
+	return handleOkResponse(payload.value)
 }
 
 // Update the current connection with a new password.
@@ -434,7 +430,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 // Return value:
 //
 //	`"OK"` response on success.
-func (client *baseClient) UpdateConnectionPassword(password string, immediateAuth bool) (Result[string], error) {
+func (client *baseClient) UpdateConnectionPassword(password string, immediateAuth bool) (string, error) {
 	return client.submitConnectionPasswordUpdate(password, immediateAuth)
 }
 
@@ -454,7 +450,7 @@ func (client *baseClient) UpdateConnectionPassword(password string, immediateAut
 // Return value:
 //
 //	`"OK"` response on success.
-func (client *baseClient) ResetConnectionPassword() (Result[string], error) {
+func (client *baseClient) ResetConnectionPassword() (string, error) {
 	return client.submitConnectionPasswordUpdate("", false)
 }
 
@@ -4897,7 +4893,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 //	Return OK if successfully create a key with a value </code>.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
-func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
+func (client *baseClient) Restore(key string, ttl int64, value string) (string, error) {
 	return client.RestoreWithOptions(key, ttl, value, *options.NewRestoreOptions())
 }
 
@@ -4918,23 +4914,19 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (Result[s
 // [valkey.io]: https://valkey.io/commands/restore/
 func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 	value string, options options.RestoreOptions,
-) (Result[string], error) {
+) (string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return CreateNilStringResult(), err
+		return DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Restore, append([]string{
 		key,
 		utils.IntToString(ttl), value,
 	}, optionArgs...))
 	if err != nil {
-		return CreateNilStringResult(), err
+		return DefaultStringResponse, err
 	}
-	response, err := handleOkResponse(result)
-	if err != nil {
-		return CreateNilStringResult(), err
-	}
-	return CreateStringResult(response), nil
+	return handleOkResponse(result)
 }
 
 // Serialize the value stored at key in a Valkey-specific format and return it to the user.

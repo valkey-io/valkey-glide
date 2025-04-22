@@ -179,7 +179,7 @@ func handleOkResponse(response *C.struct_CommandResponse) (string, error) {
 
 	typeErr := checkResponseType(response, C.Ok, false)
 	if typeErr != nil {
-		return CreateNilStringResult().Value(), typeErr
+		return DefaultStringResponse, typeErr
 	}
 
 	return "OK", nil
