@@ -859,7 +859,7 @@ func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
 	clusterScriptOptions := options.NewClusterScriptOptions()
 
 	// Set the route
-	route := config.Route(config.RandomRoute)
+	route := config.Route(config.AllPrimaries)
 	clusterScriptOptions.Route = route
 
 	// Execute the script with cluster options
