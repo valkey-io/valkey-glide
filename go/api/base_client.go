@@ -7739,7 +7739,7 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 	return handleAnyResponse(result)
 }
 
-// InvokeScript executes a Lua script on the server.
+// Executes a Lua script on the server.
 //
 // This function simplifies the process of invoking scripts on the server by using an object that
 // represents a Lua script. The script loading and execution will all be handled internally. If
@@ -7773,7 +7773,7 @@ func (client *baseClient) InvokeScript(script options.Script) (any, error) {
 	return result, nil
 }
 
-// InvokeScriptWithOptions executes a Lua script on the server with additional options.
+// Executes a Lua script on the server with additional options.
 //
 // This function simplifies the process of invoking scripts on the server by using an object that
 // represents a Lua script. The script loading, argument preparation, and execution will all be

@@ -1416,7 +1416,7 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []
 	return client.FCallReadOnlyWithArgsWithRoute(function, args, options.RouteOption{})
 }
 
-// InvokeScriptWithRoute executes a Lua script on the server with routing information.
+// Executes a Lua script on the server with routing information.
 //
 // This function simplifies the process of invoking scripts on the server by using an object that
 // represents a Lua script. The script loading and execution will all be handled internally. If
@@ -1457,7 +1457,7 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, r
 	return createClusterSingleValue[any](response), nil
 }
 
-// InvokeScriptWithClusterOptions executes a Lua script on the server with cluster script options.
+// Executes a Lua script on the server with cluster script options.
 //
 // This function simplifies the process of invoking scripts on the server by using an object that
 // represents a Lua script. The script loading, argument preparation, and execution will all be
