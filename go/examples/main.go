@@ -78,7 +78,7 @@ func main() {
 	cmd.Persist("key1")
 	cmd.ObjectEncoding("key123")
 	cmd.ObjectIdleTime("key1")
-	//cmd.ObjectFreq("key1") //config
+	//cmd.ObjectFreq("key1") //need to modify config
 	cmd.ObjectRefCount("key1")
 	cmd.Set("key4", "newkey3")
 	cmd.Rename("key2", "newkey2")
@@ -99,6 +99,7 @@ func main() {
 	cmd.SortStore("keySort", "key1_store")
 	cmd.Wait(10, 10)
 
+	// SetCommands
 	cmd.SAdd("someKey", []string{"value", "value1", "value2"})
 	cmd.SRem("someKey", []string{"value1"})
 	cmd.SMembers("someKey")
