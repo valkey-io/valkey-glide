@@ -7765,12 +7765,7 @@ func (client *baseClient) InvokeScript(script options.Script) (any, error) {
 		return nil, err
 	}
 
-	result, err := handleAnyResponse(response)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return handleAnyResponse(response)
 }
 
 // Executes a Lua script on the server with additional options.
@@ -7809,12 +7804,7 @@ func (client *baseClient) InvokeScriptWithOptions(script options.Script, scriptO
 		return nil, err
 	}
 
-	result, err := handleAnyResponse(response)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return handleAnyResponse(response)
 }
 
 // Publish posts a message to the specified channel. Returns the number of clients that received the message.
