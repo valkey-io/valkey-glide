@@ -181,31 +181,30 @@ async fn perform_benchmark(args: Args) {
 }
 
 fn calculate_latencies(values: &[Duration], prefix: &str) -> HashMap<String, Value> {
-    let values: Vec<f64> = values
+    let mut latencies: Vec<f64> = values
         .iter()
-        .map(|duration| duration.as_secs_f64() * 1000.0) // seconds -> ms
+        .map(|duration| duration.as_secs_f64() * 1000.0) // Convert to milliseconds
         .collect();
+
+    latencies.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
     let mut map = HashMap::new();
-    map.insert(
-        format!("{prefix}_p50_latency"),
-        values[values.len() / 2].into(),
-    );
-    map.insert(
-        format!("{prefix}_p90_latency"),
-        values[values.len() / 100 * 90].into(),
-    );
-    map.insert(
-        format!("{prefix}_p99_latency"),
-        values[values.len() / 100 * 99].into(),
-    );
-    map.insert(
-        format!("{prefix}_average_latency"),
-        statistical::mean(values.as_slice()).into(),
-    );
-    map.insert(
-        format!("{prefix}_std_dev"),
-        statistical::standard_deviation(values.as_slice(), None).into(),
-    );
+    let len = latencies.len() as f64;
+    if len == 0.0 {
+        panic!("No latencies were found");
+    }
+
+    let p50 = latencies[(len * 0.5) as usize];
+    let p90 = latencies[(len * 0.9) as usize];
+    let p99 = latencies[(len * 0.99) as usize];
+    let avg = statistical::mean(&latencies);
+    let stddev = statistical::standard_deviation(&latencies, None);
+
+    map.insert(format!("{prefix}_p50_latency"), p50.into());
+    map.insert(format!("{prefix}_p90_latency"), p90.into());
+    map.insert(format!("{prefix}_p99_latency"), p99.into());
+    map.insert(format!("{prefix}_average_latency"), avg.into());
+    map.insert(format!("{prefix}_std_dev"), stddev.into());
     map
 }
 
