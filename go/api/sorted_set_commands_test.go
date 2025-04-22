@@ -5,6 +5,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -1644,4 +1645,153 @@ func ExampleGlideClusterClient_ZLexCount() {
 
 	// Output:
 	// 2
+}
+
+func ExampleGlideClient_BZPopMax() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	// Add members to the sorted set
+	client.ZAdd("mySortedSet", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0})
+
+	// Pop the highest-score member
+	res, err := client.BZPopMax([]string{"mySortedSet"}, 1.0)
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+		return
+	}
+
+	value := res.Value()
+	fmt.Printf("{Key: %q, Member: %q, Score: %.1f}\n", value.Key, value.Member, value.Score)
+
+	// Output: {Key: "mySortedSet", Member: "c", Score: 3.0}
+}
+
+func ExampleGlideClusterClient_BZPopMax() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.ZAdd("{key}SortedSet", map[string]float64{"x": 5.0, "y": 6.0, "z": 7.0})
+
+	res, err := client.BZPopMax([]string{"{key}SortedSet"}, 1.0)
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+		return
+	}
+
+	value := res.Value()
+	fmt.Printf("{Key: %q, Member: %q, Score: %.1f}\n", value.Key, value.Member, value.Score)
+
+	// Output: {Key: "{key}SortedSet", Member: "z", Score: 7.0}
+}
+
+func ExampleGlideClient_ZMPop() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	// Add members to a sorted set
+	client.ZAdd("mySortedSet", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0})
+
+	// Pop the lowest-score member
+	res, err := client.ZMPop([]string{"mySortedSet"}, options.MIN)
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+		return
+	}
+
+	value := res.Value()
+	fmt.Printf("{Key: %q, MembersAndScores: [", value.Key)
+	for i, member := range value.MembersAndScores {
+		if i > 0 {
+			fmt.Print(", ")
+		}
+		fmt.Printf("{Member: %q, Score: %.1f}", member.Member, member.Score)
+	}
+	fmt.Println("]}")
+
+	// Output: {Key: "mySortedSet", MembersAndScores: [{Member: "a", Score: 1.0}]}
+}
+
+func ExampleGlideClusterClient_ZMPop() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	// Add members to a sorted set
+	client.ZAdd("{key}sortedSet", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
+
+	// Pop the lowest-score member
+	res, err := client.ZMPop([]string{"{key}sortedSet"}, options.MIN)
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+		return
+	}
+
+	value := res.Value()
+	fmt.Printf("{Key: %q, MembersAndScores: [", value.Key)
+	for i, member := range value.MembersAndScores {
+		if i > 0 {
+			fmt.Print(", ")
+		}
+		fmt.Printf("{Member: %q, Score: %.1f}", member.Member, member.Score)
+	}
+	fmt.Println("]}")
+
+	// Output: {Key: "{key}sortedSet", MembersAndScores: [{Member: "one", Score: 1.0}]}
+}
+
+func ExampleGlideClient_ZMPopWithOptions() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+
+	client.ZAdd("mySortedSet", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+
+	opts := *options.NewZPopOptions().SetCount(2)
+	res, err := client.ZMPopWithOptions([]string{"mySortedSet"}, options.MAX, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+		return
+	}
+
+	value := res.Value()
+
+	sort.Slice(value.MembersAndScores, func(i, j int) bool {
+		return value.MembersAndScores[i].Score > value.MembersAndScores[j].Score
+	})
+
+	fmt.Printf("{Key: %q, MembersAndScores: [", value.Key)
+	for i, member := range value.MembersAndScores {
+		if i > 0 {
+			fmt.Print(", ")
+		}
+		fmt.Printf("{Member: %q, Score: %.1f}", member.Member, member.Score)
+	}
+	fmt.Println("]}")
+
+	// Output: {Key: "mySortedSet", MembersAndScores: [{Member: "d", Score: 4.0}, {Member: "c", Score: 3.0}]}
+}
+
+func ExampleGlideClusterClient_ZMPopWithOptions() {
+	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+
+	client.ZAdd("{key}SortedSet", map[string]float64{"p": 10.0, "q": 20.0, "r": 30.0})
+
+	opts := *options.NewZPopOptions().SetCount(2)
+	res, err := client.ZMPopWithOptions([]string{"{key}SortedSet"}, options.MAX, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+		return
+	}
+
+	value := res.Value()
+
+	// Ensure sorting of results for deterministic comparison
+	sort.Slice(value.MembersAndScores, func(i, j int) bool {
+		return value.MembersAndScores[i].Score > value.MembersAndScores[j].Score
+	})
+
+	fmt.Printf("{Key: %q, MembersAndScores: [", value.Key)
+	for i, member := range value.MembersAndScores {
+		if i > 0 {
+			fmt.Print(", ")
+		}
+		fmt.Printf("{Member: %q, Score: %.1f}", member.Member, member.Score)
+	}
+	fmt.Println("]}")
+
+	// Output: {Key: "{key}SortedSet", MembersAndScores: [{Member: "r", Score: 30.0}, {Member: "q", Score: 20.0}]}
 }
