@@ -1467,8 +1467,8 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, r
 //
 // Note:
 //
-//   - all `keys` in `clusterScriptOptions` must map to the same hash slot.
-//   - the command will be routed based on the Route specified in clusterScriptOptions.
+//	- all `keys` in `clusterScriptOptions` must map to the same hash slot.
+//	- the command will be routed based on the Route specified in clusterScriptOptions.
 //
 // See [LOAD] and [EVALSHA] for details.
 //
@@ -1483,7 +1483,10 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, r
 //
 // [LOAD]: https://valkey.io/commands/script-load/
 // [EVALSHA]: https://valkey.io/commands/evalsha/
-func (client *GlideClusterClient) InvokeScriptWithClusterOptions(script options.Script, clusterScriptOptions options.ClusterScriptOptions) (ClusterValue[any], error) {
+func (client *GlideClusterClient) InvokeScriptWithClusterOptions(
+	script options.Script,
+	clusterScriptOptions options.ClusterScriptOptions,
+) (ClusterValue[any], error) {
 	keys := clusterScriptOptions.GetKeys()
 	args := clusterScriptOptions.GetArgs()
 	route := clusterScriptOptions.Route
