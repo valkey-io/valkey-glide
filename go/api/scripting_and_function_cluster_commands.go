@@ -45,5 +45,9 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	InvokeScriptWithRoute(script options.Script, route options.RouteOption) (ClusterValue[any], error)
 
-	InvokeScriptWithOptionsAndRoute(script options.Script, scriptOptions options.ScriptOptions, route options.RouteOption) (ClusterValue[any], error)
+	InvokeScriptWithOptionsAndRoute(
+		script options.Script,
+		scriptOptions options.ScriptOptions,
+		route options.RouteOption,
+	) (ClusterValue[any], error)
 }

@@ -26,10 +26,10 @@ type ScriptingAndFunctionBaseCommands interface {
 	FCallWithKeysAndArgs(function string, keys []string, args []string) (any, error)
 
 	FCallReadOnlyWithKeysAndArgs(function string, keys []string, args []string) (any, error)
-  
+
 	FunctionKill() (string, error)
 
-  InvokeScript(script options.Script) (any, error)
+	InvokeScript(script options.Script) (any, error)
 
 	InvokeScriptWithOptions(script options.Script, scriptOptions options.ScriptOptions) (any, error)
 }
