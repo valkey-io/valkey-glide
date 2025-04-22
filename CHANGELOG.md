@@ -15,6 +15,7 @@
 * Go: Add `ZLEXCOUNT` ([#3140](https://github.com/valkey-io/valkey-glide/pull/3140))
 * Go: Updating examples for `ZInterCard` ([#3232](https://github.com/valkey-io/valkey-glide/pull/3232))
 * Go: Fix channel passing from Go to Rust by using `runtime.Pinner` or `cgo.Handle` ([#3208](https://github.com/valkey-io/valkey-glide/pull/3208))
+* Go: Add `BZPOPMAX` and ` ZMPOP` [#3257](https://github.com/valkey-io/valkey-glide/pull/3257)
 * Go: Fix data race on the coreClient with `sync.Mutex` and a channel map ([#3236](https://github.com/valkey-io/valkey-glide/pull/3236))
 * Go: Adding support for Az Affinity ([#3235](https://github.com/valkey-io/valkey-glide/pull/3235))
 * Go: Adding support for advanced client configs and connectionTimeout ([#3290](https://github.com/valkey-io/valkey-glide/pull/3290))
@@ -55,6 +56,7 @@
 * Go: Add Function Delete ([#3603](https://github.com/valkey-io/valkey-glide/pull/3603))
 * Go: Add Function Kill ([#3604](https://github.com/valkey-io/valkey-glide/pull/3604))
 * Go: Script eval/load([#3605](https://github.com/valkey-io/valkey-glide/pull/3605))
+* Benchmarks: Fix rust benchmark latencies calculation
 
 #### Breaking Changes
 
