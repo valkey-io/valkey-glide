@@ -226,6 +226,12 @@ func (suite *GlideTestSuite) TearDownTest() {
 	for _, client := range suite.clusterClients {
 		client.Close()
 	}
+
+	// Clear the callback context for the next test
+	callbackCtx.Range(func(key, value any) bool {
+		callbackCtx.Delete(key)
+		return true
+	})
 }
 
 func (suite *GlideTestSuite) runWithDefaultClients(test func(client api.BaseClient)) {
@@ -483,83 +489,128 @@ const (
 	SyncLoopMethod
 )
 
-// verifyReceivedPubsubMessages verifies that the received messages match the expected messages
-// based on the message reading method used
-func (suite *GlideTestSuite) verifyReceivedPubsubMessages(
+// verifyPubsubMessages verifies that subscribers received the expected messages
+// For single subscriber, pass a map with a single queue using any key (e.g., 1)
+// For pattern subscriptions, the expectedMessages keys should be the pattern values
+func (suite *GlideTestSuite) verifyPubsubMessages(
+	t *testing.T,
 	expectedMessages map[string]string,
-	queue *api.PubSubMessageQueue,
+	queues map[int]*api.PubSubMessageQueue,
 	messageReadMethod MessageReadMethod,
 ) {
 	switch messageReadMethod {
 	case CallbackMethod:
-		receivedMessages := convertSyncMapToMap(&callbackCtx)
-		assert.Equal(suite.T(), expectedMessages, receivedMessages)
+		receivedMessages := make(map[string]map[string]string)
+		callbackCtx.Range(func(key, value any) bool {
+			keyStr := key.(string)
+			parts := strings.Split(keyStr, "-")
+			clientId := parts[0]
+			message := value.(*api.PubSubMessage)
+			if _, exists := receivedMessages[clientId]; !exists {
+				receivedMessages[clientId] = make(map[string]string)
+			}
+			// For pattern subscriptions, use the pattern value as the key
+			// For channel subscriptions, use the channel name as the key
+			messageKey := message.Channel
+			if !message.Pattern.IsNil() {
+				messageKey = message.Pattern.Value()
+			}
+			receivedMessages[clientId][messageKey] = message.Message
+			return true
+		})
+
+		// Verify each subscriber received the expected messages
+		for clientId, messages := range receivedMessages {
+			if !assert.Equal(t, expectedMessages, messages, "Messages mismatch for client %s", clientId) {
+				t.FailNow()
+			}
+		}
 
 	case WaitForMessageMethod:
-		// For WaitForMessage method, we need to wait for each message
-		receivedMessages := make(map[string]string)
-		for channel := range expectedMessages {
-			select {
-			case msg := <-queue.WaitForMessage():
-				receivedMessages[msg.Channel] = msg.Message
-			case <-time.After(5 * time.Second):
-				assert.Fail(suite.T(), "Timed out waiting for message on channel: %s", channel)
+		for clientId, queue := range queues {
+			receivedMessages := make(map[string]string)
+			for expectedKey := range expectedMessages {
+				select {
+				case msg := <-queue.WaitForMessage():
+					// For pattern subscriptions, use the pattern value as the key
+					// For channel subscriptions, use the channel name as the key
+					messageKey := msg.Channel
+					if !msg.Pattern.IsNil() {
+						messageKey = msg.Pattern.Value()
+					}
+					receivedMessages[messageKey] = msg.Message
+				case <-time.After(5 * time.Second):
+					assert.Fail(t, "Timed out waiting for message for key %s for client %d", expectedKey, clientId)
+					t.FailNow()
+				}
+			}
+			if !assert.Equal(t, expectedMessages, receivedMessages, "Messages mismatch for client %d", clientId) {
+				t.FailNow()
 			}
 		}
-		assert.Equal(suite.T(), expectedMessages, receivedMessages)
 
 	case SignalChannelMethod:
-		// For signal channel method, we need to wait for signals and pop messages
-		receivedMessages := make(map[string]string)
-		signalCh := make(chan struct{}, 1)
-		queue.RegisterSignalChannel(signalCh)
-		defer queue.UnregisterSignalChannel(signalCh)
+		for clientId, queue := range queues {
+			receivedMessages := make(map[string]string)
+			signalCh := make(chan struct{}, 1)
+			queue.RegisterSignalChannel(signalCh)
+			defer queue.UnregisterSignalChannel(signalCh)
 
-		timeout := time.After(25 * time.Second)
-		for len(receivedMessages) < len(expectedMessages) {
-			select {
-			case <-signalCh:
-				if msg := queue.Pop(); msg != nil {
-					receivedMessages[msg.Channel] = msg.Message
+			timeout := time.After(5 * time.Second)
+			for len(receivedMessages) < len(expectedMessages) {
+				select {
+				case <-signalCh:
+					// Process all available messages
+					for msg := queue.Pop(); msg != nil; msg = queue.Pop() {
+						// For pattern subscriptions, use the pattern value as the key
+						// For channel subscriptions, use the channel name as the key
+						messageKey := msg.Channel
+						if !msg.Pattern.IsNil() {
+							messageKey = msg.Pattern.Value()
+						}
+						receivedMessages[messageKey] = msg.Message
+					}
+				case <-timeout:
+					assert.Fail(t, fmt.Sprintf("Timed out waiting for messages for client %d", clientId))
+					suite.T().Logf("Received messages: %+v", receivedMessages)
+					t.FailNow()
+				default:
+					time.Sleep(100 * time.Millisecond)
 				}
-			case <-timeout:
-				assert.Fail(suite.T(), "Timed out waiting for messages")
-				return
-			default:
-				time.Sleep(100 * time.Millisecond)
+			}
+			if !assert.Equal(t, expectedMessages, receivedMessages, "Messages mismatch for client %d", clientId) {
+				t.FailNow()
 			}
 		}
-		assert.Equal(suite.T(), expectedMessages, receivedMessages)
 
 	case SyncLoopMethod:
-		// For sync loop method, we need to poll for messages
-		receivedMessages := make(map[string]string)
-		timeout := time.After(5 * time.Second)
-		for len(receivedMessages) < len(expectedMessages) {
-			if msg := queue.Pop(); msg != nil {
-				receivedMessages[msg.Channel] = msg.Message
-			}
+		for clientId, queue := range queues {
+			receivedMessages := make(map[string]string)
+			timeout := time.After(5 * time.Second)
+			for len(receivedMessages) < len(expectedMessages) {
+				if msg := queue.Pop(); msg != nil {
+					// For pattern subscriptions, use the pattern value as the key
+					// For channel subscriptions, use the channel name as the key
+					messageKey := msg.Channel
+					if !msg.Pattern.IsNil() {
+						messageKey = msg.Pattern.Value()
+					}
+					receivedMessages[messageKey] = msg.Message
+				}
 
-			select {
-			case <-timeout:
-				assert.Fail(suite.T(), "Timed out waiting for messages")
-				return
-			default:
-				time.Sleep(100 * time.Millisecond)
+				select {
+				case <-timeout:
+					assert.Fail(t, "Timed out waiting for messages for client %d", clientId)
+					t.FailNow()
+				default:
+					time.Sleep(100 * time.Millisecond)
+				}
+			}
+			if !assert.Equal(t, expectedMessages, receivedMessages, "Messages mismatch for client %d", clientId) {
+				t.FailNow()
 			}
 		}
-		assert.Equal(suite.T(), expectedMessages, receivedMessages)
 	}
-}
-
-// convert sync.Map with PubSubMessage to map[string]string
-func convertSyncMapToMap(syncMap *sync.Map) map[string]string {
-	mapResult := make(map[string]string)
-	syncMap.Range(func(key, value any) bool {
-		mapResult[value.(*api.PubSubMessage).Channel] = value.(*api.PubSubMessage).Message
-		return true
-	})
-	return mapResult
 }
 
 // CreatePubSubReceiver sets up a Pub/Sub receiver for the provided client.
@@ -567,22 +618,13 @@ func convertSyncMapToMap(syncMap *sync.Map) map[string]string {
 // subscription based on the provided parameters.
 //
 // Parameters:
-//   - client: The Pub/Sub client implementing either api.GlideClientCommands
-//     or api.GlideClusterClientCommands.
-//   - channels: A slice of ChannelDefn objects, each containing:
-//   - SMode: The subscription mode for standalone clients.
-//   - CMode: The subscription mode for cluster clients.
-//   - Channel: The name of the Pub/Sub channel to subscribe to.
-//   - callback: A function to handle incoming Pub/Sub messages.
-//   - ctx: A context object passed to the callback function.
+//   - clientType: The type of client to create (GlideClient or GlideClusterClient)
+//   - channels: A slice of ChannelDefn objects defining the channels to subscribe to
+//   - clientId: A unique identifier for this subscriber
+//   - withCallback: Whether to use callback-based message handling
 //
-// Behavior:
-//   - For standalone clients (api.GlideClientCommands), it creates a standalone
-//     subscription using the provided subscription modes, channels, callback, and ctx.
-//   - For cluster clients (api.GlideClusterClientCommands), it creates a cluster
-//     subscription using the provided subscription modes, channels, callback, and ctx.
-//   - If the client type is unsupported, the function will fail the test with
-//     an appropriate error message.
+// Returns:
+//   - The created client with the specified subscription configuration
 func (suite *GlideTestSuite) CreatePubSubReceiver(
 	clientType ClientType,
 	channels []ChannelDefn,
@@ -590,7 +632,7 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 	withCallback bool,
 ) api.BaseClient {
 	callback := func(message *api.PubSubMessage, context any) {
-		callbackCtx.Store(clientId, message)
+		callbackCtx.Store(fmt.Sprintf("%d-%s", clientId, message.Channel), message)
 	}
 	switch clientType {
 	case GlideClient:

@@ -3,270 +3,962 @@
 package integTest
 
 import (
-	"fmt"
-	"sync"
+	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/api"
 )
 
-// TestBasicPubSubWithGlideClient tests basic publish and subscribe functionality with GlideClient
-func (suite *GlideTestSuite) TestPubSub_Basic_WithCallback() {
-	suite.runWithPubSubClients(func(clientType ClientType) {
-		publisher := suite.createAnyClient(clientType, nil)
-		// Create a subscriber client with subscription configuration
-		messageReceived := make(chan *api.PubSubMessage, 1)
+// TestPubSub_Patterns tests all combinations of client types and message reading methods
+func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
+	tests := []struct {
+		name           string
+		clientType     ClientType
+		readMethod     MessageReadMethod
+		useCallback    bool
+		channelName    string
+		messageContent string
+	}{
+		{
+			name:           "Standalone with Callback",
+			clientType:     GlideClient,
+			readMethod:     CallbackMethod,
+			useCallback:    true,
+			channelName:    "test-callback-channel",
+			messageContent: "test callback message",
+		},
+		{
+			name:           "Standalone with WaitForMessage",
+			clientType:     GlideClient,
+			readMethod:     WaitForMessageMethod,
+			useCallback:    false,
+			channelName:    "test-pattern-channel",
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Standalone with SignalChannel",
+			clientType:     GlideClient,
+			readMethod:     SignalChannelMethod,
+			useCallback:    false,
+			channelName:    "test-pattern-channel",
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Standalone with SyncLoop",
+			clientType:     GlideClient,
+			readMethod:     SyncLoopMethod,
+			useCallback:    false,
+			channelName:    "test-pattern-channel",
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Cluster with Callback",
+			clientType:     GlideClusterClient,
+			readMethod:     CallbackMethod,
+			useCallback:    true,
+			channelName:    "test-callback-channel",
+			messageContent: "test callback message",
+		},
+		{
+			name:           "Cluster with WaitForMessage",
+			clientType:     GlideClusterClient,
+			readMethod:     WaitForMessageMethod,
+			useCallback:    false,
+			channelName:    "test-pattern-channel",
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Cluster with SignalChannel",
+			clientType:     GlideClusterClient,
+			readMethod:     SignalChannelMethod,
+			useCallback:    false,
+			channelName:    "test-pattern-channel",
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Cluster with SyncLoop",
+			clientType:     GlideClusterClient,
+			readMethod:     SyncLoopMethod,
+			useCallback:    false,
+			channelName:    "test-pattern-channel",
+			messageContent: "test pattern message",
+		},
+	}
 
-		// Create a client with a subscription and a callback
-		channels := []ChannelDefn{
-			{Channel: "test-channel", Mode: ExactMode},
-		}
-		suite.CreatePubSubReceiver(clientType, channels, 1, true)
-		// Give some time for subscription to be established
-		time.Sleep(100 * time.Millisecond)
+	for _, tt := range tests {
+		suite.T().Run(tt.name, func(t *testing.T) {
+			publisher := suite.createAnyClient(tt.clientType, nil)
 
-		// Publish a message
-		testMessage := "hello world"
-		result, err := publisher.Publish("test-channel", testMessage)
+			channels := []ChannelDefn{
+				{Channel: tt.channelName, Mode: ExactMode},
+			}
+			expectedMessages := map[string]string{
+				tt.channelName: tt.messageContent,
+			}
 
-		assert.Nil(suite.T(), err)
-		assert.NotNil(suite.T(), result)
+			var receiver api.BaseClient
+			queues := make(map[int]*api.PubSubMessageQueue)
+			if !tt.useCallback {
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
+				queue, err := receiver.GetQueue()
+				assert.Nil(t, err)
+				queues[1] = queue
+			} else {
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, true)
+			}
 
-		// Wait for the message to be received
-		var receivedMessage *api.PubSubMessage
-		select {
-		case receivedMessage = <-messageReceived:
-		case <-time.After(15 * time.Second):
-			assert.Fail(suite.T(), "Timed out waiting for message")
-		}
+			// Allow subscription to establish
+			time.Sleep(100 * time.Millisecond)
 
-		// Verify the message content
-		if receivedMessage != nil {
-			assert.Equal(suite.T(), testMessage, receivedMessage.Message)
-			assert.Equal(suite.T(), "test-channel", receivedMessage.Channel)
-			assert.True(suite.T(), receivedMessage.Pattern.IsNil())
-		}
-	})
+			// Publish test message
+			_, err := publisher.Publish(tt.channelName, tt.messageContent)
+			assert.Nil(t, err)
+
+			// Allow time for the message to be received
+			time.Sleep(100 * time.Millisecond)
+
+			// Verify using the verification function
+			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
+
+			// Clean up
+			if receiver != nil {
+				receiver.Close()
+			}
+		})
+	}
 }
 
-// TestMultipleSubscribersWithGlideClient tests message delivery to multiple subscribers
+// TestPubSub_Basic_MultipleSubscribers tests message delivery to multiple subscribers
 func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
-	suite.runWithPubSubClients(func(clientType ClientType) {
-		publisher := suite.createAnyClient(clientType, nil) // Create channels for message tracking
-		messages1 := make(chan *api.PubSubMessage, 10)
-		messages2 := make(chan *api.PubSubMessage, 10)
+	tests := []struct {
+		name           string
+		clientType     ClientType
+		readMethod     MessageReadMethod
+		useCallback    bool
+		channelName    string
+		messageContent string
+	}{
+		{
+			name:           "Standalone with Callback",
+			clientType:     GlideClient,
+			readMethod:     CallbackMethod,
+			useCallback:    true,
+			channelName:    "test-multi-callback-channel",
+			messageContent: "test multi callback message",
+		},
+		{
+			name:           "Standalone with WaitForMessage",
+			clientType:     GlideClient,
+			readMethod:     WaitForMessageMethod,
+			useCallback:    false,
+			channelName:    "test-multi-pattern-channel",
+			messageContent: "test multi pattern message",
+		},
+		{
+			name:           "Standalone with SignalChannel",
+			clientType:     GlideClient,
+			readMethod:     SignalChannelMethod,
+			useCallback:    false,
+			channelName:    "test-multi-pattern-channel",
+			messageContent: "test multi pattern message",
+		},
+		{
+			name:           "Standalone with SyncLoop",
+			clientType:     GlideClient,
+			readMethod:     SyncLoopMethod,
+			useCallback:    false,
+			channelName:    "test-multi-pattern-channel",
+			messageContent: "test multi pattern message",
+		},
+		{
+			name:           "Cluster with Callback",
+			clientType:     GlideClusterClient,
+			readMethod:     CallbackMethod,
+			useCallback:    true,
+			channelName:    "test-multi-callback-channel",
+			messageContent: "test multi callback message",
+		},
+		{
+			name:           "Cluster with WaitForMessage",
+			clientType:     GlideClusterClient,
+			readMethod:     WaitForMessageMethod,
+			useCallback:    false,
+			channelName:    "test-multi-pattern-channel",
+			messageContent: "test multi pattern message",
+		},
+		{
+			name:           "Cluster with SignalChannel",
+			clientType:     GlideClusterClient,
+			readMethod:     SignalChannelMethod,
+			useCallback:    false,
+			channelName:    "test-multi-pattern-channel",
+			messageContent: "test multi pattern message",
+		},
+		{
+			name:           "Cluster with SyncLoop",
+			clientType:     GlideClusterClient,
+			readMethod:     SyncLoopMethod,
+			useCallback:    false,
+			channelName:    "test-multi-pattern-channel",
+			messageContent: "test multi pattern message",
+		},
+	}
 
-		// Subscribe to different channels
-		channels := []ChannelDefn{
-			{Channel: "test-channel-multi", Mode: ExactMode},
-		}
-		suite.CreatePubSubReceiver(clientType, channels, 1, true)
-		suite.CreatePubSubReceiver(clientType, channels, 2, true)
+	for _, tt := range tests {
+		suite.T().Run(tt.name, func(t *testing.T) {
+			publisher := suite.createAnyClient(tt.clientType, nil)
 
-		// Give time for subscriptions to be established
-		time.Sleep(500 * time.Millisecond)
+			channels := []ChannelDefn{
+				{Channel: tt.channelName, Mode: ExactMode},
+			}
+			expectedMessages := map[string]string{
+				tt.channelName: tt.messageContent,
+			}
 
-		// Number of messages to send to each channel
-		const messageCount = 1
+			// Create multiple subscribers
+			const numSubscribers = 3
+			queues := make(map[int]*api.PubSubMessageQueue)
+			subscribers := make([]api.BaseClient, numSubscribers)
 
-		// Send messages to both channels
-		for i := 0; i < messageCount; i++ {
-			msg := fmt.Sprintf("Hello Subscribers - msg %d", i)
-
-			result1, err := publisher.Publish("test-channel-multi", msg)
-			assert.Nil(suite.T(), err)
-			assert.NotNil(suite.T(), result1)
-			suite.T().Logf("Published message to channel")
-
-			// Small delay between messages to ensure ordering
-			time.Sleep(100 * time.Millisecond)
-		}
-
-		// Wait for messages to be received with timeout
-		timeout := time.After(5 * time.Second)
-		received1 := make([]*api.PubSubMessage, 0, messageCount)
-		received2 := make([]*api.PubSubMessage, 0, messageCount)
-
-		// Wait for messageCount messages or timeout
-		waitForMessages := func(ch chan *api.PubSubMessage, received *[]*api.PubSubMessage) {
-			for len(*received) < messageCount {
-				select {
-				case msg := <-ch:
-					*received = append(*received, msg)
-				case <-timeout:
-					return // Exit on timeout
+			for i := 0; i < numSubscribers; i++ {
+				if !tt.useCallback {
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false)
+					subscribers[i] = receiver
+					queue, err := receiver.GetQueue()
+					assert.Nil(t, err)
+					queues[i+1] = queue
+				} else {
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, true)
+					subscribers[i] = receiver
 				}
 			}
-		}
 
-		// Use wait groups to wait for both channels concurrently
-		var wg sync.WaitGroup
-		wg.Add(2)
+			// Allow subscriptions to establish
+			time.Sleep(100 * time.Millisecond)
 
-		go func() {
-			defer wg.Done()
-			waitForMessages(messages1, &received1)
-		}()
+			// Publish test message
+			_, err := publisher.Publish(tt.channelName, tt.messageContent)
+			assert.Nil(t, err)
 
-		go func() {
-			defer wg.Done()
-			waitForMessages(messages2, &received2)
-		}()
+			// Allow time for the message to be received
+			time.Sleep(100 * time.Millisecond)
 
-		// Wait for both to complete or timeout
-		wgDone := make(chan struct{})
-		go func() {
-			wg.Wait()
-			close(wgDone)
-		}()
+			// Verify using the verification function
+			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
 
-		select {
-		case <-wgDone:
-			// Both channels processed
-		case <-timeout:
-			// Timeout occurred (the individual waitForMessages functions will have stopped)
-		}
-
-		// Verify results
-		assert.Equal(suite.T(), messageCount, len(received1), "Client 1 should receive exactly %d messages", messageCount)
-		assert.Equal(suite.T(), messageCount, len(received2), "Client 2 should receive exactly %d messages", messageCount)
-
-		// Verify message content and order
-		for i := 0; i < messageCount; i++ {
-			if i < len(received1) {
-				expectedMsg1 := fmt.Sprintf("Hello Subscribers - msg %d", i)
-				assert.Equal(suite.T(), expectedMsg1, received1[i].Message, "Unexpected message for client 1")
+			// Clean up subscribers
+			for _, subscriber := range subscribers {
+				subscriber.Close()
 			}
-
-			if i < len(received2) {
-				expectedMsg2 := fmt.Sprintf("Hello Subscribers - msg %d", i)
-				assert.Equal(suite.T(), expectedMsg2, received2[i].Message, "Unexpected message for client 2")
-			}
-		}
-	})
+		})
+	}
 }
 
-// TestPatternSubscribeWithGlideClient tests message pattern matching with PSUBSCRIBE
+// TestPubSub_Basic_PatternSubscription tests message pattern matching with PSUBSCRIBE
 func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
-	suite.runWithPubSubClients(func(clientType ClientType) {
-		publisher := suite.createAnyClient(clientType, nil) // Create a subscriber client with pattern subscription
-		messageReceived := make(chan *api.PubSubMessage, 10)
-		var wg sync.WaitGroup
-		wg.Add(2) // Expect 2 messages
+	tests := []struct {
+		name           string
+		clientType     ClientType
+		readMethod     MessageReadMethod
+		useCallback    bool
+		pattern        string
+		channels       []string
+		messageContent string
+	}{
+		{
+			name:           "Standalone with Callback",
+			clientType:     GlideClient,
+			readMethod:     CallbackMethod,
+			useCallback:    true,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Standalone with WaitForMessage",
+			clientType:     GlideClient,
+			readMethod:     WaitForMessageMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Standalone with SignalChannel",
+			clientType:     GlideClient,
+			readMethod:     SignalChannelMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Standalone with SyncLoop",
+			clientType:     GlideClient,
+			readMethod:     SyncLoopMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Cluster with Callback",
+			clientType:     GlideClusterClient,
+			readMethod:     CallbackMethod,
+			useCallback:    true,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Cluster with WaitForMessage",
+			clientType:     GlideClusterClient,
+			readMethod:     WaitForMessageMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Cluster with SignalChannel",
+			clientType:     GlideClusterClient,
+			readMethod:     SignalChannelMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Cluster with SyncLoop",
+			clientType:     GlideClusterClient,
+			readMethod:     SyncLoopMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2"},
+			messageContent: "test pattern message",
+		},
+	}
 
-		channels := []ChannelDefn{
-			{Channel: "test-pattern-*", Mode: PatternMode},
-		}
-		suite.CreatePubSubReceiver(clientType, channels, 1, true)
+	for _, tt := range tests {
+		suite.T().Run(tt.name, func(t *testing.T) {
+			publisher := suite.createAnyClient(tt.clientType, nil)
 
-		// Give some time for subscription to be established
-		time.Sleep(100 * time.Millisecond)
+			channels := []ChannelDefn{
+				{Channel: tt.pattern, Mode: PatternMode},
+			}
+			expectedMessages := make(map[string]string)
+			expectedMessages[tt.pattern] = tt.messageContent
 
-		// Publish messages to channels matching the pattern
-		_, err := publisher.Publish("test-pattern-1", "message to pattern 1")
-		assert.Nil(suite.T(), err)
+			var receiver api.BaseClient
+			queues := make(map[int]*api.PubSubMessageQueue)
+			if !tt.useCallback {
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
+				queue, err := receiver.GetQueue()
+				assert.Nil(t, err)
+				queues[1] = queue
+			} else {
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, true)
+			}
 
-		_, err = publisher.Publish("test-pattern-2", "message to pattern 2")
-		assert.Nil(suite.T(), err)
+			// Allow subscription to establish
+			time.Sleep(100 * time.Millisecond)
 
-		// Publish a message to a non-matching channel
-		_, err = publisher.Publish("other-channel", "should not receive")
-		assert.Nil(suite.T(), err)
+			// Publish test messages to matching channels
+			for _, channel := range tt.channels {
+				_, err := publisher.Publish(channel, tt.messageContent)
+				assert.Nil(t, err)
+			}
 
-		// Wait for the expected messages or timeout
-		done := make(chan struct{})
-		go func() {
-			wg.Wait()
-			close(done)
-		}()
+			// Publish a message to a non-matching channel
+			_, err := publisher.Publish("other-channel", "should not receive")
+			assert.Nil(t, err)
 
-		select {
-		case <-done:
-			// Expected - received both messages
-		case <-time.After(2 * time.Second):
-			assert.Fail(suite.T(), "Timed out waiting for pattern messages")
-		}
+			// Allow time for the messages to be received
+			time.Sleep(100 * time.Millisecond)
 
-		// Collect and verify received messages
-		close(messageReceived)
-		receivedMessages := make(map[string]string)
+			// Verify using the verification function
+			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
 
-		for message := range messageReceived {
-			receivedMessages[message.Channel] = message.Message
-			assert.False(suite.T(), message.Pattern.IsNil())
-			assert.Equal(suite.T(), "test-pattern-*", message.Pattern.Value())
-		}
-
-		assert.Equal(suite.T(), 2, len(receivedMessages))
-		assert.Equal(suite.T(), "message to pattern 1", receivedMessages["test-pattern-1"])
-		assert.Equal(suite.T(), "message to pattern 2", receivedMessages["test-pattern-2"])
-	})
+			// Clean up
+			if receiver != nil {
+				receiver.Close()
+			}
+		})
+	}
 }
 
-// TestPubSub_Basic_WithQueue tests basic publish and subscribe functionality using the message queue
-// instead of a callback function for receiving messages
-func (suite *GlideTestSuite) TestPubSub_Basic_WithQueue() {
-	suite.runWithPubSubClients(func(clientType ClientType) {
-		publisher := suite.createAnyClient(clientType, nil) // Create a subscriber client without a callback (will use queue instead)
-		channels := []ChannelDefn{
-			{Channel: "test-queue-channel", Mode: ExactMode},
-		}
+// TestPubSub_Basic_ManyChannels tests a single subscriber subscribing to multiple channels
+func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
+	tests := []struct {
+		name           string
+		clientType     ClientType
+		readMethod     MessageReadMethod
+		useCallback    bool
+		channelNames   []string
+		messageContent string
+	}{
+		{
+			name:           "Standalone with Callback",
+			clientType:     GlideClient,
+			readMethod:     CallbackMethod,
+			useCallback:    true,
+			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
+			messageContent: "test message",
+		},
+		{
+			name:           "Standalone with WaitForMessage",
+			clientType:     GlideClient,
+			readMethod:     WaitForMessageMethod,
+			useCallback:    false,
+			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
+			messageContent: "test message",
+		},
+		{
+			name:           "Standalone with SignalChannel",
+			clientType:     GlideClient,
+			readMethod:     SignalChannelMethod,
+			useCallback:    false,
+			channelNames:   []string{"test-channel-2", "test-channel-1", "test-channel-3"},
+			messageContent: "test message",
+		},
+		{
+			name:           "Standalone with SyncLoop",
+			clientType:     GlideClient,
+			readMethod:     SyncLoopMethod,
+			useCallback:    false,
+			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
+			messageContent: "test message",
+		},
+		{
+			name:           "Cluster with Callback",
+			clientType:     GlideClusterClient,
+			readMethod:     CallbackMethod,
+			useCallback:    true,
+			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
+			messageContent: "test message",
+		},
+		{
+			name:           "Cluster with WaitForMessage",
+			clientType:     GlideClusterClient,
+			readMethod:     WaitForMessageMethod,
+			useCallback:    false,
+			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
+			messageContent: "test message",
+		},
+		{
+			name:           "Cluster with SignalChannel",
+			clientType:     GlideClusterClient,
+			readMethod:     SignalChannelMethod,
+			useCallback:    false,
+			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
+			messageContent: "test message",
+		},
+		{
+			name:           "Cluster with SyncLoop",
+			clientType:     GlideClusterClient,
+			readMethod:     SyncLoopMethod,
+			useCallback:    false,
+			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
+			messageContent: "test message",
+		},
+	}
 
-		// Create a receiver without a callback (nil callback will use the queue)
-		receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false)
+	for _, tt := range tests {
+		suite.T().Run(tt.name, func(t *testing.T) {
+			publisher := suite.createAnyClient(tt.clientType, nil)
 
-		// Give some time for subscription to be established
-		time.Sleep(100 * time.Millisecond)
-
-		// Get message handler directly using the getMessageHandler method
-		queue, err := receiver.GetQueue()
-		assert.Nil(suite.T(), err)
-
-		// Set up a signal channel to be notified of new messages
-		signalCh := make(chan struct{}, 1)
-		queue.RegisterSignalChannel(signalCh)
-		defer queue.UnregisterSignalChannel(signalCh)
-
-		// Publish a message
-		testMessage := "hello queue world"
-		result, err := publisher.Publish("test-queue-channel", testMessage)
-
-		assert.Nil(suite.T(), err)
-		assert.NotNil(suite.T(), result)
-
-		// Wait for the message to arrive using WaitForMessage method
-		var receivedMessage *api.PubSubMessage
-
-		// Set up timeout
-		timeoutDuration := 5 * time.Second
-		timeout := time.After(timeoutDuration)
-
-		// Wait for a message to arrive in the queue
-		select {
-		case <-signalCh:
-			// A message was pushed to the queue, try to pop it
-			receivedMessage = queue.Pop()
-		case <-timeout:
-			assert.Fail(suite.T(), "Timed out waiting for message in queue")
-		}
-
-		// Alternative method using WaitForMessage (this creates a channel specifically for this message)
-		if receivedMessage == nil {
-			// If we didn't get a message via signalCh, try WaitForMessage
-			select {
-			case receivedMessage = <-queue.WaitForMessage():
-				// Successfully received a message
-			case <-time.After(timeoutDuration):
-				assert.Fail(suite.T(), "Timed out waiting for message via WaitForMessage")
+			// Create channel definitions for all channels
+			channels := make([]ChannelDefn, len(tt.channelNames))
+			for i, channelName := range tt.channelNames {
+				channels[i] = ChannelDefn{Channel: channelName, Mode: ExactMode}
 			}
-		}
 
-		// Verify the message content
-		if receivedMessage != nil {
-			assert.Equal(suite.T(), testMessage, receivedMessage.Message)
-			assert.Equal(suite.T(), "test-queue-channel", receivedMessage.Channel)
-			assert.True(suite.T(), receivedMessage.Pattern.IsNil())
-		}
-	})
+			// Create expected messages map
+			expectedMessages := make(map[string]string)
+			for _, channelName := range tt.channelNames {
+				expectedMessages[channelName] = tt.messageContent
+			}
+
+			var receiver api.BaseClient
+			queues := make(map[int]*api.PubSubMessageQueue)
+			if !tt.useCallback {
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
+				queue, err := receiver.GetQueue()
+				assert.Nil(t, err)
+				queues[1] = queue
+			} else {
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, true)
+			}
+
+			// Allow subscription to establish
+			time.Sleep(100 * time.Millisecond)
+
+			// TODO: For SignalChannel Async tests this will result in all of the messages getting stacked in the queue
+			// before the SignalChannel is registered in `verifyPubSubMessages`. We have logic to ensure that a signal
+			// handles all messages currently in the queue, but we should create a custom test that registers the SignalChannel
+			// and then publishes the messages to the channels so that we can test multiple messages arriving over time and triggering
+			// the signal handler multiple times..
+			for _, channelName := range tt.channelNames {
+				_, err := publisher.Publish(channelName, tt.messageContent)
+				assert.Nil(t, err)
+			}
+
+			// Allow time for the messages to be received
+			time.Sleep(100 * time.Millisecond)
+
+			// Verify using the verification function
+			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
+
+			// Clean up
+			if receiver != nil {
+				receiver.Close()
+			}
+		})
+	}
+}
+
+// TestPubSub_Basic_PatternManyChannels tests pattern subscriptions with multiple channels
+func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
+	tests := []struct {
+		name           string
+		clientType     ClientType
+		readMethod     MessageReadMethod
+		useCallback    bool
+		pattern        string
+		channels       []string
+		messageContent string
+	}{
+		{
+			name:           "Standalone with Callback",
+			clientType:     GlideClient,
+			readMethod:     CallbackMethod,
+			useCallback:    true,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2", "test-pattern-3"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Standalone with WaitForMessage",
+			clientType:     GlideClient,
+			readMethod:     WaitForMessageMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2", "test-pattern-3"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Standalone with SignalChannel",
+			clientType:     GlideClient,
+			readMethod:     SignalChannelMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2", "test-pattern-3"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Standalone with SyncLoop",
+			clientType:     GlideClient,
+			readMethod:     SyncLoopMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2", "test-pattern-3"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Cluster with Callback",
+			clientType:     GlideClusterClient,
+			readMethod:     CallbackMethod,
+			useCallback:    true,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2", "test-pattern-3"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Cluster with WaitForMessage",
+			clientType:     GlideClusterClient,
+			readMethod:     WaitForMessageMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2", "test-pattern-3"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Cluster with SignalChannel",
+			clientType:     GlideClusterClient,
+			readMethod:     SignalChannelMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2", "test-pattern-3"},
+			messageContent: "test pattern message",
+		},
+		{
+			name:           "Cluster with SyncLoop",
+			clientType:     GlideClusterClient,
+			readMethod:     SyncLoopMethod,
+			useCallback:    false,
+			pattern:        "test-pattern-*",
+			channels:       []string{"test-pattern-1", "test-pattern-2", "test-pattern-3"},
+			messageContent: "test pattern message",
+		},
+	}
+
+	for _, tt := range tests {
+		suite.T().Run(tt.name, func(t *testing.T) {
+			publisher := suite.createAnyClient(tt.clientType, nil)
+
+			// Create channel definitions for pattern subscription
+			channels := []ChannelDefn{
+				{Channel: tt.pattern, Mode: PatternMode},
+			}
+
+			// Create expected messages map
+			expectedMessages := make(map[string]string)
+			expectedMessages[tt.pattern] = tt.messageContent
+
+			var receiver api.BaseClient
+			queues := make(map[int]*api.PubSubMessageQueue)
+			if !tt.useCallback {
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
+				queue, err := receiver.GetQueue()
+				assert.Nil(t, err)
+				queues[1] = queue
+			} else {
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, true)
+			}
+
+			// Allow subscription to establish
+			time.Sleep(100 * time.Millisecond)
+
+			// Publish test messages to matching channels
+			for _, channel := range tt.channels {
+				_, err := publisher.Publish(channel, tt.messageContent)
+				assert.Nil(t, err)
+			}
+
+			// Publish a message to a non-matching channel
+			_, err := publisher.Publish("other-channel", "should not receive")
+			assert.Nil(t, err)
+
+			// Allow time for the messages to be received
+			time.Sleep(100 * time.Millisecond)
+
+			// Verify using the verification function
+			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
+
+			// Clean up
+			if receiver != nil {
+				receiver.Close()
+			}
+		})
+	}
+}
+
+// TestPubSub_Basic_CombinedExactPattern tests a single subscriber with both exact and pattern subscriptions
+func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
+	tests := []struct {
+		name            string
+		clientType      ClientType
+		readMethod      MessageReadMethod
+		useCallback     bool
+		exactChannel    string
+		pattern         string
+		patternChannels []string
+		messageContent  string
+	}{
+		{
+			name:            "Standalone with Callback",
+			clientType:      GlideClient,
+			readMethod:      CallbackMethod,
+			useCallback:     true,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Standalone with WaitForMessage",
+			clientType:      GlideClient,
+			readMethod:      WaitForMessageMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Standalone with SignalChannel",
+			clientType:      GlideClient,
+			readMethod:      SignalChannelMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Standalone with SyncLoop",
+			clientType:      GlideClient,
+			readMethod:      SyncLoopMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Cluster with Callback",
+			clientType:      GlideClusterClient,
+			readMethod:      CallbackMethod,
+			useCallback:     true,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Cluster with WaitForMessage",
+			clientType:      GlideClusterClient,
+			readMethod:      WaitForMessageMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Cluster with SignalChannel",
+			clientType:      GlideClusterClient,
+			readMethod:      SignalChannelMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Cluster with SyncLoop",
+			clientType:      GlideClusterClient,
+			readMethod:      SyncLoopMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+	}
+
+	for _, tt := range tests {
+		suite.T().Run(tt.name, func(t *testing.T) {
+			publisher := suite.createAnyClient(tt.clientType, nil)
+
+			// Create channel definitions for both exact and pattern subscriptions
+			channels := []ChannelDefn{
+				{Channel: tt.exactChannel, Mode: ExactMode},
+				{Channel: tt.pattern, Mode: PatternMode},
+			}
+
+			// Create expected messages map
+			expectedMessages := make(map[string]string)
+			expectedMessages[tt.exactChannel] = tt.messageContent
+			expectedMessages[tt.pattern] = tt.messageContent
+
+			var receiver api.BaseClient
+			queues := make(map[int]*api.PubSubMessageQueue)
+			if !tt.useCallback {
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
+				queue, err := receiver.GetQueue()
+				assert.Nil(t, err)
+				queues[1] = queue
+			} else {
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, true)
+			}
+
+			// Allow subscription to establish
+			time.Sleep(100 * time.Millisecond)
+
+			// Publish to exact channel
+			_, err := publisher.Publish(tt.exactChannel, tt.messageContent)
+			assert.Nil(t, err)
+
+			// Publish to pattern-matching channels
+			for _, channel := range tt.patternChannels {
+				_, err := publisher.Publish(channel, tt.messageContent)
+				assert.Nil(t, err)
+			}
+
+			// Publish to a non-matching channel
+			_, err = publisher.Publish("other-channel", "should not receive")
+			assert.Nil(t, err)
+
+			// Allow time for the messages to be received
+			time.Sleep(100 * time.Millisecond)
+
+			// Verify using the verification function
+			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
+
+			// Clean up
+			if receiver != nil {
+				receiver.Close()
+			}
+		})
+	}
+}
+
+// TestPubSub_Basic_CombinedExactPatternMultipleSubscribers tests multiple subscribers with both exact and pattern subscriptions
+func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscribers() {
+	tests := []struct {
+		name            string
+		clientType      ClientType
+		readMethod      MessageReadMethod
+		useCallback     bool
+		exactChannel    string
+		pattern         string
+		patternChannels []string
+		messageContent  string
+	}{
+		{
+			name:            "Standalone with Callback",
+			clientType:      GlideClient,
+			readMethod:      CallbackMethod,
+			useCallback:     true,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Standalone with WaitForMessage",
+			clientType:      GlideClient,
+			readMethod:      WaitForMessageMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Standalone with SignalChannel",
+			clientType:      GlideClient,
+			readMethod:      SignalChannelMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Standalone with SyncLoop",
+			clientType:      GlideClient,
+			readMethod:      SyncLoopMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Cluster with Callback",
+			clientType:      GlideClusterClient,
+			readMethod:      CallbackMethod,
+			useCallback:     true,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Cluster with WaitForMessage",
+			clientType:      GlideClusterClient,
+			readMethod:      WaitForMessageMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Cluster with SignalChannel",
+			clientType:      GlideClusterClient,
+			readMethod:      SignalChannelMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+		{
+			name:            "Cluster with SyncLoop",
+			clientType:      GlideClusterClient,
+			readMethod:      SyncLoopMethod,
+			useCallback:     false,
+			exactChannel:    "test-exact-channel",
+			pattern:         "test-pattern-*",
+			patternChannels: []string{"test-pattern-1", "test-pattern-2"},
+			messageContent:  "test message",
+		},
+	}
+
+	for _, tt := range tests {
+		suite.T().Run(tt.name, func(t *testing.T) {
+			publisher := suite.createAnyClient(tt.clientType, nil)
+
+			// Create channel definitions for both exact and pattern subscriptions
+			channels := []ChannelDefn{
+				{Channel: tt.exactChannel, Mode: ExactMode},
+				{Channel: tt.pattern, Mode: PatternMode},
+			}
+
+			// Create expected messages map
+			expectedMessages := make(map[string]string)
+			expectedMessages[tt.exactChannel] = tt.messageContent
+			expectedMessages[tt.pattern] = tt.messageContent
+
+			// Create multiple subscribers
+			const numSubscribers = 3
+			queues := make(map[int]*api.PubSubMessageQueue)
+			subscribers := make([]api.BaseClient, numSubscribers)
+
+			for i := 0; i < numSubscribers; i++ {
+				if !tt.useCallback {
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false)
+					subscribers[i] = receiver
+					queue, err := receiver.GetQueue()
+					assert.Nil(t, err)
+					queues[i+1] = queue
+				} else {
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, true)
+					subscribers[i] = receiver
+				}
+			}
+
+			// Allow subscriptions to establish
+			time.Sleep(100 * time.Millisecond)
+
+			// Publish to exact channel
+			_, err := publisher.Publish(tt.exactChannel, tt.messageContent)
+			assert.Nil(t, err)
+
+			// Publish to pattern-matching channels
+			for _, channel := range tt.patternChannels {
+				_, err := publisher.Publish(channel, tt.messageContent)
+				assert.Nil(t, err)
+			}
+
+			// Publish to a non-matching channel
+			_, err = publisher.Publish("other-channel", "should not receive")
+			assert.Nil(t, err)
+
+			// Allow time for the messages to be received
+			time.Sleep(100 * time.Millisecond)
+
+			// Verify using the verification function
+			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
+
+			// Clean up subscribers
+			for _, subscriber := range subscribers {
+				subscriber.Close()
+			}
+		})
+	}
 }
