@@ -39,7 +39,6 @@ var (
 	tls             = flag.Bool("tls", false, "one")
 	clusterHosts    = flag.String("cluster-endpoints", "", "two")
 	standaloneHosts = flag.String("standalone-endpoints", "", "three")
-	pubsub          = flag.Bool("pubsub", false, "Run PubSub tests if true, otherwise, skip the test")
 )
 
 func (suite *GlideTestSuite) SetupSuite() {
@@ -413,10 +412,6 @@ func (c *ClientType) String() string {
 	return []string{"GlideClient", "GlideClusterClient"}[*c]
 }
 
-func (suite *GlideTestSuite) getAllClientTypes() []ClientType {
-	return []ClientType{GlideClient, GlideClusterClient}
-}
-
 func (suite *GlideTestSuite) createAnyClient(clientType ClientType, subscription any) api.BaseClient {
 	switch clientType {
 	case GlideClient:
@@ -428,7 +423,6 @@ func (suite *GlideTestSuite) createAnyClient(clientType ClientType, subscription
 	case GlideClusterClient:
 		if sub, ok := subscription.(*api.ClusterSubscriptionConfig); ok {
 			return suite.createClusterClientWithSubscriptions(sub)
-
 		} else {
 			return suite.defaultClusterClient()
 		}
@@ -450,18 +444,6 @@ func (suite *GlideTestSuite) createClusterClientWithSubscriptions(
 ) api.GlideClusterClientCommands {
 	clientConfig := suite.defaultClusterClientConfig().WithSubscriptionConfig(config)
 	return suite.clusterClient(clientConfig)
-}
-
-func (suite *GlideTestSuite) runWithPubSubClients(test func(clientType ClientType)) {
-	// if *pubsub != true {
-	// 	suite.T().Skip("skipping pubsub tests")
-	// }
-
-	for _, clientType := range suite.getAllClientTypes() {
-		suite.T().Run(fmt.Sprint(clientType.String()), func(t *testing.T) {
-			test(clientType)
-		})
-	}
 }
 
 type TestChannelMode int

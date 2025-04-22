@@ -497,7 +497,8 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			// TODO: For SignalChannel Async tests this will result in all of the messages getting stacked in the queue
 			// before the SignalChannel is registered in `verifyPubSubMessages`. We have logic to ensure that a signal
 			// handles all messages currently in the queue, but we should create a custom test that registers the SignalChannel
-			// and then publishes the messages to the channels so that we can test multiple messages arriving over time and triggering
+			// and then publishes the messages to the channels so that we can test multiple messages arriving over time and
+			// triggering
 			// the signal handler multiple times..
 			for _, channelName := range tt.channelNames {
 				_, err := publisher.Publish(channelName, tt.messageContent)
@@ -805,7 +806,8 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 	}
 }
 
-// TestPubSub_Basic_CombinedExactPatternMultipleSubscribers tests multiple subscribers with both exact and pattern subscriptions
+// TestPubSub_Basic_CombinedExactPatternMultipleSubscribers tests multiple subscribers with both exact and pattern
+// subscriptions
 func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscribers() {
 	tests := []struct {
 		name            string
