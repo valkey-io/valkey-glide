@@ -849,10 +849,9 @@ func ExampleGlideClusterClient_InvokeScriptWithOptions() {
 func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
 	client := getExampleGlideClusterClient()
 
-	// Create a Lua script that returns a table
-	scriptText := `
-		return {status="success", code=200, data="test data"}
-	`
+	// Create a Lua script.
+	scriptText := "return 'Hello'"
+
 	script := options.NewScript(scriptText)
 
 	// Set up cluster script options
@@ -870,14 +869,10 @@ func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
 	}
 
 	// Print the result (a map in Go)
-	if resultMap, ok := result.SingleValue().(map[string]interface{}); ok {
-		fmt.Println("Status:", resultMap["status"])
-		fmt.Println("Code:", resultMap["code"])
-		fmt.Println("Data:", resultMap["data"])
+	for _, value := range result.MultiValue() {
+		fmt.Println(value)
 	}
 
 	// Output:
-	// Status: success
-	// Code: 200
-	// Data: test data
+	// Hello
 }
