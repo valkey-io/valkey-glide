@@ -1,144 +1,219 @@
-// use chrono::{DateTime, Utc};
-// use core::fmt;
-// use futures_util::future::BoxFuture;
-// use opentelemetry::metrics::MetricsError;
-// use opentelemetry_sdk::export::{metrics::ExportResult, metrics::MetricsData};
-// use serde_json::{Map, Value};
-// use std::fs::OpenOptions;
-// use std::io::Write;
-// use std::path::PathBuf;
-// use std::sync::atomic;
+use async_trait::async_trait;
+use opentelemetry_sdk::metrics::data::ResourceMetrics;
+use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
+use opentelemetry_sdk::metrics::MetricError;
+use opentelemetry_sdk::metrics::MetricResult;
+use opentelemetry_sdk::metrics::Temporality;
+use serde_json::{Map, Value};
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::PathBuf;
+use std::sync::atomic;
 
-// use opentelemetry_sdk::resource::Resource;
+/// An OpenTelemetry exporter that writes Metrics to a file on export.
+pub struct FileMetricExporter {
+    is_shutdown: atomic::AtomicBool,
+    path: PathBuf,
+}
 
-// /// An OpenTelemetry exporter that writes Metrics to a file on export.
-// pub struct MetricsExporterFile {
-//     resource: Resource,
-//     is_shutdown: atomic::AtomicBool,
-//     path: PathBuf,
-// }
-
-// impl fmt::Debug for MetricsExporterFile {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         f.write_str("MetricsExporterFile")
-//     }
-// }
-
-// impl MetricsExporterFile {
-//     pub fn new(mut path: PathBuf) -> Self {
-//         path.push("metrics.json");
-//         MetricsExporterFile {
-//             resource: Resource::default(),
-//             is_shutdown: atomic::AtomicBool::new(false),
-//             path,
-//         }
-//     }
-// }
+impl FileMetricExporter {
+    pub fn new(mut path: PathBuf) -> std::result::Result<Self, MetricError> {
+        path.push("metrics.json");
+        Ok(FileMetricExporter {
+            is_shutdown: atomic::AtomicBool::new(false),
+            path,
+        })
+    }
+}
 
 // macro_rules! file_writeln {
 //     ($file:expr, $content:expr) => {{
 //         if let Err(e) = $file.write(format!("{}\n", $content).as_bytes()) {
-//             return Box::pin(std::future::ready(Err(MetricsError::from(format!(
-//                 "File write error. {e}",
-//             )))));
+//             return Err(MetricError::Other(format!("File write error: {}", e)));
 //         }
 //     }};
 // }
 
-// impl opentelemetry_sdk::export::metrics::MetricsExporter for MetricsExporterFile {
-//     /// Write Metrics to JSON file
-//     fn export(&mut self, batch: Vec<MetricsData>) -> BoxFuture<'static, ExportResult> {
-//         let Ok(mut data_file) = OpenOptions::new()
-//             .create(true)
-//             .append(true)
-//             .open(&self.path)
-//         else {
-//             return Box::pin(std::future::ready(Err(MetricsError::from(format!(
-//                 "Unable to open exporter file: {} for append.",
-//                 self.path.display()
-//             )))));
-//         };
+#[async_trait]
+impl PushMetricExporter for FileMetricExporter {
+    fn temporality(&self) -> Temporality {
+        Temporality::Cumulative
+    }
 
-//         let metrics = to_jsons(batch);
-//         for metric in &metrics {
-//             if let Ok(s) = serde_json::to_string(&metric) {
-//                 file_writeln!(data_file, s);
-//             }
-//         }
-//         Box::pin(std::future::ready(Ok(())))
-//     }
+    async fn export(&self, metrics: &mut ResourceMetrics) -> MetricResult<()> {
+        if self.is_shutdown.load(atomic::Ordering::SeqCst) {
+            return Ok(());
+        }
 
-//     fn shutdown(&mut self) {
-//         self.is_shutdown.store(true, atomic::Ordering::SeqCst);
-//     }
+        let Ok(mut data_file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+        else {
+            return Err(MetricError::Other(format!(
+                "Unable to open exporter file: {} for append.",
+                self.path.display()
+            )));
+        };
 
-//     fn set_resource(&mut self, res: &opentelemetry_sdk::Resource) {
-//         self.resource = res.clone();
-//     }
-// }
+        let metrics_json = to_json(metrics);
+        if let Ok(s) = serde_json::to_string(&metrics_json) {
+            if let Err(e) = data_file.write(format!("{}\n", s).as_bytes()) {
+                return Err(MetricError::Other(format!("File write error: {}", e)));
+            }
+        }
 
-// fn to_jsons(batch: Vec<MetricsData>) -> Vec<Value> {
-//     let mut metrics = Vec::<Value>::new();
-//     for metric in &batch {
-//         let mut map = Map::new();
-//         map.insert(
-//             "scope".to_string(),
-//             Value::String(metric.instrumentation_scope.name().to_string()),
-//         );
-//         if let Some(version) = &metric.instrumentation_scope.version() {
-//             map.insert("version".to_string(), Value::String(version.to_string()));
-//         }
-//         if let Some(schema_url) = &metric.instrumentation_scope.schema_url() {
-//             map.insert(
-//                 "schema_url".to_string(),
-//                 Value::String(schema_url.to_string()),
-//             );
-//         }
+        Ok(())
+    }
 
-//         let mut scope_attributes = Vec::<Value>::new();
-//         for kv in metric.instrumentation_scope.attributes() {
-//             let mut attr = Map::new();
-//             attr.insert(kv.key.to_string(), Value::String(kv.value.to_string()));
-//             scope_attributes.push(Value::Object(attr));
-//         }
-//         map.insert(
-//             "scope_attributes".to_string(),
-//             Value::Array(scope_attributes),
-//         );
+    async fn force_flush(&self) -> MetricResult<()> {
+        Ok(())
+    }
 
-//         // Add metric data
-//         map.insert("name".to_string(), Value::String(metric.name.to_string()));
-//         map.insert(
-//             "description".to_string(),
-//             Value::String(metric.description.to_string()),
-//         );
-//         map.insert("unit".to_string(), Value::String(metric.unit.to_string()));
+    fn shutdown(&self) -> MetricResult<()> {
+        self.is_shutdown.store(true, atomic::Ordering::SeqCst);
+        Ok(())
+    }
+}
 
-//         let datetime: DateTime<Utc> = metric.start_time.into();
-//         map.insert(
-//             "start_time".to_string(),
-//             Value::String(datetime.timestamp_micros().to_string()),
-//         );
+fn to_json(metrics: &ResourceMetrics) -> Value {
+    let mut root = Map::new();
 
-//         let datetime: DateTime<Utc> = metric.end_time.into();
-//         map.insert(
-//             "end_time".to_string(),
-//             Value::String(datetime.timestamp_micros().to_string()),
-//         );
+    // Add resource attributes
+    let mut resource_attrs = Map::new();
+    for (key, value) in metrics.resource.iter() {
+        resource_attrs.insert(key.to_string(), Value::String(value.to_string()));
+    }
+    root.insert("resource".to_string(), Value::Object(resource_attrs));
 
-//         // Add metric attributes
-//         let mut metric_attributes = Vec::<Value>::new();
-//         for kv in metric.attributes.iter() {
-//             let mut attr = Map::new();
-//             attr.insert(kv.key.to_string(), Value::String(kv.value.to_string()));
-//             metric_attributes.push(Value::Object(attr));
-//         }
-//         map.insert(
-//             "metric_attributes".to_string(),
-//             Value::Array(metric_attributes),
-//         );
+    // Add scope metrics
+    let mut scope_metrics = Vec::new();
+    for scope_metric in metrics.scope_metrics.iter() {
+        let mut scope = Map::new();
+        scope.insert(
+            "name".to_string(),
+            Value::String(scope_metric.scope.name().to_string()),
+        );
+        if let Some(version) = scope_metric.scope.version() {
+            scope.insert("version".to_string(), Value::String(version.to_string()));
+        }
+        if let Some(schema_url) = scope_metric.scope.schema_url() {
+            scope.insert(
+                "schema_url".to_string(),
+                Value::String(schema_url.to_string()),
+            );
+        }
 
-//         metrics.push(Value::Object(map));
-//     }
-//     metrics
-// }
+        // Add metrics
+        let mut metrics = Vec::new();
+        for metric in scope_metric.metrics.iter() {
+            let mut metric_obj = Map::new();
+            metric_obj.insert("name".to_string(), Value::String(metric.name.to_string()));
+            metric_obj.insert(
+                "description".to_string(),
+                Value::String(metric.description.to_string()),
+            );
+            metric_obj.insert("unit".to_string(), Value::String(metric.unit.to_string()));
+
+            // Add data points
+            let data_points = Vec::new();
+            // match &metric.data {
+            //     data::Metric::Sum(sum) => {
+            //         for point in sum.data_points.iter() {
+            //             let mut dp = Map::new();
+            //             dp.insert("value".to_string(), Value::String(point.value.to_string()));
+            //             let start_time: DateTime<Utc> = point.start_time.into();
+            //             dp.insert(
+            //                 "start_time".to_string(),
+            //                 Value::String(start_time.timestamp_micros().to_string()),
+            //             );
+            //             let time: DateTime<Utc> = point.time.into();
+            //             dp.insert(
+            //                 "time".to_string(),
+            //                 Value::String(time.timestamp_micros().to_string()),
+            //             );
+
+            //             // Add attributes
+            //             let mut attributes = Map::new();
+            //             for (key, value) in point.attributes.iter() {
+            //                 attributes.insert(key.to_string(), Value::String(value.to_string()));
+            //             }
+            //             dp.insert("attributes".to_string(), Value::Object(attributes));
+
+            //             data_points.push(Value::Object(dp));
+            //         }
+            //     }
+            //     data::Metric::Gauge(gauge) => {
+            //         for point in gauge.data_points.iter() {
+            //             let mut dp = Map::new();
+            //             dp.insert("value".to_string(), Value::String(point.value.to_string()));
+            //             let time: DateTime<Utc> = point.time.into();
+            //             dp.insert(
+            //                 "time".to_string(),
+            //                 Value::String(time.timestamp_micros().to_string()),
+            //             );
+
+            //             // Add attributes
+            //             let mut attributes = Map::new();
+            //             for (key, value) in point.attributes.iter() {
+            //                 attributes.insert(key.to_string(), Value::String(value.to_string()));
+            //             }
+            //             dp.insert("attributes".to_string(), Value::Object(attributes));
+
+            //             data_points.push(Value::Object(dp));
+            //         }
+            //     }
+            //     data::Metric::Histogram(histogram) => {
+            //         for point in histogram.data_points.iter() {
+            //             let mut dp = Map::new();
+            //             dp.insert("count".to_string(), Value::Number(point.count.into()));
+            //             dp.insert("sum".to_string(), Value::String(point.sum.to_string()));
+
+            //             // Add bucket counts
+            //             let bucket_counts: Vec<Value> = point
+            //                 .bucket_counts
+            //                 .iter()
+            //                 .map(|&count| Value::Number(count.into()))
+            //                 .collect();
+            //             dp.insert("bucket_counts".to_string(), Value::Array(bucket_counts));
+
+            //             // Add explicit bounds
+            //             let bounds: Vec<Value> = point
+            //                 .explicit_bounds
+            //                 .iter()
+            //                 .map(|&bound| Value::String(bound.to_string()))
+            //                 .collect();
+            //             dp.insert("explicit_bounds".to_string(), Value::Array(bounds));
+
+            //             let start_time: DateTime<Utc> = point.start_time.into();
+            //             dp.insert(
+            //                 "start_time".to_string(),
+            //                 Value::String(start_time.timestamp_micros().to_string()),
+            //             );
+            //             let time: DateTime<Utc> = point.time.into();
+            //             dp.insert(
+            //                 "time".to_string(),
+            //                 Value::String(time.timestamp_micros().to_string()),
+            //             );
+
+            //             // Add attributes
+            //             let mut attributes = Map::new();
+            //             for (key, value) in point.attributes.iter() {
+            //                 attributes.insert(key.to_string(), Value::String(value.to_string()));
+            //             }
+            //             dp.insert("attributes".to_string(), Value::Object(attributes));
+
+            //             data_points.push(Value::Object(dp));
+            //         }
+            //     }
+            // }
+            metric_obj.insert("data_points".to_string(), Value::Array(data_points));
+            metrics.push(Value::Object(metric_obj));
+        }
+        scope.insert("metrics".to_string(), Value::Array(metrics));
+        scope_metrics.push(Value::Object(scope));
+    }
+    root.insert("scope_metrics".to_string(), Value::Array(scope_metrics));
+
+    Value::Object(root)
+}

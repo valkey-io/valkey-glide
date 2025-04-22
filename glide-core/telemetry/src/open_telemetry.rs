@@ -410,7 +410,7 @@ impl GlideOpenTelemetryConfigBuilder {
     }
 }
 
-fn build_exporter(
+fn build_span_exporter(
     batch_config: BatchConfig,
     exporter: impl SpanExporter + 'static,
 ) -> BatchSpanProcessor<Tokio> {
@@ -470,7 +470,7 @@ impl GlideOpenTelemetry {
         let trace_exporter = match trace_exporter {
             GlideOpenTelemetrySignalsExporter::File(p) => {
                 let exporter = crate::SpanExporterFile::new(p.clone());
-                build_exporter(batch_config, exporter)
+                build_span_exporter(batch_config, exporter)
             }
             GlideOpenTelemetrySignalsExporter::Http(url) => {
                 let exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -478,7 +478,7 @@ impl GlideOpenTelemetry {
                     .with_endpoint(url)
                     .with_protocol(Protocol::HttpBinary)
                     .build()?;
-                build_exporter(batch_config, exporter)
+                build_span_exporter(batch_config, exporter)
             }
             GlideOpenTelemetrySignalsExporter::Grpc(url) => {
                 let exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -486,7 +486,7 @@ impl GlideOpenTelemetry {
                     .with_endpoint(url)
                     .with_protocol(Protocol::Grpc)
                     .build()?;
-                build_exporter(batch_config, exporter)
+                build_span_exporter(batch_config, exporter)
             }
         };
 
@@ -506,16 +506,9 @@ impl GlideOpenTelemetry {
     ) -> Result<(), GlideOTELError> {
         let metrics_exporter = match metrics_exporter {
             GlideOpenTelemetrySignalsExporter::File(p) => {
-                //     let exporter = crate::MetricsExporterFile::new(p);
-                //     opentelemetry_sdk::metrics::PeriodicReader::builder(exporter, Tokio)
-                //         .with_interval(flush_interval_ms)
-                //         .build()
-                // let exporter = MetricExporter::builder()
-                //     .with_http()
-                //     .with_endpoint("url")
-                //     .with_protocol(Protocol::HttpBinary)
-                //     .build()?;
-                let exporter = crate::SpanExporterFile::new(p.clone());
+                let exporter = crate::FileMetricExporter::new(p.clone()).map_err(|e| {
+                    GlideOTELError::Other(format!("Failed to create metrics exporter: {}", e))
+                })?;
                 opentelemetry_sdk::metrics::PeriodicReader::builder(exporter, Tokio)
                     .with_interval(flush_interval_ms)
                     .build()
@@ -750,7 +743,7 @@ mod tests {
         runtime.block_on(async {
             let config = GlideOpenTelemetryConfigBuilder::default()
                 .with_flush_interval(std::time::Duration::from_millis(100))
-                .with_trace_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
+                .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
                     "/tmp",
                 )))
                 .build();
