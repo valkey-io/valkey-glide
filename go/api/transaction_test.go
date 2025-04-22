@@ -8,7 +8,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/api"
 )
 
-func ExampleGlideClient_Del() {
+func ExampleGlideClient_Transaction() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
 	tx := api.NewTransaction(client)
