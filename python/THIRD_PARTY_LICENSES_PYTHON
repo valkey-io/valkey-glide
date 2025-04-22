@@ -24458,7 +24458,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyo3:0.24.1
+Package: pyo3:0.24.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24687,7 +24687,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyo3-build-config:0.24.1
+Package: pyo3-build-config:0.24.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24916,7 +24916,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyo3-ffi:0.24.1
+Package: pyo3-ffi:0.24.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25145,7 +25145,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyo3-macros:0.24.1
+Package: pyo3-macros:0.24.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25374,7 +25374,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyo3-macros-backend:0.24.1
+Package: pyo3-macros-backend:0.24.2
 
 The following copyrights and licenses were found in the source code of this package:
 
