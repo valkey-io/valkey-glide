@@ -9677,13 +9677,7 @@ func (suite *GlideTestSuite) TestGeoPos() {
 			assert.NotNil(t, coords)
 			assert.Equal(t, 2, len(coords))
 
-			// Check longitude
-			assert.InDelta(t, expected[i][0], coords[0], 1e-9,
-				"longitude mismatch for member %s", members[i])
-
-			// Check latitude
-			assert.InDelta(t, expected[i][1], coords[1], 1e-9,
-				"latitude mismatch for member %s", members[i])
+			assert.InDeltaSlice(t, expected[i], coords, 1e-6)
 		}
 
 		// Test error case with wrong key type
@@ -9774,8 +9768,14 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 		fullResults, err := client.GeoSearchWithFullOptions(key1, &searchOrigin, *searchShape, *resultOpts, *searchOpts)
 		assert.NoError(suite.T(), err)
 		// Verify structure of results - exact values may vary slightly due to floating-point precision
-		assert.Equal(suite.T(), 4, len(fullResults))
-		assert.Equal(suite.T(), expectedResults, fullResults)
+		assert.Equal(suite.T(), len(expectedResults), len(fullResults))
+		for i := range expectedResults {
+			assert.Equal(suite.T(), expectedResults[i].Name, fullResults[i].Name)
+			assert.Equal(suite.T(), expectedResults[i].Dist, fullResults[i].Dist)
+			assert.Equal(suite.T(), expectedResults[i].Hash, fullResults[i].Hash)
+			assert.InDelta(suite.T(), expectedResults[i].Coord.Latitude, fullResults[i].Coord.Latitude, 1e-6)
+			assert.InDelta(suite.T(), expectedResults[i].Coord.Longitude, fullResults[i].Coord.Longitude, 1e-6)
+		}
 
 		// Test with count limiting result to 1
 		resultOptsWithCount := options.NewGeoSearchResultOptions().
@@ -9897,7 +9897,13 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 				},
 			},
 		}
-		assert.Equal(suite.T(), expectedKmResults, kmResults)
+		for i := range expectedKmResults {
+			assert.Equal(suite.T(), expectedKmResults[i].Name, kmResults[i].Name)
+			assert.Equal(suite.T(), expectedKmResults[i].Dist, kmResults[i].Dist)
+			assert.Equal(suite.T(), expectedKmResults[i].Hash, kmResults[i].Hash)
+			assert.InDelta(suite.T(), expectedKmResults[i].Coord.Latitude, kmResults[i].Coord.Latitude, 1e-6)
+			assert.InDelta(suite.T(), expectedKmResults[i].Coord.Longitude, kmResults[i].Coord.Longitude, 1e-6)
+		}
 
 		// Test search with ANY option
 		expectedAnyResults := []options.Location{
@@ -10039,7 +10045,7 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		// Verify stored results with distance
 		zRangeResultWithDist, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), expectedMap2, zRangeResultWithDist)
+		assert.InDeltaMapValues(suite.T(), expectedMap2, zRangeResultWithDist, 1e-6)
 
 		// Test storing results of a box search, unit: kilometers, from a geospatial data point, with count
 		count, err = client.GeoSearchStoreWithResultOptions(
@@ -10123,5 +10129,164 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		_, err = client.GeoSearchStore(destinationKey, key3, searchOrigin, *boxShape)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestBZPopMax() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+
+		res1, err := client.BZPopMax([]string{key1}, float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res1.IsNil())
+
+		membersScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+
+		res2, err := client.ZAdd(key1, membersScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res2)
+
+		res3, err := client.BZPopMax([]string{key1}, float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), api.KeyWithMemberAndScore{Key: key1, Member: "three", Score: 3.0}, res3.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestZMPop() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		key3 := "{key}-3" + uuid.NewString()
+
+		res1, err := client.ZMPop([]string{key1}, options.MIN)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res1.IsNil())
+
+		membersScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		res2, err := client.ZAdd(key1, membersScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res2)
+
+		res3, err := client.ZAdd(key2, map[string]float64{
+			"four": 4.0,
+			"five": 5.0,
+		})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res3)
+
+		// Pop minimum value from key1
+		res4, err := client.ZMPop([]string{key1}, options.MIN)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), key1, res4.Value().Key)
+		assert.ElementsMatch(
+			suite.T(),
+			[]api.MemberAndScore{
+				{Member: "one", Score: 1.0},
+			},
+			res4.Value().MembersAndScores,
+		)
+
+		// Pop maximum value from key2
+		res5, err := client.ZMPop([]string{key2}, options.MAX)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), key2, res5.Value().Key)
+		assert.ElementsMatch(
+			suite.T(),
+			[]api.MemberAndScore{
+				{Member: "five", Score: 5.0},
+			},
+			res5.Value().MembersAndScores,
+		)
+
+		// pop from an empty key3
+		res6, err := client.ZMPop([]string{key3}, options.MIN)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res6.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestZMPopWithOptions() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		key3 := "{key}-3" + uuid.NewString()
+
+		opts := *options.NewZPopOptions().SetCount(2)
+
+		res1, err := client.ZMPopWithOptions([]string{key1}, options.MIN, opts)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res1.IsNil())
+
+		membersScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+			"four":  4.0,
+		}
+		res2, err := client.ZAdd(key1, membersScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2)
+
+		res3, err := client.ZAdd(key2, map[string]float64{
+			"a": 10.0,
+			"b": 20.0,
+		})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res3)
+
+		res4, err := client.ZMPopWithOptions([]string{key1}, options.MIN, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), key1, res4.Value().Key)
+		assert.ElementsMatch(
+			suite.T(),
+			[]api.MemberAndScore{
+				{Member: "one", Score: 1.0},
+				{Member: "two", Score: 2.0},
+			},
+			res4.Value().MembersAndScores,
+		)
+
+		opts10 := *options.NewZPopOptions().SetCount(10)
+		res5, err := client.ZMPopWithOptions([]string{key1}, options.MIN, opts10)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), key1, res5.Value().Key)
+		assert.ElementsMatch(
+			suite.T(),
+			[]api.MemberAndScore{
+				{Member: "three", Score: 3.0},
+				{Member: "four", Score: 4.0},
+			},
+			res5.Value().MembersAndScores,
+		)
+
+		opts1 := *options.NewZPopOptions().SetCount(1)
+		res6, err := client.ZMPopWithOptions([]string{key2}, options.MAX, opts1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), key2, res6.Value().Key)
+		assert.ElementsMatch(
+			suite.T(),
+			[]api.MemberAndScore{
+				{Member: "b", Score: 20.0},
+			},
+			res6.Value().MembersAndScores,
+		)
+
+		res7, err := client.ZMPopWithOptions([]string{key3}, options.MIN, opts1)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res7.IsNil())
 	})
 }

@@ -100,7 +100,11 @@ public static class MainClass
 
     private static void PrintResults(string resultsFile)
     {
-        _ = Directory.CreateDirectory(Path.GetDirectoryName(resultsFile)!);
+        string? dir = Path.GetDirectoryName(resultsFile);
+        if (dir is not null && dir?.Length > 0)
+        {
+            _ = Directory.CreateDirectory(dir);
+        }
         using FileStream createStream = File.Create(resultsFile);
         JsonSerializer.Serialize(createStream, BenchJsonResults);
     }
@@ -254,9 +258,9 @@ public static class MainClass
         return await Task.WhenAll(tasks);
     }
 
-    private static async Task RunWithParameters(int total_commands,
-        int data_size,
-        int num_of_concurrent_tasks,
+    private static async Task RunWithParameters(int totalCommands,
+        int dataSize,
+        int numOfConcurrentTasks,
         string clientsToRun,
         string host,
         ushort port,
@@ -273,13 +277,13 @@ public static class MainClass
                 {
                     StandaloneClientConfiguration config = new StandaloneClientConfigurationBuilder()
                         .WithAddress(host, port).WithTls(useTLS).Build();
-                    glideClient = new GlideClient(config);
+                    glideClient = GlideClient.CreateClient(config).GetAwaiter().GetResult();
                 }
                 else
                 {
                     ClusterClientConfiguration config = new ClusterClientConfigurationBuilder()
                         .WithAddress(host, port).WithTls(useTLS).Build();
-                    glideClient = new GlideClusterClient(config);
+                    glideClient = GlideClusterClient.CreateClient(config).GetAwaiter().GetResult();
                 }
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await glideClient.Get(key),
@@ -291,9 +295,9 @@ public static class MainClass
                 clients,
                 "glide",
                 isCluster,
-                total_commands,
-                data_size,
-                num_of_concurrent_tasks
+                totalCommands,
+                dataSize,
+                numOfConcurrentTasks
             );
         }
 
@@ -312,9 +316,9 @@ public static class MainClass
                 clients,
                 "StackExchange.Redis",
                 isCluster,
-                total_commands,
-                data_size,
-                num_of_concurrent_tasks
+                totalCommands,
+                dataSize,
+                numOfConcurrentTasks
             );
 
             foreach (ClientWrapper client in clients)

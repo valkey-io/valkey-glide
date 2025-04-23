@@ -811,10 +811,16 @@ def is_address_already_in_use(
 ):
     logging.debug(f"checking is address already bind for: {server}")
     timeout_start = time.time()
+    address_in_use_errors = [
+        "Address already in use",
+        "Address in use",
+        "address in use",
+    ]
     while time.time() < timeout_start + timeout:
         with open(log_file, "r") as f:
             server_log = f.read()
-            if "Address already in use" in server_log:
+            # Check for known error message variants because different C libraries
+            if any(error_msg in server_log for error_msg in address_in_use_errors):
                 logging.debug(f"Address is already bind for server {server}")
                 return True
             elif "Ready" in server_log:

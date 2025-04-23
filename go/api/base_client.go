@@ -14,9 +14,14 @@ package api
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
 // void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
+// void pubSubCallback(void *clientPtr, enum PushKind kind,
+//                     const uint8_t *message, int64_t message_len,
+//                     const uint8_t *channel, int64_t channel_len,
+//                     const uint8_t *pattern, int64_t pattern_len);
 import "C"
 
 import (
+	goErr "errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -44,6 +49,7 @@ type BaseClient interface {
 	BitmapCommands
 	GeoSpatialCommands
 	ScriptingAndFunctionBaseCommands
+	PubSubCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -55,29 +61,25 @@ type payload struct {
 	error error
 }
 
-//export successCallback
-func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandResponse) {
-	response := cResponse
-	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
-	resultChannel <- payload{value: response, error: nil}
-}
-
-//export failureCallback
-func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
-	defer C.free_error_message(cErrorMessage)
-	msg := C.GoString(cErrorMessage)
-	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
-	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
-}
-
 type clientConfiguration interface {
 	toProtobuf() (*protobuf.ConnectionRequest, error)
 }
 
 type baseClient struct {
-	pending    map[unsafe.Pointer]struct{}
-	coreClient unsafe.Pointer
-	mu         sync.Mutex
+	pending        map[unsafe.Pointer]struct{}
+	coreClient     unsafe.Pointer
+	mu             sync.Mutex
+	messageHandler *MessageHandler
+}
+
+// setMessageHandler assigns a message handler to the client for processing pub/sub messages
+func (client *baseClient) setMessageHandler(handler *MessageHandler) {
+	client.messageHandler = handler
+}
+
+// getMessageHandler returns the currently assigned message handler
+func (client *baseClient) getMessageHandler() *MessageHandler {
+	return client.messageHandler
 }
 
 // buildAsyncClientType safely initializes a C.ClientType with an AsyncClient_Body.
@@ -153,23 +155,29 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, &errors.ClosingError{Msg: err.Error()}
 	}
+	client := &baseClient{pending: make(map[unsafe.Pointer]struct{})}
 
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
 			&clientType,
+			(C.PubSubCallback)(unsafe.Pointer(C.pubSubCallback)),
 		),
 	)
 	defer C.free_connection_response(cResponse)
-
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
 		return nil, &errors.ConnectionError{Msg: message}
 	}
 
-	return &baseClient{coreClient: cResponse.conn_ptr, pending: make(map[unsafe.Pointer]struct{})}, nil
+	client.coreClient = cResponse.conn_ptr
+
+	// Register the client in our registry using the pointer value from C
+	registerClient(client, uintptr(cResponse.conn_ptr))
+
+	return client, nil
 }
 
 // Close terminates the client by closing all associated resources.
@@ -180,6 +188,8 @@ func (client *baseClient) Close() {
 	if client.coreClient == nil {
 		return
 	}
+
+	unregisterClient(uintptr(client.coreClient))
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
@@ -2947,7 +2957,7 @@ func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+//	`true` if the timeout was set. `false` if the    timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
@@ -3872,7 +3882,7 @@ func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
 func (client *baseClient) ZPopMinWithOptions(key string, options options.ZPopOptions) (map[string]float64, error) {
-	optArgs, err := options.ToArgs()
+	optArgs, err := options.ToArgs(false)
 	if err != nil {
 		return nil, err
 	}
@@ -3925,7 +3935,7 @@ func (client *baseClient) ZPopMax(key string) (map[string]float64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
 func (client *baseClient) ZPopMaxWithOptions(key string, options options.ZPopOptions) (map[string]float64, error) {
-	optArgs, err := options.ToArgs()
+	optArgs, err := options.ToArgs(false)
 	if err != nil {
 		return nil, err
 	}
@@ -5995,9 +6005,6 @@ func (client *baseClient) CopyWithOptions(
 //	An `array` of stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
-//	fmt.Println(res) // map[key:[["field1", "entry1"], ["field2", "entry2"]]]
-//	fmt.Println(res) // map[key:[["field1", "entry1"]]
-//
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(
 	key string,
@@ -6787,6 +6794,126 @@ func (client *baseClient) ZLexCount(key string, rangeQuery *options.RangeByLex) 
 		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
+}
+
+//	Blocks the connection until it pops and returns a member-score pair
+//	with the highest score from the first non-empty sorted set.
+//
+// See [valkey.io] for details.
+//
+// Note :
+//
+// When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// Parameters:
+//
+//	keys - An array of keys to check for elements.
+//	timeoutSecs - The maximum number of seconds to block (0 blocks indefinitely).
+//
+// Return value:
+//
+//	A `KeyWithMemberAndScore` struct containing the key from which the member was popped,
+//	the popped member, and its score. If no element could be popped and the timeout expired,
+//	returns `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/bzpopmax/
+func (client *baseClient) BZPopMax(
+	keys []string,
+	timeoutSecs float64,
+) (Result[KeyWithMemberAndScore], error) {
+	args := append(keys, utils.FloatToString(timeoutSecs))
+
+	result, err := client.executeCommand(C.BZPopMax, args)
+	if err != nil {
+		return CreateNilKeyWithMemberAndScoreResult(), err
+	}
+
+	return handleKeyWithMemberAndScoreResponse(result)
+}
+
+// ZMPopWithOptions Removes and returns up to `count` members from the first non-empty sorted set
+// among the provided `keys`, based on the specified `scoreFilter` criteria.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - A list of keys representing sorted sets to check for elements.
+//	scoreFilter - Specifies whether to pop members with the lowest (`options.MIN`)
+//	 or highest (`options.MAX`) scores.
+//	opts -  Additional options, such as specifying the maximum number of elements to pop.
+//
+// Return value:
+//
+//	A `Result` containing a `KeyWithArrayOfMembersAndScores` object.
+//	If no elements could be popped from the provided keys, returns `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/zmpop/
+func (client *baseClient) ZMPopWithOptions(
+	keys []string,
+	scoreFilter options.ScoreFilter,
+	opts options.ZPopOptions,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.ToString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	optArgs, err := opts.ToArgs(true)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	args := append([]string{strconv.Itoa(len(keys))}, keys...)
+	args = append(args, scoreFilterStr)
+	args = append(args, optArgs...)
+
+	result, err := client.executeCommand(C.ZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
+}
+
+// Pops one or more member-score pairs from the first non-empty sorted set,
+// with the given keys being checked in the order provided.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - An array of keys to check for elements.
+//	scoreFilter - Pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest scores.
+//
+// Return value:
+//
+//	 A `KeyWithArrayOfMembersAndScores` struct containing:
+//	- The key from which the elements were popped.
+//	- An array of member-score pairs of the popped elements.
+//	  Returns `nil` if no member could be popped.
+//
+// [valkey.io]: https://valkey.io/commands/zmpop/
+func (client *baseClient) ZMPop(
+	keys []string,
+	scoreFilter options.ScoreFilter,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.ToString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	args := make([]string, 0, len(keys)+3)
+	args = append(args, strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, scoreFilterStr)
+
+	result, err := client.executeCommand(C.ZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
 }
 
 // Adds geospatial members with their positions to the specified sorted set stored at `key`.
@@ -7610,4 +7737,52 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 		return nil, err
 	}
 	return handleAnyResponse(result)
+}
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *baseClient) Publish(channel string, message string) (int64, error) {
+	if message == "" || channel == "" {
+		return 0, goErr.New("both message and channel are required for Publish command")
+	}
+	args := []string{channel, message}
+	result, err := client.executeCommand(C.Publish, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// Kills a function that is currently executing.
+//
+// `FUNCTION KILL` terminates read-only functions only.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// Note:
+//
+//	When in cluster mode, this command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`OK` if function is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/function-kill/
+func (client *baseClient) FunctionKill() (string, error) {
+	result, err := client.executeCommand(C.FunctionKill, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
 }
