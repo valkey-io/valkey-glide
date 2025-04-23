@@ -203,6 +203,9 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 	if err != nil {
 		return createEmptyClusterValue[interface{}](), err
 	}
+	if !route.IsMultiNode() {
+		return createClusterSingleValue[interface{}](data), err
+	}
 	return createClusterValue[interface{}](data), nil
 }
 
