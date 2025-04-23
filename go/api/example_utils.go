@@ -145,3 +145,27 @@ func getExampleTransactionGlideClient() *Transaction {
 
 	return standaloneTransactionClient
 }
+
+func getExampleTransactionGlideClusterClient() *Transaction {
+	standaloneOnce.Do(func() {
+		initFlags()
+		addresses := parseHosts(*standaloneNode)
+		config := NewGlideClusterClientConfiguration().
+			WithAddress(&addresses[0]) // use default address
+
+		client, err := NewGlideClusterClient(config)
+		if err != nil {
+			fmt.Println("error connecting to database: ", err)
+		}
+		// Flush the database before each test to ensure a clean state.
+		_, errFlush := client.CustomCommand([]string{"FLUSHALL"})
+		if errFlush != nil {
+			fmt.Println("error flushing database: ", err)
+		}
+		clientTx := NewClusterTransaction(client)
+
+		standaloneTransactionClient = clientTx
+
+	})
+	return standaloneTransactionClient
+}

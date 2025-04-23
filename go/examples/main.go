@@ -19,6 +19,8 @@ func main() {
 	if err != nil {
 		log.Fatal("error connecting to database: ", err)
 	}
+	getResult, _ := client.Get("NOT_A_KEY")
+	fmt.Println("NOT_A_KEY", getResult)
 
 	// Create a new GlideClient
 	// clientNormal, err := api.NewGlideClient(config)
@@ -51,15 +53,13 @@ func main() {
 	// fmt.Println(resultUnWatch)
 	tx := api.NewTransaction(client)
 	cmd := tx.GlideClient
-	cmd.Set("key123", "Glide")
-	// cmd.Watch([]string{"key123"})
-	// cmd.Set("key1", "Glide")
-	// cmd.Set("key2", "Hello")
-	// cmd.Set("key3", "KeyToDelete")
-	// cmd.Get("key1")
-	// cmd.Get("key2")
-	// cmd.Get("key3")
-	// cmd.Del([]string{"key3"})
+	cmd.Set("key1", "val1")
+	cmd.LPop("key1")
+	cmd.Get("key1")
+	cmd.Set("key2", "val2")
+	cmd.Get("key2")
+	cmd.Set("key3", "val3")
+	cmd.Get("key3")
 	// cmd.Append("key2", "_World")
 	// cmd.Get("key2")
 	// cmd.Set("key123", "Valkey")

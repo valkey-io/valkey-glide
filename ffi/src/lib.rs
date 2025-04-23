@@ -722,6 +722,21 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             command_response.response_type = ResponseType::Sets;
             Ok(command_response)
         }
+
+        Value::ServerError(server_error) => {
+            let error_message = format!("{}", server_error);
+
+            // Convert the formatted string to bytes
+            let bytes = error_message.into_bytes();
+            // Process the bytes as before
+            let (vec_ptr, len) = convert_vec_to_pointer(bytes);
+            command_response.string_value = vec_ptr as *mut c_char;
+            command_response.string_value_len = len;
+            command_response.response_type = ResponseType::String;
+
+            // Return as Ok to continue transaction processing
+            Ok(command_response)
+        }
         // TODO: Add support for other return types.
         _ => todo!(),
     };
@@ -833,9 +848,7 @@ pub unsafe extern "C" fn execute_transaction(
 
             let _arg = unsafe { arg_ptr.as_ref() }.expect("Argument pointer (arg_ptr) is NULL");
 
-            let arg_str = unsafe { CStr::from_ptr(arg_ptr) }
-                .to_str()
-                .expect("Invalid UTF-8 string in transaction");
+            let arg_str = unsafe { CStr::from_ptr(arg_ptr) }.to_bytes();
 
             cmd.arg(arg_str);
         }
@@ -870,7 +883,7 @@ pub unsafe extern "C" fn execute_transaction(
 
     client_adapter.execute_command(channel, async move {
         client
-            .send_transaction(&pipeline, Some(routing_info), None, true)
+            .send_transaction(&pipeline, Some(routing_info), None, false)
             .await
     })
 }

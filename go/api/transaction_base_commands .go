@@ -11,7 +11,4 @@ type TransactionBaseCommands interface {
 	Watch(keys []string) (string, error)
 
 	Unwatch() (string, error)
-	//Exec() error
-
-	//Discard() error
 }

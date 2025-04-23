@@ -24,6 +24,7 @@ type Transaction struct {
 type Cmder interface {
 	Name() C.RequestType
 	Args() []string
+	Route() config.Route
 }
 
 type GenericCommand struct {
@@ -40,6 +41,10 @@ func (cmd *GenericCommand) Args() []string {
 	return cmd.args
 }
 
+func (cmd *GenericCommand) Route() config.Route {
+	return cmd.route
+}
+
 func NewMultiCommand() Cmder {
 	return &GenericCommand{name: C.Multi, args: []string{}}
 }
@@ -48,12 +53,13 @@ func NewExecCommand() Cmder {
 	return &GenericCommand{name: C.Exec, args: []string{}}
 }
 
-// Override ExecuteCommand to queue commands in the transaction
+// Override sendCommand to queue commands in the transaction
 func (t *Transaction) sendCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
 	t.commands = append(t.commands, &GenericCommand{name: requestType, args: args})
 	return nil, nil // Queue the command instead of executing immediately
 }
 
+// Override sendCommandWithRoute to queue commands in the transaction
 func (t *Transaction) sendCommandWithRoute(requestType C.RequestType, args []string, route config.Route) (*C.struct_CommandResponse, error) {
 	t.commands = append(t.commands, &GenericCommand{name: requestType, args: args, route: route})
 	return nil, nil
@@ -144,6 +150,7 @@ func (client *baseClient) executeTransactionWithRoute(cmds []Cmder, route config
 		return nil, &errors.ClosingError{Msg: "Transaction failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
+
 	C.execute_transaction(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
