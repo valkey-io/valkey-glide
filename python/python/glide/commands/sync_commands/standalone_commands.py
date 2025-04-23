@@ -42,3 +42,21 @@ class StandaloneCommands(CoreCommands):
             [section.value for section in sections] if sections else []
         )
         return cast(bytes, self._execute_command(RequestType.Info, args))
+
+    def echo(self, message: TEncodable) -> bytes:
+        """
+        Echoes the provided `message` back.
+
+        See [valkey.io](https://valkey.io/commands/echo) for more details.
+
+        Args:
+            message (TEncodable): The message to be echoed back.
+
+        Returns:
+            bytes: The provided `message`.
+
+        Examples:
+            >>> client.echo("Valkey GLIDE")
+                b'Valkey GLIDE'
+        """
+        return cast(bytes, self._execute_command(RequestType.Echo, [message]))
