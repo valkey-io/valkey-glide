@@ -13,7 +13,7 @@
         "python/Cargo.toml",
         "node/rust-client/Cargo.toml",
         "logger_core/Cargo.toml",
-        "csharp/lib/Cargo.toml",
+        "csharp/rust/Cargo.toml",
         "glide-core/redis-rs/Cargo.toml",
         "benchmarks/rust/Cargo.toml",
         "java/Cargo.toml",
