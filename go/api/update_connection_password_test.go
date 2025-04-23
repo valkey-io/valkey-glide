@@ -12,7 +12,7 @@ func ExampleGlideClient_UpdateConnectionPassword() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response.Value())
+	fmt.Println(response)
 
 	// Output: OK
 }
@@ -23,7 +23,7 @@ func ExampleGlideClient_ResetConnectionPassword() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response.Value())
+	fmt.Println(response)
 
 	// Output: OK
 }
@@ -34,7 +34,7 @@ func ExampleGlideClusterClient_UpdateConnectionPassword() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response.Value())
+	fmt.Println(response)
 
 	// Output: OK
 }
@@ -45,7 +45,7 @@ func ExampleGlideClusterClient_ResetConnectionPassword() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response.Value())
+	fmt.Println(response)
 
 	// Output: OK
 }
