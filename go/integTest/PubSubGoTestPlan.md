@@ -119,3 +119,4 @@ Message handler functionality tested through the basic tests above:
 - [ ] Update makefile with PubSub tests
 - [ ] Update the developer.md file with how to use PubSub API
 - [ ] Update CI pipeline to run PubSub tests
+- [ ] Test SignalChannel handles multiple messages arriving over time and triggering the signal handler multiple times. This test should be structured so that the messages are not stacking in the queue.

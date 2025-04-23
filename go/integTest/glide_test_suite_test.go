@@ -460,7 +460,11 @@ type ChannelDefn struct {
 
 var callbackCtx = sync.Map{}
 
-const MESSAGE_DELIVERY_DELAY = 500 // ms
+const (
+	MESSAGE_TIMEOUT          = 5   // second
+	MESSAGE_PROCESSING_DELAY = 100 // ms
+	ITERATION_DELAY          = 100 // ms
+)
 
 type MessageReadMethod int
 
@@ -521,7 +525,7 @@ func (suite *GlideTestSuite) verifyPubsubMessages(
 						messageKey = msg.Pattern.Value()
 					}
 					receivedMessages[messageKey] = msg.Message
-				case <-time.After(5 * time.Second):
+				case <-time.After(MESSAGE_TIMEOUT * time.Second):
 					assert.Fail(t, "Timed out waiting for message for key %s for client %d", expectedKey, clientId)
 					t.FailNow()
 				}
@@ -538,7 +542,6 @@ func (suite *GlideTestSuite) verifyPubsubMessages(
 			queue.RegisterSignalChannel(signalCh)
 			defer queue.UnregisterSignalChannel(signalCh)
 
-			timeout := time.After(5 * time.Second)
 			for len(receivedMessages) < len(expectedMessages) {
 				select {
 				case <-signalCh:
@@ -552,12 +555,12 @@ func (suite *GlideTestSuite) verifyPubsubMessages(
 						}
 						receivedMessages[messageKey] = msg.Message
 					}
-				case <-timeout:
+				case <-time.After(MESSAGE_TIMEOUT * time.Second):
 					assert.Fail(t, fmt.Sprintf("Timed out waiting for messages for client %d", clientId))
 					suite.T().Logf("Received messages: %+v", receivedMessages)
 					t.FailNow()
 				default:
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(ITERATION_DELAY * time.Millisecond)
 				}
 			}
 			if !assert.Equal(t, expectedMessages, receivedMessages, "Messages mismatch for client %d", clientId) {
@@ -568,7 +571,6 @@ func (suite *GlideTestSuite) verifyPubsubMessages(
 	case SyncLoopMethod:
 		for clientId, queue := range queues {
 			receivedMessages := make(map[string]string)
-			timeout := time.After(5 * time.Second)
 			for len(receivedMessages) < len(expectedMessages) {
 				if msg := queue.Pop(); msg != nil {
 					// For pattern subscriptions, use the pattern value as the key
@@ -581,11 +583,11 @@ func (suite *GlideTestSuite) verifyPubsubMessages(
 				}
 
 				select {
-				case <-timeout:
+				case <-time.After(MESSAGE_TIMEOUT * time.Second):
 					assert.Fail(t, "Timed out waiting for messages for client %d", clientId)
 					t.FailNow()
 				default:
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(ITERATION_DELAY * time.Millisecond)
 				}
 			}
 			if !assert.Equal(t, expectedMessages, receivedMessages, "Messages mismatch for client %d", clientId) {

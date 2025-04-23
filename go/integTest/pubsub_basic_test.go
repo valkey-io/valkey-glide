@@ -109,22 +109,17 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 			}
 
 			// Allow subscription to establish
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Publish test message
 			_, err := publisher.Publish(tt.channelName, tt.messageContent)
 			assert.Nil(t, err)
 
 			// Allow time for the message to be received
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Verify using the verification function
 			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
-
-			// Clean up
-			if receiver != nil {
-				receiver.Close()
-			}
 		})
 	}
 }
@@ -235,22 +230,17 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 			}
 
 			// Allow subscriptions to establish
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Publish test message
 			_, err := publisher.Publish(tt.channelName, tt.messageContent)
 			assert.Nil(t, err)
 
 			// Allow time for the message to be received
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Verify using the verification function
 			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
-
-			// Clean up subscribers
-			for _, subscriber := range subscribers {
-				subscriber.Close()
-			}
 		})
 	}
 }
@@ -362,7 +352,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 			}
 
 			// Allow subscription to establish
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Publish test messages to matching channels
 			for _, channel := range tt.channels {
@@ -375,15 +365,10 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 			assert.Nil(t, err)
 
 			// Allow time for the messages to be received
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Verify using the verification function
 			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
-
-			// Clean up
-			if receiver != nil {
-				receiver.Close()
-			}
 		})
 	}
 }
@@ -492,29 +477,18 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			}
 
 			// Allow subscription to establish
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
-			// TODO: For SignalChannel Async tests this will result in all of the messages getting stacked in the queue
-			// before the SignalChannel is registered in `verifyPubSubMessages`. We have logic to ensure that a signal
-			// handles all messages currently in the queue, but we should create a custom test that registers the SignalChannel
-			// and then publishes the messages to the channels so that we can test multiple messages arriving over time and
-			// triggering
-			// the signal handler multiple times..
 			for _, channelName := range tt.channelNames {
 				_, err := publisher.Publish(channelName, tt.messageContent)
 				assert.Nil(t, err)
 			}
 
 			// Allow time for the messages to be received
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Verify using the verification function
 			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
-
-			// Clean up
-			if receiver != nil {
-				receiver.Close()
-			}
 		})
 	}
 }
@@ -629,7 +603,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 			}
 
 			// Allow subscription to establish
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Publish test messages to matching channels
 			for _, channel := range tt.channels {
@@ -642,15 +616,10 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 			assert.Nil(t, err)
 
 			// Allow time for the messages to be received
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Verify using the verification function
 			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
-
-			// Clean up
-			if receiver != nil {
-				receiver.Close()
-			}
 		})
 	}
 }
@@ -776,7 +745,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 			}
 
 			// Allow subscription to establish
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Publish to exact channel
 			_, err := publisher.Publish(tt.exactChannel, tt.messageContent)
@@ -793,15 +762,10 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 			assert.Nil(t, err)
 
 			// Allow time for the messages to be received
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Verify using the verification function
 			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
-
-			// Clean up
-			if receiver != nil {
-				receiver.Close()
-			}
 		})
 	}
 }
@@ -935,7 +899,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 			}
 
 			// Allow subscriptions to establish
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Publish to exact channel
 			_, err := publisher.Publish(tt.exactChannel, tt.messageContent)
@@ -952,15 +916,10 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 			assert.Nil(t, err)
 
 			// Allow time for the messages to be received
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Verify using the verification function
 			suite.verifyPubsubMessages(t, expectedMessages, queues, tt.readMethod)
-
-			// Clean up subscribers
-			for _, subscriber := range subscribers {
-				subscriber.Close()
-			}
 		})
 	}
 }

@@ -83,6 +83,9 @@ func (client *baseClient) getMessageHandler() *MessageHandler {
 	return client.messageHandler
 }
 
+// GetQueue returns the pub/sub queue for the client.
+// This method is only available for clients that have a subscription,
+// and returns an error if the client does not have a subscription.
 func (client *baseClient) GetQueue() (*PubSubMessageQueue, error) {
 	// MessageHandler is only configured when a subscription is defined
 	if client.getMessageHandler() == nil {
