@@ -63,3 +63,36 @@ class ClusterCommands(CoreCommands):
             TClusterResponse[bytes],
             self._execute_command(RequestType.Info, args, route),
         )
+
+    def echo(
+        self, message: TEncodable, route: Optional[Route] = None
+    ) -> TClusterResponse[bytes]:
+        """
+        Echoes the provided `message` back.
+
+        See [valkey.io](https://valkey.io/commands/echo) for more details.
+
+        Args:
+            message (TEncodable): The message to be echoed back.
+            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[bytes]: The provided `message`.
+
+            When specifying a route other than a single node, response will be::
+
+                {Address (bytes) : response (bytes) , ... }
+
+            with type of Dict[bytes, bytes].
+
+        Examples:
+            >>> client.echo(b"Valkey GLIDE")
+                b'Valkey GLIDE'
+            >>> client.echo("Valkey GLIDE", AllNodes())
+                {b'addr': b'Valkey GLIDE', b'addr2': b'Valkey GLIDE', b'addr3': b'Valkey GLIDE'}
+        """
+        return cast(
+            TClusterResponse[bytes],
+            self._execute_command(RequestType.Echo, [message], route),
+        )
