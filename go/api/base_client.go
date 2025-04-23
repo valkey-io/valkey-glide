@@ -378,7 +378,7 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	return cStrings, stringLengths
 }
 
-func (client *baseClient) submitConnectionPasswordUpdate(password string, immediateAuth bool) (Result[string], error) {
+func (client *baseClient) submitConnectionPasswordUpdate(password string, immediateAuth bool) (string, error) {
 	// Create a channel to receive the result
 	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
@@ -390,7 +390,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return CreateNilStringResult(), &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
+		return DefaultStringResponse, &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
@@ -412,10 +412,10 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 	client.mu.Unlock()
 
 	if payload.error != nil {
-		return CreateNilStringResult(), payload.error
+		return DefaultStringResponse, payload.error
 	}
 
-	return handleStringOrNilResponse(payload.value)
+	return handleOkResponse(payload.value)
 }
 
 // Update the current connection with a new password.
@@ -442,7 +442,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 // Return value:
 //
 //	`"OK"` response on success.
-func (client *baseClient) UpdateConnectionPassword(password string, immediateAuth bool) (Result[string], error) {
+func (client *baseClient) UpdateConnectionPassword(password string, immediateAuth bool) (string, error) {
 	return client.submitConnectionPasswordUpdate(password, immediateAuth)
 }
 
@@ -462,7 +462,7 @@ func (client *baseClient) UpdateConnectionPassword(password string, immediateAut
 // Return value:
 //
 //	`"OK"` response on success.
-func (client *baseClient) ResetConnectionPassword() (Result[string], error) {
+func (client *baseClient) ResetConnectionPassword() (string, error) {
 	return client.submitConnectionPasswordUpdate("", false)
 }
 
@@ -486,7 +486,7 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
@@ -521,7 +521,7 @@ func (client *baseClient) SetWithOptions(key string, value string, options optio
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNilResponse(result)
+	return handleOkOrStringOrNilResponse(result)
 }
 
 // Get string value associated with the given key, or api.CreateNilStringResult() is returned if no such value
@@ -624,7 +624,7 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or more keys already exist,
@@ -2290,7 +2290,7 @@ func (client *baseClient) LTrim(key string, start int64, end int64) (string, err
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Returns the length of the list stored at key.
@@ -2770,7 +2770,7 @@ func (client *baseClient) LSet(key string, index int64, element string) (string,
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Atomically pops and removes the left/right-most element to the list stored at source depending on whereFrom, and pushes
@@ -3343,7 +3343,7 @@ func (client *baseClient) PfMerge(destination string, sourceKeys []string) (stri
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
@@ -3448,7 +3448,7 @@ func (client *baseClient) Rename(key string, newKey string) (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Renames key to newkey if newKey does not yet exist.
@@ -4888,7 +4888,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Create a key associated with a value that is obtained by
@@ -4905,7 +4905,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 //	Return OK if successfully create a key with a value </code>.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
-func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
+func (client *baseClient) Restore(key string, ttl int64, value string) (string, error) {
 	return client.RestoreWithOptions(key, ttl, value, *options.NewRestoreOptions())
 }
 
@@ -4926,19 +4926,19 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (Result[s
 // [valkey.io]: https://valkey.io/commands/restore/
 func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 	value string, options options.RestoreOptions,
-) (Result[string], error) {
+) (string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return CreateNilStringResult(), err
+		return DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Restore, append([]string{
 		key,
 		utils.IntToString(ttl), value,
 	}, optionArgs...))
 	if err != nil {
-		return CreateNilStringResult(), err
+		return DefaultStringResponse, err
 	}
-	return handleStringOrNilResponse(result)
+	return handleOkResponse(result)
 }
 
 // Serialize the value stored at key in a Valkey-specific format and return it to the user.
@@ -5074,7 +5074,7 @@ func (client *baseClient) XGroupSetIdWithOptions(
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Removes all elements in the sorted set stored at `key` with a lexicographical order
@@ -7576,7 +7576,7 @@ func (client *baseClient) FunctionFlush() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all function libraries in synchronous mode.
@@ -7597,7 +7597,7 @@ func (client *baseClient) FunctionFlushSync() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all function libraries in asynchronous mode.
@@ -7618,7 +7618,7 @@ func (client *baseClient) FunctionFlushAsync() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Invokes a previously loaded function.
