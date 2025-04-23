@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
