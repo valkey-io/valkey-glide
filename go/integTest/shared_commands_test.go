@@ -10296,7 +10296,7 @@ func (suite *GlideTestSuite) TestInvokeScriptWithoutRoute() {
 		key1 := uuid.NewString()
 		key2 := uuid.NewString()
 
-		//Test a script that returns a string without keys and args.
+		// Test a script that returns a string without keys and args.
 		script1 := options.NewScript("return 'Hello'")
 		response1, err := client.InvokeScript(*script1)
 		assert.Nil(suite.T(), err)
