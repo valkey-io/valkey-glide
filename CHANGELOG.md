@@ -54,6 +54,7 @@
 * Go: Add Function Stats ([#3526](https://github.com/valkey-io/valkey-glide/pull/3526))
 * Go: Add Function Delete ([#3603](https://github.com/valkey-io/valkey-glide/pull/3603))
 * Go: Add Function Kill ([#3604](https://github.com/valkey-io/valkey-glide/pull/3604))
+* Go: Add Script Exists ([#3649](https://github.com/valkey-io/valkey-glide/pull/3649))
 
 #### Breaking Changes
 
