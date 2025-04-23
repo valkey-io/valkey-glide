@@ -123,7 +123,7 @@ func (client *baseClient) executeTransactionWithRoute(cmds []Cmder, route config
 	var routeBytesPtr *C.uchar = nil
 	var routeBytesCount C.uintptr_t = 0
 
-	if route != nil {
+	if route != nil && !route.IsMultiNode() {
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
 			return nil, &errors.RequestError{Msg: "Failed to convert route to protobuf"}
