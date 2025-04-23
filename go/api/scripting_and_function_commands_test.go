@@ -858,8 +858,7 @@ func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
 	clusterScriptOptions := options.NewClusterScriptOptions()
 
 	// Set the route
-	route := config.Route(config.AllPrimaries)
-	clusterScriptOptions.Route = route
+	clusterScriptOptions.Route = config.AllPrimaries
 
 	// Execute the script with cluster options
 	result, err := client.InvokeScriptWithClusterOptions(*script, *clusterScriptOptions)
@@ -868,7 +867,8 @@ func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
 		return
 	}
 
-	// Print the result (a map in Go)
+	// Print the result. The result contains response from multiple nodes.
+	// We are checking and printing the response from only one node below.
 	for _, value := range result.MultiValue() {
 		if value != nil && value.(string) == "Hello" {
 			fmt.Println(value)
