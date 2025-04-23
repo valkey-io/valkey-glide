@@ -5,8 +5,11 @@ namespace Valkey.Glide.Pipeline;
 // TODO docs for the god of docs
 public sealed class Batch : BaseBatch<Batch>
 {
-    public Batch(bool isAtomic) : base(isAtomic)
+    public Batch(bool isAtomic) : base(isAtomic) { }
+
+    // Standalone commands: select, move, copy, scan
+    public Batch Select()
     {
-        // Standalone commands: select, move, copy, scan
+        return this;
     }
 }

@@ -1,7 +1,11 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.Pipeline;
+
+using static Valkey.Glide.Pipeline.Options;
 using static Valkey.Glide.Route;
 
+using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
 public class ClusterClientTests
@@ -62,5 +66,63 @@ public class ClusterClientTests
 
         long res = (long)(await client.CustomCommand(["dbsize"], AllPrimaries))!;
         Assert.True(res >= 3);
+    }
+
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BatchTimeout(bool isAtomic)
+    {
+        using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+
+        ClusterBatch batch = new ClusterBatch(isAtomic).CustomCommand(["DEBUG", "sleep", "0.5"]);
+        ClusterBatchOptions options = new(timeout: 100);
+
+        // Expect a timeout exception on short timeout
+        _ = await Assert.ThrowsAsync<Exception>(() => client.Exec(batch, options));
+        // TODO TimeoutException from #3411 https://github.com/valkey-io/valkey-glide/pull/3411
+
+        // Retry with a longer timeout and expect [null]
+        options = new(timeout: 1000);
+        object[] res = (await client.Exec(batch, options))!;
+        Assert.Equal([new gs("OK")], res); // TODO changed to "OK" in #3589 https://github.com/valkey-io/valkey-glide/pull/3589
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BatchRaiseOnError(bool isAtomic)
+    {
+        using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+        string key1 = "{BatchRaiseOnError}-1-" + Guid.NewGuid();
+        string key2 = "{BatchRaiseOnError}-2-" + Guid.NewGuid();
+
+        ClusterBatch batch = new ClusterBatch(isAtomic).Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
+        ClusterBatchOptions options = new(raiseOnError: false);
+
+        object[] res = (await client.Exec(batch, options))!;
+        // Exceptions aren't raised, but stored in the result set
+        Assert.Multiple(
+            () => Assert.Equal(4, res.Length),
+            () => Assert.Equal(new gs("OK"), res[0]), // TODO changed to "OK" in #3589 https://github.com/valkey-io/valkey-glide/pull/3589
+            () => Assert.Equal(1L, (long)res[2]),
+            () => Assert.IsType<Exception>(res[1]), // TODO RequestException from #3411 https://github.com/valkey-io/valkey-glide/pull/3411
+            () => Assert.IsType<Exception>(res[3]),
+            () => Assert.Contains("wrong kind of value", ((Exception)res[1]).Message),
+            () => Assert.Contains("no such key", ((Exception)res[3]).Message)
+        );
+
+        // First exception is raised, all data lost
+
+        options = new(raiseOnError: true);
+        Exception err = await Assert.ThrowsAsync<Exception>(async () =>
+        {
+            // TODO RequestException from #3411 https://github.com/valkey-io/valkey-glide/pull/3411
+            await client.Exec(batch, options);
+            GC.KeepAlive(client); // TODO?
+        });
+        Assert.Contains("wrong kind of value", err.Message);
+        GC.KeepAlive(client);
     }
 }

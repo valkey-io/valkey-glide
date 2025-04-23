@@ -31,6 +31,7 @@ internal class FFI
             {
                 FreeMemory();
                 FreeStructPtr(_ptr);
+                _ptr = IntPtr.Zero;
             }
         }
 

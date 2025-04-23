@@ -68,43 +68,37 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     internal async Task<T> Command<T>(RequestType requestType, GlideString[] arguments, ResponseHandler<T> responseHandler, Route? route = null) where T : class?
     {
         // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
-        FFI.Cmd cmd = new(requestType, arguments);
+        using FFI.Cmd cmd = new(requestType, arguments);
 
         // 2. Allocate memory for route
-        FFI.Route? ffiRoute = route?.ToFfi();
+        using FFI.Route? ffiRoute = route?.ToFfi();
 
         // 3. Sumbit request to the rust part
         Message message = _messageContainer.GetMessageForCall();
         CommandFfi(_clientPointer, (ulong)message.Index, cmd.ToPtr(), ffiRoute?.ToPtr() ?? IntPtr.Zero);
-        // All data must be copied in sync manner, so we
 
-        // 4. Free memories allocated
-        ffiRoute?.Dispose();
-
-        cmd.Dispose();
-
-        // 5. Get a response and Handle it
+        // 4. Get a response and Handle it
         return responseHandler(await message);
+
+        // All memory allocated is auto-freed by `using` operator
     }
 
     protected async Task<object?[]?> Batch<T>(BaseBatch<T> batch, BaseBatchOptions? options = null) where T : BaseBatch<T>
     {
-        FFI.Batch ffiBatch = batch.ToFFI();
+        // 1. Allocate memory for batch, which allocates all nested Cmds
+        using FFI.Batch ffiBatch = batch.ToFFI();
 
         // 2. Allocate memory for options
-        FFI.BatchOptions? ffiOptions = options?.ToFfi();
+        using FFI.BatchOptions? ffiOptions = options?.ToFfi();
 
         // 3. Sumbit request to the rust part
         Message message = _messageContainer.GetMessageForCall();
         BatchFfi(_clientPointer, (ulong)message.Index, ffiBatch.ToPtr(), ffiOptions?.ToPtr() ?? IntPtr.Zero);
 
-        // 4. Free memories allocated
-        ffiOptions?.Dispose();
-
-        ffiBatch.Dispose();
-
-        // 5. Get a response and Handle it
+        // 4. Get a response and Handle it
         return HandleServerResponse<object?[]?>(await message, true);
+
+        // All memory allocated is auto-freed by `using` operator
     }
 
     internal protected static string HandleOk(IntPtr response)
