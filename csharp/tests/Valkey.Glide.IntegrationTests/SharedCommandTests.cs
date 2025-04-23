@@ -2,6 +2,7 @@
 
 using Valkey.Glide.Pipeline;
 
+using static Valkey.Glide.Errors;
 using static Valkey.Glide.Pipeline.Options;
 
 using gs = Valkey.Glide.GlideString;
@@ -88,14 +89,14 @@ public class SharedCommandTests(TestConfiguration config)
             () => Assert.Equal(4, res.Length),
             () => Assert.Equal(new gs("OK"), res[0]), // TODO changed to "OK" in #3589 https://github.com/valkey-io/valkey-glide/pull/3589
             () => Assert.Equal(1L, (long)res[2]),
-            () => Assert.IsType<Exception>(res[1]), // TODO RequestException from #3411 https://github.com/valkey-io/valkey-glide/pull/3411
-            () => Assert.IsType<Exception>(res[3]),
-            () => Assert.Contains("wrong kind of value", ((Exception)res[1]).Message),
-            () => Assert.Contains("no such key", ((Exception)res[3]).Message)
+            () => Assert.IsType<RequestException>(res[1]),
+            () => Assert.IsType<RequestException>(res[3]),
+            () => Assert.Contains("wrong kind of value", ((RequestException)res[1]).Message),
+            () => Assert.Contains("no such key", ((RequestException)res[3]).Message)
         );
 
         options = isCluster ? new ClusterBatchOptions(raiseOnError: true) : new BatchOptions(raiseOnError: true);
-        Exception err = await Assert.ThrowsAsync<Exception>(async () =>
+        Exception err = await Assert.ThrowsAsync<RequestException>(async () =>
         {
             // TODO RequestException from #3411 https://github.com/valkey-io/valkey-glide/pull/3411
             _ = isCluster

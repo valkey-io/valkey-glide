@@ -4,10 +4,13 @@ mod ffi;
 use ffi::{
     convert_double_pointer_to_vec, create_cmd, create_connection_request, create_pipeline, create_route, get_pipeline_options, BatchInfo, BatchOptionsInfo, CmdInfo, ConnectionConfig, ResponseValue, RouteInfo
 };
-use glide_core::{client::Client as GlideClient, request_type::RequestType};
-use redis::RedisResult;
+use glide_core::{
+    client::Client as GlideClient,
+    errors::{error_message, error_type, RequestErrorType},
+    request_type::RequestType,
+};
 use std::{
-    ffi::{c_char, c_void, CStr},
+    ffi::{c_char, c_void, CStr, CString},
     sync::Arc,
 };
 use tokio::runtime::{Builder, Runtime};
@@ -22,40 +25,39 @@ pub enum Level {
     Off = 5,
 }
 
-// TODO define `SuccessCallback` and `FailureCallback` types
-
 pub struct Client {
     runtime: Runtime,
     core: Arc<CommandExecutionCore>,
 }
 
+/// Success callback that is called when a command succeeds.
+///
+/// The success callback needs to copy the given data synchronously, since it will be dropped by Rust once the callback returns.
+/// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
+///
+/// `index` is a baton-pass back to the caller language to uniquely identify the promise.
+/// `message` is the value returned by the command. The 'message' is managed by Rust and is freed when the callback returns control back to the caller.
+pub type SuccessCallback = unsafe extern "C" fn(usize, *const ResponseValue) -> ();
+
+/// Failure callback that is called when a command fails.
+///
+/// The failure callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns.
+/// The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
+///
+/// * `index` is a baton-pass back to the caller language to uniquely identify the promise.
+/// * `error_message` is an UTF-8 string storing the error message returned by server for the failed command.
+///   The `error_message` is managed by Rust and is freed when the callback returns control back to the caller.
+/// * `error_type` is the type of error returned by glide-core, depending on the [`RedisError`](redis::RedisError) returned.
+pub type FailureCallback = unsafe extern "C" fn(
+    index: usize,
+    error_message: *const c_char,
+    error_type: RequestErrorType,
+) -> ();
+
 struct CommandExecutionCore {
     client: GlideClient,
-    success_callback: unsafe extern "C" fn(usize, *const ResponseValue) -> (),
-    failure_callback: unsafe extern "C" fn(usize) -> (), // TODO - add specific error codes
-}
-
-/// # Safety
-///
-/// * `config` must be a valid [`ConnectionConfig`] pointer. See the safety documentation of [`create_connection_request`].
-unsafe fn create_client_internal(
-    config: *const ConnectionConfig,
-    success_callback: unsafe extern "C" fn(usize, *const ResponseValue) -> (),
-    failure_callback: unsafe extern "C" fn(usize) -> (),
-) -> RedisResult<Client> {
-    let request = unsafe { create_connection_request(config) };
-    let runtime = Builder::new_multi_thread()
-        .enable_all()
-        .thread_name("GLIDE C# thread")
-        .build()?;
-    let _runtime_handle = runtime.enter();
-    let client = runtime.block_on(GlideClient::new(request, None)).unwrap(); // TODO - handle errors.
-    let core = Arc::new(CommandExecutionCore {
-        success_callback,
-        failure_callback,
-        client,
-    });
-    Ok(Client { runtime, core })
+    success_callback: SuccessCallback,
+    failure_callback: FailureCallback,
 }
 
 /// Creates a new client with the given configuration.
@@ -64,17 +66,41 @@ unsafe fn create_client_internal(
 ///
 /// # Safety
 ///
-/// * `config` must be a valid [`ConnectionConfig`] pointer. See the safety documentation of [`create_client_internal`].
+/// * `config` must be a valid [`ConnectionConfig`] pointer. See the safety documentation of [`create_connection_request`].
 #[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
 pub unsafe extern "C" fn create_client(
     config: *const ConnectionConfig,
-    success_callback: unsafe extern "C" fn(usize, *const ResponseValue) -> (),
-    failure_callback: unsafe extern "C" fn(usize) -> (),
-) -> *const c_void {
-    match unsafe { create_client_internal(config, success_callback, failure_callback) } {
-        Err(_) => std::ptr::null(), // TODO - log errors
-        Ok(client) => Arc::into_raw(Arc::new(client)) as *const c_void,
+    success_callback: SuccessCallback,
+    failure_callback: FailureCallback,
+) {
+    let request = unsafe { create_connection_request(config) };
+    let runtime = Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("GLIDE C# thread")
+        .build()
+        .unwrap();
+
+    let _runtime_handle = runtime.enter();
+    let res = runtime.block_on(GlideClient::new(request, None));
+    match res {
+        Ok(client) => {
+            let core = Arc::new(CommandExecutionCore {
+                success_callback,
+                failure_callback,
+                client,
+            });
+
+            let client_ptr = Arc::into_raw(Arc::new(Client { runtime, core }));
+            unsafe { success_callback(0, client_ptr as *const ResponseValue) };
+        }
+        Err(err) => {
+            let err_ptr = CString::into_raw(
+                CString::new(err.to_string()).expect("Couldn't convert error message to CString"),
+            );
+            unsafe { failure_callback(0, err_ptr, RequestErrorType::Disconnect) };
+            _ = CString::from_raw(err_ptr);
+        }
     }
 }
 
@@ -122,10 +148,12 @@ pub unsafe extern "C" fn command(
     let cmd = match unsafe { create_cmd(cmd_ptr) } {
         Ok(cmd) => cmd,
         Err(err) => {
-            unsafe {
-                (core.failure_callback)(callback_index); // TODO - report errors
-                return;
-            }
+            let err_ptr = CString::into_raw(
+                CString::new(err).expect("Couldn't convert error message to CString"),
+            );
+            unsafe { (core.failure_callback)(callback_index, err_ptr, RequestErrorType::ExecAbort) };
+            _ = CString::from_raw(err_ptr);
+            return;
         },
     };
 
@@ -133,17 +161,18 @@ pub unsafe extern "C" fn command(
 
     client.runtime.spawn(async move {
         let result = core.client.clone().send_command(&cmd, route).await;
-        unsafe {
-            match result {
-                Ok(value) => {
-                    let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
-                    (core.success_callback)(callback_index, ptr);
-                }
-                Err(err) => {
-                    dbg!(err); // TODO - report errors
-                    (core.failure_callback)(callback_index)
-                }
-            };
+        match result {
+            Ok(value) => {
+                let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
+                unsafe { (core.success_callback)(callback_index, ptr) };
+            }
+            Err(err) => {
+                let err_ptr = CString::into_raw(
+                    CString::new(error_message(&err)).expect("Couldn't convert error message to CString"),
+                );
+                unsafe { (core.failure_callback)(callback_index, err_ptr, error_type(&err)) };
+                _ = CString::from_raw(err_ptr);
+            }
         };
     });
 }
@@ -166,10 +195,12 @@ pub unsafe extern "C" fn batch(
     let pipeline = match unsafe { create_pipeline(batch_ptr) } {
         Ok(pipeline) => pipeline,
         Err(err) => {
-            unsafe {
-                (core.failure_callback)(callback_index); // TODO - report errors
-                return;
-            }
+            let err_ptr = CString::into_raw(
+                CString::new(err).expect("Couldn't convert error message to CString"),
+            );
+            unsafe { (core.failure_callback)(callback_index, err_ptr, RequestErrorType::ExecAbort) };
+            _ = CString::from_raw(err_ptr);
+            return;
         },
     };
 
@@ -186,17 +217,18 @@ pub unsafe extern "C" fn batch(
             core.client.clone().send_pipeline(&pipeline, route, raise_on_error, pipeline_timeout, pipeline_retry_strategy).await
         };
         dbg!(&result);
-        unsafe {
-            match result {
-                Ok(value) => {
-                    let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
-                    (core.success_callback)(callback_index, ptr);
-                }
-                Err(err) => {
-                    dbg!(err); // TODO - report errors
-                    (core.failure_callback)(callback_index)
-                }
-            };
+        match result {
+            Ok(value) => {
+                let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
+                unsafe { (core.success_callback)(callback_index, ptr) };
+            }
+            Err(err) => {
+                let err_ptr = CString::into_raw(
+                    CString::new(error_message(&err)).expect("Couldn't convert error message to CString"),
+                );
+                unsafe { (core.failure_callback)(callback_index, err_ptr, error_type(&err)) };
+                _ = CString::from_raw(err_ptr);
+            }
         };
     });
 }

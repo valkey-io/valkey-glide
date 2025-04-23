@@ -34,6 +34,38 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 	assert.Equal(suite.T(), "GO GLIDE GO", result.SingleValue().(string))
 }
 
+func (suite *GlideTestSuite) TestClusterCustomCommandDbSize() {
+	client := suite.defaultClusterClient()
+	// DBSIZE result is always a single number regardless of route
+	result, err := client.CustomCommand([]string{"dbsize"})
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+
+	result, err = client.CustomCommandWithRoute([]string{"dbsize"}, config.AllPrimaries)
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+
+	result, err = client.CustomCommandWithRoute([]string{"dbsize"}, config.RandomRoute)
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+}
+
+func (suite *GlideTestSuite) TestClusterCustomCommandConfigGet() {
+	client := suite.defaultClusterClient()
+
+	// CONFIG GET returns a map, but with a single node route it is handled as a single value
+	result, err := client.CustomCommandWithRoute([]string{"CONFIG", "GET", "*file"}, config.RandomRoute)
+	assert.NoError(suite.T(), err)
+	assert.Greater(suite.T(), len(result.SingleValue().(map[string]any)), 0)
+
+	result, err = client.CustomCommandWithRoute([]string{"CONFIG", "GET", "*file"}, config.AllPrimaries)
+	assert.NoError(suite.T(), err)
+	assert.Greater(suite.T(), len(result.MultiValue()), 0)
+	for _, val := range result.MultiValue() {
+		assert.Greater(suite.T(), len(val.(map[string]any)), 0)
+	}
+}
+
 func (suite *GlideTestSuite) TestInfoCluster() {
 	DEFAULT_INFO_SECTIONS := []string{
 		"Server",
@@ -1489,6 +1521,20 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 		}
 	}
 
+	// load new lib and delete it with single node route - first lib remains loaded
+	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoadWithRoute(anotherLib, true, route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "anotherLib", result)
+
+	deleteResult, err := client.FunctionDeleteWithRoute("anotherLib", route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", deleteResult)
+
+	// delete missing lib returns a error
+	_, err = client.FunctionDeleteWithRoute("anotherLib", route)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+
 	// Test with all primaries route
 	libName = "mylib1c_all"
 	funcName = "myfunc1c_all"
@@ -1529,6 +1575,20 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 			assert.Equal(t, "one", value)
 		}
 	}
+
+	// load new lib and delete it with all primaries route - first lib remains loaded
+	anotherLib = GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoadWithRoute(anotherLib, true, route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "anotherLib", result)
+
+	deleteResult, err = client.FunctionDeleteWithRoute("anotherLib", route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", deleteResult)
+
+	// delete missing lib returns a error
+	_, err = client.FunctionDeleteWithRoute("anotherLib", route)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
@@ -1578,6 +1638,20 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
 			assert.Equal(t, "one", value)
 		}
 	}
+
+	// load new lib and delete it - first lib remains loaded
+	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoad(anotherLib, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "anotherLib", result)
+
+	deleteResult, err := client.FunctionDelete("anotherLib")
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", deleteResult)
+
+	// delete missing lib returns a error
+	_, err = client.FunctionDelete("anotherLib")
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
@@ -1779,4 +1853,46 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].FunctionCount)
 		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].LibraryCount)
 	}
+}
+
+func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+
+	// Flush before setup
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing loaded, nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+
+	// key for routing to a primary node
+	randomKey := uuid.NewString()
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, randomKey),
+	}
+
+	// Flush all functions with route
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKillWithRoute(route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }

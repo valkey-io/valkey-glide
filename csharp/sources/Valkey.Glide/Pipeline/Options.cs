@@ -64,7 +64,7 @@ public class Options
                 _retryStrategy?._retryConnectionError,
                 _raiseOnError,
                 _timeout,
-                _route.ToFfi()
+                _route?.ToFfi()
                 );
         }
     }
