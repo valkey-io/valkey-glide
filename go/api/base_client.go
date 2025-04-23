@@ -7828,6 +7828,7 @@ func (client *baseClient) PubSubNumPat() (int64, error) {
 	return handleIntResponse(result)
 }
 
+
 // Kills a function that is currently executing.
 //
 // `FUNCTION KILL` terminates read-only functions only.
