@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Optional
 
 from glide.exceptions import RequestError
-from glide.protobuf.command_request_pb2 import CommandRequest, SimpleRoutes
+from glide.protobuf.command_request_pb2 import CommandRequest, Routes, SimpleRoutes
 from glide.protobuf.command_request_pb2 import SlotTypes as ProtoSlotTypes
 
 
@@ -120,3 +120,28 @@ def set_protobuf_route(request: CommandRequest, route: Optional[Route]) -> None:
         request.route.by_address_route.port = route.port
     else:
         raise RequestError(f"Received invalid route type: {type(route)}")
+
+
+def route_to_protobuf(route: Optional[Route]) -> Optional[Routes]:
+    if route is None:
+        return None
+
+    protobuf_route = Routes()
+    if isinstance(route, AllNodes):
+        protobuf_route.simple_routes = SimpleRoutes.AllNodes
+    elif isinstance(route, AllPrimaries):
+        protobuf_route.simple_routes = SimpleRoutes.AllPrimaries
+    elif isinstance(route, RandomNode):
+        protobuf_route.simple_routes = SimpleRoutes.Random
+    elif isinstance(route, SlotKeyRoute):
+        protobuf_route.slot_key_route.slot_type = to_protobuf_slot_type(route.slot_type)
+        protobuf_route.slot_key_route.slot_key = route.slot_key
+    elif isinstance(route, SlotIdRoute):
+        protobuf_route.slot_id_route.slot_type = to_protobuf_slot_type(route.slot_type)
+        protobuf_route.slot_id_route.slot_id = route.slot_id
+    elif isinstance(route, ByAddressRoute):
+        protobuf_route.by_address_route.host = route.host
+        protobuf_route.by_address_route.port = route.port
+    else:
+        raise RequestError(f"Received invalid route type: {type(route)}")
+    return protobuf_route
