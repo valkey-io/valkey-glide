@@ -6,6 +6,7 @@ package api
 type PubSubCommands interface {
 	// Publish publishes a message to a channel. Returns the number of clients that received the message.
 	Publish(channel string, message string) (int64, error)
+	PubSubChannels() ([]string, error)
 }
 
 // PubSubClusterCommands defines additional Pub/Sub operations available only in cluster mode.
