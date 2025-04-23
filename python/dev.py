@@ -9,10 +9,6 @@ from pathlib import Path
 from shutil import which
 from typing import Any, Dict, List, Optional
 
-# Constants
-PROTO_REL_PATH = "glide-core/src/protobuf"
-PYTHON_CLIENT_PATH = "python/python/glide"
-
 
 def find_project_root() -> Path:
     root = Path(__file__).resolve().parent.parent
@@ -20,7 +16,15 @@ def find_project_root() -> Path:
     return root
 
 
+# Constants
+PROTO_REL_PATH = "glide-core/src/protobuf"
+PYTHON_CLIENT_PATH = "python/python/glide"
+VENV_NAME = ".env"
 GLIDE_ROOT = find_project_root()
+PYTHON_DIR = GLIDE_ROOT / "python"
+VENV_DIR = PYTHON_DIR / VENV_NAME
+VENV_BIN_DIR = VENV_DIR / "bin"
+PYTHON_EXE = VENV_BIN_DIR / "python"
 
 
 def check_dependencies() -> None:
@@ -44,22 +48,19 @@ def check_dependencies() -> None:
         sys.exit(1)
 
 
-def prepare_python_env(no_cache: bool = False) -> Path:
-    python_dir = GLIDE_ROOT / "python"
-    venv_dir = python_dir / ".env"
-
-    if not venv_dir.exists():
+def prepare_python_env(no_cache: bool = False):
+    if not VENV_DIR.exists():
         print("[INFO] Creating new Python virtual environment...")
-        run_command(["python3", "-m", "venv", str(venv_dir)], label="venv creation")
+        run_command(["python3", "-m", "venv", str(VENV_DIR)], label="venv creation")
     else:
         print("[INFO] Using existing Python virtual environment")
 
-    pip_path = venv_dir / "bin" / "pip"
+    pip_path = VENV_BIN_DIR / "pip"
     install_cmd = [
         str(pip_path),
         "install",
         "-r",
-        str(python_dir / "dev_requirements.txt"),
+        str(PYTHON_DIR / "dev_requirements.txt"),
     ]
     if no_cache:
         install_cmd.insert(2, "--no-cache-dir")
@@ -74,7 +75,7 @@ def prepare_python_env(no_cache: bool = False) -> Path:
         str(GLIDE_ROOT / "benchmarks" / "python" / "requirements.txt"),
     ]
     if no_cache:
-        install_cmd.insert(2, "--no-cache-dir")
+        install_benchmark_cmd.insert(2, "--no-cache-dir")
 
     print(
         f"[INFO] Installing benchmark requirements using: {' '.join(install_benchmark_cmd)}"
@@ -83,7 +84,13 @@ def prepare_python_env(no_cache: bool = False) -> Path:
 
     print("[OK] Python environment ready")
 
-    return venv_dir / "bin" / "python"
+
+def get_venv_env() -> Dict[str, str]:
+    env = os.environ.copy()
+    env["VIRTUAL_ENV"] = str(VENV_DIR)
+    env_path = env.get("PATH", "")
+    env["PATH"] = f"{VENV_BIN_DIR}{os.pathsep}{env_path}"
+    return env
 
 
 def generate_protobuf_files() -> None:
@@ -97,22 +104,13 @@ def generate_protobuf_files() -> None:
 
     print(f"[INFO] Generating Python and .pyi files from Protobuf in: {proto_src}")
 
-    # Locate the venv bin dir
-    venv_dir = GLIDE_ROOT / "python" / ".env"
-    venv_bin = venv_dir / "bin"
-    mypy_plugin_path = venv_bin / "protoc-gen-mypy"
-
+    mypy_plugin_path = VENV_BIN_DIR / "protoc-gen-mypy"
     if not mypy_plugin_path.exists():
         print("❌ Error: protoc-gen-mypy not found in venv.")
         print(
             "Hint: Try `pip install --requirement python/dev_requirements.txt` again."
         )
         sys.exit(1)
-
-    env = os.environ.copy()
-    env_path = env.get("PATH", "")
-    if str(venv_bin) not in env_path.split(os.pathsep):
-        env["PATH"] = f"{venv_bin}{os.pathsep}{env_path}"
 
     run_command(
         [
@@ -124,7 +122,7 @@ def generate_protobuf_files() -> None:
             *map(str, proto_files),
         ],
         label="protoc generation",
-        env=env,
+        env=get_venv_env(),
     )
 
     print(f"[OK] Protobuf files (.py + .pyi) generated at: {proto_dst}")
@@ -134,15 +132,14 @@ def build_async_client(release: bool, no_cache: bool = False) -> None:
     print(
         f"[INFO] Building async client in {'release' if release else 'debug'} mode..."
     )
-    python_exe = prepare_python_env(no_cache)
+    env = activate_venv(no_cache)
     generate_protobuf_files()
-    env = activate_venv()
 
-    cmd = [str(python_exe), "-m", "maturin", "develop"]
+    cmd = [str(PYTHON_EXE), "-m", "maturin", "develop"]
     if release:
         cmd += ["--release", "--strip"]
 
-    run_command(cmd, cwd=GLIDE_ROOT / "python", env=env, label="maturin develop")
+    run_command(cmd, cwd=PYTHON_DIR, env=env, label="maturin develop")
     print("[OK] Async client build completed")
 
 
@@ -154,38 +151,33 @@ def run_command(
 ) -> None:
     label = label or cmd[0]
     print(f"[INFO] Running {label}...")
+
     try:
-        result = subprocess.run(
+        subprocess.run(
             cmd,
             cwd=cwd,
             check=True,
             env=env,
-            capture_output=True,
+            stderr=subprocess.PIPE,  # Only capture stderr
             text=True,
         )
         print(f"[OK] {label} completed successfully.")
-        if result.stdout:
-            print(result.stdout.strip())
     except subprocess.CalledProcessError as e:
         print(f"❌ Error while running {label}: ")
         print(f"Command: {' '.join(e.cmd)}")
         print(f"Exit code: {e.returncode}")
-        if e.stdout:
-            print("--- STDOUT ---")
-            print(e.stdout.strip())
         if e.stderr:
             print("--- STDERR ---")
             print(e.stderr.strip())
         sys.exit(e.returncode)
 
 
-def activate_venv() -> Dict[Any, Any]:
-    python_exe = prepare_python_env()
-    venv_bin = python_exe.parent
+def activate_venv(no_cache: bool = False) -> Dict[Any, Any]:
+    prepare_python_env(no_cache)
     env = os.environ.copy()
-    env["VIRTUAL_ENV"] = str(venv_bin.parent)
+    env["VIRTUAL_ENV"] = str(VENV_BIN_DIR.parent)
     env_path = env["PATH"]
-    env["PATH"] = f"{venv_bin}:{env_path}"  # noqa: E231
+    env["PATH"] = f"{VENV_BIN_DIR}:{env_path}"  # noqa: E231
     return env
 
 
@@ -194,24 +186,23 @@ def run_linters() -> None:
     env = activate_venv()
     generate_protobuf_files()
 
-    run_command(["isort", "."], cwd=GLIDE_ROOT / "python", label="isort", env=env)
-    run_command(["black", "."], cwd=GLIDE_ROOT / "python", label="black", env=env)
-    run_command(["flake8", "."], cwd=GLIDE_ROOT / "python", label="flake8", env=env)
-    run_command(["mypy", ".."], cwd=GLIDE_ROOT / "python", label="mypy", env=env)
+    run_command(["isort", "."], cwd=PYTHON_DIR, label="isort", env=env)
+    run_command(["black", "."], cwd=PYTHON_DIR, label="black", env=env)
+    run_command(["flake8", "."], cwd=PYTHON_DIR, label="flake8", env=env)
+    run_command(["mypy", ".."], cwd=PYTHON_DIR, label="mypy", env=env)
 
     print("[OK] All linters completed successfully.")
 
 
 def run_tests(extra_args: Optional[List[str]] = None) -> None:
     print("[INFO] Running test suite...")
-    python_exe = prepare_python_env()
+    env = get_venv_env()
 
-    cmd = [str(python_exe.parent / "pytest"), "-v", "--asyncio-mode=auto"]
+    cmd = ["pytest", "-v", "--asyncio-mode=auto"]
     if extra_args:
         cmd += extra_args
 
-    run_command(cmd, cwd=GLIDE_ROOT / "python" / "python", label="pytest")
-
+    run_command(cmd, cwd=PYTHON_DIR, label="pytest", env=env)
     print("[OK] Tests completed successfully")
 
 

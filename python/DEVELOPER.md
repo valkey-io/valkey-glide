@@ -99,6 +99,7 @@ mkdir -p $HOME/src
 cd $HOME/src
 git clone https://github.com/valkey-io/valkey-glide.git
 cd valkey-glide
+```
 
 # Build
 ---
@@ -160,10 +161,9 @@ pytest -v --asyncio-mode=auto
 
 # Protobuf
 ---
+During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files.
 
-Protobuf files are automatically regenerated as part of the `build` process.
-
-If you only need to regenerate the protobuf files (e.g., after editing `.proto` files), you can use the standalone command:
+Protobuf files are automatically regenerated as part of the `build` process. If you only need to regenerate the protobuf files (e.g., after editing `.proto` files), you can use the standalone command:
 
 ```bash
 python python/dev.py protobuf
