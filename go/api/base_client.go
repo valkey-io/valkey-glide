@@ -7881,6 +7881,7 @@ func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, err
 	return handleStringIntMapResponse(result)
 }
 
+
 // Kills a function that is currently executing.
 //
 // `FUNCTION KILL` terminates read-only functions only.
