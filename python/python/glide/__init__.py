@@ -123,6 +123,7 @@ from glide.config import (
     ProtocolVersion,
     ReadFrom,
     ServerCredentials,
+    TlsAdvancedConfiguration,
 )
 from glide.constants import (
     OK,
@@ -201,6 +202,7 @@ __all__ = [
     "TJsonUniversalResponse",
     "TOK",
     "TResult",
+    "TlsAdvancedConfiguration",
     "TXInfoStreamFullResponse",
     "TXInfoStreamResponse",
     "FtAggregateResponse",
