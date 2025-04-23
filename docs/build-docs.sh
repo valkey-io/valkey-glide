@@ -1,6 +1,5 @@
 #!/bin/bash -ex
 
-
 TARGET=$@
 if [ -z "$TARGET" ]; then
     TARGET="build"

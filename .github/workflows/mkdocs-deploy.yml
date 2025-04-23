@@ -30,5 +30,4 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install dependencies and build docs
-              run: |
-                ./docs/build-docs.sh gh-deploy --force
+              run: ./docs/build-docs.sh gh-deploy --force
