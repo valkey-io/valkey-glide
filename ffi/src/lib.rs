@@ -812,15 +812,10 @@ pub unsafe extern "C" fn execute_transaction(
     route_bytes: *const u8,
     route_bytes_len: usize,
 ) -> *mut CommandResult {
-    if transaction.is_null() {
-        panic!("Transaction pointer is NULL");
-    }
+    let transaction = unsafe { transaction.as_ref() }.expect("Transaction pointer is NULL");
 
-    let transaction = unsafe { &*transaction };
-
-    if transaction.commands.is_null() {
-        panic!("Transaction commands pointer is NULL");
-    }
+    let _commands =
+        unsafe { transaction.commands.as_ref() }.expect("Transaction commands pointer is NULL");
 
     let mut pipeline = redis::Pipeline::with_capacity(transaction.cmd_count as usize);
     pipeline.atomic();
@@ -836,9 +831,7 @@ pub unsafe extern "C" fn execute_transaction(
         for j in 0..cmder.args_count {
             let arg_ptr = unsafe { *cmder.args.add(j as usize) };
 
-            if arg_ptr.is_null() {
-                panic!("Argument pointer is NULL at command {}, arg {}", i, j);
-            }
+            let _arg = unsafe { arg_ptr.as_ref() }.expect("Argument pointer (arg_ptr) is NULL");
 
             let arg_str = unsafe { CStr::from_ptr(arg_ptr) }
                 .to_str()
@@ -846,6 +839,7 @@ pub unsafe extern "C" fn execute_transaction(
 
             cmd.arg(arg_str);
         }
+
         pipeline.add_command(cmd);
     }
 
