@@ -1579,7 +1579,7 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Kills a function that is currently executing.
