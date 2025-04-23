@@ -666,20 +666,8 @@ pub unsafe extern "C" fn create_client(
 #[no_mangle]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
-
-    // Convert the raw pointer back to an Arc to check the strong count
-    let client_adapter = unsafe { Arc::from_raw(client_adapter_ptr as *const ClientAdapter) };
-    let strong_count = Arc::strong_count(&client_adapter);
-
     // This will bring the strong count down to 0 once all client requests are done.
     unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const ClientAdapter) };
-
-    // Check if there are still other references to this client adapter after our decrement
-    // If strong_count was > 1 before decrementing, it means there are still other references
-    if strong_count > 1 {
-        eprintln!("Warning: Client not fully closed. There are still {} references to the client adapter pointer.",
-                 strong_count - 1);
-    }
 }
 
 /// Deallocates a `ConnectionResponse`.
