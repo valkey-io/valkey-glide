@@ -29,15 +29,6 @@ jobs:
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Install mkdocs + plugins
+            - name: Install dependencies and build docs
               run: |
-                  python3 -m pip install --upgrade pip
-                  pip install --break-system-packages \
-                    mkdocs \
-                    mkdocstrings-python==1.13.0 \
-                    pymdown-extensions \
-                    mkdocs-breadcrumbs-plugin \
-                    mkdocs-material \
-
-            - name: build docs
-              run: ./docs/build-docs.sh gh-deploy --force
+                ./docs/build-docs.sh gh-deploy --force
