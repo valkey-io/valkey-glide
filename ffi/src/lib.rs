@@ -846,39 +846,6 @@ pub unsafe extern "C" fn execute_transaction(
 
             cmd.arg(arg_str);
         }
-        for j in 0..cmder.args_count {
-            let arg_ptr = unsafe { *cmder.args.add(j as usize) };
-
-            if arg_ptr.is_null() {
-                panic!("Argument pointer is NULL at command {}, arg {}", i, j);
-            }
-
-            let arg_bytes = unsafe {
-                CStr::from_ptr(arg_ptr).to_bytes();
-            };
-
-            #[cfg(unix)]
-            {
-                // On Unix, use raw_arg to pass the argument as bytes
-                let c_string = CString::new(arg_bytes).expect("Failed to convert bytes to CString");
-                cmd.raw_arg(c_string);
-            }
-
-            #[cfg(not(unix))]
-            {
-                // On non-Unix systems, std::process::Command doesn't directly accept &[u8].
-                // You'll need a different approach depending on what the external command expects.
-                // Options include:
-                // 1. Writing the bytes to a temporary file and passing the file path.
-                // 2. Encoding the bytes (e.g., Base64) into a string and passing that.
-                // 3. Using platform-specific APIs if available.
-                eprintln!("Warning: Passing raw binary arguments as []byte is not directly supported on this platform with std::process::Command. Consider platform-specific solutions or encoding.");
-                // Example (not recommended as a universal solution): Base64 encoding
-                // let encoded_arg = base64::encode(arg_bytes);
-                // cmd.arg(encoded_arg);
-            }
-        }
-
         pipeline.add_command(cmd);
     }
 

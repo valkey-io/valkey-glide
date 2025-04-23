@@ -49,12 +49,12 @@ func NewExecCommand() Cmder {
 }
 
 // Override ExecuteCommand to queue commands in the transaction
-func (t *Transaction) ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
+func (t *Transaction) sendCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
 	t.commands = append(t.commands, &GenericCommand{name: requestType, args: args})
 	return nil, nil // Queue the command instead of executing immediately
 }
 
-func (t *Transaction) ExecuteCommandWithRoute(requestType C.RequestType, args []string, route config.Route) (*C.struct_CommandResponse, error) {
+func (t *Transaction) sendCommandWithRoute(requestType C.RequestType, args []string, route config.Route) (*C.struct_CommandResponse, error) {
 	t.commands = append(t.commands, &GenericCommand{name: requestType, args: args, route: route})
 	return nil, nil
 }

@@ -65,7 +65,7 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
-	res, err := client.executor.ExecuteCommand(C.CustomCommand, args)
+	res, err := client.executor.sendCommand(C.CustomCommand, args)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *GlideClient) ConfigSet(parameters map[string]string) (string, error) {
-	result, err := client.executor.ExecuteCommand(C.ConfigSet, utils.MapToString(parameters))
+	result, err := client.executor.sendCommand(C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -111,7 +111,7 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
-	res, err := client.executor.ExecuteCommand(C.ConfigGet, args)
+	res, err := client.executor.sendCommand(C.ConfigGet, args)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/select/
 func (client *GlideClient) Select(index int64) (string, error) {
-	result, err := client.executor.ExecuteCommand(C.Select, []string{utils.IntToString(index)})
+	result, err := client.executor.sendCommand(C.Select, []string{utils.IntToString(index)})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -175,7 +175,7 @@ func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string,
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	result, err := client.executor.ExecuteCommand(C.Info, optionArgs)
+	result, err := client.executor.sendCommand(C.Info, optionArgs)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -191,7 +191,7 @@ func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string,
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
 func (client *GlideClient) DBSize() (int64, error) {
-	result, err := client.executor.ExecuteCommand(C.DBSize, []string{})
+	result, err := client.executor.sendCommand(C.DBSize, []string{})
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -211,7 +211,7 @@ func (client *GlideClient) DBSize() (int64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClient) Echo(message string) (Result[string], error) {
-	result, err := client.executor.ExecuteCommand(C.Echo, []string{message})
+	result, err := client.executor.sendCommand(C.Echo, []string{message})
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -245,7 +245,7 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	result, err := client.executor.ExecuteCommand(C.Ping, optionArgs)
+	result, err := client.executor.sendCommand(C.Ping, optionArgs)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -262,7 +262,7 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClient) FlushAll() (string, error) {
-	result, err := client.executor.ExecuteCommand(C.FlushAll, []string{})
+	result, err := client.executor.sendCommand(C.FlushAll, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -283,7 +283,7 @@ func (client *GlideClient) FlushAll() (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, error) {
-	result, err := client.executor.ExecuteCommand(C.FlushAll, []string{string(mode)})
+	result, err := client.executor.sendCommand(C.FlushAll, []string{string(mode)})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -300,7 +300,7 @@ func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, 
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClient) FlushDB() (string, error) {
-	result, err := client.executor.ExecuteCommand(C.FlushDB, []string{})
+	result, err := client.executor.sendCommand(C.FlushDB, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -321,7 +321,7 @@ func (client *GlideClient) FlushDB() (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, error) {
-	result, err := client.executor.ExecuteCommand(C.FlushDB, []string{string(mode)})
+	result, err := client.executor.sendCommand(C.FlushDB, []string{string(mode)})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -336,7 +336,7 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
 func (client *GlideClient) Lolwut() (string, error) {
-	result, err := client.executor.ExecuteCommand(C.Lolwut, []string{})
+	result, err := client.executor.sendCommand(C.Lolwut, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -359,7 +359,7 @@ func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string,
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	result, err := client.executor.ExecuteCommand(C.Lolwut, commandArgs)
+	result, err := client.executor.sendCommand(C.Lolwut, commandArgs)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -374,7 +374,7 @@ func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string,
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
 func (client *GlideClient) ClientId() (int64, error) {
-	result, err := client.executor.ExecuteCommand(C.ClientId, []string{})
+	result, err := client.executor.sendCommand(C.ClientId, []string{})
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -389,7 +389,7 @@ func (client *GlideClient) ClientId() (int64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/lastsave/
 func (client *GlideClient) LastSave() (int64, error) {
-	response, err := client.executor.ExecuteCommand(C.LastSave, []string{})
+	response, err := client.executor.sendCommand(C.LastSave, []string{})
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -404,7 +404,7 @@ func (client *GlideClient) LastSave() (int64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/config-resetstat/
 func (client *GlideClient) ConfigResetStat() (string, error) {
-	response, err := client.executor.ExecuteCommand(C.ConfigResetStat, []string{})
+	response, err := client.executor.sendCommand(C.ConfigResetStat, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -419,7 +419,7 @@ func (client *GlideClient) ConfigResetStat() (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
 func (client *GlideClient) ClientGetName() (string, error) {
-	result, err := client.executor.ExecuteCommand(C.ClientGetName, []string{})
+	result, err := client.executor.sendCommand(C.ClientGetName, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -438,7 +438,7 @@ func (client *GlideClient) ClientGetName() (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
 func (client *GlideClient) ClientSetName(connectionName string) (string, error) {
-	result, err := client.executor.ExecuteCommand(C.ClientSetName, []string{connectionName})
+	result, err := client.executor.sendCommand(C.ClientSetName, []string{connectionName})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -458,7 +458,7 @@ func (client *GlideClient) ClientSetName(connectionName string) (string, error) 
 //
 // [valkey.io]: https://valkey.io/commands/move/
 func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
-	result, err := client.executor.ExecuteCommand(C.Move, []string{key, utils.IntToString(dbIndex)})
+	result, err := client.executor.sendCommand(C.Move, []string{key, utils.IntToString(dbIndex)})
 	if err != nil {
 		return defaultBoolResponse, err
 	}
@@ -481,7 +481,7 @@ func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
-	res, err := client.executor.ExecuteCommand(C.Scan, []string{utils.IntToString(cursor)})
+	res, err := client.executor.sendCommand(C.Scan, []string{utils.IntToString(cursor)})
 	if err != nil {
 		return DefaultStringResponse, nil, err
 	}
@@ -508,7 +508,7 @@ func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.Sca
 	if err != nil {
 		return DefaultStringResponse, nil, err
 	}
-	res, err := client.executor.ExecuteCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
+	res, err := client.executor.sendCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
 	if err != nil {
 		return DefaultStringResponse, nil, err
 	}
@@ -526,7 +526,7 @@ func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.Sca
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *GlideClient) ConfigRewrite() (string, error) {
-	response, err := client.executor.ExecuteCommand(C.ConfigRewrite, []string{})
+	response, err := client.executor.sendCommand(C.ConfigRewrite, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -541,7 +541,7 @@ func (client *GlideClient) ConfigRewrite() (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
 func (client *GlideClient) RandomKey() (Result[string], error) {
-	result, err := client.executor.ExecuteCommand(C.RandomKey, []string{})
+	result, err := client.executor.sendCommand(C.RandomKey, []string{})
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
