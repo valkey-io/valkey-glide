@@ -7803,20 +7803,20 @@ func (client *baseClient) PubSubChannels() ([]string, error) {
 // See [valkey.io] for details.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-channels
-// func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
-// 	if pattern == "" {
-// 		return nil, errors.New("pattern is required for PubSubChannelsWithPattern command")
-// 	}
+func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
+	if pattern == "" {
+		return nil, &errors.RequestError{Msg: "pattern is required for PubSubChannelsWithPattern command"}
+	}
 
-// 	args := []string{"CHANNELS", pattern}
-// 	result, err := client.executeCommand(C.PubSubChannels, args)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	args := []string{pattern}
+	result, err := client.executeCommand(C.PubSubChannels, args)
+	if err != nil {
+		return nil, err
+	}
 
-// 	return handleStringArrayResponse(result)
+	return handleStringArrayResponse(result)
 
-// }
+}
 
 // Kills a function that is currently executing.
 //

@@ -4,11 +4,13 @@ package api
 
 import (
 	"fmt"
+	"sort"
 	"time"
 )
 
 func ExampleGlideClient_Publish() {
 	var publisher *GlideClient = getExampleGlideClient() // example helper function
+	defer closeAllClients()
 
 	// Create a subscriber with subscription
 	subscriber := getExampleGlideClientWithSubscription(ExactChannelMode, "my_channel")
@@ -39,6 +41,7 @@ func ExampleGlideClient_Publish() {
 
 func ExampleGlideClusterClient_Publish() {
 	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	defer closeAllClients()
 
 	// Create a subscriber with subscription
 	subscriber := getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "my_channel")
@@ -69,6 +72,7 @@ func ExampleGlideClusterClient_Publish() {
 
 func ExampleGlideClient_PubSubChannels() {
 	var publisher *GlideClient = getExampleGlideClient() // example helper function
+	defer closeAllClients()
 
 	// Create subscribers with subscriptions
 	getExampleGlideClientWithSubscription(ExactChannelMode, "channel1")
@@ -85,25 +89,68 @@ func ExampleGlideClient_PubSubChannels() {
 	// Output: [channel1]
 }
 
-// func ExampleGlideClusterClient_PubSubChannels() {
-// 	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleGlideClusterClient_PubSubChannels() {
+	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	defer closeAllClients()
 
-// 	// Create subscribers with subscriptions
-// 	subscriber1 := getExampleGlideClusterClientWithSubscription(ExactMode, "channel1")
-// 	subscriber2 := getExampleGlideClusterClientWithSubscription(ExactMode, "channel2")
+	// Create subscribers with subscriptions
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "channel1")
 
-// 	// Allow subscriptions to establish
-// 	time.Sleep(100 * time.Millisecond)
+	// Allow subscriptions to establish
+	time.Sleep(100 * time.Millisecond)
 
-// 	// Publish messages to create channels
-// 	publisher.Publish("channel1", "message1")
-// 	publisher.Publish("channel2", "message2")
+	result, err := publisher.PubSubChannels()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
 
-// 	result, err := publisher.PubSubChannels()
-// 	if err != nil {
-// 		fmt.Println("Glide example failed with an error: ", err)
-// 	}
-// 	fmt.Println(result)
+	// Output: [channel1]
+}
 
-// 	// Output: [channel1 channel2]
-// }
+func ExampleGlideClient_PubSubChannelsWithPattern() {
+	var publisher *GlideClient = getExampleGlideClient() // example helper function
+	defer closeAllClients()
+
+	// Create subscribers with subscriptions to different channels
+	getExampleGlideClientWithSubscription(ExactChannelMode, "news.sports")
+	getExampleGlideClientWithSubscription(ExactChannelMode, "news.weather")
+	getExampleGlideClientWithSubscription(ExactChannelMode, "events.local")
+
+	// Allow subscriptions to establish
+	time.Sleep(100 * time.Millisecond)
+
+	// Get channels matching the "news.*" pattern
+	result, err := publisher.PubSubChannelsWithPattern("news.*")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	sort.Strings(result)
+	fmt.Println(result)
+
+	// Output: [news.sports news.weather]
+}
+
+func ExampleGlideClusterClient_PubSubChannelsWithPattern() {
+	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	defer closeAllClients()
+
+	// Create subscribers with subscriptions to different channels
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.sports")
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.weather")
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "events.local")
+	// Allow subscriptions to establish
+	time.Sleep(100 * time.Millisecond)
+
+	// Get channels matching the "news.*" pattern
+	result, err := publisher.PubSubChannelsWithPattern("news.*")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	sort.Strings(result)
+	fmt.Println(result)
+
+	// Output: [news.sports news.weather]
+}
