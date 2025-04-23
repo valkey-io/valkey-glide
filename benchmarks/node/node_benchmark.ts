@@ -20,7 +20,7 @@ import {
     generateValue,
     getAddress,
     receivedOptions,
-} from "../utilities/utils";
+} from "../utilities/utils.js";
 
 export const PROB_GET = 0.8;
 export const PROB_GET_EXISTING_KEY = 0.8;

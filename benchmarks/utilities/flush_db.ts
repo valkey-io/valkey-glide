@@ -2,49 +2,40 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { RedisClientType, RedisClusterType } from "redis";
-import { createRedisClient, receivedOptions } from "./utils";
+import { GlideClient, GlideClusterClient } from "@valkey/valkey-glide";
+import process from "node:process";
+import { PORT, receivedOptions } from "./utils.js";
+
+interface ReceivedOptions {
+    host: string;
+    clusterModeEnabled: boolean;
+    tls: boolean;
+    port: number;
+}
 
 async function flush_database(
     host: string,
     isCluster: boolean,
     tls: boolean,
-    port: number,
-) {
-    if (isCluster) {
-        const client = (await createRedisClient(
-            host,
-            isCluster,
-            tls,
-            port,
-        )) as RedisClusterType;
-        await Promise.all(
-            client.masters.map((master) => {
-                return flush_database(master.host, false, tls, master.port);
-            }),
-        );
-        await client.quit();
-    } else {
-        const client = (await createRedisClient(
-            host,
-            isCluster,
-            tls,
-            port,
-        )) as RedisClientType;
-        await client.connect();
-        await client.flushAll();
-        await client.quit();
-    }
+    port: number = PORT,
+): Promise<void> {
+    const clientClass = isCluster ? GlideClusterClient : GlideClient;
+    const client = await clientClass.createClient({
+        addresses: [{ host, port: port }],
+        useTLS: tls,
+    });
+    await client.flushall();
+    client.close();
 }
 
 Promise.resolve()
-    .then(async () => {
-        console.log("Flushing " + receivedOptions.host);
+    .then(async (): Promise<void> => {
+        console.log("Flushing " + (receivedOptions as ReceivedOptions).host);
         await flush_database(
-            receivedOptions.host,
-            receivedOptions.clusterModeEnabled,
-            receivedOptions.tls,
-            receivedOptions.port,
+            (receivedOptions as ReceivedOptions).host,
+            (receivedOptions as ReceivedOptions).clusterModeEnabled,
+            (receivedOptions as ReceivedOptions).tls,
+            (receivedOptions as ReceivedOptions).port,
         );
     })
     .then(() => {

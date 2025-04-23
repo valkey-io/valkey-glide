@@ -35,6 +35,7 @@ host="localhost"
 port=6379
 tlsFlag="--tls"
 dotnetFramework="net6.0"
+setupValkey=false
 
 function runPythonBenchmark(){
   # generate protobuf files
@@ -58,7 +59,7 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/../node
   npm install
   rm -rf build-ts
-  npm run build:benchmark
+  npm run build:release
   cd ${BENCH_FOLDER}/node
   npm install
   npx tsc
@@ -147,7 +148,45 @@ function Help() {
     echo The benchmark will connect to the server using transport level security \(TLS\) by default. Pass -no-tls to connect to server without TLS.
     echo By default, the benchmark runs against localhost. Pass -host and then the address of the requested Redis server in order to connect to a different server.
     echo By default, the benchmark runs against port 6379. Pass -port and then the port number in order to connect to a different port.
-    echo By default, the C# benchmark runs with 'net6.0' framework. Pass -dotnet-framework and then the framework version in order to use a different framework.
+    echo By default, the C
+    echo Pass -sv or --setup-valkey to automatically start a Valkey server before benchmarks. Use with -is-cluster to setup cluster mode.
+}
+
+# function to setup Valkey server
+function setupValkey() {
+    if [ -n "$clusterFlag" ]; then
+        echo "Setting up Valkey cluster..."
+        # Option 1: Use Docker Compose for cluster setup
+        if [ "$USE_DOCKER" = "true" ]; then
+            echo "Bringing up Valkey cluster via Docker Compose..."
+            docker compose -f "${BENCH_FOLDER}/utilities/docker-compose.yml" up -d
+        # Option 2: Set up cluster directly using the cluster-setup script
+        else
+            echo "Setting up Valkey cluster directly using cluster-setup.sh..."
+            export SKIP_SYSCTL=1
+            export DATA_DIR="${BENCH_FOLDER}/utilities/data"
+            
+            # Ensure data directory exists with proper permissions
+            mkdir -p "${DATA_DIR}" 2>/dev/null || {
+                echo "Creating data directory with sudo..."
+                sudo mkdir -p "${DATA_DIR}"
+                sudo chown -R $(id -u):$(id -g) "${DATA_DIR}"
+            }
+            
+            chmod +x "${BENCH_FOLDER}/utilities/cluster-setup.sh"
+            
+            # First try running without sudo
+            "${BENCH_FOLDER}/utilities/cluster-setup.sh" || {
+                echo "Cluster setup failed, trying with sudo..."
+                sudo "${BENCH_FOLDER}/utilities/cluster-setup.sh"
+            }
+            
+            echo "Cluster setup complete."
+        fi
+    else
+        echo "Starting standalone Valkey container..."
+        docker run -d --name valkey-standalone -p "${port}:6379" valkey/valkey:latest
+    fi
 }
 
 while test $# -gt 0
@@ -247,10 +286,20 @@ do
             ;;
         -dotnet-framework)
             dotnetFramework=$2
+            ;;            
+        -sv|--setup-valkey)
+            setupValkey=true
             ;;
+        *)
+            ;; # existing fallback
     esac
     shift
 done
+
+# setup Valkey server if requested
+if [ "$setupValkey" = true ]; then
+    setupValkey
+fi
 
 for currentDataSize in $dataSize
 do
