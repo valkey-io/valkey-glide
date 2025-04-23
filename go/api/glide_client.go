@@ -27,10 +27,6 @@ type GlideClient struct {
 	*baseClient
 }
 
-// func (client *GlideClient) ExecuteCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
-// 	return client.executeCommand(requestType, args)
-// }
-
 // NewGlideClient creates a [GlideClientCommands] in standalone mode using the given [GlideClientConfiguration].
 func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, error) {
 	client, err := createClient(config)

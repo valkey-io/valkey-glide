@@ -47,7 +47,7 @@ func ExampleGlideClusterClient_InfoWithOptions() {
 		}
 	}
 
-	// Output: OKg
+	// Output: OK
 }
 
 func ExampleGlideClusterClient_TimeWithOptions() {

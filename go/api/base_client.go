@@ -484,6 +484,7 @@ func (client *baseClient) ResetConnectionPassword() (Result[string], error) {
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) Set(key string, value string) (string, error) {
 	result, err := client.executor.ExecuteCommand(C.Set, []string{key, value})
+	fmt.Println("SetResult", result)
 	if err != nil {
 		return DefaultStringResponse, err
 	}

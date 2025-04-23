@@ -6,7 +6,6 @@ package api
 import "C"
 
 import (
-	"fmt"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
@@ -89,7 +88,6 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClusterClient) Info() (map[string]string, error) {
-	fmt.Println("Infor Cluster")
 	result, err := client.executor.ExecuteCommand(C.Info, []string{})
 	if err != nil {
 		return nil, err
@@ -199,14 +197,10 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) Ping() (string, error) {
-	fmt.Println("Ping Cluster command")
 	result, err := client.executor.ExecuteCommand(C.Ping, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	// if result == nil {
-	// 	return DefaultStringResponse, err
-	// }
 	return handleStringResponse(result)
 }
 
