@@ -141,6 +141,7 @@ pub enum ResponseType {
     Array = 5,
     Map = 6,
     Sets = 7,
+    Ok = 8,
 }
 
 /// Success callback that is called when a command succeeds.
@@ -665,8 +666,20 @@ pub unsafe extern "C" fn create_client(
 #[no_mangle]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
+
+    // Convert the raw pointer back to an Arc to check the strong count
+    let client_adapter = unsafe { Arc::from_raw(client_adapter_ptr as *const ClientAdapter) };
+    let strong_count = Arc::strong_count(&client_adapter);
+
     // This will bring the strong count down to 0 once all client requests are done.
     unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const ClientAdapter) };
+
+    // Check if there are still other references to this client adapter after our decrement
+    // If strong_count was > 1 before decrementing, it means there are still other references
+    if strong_count > 1 {
+        eprintln!("Warning: Client not fully closed. There are still {} references to the client adapter pointer.",
+                 strong_count - 1);
+    }
 }
 
 /// Deallocates a `ConnectionResponse`.
@@ -711,6 +724,7 @@ pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *cons
         ResponseType::Array => c"Array",
         ResponseType::Map => c"Map",
         ResponseType::Sets => c"Sets",
+        ResponseType::Ok => c"Ok",
     };
     c_str.as_ptr()
 }
@@ -857,11 +871,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             Ok(command_response)
         }
         Value::Okay => {
-            let vec: Vec<u8> = String::from("OK").into_bytes();
-            let (vec_ptr, len) = convert_vec_to_pointer(vec);
-            command_response.string_value = vec_ptr as *mut c_char;
-            command_response.string_value_len = len;
-            command_response.response_type = ResponseType::String;
+            command_response.response_type = ResponseType::Ok;
             Ok(command_response)
         }
         Value::Int(num) => {
