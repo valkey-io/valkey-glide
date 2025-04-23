@@ -10290,3 +10290,52 @@ func (suite *GlideTestSuite) TestZMPopWithOptions() {
 		assert.True(suite.T(), res7.IsNil())
 	})
 }
+
+func (suite *GlideTestSuite) TestInvokeScriptWithoutRoute() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.NewString()
+		key2 := uuid.NewString()
+
+		//Test a script that returns a string without keys and args.
+		script1 := options.NewScript("return 'Hello'")
+		response1, err := client.InvokeScript(*script1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "Hello", response1)
+
+		// Test script that sets a key with value.
+		script2 := options.NewScript("return redis.call('SET', KEYS[1], ARGV[1])")
+
+		// Create Script options for setting key1
+		scriptOptions := options.NewScriptOptions()
+		scriptOptions.WithKeys([]string{key1}).WithArgs([]string{"value1"})
+		setResponse, err := client.InvokeScriptWithOptions(*script2, *scriptOptions)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setResponse)
+
+		// Set another key, key2 with the same script
+		scriptOptions2 := options.NewScriptOptions()
+		scriptOptions2.WithKeys([]string{key2}).WithArgs([]string{"value2"})
+		setResponse2, err := client.InvokeScriptWithOptions(*script2, *scriptOptions2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setResponse2)
+		script2.Close()
+
+		// Test script that gets a key's value
+		script3 := options.NewScript("return redis.call('GET', KEYS[1])")
+
+		// Create ClusterScriptOptions for getting key1
+		scriptOptions3 := options.NewScriptOptions()
+		scriptOptions3.WithKeys([]string{key1})
+		getResponse1, err := client.InvokeScriptWithOptions(*script3, *scriptOptions3)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "value1", getResponse1)
+
+		// Get another key's value
+		scriptOptions4 := options.NewScriptOptions()
+		scriptOptions4.WithKeys([]string{key2})
+		getResponse2, err := client.InvokeScriptWithOptions(*script3, *scriptOptions4)
+		assert.Equal(suite.T(), "value2", getResponse2)
+		assert.Nil(suite.T(), err)
+		script3.Close()
+	})
+}

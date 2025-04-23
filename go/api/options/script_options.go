@@ -46,16 +46,39 @@ func (o *ScriptOptions) GetArgs() []string {
 	return o.args
 }
 
+// ScriptArgOptions represents options for script execution with only arguments
+type ScriptArgOptions struct {
+	args []string
+}
+
+// NewScriptArgOptions creates a new ScriptArgOptions with default values
+func NewScriptArgOptions() *ScriptArgOptions {
+	return &ScriptArgOptions{
+		args: []string{},
+	}
+}
+
+// WithArgs sets the arguments for the script
+func (o *ScriptArgOptions) WithArgs(args []string) *ScriptArgOptions {
+	o.args = args
+	return o
+}
+
+// GetArgs returns the arguments for the script
+func (o *ScriptArgOptions) GetArgs() []string {
+	return o.args
+}
+
 type ClusterScriptOptions struct {
-	*ScriptOptions
+	*ScriptArgOptions
 	*RouteOption
 }
 
 // NewClusterScriptOptions creates a new ClusterScriptOptions with default values
 func NewClusterScriptOptions() *ClusterScriptOptions {
 	return &ClusterScriptOptions{
-		ScriptOptions: NewScriptOptions(),
-		RouteOption:   &RouteOption{},
+		ScriptArgOptions: NewScriptArgOptions(),
+		RouteOption:      &RouteOption{},
 	}
 }
 
@@ -65,9 +88,9 @@ func (o *ClusterScriptOptions) WithRouteOptions(routeOption *RouteOption) *Clust
 	return o
 }
 
-// WithScriptOptions sets the script options for the cluster script
-func (o *ClusterScriptOptions) WithScriptOptions(scriptOptions *ScriptOptions) *ClusterScriptOptions {
-	o.ScriptOptions = scriptOptions
+// WithScriptArgOptions sets the script arg options for the cluster script
+func (o *ClusterScriptOptions) WithScriptArgOptions(scriptArgOptions *ScriptArgOptions) *ClusterScriptOptions {
+	o.ScriptArgOptions = scriptArgOptions
 	return o
 }
 
