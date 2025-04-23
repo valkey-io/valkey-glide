@@ -34,6 +34,38 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 	assert.Equal(suite.T(), "GO GLIDE GO", result.SingleValue().(string))
 }
 
+func (suite *GlideTestSuite) TestClusterCustomCommandDbSize() {
+	client := suite.defaultClusterClient()
+	// DBSIZE result is always a single number regardless of route
+	result, err := client.CustomCommand([]string{"dbsize"})
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+
+	result, err = client.CustomCommandWithRoute([]string{"dbsize"}, config.AllPrimaries)
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+
+	result, err = client.CustomCommandWithRoute([]string{"dbsize"}, config.RandomRoute)
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+}
+
+func (suite *GlideTestSuite) TestClusterCustomCommandConfigGet() {
+	client := suite.defaultClusterClient()
+
+	// CONFIG GET returns a map, but with a single node route it is handled as a single value
+	result, err := client.CustomCommandWithRoute([]string{"CONFIG", "GET", "*file"}, config.RandomRoute)
+	assert.NoError(suite.T(), err)
+	assert.Greater(suite.T(), len(result.SingleValue().(map[string]any)), 0)
+
+	result, err = client.CustomCommandWithRoute([]string{"CONFIG", "GET", "*file"}, config.AllPrimaries)
+	assert.NoError(suite.T(), err)
+	assert.Greater(suite.T(), len(result.MultiValue()), 0)
+	for _, val := range result.MultiValue() {
+		assert.Greater(suite.T(), len(val.(map[string]any)), 0)
+	}
+}
+
 func (suite *GlideTestSuite) TestInfoCluster() {
 	DEFAULT_INFO_SECTIONS := []string{
 		"Server",
@@ -1825,15 +1857,10 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 
 func (suite *GlideTestSuite) TestInvokeScript() {
 	clusterClient := suite.defaultClusterClient()
-	defaultClient := suite.defaultClient()
 	key1 := uuid.New().String()
 	key2 := uuid.New().String()
 
 	script1 := options.NewScript("return 'Hello'")
-	response1, err := defaultClient.InvokeScript(*script1)
-	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), "Hello", response1)
-
 	routeOption := options.RouteOption{Route: config.AllPrimaries}
 	// Test simple script that returns a string
 	clusterResponse, err := clusterClient.InvokeScriptWithRoute(*script1, routeOption)
@@ -1841,42 +1868,42 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 	for _, value := range clusterResponse.MultiValue() {
 		assert.Equal(suite.T(), "Hello", value)
 	}
-
 	script1.Close()
 
 	// Test script that sets a key with value
 	script2 := options.NewScript("return redis.call('SET', KEYS[1], ARGV[1])")
-	scriptOptions := options.NewScriptOptions().WithKeys([]string{key1}).WithArgs([]string{"value1"})
-	clusterSetResponse, err := clusterClient.InvokeScriptWithOptionsAndRoute(*script2, *scriptOptions, routeOption)
+
+	// Create ClusterScriptOptions for setting key1
+	scriptOptions := options.NewScriptOptions()
+	scriptOptions.WithKeys([]string{key1}).WithArgs([]string{"value1"})
+	setResponse, err := clusterClient.InvokeScriptWithOptions(*script2, *scriptOptions)
 	assert.Nil(suite.T(), err)
-	for _, value := range clusterSetResponse.MultiValue() {
-		assert.Equal(suite.T(), "OK", value)
-	}
+	assert.Equal(suite.T(), "OK", setResponse)
 
 	// Set another key with the same script
-	scriptOptions2 := options.NewScriptOptions().WithKeys([]string{key2}).WithArgs([]string{"value2"})
-	clusterSetResponse2, err := clusterClient.InvokeScriptWithOptionsAndRoute(*script2, *scriptOptions2, routeOption)
+	scriptOptions2 := options.NewScriptOptions()
+	scriptOptions2.WithKeys([]string{key2}).WithArgs([]string{"value2"})
+	setResponse2, err := clusterClient.InvokeScriptWithOptions(*script2, *scriptOptions2)
+	assert.Equal(suite.T(), "OK", setResponse2)
 	assert.Nil(suite.T(), err)
-	for _, value := range clusterSetResponse2.MultiValue() {
-		assert.Equal(suite.T(), "OK", value)
-	}
 	script2.Close()
 
 	// Test script that gets a key's value
 	script3 := options.NewScript("return redis.call('GET', KEYS[1])")
-	scriptOptions3 := options.NewScriptOptions().WithKeys([]string{key1})
-	getResponse1, err := clusterClient.InvokeScriptWithOptionsAndRoute(*script3, *scriptOptions3, routeOption)
+
+	// Create ClusterScriptOptions for getting key1
+	scriptOptions3 := options.NewScriptOptions()
+	scriptOptions3.WithKeys([]string{key1})
+	getResponse1, err := clusterClient.InvokeScriptWithOptions(*script3, *scriptOptions3)
 	assert.Nil(suite.T(), err)
-	for _, value := range getResponse1.MultiValue() {
-		assert.Equal(suite.T(), "value1", value)
-	}
+	assert.Equal(suite.T(), "value1", getResponse1)
+
 	// Get another key's value
-	scriptOpts4 := options.NewScriptOptions().WithKeys([]string{key2})
-	getResponse2, err := clusterClient.InvokeScriptWithOptionsAndRoute(*script3, *scriptOpts4, routeOption)
+	scriptOptions4 := options.NewScriptOptions()
+	scriptOptions4.WithKeys([]string{key2})
+	getResponse2, err := clusterClient.InvokeScriptWithOptions(*script3, *scriptOptions4)
+	assert.Equal(suite.T(), "value2", getResponse2)
 	assert.Nil(suite.T(), err)
-	for _, value := range getResponse2.MultiValue() {
-		assert.Equal(suite.T(), "value2", value)
-	}
 	script3.Close()
 }
 

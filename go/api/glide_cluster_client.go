@@ -63,6 +63,9 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 	if err != nil {
 		return nil, err
 	}
+	if config.subscriptionConfig != nil {
+		client.setMessageHandler(NewMessageHandler(config.subscriptionConfig.callback, config.subscriptionConfig.context))
+	}
 
 	return &GlideClusterClient{client}, nil
 }
@@ -200,6 +203,9 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 	if err != nil {
 		return createEmptyClusterValue[interface{}](), err
 	}
+	if !route.IsMultiNode() {
+		return createClusterSingleValue[interface{}](data), err
+	}
 	return createClusterValue[interface{}](data), nil
 }
 
@@ -316,7 +322,7 @@ func (client *GlideClusterClient) FlushAll() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all the keys of all the existing databases.
@@ -338,13 +344,13 @@ func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.Flush
 		if err != nil {
 			return DefaultStringResponse, err
 		}
-		return handleStringResponse(result)
+		return handleOkResponse(result)
 	}
 	result, err := client.executeCommandWithRoute(C.FlushAll, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all the keys of the currently selected database.
@@ -362,7 +368,7 @@ func (client *GlideClusterClient) FlushDB() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all the keys of the currently selected database.
@@ -384,13 +390,13 @@ func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushC
 		if err != nil {
 			return DefaultStringResponse, err
 		}
-		return handleStringResponse(result)
+		return handleOkResponse(result)
 	}
 	result, err := client.executeCommandWithRoute(C.FlushDB, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Echo the provided message back.
@@ -751,7 +757,7 @@ func (client *GlideClusterClient) ConfigResetStat() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(response)
+	return handleOkResponse(response)
 }
 
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
@@ -771,7 +777,7 @@ func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteO
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(response)
+	return handleOkResponse(response)
 }
 
 // Sets configuration parameters to the specified values.
@@ -794,7 +800,7 @@ func (client *GlideClusterClient) ConfigSet(
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Sets configuration parameters to the specified values
@@ -818,7 +824,7 @@ func (client *GlideClusterClient) ConfigSetWithOptions(
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Get the values of configuration parameters.
@@ -899,7 +905,7 @@ func (client *GlideClusterClient) ClientSetName(connectionName string) (ClusterV
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
-	data, err := handleStringResponse(response)
+	data, err := handleOkResponse(response)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
@@ -935,7 +941,7 @@ func (client *GlideClusterClient) ClientSetNameWithOptions(
 		}
 		return createClusterMultiValue[string](data), nil
 	}
-	data, err := handleStringResponse(response)
+	data, err := handleOkResponse(response)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
@@ -1006,7 +1012,7 @@ func (client *GlideClusterClient) ConfigRewrite() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(response)
+	return handleOkResponse(response)
 }
 
 // Rewrites the configuration file with the current configuration.
@@ -1026,7 +1032,7 @@ func (client *GlideClusterClient) ConfigRewriteWithOptions(opts options.RouteOpt
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(response)
+	return handleOkResponse(response)
 }
 
 // Returns a random key.
@@ -1127,7 +1133,7 @@ func (client *GlideClusterClient) FunctionFlushWithRoute(route options.RouteOpti
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all function libraries in synchronous mode.
@@ -1153,7 +1159,7 @@ func (client *GlideClusterClient) FunctionFlushSyncWithRoute(route options.Route
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all function libraries in asynchronous mode.
@@ -1179,7 +1185,7 @@ func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(route options.Rout
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Invokes a previously loaded function.
@@ -1416,7 +1422,7 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []
 	return client.FCallReadOnlyWithArgsWithRoute(function, args, options.RouteOption{})
 }
 
-// InvokeScriptWithRoute executes a Lua script on the server with routing information.
+// Executes a Lua script on the server with routing information.
 //
 // This function simplifies the process of invoking scripts on the server by using an object that
 // represents a Lua script. The script loading and execution will all be handled internally. If
@@ -1441,7 +1447,10 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []
 //
 // [LOAD]: https://valkey.io/commands/script-load/
 // [EVALSHA]: https://valkey.io/commands/evalsha/
-func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, route options.RouteOption) (ClusterValue[any], error) {
+func (client *GlideClusterClient) InvokeScriptWithRoute(
+	script options.Script,
+	route options.RouteOption,
+) (ClusterValue[any], error) {
 	response, err := client.baseClient.executeScriptWithRoute(script.GetHash(), []string{}, []string{}, route.Route)
 	if err != nil {
 		return createEmptyClusterValue[any](), err
@@ -1457,7 +1466,7 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, r
 	return createClusterSingleValue[any](response), nil
 }
 
-// InvokeScriptWithOptionsAndRoute executes a Lua script on the server with additional options and routing information.
+// Executes a Lua script on the server with cluster script options.
 //
 // This function simplifies the process of invoking scripts on the server by using an object that
 // represents a Lua script. The script loading, argument preparation, and execution will all be
@@ -1467,16 +1476,15 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, r
 //
 // Note:
 //
-//   - all `keys` in `scriptOptions` must map to the same hash slot.
-//   - the command will be routed to a random node, unless `route` is provided.
+//   - all `keys` in `clusterScriptOptions` must map to the same hash slot.
+//   - the command will be routed based on the Route specified in clusterScriptOptions.
 //
 // See [LOAD] and [EVALSHA] for details.
 //
 // Parameters:
 //
 //	script - The script to execute.
-//	scriptOptions - Options for script execution including keys and arguments.
-//	route - Routing information for the script execution.
+//	clusterScriptOptions - Combined options for script execution including keys, arguments, and routing information.
 //
 // Return value:
 //
@@ -1484,16 +1492,19 @@ func (client *GlideClusterClient) InvokeScriptWithRoute(script options.Script, r
 //
 // [LOAD]: https://valkey.io/commands/script-load/
 // [EVALSHA]: https://valkey.io/commands/evalsha/
-func (client *GlideClusterClient) InvokeScriptWithOptionsAndRoute(script options.Script, scriptOptions options.ScriptOptions, route options.RouteOption) (ClusterValue[any], error) {
-	keys := scriptOptions.GetKeys()
-	args := scriptOptions.GetArgs()
+func (client *GlideClusterClient) InvokeScriptWithClusterOptions(
+	script options.Script,
+	clusterScriptOptions options.ClusterScriptOptions,
+) (ClusterValue[any], error) {
+	args := clusterScriptOptions.GetArgs()
+	route := clusterScriptOptions.Route
 
-	response, err := client.baseClient.executeScriptWithRoute(script.GetHash(), keys, args, route.Route)
+	response, err := client.baseClient.executeScriptWithRoute(script.GetHash(), []string{}, args, route)
 	if err != nil {
 		return createEmptyClusterValue[any](), err
 	}
 
-	if route.Route != nil && route.Route.IsMultiNode() {
+	if route != nil && route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(response)
 		if err != nil {
 			return createEmptyClusterValue[any](), err
@@ -1629,7 +1640,39 @@ func (client *GlideClusterClient) FunctionDeleteWithRoute(libName string, route 
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
+}
+
+// Kills a function that is currently executing.
+//
+// `FUNCTION KILL` terminates read-only functions only.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	`OK` if function is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/function-kill/
+func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(
+		C.FunctionKill,
+		[]string{},
+		route.Route,
+	)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
 }
 
 // Kills a function that is currently executing.

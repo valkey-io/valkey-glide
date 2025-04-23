@@ -846,42 +846,38 @@ func ExampleGlideClusterClient_InvokeScriptWithOptions() {
 	// 30
 }
 
-func ExampleGlideClusterClient_InvokeScriptWithOptionsAndRoute() {
+func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
 	client := getExampleGlideClusterClient()
 
-	// Create a Lua script that returns a table
-	scriptText := `
-		return {status="success", code=200, data="test data"}
-	`
+	// Create a Lua script.
+	scriptText := "return 'Hello'"
+
 	script := options.NewScript(scriptText)
 
-	// Set up script options
-	scriptOptions := options.NewScriptOptions()
+	// Set up cluster script options
+	clusterScriptOptions := options.NewClusterScriptOptions()
 
-	// Set up routing options
-	route := config.Route(config.RandomRoute)
-	routeOpts := options.RouteOption{
-		Route: route,
-	}
+	// Set the route
+	clusterScriptOptions.Route = config.AllPrimaries
 
-	// Execute the script with options and route
-	result, err := client.InvokeScriptWithOptionsAndRoute(*script, *scriptOptions, routeOpts)
+	// Execute the script with cluster options
+	result, err := client.InvokeScriptWithClusterOptions(*script, *clusterScriptOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
-	// Print the result (a map in Go)
-	if resultMap, ok := result.SingleValue().(map[string]interface{}); ok {
-		fmt.Println("Status:", resultMap["status"])
-		fmt.Println("Code:", resultMap["code"])
-		fmt.Println("Data:", resultMap["data"])
+	// Print the result. The result contains response from multiple nodes.
+	// We are checking and printing the response from only one node below.
+	for _, value := range result.MultiValue() {
+		if value != nil && value.(string) == "Hello" {
+			fmt.Println(value)
+			break
+		}
 	}
 
 	// Output:
-	// Status: success
-	// Code: 200
-	// Data: test data
+	// Hello
 }
 
 func ExampleGlideClient_ScriptExists() {

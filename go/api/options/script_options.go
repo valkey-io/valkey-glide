@@ -46,6 +46,54 @@ func (o *ScriptOptions) GetArgs() []string {
 	return o.args
 }
 
+// ScriptArgOptions represents options for script execution with only arguments
+type ScriptArgOptions struct {
+	args []string
+}
+
+// NewScriptArgOptions creates a new ScriptArgOptions with default values
+func NewScriptArgOptions() *ScriptArgOptions {
+	return &ScriptArgOptions{
+		args: []string{},
+	}
+}
+
+// WithArgs sets the arguments for the script
+func (o *ScriptArgOptions) WithArgs(args []string) *ScriptArgOptions {
+	o.args = args
+	return o
+}
+
+// GetArgs returns the arguments for the script
+func (o *ScriptArgOptions) GetArgs() []string {
+	return o.args
+}
+
+type ClusterScriptOptions struct {
+	*ScriptArgOptions
+	*RouteOption
+}
+
+// NewClusterScriptOptions creates a new ClusterScriptOptions with default values
+func NewClusterScriptOptions() *ClusterScriptOptions {
+	return &ClusterScriptOptions{
+		ScriptArgOptions: NewScriptArgOptions(),
+		RouteOption:      &RouteOption{},
+	}
+}
+
+// WithRouteOptions sets the route options for the cluster script
+func (o *ClusterScriptOptions) WithRouteOptions(routeOption *RouteOption) *ClusterScriptOptions {
+	o.RouteOption = routeOption
+	return o
+}
+
+// WithScriptArgOptions sets the script arg options for the cluster script
+func (o *ClusterScriptOptions) WithScriptArgOptions(scriptArgOptions *ScriptArgOptions) *ClusterScriptOptions {
+	o.ScriptArgOptions = scriptArgOptions
+	return o
+}
+
 // Script represents a Lua script stored in Valkey/Redis
 type Script struct {
 	hash      string
@@ -54,9 +102,9 @@ type Script struct {
 }
 
 // NewScript creates a new Script object
-func NewScript(code interface{}) *Script {
+func NewScript(code string) *Script {
 	// In Go implementation, we'd convert code to bytes and store the script
-	hash := storeScript(getBytes(stringOf(code)))
+	hash := storeScript(getBytes(code))
 	return &Script{
 		hash:      hash,
 		isDropped: false,
@@ -79,18 +127,6 @@ func (s *Script) Close() error {
 		s.isDropped = true
 	}
 	return nil
-}
-
-// stringOf converts an interface to a string
-func stringOf(value interface{}) string {
-	switch v := value.(type) {
-	case string:
-		return v
-	case []byte:
-		return string(v)
-	default:
-		return ""
-	}
 }
 
 // getBytes returns the bytes representation of the string

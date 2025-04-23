@@ -45,10 +45,9 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	InvokeScriptWithRoute(script options.Script, route options.RouteOption) (ClusterValue[any], error)
 
-	InvokeScriptWithOptionsAndRoute(
+	InvokeScriptWithClusterOptions(
 		script options.Script,
-		scriptOptions options.ScriptOptions,
-		route options.RouteOption,
+		clusterScriptOptions options.ClusterScriptOptions,
 	) (ClusterValue[any], error)
 
 	ScriptExists(sha1s []string) ([]bool, error)
