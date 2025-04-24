@@ -1,13 +1,15 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import os
+from pathlib import Path
 import subprocess
 import sys
 from typing import List, Optional
 
 from glide.config import NodeAddress
 
-SCRIPT_FILE = os.path.abspath(f"{__file__}/../../../../../utils/cluster_manager.py")
+SCRIPT_FILE = (
+    Path(__file__).parent.parent.parent.parent / "utils" / "cluster_manager.py"
+)
 
 
 class ValkeyCluster:
@@ -24,7 +26,7 @@ class ValkeyCluster:
             self.init_from_existing_cluster(addresses)
         else:
             self.tls = tls
-            args_list = [sys.executable, SCRIPT_FILE]
+            args_list = [sys.executable, str(SCRIPT_FILE)]
             if tls:
                 args_list.append("--tls")
             args_list.append("start")
