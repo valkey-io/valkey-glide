@@ -56,6 +56,7 @@ run-name:
 
 env:
     CARGO_TERM_COLOR: always
+    BASE_GO_VERSION: "1.22"
 
 jobs:
     get-matrices:
@@ -107,10 +108,20 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.TARGET }}-go
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
+
             - name: Install & build & test
               working-directory: go
               run: |
-                  make install-tools-go${{ matrix.go }} build
+                  make install-tools build
                   make -k unit-test integ-test
 
             - name: Run Example Tests
@@ -120,7 +131,7 @@ jobs:
                   make -k example-test
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.go == '1.22' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.go == env.BASE_GO_VERSION }}
               with:
                   language-flag: -go
 
@@ -141,16 +152,26 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Set up Go ${{ matrix.go }}
+            - name: Set up Go
               uses: actions/setup-go@v5
               with:
-                  go-version: "1.22"
+                  go-version: ${{ env.BASE_GO_VERSION }}
                   cache-dependency-path: go/go.sum
 
             - name: Install protoc
               uses: ./.github/workflows/install-rust-and-protoc
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: x86_64-unknown-linux-gnu-go
+                  restore-keys: |
+                      x86_64-unknown-linux-gnu-glide-core
+                      x86_64-unknown-linux-gnu
 
             - name: Install and run linters
               working-directory: go
@@ -213,10 +234,18 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.IMAGE }}-go
+                  restore-keys: ${{ matrix.host.IMAGE }}
+
             - name: Install & build & test
               working-directory: go
               run: |
-                  make install-tools-go${{ matrix.go }} build
+                  make install-tools build
                   make -k unit-test integ-test
 
             - name: Upload test reports
@@ -245,13 +274,23 @@ jobs:
             - name: Set up Go
               uses: actions/setup-go@v5
               with:
-                  go-version: "1.20"
+                  go-version: ${{ env.BASE_GO_VERSION }}
                   cache-dependency-path: go/go.sum
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: aarch64-unknown-linux-gnu-go
+                  restore-keys: |
+                      aarch64-unknown-linux-gnu-glide-core
+                      aarch64-unknown-linux-gnu
 
             - name: Build and test
               working-directory: ./go
               run: |
-                  make install-tools-go1.20 build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
 
             - name: Upload test reports
               if: always()

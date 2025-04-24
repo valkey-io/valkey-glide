@@ -394,12 +394,11 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = CommandRequest.decodeDelimited(reader);
 
+                expect(request.batch?.commands?.at(0)?.requestType).toEqual(
+                    RequestType.Set,
+                );
                 expect(
-                    request.transaction?.commands?.at(0)?.requestType,
-                ).toEqual(RequestType.Set);
-                expect(
-                    request.transaction?.commands?.at(0)?.argsArray?.args
-                        ?.length,
+                    request.batch?.commands?.at(0)?.argsArray?.args?.length,
                 ).toEqual(2);
                 expect(request.route?.slotKeyRoute?.slotKey).toEqual("key");
                 expect(request.route?.slotKeyRoute?.slotType).toEqual(0); // Primary = 0
@@ -425,12 +424,11 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = CommandRequest.decodeDelimited(reader);
 
+                expect(request.batch?.commands?.at(0)?.requestType).toEqual(
+                    RequestType.Info,
+                );
                 expect(
-                    request.transaction?.commands?.at(0)?.requestType,
-                ).toEqual(RequestType.Info);
-                expect(
-                    request.transaction?.commands?.at(0)?.argsArray?.args
-                        ?.length,
+                    request.batch?.commands?.at(0)?.argsArray?.args?.length,
                 ).toEqual(1);
                 expect(request.route?.simpleRoutes).toEqual(
                     command_request.SimpleRoutes.Random,

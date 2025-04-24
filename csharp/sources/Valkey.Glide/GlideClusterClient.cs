@@ -29,7 +29,7 @@ public sealed class GlideClusterClient : BaseClient, IGenericClusterCommands
     ///     .WithAuthentication("user1", "passwordA")
     ///     .WithTls()
     ///     .Build();
-    /// GlideClusterClient client = await GlideClusterClient.CreateClient(config);
+    /// using GlideClusterClient client = await GlideClusterClient.CreateClient(config);
     /// </code>
     /// </example>
     /// </summary>

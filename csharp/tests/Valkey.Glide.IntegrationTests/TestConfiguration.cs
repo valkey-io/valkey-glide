@@ -3,8 +3,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-using Microsoft.VisualStudio.TestPlatform.Utilities;
-
 using Valkey.Glide.IntegrationTests;
 
 using static Valkey.Glide.ConnectionConfiguration;
@@ -72,7 +70,7 @@ public class TestConfiguration : IDisposable
         _scriptDir = Path.Combine(projectDir, "..", "utils");
 
         // Stop all if weren't stopped on previous test run
-        StopServer(false);
+        //StopServer(false);
 
         // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
         // Not using `Directory.Exists` before deleting, because another process may delete the dir while IT is running.
@@ -103,6 +101,9 @@ public class TestConfiguration : IDisposable
         StopServer(true);
         TestConsoleWriteLine(_output.ToString());
     }
+    //public void Dispose() =>
+    //    // Stop all
+    //    StopServer(true);
 
     private readonly string _scriptDir;
 

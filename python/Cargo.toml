@@ -27,4 +27,4 @@ python-source = "python"
 
 [profile.release]
 lto = true
-debug = true
+strip = "symbols"

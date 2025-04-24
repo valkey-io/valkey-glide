@@ -55,3 +55,7 @@ utils/TestUtils.js
 
 # generaged files (e.g. protobuf)
 generated/
+
+# docs
+docs/markdown/node/**
+docs/site/**

@@ -3,6 +3,7 @@
 package utils
 
 import (
+	"fmt"
 	"strconv"
 	"unsafe"
 )
@@ -82,4 +83,21 @@ func Concat(slices ...[]string) []string {
 	}
 
 	return newSlice
+}
+
+func ToString(v any) (string, bool) {
+	switch val := v.(type) {
+	case string:
+		return val, true
+	case []byte:
+		return string(val), true
+	case int64:
+		return fmt.Sprintf("%d", val), true
+	case float64:
+		return fmt.Sprintf("%g", val), true
+	case int:
+		return fmt.Sprintf("%d", val), true
+	default:
+		return fmt.Sprintf("%v", val), true
+	}
 }

@@ -4,23 +4,23 @@ package glide.api.commands.servermodules;
 import static glide.utils.ArgsBuilder.checkTypeOrThrow;
 import static glide.utils.ArgsBuilder.newArgsBuilder;
 
-import glide.api.models.BaseTransaction;
-import glide.api.models.Transaction;
+import glide.api.models.BaseBatch;
+import glide.api.models.Batch;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
 import lombok.NonNull;
 
 /**
- * Transaction implementation for JSON module. Transactions allow the execution of a group of
- * commands in a single step. See {@link Transaction}.
+ * Batch implementation for JSON module. Batches allow the execution of a group of commands in a
+ * single step. See {@link Batch}.
  *
  * @example
  *     <pre>{@code
- * Transaction transaction = new Transaction();
- * JsonBatch.set(transaction, "doc", ".", "{\"a\": 1.0, \"b\": 2}");
- * JsonBatch.get(transaction, "doc");
- * Object[] result = client.exec(transaction).get();
+ * Batch batch = new Batch(true);
+ * JsonBatch.set(batch, "doc", ".", "{\"a\": 1.0, \"b\": 2}");
+ * JsonBatch.get(batch, "doc");
+ * Object[] result = client.exec(batch).get();
  * assert result[0].equals("OK"); // result of JsonBatch.set()
  * assert result[1].equals("{\"a\": 1.0, \"b\": 2}"); // result of JsonBatch.get()
  * }</pre>
@@ -57,7 +57,7 @@ public class JsonBatch {
     /**
      * Sets the JSON value at the specified <code>path</code> stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be set. The key
      *     will be modified only if <code>value</code> is added as the last child in the specified
@@ -67,22 +67,22 @@ public class JsonBatch {
      * @return Command Response - A simple <code>"OK"</code> response if the value is successfully
      *     set.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> set(
-            @NonNull BaseTransaction<T> transaction,
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> set(
+            @NonNull BaseBatch<T> batch,
             @NonNull ArgType key,
             @NonNull ArgType path,
             @NonNull ArgType value) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
         checkTypeOrThrow(value);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder().add(JSON_SET).add(key).add(path).add(value).toArray());
     }
 
     /**
      * Sets the JSON value at the specified <code>path</code> stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be set. The key
      *     will be modified only if <code>value</code> is added as the last child in the specified
@@ -93,8 +93,8 @@ public class JsonBatch {
      * @return Command Response - A simple <code>"OK"</code> response if the value is successfully
      *     set. If value isn't set because of <code>setCondition</code>, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> set(
-            @NonNull BaseTransaction<T> transaction,
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> set(
+            @NonNull BaseBatch<T> batch,
             @NonNull ArgType key,
             @NonNull ArgType path,
             @NonNull ArgType value,
@@ -102,7 +102,7 @@ public class JsonBatch {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
         checkTypeOrThrow(value);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder()
                         .add(JSON_SET)
                         .add(key)
@@ -115,21 +115,21 @@ public class JsonBatch {
     /**
      * Retrieves the JSON value at the specified <code>path</code> stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @return Command Response - Returns a string representation of the JSON document. If <code>key
      *     </code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> get(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> get(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_GET).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_GET).add(key).toArray());
     }
 
     /**
      * Retrieves the JSON value at the specified <code>paths</code> stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param paths List of paths within the JSON document.
      * @return Command Response -
@@ -152,36 +152,34 @@ public class JsonBatch {
      *     In case of multiple paths, and <code>paths</code> are a mix of both JSONPath and legacy
      *     path, the command behaves as if all are JSONPath paths.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> get(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType[] paths) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> get(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType[] paths) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(paths);
-        return transaction.customCommand(newArgsBuilder().add(JSON_GET).add(key).add(paths).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_GET).add(key).add(paths).toArray());
     }
 
     /**
      * Retrieves the JSON value at the specified <code>path</code> stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param options Options for formatting the byte representation of the JSON data. See <code>
      *     JsonGetOptions</code>.
      * @return Command Response - Returns a string representation of the JSON document. If <code>key
      *     </code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> get(
-            @NonNull BaseTransaction<T> transaction,
-            @NonNull ArgType key,
-            @NonNull JsonGetOptions options) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> get(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull JsonGetOptions options) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder().add(JSON_GET).add(key).add(options.toArgs()).toArray());
     }
 
     /**
      * Retrieves the JSON value at the specified <code>path</code> stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param paths List of paths within the JSON document.
      * @param options Options for formatting the byte representation of the JSON data. See <code>
@@ -206,14 +204,14 @@ public class JsonBatch {
      *     In case of multiple paths, and <code>paths</code> are a mix of both JSONPath and legacy
      *     path, the command behaves as if all are JSONPath paths.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> get(
-            @NonNull BaseTransaction<T> transaction,
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> get(
+            @NonNull BaseBatch<T> batch,
             @NonNull ArgType key,
             @NonNull ArgType[] paths,
             @NonNull JsonGetOptions options) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(paths);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder().add(JSON_GET).add(key).add(options.toArgs()).add(paths).toArray());
     }
 
@@ -221,9 +219,9 @@ public class JsonBatch {
      * Retrieves the JSON values at the specified <code>path</code> stored at multiple <code>keys
      * </code>.
      *
-     * @apiNote When using ClusterTransaction, all keys in the transaction must be mapped to the same
-     *     slot.
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @apiNote When using Atomic ClusterBatch (Transaction), all keys in the transaction must be
+     *     mapped to the same slot.
+     * @param batch The batch to execute the command in.
      * @param keys The keys of the JSON documents.
      * @param path The path within the JSON documents.
      * @return Command Response -An array with requested values for each key.
@@ -238,18 +236,18 @@ public class JsonBatch {
      *     If a <code>key</code> doesn't exist, the corresponding array element will be <code>null
      *     </code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> mget(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType[] keys, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> mget(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType[] keys, @NonNull ArgType path) {
         checkTypeOrThrow(keys);
         checkTypeOrThrow(path);
-        return transaction.customCommand(newArgsBuilder().add(JSON_MGET).add(keys).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_MGET).add(keys).add(path).toArray());
     }
 
     /**
      * Appends one or more <code>values</code> to the JSON array at the specified <code>path</code>
      * within the JSON document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the <code>path</code> within the JSON document where the <code>values
      *     </code> will be appended.
@@ -270,15 +268,15 @@ public class JsonBatch {
      *           doesn't exist, an error is raised. If <code>key</code> doesn't exist, an error is
      *           raised.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> arrappend(
-            @NonNull BaseTransaction<T> transaction,
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> arrappend(
+            @NonNull BaseBatch<T> batch,
             @NonNull ArgType key,
             @NonNull ArgType path,
             @NonNull ArgType[] values) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
         checkTypeOrThrow(values);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder().add(JSON_ARRAPPEND).add(key).add(path).add(values).toArray());
     }
 
@@ -286,7 +284,7 @@ public class JsonBatch {
      * Inserts one or more values into the array at the specified <code>path</code> within the JSON
      * document stored at <code>key</code>, before the given <code>index</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param index The array index before which values are inserted.
@@ -307,8 +305,8 @@ public class JsonBatch {
      *     </ul>
      *     If the index is out of bounds or <code>key</code> doesn't exist, an error is raised.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> arrinsert(
-            @NonNull BaseTransaction<T> transaction,
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> arrinsert(
+            @NonNull BaseBatch<T> batch,
             @NonNull ArgType key,
             @NonNull ArgType path,
             int index,
@@ -316,7 +314,7 @@ public class JsonBatch {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
         checkTypeOrThrow(values);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder()
                         .add(JSON_ARRINSERT)
                         .add(key)
@@ -330,7 +328,7 @@ public class JsonBatch {
      * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
      * path.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param scalar The scalar value to search for.
@@ -345,15 +343,15 @@ public class JsonBatch {
      *           value at the <code>path</code> is not an array, an error is raised.
      *     </ul>
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> arrindex(
-            @NonNull BaseTransaction<T> transaction,
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> arrindex(
+            @NonNull BaseBatch<T> batch,
             @NonNull ArgType key,
             @NonNull ArgType path,
             @NonNull ArgType scalar) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
         checkTypeOrThrow(scalar);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder().add(JSON_ARRINDEX).add(key).add(path).add(scalar).toArray());
     }
 
@@ -361,7 +359,7 @@ public class JsonBatch {
      * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
      * path.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param scalar The scalar value to search for.
@@ -377,8 +375,8 @@ public class JsonBatch {
      *           value at the <code>path</code> is not an array, an error is raised.
      *     </ul>
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> arrindex(
-            @NonNull BaseTransaction<T> transaction,
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> arrindex(
+            @NonNull BaseBatch<T> batch,
             @NonNull ArgType key,
             @NonNull ArgType path,
             @NonNull ArgType scalar,
@@ -386,7 +384,7 @@ public class JsonBatch {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
         checkTypeOrThrow(scalar);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder()
                         .add(JSON_ARRINDEX)
                         .add(key)
@@ -400,7 +398,7 @@ public class JsonBatch {
      * Retrieves the length of the array at the specified <code>path</code> within the JSON document
      * stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -417,38 +415,36 @@ public class JsonBatch {
      *     </ul>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> arrlen(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> arrlen(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
-                newArgsBuilder().add(JSON_ARRLEN).add(key).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_ARRLEN).add(key).add(path).toArray());
     }
 
     /**
      * Retrieves the length of the array at the root of the JSON document stored at <code>key</code>.
      * <br>
-     * Equivalent to {@link #arrlen(BaseTransaction, ArgType, ArgType)} with <code>path</code> set to
-     * <code>
+     * Equivalent to {@link #arrlen(BaseBatch, ArgType, ArgType)} with <code>path</code> set to <code>
      * "."</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - The array length stored at the root of the document. If document
      *     root is not an array, an error is raised.<br>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> arrlen(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> arrlen(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_ARRLEN).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_ARRLEN).add(key).toArray());
     }
 
     /**
      * Reports memory usage in bytes of a JSON object at the specified <code>path</code> within the
      * JSON document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -464,21 +460,21 @@ public class JsonBatch {
      *     </ul>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> debugMemory(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> debugMemory(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder().add(JSON_DEBUG_MEMORY).add(key).add(path).toArray());
     }
 
     /**
      * Reports memory usage in bytes of a JSON object at the specified <code>path</code> within the
      * JSON document stored at <code>key</code>.<br>
-     * Equivalent to {@link #debugMemory(BaseTransaction, ArgType, ArgType)} with <code>path</code>
-     * set to <code>".."</code>.
+     * Equivalent to {@link #debugMemory(BaseBatch, ArgType, ArgType)} with <code>path</code> set to
+     * <code>".."</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - The total memory usage in bytes of the entire JSON document.<br>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
@@ -489,10 +485,10 @@ public class JsonBatch {
      * assert res == 258L;
      * }</pre>
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> debugMemory(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> debugMemory(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_DEBUG_MEMORY).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_DEBUG_MEMORY).add(key).toArray());
     }
 
     /**
@@ -502,7 +498,7 @@ public class JsonBatch {
      * field for each of their containing JSON values. Each container value, except the root
      * container, counts as one additional field.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -518,11 +514,11 @@ public class JsonBatch {
      *     </ul>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> debugFields(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> debugFields(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder().add(JSON_DEBUG_FIELDS).add(key).add(path).toArray());
     }
 
@@ -532,43 +528,43 @@ public class JsonBatch {
      * Each non-container JSON value counts as one field. Objects and arrays recursively count one
      * field for each of their containing JSON values. Each container value, except the root
      * container, counts as one additional field.<br>
-     * Equivalent to {@link #debugFields(BaseTransaction, ArgType, ArgType)} with <code>path</code>
-     * set to <code>".."</code>.
+     * Equivalent to {@link #debugFields(BaseBatch, ArgType, ArgType)} with <code>path</code> set to
+     * <code>".."</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - The total number of fields in the entire JSON document.<br>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> debugFields(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> debugFields(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_DEBUG_FIELDS).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_DEBUG_FIELDS).add(key).toArray());
     }
 
     /**
      * Pops the last element from the array stored in the root of the JSON document stored at <code>
-     * key</code>. Equivalent to {@link #arrpop(BaseTransaction, ArgType, ArgType)} with <code>
+     * key</code>. Equivalent to {@link #arrpop(BaseBatch, ArgType, ArgType)} with <code>
      * path</code> set to <code>"."</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @return Command Response - Returns a string representing the popped JSON value, or <code>null
      *     </code> if the array at document root is empty.<br>
      *     If the JSON value at document root is not an array or if <code>key</code> doesn't exist, an
      *     error is raised.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> arrpop(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> arrpop(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_ARRPOP).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_ARRPOP).add(key).toArray());
     }
 
     /**
      * Pops the last element from the array located at <code>path</code> in the JSON document stored
      * at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -585,19 +581,18 @@ public class JsonBatch {
      *     </ul>
      *     If <code>key</code> doesn't exist, an error is raised.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> arrpop(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> arrpop(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
-                newArgsBuilder().add(JSON_ARRPOP).add(key).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_ARRPOP).add(key).add(path).toArray());
     }
 
     /**
      * Pops an element from the array located at <code>path</code> in the JSON document stored at
      * <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path The path within the JSON document.
      * @param index The index of the element to pop. Out of boundary indexes are rounded to their
@@ -616,14 +611,11 @@ public class JsonBatch {
      *     </ul>
      *     If <code>key</code> doesn't exist, an error is raised.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> arrpop(
-            @NonNull BaseTransaction<T> transaction,
-            @NonNull ArgType key,
-            @NonNull ArgType path,
-            long index) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> arrpop(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path, long index) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder().add(JSON_ARRPOP).add(key).add(path).add(Long.toString(index)).toArray());
     }
 
@@ -636,7 +628,7 @@ public class JsonBatch {
      * If <code>start</code> >= size or <code>start</code> > <code>end</code>, the array is emptied
      * and 0 is return.<br>
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param start The index of the first element to keep, inclusive.
@@ -658,15 +650,15 @@ public class JsonBatch {
      *     </ul>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> arrtrim(
-            @NonNull BaseTransaction<T> transaction,
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> arrtrim(
+            @NonNull BaseBatch<T> batch,
             @NonNull ArgType key,
             @NonNull ArgType path,
             int start,
             int end) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder()
                         .add(JSON_ARRTRIM)
                         .add(key)
@@ -680,7 +672,7 @@ public class JsonBatch {
      * Increments or decrements the JSON value(s) at the specified <code>path</code> by <code>number
      * </code> within the JSON document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param number The number to increment or decrement by.
@@ -703,14 +695,11 @@ public class JsonBatch {
      *     If <code>key</code> does not exist, an error is raised.<br>
      *     If the result is out of the range of 64-bit IEEE double, an error is raised.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> numincrby(
-            @NonNull BaseTransaction<T> transaction,
-            @NonNull ArgType key,
-            @NonNull ArgType path,
-            Number number) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> numincrby(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path, Number number) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder().add(JSON_NUMINCRBY).add(key).add(path).add(number.toString()).toArray());
     }
 
@@ -718,7 +707,7 @@ public class JsonBatch {
      * Multiplies the JSON value(s) at the specified <code>path</code> by <code>number</code> within
      * the JSON document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param number The number to multiply by.
@@ -740,41 +729,37 @@ public class JsonBatch {
      *     If <code>key</code> does not exist, an error is raised.<br>
      *     If the result is out of the range of 64-bit IEEE double, an error is raised.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> nummultby(
-            @NonNull BaseTransaction<T> transaction,
-            @NonNull ArgType key,
-            @NonNull ArgType path,
-            Number number) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> nummultby(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path, Number number) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder().add(JSON_NUMMULTBY).add(key).add(path).add(number.toString()).toArray());
     }
 
     /**
      * Retrieves the number of key-value pairs in the object values at the specified <code>path</code>
      * within the JSON document stored at <code>key</code>.<br>
-     * Equivalent to {@link #objlen(BaseTransaction, ArgType, ArgType)} with <code>path</code> set to
-     * <code>
+     * Equivalent to {@link #objlen(BaseBatch, ArgType, ArgType)} with <code>path</code> set to <code>
      * "."</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - The object length stored at the root of the document. If document
      *     root is not an object, an error is raised.<br>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> objlen(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> objlen(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_OBJLEN).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_OBJLEN).add(key).toArray());
     }
 
     /**
      * Retrieves the number of key-value pairs in the object values at the specified <code>path</code>
      * within the JSON document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -793,38 +778,37 @@ public class JsonBatch {
      *     </ul>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> objlen(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> objlen(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
-                newArgsBuilder().add(JSON_OBJLEN).add(key).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_OBJLEN).add(key).add(path).toArray());
     }
 
     /**
      * Retrieves the key names in the object values at the specified <code>path</code> within the JSON
      * document stored at <code>key</code>.<br>
-     * Equivalent to {@link #objkeys(BaseTransaction, ArgType, ArgType)} with <code>path</code> set to
+     * Equivalent to {@link #objkeys(BaseBatch, ArgType, ArgType)} with <code>path</code> set to
      * <code>
      * "."</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - The object length stored at the root of the document. If document
      *     root is not an object, an error is raised.<br>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> objkeys(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> objkeys(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_OBJKEYS).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_OBJKEYS).add(key).toArray());
     }
 
     /**
      * Retrieves the key names in the object values at the specified <code>path</code> within the JSON
      * document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -843,95 +827,93 @@ public class JsonBatch {
      *     </ul>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> objkeys(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> objkeys(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
-                newArgsBuilder().add(JSON_OBJKEYS).add(key).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_OBJKEYS).add(key).add(path).toArray());
     }
 
     /**
      * Deletes the JSON document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @return Command Response - The number of elements deleted. 0 if the key does not exist.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> del(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> del(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_DEL).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_DEL).add(key).toArray());
     }
 
     /**
      * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at
      * <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be deleted.
      * @return Command Response - The number of elements deleted. 0 if the key does not exist, or if
      *     the JSON path is invalid or does not exist.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> del(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> del(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(newArgsBuilder().add(JSON_DEL).add(key).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_DEL).add(key).add(path).toArray());
     }
 
     /**
      * Deletes the JSON document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @return Command Response - The number of elements deleted. 0 if the key does not exist.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> forget(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> forget(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_FORGET).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_FORGET).add(key).toArray());
     }
 
     /**
      * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at
      * <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be deleted.
      * @return Command Response - The number of elements deleted. 0 if the key does not exist, or if
      *     the JSON path is invalid or does not exist.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> forget(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> forget(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
-                newArgsBuilder().add(JSON_FORGET).add(key).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_FORGET).add(key).add(path).toArray());
     }
 
     /**
      * Toggles a Boolean value stored at the root within the JSON document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - Returns the toggled boolean value at the root of the document, or
      *     <code>null</code> for JSON values matching the root that are not boolean. If <code>key
      *     </code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> toggle(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> toggle(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_TOGGLE).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_TOGGLE).add(key).toArray());
     }
 
     /**
      * Toggles a Boolean value stored at the specified <code>path</code> within the JSON document
      * stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -945,19 +927,18 @@ public class JsonBatch {
      *     </ul>
      *     If <code>key</code> doesn't exist, returns <code>null</code>.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> toggle(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> toggle(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
-                newArgsBuilder().add(JSON_TOGGLE).add(key).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_TOGGLE).add(key).add(path).toArray());
     }
 
     /**
      * Appends the specified <code>value</code> to the string stored at the specified <code>path
      * </code> within the JSON document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param value The value to append to the string. Must be wrapped with single quotes. For
      *     example, to append "foo", pass '"foo"'.
@@ -978,15 +959,15 @@ public class JsonBatch {
      *           If <code>key</code> doesn't exist, an error is raised.
      *     </ul>
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> strappend(
-            @NonNull BaseTransaction<T> transaction,
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> strappend(
+            @NonNull BaseBatch<T> batch,
             @NonNull ArgType key,
             @NonNull ArgType value,
             @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(value);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
+        return batch.customCommand(
                 newArgsBuilder().add(JSON_STRAPPEND).add(key).add(path).add(value).toArray());
     }
 
@@ -994,7 +975,7 @@ public class JsonBatch {
      * Appends the specified <code>value</code> to the string stored at the root within the JSON
      * document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param value The value to append to the string. Must be wrapped with single quotes. For
      *     example, to append "foo", pass '"foo"'.
@@ -1003,19 +984,18 @@ public class JsonBatch {
      *     If the JSON value at root is not a string, an error is raised.<br>
      *     If <code>key</code> doesn't exist, an error is raised.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> strappend(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType value) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> strappend(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType value) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(value);
-        return transaction.customCommand(
-                newArgsBuilder().add(JSON_STRAPPEND).add(key).add(value).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_STRAPPEND).add(key).add(value).toArray());
     }
 
     /**
      * Returns the length of the JSON string value stored at the specified <code>path</code> within
      * the JSON document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -1033,46 +1013,44 @@ public class JsonBatch {
      *           </code> is returned.
      *     </ul>
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> strlen(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> strlen(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(
-                newArgsBuilder().add(JSON_STRLEN).add(key).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_STRLEN).add(key).add(path).toArray());
     }
 
     /**
      * Returns the length of the JSON string value stored at the root within the JSON document stored
      * at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - Returns the length of the JSON value at the root.<br>
      *     If the JSON value is not a string, an error is raised.<br>
      *     If <code>key</code> doesn't exist, <code>null</code> is returned.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> strlen(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> strlen(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_STRLEN).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_STRLEN).add(key).toArray());
     }
 
     /**
      * Clears an array and an object at the root of the JSON document stored at <code>key</code>.<br>
-     * Equivalent to {@link #clear(BaseTransaction, ArgType, ArgType)} with <code>path</code> set to
-     * <code>
+     * Equivalent to {@link #clear(BaseBatch, ArgType, ArgType)} with <code>path</code> set to <code>
      * "."</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - <code>1</code> if the document wasn't empty or <code>0</code> if it
      *     was.<br>
      *     If <code>key</code> doesn't exist, an error is raised.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> clear(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> clear(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_CLEAR).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_CLEAR).add(key).toArray());
     }
 
     /**
@@ -1081,7 +1059,7 @@ public class JsonBatch {
      * Numeric values are set to <code>0</code>, boolean values are set to <code>false</code>, and
      * string values are converted to empty strings.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response - The number of containers cleared.<br>
@@ -1089,11 +1067,11 @@ public class JsonBatch {
      *     (e.g., an empty array, object, or string), 0 is returned. If <code>key</code> doesn't
      *     exist, an error is raised.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> clear(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> clear(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(newArgsBuilder().add(JSON_CLEAR).add(key).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_CLEAR).add(key).add(path).toArray());
     }
 
     /**
@@ -1112,15 +1090,15 @@ public class JsonBatch {
      *       {, followed by key-value pairs, each of which is a RESP bulk string.
      * </ul>
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - Returns the JSON document in its RESP form. If <code>key</code>
      *     doesn't exist, <code>null</code> is returned.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> resp(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> resp(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_RESP).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_RESP).add(key).toArray());
     }
 
     /**
@@ -1140,7 +1118,7 @@ public class JsonBatch {
      *       {, followed by key-value pairs, each of which is a RESP bulk string.
      * </ul>
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @return Command Response -
@@ -1155,34 +1133,34 @@ public class JsonBatch {
      *     </ul>
      *     If <code>key</code> doesn't exist, <code>null</code> is returned.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> resp(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> resp(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(newArgsBuilder().add(JSON_RESP).add(key).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_RESP).add(key).add(path).toArray());
     }
 
     /**
      * Retrieves the type of the JSON value at the root of the JSON document stored at <code>key
      * </code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @return Command Response - Returns the type of the JSON value at root. If <code>key</code>
      *     doesn't exist, <code>
      *     null</code> is returned.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> type(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> type(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return transaction.customCommand(newArgsBuilder().add(JSON_TYPE).add(key).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_TYPE).add(key).toArray());
     }
 
     /**
      * Retrieves the type of the JSON value at the specified <code>path</code> within the JSON
      * document stored at <code>key</code>.
      *
-     * @param transaction The Valkey GLIDE client to execute the command in transaction.
+     * @param batch The batch to execute the command in.
      * @param key The key of the JSON document.
      * @param path Represents the path within the JSON document where the type will be retrieved.
      * @return Command Response -
@@ -1196,10 +1174,10 @@ public class JsonBatch {
      *     </ul>
      *     If <code>key</code> doesn't exist, <code>null</code> is returned.
      */
-    public static <ArgType, T extends BaseTransaction<T>> BaseTransaction<T> type(
-            @NonNull BaseTransaction<T> transaction, @NonNull ArgType key, @NonNull ArgType path) {
+    public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> type(
+            @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return transaction.customCommand(newArgsBuilder().add(JSON_TYPE).add(key).add(path).toArray());
+        return batch.customCommand(newArgsBuilder().add(JSON_TYPE).add(key).add(path).toArray());
     }
 }

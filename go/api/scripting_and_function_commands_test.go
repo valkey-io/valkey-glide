@@ -8,12 +8,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
-	"github.com/valkey-io/valkey-glide/go/integTest"
 )
 
 var (
-	libraryCode         = integTest.GenerateLuaLibCode("mylib", map[string]string{"myfunc": "return 42"}, true)
-	libraryCodeWithArgs = integTest.GenerateLuaLibCode("mylib", map[string]string{"myfunc": "return args[1]"}, true)
+	libraryCode = `#!lua name=mylib
+redis.register_function{ function_name = 'myfunc', callback = function(keys, args) return 42 end, flags = { 'no-writes' } }`
+	libraryCodeWithArgs = `#!lua name=mylib
+redis.register_function{ function_name = 'myfunc', callback = function(keys, args) return args[1] end, flags = { 'no-writes' } }`
 )
 
 // FunctionLoad Examples
@@ -528,4 +529,220 @@ func ExampleGlideClusterClient_FCallReadOnlyWithArgsWithRoute() {
 
 	// Output:
 	// 1
+}
+
+func ExampleGlideClient_FunctionStats() {
+	client := getExampleGlideClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Get function statistics
+	stats, err := client.FunctionStats()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Print statistics for each node
+	for _, nodeStats := range stats {
+		fmt.Println("Example stats:")
+		for engineName, engine := range nodeStats.Engines {
+			fmt.Printf("  Engine %s: %d functions, %d libraries\n",
+				engineName, engine.FunctionCount, engine.LibraryCount)
+		}
+	}
+
+	// Output:
+	// Example stats:
+	//   Engine LUA: 1 functions, 1 libraries
+}
+
+func ExampleGlideClusterClient_FunctionStats() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Get function statistics
+	stats, err := client.FunctionStats()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Print statistics
+	fmt.Printf("Nodes reached: %d\n", len(stats))
+	for _, nodeStats := range stats {
+		fmt.Println("Example stats:")
+		for engineName, engine := range nodeStats.Engines {
+			fmt.Printf("  Engine %s: %d functions, %d libraries\n",
+				engineName, engine.FunctionCount, engine.LibraryCount)
+		}
+		break
+	}
+
+	// Output:
+	// Nodes reached: 6
+	// Example stats:
+	//   Engine LUA: 1 functions, 1 libraries
+}
+
+func ExampleGlideClusterClient_FunctionStatsWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{
+		Route: route,
+	}
+	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Get function statistics with route
+	stats, err := client.FunctionStatsWithRoute(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Print statistics
+	fmt.Printf("Nodes reached: %d\n", len(stats.MultiValue()))
+	for _, nodeStats := range stats.MultiValue() {
+		fmt.Println("Example stats:")
+		for engineName, engine := range nodeStats.Engines {
+			fmt.Printf("  Engine %s: %d functions, %d libraries\n",
+				engineName, engine.FunctionCount, engine.LibraryCount)
+		}
+		break
+	}
+
+	// Output:
+	// Nodes reached: 3
+	// Example stats:
+	//   Engine LUA: 1 functions, 1 libraries
+}
+
+func ExampleGlideClient_FunctionDelete() {
+	client := getExampleGlideClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Delete function
+	result, err := client.FunctionDelete("mylib")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClusterClient_FunctionDelete() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Delete function
+	result, err := client.FunctionDelete("mylib")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClusterClient_FunctionDeleteWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{
+		Route: route,
+	}
+	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Delete function with route
+	result, err := client.FunctionDeleteWithRoute("mylib", opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClient_FunctionKill() {
+	client := getExampleGlideClient()
+
+	// Try to kill when no function is running
+	_, err := client.FunctionKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_FunctionKill() {
+	client := getExampleGlideClusterClient()
+
+	// Try to kill when no function is running
+	_, err := client.FunctionKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_FunctionKillWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Try to kill with route when no function is running
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{
+		Route: route,
+	}
+	_, err := client.FunctionKillWithRoute(opts)
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
 }
