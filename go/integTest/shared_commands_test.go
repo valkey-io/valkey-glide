@@ -10381,6 +10381,7 @@ func (suite *GlideTestSuite) TestScriptFlush() {
 		script.Close()
 	})
 }
+
 func (suite *GlideTestSuite) TestScriptShow() {
 	suite.SkipIfServerVersionLowerThanBy("8.0.0")
 
