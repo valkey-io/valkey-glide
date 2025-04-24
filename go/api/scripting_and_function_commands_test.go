@@ -884,8 +884,8 @@ func ExampleGlideClient_ScriptExists() {
 	client := getExampleGlideClient()
 
 	// Invoke a script
-	script := options.NewScript("return 'Hello World!'", false)
-	client.InvokeScript(script)
+	script := options.NewScript("return 'Hello World!'")
+	client.InvokeScript(*script)
 
 	response, err := client.ScriptExists([]string{script.GetHash()})
 	if err != nil {
@@ -904,8 +904,8 @@ func ExampleGlideClusterClient_ScriptExists() {
 	client := getExampleGlideClusterClient()
 
 	// Invoke a script
-	script := options.NewScript("return 'Hello World!'", false)
-	client.InvokeScript(script)
+	script := options.NewScript("return 'Hello World!'")
+	client.InvokeScript(*script)
 
 	response, err := client.ScriptExists([]string{script.GetHash()})
 	if err != nil {
@@ -925,8 +925,8 @@ func ExampleGlideClusterClient_ScriptExistsWithRoute() {
 	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
 
 	// Invoke a script
-	script := options.NewScript("return 'Hello World!'", false)
-	client.InvokeScriptWithRoute(script, route)
+	script := options.NewScript("return 'Hello World!'")
+	client.InvokeScriptWithRoute(*script, route)
 
 	response, err := client.ScriptExistsWithRoute([]string{script.GetHash()}, route)
 	if err != nil {

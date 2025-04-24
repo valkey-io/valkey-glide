@@ -1053,34 +1053,24 @@ func (suite *GlideTestSuite) TestFunctionKill() {
 func (suite *GlideTestSuite) TestScriptExists() {
 	client := suite.defaultClient()
 
-	// Test regular scripts
 	script1 := options.NewScript("return 'Hello'")
 	script2 := options.NewScript("return 'World'")
 
-	// Test binary scripts
-	script1_bin := options.NewScript("return 'Binary Hello'")
-	script2_bin := options.NewScript("return 'Binary World'")
-
-	// Load script1 and script2_bin
+	// Load script1
 	client.InvokeScript(*script1)
-	client.InvokeScript(*script2_bin)
 
-	expected := []bool{true, false, false, true, false}
+	expected := []bool{true, false, false}
 
 	// Get the SHA1 digests of the scripts
 	sha1_1 := script1.GetHash()
-	sha1_bin1 := script1_bin.GetHash()
 	sha1_2 := script2.GetHash()
-	sha1_bin2 := script2_bin.GetHash()
 	nonExistentSha1 := strings.Repeat("0", 40)
 
 	// Ensure scripts exist
-	response, err := client.ScriptExists([]string{sha1_1, sha1_bin1, sha1_2, sha1_bin2, nonExistentSha1})
+	response, err := client.ScriptExists([]string{sha1_1, sha1_2, nonExistentSha1})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), expected, response)
 
 	script1.Close()
-	script1_bin.Close()
 	script2.Close()
-	script2_bin.Close()
 }
