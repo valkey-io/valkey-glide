@@ -1,5 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using System.Diagnostics;
+
 using static Valkey.Glide.ConnectionConfiguration;
 using static Valkey.Glide.Errors;
 
@@ -19,7 +21,7 @@ public class ErrorHandlingTests
     public async Task ErrorIfTimedOut()
     {
         using GlideClient client = TestConfiguration.DefaultStandaloneClient();
-        //TestContext.Current.TestOutputHelper?.WriteLine($"{client} {DateTime.Now:O}");
+        TestContext.Current.TestOutputHelper?.WriteLine($"{client} line {new StackFrame(1, true).GetFileLineNumber()} {DateTime.Now:O}");
         //_ = await Assert.ThrowsAsync<TimeoutException>(() => client.CustomCommand(["debug", "sleep", "1"]));
         //*
         _ = await Assert.ThrowsAsync<TimeoutException>(async () =>
@@ -27,11 +29,12 @@ public class ErrorHandlingTests
             _ = await client.CustomCommand(["debug", "sleep", "1"]);
             //TestContext.Current.TestOutputHelper?.WriteLine($"CustomCommand = {res}");
             // TODO try KeepAlive here
+            TestContext.Current.TestOutputHelper?.WriteLine($"{client} line {new StackFrame(1, true).GetFileLineNumber()} {DateTime.Now:O}");
             GC.KeepAlive(client);
         });
         //*/
-        //TestContext.Current.TestOutputHelper?.WriteLine($"{client} {DateTime.Now:O}");
-        //GC.KeepAlive(client);
+        TestContext.Current.TestOutputHelper?.WriteLine($"{client} line {new StackFrame(1, true).GetFileLineNumber()} {DateTime.Now:O}");
+        GC.KeepAlive(client);
     }
 
     [Fact]
