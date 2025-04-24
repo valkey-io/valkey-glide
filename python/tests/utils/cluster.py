@@ -1,8 +1,8 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 from typing import List, Optional
 
 from glide.config import NodeAddress
