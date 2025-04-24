@@ -151,3 +151,10 @@ __it:
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/integTest | go-test-report -o reports/integ-tests.html -t integ-test > /dev/null)
 # code above ^ is similar to `go test .... -json | go-test-report ....`, but it also prints plain text output to stdout
 # `go test` prints plain text, tee duplicates it to stdout and to `test2json` which is coupled with `go-test-report` to generate the report
+
+# advanced tests - run only tests from AdvancedTestSuite
+advanced-test:
+	mkdir -p reports
+	set -o pipefail; \
+	go test -v ./integTest/... -run TestAdvancedTestSuite $(if $(test-filter), -testify.m $(test-filter)) \
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/integTest | go-test-report -o reports/advanced-tests.html -t advanced-test > /dev/null)

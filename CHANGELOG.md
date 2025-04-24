@@ -57,6 +57,7 @@
 * Go: Add Function Delete ([#3603](https://github.com/valkey-io/valkey-glide/pull/3603))
 * Go: Add Function Kill ([#3604](https://github.com/valkey-io/valkey-glide/pull/3604))
 * Benchmarks: Fix rust benchmark latencies calculation
+* Go: Add GO Advanced Test Suite and Function Kill server response tests([#TBD](https://github.com/valkey-io/valkey-glide/pull/TBD))
 
 #### Breaking Changes
 
