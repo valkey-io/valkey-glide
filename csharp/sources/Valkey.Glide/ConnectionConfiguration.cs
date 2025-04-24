@@ -228,12 +228,14 @@ public abstract class ConnectionConfiguration
         /// the server is in standalone mode, only nodes whose addresses were provided will be used by the
         /// client.
         /// <para />
-        /// For example: <code>
+        /// For example:
+        /// <code>
         /// [
         ///   ("sample-address-0001.use1.cache.amazonaws.com", 6378),
         ///   ("sample-address-0002.use2.cache.amazonaws.com"),
         ///   ("sample-address-0002.use3.cache.amazonaws.com", 6380)
-        /// ]</code>
+        /// ]
+        /// </code>
         /// </summary>
         public AddressBuilder Addresses
         {
@@ -397,7 +399,7 @@ public abstract class ConnectionConfiguration
 
         public void Dispose() => Clean();
 
-        private void Clean() // TODO
+        private void Clean() // TODO merge with #3626 https://github.com/valkey-io/valkey-glide/pull/3626
         {
             if (Config.Addresses != IntPtr.Zero)
             {

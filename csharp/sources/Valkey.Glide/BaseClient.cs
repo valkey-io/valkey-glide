@@ -1,19 +1,16 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using System.Buffers;
 using System.Runtime.InteropServices;
 
-using Valkey.Glide.Pipeline;
 using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
+using Valkey.Glide.Pipeline;
 
-using static Valkey.Glide.Pipeline.Options;
 using static Valkey.Glide.ConnectionConfiguration;
-using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Errors;
+using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Internals.ResponseHandler;
-using static Valkey.Glide.Route;
-using System.Diagnostics;
+using static Valkey.Glide.Pipeline.Options;
 
 namespace Valkey.Glide;
 
@@ -71,12 +68,12 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         _failureCallbackDelegate = FailureCallback;
     }
 
-    internal protected delegate T ResponseHandler<T>(IntPtr response);
+    protected internal delegate T ResponseHandler<T>(IntPtr response);
 
     internal async Task<T> Command<T>(RequestType requestType, GlideString[] arguments, ResponseHandler<T> responseHandler, Route? route = null) where T : class?
     {
         // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
-        using FFI.Cmd cmd = new(requestType, arguments);
+        using Cmd cmd = new(requestType, arguments);
 
         // 2. Allocate memory for route
         using FFI.Route? ffiRoute = route?.ToFfi();
@@ -109,10 +106,10 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         // All memory allocated is auto-freed by `using` operator
     }
 
-    internal protected static string HandleOk(IntPtr response)
+    protected internal static string HandleOk(IntPtr response)
         => HandleServerResponse<GlideString, string>(response, false, gs => gs.GetString());
 
-    internal protected static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
+    protected internal static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
         => HandleServerResponse<T, T>(response, isNullable, o => o);
 
     /// <summary>
@@ -122,10 +119,10 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     /// <typeparam name="T">Command's return type.</typeparam>
     /// <param name="response"></param>
     /// <param name="isNullable"></param>
-    /// <param name="converter">Optional converted to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
+    /// <param name="converter">Optional converted to convert <typeparamref name="R" /> to <typeparamref name="T" />.</param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
-    internal protected static T HandleServerResponse<R, T>(IntPtr response, bool isNullable, Func<R, T> converter) where T : class? where R : class?
+    protected internal static T HandleServerResponse<R, T>(IntPtr response, bool isNullable, Func<R, T> converter) where T : class? where R : class?
     {
         try
         {
@@ -179,7 +176,6 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     /// Raw pointer to the underlying native client.
     private IntPtr _clientPointer;
     private readonly MessageContainer _messageContainer = new();
-    private readonly ArrayPool<IntPtr> _arrayPool = ArrayPool<IntPtr>.Shared;
     private readonly object _lock = new();
 
     #endregion private fields

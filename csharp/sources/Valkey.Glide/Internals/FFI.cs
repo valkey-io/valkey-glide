@@ -4,12 +4,11 @@ using System.Buffers;
 using System.Runtime.InteropServices;
 
 using static Valkey.Glide.ConnectionConfiguration;
-using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Route;
 
 namespace Valkey.Glide.Internals;
 
-// TODO docs for the god of docs
+// FFI-ready structs, helper methods and wrappers
 internal class FFI
 {
     internal abstract class Marshallable : IDisposable
@@ -47,13 +46,15 @@ internal class FFI
         private GCHandle _pinnedArgs;
         private nuint[] _lengths;
         private GCHandle _pinnedLengths;
-        private GlideString[] _args;
+        private readonly GlideString[] _args;
         private CmdInfo _cmd;
 
         public Cmd(RequestType requestType, GlideString[] arguments)
         {
             _cmd = new() { RequestType = requestType, ArgCount = (nuint)arguments.Length };
             _args = arguments;
+            _argPtrs = [];
+            _lengths = [];
         }
 
         protected override void FreeMemory()
@@ -106,6 +107,7 @@ internal class FFI
         {
             _cmds = cmds;
             _batch = new() { IsAtomic = isAtomic, CmdCount = (nuint)cmds.Length };
+            _cmdPtrs = [];
         }
 
         protected override void FreeMemory()
@@ -138,7 +140,6 @@ internal class FFI
     internal class Route : Marshallable
     {
         private readonly RouteInfo _info;
-        private IntPtr _ptr = IntPtr.Zero;
 
         public Route(
             RouteType requestType,
@@ -157,22 +158,15 @@ internal class FFI
             };
         }
 
-        protected override void FreeMemory()
-        {
-            FreeStructPtr(_ptr);
-        }
+        protected override void FreeMemory() { }
 
-        protected override IntPtr AllocateAndCopy()
-        {
-            return StructToPtr(_info);
-        }
+        protected override IntPtr AllocateAndCopy() => StructToPtr(_info);
     }
 
     internal class BatchOptions : Marshallable
     {
         private BatchOptionsInfo _info;
         private readonly Route? _route;
-        private IntPtr _ptr = IntPtr.Zero;
 
         public BatchOptions(
             bool? retryServerError = false,
@@ -194,11 +188,7 @@ internal class FFI
             };
         }
 
-        protected override void FreeMemory()
-        {
-            _route?.Dispose();
-            FreeStructPtr(_ptr);
-        }
+        protected override void FreeMemory() => _route?.Dispose();
 
         protected override IntPtr AllocateAndCopy()
         {
@@ -207,17 +197,14 @@ internal class FFI
         }
     }
 
-    private static IntPtr StructToPtr<T>(T @struct)
+    private static IntPtr StructToPtr<T>(T @struct) where T : struct
     {
         IntPtr result = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(T)));
         Marshal.StructureToPtr(@struct, result, false);
         return result;
     }
 
-    private static void FreeStructPtr(IntPtr ptr)
-    {
-        Marshal.FreeHGlobal(ptr);
-    }
+    private static void FreeStructPtr(IntPtr ptr) => Marshal.FreeHGlobal(ptr);
 
     private static T[] PoolRent<T>(int len) => ArrayPool<T>.Shared.Rent(len);
 

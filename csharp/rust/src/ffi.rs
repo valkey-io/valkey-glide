@@ -2,18 +2,22 @@
 
 use std::{
     ffi::{c_char, c_void, CStr},
-    slice::from_raw_parts, sync::Arc,
+    slice::from_raw_parts,
 };
 
-use glide_core::{client::{
-    AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, NodeAddress,
-    ReadFrom as coreReadFrom, TlsMode,
-}, request_type::RequestType};
+use glide_core::{
+    client::{
+        AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, NodeAddress,
+        ReadFrom as coreReadFrom, TlsMode,
+    },
+    request_type::RequestType,
+};
 use redis::{
-    cluster::ClusterPipeline, cluster_routing::{
+    cluster_routing::{
         MultipleNodeRoutingInfo, ResponsePolicy, Routable, Route, RoutingInfo,
         SingleNodeRoutingInfo, SlotAddr,
-    }, Cmd, Pipeline, PipelineRetryStrategy, Value
+    },
+    Cmd, Pipeline, PipelineRetryStrategy, Value,
 };
 
 /// Convert raw C string to a rust string.
@@ -255,11 +259,13 @@ pub struct RouteInfo {
 /// Convert route configuration to a corresponding object.
 ///
 /// # Safety
-///
 /// * `route_info` could be `null`, but if it is not `null`, it must be a valid pointer to a [`RouteInfo`] struct.
 /// * `slot_key` and `hostname` in dereferenced [`RouteInfo`] struct must contain valid string pointers when corresponding `route_type` is set.
 ///   See description of [`RouteInfo`] and the safety documentation of [`ptr_to_str`].
-pub(crate) unsafe fn create_route(route_info: *const RouteInfo, cmd: Option<&Cmd>) -> Option<RoutingInfo> {
+pub(crate) unsafe fn create_route(
+    route_info: *const RouteInfo,
+    cmd: Option<&Cmd>,
+) -> Option<RoutingInfo> {
     if route_info.is_null() {
         return None;
     }
@@ -437,15 +443,16 @@ impl ResponseValue {
                     val: vec_ptr as i64,
                     size: len as u32,
                 }
-            },
+            }
             Value::ServerError(err) => {
-                let (vec_ptr, len) = convert_vec_to_pointer(err.details().unwrap().as_bytes().to_vec());
+                let (vec_ptr, len) =
+                    convert_vec_to_pointer(err.details().unwrap().as_bytes().to_vec());
                 ResponseValue {
                     typ: ValueType::Error,
                     val: vec_ptr as i64,
                     size: len as u32,
                 }
-            },
+            }
             _ => todo!(), // push, bigint, attribute
         }
     }
@@ -509,11 +516,16 @@ pub struct BatchOptionsInfo {
     pub route_info: *const RouteInfo,
 }
 
-// TODO docs for the god of docs
+// TODO merge with #3626 https://github.com/valkey-io/valkey-glide/pull/3626
 pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
-    let arg_vec =
-        unsafe { convert_double_pointer_to_vec((*ptr).args as *const *const c_void, (*ptr).arg_count, (*ptr).args_len) };
-    
+    let arg_vec = unsafe {
+        convert_double_pointer_to_vec(
+            (*ptr).args as *const *const c_void,
+            (*ptr).arg_count,
+            (*ptr).args_len,
+        )
+    };
+
     let Some(mut cmd) = (*ptr).request_type.get_command() else {
         return Err("Couldn't fetch command type".into());
     };
@@ -523,8 +535,17 @@ pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
     Ok(cmd)
 }
 
+/// Convert [`BatchInfo`] to a [`Pipeline`].
+///
+/// # Safety
+/// * `ptr` must be able to be safely casted to a valid [`BatchInfo`].
+/// * `cmds` in a referred [`BatchInfo`] structure must not be `null`.
+/// * `cmds` in a referred [`BatchInfo`] structure must point to `cmd_count` consecutive [`CmdInfo`] pointers.
+///   They must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`]. See the safety documentation of [`from_raw_parts`].
+/// * Every pointer stored in `cmds` must not be `null` and must point to a valid [`CmdInfo`] structure.
+/// * All data in referred [`CmdInfo`] structure(s) should be valid. See the safety documentation of [`create_cmd`].
 pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, String> {
-    let cmd_pointers = unsafe { std::slice::from_raw_parts((*ptr).cmds, (*ptr).cmd_count) };
+    let cmd_pointers = unsafe { from_raw_parts((*ptr).cmds, (*ptr).cmd_count) };
     let mut pipeline = Pipeline::with_capacity((*ptr).cmd_count);
     for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
         match unsafe { create_cmd(*cmd_ptr) } {
@@ -539,7 +560,20 @@ pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, 
     Ok(pipeline)
 }
 
-pub(crate) unsafe fn get_pipeline_options(ptr: *const BatchOptionsInfo) -> (Option<RoutingInfo>, bool, Option<u32>, PipelineRetryStrategy) {
+/// Convert [`BatchOptionsInfo`] to a tuple of corresponding values.
+///
+/// # Safety
+/// * `ptr` could be `null`, but if it is not `null`, it must be a valid pointer to a [`BatchOptionsInfo`] struct.
+/// * `route_info` in dereferenced [`BatchOptionsInfo`] struct must contain a [`RouteInfo`] pointer.
+///   See description of [`RouteInfo`] and the safety documentation of [`create_route`].
+pub(crate) unsafe fn get_pipeline_options(
+    ptr: *const BatchOptionsInfo,
+) -> (
+    Option<RoutingInfo>,
+    bool,
+    Option<u32>,
+    PipelineRetryStrategy,
+) {
     if ptr.is_null() {
         return (None, false, None, PipelineRetryStrategy::new(false, false));
     }
@@ -550,5 +584,10 @@ pub(crate) unsafe fn get_pipeline_options(ptr: *const BatchOptionsInfo) -> (Opti
     };
     let route = unsafe { create_route((*ptr).route_info, None) };
 
-    (route, (*ptr).raise_on_error, timeout, PipelineRetryStrategy::new((*ptr).retry_server_error, (*ptr).retry_connection_error))
+    (
+        route,
+        (*ptr).raise_on_error,
+        timeout,
+        PipelineRetryStrategy::new((*ptr).retry_server_error, (*ptr).retry_connection_error),
+    )
 }

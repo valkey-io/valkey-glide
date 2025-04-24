@@ -2,12 +2,12 @@
 
 mod ffi;
 use ffi::{
-    convert_double_pointer_to_vec, create_cmd, create_connection_request, create_pipeline, create_route, get_pipeline_options, BatchInfo, BatchOptionsInfo, CmdInfo, ConnectionConfig, ResponseValue, RouteInfo
+    create_cmd, create_connection_request, create_pipeline, create_route, get_pipeline_options,
+    BatchInfo, BatchOptionsInfo, CmdInfo, ConnectionConfig, ResponseValue, RouteInfo,
 };
 use glide_core::{
     client::Client as GlideClient,
     errors::{error_message, error_type, RequestErrorType},
-    request_type::RequestType,
 };
 use std::{
     ffi::{c_char, c_void, CStr, CString},
@@ -120,22 +120,20 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
 }
 
 /// Execute a command.
-/// Expects that arguments will be kept valid until the callback is called.
 ///
 /// # Safety
 /// * `client_ptr` must not be `null`.
 /// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
 /// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
-/// * `args` and `args_len` must not be `null`.
-/// * `data` must point to `arg_count` consecutive string pointers.
-/// * `args_len` must point to `arg_count` consecutive string lengths. See the safety documentation of [`convert_double_pointer_to_vec`].
+/// * `cmd_ptr` must not be `null`.
+/// * `cmd_ptr` must be able to be safely casted to a valid [`CmdInfo`]. See the safety documentation of [`create_cmd`].
 /// * `route_info` could be `null`, but if it is not `null`, it must be a valid [`RouteInfo`] pointer. See the safety documentation of [`create_route`].
 #[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_ptr: *const c_void,
     callback_index: usize,
-    cmd_ptr: *const CmdInfo, // TODO update safety
+    cmd_ptr: *const CmdInfo,
     route_info: *const RouteInfo,
 ) {
     let client = unsafe {
@@ -151,10 +149,12 @@ pub unsafe extern "C" fn command(
             let err_ptr = CString::into_raw(
                 CString::new(err).expect("Couldn't convert error message to CString"),
             );
-            unsafe { (core.failure_callback)(callback_index, err_ptr, RequestErrorType::ExecAbort) };
+            unsafe {
+                (core.failure_callback)(callback_index, err_ptr, RequestErrorType::ExecAbort)
+            };
             _ = CString::from_raw(err_ptr);
             return;
-        },
+        }
     };
 
     let route = unsafe { create_route(route_info, Some(&cmd)) };
@@ -168,7 +168,8 @@ pub unsafe extern "C" fn command(
             }
             Err(err) => {
                 let err_ptr = CString::into_raw(
-                    CString::new(error_message(&err)).expect("Couldn't convert error message to CString"),
+                    CString::new(error_message(&err))
+                        .expect("Couldn't convert error message to CString"),
                 );
                 unsafe { (core.failure_callback)(callback_index, err_ptr, error_type(&err)) };
                 _ = CString::from_raw(err_ptr);
@@ -177,7 +178,16 @@ pub unsafe extern "C" fn command(
     });
 }
 
-// TODO docs for the god of docs
+/// Execute a batch.
+///
+/// # Safety
+/// * `client_ptr` must not be `null`.
+/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
+/// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
+/// * `batch_ptr` must not be `null`.
+/// * `batch_ptr` must be able to be safely casted to a valid [`BatchInfo`]. See the safety documentation of [`create_pipeline`].
+/// * `options_ptr` could be `null`, but if it is not `null`, it must be a valid [`BatchOptionsInfo`] pointer. See the safety documentation of [`get_pipeline_options`].
+#[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
 pub unsafe extern "C" fn batch(
     client_ptr: *const c_void,
@@ -198,25 +208,35 @@ pub unsafe extern "C" fn batch(
             let err_ptr = CString::into_raw(
                 CString::new(err).expect("Couldn't convert error message to CString"),
             );
-            unsafe { (core.failure_callback)(callback_index, err_ptr, RequestErrorType::ExecAbort) };
+            unsafe {
+                (core.failure_callback)(callback_index, err_ptr, RequestErrorType::ExecAbort)
+            };
             _ = CString::from_raw(err_ptr);
             return;
-        },
+        }
     };
 
-    dbg!(&pipeline);
-
-    let (route, raise_on_error, pipeline_timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
-
-    dbg!(&route, &raise_on_error, &pipeline_timeout, &pipeline_retry_strategy);
+    let (route, raise_on_error, pipeline_timeout, pipeline_retry_strategy) =
+        unsafe { get_pipeline_options(options_ptr) };
 
     client.runtime.spawn(async move {
         let result = if pipeline.is_atomic() {
-            core.client.clone().send_transaction(&pipeline, route, pipeline_timeout, raise_on_error).await
+            core.client
+                .clone()
+                .send_transaction(&pipeline, route, pipeline_timeout, raise_on_error)
+                .await
         } else {
-            core.client.clone().send_pipeline(&pipeline, route, raise_on_error, pipeline_timeout, pipeline_retry_strategy).await
+            core.client
+                .clone()
+                .send_pipeline(
+                    &pipeline,
+                    route,
+                    raise_on_error,
+                    pipeline_timeout,
+                    pipeline_retry_strategy,
+                )
+                .await
         };
-        dbg!(&result);
         match result {
             Ok(value) => {
                 let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
@@ -224,7 +244,8 @@ pub unsafe extern "C" fn batch(
             }
             Err(err) => {
                 let err_ptr = CString::into_raw(
-                    CString::new(error_message(&err)).expect("Couldn't convert error message to CString"),
+                    CString::new(error_message(&err))
+                        .expect("Couldn't convert error message to CString"),
                 );
                 unsafe { (core.failure_callback)(callback_index, err_ptr, error_type(&err)) };
                 _ = CString::from_raw(err_ptr);
