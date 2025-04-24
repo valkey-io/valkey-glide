@@ -14,14 +14,7 @@ public interface IServerManagementCommands
     /// Get information and statistics about the server using <see cref="Section.DEFAULT" /> option.<br />
     /// See <see href="https://valkey.io/commands/info/">valkey.io</see> for details.
     /// </summary>
-    /// <remarks>
-    /// <example>
-    /// <code>
-    /// string response = await client.Info();
-    /// response.Split().First(l => l.Contains("total_net_input_bytes"))
-    /// </code>
-    /// </example>
-    /// </remarks>
+    /// <inheritdoc cref="IServerManagementClusterCommands.Info()" path="/remarks" />
     /// <returns>A <see langword="string" /> containing the information for the sections requested.</returns>
     Task<string> Info();
 
@@ -30,8 +23,8 @@ public interface IServerManagementCommands
     /// Starting from server version 7, command supports multiple <see cref="Section" /> arguments.<br />
     /// See <see href="https://valkey.io/commands/info/">valkey.io</see> for details.
     /// </summary>
-    /// <inheritdoc cref="IServerManagementClusterCommands.Info(Section[], Route)" path="/remarks" />
-    /// <inheritdoc cref="IServerManagementClusterCommands.Info(Section[], Route)" path="/param" />
+    /// <inheritdoc cref="IServerManagementClusterCommands.Info(Section[])" path="/remarks" />
+    /// <inheritdoc cref="IServerManagementClusterCommands.Info(Section[])" path="/param" />
     /// <returns>
     /// <inheritdoc cref="Info()" />
     /// </returns>
