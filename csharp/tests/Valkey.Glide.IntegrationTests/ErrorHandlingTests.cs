@@ -18,18 +18,28 @@ public class ErrorHandlingTests
     [Fact]
     public async Task ErrorIfTimedOut()
     {
-        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
-        TestContext.Current.TestOutputHelper?.WriteLine($"{client} {DateTime.Now:O}");
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        //TestContext.Current.TestOutputHelper?.WriteLine($"{client} {DateTime.Now:O}");
+        //_ = await Assert.ThrowsAsync<TimeoutException>(() => client.CustomCommand(["debug", "sleep", "1"]));
+        //*
         _ = await Assert.ThrowsAsync<TimeoutException>(async () =>
-            await client.CustomCommand(["debug", "sleep", "1"])
-        );
-        TestContext.Current.TestOutputHelper?.WriteLine($"{client} {DateTime.Now:O}");
-        GC.KeepAlive(client);
+        {
+            _ = await client.CustomCommand(["debug", "sleep", "1"]);
+            //TestContext.Current.TestOutputHelper?.WriteLine($"CustomCommand = {res}");
+            // TODO try KeepAlive here
+            GC.KeepAlive(client);
+        });
+        //*/
+        //TestContext.Current.TestOutputHelper?.WriteLine($"{client} {DateTime.Now:O}");
+        //GC.KeepAlive(client);
     }
 
     [Fact]
-    public async Task ErrorIfIncorrectArgs() =>
-        await Assert.ThrowsAsync<RequestException>(async () =>
-            await TestConfiguration.DefaultStandaloneClient().CustomCommand(["ping", "pong", "pang"])
+    public async Task ErrorIfIncorrectArgs()
+    {
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        _ = await Assert.ThrowsAsync<RequestException>(()
+            => client.CustomCommand(["ping", "pong", "pang"])
         );
+    }
 }
