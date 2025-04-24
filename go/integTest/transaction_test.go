@@ -18,6 +18,7 @@ func (suite *GlideTestSuite) TestWatch() {
 	cmd := tx.GlideClient
 	cmd.Del([]string{key})
 	result, err := tx.Exec()
+	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "[OK OK 1]", result)
 
 }
@@ -38,6 +39,7 @@ func (suite *GlideTestSuite) TestExec() {
 	cmd.Get(key)
 	cmd.Del([]string{key})
 	result, err := tx.Exec()
+	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "[OK hello 1]", result)
 
 }
