@@ -2048,8 +2048,6 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
 	killClient := suite.defaultClusterClient()
 
-	killClient.Set("ScriptKillWithRoute", "starting")
-
 	// key for routing to a primary node
 	randomKey := uuid.NewString()
 	route := options.RouteOption{
@@ -2070,7 +2068,6 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	time.Sleep(2 * time.Second)
 
 	result, err := killClient.ScriptKillWithRoute(route)
-	killClient.Set("ScriptKillWithRoute", "finished killing")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", result)
 	script.Close()
@@ -2121,8 +2118,6 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
 	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
 	killClient := suite.defaultClusterClient()
 
-	killClient.Set("ScriptKillUnkillableWithRoute", "starting")
-
 	// key for routing to a primary node
 	route := options.RouteOption{
 		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, key),
@@ -2142,7 +2137,6 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
 	time.Sleep(2 * time.Second)
 
 	_, err = killClient.ScriptKillWithRoute(route)
-	killClient.Set("ScriptKillUnkillableWithRoute", "finished killing")
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "unkillable"))
 	script.Close()
