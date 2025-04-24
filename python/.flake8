@@ -1,0 +1,10 @@
+[flake8]
+max-complexity = 12
+max-line-length = 200
+count = true
+show-source = true
+statistics = true
+exclude =
+    .env
+    .env_main
+    python/glide/protobuf
