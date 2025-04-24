@@ -7998,7 +7998,7 @@ func (client *baseClient) ScriptFlush() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // ScriptFlushWithMode removes all the scripts from the script cache with the specified flush mode.
@@ -8020,5 +8020,5 @@ func (client *baseClient) ScriptFlushWithMode(mode options.FlushMode) (string, e
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }

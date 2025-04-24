@@ -1761,7 +1761,7 @@ func (client *GlideClusterClient) ScriptFlushWithRoute(route options.RouteOption
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // ScriptFlushWithMode removes all the scripts from the script cache with the specified flush mode.
@@ -1805,5 +1805,5 @@ func (client *GlideClusterClient) ScriptFlushWithModeWithRoute(
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }

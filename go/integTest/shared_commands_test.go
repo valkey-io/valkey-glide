@@ -10339,6 +10339,7 @@ func (suite *GlideTestSuite) TestInvokeScriptWithoutRoute() {
 		script3.Close()
 	})
 }
+
 func (suite *GlideTestSuite) TestScriptFlush() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// Create a script
