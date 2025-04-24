@@ -7781,7 +7781,7 @@ func (client *baseClient) Publish(channel string, message string) (int64, error)
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-channels
 func (client *baseClient) PubSubChannels() ([]string, error) {
-	//args := []string{"CHANNELS"}
+	// args := []string{"CHANNELS"}
 	result, err := client.executeCommand(C.PubSubChannels, []string{})
 	if err != nil {
 		return nil, err
@@ -7815,7 +7815,6 @@ func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, e
 	}
 
 	return handleStringArrayResponse(result)
-
 }
 
 // Kills a function that is currently executing.
