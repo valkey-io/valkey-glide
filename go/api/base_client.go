@@ -561,6 +561,10 @@ func (client *baseClient) SetWithOptions(key string, value string, options optio
 //
 //	If key exists, returns the value of key as a String. Otherwise, return [api.CreateNilStringResult()].
 //
+// 	In transaction: 
+//   Returns [api.CreateNilStringResult()] immediately while adding the command to the transaction queue.
+//   Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/get/
 func (client *baseClient) Get(key string) (Result[string], error) {
 	result, err := client.executor.sendCommand(C.Get, []string{key})
