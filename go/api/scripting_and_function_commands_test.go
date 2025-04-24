@@ -1093,7 +1093,7 @@ func ExampleGlideClusterClient_ScriptFlushWithMode() {
 	fmt.Println("Script exists before flush:", exists[0])
 
 	// Flush all scripts with SYNC mode
-	result, err := client.ScriptFlushWithMode(options.SYNC)
+	result, err := client.ScriptFlushWithMode(options.ASYNC)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
