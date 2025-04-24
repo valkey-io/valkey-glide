@@ -89,147 +89,119 @@ protoc --version
 
 </details>
 
-# Building
+# Cloning the Repository
 ---
 
-Before starting this step, make sure you've installed all software requirements.
-
-## Prepare your environment
+To begin development, clone the repository:
 
 ```bash
 mkdir -p $HOME/src
-cd $_
+cd $HOME/src
 git clone https://github.com/valkey-io/valkey-glide.git
 cd valkey-glide
-GLIDE_ROOT=$(pwd)
-protoc -Iprotobuf=${GLIDE_ROOT}/glide-core/src/protobuf/    \
-        --python_out=${GLIDE_ROOT}/python/python/glide      \
-        ${GLIDE_ROOT}/glide-core/src/protobuf/*.proto
-cd python
-python3 -m venv .env
-source .env/bin/activate
-pip install -r dev_requirements.txt
 ```
 
-## Build the package (in release mode):
-
-```bash
-maturin develop --release --strip
-```
-
-> **Note:** to build the wrapper binary with debug symbols remove the `--strip` flag.
-
-> **Note 2:** for a faster build time, execute `maturin develop` without the release flag. This will perform an unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to include the `--release` flag when measuring performance.
-
-# Running tests
+# Build
 ---
 
-Ensure you have installed `valkey-server` and `valkey-cli` on your host (or `redis-server` and `redis-cli`). 
-See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
+After installing prerequisites and cloning the repository, you can build the async Python client using the `dev.py` CLI utility that can be found in the root `python/` directory.
 
-From a terminal, change directory to the GLIDE source folder and type:
+### Examples:
 
 ```bash
-cd $HOME/src/valkey-glide
-cd python
+# Build the async client in release mode
+python3 dev.py build --client async --mode release
+```
+
+> These commands handle environment setup, dependency installation, and consistent build logic.
+
+### Notes on Build Modes
+- Use `--mode debug` (default) when developing or debugging.
+- Use `--mode release` when measuring performance or preparing production builds.
+
+Run the following to see all available commands:
+```bash
+python3 dev.py --help
+```
+
+# Tests
+---
+
+Ensure you have installed `valkey-server` and `valkey-cli` on your host (or `redis-server` and `redis-cli`).
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
+
+You can run all tests from the root `python/` directory using:
+```bash
+python3 dev.py test
+```
+
+To pass additional arguments to `pytest`, use the `--args` flag:
+```bash
+# Run a specific test
+python3 dev.py test --args -k <test_name>
+
+# Run against existing servers with tls enabled
+python3 dev.py test --args \
+  --tls \
+  --cluster-endpoints=localhost:7000 \
+  --standalone-endpoints=localhost:6379
+```
+
+# Manually Running Tests
+---
+
+If needed, you can invoke `pytest` directly from the root `python/` directory for custom workflows:
+
+### Run all tests manually
+```bash
 source .env/bin/activate
 pytest -v --asyncio-mode=auto
 ```
 
-To run modules tests:
-
-```bash
-cd $HOME/src/valkey-glide
-cd python
-source .env/bin/activate
-pytest -v --asyncio-mode=auto -k "test_server_modules.py"
-```
-
-**TIP:** to run a specific test, append `-k <test_name>` to the `pytest` execution line
-
-To run tests against an already running servers, change the `pytest` line above to this:
-
-```bash
-pytest -v --asyncio-mode=auto --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
-```
-
-# Generate protobuf files
+# Protobuf
 ---
+During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files.
 
-During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made
-to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to
-regenerate the Python protobuf files. To do so, run:
-
-```bash
-cd $HOME/src/valkey-glide
-GLIDE_ROOT_FOLDER_PATH=.
-protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/    \
-    --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide          \
-    ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
-```
-
-## Protobuf interface files
-
-To generate the protobuf files with Python Interface files (pyi) for type-checking purposes, ensure you have installed `mypy-protobuf` with pip, and then execute the following command:
+Protobuf files are automatically regenerated as part of the `build` process. If you only need to regenerate the protobuf files (e.g., after editing `.proto` files), you can use the standalone command the root `python/` directory:
 
 ```bash
-cd $HOME/src/valkey-glide
-GLIDE_ROOT_FOLDER_PATH=.
-MYPY_PROTOC_PATH=`which protoc-gen-mypy`
-protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH}                     \
-        -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/   \
-        --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide      \
-        --mypy_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide        \
-        ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
+python3 dev.py protobuf
 ```
+
+This generates `.py` and `.pyi` interface files for type checking and places them in the `python/python/glide/protobuf` folder.
 
 # Linters
 ---
 
 Development on the Python wrapper may involve changes in either the Python or Rust code. Each language has distinct linter tests that must be passed before committing changes.
 
-## Language-specific Linters
+### Python Linters
+This project uses the following Python linters and formatters:
+- `isort`
+- `black`
+- `flake8`
+- `mypy`
 
-**Python:**
+To check formatting and run static analysis for Python code, use the `dev.py` utility from the root `python/` directory:
+```bash
+python3 dev.py lint
+```
 
--   flake8
--   isort
--   black
--   mypy
+By default, this will auto-fix formatting issues using isort and black.
+If you want to only check formatting without modifying any files, pass the --check flag:
+```bash
+python3 dev.py lint --check
+```
 
-**Rust:**
+### Rust Linters
+For Rust code, run manually:
+```bash
+rustup component add clippy rustfmt
+cargo clippy --all-features --all-targets -- -D warnings
+cargo fmt --manifest-path ./Cargo.toml --all
+```
 
--   clippy
--   fmt
-
-## Running the linters
-
-Run from the main `/python` folder
-
-1. Python
-    > Note: make sure to [generate protobuf with interface files]("#protobuf-interface-files") before running `mypy` linter
-    ```bash
-    cd $HOME/src/valkey-glide/python
-    source .env/bin/activate
-    pip install -r dev_requirements.txt
-    isort . --profile black --skip-glob python/glide/protobuf --skip-glob .env
-    black . --exclude python/glide/protobuf --exclude .env
-    flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics      \
-            --exclude=python/glide/protobuf,.env --extend-ignore=E230
-    flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127  \
-            --statistics --exclude=python/glide/protobuf,.env             \
-            --extend-ignore=E230
-    # run type check
-    mypy .
-    ```
-
-2. Rust
-
-    ```bash
-    rustup component add clippy rustfmt
-    cargo clippy --all-features --all-targets -- -D warnings
-    cargo fmt --manifest-path ./Cargo.toml --all
-    ```
+> These are not included in the `dev.py` utility and should be run separately from the `python` root folder.
 
 # Documentation
 ---

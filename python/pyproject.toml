@@ -13,6 +13,7 @@ dependencies = [
     "typing-extensions>=4.8.0; python_version < '3.11'",
     "protobuf>=3.20",
 ]
+
 classifiers = [
     "Topic :: Database",
     "Topic :: Utilities",
@@ -26,14 +27,13 @@ classifiers = [
 
 [tool.isort]
 profile = "black"
-
-[tool.flake8]
-max-complexity = 12
-max-line-length = 127
-extend-ignore = ['E203']
+skip = [
+    ".env",
+    "python/glide/protobuf"
+]
 
 [tool.black]
 target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
 
 [tool.mypy]
-exclude = ['submodules', 'utils/release-candidate-testing']
+exclude = "^(.*\\/)?(\\.env|python/python/glide/protobuf|utils/release-candidate-testing|target|ort)(\\/|$)"

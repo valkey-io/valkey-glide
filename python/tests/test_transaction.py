@@ -1057,9 +1057,9 @@ class TestTransaction:
 
         if not await check_if_server_version_lt(glide_client, "7.0.0"):
             transaction.pubsub_shardchannels()
-            expected.append([])
+            expected.append(cast(TResult, []))
             transaction.pubsub_shardnumsub()
-            expected.append({})
+            expected.append(cast(TResult, {}))
 
         result = await glide_client.exec(transaction)
         assert isinstance(result, list)
