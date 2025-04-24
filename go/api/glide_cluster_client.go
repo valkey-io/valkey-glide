@@ -1754,5 +1754,5 @@ func (client *GlideClusterClient) ScriptKillWithRoute(route options.RouteOption)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }

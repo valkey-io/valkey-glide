@@ -8003,5 +8003,5 @@ func (client *baseClient) ScriptKill() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
