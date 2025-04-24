@@ -102,3 +102,82 @@ func (suite *GlideTestSuite) TestPubSubChannels() {
 		})
 	}
 }
+
+// TestPubSubNumPat tests the PubSubNumPat command for standalone and cluster clients
+func (suite *GlideTestSuite) TestPubSubNumPat() {
+	tests := []struct {
+		name          string
+		clientType    ClientType
+		channelDefns  []ChannelDefn
+		expectedCount int64
+	}{
+		{
+			name:          "Standalone Single Pattern",
+			clientType:    GlideClient,
+			channelDefns:  []ChannelDefn{{Channel: "news.*", Mode: PatternMode}},
+			expectedCount: 1,
+		},
+		{
+			name:       "Standalone Multiple Patterns",
+			clientType: GlideClient,
+			channelDefns: []ChannelDefn{
+				{Channel: "news.*", Mode: PatternMode},
+				{Channel: "events.*", Mode: PatternMode},
+				{Channel: "sports.*", Mode: PatternMode},
+			},
+			expectedCount: 3,
+		},
+		{
+			name:       "Standalone Mixed Modes",
+			clientType: GlideClient,
+			channelDefns: []ChannelDefn{
+				{Channel: "news.*", Mode: PatternMode},
+				{Channel: "events.local", Mode: ExactMode},
+				{Channel: "sports.*", Mode: PatternMode},
+			},
+			expectedCount: 2,
+		},
+		{
+			name:          "Cluster Single Pattern",
+			clientType:    GlideClusterClient,
+			channelDefns:  []ChannelDefn{{Channel: "cluster.news.*", Mode: PatternMode}},
+			expectedCount: 1,
+		},
+		{
+			name:       "Cluster Multiple Patterns",
+			clientType: GlideClusterClient,
+			channelDefns: []ChannelDefn{
+				{Channel: "cluster.news.*", Mode: PatternMode},
+				{Channel: "cluster.events.*", Mode: PatternMode},
+				{Channel: "cluster.sports.*", Mode: PatternMode},
+			},
+			expectedCount: 3,
+		},
+		{
+			name:       "Cluster Mixed Modes",
+			clientType: GlideClusterClient,
+			channelDefns: []ChannelDefn{
+				{Channel: "cluster.news.*", Mode: PatternMode},
+				{Channel: "cluster.events.local", Mode: ExactMode},
+				{Channel: "cluster.sports.*", Mode: PatternMode},
+			},
+			expectedCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		suite.T().Run(tt.name, func(t *testing.T) {
+			// Create a client with subscriptions
+			receiver := suite.CreatePubSubReceiver(tt.clientType, tt.channelDefns, 1, false)
+			defer receiver.Close()
+
+			// Allow subscription to establish
+			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
+
+			// Get pattern subscription count
+			count, err := receiver.PubSubNumPat()
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedCount, count)
+		})
+	}
+}
