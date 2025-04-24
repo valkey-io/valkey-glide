@@ -140,6 +140,8 @@ describe("GlideClusterClient", () => {
             };
         },
         close: (testSucceeded: boolean) => {
+            client.close();
+            azClient.close();
             if (testSucceeded) {
                 testsFailed -= 1;
             }
