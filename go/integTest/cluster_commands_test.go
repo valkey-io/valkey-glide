@@ -2065,7 +2065,7 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 
 	go invokeClient.InvokeScriptWithRoute(*script, route)
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	result, err := killClient.ScriptKillWithRoute(route)
 	assert.NoError(suite.T(), err)
@@ -2090,8 +2090,7 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
-	// Kill Running Code
-	code := CreateLongRunningLuaScript(5, false)
+	code := CreateLongRunningLuaScript(7, false)
 	script := options.NewScript(code)
 
 	go invokeClient.InvokeScriptWithOptions(*script, *options.NewScriptOptions().WithKeys([]string{key}))
@@ -2103,7 +2102,8 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "unkillable"))
 	script.Close()
 
-	time.Sleep(1 * time.Second)
+	// Wait until script finishes
+	time.Sleep(6 * time.Second)
 
 	// Ensure no script is running at the end
 	_, err = killClient.ScriptKill()
@@ -2129,19 +2129,20 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
 	// Kill Running Code
-	code := CreateLongRunningLuaScript(6, false)
+	code := CreateLongRunningLuaScript(7, false)
 	script := options.NewScript(code)
 
 	go invokeClient.InvokeScriptWithOptions(*script, *options.NewScriptOptions().WithKeys([]string{key}))
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	_, err = killClient.ScriptKillWithRoute(route)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "unkillable"))
 	script.Close()
 
-	time.Sleep(1 * time.Second)
+	// Wait until script finishes
+	time.Sleep(6 * time.Second)
 
 	// Ensure no script is running at the end
 	_, err = killClient.ScriptKillWithRoute(route)
