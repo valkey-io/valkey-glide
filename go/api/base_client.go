@@ -7983,3 +7983,25 @@ func (client *baseClient) ScriptExists(
 
 	return handleBoolArrayResponse(response)
 }
+
+// Kills the currently executing Lua script, assuming no write operation was yet performed by the
+// script.
+//
+// Note:
+//
+//	When in cluster mode, this command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`OK` if script is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/script-kill
+func (client *baseClient) ScriptKill() (string, error) {
+	result, err := client.executeCommand(C.ScriptKill, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}

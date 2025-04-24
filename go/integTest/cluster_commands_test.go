@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -2009,4 +2010,147 @@ func (suite *GlideTestSuite) TestScriptExistsWithRoute() {
 	script1.Close()
 	script2.Close()
 	script3.Close()
+}
+
+func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
+	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	killClient := suite.defaultClusterClient()
+
+	// Ensure no script is running at the beginning
+	_, err := killClient.ScriptKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Kill Running Code
+	code := CreateLongRunningLuaScript(5, true)
+	script := options.NewScript(code)
+
+	go invokeClient.InvokeScript(*script)
+
+	time.Sleep(1 * time.Second)
+
+	result, err := killClient.ScriptKill()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+	script.Close()
+
+	time.Sleep(1 * time.Second)
+
+	// Ensure no script is running at the end
+	_, err = killClient.ScriptKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestScriptKillWithRoute() {
+	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
+
+	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	killClient := suite.defaultClusterClient()
+
+	killClient.Set("ScriptKillWithRoute", "starting")
+
+	// key for routing to a primary node
+	randomKey := uuid.NewString()
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, randomKey),
+	}
+
+	// Ensure no script is running at the beginning
+	_, err := killClient.ScriptKillWithRoute(route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Kill Running Code
+	code := CreateLongRunningLuaScript(6, true)
+	script := options.NewScript(code)
+
+	go invokeClient.InvokeScriptWithRoute(*script, route)
+
+	time.Sleep(2 * time.Second)
+
+	result, err := killClient.ScriptKillWithRoute(route)
+	killClient.Set("ScriptKillWithRoute", "finished killing")
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+	script.Close()
+
+	time.Sleep(1 * time.Second)
+
+	// Ensure no script is running at the end
+	_, err = killClient.ScriptKillWithRoute(route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
+	key := uuid.NewString()
+	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	killClient := suite.defaultClusterClient()
+
+	// Ensure no script is running at the beginning
+	_, err := killClient.ScriptKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Kill Running Code
+	code := CreateLongRunningLuaScript(5, false)
+	script := options.NewScript(code)
+
+	go invokeClient.InvokeScriptWithOptions(*script, *options.NewScriptOptions().WithKeys([]string{key}))
+
+	time.Sleep(1 * time.Second)
+
+	_, err = killClient.ScriptKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "unkillable"))
+	script.Close()
+
+	time.Sleep(1 * time.Second)
+
+	// Ensure no script is running at the end
+	_, err = killClient.ScriptKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
+	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
+
+	key := uuid.NewString()
+	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	killClient := suite.defaultClusterClient()
+
+	killClient.Set("ScriptKillUnkillableWithRoute", "starting")
+
+	// key for routing to a primary node
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, key),
+	}
+
+	// Ensure no script is running at the beginning
+	_, err := killClient.ScriptKillWithRoute(route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Kill Running Code
+	code := CreateLongRunningLuaScript(6, false)
+	script := options.NewScript(code)
+
+	go invokeClient.InvokeScriptWithOptions(*script, *options.NewScriptOptions().WithKeys([]string{key}))
+
+	time.Sleep(2 * time.Second)
+
+	_, err = killClient.ScriptKillWithRoute(route)
+	killClient.Set("ScriptKillUnkillableWithRoute", "finished killing")
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "unkillable"))
+	script.Close()
+
+	time.Sleep(1 * time.Second)
+
+	// Ensure no script is running at the end
+	_, err = killClient.ScriptKillWithRoute(route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }

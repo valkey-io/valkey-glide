@@ -53,4 +53,8 @@ type ScriptingAndFunctionClusterCommands interface {
 	ScriptExists(sha1s []string) ([]bool, error)
 
 	ScriptExistsWithRoute(sha1s []string, route options.RouteOption) ([]bool, error)
+
+	ScriptKill() (string, error)
+
+	ScriptKillWithRoute(route options.RouteOption) (string, error)
 }

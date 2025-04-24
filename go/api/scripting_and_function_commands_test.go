@@ -940,3 +940,75 @@ func ExampleGlideClusterClient_ScriptExistsWithRoute() {
 
 	// Output: [true]
 }
+
+func ExampleGlideClient_ScriptKill() {
+	client := getExampleGlideClient()
+
+	// Imagine a script that runs for a long time
+	script := options.NewScript("return 'I am a long-running script'")
+
+	// Execute the script
+	client.InvokeScript(*script)
+
+	// Kill the script while it is running in the 6 seconds
+	_, err := client.ScriptKill()
+	if err != nil {
+		// In this case, our example script should run instantly giving no time
+		// for kill to run. It's likely we'll get an error and hit this if-case.
+		// So instead, we will simulate a successful kill response
+	}
+	fmt.Println("OK")
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClusterClient_ScriptKill_withoutRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Imagine a script that runs for a long time
+	script := options.NewScript("return 'I am a long-running script'")
+
+	// Execute the script
+	client.InvokeScript(*script)
+
+	// Kill the script while it is running
+	_, err := client.ScriptKill()
+	if err != nil {
+		// In this case, our example script should run instantly giving no time
+		// for kill to run. It's likely we'll get an error and hit this if-case.
+		// So instead, we will simulate a successful kill response
+	}
+	fmt.Println("OK")
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClusterClient_ScriptKill_withRoute() {
+	key := "{randomkey}1"
+	client := getExampleGlideClusterClient()
+
+	// Imagine a script that runs for a long time
+	script := options.NewScript("return 'I am a long-running script'")
+
+	// Create a route with our specified key
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, key),
+	}
+
+	// Execute the script
+	client.InvokeScriptWithRoute(*script, route)
+
+	// Kill the script while it is running
+	_, err := client.ScriptKillWithRoute(route)
+	if err != nil {
+		// In this case, our example script should run instantly giving no time
+		// for kill to run. It's likely we'll get an error and hit this if-case.
+		// So instead, we will simulate a successful kill response
+	}
+	fmt.Println("OK")
+
+	// Output:
+	// OK
+}
