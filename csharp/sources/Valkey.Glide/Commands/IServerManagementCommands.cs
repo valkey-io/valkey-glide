@@ -30,14 +30,7 @@ public interface IServerManagementCommands
     /// Starting from server version 7, command supports multiple <see cref="Section" /> arguments.<br />
     /// See <see href="https://valkey.io/commands/info/">valkey.io</see> for details.
     /// </summary>
-    /// <remarks>
-    /// <example>
-    /// <code>
-    /// string response = await client.Info([ Section.STATS ]);
-    /// response.Split().First(l => l.Contains("total_net_input_bytes"))
-    /// </code>
-    /// </example>
-    /// </remarks>
+    /// <inheritdoc cref="IServerManagementClusterCommands.Info(Section[], Route)" path="/remarks" />
     /// <inheritdoc cref="IServerManagementClusterCommands.Info(Section[], Route)" path="/param" />
     /// <returns>
     /// <inheritdoc cref="Info()" />
