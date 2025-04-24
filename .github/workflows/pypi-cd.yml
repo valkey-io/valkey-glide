@@ -141,13 +141,18 @@ jobs:
                   folder_path: "${{ github.workspace }}/python/.cargo"
                   named_os: ${{ matrix.build.NAMED_OS }}
 
-            - name: Build Python wrapper
+            - name: Install dependencies
               uses: ./.github/workflows/build-python-wrapper
               with:
                   os: ${{ matrix.build.OS }}
                   target: ${{ matrix.build.TARGET }}
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Generate protobuf files
+              working-directory: ./python
+              run: |
+                  python3 dev.py protobuf
 
             - name: Include protobuf files in the package
               working-directory: ./python
