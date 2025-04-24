@@ -119,7 +119,7 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return make(map[string]string), err
 	}
 
@@ -1062,7 +1062,7 @@ func (client *GlideClusterClient) RandomKey() (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
@@ -1087,7 +1087,7 @@ func (client *GlideClusterClient) RandomKeyWithRoute(opts options.RouteOption) (
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)

@@ -165,7 +165,7 @@ func (client *GlideClient) Select(index int64) (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return DefaultStringResponse, err
 	}
 
@@ -573,7 +573,7 @@ func (client *GlideClient) RandomKey() (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)

@@ -96,18 +96,6 @@ func (client *baseClient) GetQueue() (*PubSubMessageQueue, error) {
 	return client.getMessageHandler().GetQueue(), nil
 }
 
-//export failureCallback
-func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
-	defer C.free_error_message(cErrorMessage)
-	msg := C.GoString(cErrorMessage)
-	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
-	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
-}
-
-type clientConfiguration interface {
-	toProtobuf() (*protobuf.ConnectionRequest, error)
-}
-
 type CommandExecutor interface {
 	sendCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error)
 	sendCommandWithRoute(requestType C.RequestType, args []string, route config.Route) (*C.struct_CommandResponse, error)
@@ -553,7 +541,7 @@ func (client *baseClient) SetWithOptions(key string, value string, options optio
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -579,7 +567,7 @@ func (client *baseClient) Get(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -605,7 +593,7 @@ func (client *baseClient) GetEx(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -637,7 +625,7 @@ func (client *baseClient) GetExWithOptions(key string, options options.GetExOpti
 		return CreateNilStringResult(), err
 	}
 
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -1076,7 +1064,7 @@ func (client *baseClient) GetDel(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -1103,7 +1091,7 @@ func (client *baseClient) HGet(key string, field string) (Result[string], error)
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -1374,7 +1362,7 @@ func (client *baseClient) HIncrBy(key string, field string, increment int64) (in
 	if err != nil {
 		return defaultIntResponse, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return defaultIntResponse, err
 	}
 
@@ -1494,7 +1482,7 @@ func (client *baseClient) HRandField(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
@@ -1603,7 +1591,7 @@ func (client *baseClient) LPop(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -1655,7 +1643,7 @@ func (client *baseClient) LPos(key string, element string) (Result[int64], error
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilInt64Result(), err
 	}
 
@@ -2103,7 +2091,7 @@ func (client *baseClient) SRandMember(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -2129,7 +2117,7 @@ func (client *baseClient) SPop(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -2328,7 +2316,7 @@ func (client *baseClient) LIndex(key string, index int64) (Result[string], error
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -2438,7 +2426,7 @@ func (client *baseClient) RPop(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -2537,7 +2525,7 @@ func (client *baseClient) BLPop(keys []string, timeoutSecs float64) ([]string, e
 	if err != nil {
 		return nil, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return handleStringArrayResponse(result)
 	}
 
@@ -2572,7 +2560,7 @@ func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]string, e
 	if err != nil {
 		return nil, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return handleStringArrayResponse(result)
 	}
 
@@ -2892,7 +2880,7 @@ func (client *baseClient) LMove(
 		return CreateNilStringResult(), err
 	}
 
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -2952,7 +2940,7 @@ func (client *baseClient) BLMove(
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -3431,7 +3419,7 @@ func (client *baseClient) PfMerge(destination string, sourceKeys []string) (stri
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return DefaultStringResponse, err
 	}
 
@@ -3627,7 +3615,7 @@ func (client *baseClient) XAddWithOptions(
 		return CreateNilStringResult(), err
 	}
 
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
@@ -3686,7 +3674,7 @@ func (client *baseClient) XReadWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return make(map[string]map[string][][]string), err
 	}
 	return handleXReadResponse(result)
@@ -3756,7 +3744,7 @@ func (client *baseClient) XReadGroupWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return make(map[string]map[string][][]string), err
 	}
 	return handleXReadGroupResponse(result)
@@ -4196,7 +4184,7 @@ func (client *baseClient) BZMPop(
 	if err != nil {
 		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 
@@ -4268,7 +4256,7 @@ func (client *baseClient) BZMPopWithOptions(
 	if err != nil {
 		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 
@@ -4466,7 +4454,7 @@ func (client *baseClient) ZRank(key string, member string) (Result[int64], error
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilInt64Result(), err
 	}
 	return handleIntOrNilResponse(result)
@@ -4494,7 +4482,7 @@ func (client *baseClient) ZRankWithScore(key string, member string) (Result[int6
 	if err != nil {
 		return CreateNilInt64Result(), CreateNilFloat64Result(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilInt64Result(), CreateNilFloat64Result(), err
 	}
 	return handleLongAndDoubleOrNullResponse(result)
@@ -4524,7 +4512,7 @@ func (client *baseClient) ZRevRank(key string, member string) (Result[int64], er
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilInt64Result(), err
 	}
 	return handleIntOrNilResponse(result)
@@ -4553,7 +4541,7 @@ func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[i
 	if err != nil {
 		return CreateNilInt64Result(), CreateNilFloat64Result(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilInt64Result(), CreateNilFloat64Result(), err
 	}
 	return handleLongAndDoubleOrNullResponse(result)
@@ -4826,7 +4814,7 @@ func (client *baseClient) ZScore(key string, member string) (Result[float64], er
 	if err != nil {
 		return CreateNilFloat64Result(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilFloat64Result(), err
 	}
 	return handleFloatOrNilResponse(result)
@@ -4921,7 +4909,7 @@ func (client *baseClient) XPending(key string, group string) (XPendingSummary, e
 	if err != nil {
 		return XPendingSummary{}, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return XPendingSummary{}, err
 	}
 
@@ -5012,6 +5000,9 @@ func (client *baseClient) XGroupCreateWithOptions(
 	if err != nil {
 		return DefaultStringResponse, err
 	}
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
+		return DefaultStringResponse, err
+	}
 	return handleOkResponse(result)
 }
 
@@ -5062,8 +5053,8 @@ func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	if result == nil {
-		return CreateNilStringResult(), err
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
+		return DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -5085,7 +5076,7 @@ func (client *baseClient) Dump(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 	// fmt.Println(result)
@@ -5113,7 +5104,7 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 
@@ -5315,7 +5306,7 @@ func (client *baseClient) ZRandMember(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
@@ -5411,7 +5402,7 @@ func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilInt64Result(), err
 	}
 
@@ -5434,7 +5425,7 @@ func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilInt64Result(), err
 	}
 	return handleIntOrNilResponse(result)
@@ -5457,7 +5448,7 @@ func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilInt64Result(), err
 	}
 	return handleIntOrNilResponse(result)
@@ -5689,7 +5680,7 @@ func (client *baseClient) XGroupCreateConsumer(
 	if err != nil {
 		return false, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return false, err
 	}
 	return handleBoolResponse(result)
@@ -6215,7 +6206,7 @@ func (client *baseClient) XRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return make([]XRangeResponse, 0, 0), err
 	}
 	return handleXRangeResponse(result)
@@ -6289,7 +6280,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return make([]XRangeResponse, 0, 0), err
 	}
 
@@ -6441,7 +6432,7 @@ func (client *baseClient) BitField(key string, subCommands []options.BitFieldSub
 	if err != nil {
 		return nil, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		slice := make([]Result[int64], 0, 0)
 		return slice, err
 	}
@@ -7234,7 +7225,7 @@ func (client *baseClient) GeoDist(key string, member1 string, member2 string) (R
 	if err != nil {
 		return CreateNilFloat64Result(), err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilFloat64Result(), err
 	}
 	return handleFloatOrNilResponse(result)
@@ -7743,7 +7734,7 @@ func (client *baseClient) FunctionFlush() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	if result == nil {
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
