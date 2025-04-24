@@ -63,8 +63,5 @@
         "trailingComma": "all",
         "singleQuote": true,
         "arrowParens": "always"
-    },
-    "dependencies": {
-        "save": "^2.9.0"
     }
 }
