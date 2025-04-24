@@ -940,6 +940,7 @@ func ExampleGlideClusterClient_ScriptExistsWithRoute() {
 
 	// Output: [true]
 }
+
 func ExampleGlideClient_ScriptFlush() {
 	client := getExampleGlideClient()
 
