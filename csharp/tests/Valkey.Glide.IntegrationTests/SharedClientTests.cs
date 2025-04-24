@@ -10,7 +10,7 @@ public class SharedClientTests(TestConfiguration config)
 
     public TestConfiguration Config { get; } = config;
 
-    [Theory(DisableDiscoveryEnumeration = true, Skip = "Flaky on MacOS", SkipWhen = nameof(config.IsMacOs), SkipType = typeof(TestConfiguration))]
+    [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task HandleVeryLargeInput(BaseClient client)
     {
@@ -27,7 +27,7 @@ public class SharedClientTests(TestConfiguration config)
 
     // This test is slow, but it caught timing and releasing issues in the past,
     // so it's being kept.
-    [Theory(DisableDiscoveryEnumeration = true, Skip = "Flaky on MacOS", SkipWhen = nameof(config.IsMacOs), SkipType = typeof(TestConfiguration))]
+    [Theory(DisableDiscoveryEnumeration = true)]
     [Trait("duration", "long")]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public void ConcurrentOperationsWork(BaseClient client)
