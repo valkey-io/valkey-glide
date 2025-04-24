@@ -53,4 +53,12 @@ type ScriptingAndFunctionClusterCommands interface {
 	ScriptExists(sha1s []string) ([]bool, error)
 
 	ScriptExistsWithRoute(sha1s []string, route options.RouteOption) ([]bool, error)
+
+	ScriptFlush() (string, error)
+
+	ScriptFlushWithRoute(route options.RouteOption) (string, error)
+
+	ScriptFlushWithMode(mode options.FlushMode) (string, error)
+
+	ScriptFlushWithModeWithRoute(mode options.FlushMode, route options.RouteOption) (string, error)
 }

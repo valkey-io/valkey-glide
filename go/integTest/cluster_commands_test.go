@@ -2010,3 +2010,46 @@ func (suite *GlideTestSuite) TestScriptExistsWithRoute() {
 	script2.Close()
 	script3.Close()
 }
+
+func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
+	client := suite.defaultClusterClient()
+
+	// Create a script
+	script := options.NewScript("return 'Hello'")
+	routeOption := options.RouteOption{Route: config.AllPrimaries}
+
+	// Load script
+	_, err := client.InvokeScriptWithRoute(*script, routeOption)
+	assert.Nil(suite.T(), err)
+
+	// Check existence of script
+	scriptHash := script.GetHash()
+	result, err := client.ScriptExistsWithRoute([]string{scriptHash}, routeOption)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), []bool{true}, result)
+
+	// Flush the script cache
+	flushResult, err := client.ScriptFlushWithRoute(routeOption)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", flushResult)
+
+	// Check that the script no longer exists
+	result, err = client.ScriptExistsWithRoute([]string{scriptHash}, routeOption)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), []bool{false}, result)
+
+	// Test with ASYNC mode
+	_, err = client.InvokeScriptWithRoute(*script, routeOption)
+	assert.Nil(suite.T(), err)
+
+	asyncMode := options.FlushMode(options.ASYNC)
+	flushResult, err = client.ScriptFlushWithModeWithRoute(asyncMode, routeOption)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", flushResult)
+
+	result, err = client.ScriptExistsWithRoute([]string{scriptHash}, routeOption)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), []bool{false}, result)
+
+	script.Close()
+}
