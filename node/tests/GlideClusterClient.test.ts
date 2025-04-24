@@ -57,6 +57,7 @@ import {
     validateTransactionResponse,
     waitForNotBusy,
 } from "./TestUtilities";
+import { log } from "rust-client";
 
 const TIMEOUT = 50000;
 
@@ -140,7 +141,9 @@ describe("GlideClusterClient", () => {
             };
         },
         close: (testSucceeded: boolean) => {
+            console.log("closing client");
             client.close();
+            console.log("closing azClient");
             azClient.close();
             if (testSucceeded) {
                 testsFailed -= 1;
