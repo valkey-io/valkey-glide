@@ -12,10 +12,10 @@ namespace Valkey.Glide;
 /// <remarks>
 /// <see langword="ClusterValue" /> stores values in a union-like object. It contains a single-value or
 /// multi-value response from the server. If the command's routing is to a single node use
-/// <see cref="ClusterValue{T}.SingleValue"/> to return a response of type <typeparamref name="T"/>.
-/// Otherwise, use <see cref="ClusterValue{T}.MultiValue"/> to return a <see langword="Dictionary" />
+/// <see cref="ClusterValue{T}.SingleValue" /> to return a response of type <typeparamref name="T" />.
+/// Otherwise, use <see cref="ClusterValue{T}.MultiValue" /> to return a <see langword="Dictionary" />
 /// of <c>address: nodeResponse</c> where <c>address</c> is of type <see langword="string" /> and
-/// <c>nodeResponse</c> is of type <typeparamref name="T"/>.
+/// <c>nodeResponse</c> is of type <typeparamref name="T" />.
 /// </remarks>
 /// <typeparam name="T">The wrapped response type</typeparam>
 public class ClusterValue<T>
@@ -48,29 +48,29 @@ public class ClusterValue<T>
         => new() { _multiValue = obj };
 
     internal static ClusterValue<T> OfMultiValue(Dictionary<GlideString, T> obj)
-        => new() { _multiValue = obj.DonwCastKeys() };
+        => new() { _multiValue = obj.DownCastKeys() };
 
     /// <summary>
     /// Get per-node value.<br />
-    /// Asserts if <see cref="HasMultiData"/> is <see langword="false" />.
+    /// Asserts if <see cref="HasMultiData" /> is <see langword="false" />.
     /// </summary>
     public Dictionary<string, T> MultiValue
         => _multiValue ?? throw new Exception("No multi value stored");
 
     /// <summary>
     /// Get the single value.<br />
-    /// Asserts if <see cref="HasSingleData"/> is <see langword="false" />.
+    /// Asserts if <see cref="HasSingleData" /> is <see langword="false" />.
     /// </summary>
     public T SingleValue
         => _singleValue ?? throw new Exception("No single value stored");
 
     /// <summary>
-    /// Check that multi-value is stored in this object. Should be called prior to <see cref="MultiValue"/>.
+    /// Check that multi-value is stored in this object. Should be called prior to <see cref="MultiValue" />.
     /// </summary>
     public bool HasMultiData => _multiValue != null;
 
     /// <summary>
-    /// Check that single-value is stored in this object. Should be called prior to <see cref="SingleValue"/>.
+    /// Check that single-value is stored in this object. Should be called prior to <see cref="SingleValue" />.
     /// </summary>
     public bool HasSingleData => _singleValue != null;
 }

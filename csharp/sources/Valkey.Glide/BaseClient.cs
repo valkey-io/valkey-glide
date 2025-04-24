@@ -158,7 +158,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     /// <param name="response"></param>
     /// <param name="converter">Function to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
     protected static Dictionary<string, T> HandleMultiNodeResponse<R, T>(IntPtr response, Func<R, T> converter) where T : class?
-        => HandleServerResponse<Dictionary<GlideString, object>, Dictionary<string, T>>(response, false, dict => dict.DonwCastKeys().ConvertValues(converter));
+        => HandleServerResponse<Dictionary<GlideString, object>, Dictionary<string, T>>(response, false, dict => dict.DownCastKeys().ConvertValues(converter));
 
     /// <summary>
     /// Process and convert a server response.

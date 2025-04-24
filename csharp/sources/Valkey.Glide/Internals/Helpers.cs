@@ -7,12 +7,12 @@ namespace Valkey.Glide.Internals;
 internal static class Helpers
 {
     // Downcast dictionary keys from `GlideString` to `string`
-    public static Dictionary<string, T> DonwCastKeys<T>(this Dictionary<GlideString, T> dict)
+    public static Dictionary<string, T> DownCastKeys<T>(this Dictionary<GlideString, T> dict)
         => dict.Select(p => (Key: p.Key.ToString(), p.Value)).ToDictionary(p => p.Key, p => p.Value);
 
     // TODO make recursive?
     // Downcast dictionary values from `GlideString` to `string`
-    public static Dictionary<T, string> DonwCastVals<T>(this Dictionary<T, GlideString> dict) where T : class
+    public static Dictionary<T, string> DownCastVals<T>(this Dictionary<T, GlideString> dict) where T : class
         => dict.Select(p => (p.Key, Value: p.Value.ToString())).ToDictionary(p => p.Key, p => p.Value);
 
     // Convert values in a dictionary from T to V where input dict has type `Dictionary<K, object>`
