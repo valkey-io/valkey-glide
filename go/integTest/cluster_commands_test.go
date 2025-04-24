@@ -1948,3 +1948,65 @@ func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
+
+func (suite *GlideTestSuite) TestScriptExistsWithoutRoute() {
+	client := suite.defaultClusterClient()
+
+	script1 := options.NewScript("return 'Hello'")
+	script2 := options.NewScript("return 'World'")
+
+	// Load script1
+	client.InvokeScript(*script1)
+
+	expected := []bool{true, false, false}
+
+	// Get the SHA1 digests of the scripts
+	sha1_1 := script1.GetHash()
+	sha1_2 := script2.GetHash()
+	nonExistentSha1 := strings.Repeat("0", 40)
+
+	// Ensure scripts exist
+	response, err := client.ScriptExists([]string{sha1_1, sha1_2, nonExistentSha1})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expected, response)
+
+	script1.Close()
+	script2.Close()
+}
+
+func (suite *GlideTestSuite) TestScriptExistsWithRoute() {
+	client := suite.defaultClusterClient()
+	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, uuid.New().String())}
+
+	script1 := options.NewScript("return 'Hello'")
+	script2 := options.NewScript("return 'World'")
+	script3 := options.NewScript("return 'Hello World'")
+
+	// Load script1 and script3
+	client.InvokeScript(*script1)
+	client.InvokeScriptWithRoute(*script3, route)
+
+	expected := []bool{true, false, true, false}
+
+	// Get the SHA1 digests of the scripts
+	sha1_1 := script1.GetHash()
+	sha1_2 := script2.GetHash()
+	sha1_3 := script3.GetHash()
+	nonExistentSha1 := strings.Repeat("0", 40)
+
+	// Ensure scripts exist
+	response, err := client.ScriptExists([]string{sha1_1, sha1_2, sha1_3, nonExistentSha1})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expected, response)
+
+	routeResponse, err := client.ScriptExistsWithRoute(
+		[]string{sha1_1, sha1_2, sha1_3, nonExistentSha1},
+		route,
+	)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expected, routeResponse)
+
+	script1.Close()
+	script2.Close()
+	script3.Close()
+}

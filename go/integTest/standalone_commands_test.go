@@ -1049,3 +1049,28 @@ func (suite *GlideTestSuite) TestFunctionKill() {
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
+
+func (suite *GlideTestSuite) TestScriptExists() {
+	client := suite.defaultClient()
+
+	script1 := options.NewScript("return 'Hello'")
+	script2 := options.NewScript("return 'World'")
+
+	// Load script1
+	client.InvokeScript(*script1)
+
+	expected := []bool{true, false, false}
+
+	// Get the SHA1 digests of the scripts
+	sha1_1 := script1.GetHash()
+	sha1_2 := script2.GetHash()
+	nonExistentSha1 := strings.Repeat("0", 40)
+
+	// Ensure scripts exist
+	response, err := client.ScriptExists([]string{sha1_1, sha1_2, nonExistentSha1})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expected, response)
+
+	script1.Close()
+	script2.Close()
+}
