@@ -24,11 +24,13 @@ use redis::{
 };
 use std::cell::Cell;
 use std::collections::HashSet;
+use std::fs;
+use std::io;
+use std::os::unix::fs::PermissionsExt;
 use std::ptr::from_mut;
 use std::rc::Rc;
 use std::sync::RwLock;
-use std::{env, str};
-use std::{io, thread};
+use std::{str, thread};
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
@@ -43,6 +45,7 @@ use PipeListeningResult::*;
 
 /// The socket file name
 const SOCKET_FILE_NAME: &str = "glide-socket";
+const UNIX_SOCKER_DIR: &str = "/tmp";
 
 /// The maximum length of a request's arguments to be passed as a vector of
 /// strings instead of a pointer
@@ -807,19 +810,18 @@ struct ClosingError {
 }
 
 /// Get the socket full path.
-/// The socket file name will contain the process ID and will try to be saved into the user's runtime directory
-/// (e.g. /run/user/1000) in Unix systems. If the runtime dir isn't found, the socket file will be saved to the temp dir.
+/// On Unix-based systems, we use the /tmp directory for the socket file to ensure a predictable and short path,
+/// avoiding issues with the ~100-character limit on Unix domain socket paths.
+/// While placing the socket in /tmp has known security concerns, they are less relevant here since the socket is used for intraprocess communication only.
+/// To further enhance security, we include a UUID in the socket filename and restrict socket permissions to the owner after binding.
+///
 /// For Windows, the socket file will be saved to %AppData%\Local.
 pub fn get_socket_path_from_name(socket_name: String) -> String {
     let base_dirs = BaseDirs::new().expect("Failed to create BaseDirs");
-    let tmp_dir;
     let folder = if cfg!(windows) {
         base_dirs.data_local_dir()
     } else {
-        base_dirs.runtime_dir().unwrap_or({
-            tmp_dir = env::temp_dir();
-            tmp_dir.as_path()
-        })
+        std::path::Path::new(UNIX_SOCKER_DIR)
     };
     folder
         .join(socket_name)
@@ -907,6 +909,8 @@ pub fn start_socket_listener_internal<InitCallback>(
                         }
                         Ok(listener_socket) => listener_socket,
                     };
+                    // Restrict permissions: rw------- (owner only)
+                    fs::set_permissions(&socket_path_cloned, fs::Permissions::from_mode(0o600))?;
 
                     // Signal initialization is successful.
                     // IMPORTANT:

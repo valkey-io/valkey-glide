@@ -1,4 +1,6 @@
 #### Changes
+* Core: Add an OK response type to FFI ([#3630](https://github.com/valkey-io/valkey-glide/pull/3630))
+* Core: Move UDS Socket Filename to tmp ([#3615](https://github.com/valkey-io/valkey-glide/pull/3615))
 * Core: Ensure UDS socket filename is truly unique. ([#3596](https://github.com/valkey-io/valkey-glide/pull/3596))
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
 * Core: Add `opentelemetry` protocols support ([#3191](https://github.com/valkey-io/valkey-glide/pull/3191))
@@ -14,6 +16,7 @@
 * Go: Add `ZLEXCOUNT` ([#3140](https://github.com/valkey-io/valkey-glide/pull/3140))
 * Go: Updating examples for `ZInterCard` ([#3232](https://github.com/valkey-io/valkey-glide/pull/3232))
 * Go: Fix channel passing from Go to Rust by using `runtime.Pinner` or `cgo.Handle` ([#3208](https://github.com/valkey-io/valkey-glide/pull/3208))
+* Go: Add `BZPOPMAX` and ` ZMPOP` [#3257](https://github.com/valkey-io/valkey-glide/pull/3257)
 * Go: Fix data race on the coreClient with `sync.Mutex` and a channel map ([#3236](https://github.com/valkey-io/valkey-glide/pull/3236))
 * Go: Adding support for Az Affinity ([#3235](https://github.com/valkey-io/valkey-glide/pull/3235))
 * Go: Adding support for advanced client configs and connectionTimeout ([#3290](https://github.com/valkey-io/valkey-glide/pull/3290))
@@ -36,8 +39,8 @@
 * Go: Add `LastSave` ([#3086](https://github.com/valkey-io/valkey-glide/pull/3086))
 * Go: Add `Config Reset Stat` ([#3121](https://github.com/valkey-io/valkey-glide/pull/3121))
 * Go: Add `GeoSearch` and `GeoSearchStore` ([#3385](https://github.com/valkey-io/valkey-glide/pull/3385))
-* Go: Add `Cluster Config Set & Get` ([#3274](https://github.com/valkey-io/valkey-glide/pull/3274))
-* Go: Add `Client Set & Get` ([#3302](https://github.com/valkey-io/valkey-glide/pull/3302))
+* Go: Add `ConfigSet` & `ConfigGet` for cluster client ([#3274](https://github.com/valkey-io/valkey-glide/pull/3274), [#3594](https://github.com/valkey-io/valkey-glide/pull/3594))
+* Go: Add `ClientSetName` & `ClientGetName` ([#3302](https://github.com/valkey-io/valkey-glide/pull/3302))
 * Go: Add `Move` ([#3369](https://github.com/valkey-io/valkey-glide/pull/3369))
 * Go: Add `Scan` ([#3378](https://github.com/valkey-io/valkey-glide/pull/3378))
 * Go: Add `LCS` ([#3475](https://github.com/valkey-io/valkey-glide/pull/3475))
@@ -51,6 +54,10 @@
 * Python: Add equallity check to `ExpirySet` ([#3554](https://github.com/valkey-io/valkey-glide/issues/3554))
 * Java: Add Batches support ([#3561](https://github.com/valkey-io/valkey-glide/pull/3561))
 * Go: Add Function Stats ([#3526](https://github.com/valkey-io/valkey-glide/pull/3526))
+* Go: Add Function Delete ([#3603](https://github.com/valkey-io/valkey-glide/pull/3603))
+* Go: Add Function Kill ([#3604](https://github.com/valkey-io/valkey-glide/pull/3604))
+* Benchmarks: Fix rust benchmark latencies calculation
+* Python: Moved the tests folder to be under the root folder ([#3661](https://github.com/valkey-io/valkey-glide/pull/3661))
 * Java: Implement support for Insecure TLS authentication mode([#3386](https://github.com/valkey-io/valkey-glide/pull/3386))
 
 #### Breaking Changes
@@ -59,6 +66,8 @@
 * Java: Deprecate `Transaction` and `ClusterTransaction` ([#3561](https://github.com/valkey-io/valkey-glide/pull/3561))
 
 #### Fixes
+
+* Go, Java: Fix response handling for `customCommand` API for cluster client ([#3593](https://github.com/valkey-io/valkey-glide/pull/3593))
 
 #### Operational Enhancements
 

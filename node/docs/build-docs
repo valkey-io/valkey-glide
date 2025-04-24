@@ -1,6 +1,5 @@
-#!/bin/bash
+#!/bin/bash -e
 npm install --save-dev typedoc
-
 typedoc src/BaseClient.ts                   \
         src/Transaction.ts                  \
         src/GlideClient.ts                  \
@@ -15,3 +14,7 @@ typedoc src/BaseClient.ts                   \
         --disableSources                    \
         --includeHierarchySummary           \
         --out ../docs/markdown/node/
+
+
+# Run urls conversion script - makes them apear not broken in the website
+node ./docs/convert-urls.mjs

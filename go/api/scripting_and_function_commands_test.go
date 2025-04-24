@@ -633,3 +633,116 @@ func ExampleGlideClusterClient_FunctionStatsWithRoute() {
 	// Example stats:
 	//   Engine LUA: 1 functions, 1 libraries
 }
+
+func ExampleGlideClient_FunctionDelete() {
+	client := getExampleGlideClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Delete function
+	result, err := client.FunctionDelete("mylib")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClusterClient_FunctionDelete() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Delete function
+	result, err := client.FunctionDelete("mylib")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClusterClient_FunctionDeleteWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{
+		Route: route,
+	}
+	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Delete function with route
+	result, err := client.FunctionDeleteWithRoute("mylib", opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClient_FunctionKill() {
+	client := getExampleGlideClient()
+
+	// Try to kill when no function is running
+	_, err := client.FunctionKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_FunctionKill() {
+	client := getExampleGlideClusterClient()
+
+	// Try to kill when no function is running
+	_, err := client.FunctionKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_FunctionKillWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Try to kill with route when no function is running
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{
+		Route: route,
+	}
+	_, err := client.FunctionKillWithRoute(opts)
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}

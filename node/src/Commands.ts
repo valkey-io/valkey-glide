@@ -157,12 +157,12 @@ export type SetOptions = (
     returnOldValue?: boolean;
     /**
      * If not set, no expiry time will be set for the value.
+     *
+     * `keepExisting` - Retain the time to live associated with the key.
+     * Equivalent to `KEEPTTL` in the Valkey API.
      */
-    expiry?: /**
-     * Retain the time to live associated with the key. Equivalent to
-     * `KEEPTTL` in the Valkey API.
-     */
-    | "keepExisting"
+    expiry?:
+        | "keepExisting"
         | {
               type: TimeUnit;
               count: number;

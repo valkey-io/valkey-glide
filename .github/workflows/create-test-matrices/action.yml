@@ -4,6 +4,7 @@ inputs:
         required: true
         type: choice
         options:
+            - rust
             - java
             - node
             - python

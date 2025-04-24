@@ -276,7 +276,7 @@ func ExampleGlideClusterClient_ConfigGet() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result.MultiValue())
+	fmt.Println(result)
 
 	// Output:
 	// map[timeout:1000]
@@ -292,7 +292,7 @@ func ExampleGlideClusterClient_ConfigGetWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result.MultiValue())
+	fmt.Println(result.SingleValue())
 
 	// Output:
 	// map[timeout:1000]

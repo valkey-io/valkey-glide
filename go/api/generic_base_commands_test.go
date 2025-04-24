@@ -664,7 +664,7 @@ func ExampleGlideClient_Restore() {
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
-	fmt.Println(result2.Value())
+	fmt.Println(result2)
 
 	// Output:
 	// OK
@@ -683,7 +683,7 @@ func ExampleGlideClusterClient_Restore() {
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
-	fmt.Println(result2.Value())
+	fmt.Println(result2)
 
 	// Output:
 	// OK
@@ -703,7 +703,7 @@ func ExampleGlideClient_RestoreWithOptions() {
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
-	fmt.Println(result2.Value())
+	fmt.Println(result2)
 
 	// Output:
 	// OK
@@ -723,7 +723,7 @@ func ExampleGlideClusterClient_RestoreWithOptions() {
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
-	fmt.Println(result2.Value())
+	fmt.Println(result2)
 
 	// Output:
 	// OK

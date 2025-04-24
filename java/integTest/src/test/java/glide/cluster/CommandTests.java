@@ -240,6 +240,54 @@ public class CommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
+    public void custom_command_dbsize(GlideClusterClient clusterClient) {
+        ClusterValue<Object> data = clusterClient.customCommand(new String[] {"dbsize"}).get();
+        assertTrue((Long) data.getSingleValue() >= 0);
+        data = clusterClient.customCommand(new GlideString[] {gs("dbsize")}).get();
+        assertTrue((Long) data.getSingleValue() >= 0);
+
+        data = clusterClient.customCommand(new String[] {"dbsize"}, ALL_NODES).get();
+        assertTrue((Long) data.getSingleValue() >= 0);
+        data = clusterClient.customCommand(new GlideString[] {gs("dbsize")}, ALL_NODES).get();
+        assertTrue((Long) data.getSingleValue() >= 0);
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public void custom_command_config_get(GlideClusterClient clusterClient) {
+        ClusterValue<Object> data =
+                clusterClient.customCommand(new String[] {"config", "get", "*file"}, RANDOM).get();
+        assertFalse(((Map<String, Object>) data.getSingleValue()).isEmpty());
+
+        data = clusterClient.customCommand(new String[] {"config", "get", "*file"}, ALL_NODES).get();
+        assertFalse(((Map<String, Object>) data.getMultiValue()).isEmpty());
+
+        for (Object value : ((Map<String, Object>) data.getMultiValue()).values()) {
+            assertFalse(((Map<String, Object>) value).isEmpty());
+        }
+
+        data =
+                clusterClient
+                        .customCommand(new GlideString[] {gs("config"), gs("get"), gs("*file")}, RANDOM)
+                        .get();
+        assertFalse(((Map<GlideString, Object>) data.getSingleValue()).isEmpty());
+
+        data =
+                clusterClient
+                        .customCommand(new GlideString[] {gs("config"), gs("get"), gs("*file")}, ALL_NODES)
+                        .get();
+        assertFalse(((Map<String, Object>) data.getMultiValue()).isEmpty());
+
+        for (Object value : ((Map<String, Object>) data.getMultiValue()).values()) {
+            assertFalse(((Map<GlideString, Object>) value).isEmpty());
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
     public void custom_command_binary_with_route(GlideClusterClient clusterClient) {
         ClusterValue<Object> data =
                 clusterClient.customCommand(new GlideString[] {gs("info")}, ALL_NODES).get();
@@ -505,15 +553,16 @@ public class CommandTests {
     public void config_reset_stat(GlideClusterClient clusterClient) {
         var data = clusterClient.info(new Section[] {STATS}).get();
         String firstNodeInfo = getFirstEntryFromMultiValue(data);
-        long value_before = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+        long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
         var result = clusterClient.configResetStat().get();
         assertEquals(OK, result);
 
         data = clusterClient.info(new Section[] {STATS}).get();
         firstNodeInfo = getFirstEntryFromMultiValue(data);
-        long value_after = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
-        assertTrue(value_after < value_before);
+        long valueAfter = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+
+        assertTrue(valueBefore == 0 ? valueAfter == 0 : valueAfter < valueBefore);
     }
 
     @ParameterizedTest

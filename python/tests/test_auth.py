@@ -7,6 +7,7 @@ from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
 from glide.glide_client import TGlideClient
+
 from tests.conftest import (
     NEW_PASSWORD,
     USERNAME,
