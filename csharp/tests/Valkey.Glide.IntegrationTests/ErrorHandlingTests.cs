@@ -26,7 +26,7 @@ public class ErrorHandlingTests
         //*
         _ = Assert.Throws<TimeoutException>(() =>
         {
-            _ = client.CustomCommand(["debug", "sleep", "1"]).GetAwaiter().GetResult();
+            _ = client.CustomCommand(["debug", "sleep", "0.5"]).GetAwaiter().GetResult();
             //TestContext.Current.TestOutputHelper?.WriteLine($"CustomCommand = {res}");
             // TODO try KeepAlive here
             TestContext.Current.TestOutputHelper?.WriteLine($"{client} line {new StackFrame(1, true).GetFileLineNumber()} {DateTime.Now:O}");
@@ -34,6 +34,21 @@ public class ErrorHandlingTests
         });
         //*/
         TestContext.Current.TestOutputHelper?.WriteLine($"{client} line {new StackFrame(1, true).GetFileLineNumber()} {DateTime.Now:O}");
+        // Ping server until it wakes up, otherwise following tests may fail
+        int attempt = 0;
+        for (; attempt < 10; attempt++)
+        {
+            try
+            {
+                _ = await client.CustomCommand(["ping"]);
+                break;
+            }
+            catch (TimeoutException) { }
+        }
+        if (attempt == 10)
+        {
+            Assert.Fail($"Server didn't wake up");
+        }
         GC.KeepAlive(client);
     }
 
