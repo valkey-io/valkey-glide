@@ -24,9 +24,9 @@ public class ErrorHandlingTests
         TestContext.Current.TestOutputHelper?.WriteLine($"{client} line {new StackFrame(1, true).GetFileLineNumber()} {DateTime.Now:O}");
         //_ = await Assert.ThrowsAsync<TimeoutException>(() => client.CustomCommand(["debug", "sleep", "1"]));
         //*
-        _ = await Assert.ThrowsAsync<TimeoutException>(async () =>
+        _ = Assert.Throws<TimeoutException>(() =>
         {
-            _ = await client.CustomCommand(["debug", "sleep", "1"]);
+            _ = client.CustomCommand(["debug", "sleep", "1"]).GetAwaiter().GetResult();
             //TestContext.Current.TestOutputHelper?.WriteLine($"CustomCommand = {res}");
             // TODO try KeepAlive here
             TestContext.Current.TestOutputHelper?.WriteLine($"{client} line {new StackFrame(1, true).GetFileLineNumber()} {DateTime.Now:O}");
