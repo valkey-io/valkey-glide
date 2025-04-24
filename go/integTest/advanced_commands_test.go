@@ -25,7 +25,6 @@ type AdvancedTestSuite struct {
 	clusterHosts    []api.NodeAddress
 	tls             bool
 	serverVersion   string
-	clients         []api.GlideClientCommands
 	clusterClients  []api.GlideClusterClientCommands
 }
 

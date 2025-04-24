@@ -114,7 +114,7 @@ format:
 unit-test:
 	mkdir -p reports
 	set -o pipefail; \
-	go test -v ./... -skip 'Example|TestGlideTestSuite' $(if $(test-filter), -run $(test-filter)) \
+	go test -v ./... -skip 'Example|TestGlideTestSuite|TestAdvancedTestSuite' $(if $(test-filter), -run $(test-filter)) \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
 
 # example tests - skip complete IT suite (including MT)
@@ -133,7 +133,7 @@ example-test:
 	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
 
 # integration tests - run subtask with skipping modules tests
-integ-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule $(if $(test-filter), -testify.m $(test-filter))
+integ-test: export TEST_FILTER = -skip 'TestGlideTestSuite/TestModule|TestAdvancedTestSuite' $(if $(test-filter), -testify.m $(test-filter))
 integ-test: __it
 
 # modules tests - run substask with default filter
