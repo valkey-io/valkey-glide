@@ -228,7 +228,7 @@ jobs:
               if: always()
               working-directory: ./python
               run: |
-                  python3 dev.py lint
+                  python3 dev.py lint --check
 
     docs-test:
         runs-on: ubuntu-latest

@@ -104,13 +104,13 @@ cd valkey-glide
 # Build
 ---
 
-After installing prerequisites and cloning the repository, you can build the async Python client using the `dev.py` CLI utility.
+After installing prerequisites and cloning the repository, you can build the async Python client using the `dev.py` CLI utility that can be found in the root `python/` directory.
 
 ### Examples:
 
 ```bash
 # Build the async client in release mode
-python python/dev.py build --client async --mode release
+python3 dev.py build --client async --mode release
 ```
 
 > These commands handle environment setup, dependency installation, and consistent build logic.
@@ -121,7 +121,7 @@ python python/dev.py build --client async --mode release
 
 Run the following to see all available commands:
 ```bash
-python python/dev.py --help
+python3 dev.py --help
 ```
 
 # Tests
@@ -130,18 +130,18 @@ python python/dev.py --help
 Ensure you have installed `valkey-server` and `valkey-cli` on your host (or `redis-server` and `redis-cli`).
 See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 
-You can run all tests using:
+You can run all tests from the root `python/` directory using:
 ```bash
-python python/dev.py test
+python3 dev.py test
 ```
 
 To pass additional arguments to `pytest`, use the `--args` flag:
 ```bash
 # Run a specific test
-python python/dev.py test --args -k <test_name>
+python3 dev.py test --args -k <test_name>
 
 # Run against existing servers with tls enabled
-python python/dev.py test --args \
+python3 dev.py test --args \
   --tls \
   --cluster-endpoints=localhost:7000 \
   --standalone-endpoints=localhost:6379
@@ -150,11 +150,10 @@ python python/dev.py test --args \
 # Manually Running Tests
 ---
 
-If needed, you can invoke `pytest` directly for custom workflows:
+If needed, you can invoke `pytest` directly from the root `python/` directory for custom workflows:
 
 ### Run all tests manually
 ```bash
-cd python
 source .env/bin/activate
 pytest -v --asyncio-mode=auto
 ```
@@ -163,10 +162,10 @@ pytest -v --asyncio-mode=auto
 ---
 During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files.
 
-Protobuf files are automatically regenerated as part of the `build` process. If you only need to regenerate the protobuf files (e.g., after editing `.proto` files), you can use the standalone command:
+Protobuf files are automatically regenerated as part of the `build` process. If you only need to regenerate the protobuf files (e.g., after editing `.proto` files), you can use the standalone command the root `python/` directory:
 
 ```bash
-python python/dev.py protobuf
+python3 dev.py protobuf
 ```
 
 This generates `.py` and `.pyi` interface files for type checking and places them in the `python/python/glide/protobuf` folder.
@@ -177,22 +176,26 @@ This generates `.py` and `.pyi` interface files for type checking and places the
 Development on the Python wrapper may involve changes in either the Python or Rust code. Each language has distinct linter tests that must be passed before committing changes.
 
 ### Python Linters
-To check formatting and static analysis for Python code, use:
-```bash
-python python/dev.py lint
-```
-
-This includes:
+This project uses the following Python linters and formatters:
 - `isort`
 - `black`
 - `flake8`
 - `mypy`
+
+To check formatting and run static analysis for Python code, use the `dev.py` utility from the root `python/` directory:
+```bash
+python3 dev.py lint
+```
+
+By default, this will auto-fix formatting issues using isort and black.
+If you want to only check formatting without modifying any files, pass the --check flag:
+```bash
+python3 dev.py lint --check
 ```
 
 ### Rust Linters
 For Rust code, run manually:
 ```bash
-cd python
 rustup component add clippy rustfmt
 cargo clippy --all-features --all-targets -- -D warnings
 cargo fmt --manifest-path ./Cargo.toml --all

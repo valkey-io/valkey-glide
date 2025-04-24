@@ -181,13 +181,20 @@ def activate_venv(no_cache: bool = False) -> Dict[Any, Any]:
     return env
 
 
-def run_linters() -> None:
+def run_linters(check_only: bool = False) -> None:
     print("[INFO] Running Python linters...")
     env = activate_venv()
     generate_protobuf_files()
 
-    run_command(["isort", "."], cwd=PYTHON_DIR, label="isort", env=env)
-    run_command(["black", "."], cwd=PYTHON_DIR, label="black", env=env)
+    isort_args = ["isort", ".", "--profile black"]
+    black_args = ["black", "."]
+
+    if check_only:
+        isort_args.extend(["--check", "--diff"])
+        black_args.extend(["--check", "--diff"])
+
+    run_command(isort_args, cwd=PYTHON_DIR, label="isort", env=env)
+    run_command(black_args, cwd=PYTHON_DIR, label="black", env=env)
     run_command(["flake8", "."], cwd=PYTHON_DIR, label="flake8", env=env)
     run_command(["mypy", ".."], cwd=PYTHON_DIR, label="mypy", env=env)
 
@@ -222,44 +229,37 @@ Examples:
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # -------------------- Build Command --------------------
     build_parser = subparsers.add_parser("build", help="Build the Python clients")
     build_parser.add_argument(
-        "--client",
-        default="async",
-        choices=["async"],
-        # TODO: use these options once the sync client is added:
-        # choices=["async", "sync", "all"],
-        # default="all",
-        help="Which client to build",
+        "--client", default="async", choices=["async"], help="Which client to build"
     )
     build_parser.add_argument(
-        "--mode",
-        choices=["debug", "release"],
-        default="debug",
-        help="Build mode (default: debug)",
+        "--mode", choices=["debug", "release"], default="debug", help="Build mode"
     )
     build_parser.add_argument(
         "--no-cache",
         action="store_true",
-        help="Install Python dependencies without using pip cache",
+        help="Install Python dependencies without cache",
     )
 
-    # -------------------- Protobuf Command --------------------
     subparsers.add_parser(
         "protobuf", help="Generate Python protobuf files including .pyi stubs"
     )
 
-    # -------------------- Lint Command --------------------
-    subparsers.add_parser("lint", help="Run all Python linters")
+    lint_parser = subparsers.add_parser("lint", help="Run all Python linters")
+    lint_parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Only check code formatting without modifying files",
+    )
 
-    # -------------------- Test Command --------------------
     test_parser = subparsers.add_parser("test", help="Run all Python tests")
     test_parser.add_argument(
         "--args",
         nargs=argparse.REMAINDER,
         help="Additional arguments to pass to pytest",
     )
+
     args = parser.parse_args()
     check_dependencies()
 
@@ -270,7 +270,7 @@ Examples:
 
     elif args.command == "lint":
         print("🔍 Running linters...")
-        run_linters()
+        run_linters(check_only=args.check)
 
     elif args.command == "test":
         print("🧪 Running tests...")
@@ -279,7 +279,6 @@ Examples:
     elif args.command == "build":
         release = args.mode == "release"
         no_cache = args.no_cache
-
         if args.client in ("async"):
             print(f"🛠 Building async client ({args.mode} mode)...")
             build_async_client(release, no_cache)
