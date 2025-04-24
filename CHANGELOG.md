@@ -57,6 +57,7 @@
 * Go: Add Function Delete ([#3603](https://github.com/valkey-io/valkey-glide/pull/3603))
 * Go: Add Function Kill ([#3604](https://github.com/valkey-io/valkey-glide/pull/3604))
 * Benchmarks: Fix rust benchmark latencies calculation
+* Python: Moved the tests folder to be under the root folder ([#3661](https://github.com/valkey-io/valkey-glide/pull/3661))
 
 #### Breaking Changes
 
