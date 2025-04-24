@@ -7828,7 +7828,6 @@ func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, e
 
 	return handleStringArrayResponse(result)
 }
-
 // Returns the number of patterns that are subscribed to by clients.
 //
 // This returns the total number of unique patterns that all clients are subscribed to,
