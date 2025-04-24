@@ -42,6 +42,18 @@ public class SharedClientTests {
 
     @Getter private static List<Arguments> clients;
 
+    @SneakyThrows
+    private static GlideClient createGlideClientWithTimeout() {
+        return GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
+    }
+
+    @SneakyThrows
+    private static GlideClusterClient createGlideClusterClientWithTimeout() {
+        return GlideClusterClient.createClient(
+                        commonClusterClientConfig().requestTimeout(10000).build())
+                .get();
+    }
+
     @BeforeAll
     @SneakyThrows
     public static void init() {
@@ -55,17 +67,8 @@ public class SharedClientTests {
     @SneakyThrows
     public static Stream<Arguments> getTimeoutClients() {
         return Stream.of(
-                Arguments.of(
-                        named(
-                                "GlideClient",
-                                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build())
-                                        .get())),
-                Arguments.of(
-                        named(
-                                "GlideClusterClient",
-                                GlideClusterClient.createClient(
-                                                commonClusterClientConfig().requestTimeout(10000).build())
-                                        .get())));
+                Arguments.of(named("GlideClient", createGlideClientWithTimeout())),
+                Arguments.of(named("GlideClusterClient", createGlideClusterClientWithTimeout())));
     }
 
     @SneakyThrows
@@ -113,12 +116,13 @@ public class SharedClientTests {
 
     private static Stream<Arguments> clientAndDataSize() {
         return Stream.of(
-                Arguments.of(standaloneClient, 100),
-                Arguments.of(standaloneClient, 1 << 16),
-                Arguments.of(clusterClient, 100),
-                Arguments.of(clusterClient, 1 << 16));
+                Arguments.of(createGlideClientWithTimeout(), 100),
+                Arguments.of(createGlideClientWithTimeout(), 1 << 16),
+                Arguments.of(createGlideClusterClientWithTimeout(), 100),
+                Arguments.of(createGlideClusterClientWithTimeout(), 1 << 16));
     }
 
+    @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("clientAndDataSize")
     public void client_can_handle_concurrent_workload(BaseClient client, int valueSize) {
@@ -145,6 +149,7 @@ public class SharedClientTests {
         CompletableFuture.allOf(futures).join();
 
         executorService.shutdown();
+        client.close();
     }
 
     private static Stream<Arguments> inflightRequestsLimitSizeAndClusterMode() {

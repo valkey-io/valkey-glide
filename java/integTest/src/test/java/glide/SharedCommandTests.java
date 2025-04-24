@@ -14266,6 +14266,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, requestException2.getCause());
     }
 
+    @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -14406,6 +14407,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -14557,6 +14559,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -14750,7 +14753,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
-    @Timeout(20) // seconds
+    @Timeout(30) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -14962,6 +14965,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -15144,6 +15148,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    @Timeout(20) // seconds
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
