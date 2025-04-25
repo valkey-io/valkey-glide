@@ -746,3 +746,122 @@ func ExampleGlideClusterClient_FunctionKillWithRoute() {
 	// Output:
 	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
 }
+
+func ExampleGlideClient_FunctionList() {
+	client := getExampleGlideClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	query := FunctionListQuery{
+		LibraryName: "mylib",
+		WithCode:    true,
+	}
+
+	libs, err := client.FunctionList(query)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	for _, lib := range libs {
+		fmt.Println(lib.Name)
+		for _, function := range lib.Functions {
+			fmt.Println(function.Name)
+		}
+		fmt.Println("Engine:")
+		fmt.Println(lib.Engine)
+	}
+
+	// Output:
+	// mylib
+	// myfunc
+	// Engine:
+	// LUA
+}
+
+func ExampleGlideClusterClient_FunctionList() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	query := FunctionListQuery{
+		LibraryName: "mylib",
+		WithCode:    true,
+	}
+
+	libs, err := client.FunctionList(query)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	for _, lib := range libs {
+		fmt.Println(lib.Name)
+		for _, function := range lib.Functions {
+			fmt.Println(function.Name)
+		}
+		fmt.Println("Engine:")
+		fmt.Println(lib.Engine)
+	}
+
+	// Output:
+	// mylib
+	// myfunc
+	// Engine:
+	// LUA
+}
+
+func ExampleGlideClusterClient_FunctionListWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{
+		Route: route,
+	}
+	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// List functions with route
+	query := FunctionListQuery{
+		WithCode: true,
+	}
+	result, err := client.FunctionListWithRoute(query, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Print results for each node
+	for _, libs := range result.MultiValue() {
+		fmt.Println("Example Node:")
+		for _, lib := range libs {
+			fmt.Printf("  Library: %s\n", lib.Name)
+			fmt.Printf("  Engine: %s\n", lib.Engine)
+			fmt.Printf("  Functions: %d\n", len(lib.Functions))
+			if lib.Code != "" {
+				fmt.Printf("  Code: %s\n", lib.Code)
+			}
+		}
+		break
+	}
+
+	// Output:
+	// Example Node:
+	//   Library: mylib
+	//   Engine: LUA
+	//   Functions: 1
+	//   Code: #!lua name=mylib
+	// redis.register_function{ function_name = 'myfunc', callback = function(keys, args) return 42 end, flags = { 'no-writes' } }
+}

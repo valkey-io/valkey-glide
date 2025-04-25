@@ -42,4 +42,6 @@ type ScriptingAndFunctionClusterCommands interface {
 	FunctionDeleteWithRoute(libName string, route options.RouteOption) (string, error)
 
 	FunctionKillWithRoute(route options.RouteOption) (string, error)
+
+	FunctionListWithRoute(query FunctionListQuery, route options.RouteOption) (ClusterValue[[]LibraryInfo], error)
 }
