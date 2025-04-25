@@ -1,7 +1,5 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using System.Diagnostics;
-
 using static Valkey.Glide.ConnectionConfiguration;
 using static Valkey.Glide.Errors;
 
@@ -26,9 +24,9 @@ public class ErrorHandlingTests
         TestContext.Current.TestOutputHelper?.WriteLine($"{client} 1 {DateTime.Now:O}");
         //_ = await Assert.ThrowsAsync<TimeoutException>(() => client.CustomCommand(["debug", "sleep", "1"]));
         //*
-        _ = Assert.Throws<TimeoutException>(() =>
+        _ = await Assert.ThrowsAsync<TimeoutException>(async () =>
         {
-            _ = client.CustomCommand(["debug", "sleep", "0.5"]).GetAwaiter().GetResult();
+            _ = await client.CustomCommand(["debug", "sleep", "0.5"]);
             //TestContext.Current.TestOutputHelper?.WriteLine($"CustomCommand = {res}");
             // TODO try KeepAlive here
             TestContext.Current.TestOutputHelper?.WriteLine($"{client} 2 {DateTime.Now:O}");
