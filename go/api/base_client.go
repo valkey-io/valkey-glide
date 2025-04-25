@@ -7750,33 +7750,6 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 	return handleAnyResponse(result)
 }
 
-// Posts a message to the specified channel. Returns the number of clients that received the message.
-//
-// Channel can be any string, but common patterns include using "." to create namespaces like
-// "news.sports" or "news.weather".
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	channel - The channel to publish to.
-//	message - The message to publish.
-//
-// Return value:
-//
-//	The number of clients that received the message.
-//
-// [valkey.io]: https://valkey.io/commands/publish
-func (client *baseClient) Publish(channel string, message string) (int64, error) {
-	args := []string{channel, message}
-	result, err := client.executeCommand(C.Publish, args)
-	if err != nil {
-		return 0, err
-	}
-
-	return handleIntResponse(result)
-}
-
 // Lists the currently active channels.
 //
 // When used in cluster mode, the command is routed to all nodes and aggregates
@@ -7903,6 +7876,31 @@ func (client *baseClient) PubSubNumPat() (int64, error) {
 	}
 
 	return handleIntResponse(result)
+}
+
+// PubSubNumSub returns the number of subscribers for the specified channels.
+//
+// The count only includes clients subscribed to exact channels, not pattern subscriptions.
+// If no channels are specified, an empty map is returned.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single map.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numsub
+func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, error) {
+	if len(channels) == 0 {
+		// If no channels specified, just return an empty map
+		return make(map[string]int64), nil
+	}
+
+	result, err := client.executeCommand(C.PubSubNumSub, channels)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringIntMapResponse(result)
 }
 
 // Kills a function that is currently executing.

@@ -1581,3 +1581,31 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 	}
 	return handleOkResponse(result)
 }
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *GlideClusterClient) Publish(channel string, message string, sharded bool) (int64, error) {
+	if message == "" || channel == "" {
+		return 0, &errors.RequestError{Msg: "both message and channel are required for Publish command"}
+	}
+	args := []string{channel, message}
+
+	var requestType C.RequestType
+	if sharded {
+		requestType = C.SPublish
+	} else {
+		requestType = C.Publish
+	}
+	result, err := client.executeCommand(requestType, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
