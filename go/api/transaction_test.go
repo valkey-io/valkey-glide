@@ -7,7 +7,8 @@ import (
 )
 
 func ExampleTransaction_Exec() {
-	var cmd *Transaction = getExampleTransactionGlideClient() // example helper function
+	var tx *Transaction = getExampleTransactionGlideClient() // example helper function
+	cmd := tx.GlideClient
 	cmd.Set("key123", "Glide")
 	cmd.Set("key1", "Glide")
 	cmd.Set("key2", "Hello")
@@ -18,7 +19,7 @@ func ExampleTransaction_Exec() {
 	cmd.Set("key123", "Valkey")
 	cmd.Get("key123")
 	cmd.Type("key123")
-	result, _ := cmd.Exec()
+	result, _ := tx.Exec()
 	fmt.Println(result)
 
 	// Output:
@@ -27,10 +28,11 @@ func ExampleTransaction_Exec() {
 
 func ExampleTransaction_Watch() {
 	var clientTx *Transaction = getExampleTransactionGlideClient() // example helper function
-	clientTx.Set("key123", "Glide")
-	clientTx.Watch([]string{"key123", "key345"})
-	clientTx.Get("key123")
-	clientTx.Del([]string{"key123"})
+	cmd := clientTx
+	cmd.Set("key123", "Glide")
+	cmd.Watch([]string{"key123", "key345"})
+	cmd.Get("key123")
+	cmd.Del([]string{"key123"})
 
 	result, _ := clientTx.Exec()
 	fmt.Println(result)
@@ -41,11 +43,12 @@ func ExampleTransaction_Watch() {
 
 func ExampleTransaction_Unwatch() {
 	var clientTx *Transaction = getExampleTransactionGlideClient() // example helper function
-	clientTx.Set("key123", "Glide")
-	clientTx.Watch([]string{"key123", "key345"})
-	clientTx.Get("key123")
-	clientTx.Unwatch()
-	clientTx.Del([]string{"key123"})
+	cmd := clientTx.GlideClient
+	cmd.Set("key123", "Glide")
+	cmd.Watch([]string{"key123", "key345"})
+	cmd.Get("key123")
+	cmd.Unwatch()
+	cmd.Del([]string{"key123"})
 
 	result, _ := clientTx.Exec()
 	fmt.Println(result)

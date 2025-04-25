@@ -24,6 +24,7 @@ var (
 	clusterAddresses            []NodeAddress
 	standaloneClient            *GlideClient
 	standaloneOnce              sync.Once
+	standaloneTransactionOnce   sync.Once
 	standaloneTransactionClient *Transaction
 	standaloneAddresses         []NodeAddress
 	initOnce                    sync.Once
@@ -123,7 +124,7 @@ func parseHosts(addresses string) []NodeAddress {
 }
 
 func getExampleTransactionGlideClient() *Transaction {
-	standaloneOnce.Do(func() {
+	standaloneTransactionOnce.Do(func() {
 		initFlags()
 		addresses := parseHosts(*standaloneNode)
 		config := NewGlideClientConfiguration().
