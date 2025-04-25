@@ -101,7 +101,6 @@ PROB_GET_EXISTING_KEY = 0.8
 SIZE_GET_KEYSPACE = 3750000  # 3.75 million
 SIZE_SET_KEYSPACE = 3000000  # 3 million
 started_tasks_counter = 0
-running_tasks = set()
 bench_json_results: List[str] = []
 
 
