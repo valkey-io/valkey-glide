@@ -53,7 +53,6 @@ public class TestConfiguration : IDisposable
 
     public TestConfiguration()
     {
-        BaseClient.LOG = _output.WriteLine;
         Console.SetOut(_output);
 
         string? projectDir = Directory.GetCurrentDirectory();
@@ -95,15 +94,8 @@ public class TestConfiguration : IDisposable
 
     ~TestConfiguration() => Dispose();
 
-    public void Dispose()
-    {
-        // Stop all
-        StopServer(true);
-        TestConsoleWriteLine(_output.ToString());
-    }
-    //public void Dispose() =>
-    //    // Stop all
-    //    StopServer(true);
+    // Stop all
+    public void Dispose() => StopServer(true);
 
     private readonly string _scriptDir;
 
