@@ -105,7 +105,11 @@ func (client *baseClient) sendCommand(requestType C.RequestType, args []string) 
 	return client.executeCommand(requestType, args)
 }
 
-func (client *baseClient) sendCommandWithRoute(requestType C.RequestType, args []string, route config.Route) (*C.struct_CommandResponse, error) {
+func (client *baseClient) sendCommandWithRoute(
+	requestType C.RequestType,
+	args []string,
+	route config.Route,
+) (*C.struct_CommandResponse, error) {
 	return client.executeCommandWithRoute(requestType, args, route)
 }
 
@@ -1683,7 +1687,10 @@ func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCountWithValues(key string, count int64) ([][]string, error) {
-	result, err := client.executor.sendCommand(C.HRandField, []string{key, utils.IntToString(count), options.WithValuesKeyword})
+	result, err := client.executor.sendCommand(
+		C.HRandField,
+		[]string{key, utils.IntToString(count), options.WithValuesKeyword},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -5395,7 +5402,10 @@ func (client *baseClient) ZRemRangeByLex(key string, rangeQuery options.RangeByL
 //
 // [valkey.io]: https://valkey.io/commands/zremrangebyrank/
 func (client *baseClient) ZRemRangeByRank(key string, start int64, stop int64) (int64, error) {
-	result, err := client.executor.sendCommand(C.ZRemRangeByRank, []string{key, utils.IntToString(start), utils.IntToString(stop)})
+	result, err := client.executor.sendCommand(
+		C.ZRemRangeByRank,
+		[]string{key, utils.IntToString(start), utils.IntToString(stop)},
+	)
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -5497,7 +5507,10 @@ func (client *baseClient) ZRandMemberWithCount(key string, count int64) ([]strin
 //
 // [valkey.io]: https://valkey.io/commands/zrandmember/
 func (client *baseClient) ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error) {
-	result, err := client.executor.sendCommand(C.ZRandMember, []string{key, utils.IntToString(count), options.WithScoresKeyword})
+	result, err := client.executor.sendCommand(
+		C.ZRandMember,
+		[]string{key, utils.IntToString(count), options.WithScoresKeyword},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -5947,7 +5960,10 @@ func (client *baseClient) GetBit(key string, offset int64) (int64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/wait/
 func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (int64, error) {
-	result, err := client.executor.sendCommand(C.Wait, []string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout)})
+	result, err := client.executor.sendCommand(
+		C.Wait,
+		[]string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout)},
+	)
 	if err != nil {
 		return defaultIntResponse, err
 	}

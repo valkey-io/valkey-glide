@@ -69,7 +69,7 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 	// This ensures that any calls through the executor path
 	// will properly route through GlideClient
 	client.executor = glideClient
-	//return &GlideClient{client}, nil
+	// return &GlideClient{client}, nil
 	return glideClient, nil
 }
 

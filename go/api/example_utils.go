@@ -141,7 +141,6 @@ func getExampleTransactionGlideClient() *Transaction {
 		clientTx := NewTransaction(client)
 
 		standaloneTransactionClient = clientTx
-
 	})
 
 	// cmd := standaloneTransactionClient.GlideClient
@@ -174,7 +173,6 @@ func getExampleTransactionGlideClusterClient() *Transaction {
 		clientTx := NewClusterTransaction(client)
 
 		standaloneTransactionClient = clientTx
-
 	})
 	return standaloneTransactionClient
 }

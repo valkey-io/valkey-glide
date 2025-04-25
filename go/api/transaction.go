@@ -60,7 +60,11 @@ func (t *Transaction) sendCommand(requestType C.RequestType, args []string) (*C.
 }
 
 // Override sendCommandWithRoute to queue commands in the transaction
-func (t *Transaction) sendCommandWithRoute(requestType C.RequestType, args []string, route config.Route) (*C.struct_CommandResponse, error) {
+func (t *Transaction) sendCommandWithRoute(
+	requestType C.RequestType,
+	args []string,
+	route config.Route,
+) (*C.struct_CommandResponse, error) {
 	t.commands = append(t.commands, &GenericCommand{name: requestType, args: args, route: route})
 	return nil, nil
 }
@@ -101,7 +105,7 @@ func (client *baseClient) executeTransactionWithRoute(cmds []Cmder, route config
 			cArgs[j] = C.CString(arg)
 			argPtrs = append(argPtrs, cArgs[j])
 		}
-		//Check cArgs
+		// Check cArgs
 		var cArgsPtr **C.char
 
 		if len(cmd.Args()) > 0 {
