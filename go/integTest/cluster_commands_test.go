@@ -2046,8 +2046,11 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), []bool{true}, result)
 
+	// Create ScriptFlushOptions with default mode (SYNC) and route
+	scriptFlushOptions := options.NewScriptFlushOptions().WithRoute(&routeOption)
+
 	// Flush the script cache
-	flushResult, err = client.ScriptFlushWithRoute(routeOption)
+	flushResult, err = client.ScriptFlushWithOptions(*scriptFlushOptions)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", flushResult)
 
@@ -2060,8 +2063,12 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 	_, err = client.InvokeScriptWithRoute(*script, routeOption)
 	assert.Nil(suite.T(), err)
 
-	asyncMode := options.FlushMode(options.ASYNC)
-	flushResult, err = client.ScriptFlushWithModeWithRoute(asyncMode, routeOption)
+	// Create ScriptFlushOptions with ASYNC mode and route
+	scriptFlushOptions = options.NewScriptFlushOptions().
+		WithMode(options.ASYNC).
+		WithRoute(&routeOption)
+
+	flushResult, err = client.ScriptFlushWithOptions(*scriptFlushOptions)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", flushResult)
 

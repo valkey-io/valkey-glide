@@ -1117,7 +1117,7 @@ func ExampleGlideClusterClient_ScriptFlushWithMode() {
 	// Script exists after flush: false
 }
 
-func ExampleGlideClusterClient_ScriptFlushWithRoute() {
+func ExampleGlideClusterClient_ScriptFlushWithOptions() {
 	client := getExampleGlideClusterClient()
 	route := options.RouteOption{Route: config.AllPrimaries}
 
@@ -1138,7 +1138,8 @@ func ExampleGlideClusterClient_ScriptFlushWithRoute() {
 	fmt.Println("Script exists before flush:", exists[0])
 
 	// Flush all scripts on all primaries
-	result, err := client.ScriptFlushWithRoute(route)
+	scriptFlushOptions := options.NewScriptFlushOptions().WithRoute(&route)
+	result, err := client.ScriptFlushWithOptions(*scriptFlushOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1162,7 +1163,7 @@ func ExampleGlideClusterClient_ScriptFlushWithRoute() {
 	// Script exists after flush: false
 }
 
-func ExampleGlideClusterClient_ScriptFlushWithModeWithRoute() {
+func ExampleGlideClusterClient_ScriptFlushWithOptionsWithModeAndRoute() {
 	client := getExampleGlideClusterClient()
 	route := options.RouteOption{Route: config.AllPrimaries}
 
@@ -1183,7 +1184,8 @@ func ExampleGlideClusterClient_ScriptFlushWithModeWithRoute() {
 	fmt.Println("Script exists before flush:", exists[0])
 
 	// Flush all scripts on all primaries with ASYNC mode
-	result, err := client.ScriptFlushWithModeWithRoute(options.ASYNC, route)
+	scriptFlushOptions := options.NewScriptFlushOptions().WithMode(options.ASYNC).WithRoute(&route)
+	result, err := client.ScriptFlushWithOptions(*scriptFlushOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return

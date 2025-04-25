@@ -56,9 +56,5 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	ScriptFlush() (string, error)
 
-	ScriptFlushWithRoute(route options.RouteOption) (string, error)
-
-	ScriptFlushWithMode(mode options.FlushMode) (string, error)
-
-	ScriptFlushWithModeWithRoute(mode options.FlushMode, route options.RouteOption) (string, error)
+	ScriptFlushWithOptions(options options.ScriptFlushOptions) (string, error)
 }
