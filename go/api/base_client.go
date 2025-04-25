@@ -510,6 +510,9 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
+		return DefaultStringResponse, err
+	}
 
 	return handleOkResponse(result)
 }

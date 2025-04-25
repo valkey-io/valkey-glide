@@ -1043,9 +1043,15 @@ pub unsafe extern "C" fn execute_transaction(
     };
 
     // Get routing info with fallback
-    let routing_info = get_route(route, None).unwrap_or_else(|| {
+    // let routing_info = get_route(route, None).unwrap_or_else(|| {
+    //     RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random) // Default routing
+    // });
+
+    let routing_info = if let Some(info) = get_route(route, None) {
+        info
+    } else {
         RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random) // Default routing
-    });
+    };
 
     let mut client = client_adapter.core.client.clone();
 
