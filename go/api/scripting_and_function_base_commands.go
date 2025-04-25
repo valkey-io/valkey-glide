@@ -2,6 +2,8 @@
 
 package api
 
+import "github.com/valkey-io/valkey-glide/go/api/options"
+
 // Supports commands and transactions for the "Scripting and Function" group for a standalone
 // or cluster client.
 //
@@ -26,4 +28,16 @@ type ScriptingAndFunctionBaseCommands interface {
 	FCallReadOnlyWithKeysAndArgs(function string, keys []string, args []string) (any, error)
 
 	FunctionKill() (string, error)
+
+	InvokeScript(script options.Script) (any, error)
+
+	InvokeScriptWithOptions(script options.Script, scriptOptions options.ScriptOptions) (any, error)
+
+	ScriptExists(sha1s []string) ([]bool, error)
+
+	ScriptFlush() (string, error)
+
+	ScriptFlushWithMode(mode options.FlushMode) (string, error)
+
+	ScriptKill() (string, error)
 }
