@@ -4,6 +4,8 @@ using System.Collections;
 using System.ComponentModel;
 using System.Text;
 
+using static Valkey.Glide.Commands.Options.InfoOptions;
+
 namespace Valkey.Glide;
 
 /// <summary>
@@ -38,6 +40,13 @@ public static class GlideStringExtensions
     /// <param name="strings">An array of <see langword="byte[]" />s to convert.</param>
     /// <returns>An array of <see cref="GlideString" />s.</returns>
     public static GlideString[] ToGlideStrings(this byte[][] strings) => [.. strings.Select(s => new GlideString(s))];
+
+    /// <summary>
+    /// Convert an <see langword="Section[]" /> to an <see langword="GlideString[]" />.
+    /// </summary>
+    /// <param name="strings">An array of <see langword="string" />s to convert.</param>
+    /// <returns>An array of <see cref="GlideString" />s.</returns>
+    public static GlideString[] ToGlideStrings(this Section[] strings) => [.. strings.Select(s => new GlideString(s.ToString()))];
 
     /// <summary>
     /// Convert an <see langword="GlideString[]" /> to an <see langword="string[]" />.<br />
