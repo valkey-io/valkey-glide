@@ -217,7 +217,7 @@ func (client *baseClient) Watch(keys []string) (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 func (client *baseClient) Unwatch() (string, error) {
@@ -225,7 +225,7 @@ func (client *baseClient) Unwatch() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 func (t *Transaction) Discard() error {

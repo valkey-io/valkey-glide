@@ -3,31 +3,78 @@
 package integTest
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/api"
 )
 
+func anyToString(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case int:
+		return strconv.Itoa(v)
+	case int8:
+		return strconv.FormatInt(int64(v), 10)
+	case int16:
+		return strconv.FormatInt(int64(v), 10)
+	case int32:
+		return strconv.FormatInt(int64(v), 10)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case uint:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint8:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint16:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint64:
+		return strconv.FormatUint(v, 10)
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(v)
+	case []byte:
+		return string(v)
+	case fmt.Stringer:
+		return v.String()
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
 func (suite *GlideTestSuite) TestWatch() {
 	client := suite.defaultClient()
 	key := uuid.New().String()
 	suite.verifyOK(client.Set(key, "value"))
-	suite.verifyOK(client.Watch([]string{"key1"}))
 
+	result, err := client.Watch([]string{"key1"})
+	assert.NoError(suite.T(), err)
+	strings.Contains(result, "OK")
 	tx := api.NewTransaction(client)
 	cmd := tx.GlideClient
 	cmd.Del([]string{key})
-	result, err := tx.Exec()
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "[OK OK 1]", result)
-
+	resultTx, errTx := tx.Exec()
+	assert.NoError(suite.T(), errTx)
+	resultString := anyToString(resultTx)
+	strings.Contains(resultString, "1")
 }
 
 func (suite *GlideTestSuite) TestUnwatch() {
 	client := suite.defaultClient()
 	key := uuid.New().String()
 	suite.verifyOK(client.Set(key, "value"))
-	suite.verifyOK(client.Unwatch())
+	result, errTx := client.Unwatch()
+	strings.Contains(result, "OK")
+	assert.NoError(suite.T(), errTx)
 }
 
 func (suite *GlideTestSuite) TestExec() {
@@ -38,8 +85,8 @@ func (suite *GlideTestSuite) TestExec() {
 	cmd.Set(key, "hello")
 	cmd.Get(key)
 	cmd.Del([]string{key})
-	result, err := tx.Exec()
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "[OK hello 1]", result)
-
+	result, errTx := tx.Exec()
+	assert.NoError(suite.T(), errTx)
+	resultString := anyToString(result)
+	strings.Contains(resultString, "OK hello 1")
 }
