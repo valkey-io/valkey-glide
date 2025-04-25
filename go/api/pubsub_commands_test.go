@@ -202,7 +202,8 @@ func ExampleGlideClient_PubSubNumSub() {
 	// Create subscribers with subscriptions to different channels
 	getExampleGlideClientWithSubscription(ExactChannelMode, "news.sports")
 	getExampleGlideClientWithSubscription(ExactChannelMode, "news.weather")
-	getExampleGlideClientWithSubscription(ExactChannelMode, "news.weather") // Second subscriber to same channel
+	// Second subscriber to same channel
+	getExampleGlideClientWithSubscription(ExactChannelMode, "news.weather")
 	getExampleGlideClientWithSubscription(ExactChannelMode, "events.local")
 
 	// Allow subscriptions to establish
@@ -232,39 +233,40 @@ func ExampleGlideClient_PubSubNumSub() {
 	// news.weather: 2
 }
 
-// func ExampleGlideClusterClient_PubSubNumSub() {
-// 	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-// 	defer closeAllClients()
+func ExampleGlideClusterClient_PubSubNumSub() {
+	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	defer closeAllClients()
 
-// 	// Create subscribers with subscriptions to different channels
-// 	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "cluster.news.sports")
-// 	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "cluster.news.weather")
-// 	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "cluster.news.weather") // Second subscriber to same channel
-// 	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "cluster.events.local")
+	// Create subscribers with subscriptions to different channels
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.sports")
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.weather")
+	// Second subscriber to same channel
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.weather")
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "events.local")
 
-// 	// Allow subscriptions to establish
-// 	time.Sleep(100 * time.Millisecond)
+	// Allow subscriptions to establish
+	time.Sleep(100 * time.Millisecond)
 
-// 	// Get subscriber counts for specific channels
-// 	result, err := publisher.PubSubNumSub([]string{"cluster.news.sports", "cluster.news.weather", "cluster.events.local"})
-// 	if err != nil {
-// 		fmt.Println("Glide example failed with an error: ", err)
-// 	}
+	// Get subscriber counts for specific channels
+	result, err := publisher.PubSubNumSub([]string{"news.sports", "news.weather", "events.local"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
 
-// 	// Sort the channels for consistent output
-// 	channels := make([]string, 0, len(result))
-// 	for channel := range result {
-// 		channels = append(channels, channel)
-// 	}
-// 	sort.Strings(channels)
+	// Sort the channels for consistent output
+	channels := make([]string, 0, len(result))
+	for channel := range result {
+		channels = append(channels, channel)
+	}
+	sort.Strings(channels)
 
-// 	// Print results in sorted order
-// 	for _, channel := range channels {
-// 		fmt.Printf("%s: %d\n", channel, result[channel])
-// 	}
+	// Print results in sorted order
+	for _, channel := range channels {
+		fmt.Printf("%s: %d\n", channel, result[channel])
+	}
 
-// 	// Output:
-// 	// cluster.events.local: 1
-// 	// cluster.news.sports: 1
-// 	// cluster.news.weather: 2
-// }
+	// Output:
+	// events.local: 1
+	// news.sports: 1
+	// news.weather: 2
+}
