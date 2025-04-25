@@ -1731,6 +1731,7 @@ func (client *GlideClusterClient) ScriptExistsWithRoute(
 }
 
 // ScriptFlush removes all the scripts from the script cache.
+// The command will be routed to all nodes.
 //
 // See [valkey.io] for details.
 //
@@ -1743,65 +1744,35 @@ func (client *GlideClusterClient) ScriptFlush() (string, error) {
 	return client.baseClient.ScriptFlush()
 }
 
-// ScriptFlushWithRoute removes all the scripts from the script cache on the specified route.
+// ScriptFlushWithOptions removes all the scripts from the script cache with the specified route options.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	route - The route option specifying which node(s) to execute the command on.
+//	options - The ScriptFlushOptions containing the flush mode and route.
+//			  The mode can be either SYNC or ASYNC.
 //
 // Return value:
 //
 //	OK on success.
 //
 // [valkey.io]: https://valkey.io/commands/script-flush/
-func (client *GlideClusterClient) ScriptFlushWithRoute(route options.RouteOption) (string, error) {
-	result, err := client.executeCommandWithRoute(C.ScriptFlush, []string{}, route.Route)
-	if err != nil {
-		return DefaultStringResponse, err
-	}
-	return handleOkResponse(result)
-}
-
-// ScriptFlushWithMode removes all the scripts from the script cache with the specified flush mode.
-// The mode can be either SYNC or ASYNC.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	mode - The flush mode (SYNC or ASYNC).
-//
-// Return value:
-//
-//	OK on success.
-//
-// [valkey.io]: https://valkey.io/commands/script-flush/
-func (client *GlideClusterClient) ScriptFlushWithMode(mode options.FlushMode) (string, error) {
-	return client.baseClient.ScriptFlushWithMode(mode)
-}
-
-// ScriptFlushWithModeWithRoute removes all the scripts from the script cache with the specified flush mode
-// on the specified route. The mode can be either SYNC or ASYNC.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	mode - The flush mode (SYNC or ASYNC).
-//	route - The route option specifying which node(s) to execute the command on.
-//
-// Return value:
-//
-//	OK on success.
-//
-// [valkey.io]: https://valkey.io/commands/script-flush/
-func (client *GlideClusterClient) ScriptFlushWithModeWithRoute(
-	mode options.FlushMode,
-	route options.RouteOption,
+func (client *GlideClusterClient) ScriptFlushWithOptions(
+	options options.ScriptFlushOptions,
 ) (string, error) {
-	result, err := client.executeCommandWithRoute(C.ScriptFlush, []string{string(mode)}, route.Route)
+	args := []string{}
+	if options.Mode != "" {
+		args = append(args, string(options.Mode))
+	}
+	if options.Route == nil {
+		result, err := client.executeCommand(C.ScriptFlush, args)
+		if err != nil {
+			return DefaultStringResponse, err
+		}
+		return handleOkResponse(result)
+	}
+	result, err := client.executeCommandWithRoute(C.ScriptFlush, args, options.Route.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}

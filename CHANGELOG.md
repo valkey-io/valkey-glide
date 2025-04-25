@@ -59,6 +59,8 @@
 * Go: Script eval/load([#3605](https://github.com/valkey-io/valkey-glide/pull/3605))
 * Benchmarks: Fix rust benchmark latencies calculation
 * Go: Add Script Exists ([#3649](https://github.com/valkey-io/valkey-glide/pull/3649))
+* Python: Moved the tests folder to be under the root folder ([#3661](https://github.com/valkey-io/valkey-glide/pull/3661))
+* Go: Add script flush command([#3662](https://github.com/valkey-io/valkey-glide/pull/3662))
 
 #### Breaking Changes
 

@@ -2016,20 +2016,41 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 
 	// Create a script
 	script := options.NewScript("return 'Hello'")
-	routeOption := options.RouteOption{Route: config.AllPrimaries}
 
 	// Load script
-	_, err := client.InvokeScriptWithRoute(*script, routeOption)
+	_, err := client.InvokeScript(*script)
 	assert.Nil(suite.T(), err)
 
 	// Check existence of script
 	scriptHash := script.GetHash()
-	result, err := client.ScriptExistsWithRoute([]string{scriptHash}, routeOption)
+	result, err := client.ScriptExists([]string{scriptHash})
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), []bool{true}, result)
 
 	// Flush the script cache
-	flushResult, err := client.ScriptFlushWithRoute(routeOption)
+	flushResult, err := client.ScriptFlush()
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", flushResult)
+
+	// Create a script
+	script = options.NewScript("return 'Hello'")
+	routeOption := options.RouteOption{Route: config.AllPrimaries}
+
+	// Load script
+	_, err = client.InvokeScriptWithRoute(*script, routeOption)
+	assert.Nil(suite.T(), err)
+
+	// Check existence of script
+	scriptHash = script.GetHash()
+	result, err = client.ScriptExistsWithRoute([]string{scriptHash}, routeOption)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), []bool{true}, result)
+
+	// Create ScriptFlushOptions with default mode (SYNC) and route
+	scriptFlushOptions := options.NewScriptFlushOptions().WithRoute(&routeOption)
+
+	// Flush the script cache
+	flushResult, err = client.ScriptFlushWithOptions(*scriptFlushOptions)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", flushResult)
 
@@ -2042,8 +2063,12 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 	_, err = client.InvokeScriptWithRoute(*script, routeOption)
 	assert.Nil(suite.T(), err)
 
-	asyncMode := options.FlushMode(options.ASYNC)
-	flushResult, err = client.ScriptFlushWithModeWithRoute(asyncMode, routeOption)
+	// Create ScriptFlushOptions with ASYNC mode and route
+	scriptFlushOptions = options.NewScriptFlushOptions().
+		WithMode(options.ASYNC).
+		WithRoute(&routeOption)
+
+	flushResult, err = client.ScriptFlushWithOptions(*scriptFlushOptions)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", flushResult)
 

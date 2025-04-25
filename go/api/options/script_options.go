@@ -162,3 +162,29 @@ func dropScript(hash string) {
 
 	C.drop_script(cHash)
 }
+
+// ScriptFlushOptions represents options for script flush operations
+type ScriptFlushOptions struct {
+	Mode  FlushMode
+	Route *RouteOption
+}
+
+// NewScriptFlushOptions creates a new ScriptFlushOptions with default values
+func NewScriptFlushOptions() *ScriptFlushOptions {
+	return &ScriptFlushOptions{
+		Mode:  "",
+		Route: &RouteOption{},
+	}
+}
+
+// WithMode sets the flush mode for the script flush operation
+func (o *ScriptFlushOptions) WithMode(mode FlushMode) *ScriptFlushOptions {
+	o.Mode = mode
+	return o
+}
+
+// WithRoute sets the route option for the script flush operation
+func (o *ScriptFlushOptions) WithRoute(route *RouteOption) *ScriptFlushOptions {
+	o.Route = route
+	return o
+}
