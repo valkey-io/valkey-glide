@@ -7892,7 +7892,6 @@ func (client *baseClient) FunctionLoad(libraryCode string, replace bool) (string
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
 func (client *baseClient) FunctionFlush() (string, error) {
-	fmt.Println("Command Sig")
 	result, err := client.executor.sendCommand(C.FunctionFlush, []string{})
 	if err != nil {
 		return DefaultStringResponse, err

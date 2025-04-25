@@ -139,13 +139,12 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //
 // Return value:
 //
-//	When specifying a route other than a single node or when route is not given,
-//	it returns a map where each address is the key and its corresponding node response is the value.
-//	When a single node route is given, command returns a string containing the information for the sections requested.
-//  In transaction:
-//   The command routes to a single node and returns that node's information containing the information for the
-//   sections requested.
-//   
+//		When specifying a route other than a single node or when route is not given,
+//		it returns a map where each address is the key and its corresponding node response is the value.
+//		When a single node route is given, command returns a string containing the information for the sections requested.
+//	 In transaction:
+//	  The command routes to a single node and returns that node's information containing the information for the
+//	  sections requested.
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOptions) (ClusterValue[string], error) {
@@ -335,9 +334,9 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 // Return value:
 //
-//	`"OK"` response on success.
-//  In Transaction, 
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		`"OK"` response on success.
+//	 In Transaction,
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClusterClient) FlushAll() (string, error) {
