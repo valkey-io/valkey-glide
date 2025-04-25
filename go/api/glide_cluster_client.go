@@ -1730,7 +1730,7 @@ func (client *GlideClusterClient) ScriptExistsWithRoute(
 	return handleBoolArrayResponse(response)
 }
 
-// ScriptFlush removes all the scripts from the script cache.
+// Removes all the scripts from the script cache.
 // The command will be routed to all nodes.
 //
 // See [valkey.io] for details.
@@ -1744,7 +1744,7 @@ func (client *GlideClusterClient) ScriptFlush() (string, error) {
 	return client.baseClient.ScriptFlush()
 }
 
-// ScriptFlushWithOptions removes all the scripts from the script cache with the specified route options.
+// Removes all the scripts from the script cache with the specified route options.
 //
 // See [valkey.io] for details.
 //
@@ -1800,7 +1800,7 @@ func (client *GlideClusterClient) ScriptKillWithRoute(route options.RouteOption)
 		[]string{},
 		route.Route,
 	)
-  if err != nil {
+	if err != nil {
 		return DefaultStringResponse, err
 	}
 	return handleOkResponse(result)

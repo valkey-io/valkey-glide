@@ -7984,7 +7984,7 @@ func (client *baseClient) ScriptExists(
 	return handleBoolArrayResponse(response)
 }
 
-// ScriptFlush removes all the scripts from the script cache.
+// Removes all the scripts from the script cache.
 //
 // See [valkey.io] for details.
 //
@@ -8001,7 +8001,7 @@ func (client *baseClient) ScriptFlush() (string, error) {
 	return handleOkResponse(result)
 }
 
-// ScriptFlushWithMode removes all the scripts from the script cache with the specified flush mode.
+// Removes all the scripts from the script cache with the specified flush mode.
 // The mode can be either SYNC or ASYNC.
 //
 // See [valkey.io] for details.
@@ -8044,4 +8044,3 @@ func (client *baseClient) ScriptKill() (string, error) {
 	}
 	return handleOkResponse(result)
 }
-
