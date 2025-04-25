@@ -34,4 +34,6 @@ type ScriptingAndFunctionBaseCommands interface {
 	InvokeScriptWithOptions(script options.Script, scriptOptions options.ScriptOptions) (any, error)
 
 	ScriptExists(sha1s []string) ([]bool, error)
+
+	ScriptKill() (string, error)
 }

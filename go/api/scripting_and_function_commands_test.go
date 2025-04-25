@@ -940,3 +940,48 @@ func ExampleGlideClusterClient_ScriptExistsWithRoute() {
 
 	// Output: [true]
 }
+
+func ExampleGlideClient_ScriptKill() {
+	client := getExampleGlideClient()
+
+	// Try to kill scripts when no scripts are running
+	_, err := client.ScriptKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_ScriptKill_withoutRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Try to kill scripts when no scripts are running
+	_, err := client.ScriptKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_ScriptKill_withRoute() {
+	key := "{randomkey}1"
+	client := getExampleGlideClusterClient()
+
+	// Create a route with our specified key
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, key),
+	}
+
+	// Try to kill scripts when no scripts are running
+	_, err := client.ScriptKillWithRoute(route)
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
