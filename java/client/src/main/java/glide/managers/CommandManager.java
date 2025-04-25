@@ -18,6 +18,7 @@ import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.batch.BaseBatchOptions;
+import glide.telemetry.SpanManager;
 import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.scan.ClusterScanCursor;

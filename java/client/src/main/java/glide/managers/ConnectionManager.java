@@ -212,17 +212,22 @@ public class ConnectionManager {
         if (configuration.getConnectionTimeout() != null) {
             connectionRequestBuilder.setConnectionTimeout(configuration.getConnectionTimeout());
         }
-        
+
         // Add OpenTelemetry configuration if provided
         if (configuration.getOpenTelemetryConfig() != null) {
             OpenTelemetryConfig otelConfig = configuration.getOpenTelemetryConfig();
-            connectionRequestBuilder.setOpentelemetryConfig(
-                ConnectionRequestOuterClass.OpenTelemetryConfig.newBuilder()
-                    .setTracesCollectorEndPoint(otelConfig.getTracesCollectorEndPoint())
-                    .setMetricsCollectorEndPoint(otelConfig.getMetricsCollectorEndPoint())
-                    .setFlushInterval(otelConfig.getFlushIntervalMs())
-                    .build()
-            );
+
+            ConnectionRequestOuterClass.OpenTelemetryConfig.Builder outerOtelBuilder = ConnectionRequestOuterClass.OpenTelemetryConfig.newBuilder();
+            if (otelConfig.getTracesCollectorEndPoint() != null) {
+                outerOtelBuilder.setTracesCollectorEndPoint(otelConfig.getTracesCollectorEndPoint());
+            }
+            if (otelConfig.getMetricsCollectorEndPoint() != null) {
+                outerOtelBuilder.setMetricsCollectorEndPoint(otelConfig.getMetricsCollectorEndPoint());
+            }
+            if (otelConfig.getFlushIntervalMs() != null) {
+                outerOtelBuilder.setFlushInterval(otelConfig.getFlushIntervalMs());
+            }
+            connectionRequestBuilder.setOpentelemetryConfig(outerOtelBuilder.build());
         }
 
         return connectionRequestBuilder;

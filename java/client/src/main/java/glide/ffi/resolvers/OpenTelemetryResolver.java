@@ -3,20 +3,23 @@ package glide.ffi.resolvers;
 
 /**
  * Native resolver for OpenTelemetry functionality.
- * This class provides JNI bindings to the Rust OpenTelemetry implementation.
  */
 public class OpenTelemetryResolver {
+    static {
+        // Load the native library
+        NativeUtils.loadGlideLib();
+    }
 
     /**
      * Creates a new OpenTelemetry span with the given name.
      *
-     * @param name The name of the span to create
-     * @return A pointer to the created span
+     * @param name The name of the span
+     * @return A pointer to the span as a long
      */
     public static native long createOtelSpan(String name);
 
     /**
-     * Drops an OpenTelemetry span, releasing its resources.
+     * Drops an OpenTelemetry span that was previously created.
      *
      * @param spanPtr The pointer to the span to drop
      */
