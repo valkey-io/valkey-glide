@@ -7772,7 +7772,7 @@ func (client *baseClient) Publish(channel string, message string) (int64, error)
 	return handleIntResponse(result)
 }
 
-// PubSubChannels lists the currently active channels.
+// Lists the currently active channels.
 //
 // When used in cluster mode, the command is routed to all nodes and aggregates
 // the responses into a single array.
