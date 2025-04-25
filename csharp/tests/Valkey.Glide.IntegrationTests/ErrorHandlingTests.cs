@@ -9,6 +9,8 @@ using TimeoutException = Valkey.Glide.Errors.TimeoutException;
 
 namespace Valkey.Glide.IntegrationTests;
 
+[Collection(typeof(ErrorHandlingTests))]
+[CollectionDefinition(DisableParallelization = true)]
 public class ErrorHandlingTests
 {
     [Fact]
@@ -21,7 +23,7 @@ public class ErrorHandlingTests
     public async Task ErrorIfTimedOut()
     {
         using GlideClient client = TestConfiguration.DefaultStandaloneClient();
-        TestContext.Current.TestOutputHelper?.WriteLine($"{client} line {new StackFrame(1, true).GetFileLineNumber()} {DateTime.Now:O}");
+        TestContext.Current.TestOutputHelper?.WriteLine($"{client} 1 {DateTime.Now:O}");
         //_ = await Assert.ThrowsAsync<TimeoutException>(() => client.CustomCommand(["debug", "sleep", "1"]));
         //*
         _ = Assert.Throws<TimeoutException>(() =>
@@ -29,11 +31,11 @@ public class ErrorHandlingTests
             _ = client.CustomCommand(["debug", "sleep", "0.5"]).GetAwaiter().GetResult();
             //TestContext.Current.TestOutputHelper?.WriteLine($"CustomCommand = {res}");
             // TODO try KeepAlive here
-            TestContext.Current.TestOutputHelper?.WriteLine($"{client} line {new StackFrame(1, true).GetFileLineNumber()} {DateTime.Now:O}");
+            TestContext.Current.TestOutputHelper?.WriteLine($"{client} 2 {DateTime.Now:O}");
             GC.KeepAlive(client);
         });
         //*/
-        TestContext.Current.TestOutputHelper?.WriteLine($"{client} line {new StackFrame(1, true).GetFileLineNumber()} {DateTime.Now:O}");
+        TestContext.Current.TestOutputHelper?.WriteLine($"{client} 3 {DateTime.Now:O}");
         // Ping server until it wakes up, otherwise following tests may fail
         int attempt = 0;
         for (; attempt < 10; attempt++)
@@ -49,6 +51,7 @@ public class ErrorHandlingTests
         {
             Assert.Fail($"Server didn't wake up");
         }
+        TestContext.Current.TestOutputHelper?.WriteLine($"{client} 4 {DateTime.Now:O}");
         GC.KeepAlive(client);
     }
 
