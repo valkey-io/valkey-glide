@@ -93,8 +93,6 @@ func (client *baseClient) executeTransactionWithRoute(cmds []Cmder, route config
 
 	cCmders := (*[1 << 30]C.Cmder)(cCmdersArray)[:len(cmds):len(cmds)]
 
-	argPtrs := []*C.char{} // Track allocated memory for cleanup
-
 	for i, cmd := range cmds {
 		cArgsArray := C.malloc(C.size_t(len(cmd.Args())) * C.size_t(unsafe.Sizeof(uintptr(0))))
 		defer C.free(cArgsArray)
@@ -103,7 +101,6 @@ func (client *baseClient) executeTransactionWithRoute(cmds []Cmder, route config
 
 		for j, arg := range cmd.Args() {
 			cArgs[j] = C.CString(arg)
-			argPtrs = append(argPtrs, cArgs[j])
 		}
 		// Check cArgs
 		var cArgsPtr **C.char

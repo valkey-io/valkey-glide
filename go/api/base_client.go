@@ -6367,7 +6367,7 @@ func (client *baseClient) XRangeWithOptions(
 		return nil, err
 	}
 	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
-		return make([]XRangeResponse, 0, 0), err
+		return make([]XRangeResponse, 0), err
 	}
 	return handleXRangeResponse(result)
 }
@@ -6441,7 +6441,7 @@ func (client *baseClient) XRevRangeWithOptions(
 		return nil, err
 	}
 	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
-		return make([]XRangeResponse, 0, 0), err
+		return make([]XRangeResponse, 0), err
 	}
 
 	return handleXRevRangeResponse(result)
@@ -6593,7 +6593,7 @@ func (client *baseClient) BitField(key string, subCommands []options.BitFieldSub
 		return nil, err
 	}
 	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
-		slice := make([]Result[int64], 0, 0)
+		slice := make([]Result[int64], 0)
 		return slice, err
 	}
 	return handleIntOrNilArrayResponse(result)
