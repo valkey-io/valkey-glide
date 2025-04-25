@@ -1207,6 +1207,7 @@ func ExampleGlideClusterClient_ScriptKill_withRoute() {
 	// Output:
 	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
 }
+
 // ScriptShow Examples
 func ExampleGlideClient_ScriptShow() {
 	client := getExampleGlideClient()
