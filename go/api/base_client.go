@@ -7918,37 +7918,12 @@ func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, err
 		return make(map[string]int64), nil
 	}
 
-	args := append([]string{"NUMSUB"}, channels...)
-	result, err := client.executeCommand(C.PubSubNumSub, args) // TODO: return result
+	result, err := client.executeCommand(C.PubSubNumSub, channels)
 	if err != nil {
 		return nil, err
 	}
-	actualTypeStr := C.GoString(C.get_response_type_string(result.response_type))
-	fmt.Printf("actualTypeStr %+v\n", actualTypeStr)
 
-	arrResult, err := parseMap(result)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Printf("result %+v\n", arrResult)
-
-	// NUMSUB returns a flat array of channel, count pairs
-	// flatArray := utils.ReadStringArray(result)
-	resultMap := make(map[string]int64)
-
-	// Process pairs of channel name and subscriber count
-	// for i := 0; i < len(flatArray); i += 2 {
-	// 	if i+1 < len(flatArray) {
-	// 		channel := flatArray[i]
-	// 		count, err := utils.StringToInt64(flatArray[i+1])
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 		resultMap[channel] = count
-	// 	}
-	// }
-
-	return resultMap, nil
+	return handleStringIntMapResponse(result)
 }
 
 // Kills a function that is currently executing.
