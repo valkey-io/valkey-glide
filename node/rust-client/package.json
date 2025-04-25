@@ -35,13 +35,14 @@
     "scripts": {
         "artifacts": "napi artifacts",
         "build": "npm install && napi build --features testing_utilities --platform --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:release": "npm install && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release": "npm install --omit=dev && npm run globals && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
         "build:benchmark": "npm install && napi build --features testing_utilities --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
         "format": "run-p format:prettier format:rs",
         "format:prettier": "prettier . -w",
         "format:rs": "cargo fmt",
         "prepublishOnly": "napi prepublish -t npm",
-        "version": "napi version"
+        "version": "napi version",
+        "globals": "npm install --global @napi-rs/cli prettier"
     },
     "devDependencies": {
         "@napi-rs/cli": "^2.18.4",
