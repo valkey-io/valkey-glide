@@ -10,6 +10,8 @@ type PubSubCommands interface {
 	PubSubChannels() ([]string, error)
 	// PubSubChannelsWithPattern returns a list of all channels that match the given pattern.
 	PubSubChannelsWithPattern(pattern string) ([]string, error)
+	// PubSubNumPat returns the number of patterns that are subscribed to by clients.
+	PubSubNumPat() (int64, error)
 }
 
 // PubSubClusterCommands defines additional Pub/Sub operations available only in cluster mode.

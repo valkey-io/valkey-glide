@@ -21,7 +21,6 @@ package api
 import "C"
 
 import (
-	goErr "errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -7760,9 +7759,6 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 //
 // [valkey.io]: https://valkey.io/commands/publish
 func (client *baseClient) Publish(channel string, message string) (int64, error) {
-	if message == "" || channel == "" {
-		return 0, goErr.New("both message and channel are required for Publish command")
-	}
 	args := []string{channel, message}
 	result, err := client.executeCommand(C.Publish, args)
 	if err != nil {
@@ -7810,6 +7806,26 @@ func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, e
 	}
 
 	return handleStringArrayResponse(result)
+}
+
+// PubSubNumPat returns the number of patterns that are subscribed to by clients.
+//
+// This returns the total number of unique patterns that all clients are subscribed to,
+// not the count of clients subscribed to patterns.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numpat
+func (client *baseClient) PubSubNumPat() (int64, error) {
+	result, err := client.executeCommand(C.PubSubNumPat, []string{})
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
 }
 
 // Kills a function that is currently executing.
