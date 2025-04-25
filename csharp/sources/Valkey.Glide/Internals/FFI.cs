@@ -40,11 +40,12 @@ internal class FFI
         protected abstract void FreeMemory();
     }
 
+    // A wrapper for a command, resposible for marshalling (allocating and freeing) the required data
     internal class Cmd : Marshallable
     {
-        private IntPtr[] _argPtrs;
+        private IntPtr[] _argPtrs = [];
         private GCHandle _pinnedArgs;
-        private nuint[] _lengths;
+        private nuint[] _lengths = [];
         private GCHandle _pinnedLengths;
         private readonly GlideString[] _args;
         private CmdInfo _cmd;
@@ -53,8 +54,6 @@ internal class FFI
         {
             _cmd = new() { RequestType = requestType, ArgCount = (nuint)arguments.Length };
             _args = arguments;
-            _argPtrs = [];
-            _lengths = [];
         }
 
         protected override void FreeMemory()
@@ -137,6 +136,7 @@ internal class FFI
         }
     }
 
+    // A wrapper for a route
     internal class Route : Marshallable
     {
         private readonly RouteInfo _info;
@@ -194,6 +194,63 @@ internal class FFI
         {
             _info.Route = _route?.ToPtr() ?? IntPtr.Zero;
             return StructToPtr(_info);
+        }
+    }
+
+    // A wrapper for connection request
+    internal class ConnectionConfig : Marshallable
+    {
+        private ConnectionRequest _request;
+        private readonly List<NodeAddress> _addresses;
+
+        public ConnectionConfig(
+            List<NodeAddress> addresses,
+            TlsMode? tlsMode,
+            bool clusterMode,
+            uint? requestTimeout,
+            uint? connectionTimeout,
+            ReadFrom? readFrom,
+            RetryStrategy? retryStrategy,
+            AuthenticationInfo? authenticationInfo,
+            uint databaseId,
+            Protocol? protocol,
+            string? clientName)
+        {
+            _addresses = addresses;
+            _request = new()
+            {
+                AddressCount = (nuint)addresses.Count,
+                HasTlsMode = tlsMode.HasValue,
+                TlsMode = tlsMode ?? default,
+                ClusterMode = clusterMode,
+                HasRequestTimeout = requestTimeout.HasValue,
+                RequestTimeout = requestTimeout ?? default,
+                HasConnectionTimeout = connectionTimeout.HasValue,
+                ConnectionTimeout = connectionTimeout ?? default,
+                HasReadFrom = readFrom.HasValue,
+                ReadFrom = readFrom ?? default,
+                HasConnectionRetryStrategy = retryStrategy.HasValue,
+                ConnectionRetryStrategy = retryStrategy ?? default,
+                HasAuthenticationInfo = authenticationInfo.HasValue,
+                AuthenticationInfo = authenticationInfo ?? default,
+                DatabaseId = databaseId,
+                HasProtocol = protocol.HasValue,
+                Protocol = protocol ?? default,
+                ClientName = clientName,
+            };
+        }
+
+        protected override void FreeMemory() => Marshal.FreeHGlobal(_request.Addresses);
+
+        protected override IntPtr AllocateAndCopy()
+        {
+            int addressSize = Marshal.SizeOf(typeof(NodeAddress));
+            _request.Addresses = Marshal.AllocHGlobal(addressSize * (int)_request.AddressCount);
+            for (int i = 0; i < (int)_request.AddressCount; i++)
+            {
+                Marshal.StructureToPtr(_addresses[i], _request.Addresses + (i * addressSize), false);
+            }
+            return StructToPtr(_request);
         }
     }
 
@@ -276,7 +333,7 @@ internal class FFI
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct ConnectionRequest
+    private struct ConnectionRequest
     {
         public nuint AddressCount;
         public IntPtr Addresses; // ** NodeAddress - array pointer

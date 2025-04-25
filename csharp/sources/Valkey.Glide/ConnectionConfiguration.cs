@@ -2,6 +2,8 @@
 
 using System.Runtime.InteropServices;
 
+using Valkey.Glide.Internals;
+
 using static Valkey.Glide.Internals.FFI;
 
 namespace Valkey.Glide;
@@ -9,6 +11,24 @@ namespace Valkey.Glide;
 public abstract class ConnectionConfiguration
 {
     #region Structs and Enums definitions
+    internal record ConnectionConfig
+    {
+        public List<NodeAddress> Addresses = [];
+        public TlsMode? TlsMode;
+        public bool ClusterMode;
+        public uint? RequestTimeout;
+        public uint? ConnectionTimeout;
+        public ReadFrom? ReadFrom;
+        public RetryStrategy? RetryStrategy;
+        public AuthenticationInfo? AuthenticationInfo;
+        public uint DatabaseId;
+        public Protocol? Protocol;
+        public string? ClientName;
+
+        internal FFI.ConnectionConfig ToFfi() =>
+            new(Addresses, TlsMode, ClusterMode, RequestTimeout, ConnectionTimeout, ReadFrom, RetryStrategy, AuthenticationInfo, DatabaseId, Protocol, ClientName);
+    }
+
     /// <summary>
     /// Represents the strategy used to determine how and when to reconnect, in case of connection
     /// failures. The time between attempts grows exponentially, to the formula <c>rand(0 ... factor *
@@ -129,9 +149,9 @@ public abstract class ConnectionConfiguration
     /// </summary>
     public abstract class BaseClientConfiguration
     {
-        internal ConnectionRequest Request;
+        internal ConnectionConfig Request = new();
 
-        internal ConnectionRequest ToRequest() => Request;
+        internal ConnectionConfig ToRequest() => Request;
     }
 
     /// <summary>
@@ -154,25 +174,23 @@ public abstract class ConnectionConfiguration
     /// Builder for configuration of common parameters for standalone and cluster client.
     /// </summary>
     /// <typeparam name="T">Derived builder class</typeparam>
-    public abstract class ClientConfigurationBuilder<T> : IDisposable
+    public abstract class ClientConfigurationBuilder<T>
         where T : ClientConfigurationBuilder<T>, new()
     {
-        internal ConnectionRequest Config;
+        internal ConnectionConfig Config;
 
         protected ClientConfigurationBuilder(bool clusterMode)
         {
-            Config = new ConnectionRequest { ClusterMode = clusterMode };
+            Config = new ConnectionConfig { ClusterMode = clusterMode };
         }
 
         #region address
-        private readonly List<NodeAddress> _addresses = [];
-
         /// <inheritdoc cref="Addresses"/>
         /// <b>Add</b> a new address to the list.<br />
         /// See also <seealso cref="Addresses"/>.
         protected (string? host, ushort? port) Address
         {
-            set => _addresses.Add(new NodeAddress
+            set => Config.Addresses.Add(new NodeAddress
             {
                 Host = value.host ?? DEFAULT_HOST,
                 Port = value.port ?? DEFAULT_PORT
@@ -228,14 +246,12 @@ public abstract class ConnectionConfiguration
         /// the server is in standalone mode, only nodes whose addresses were provided will be used by the
         /// client.
         /// <para />
-        /// For example:
-        /// <code>
+        /// For example: <code>
         /// [
         ///   ("sample-address-0001.use1.cache.amazonaws.com", 6378),
         ///   ("sample-address-0002.use2.cache.amazonaws.com"),
         ///   ("sample-address-0002.use3.cache.amazonaws.com", 6380)
-        /// ]
-        /// </code>
+        /// ]</code>
         /// </summary>
         public AddressBuilder Addresses
         {
@@ -250,11 +266,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public bool UseTls
         {
-            set
-            {
-                Config.HasTlsMode = true;
-                Config.TlsMode = value ? TlsMode.SecureTls : TlsMode.NoTls;
-            }
+            set => Config.TlsMode = value ? TlsMode.SecureTls : TlsMode.NoTls;
         }
         /// <inheritdoc cref="UseTls"/>
         public T WithTls(bool useTls)
@@ -278,11 +290,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public uint RequestTimeout
         {
-            set
-            {
-                Config.HasRequestTimeout = true;
-                Config.RequestTimeout = value;
-            }
+            set => Config.RequestTimeout = value;
         }
         /// <inheritdoc cref="RequestTimeout"/>
         public T WithRequestTimeout(uint requestTimeout)
@@ -300,11 +308,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public uint ConnectionTimeout
         {
-            set
-            {
-                Config.HasConnectionTimeout = true;
-                Config.ConnectionTimeout = value;
-            }
+            set => Config.ConnectionTimeout = value;
         }
         /// <inheritdoc cref="ConnectionTimeout"/>
         public T WithConnectionTimeout(uint connectionTimeout)
@@ -319,11 +323,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public ReadFrom ReadFrom
         {
-            set
-            {
-                Config.HasReadFrom = true;
-                Config.ReadFrom = value;
-            }
+            set => Config.ReadFrom = value;
         }
         /// <inheritdoc cref="ReadFrom"/>
         public T WithReadFrom(ReadFrom readFrom)
@@ -366,11 +366,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public Protocol ProtocolVersion
         {
-            set
-            {
-                Config.HasProtocol = true;
-                Config.Protocol = value;
-            }
+            set => Config.Protocol = value;
         }
 
         /// <inheritdoc cref="ProtocolVersion"/>
@@ -397,29 +393,7 @@ public abstract class ConnectionConfiguration
         }
         #endregion
 
-        public void Dispose() => Clean();
-
-        private void Clean() // TODO merge with #3626 https://github.com/valkey-io/valkey-glide/pull/3626
-        {
-            if (Config.Addresses != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(Config.Addresses);
-                Config.Addresses = IntPtr.Zero;
-            }
-        }
-
-        internal ConnectionRequest Build()
-        {
-            Clean(); // memory leak protection on rebuilding a config from the builder
-            Config.AddressCount = (uint)_addresses.Count;
-            int addressSize = Marshal.SizeOf(typeof(NodeAddress));
-            Config.Addresses = Marshal.AllocHGlobal(addressSize * _addresses.Count);
-            for (int i = 0; i < _addresses.Count; i++)
-            {
-                Marshal.StructureToPtr(_addresses[i], Config.Addresses + (i * addressSize), false);
-            }
-            return Config;
-        }
+        internal ConnectionConfig Build() => Config;
     }
 
     /// <summary>
@@ -456,11 +430,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public RetryStrategy ConnectionRetryStrategy
         {
-            set
-            {
-                Config.HasConnectionRetryStrategy = true;
-                Config.ConnectionRetryStrategy = value;
-            }
+            set => Config.RetryStrategy = value;
         }
         /// <inheritdoc cref="ConnectionRetryStrategy"/>
         public StandaloneClientConfigurationBuilder WithConnectionRetryStrategy(RetryStrategy connectionRetryStrategy)

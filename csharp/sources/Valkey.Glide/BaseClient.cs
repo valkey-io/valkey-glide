@@ -51,11 +51,10 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
         nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(client._successCallbackDelegate);
         nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(client._failureCallbackDelegate);
-        nint configPtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(ConnectionRequest)));
-        Marshal.StructureToPtr(config.ToRequest(), configPtr, false);
+
+        using FFI.ConnectionConfig request = config.Request.ToFfi();
         Message message = client._messageContainer.GetMessageForCall();
-        CreateClientFfi(configPtr, successCallbackPointer, failureCallbackPointer);
-        Marshal.FreeHGlobal(configPtr);
+        CreateClientFfi(request.ToPtr(), successCallbackPointer, failureCallbackPointer);
         client._clientPointer = await message; // This will throw an error thru failure callback if any
         return client._clientPointer != IntPtr.Zero
             ? client

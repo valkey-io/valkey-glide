@@ -59,8 +59,7 @@ public sealed class GlideClusterClient : BaseClient, IGenericClusterCommands
     public async Task<object?> CustomCommand(GlideString[] args, Route? route = null)
         => await Command(FFI.RequestType.CustomCommand, args, resp => HandleServerResponse<object?>(resp, true), route);
 
-    public async Task<object?[]?> Exec(ClusterBatch batch)
-        => await Batch(batch);
+    public async Task<object?[]?> Exec(ClusterBatch batch) => await Batch(batch);
 
     public async Task<object?[]?> Exec(ClusterBatch batch, ClusterBatchOptions options)
         => batch.IsAtomic && options.RetryStrategy is not null

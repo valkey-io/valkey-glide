@@ -61,9 +61,7 @@ public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGe
     public async Task<object?> CustomCommand(GlideString[] args)
         => await Command(FFI.RequestType.CustomCommand, args, resp => HandleServerResponse<object?>(resp, true));
 
-    public async Task<object?[]?> Exec(Batch batch)
-        => await Batch(batch);
+    public async Task<object?[]?> Exec(Batch batch) => await Batch(batch);
 
-    public async Task<object?[]?> Exec(Batch batch, BatchOptions options)
-        => await Batch(batch, options);
+    public async Task<object?[]?> Exec(Batch batch, BatchOptions options) => await Batch(batch, options);
 }
