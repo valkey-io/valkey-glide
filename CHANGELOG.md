@@ -1,4 +1,5 @@
 #### Changes
+
 * Core: Add an OK response type to FFI ([#3630](https://github.com/valkey-io/valkey-glide/pull/3630))
 * Core: Move UDS Socket Filename to tmp ([#3615](https://github.com/valkey-io/valkey-glide/pull/3615))
 * Core: Ensure UDS socket filename is truly unique. ([#3596](https://github.com/valkey-io/valkey-glide/pull/3596))
@@ -16,7 +17,7 @@
 * Go: Add `ZLEXCOUNT` ([#3140](https://github.com/valkey-io/valkey-glide/pull/3140))
 * Go: Updating examples for `ZInterCard` ([#3232](https://github.com/valkey-io/valkey-glide/pull/3232))
 * Go: Fix channel passing from Go to Rust by using `runtime.Pinner` or `cgo.Handle` ([#3208](https://github.com/valkey-io/valkey-glide/pull/3208))
-* Go: Add `BZPOPMAX` and ` ZMPOP` [#3257](https://github.com/valkey-io/valkey-glide/pull/3257)
+* Go: Add `BZPOPMAX` and `ZMPOP` [#3257](https://github.com/valkey-io/valkey-glide/pull/3257)
 * Go: Fix data race on the coreClient with `sync.Mutex` and a channel map ([#3236](https://github.com/valkey-io/valkey-glide/pull/3236))
 * Go: Adding support for Az Affinity ([#3235](https://github.com/valkey-io/valkey-glide/pull/3235))
 * Go: Adding support for advanced client configs and connectionTimeout ([#3290](https://github.com/valkey-io/valkey-glide/pull/3290))
@@ -48,6 +49,7 @@
 * Core/FFI/Go: Add support for async and sync client types in FFI ([#3451](https://github.com/valkey-io/valkey-glide/pull/3451))
 * Go: Add PubSub support ([#3417](https://github.com/valkey-io/valkey-glide/pull/3417))
 * Go: Add `Publish` ([#3417](https://github.com/valkey-io/valkey-glide/pull/3417))
+* Go: Add `PubSubChannels` ([#3665](https://github.com/valkey-io/valkey-glide/pull/3665))
 * Go: Add `Config Rewrite` ([#3156](https://github.com/valkey-io/valkey-glide/pull/3156))
 * Go: Add `Random Key` ([#3358](https://github.com/valkey-io/valkey-glide/pull/3358))
 * Go: Add Function Load, Function Flush, FCall and FCall_RO ([#3474](https://github.com/valkey-io/valkey-glide/pull/3474))
