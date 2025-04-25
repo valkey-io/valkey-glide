@@ -33,6 +33,7 @@ public class ErrorHandlingTests
             //GC.KeepAlive(client);
         });
         //*/
+        /*
         TestContext.Current.TestOutputHelper?.WriteLine($"{client} 3 {DateTime.Now:O}");
         // Ping server until it wakes up, otherwise following tests may fail
         int attempt = 0;
@@ -51,6 +52,7 @@ public class ErrorHandlingTests
         }
         TestContext.Current.TestOutputHelper?.WriteLine($"{client} 4 {DateTime.Now:O}");
         GC.KeepAlive(client);
+        //*/
     }
 
     [Fact]
