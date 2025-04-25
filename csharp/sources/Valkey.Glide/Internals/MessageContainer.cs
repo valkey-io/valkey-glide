@@ -4,13 +4,8 @@ using System.Collections.Concurrent;
 
 namespace Valkey.Glide.Internals;
 
-internal class MessageContainer
+internal class MessageContainer(BaseClient client)
 {
-    internal MessageContainer(BaseClient client)
-    {
-        _client = client;
-    }
-
     internal Message GetMessage(int index) => _messages[index];
 
     internal Message GetMessageForCall()
@@ -70,6 +65,6 @@ internal class MessageContainer
 
     // Holding the client prevents it from being GC'd until all operations complete.
 #pragma warning disable IDE0052 // Remove unread private members
-    private readonly BaseClient _client;
+    private readonly BaseClient _client = client;
 #pragma warning restore IDE0052 // Remove unread private members
 }
