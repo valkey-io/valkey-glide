@@ -215,7 +215,7 @@ pub unsafe extern "C" fn create_client(
 /// # Safety
 ///
 /// * `client_ptr` must not be `null`.
-/// * `client_ptr` must be able to be safely casted to a valid [`Arc<Client>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
+/// * `client_ptr` must be able to be safely casted to a valid [`Arc<Client>`] via [`Arc::from_raw`]. See the safety documentation of [`Arc::from_raw`].
 #[no_mangle]
 pub extern "C" fn close_client(client_ptr: *const c_void) {
     assert!(!client_ptr.is_null());
@@ -229,7 +229,7 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
 ///
 /// # Safety
 /// * `client_ptr` must not be `null`.
-/// * `client_ptr` must be able to be safely casted to a valid [`Arc<Client>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
+/// * `client_ptr` must be able to be safely casted to a valid [`Arc<Client>`] via [`Arc::from_raw`]. See the safety documentation of [`Arc::from_raw`].
 /// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
 /// * Pointers to callbacks stored in [`Client`] should remain valid. See the safety documentation of [`SuccessCallback`] and [`FailureCallback`].
 /// * `args` and `args_len` must not be `null`.

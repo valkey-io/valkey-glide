@@ -31,30 +31,24 @@ public class TestConfiguration : IDisposable
     public static GlideClient DefaultStandaloneClient() => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
     public static GlideClusterClient DefaultClusterClient() => GlideClusterClient.CreateClient(DefaultClusterClientConfig().Build()).GetAwaiter().GetResult();
 
-    private static TheoryData<BaseClient> s_testClients = [];
-
     public static TheoryData<BaseClient> TestClients
     {
         get
         {
-            if (s_testClients.Count == 0)
+            if (field.Count == 0)
             {
-                s_testClients = [(BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient()];
+                field = [(BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient()];
             }
-            return s_testClients;
+            return field;
         }
 
-        private set => s_testClients = value;
-    }
+        private set;
+    } = [];
 
-    public static void ResetTestClients() => s_testClients = [];
-
-    private readonly StringWriter _output = new();
+    public static void ResetTestClients() => TestClients = [];
 
     public TestConfiguration()
     {
-        Console.SetOut(_output);
-
         string? projectDir = Directory.GetCurrentDirectory();
         while (!(Path.GetFileName(projectDir) == "csharp" || projectDir == null))
         {
@@ -69,7 +63,7 @@ public class TestConfiguration : IDisposable
         _scriptDir = Path.Combine(projectDir, "..", "utils");
 
         // Stop all if weren't stopped on previous test run
-        //StopServer(false);
+        StopServer(false);
 
         // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
         // Not using `Directory.Exists` before deleting, because another process may delete the dir while IT is running.
