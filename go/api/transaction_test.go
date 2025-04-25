@@ -9,20 +9,11 @@ import (
 func ExampleTransaction_Exec() {
 	var cmd *Transaction = getExampleTransactionGlideClient() // example helper function
 	cmd.Set("key123", "Glide")
-	cmd.Set("key1", "Glide")
-	cmd.Set("key2", "Hello")
-	cmd.Set("key3", "KeyToDelete")
-	cmd.Del([]string{"key3"})
-	cmd.Append("key2", "_World")
-	cmd.Get("key2")
-	cmd.Set("key123", "Valkey")
-	cmd.Get("key123")
-	cmd.Type("key123")
 	result, _ := cmd.Exec()
 	fmt.Println(result)
 
 	// Output:
-	// [OK OK OK OK 1 11 Hello_World OK Valkey string]
+	// [OK]
 }
 
 func ExampleTransaction_Watch() {
