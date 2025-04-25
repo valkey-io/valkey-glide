@@ -65,11 +65,6 @@ func (suite *GlideTestSuite) TestPubSubChannels() {
 
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
-			// Skip cluster tests if cluster hosts are not available
-			if tt.clientType == 1 && len(suite.clusterHosts) == 0 {
-				t.Skip("Cluster not available")
-			}
-
 			// Create channel definitions for all channels
 			channels := make([]ChannelDefn, len(tt.channelNames))
 			for i, channelName := range tt.channelNames {
