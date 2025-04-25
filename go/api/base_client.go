@@ -21,7 +21,6 @@ package api
 import "C"
 
 import (
-	goErr "errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -7760,9 +7759,6 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 //
 // [valkey.io]: https://valkey.io/commands/publish
 func (client *baseClient) Publish(channel string, message string) (int64, error) {
-	if message == "" || channel == "" {
-		return 0, goErr.New("both message and channel are required for Publish command")
-	}
 	args := []string{channel, message}
 	result, err := client.executeCommand(C.Publish, args)
 	if err != nil {
