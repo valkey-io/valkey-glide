@@ -7803,10 +7803,6 @@ func (client *baseClient) PubSubChannels() ([]string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-channels
 func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
-	if pattern == "" {
-		return nil, &errors.RequestError{Msg: "pattern is required for PubSubChannelsWithPattern command"}
-	}
-
 	args := []string{pattern}
 	result, err := client.executeCommand(C.PubSubChannels, args)
 	if err != nil {
