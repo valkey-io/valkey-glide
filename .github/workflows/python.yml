@@ -193,9 +193,7 @@ jobs:
             - name: Test pubsub with pytest
               working-directory: ./python
               run: |
-                  source .env/bin/activate
-                  pip install -r dev_requirements.txt
-                  pytest -v --asyncio-mode=auto -k test_pubsub --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -k test_pubsub --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()
@@ -241,8 +239,6 @@ jobs:
               run: |
                   python -m pip install --upgrade pip
                   pip install sphinx sphinx-rtd-theme
-                  pip install -r dev_requirements.txt
-                  pip install -r requirements.txt
 
             - name: Build docs
               working-directory: ./python/docs
@@ -313,8 +309,7 @@ jobs:
             - name: Test with pytest
               working-directory: ./python
               run: |
-                  source .env/bin/activate
-                  pytest -v --asyncio-mode=auto --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()
