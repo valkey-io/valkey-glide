@@ -946,6 +946,20 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 	functionResult, err = client.FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "one", functionResult)
+
+	// load new lib and delete it - first lib remains loaded
+	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoad(anotherLib, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "anotherLib", result)
+
+	deleteResult, err := client.FunctionDelete("anotherLib")
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", deleteResult)
+
+	// delete missing lib returns a error
+	_, err = client.FunctionDelete("anotherLib")
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFunctionStats() {
@@ -1016,4 +1030,22 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 		assert.Equal(suite.T(), int64(0), nodeStats.Engines["LUA"].LibraryCount)
 		assert.Equal(suite.T(), int64(0), nodeStats.Engines["LUA"].FunctionCount)
 	}
+}
+
+func (suite *GlideTestSuite) TestFunctionKill() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+
+	// Flush all functions
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }

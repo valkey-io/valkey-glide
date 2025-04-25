@@ -6,6 +6,7 @@ using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
 
 using static Valkey.Glide.ConnectionConfiguration;
+using static Valkey.Glide.Errors;
 using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Internals.ResponseHandler;
 
@@ -42,20 +43,26 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     #endregion public methods
 
     #region protected methods
-    protected BaseClient(BaseClientConfiguration config)
+    protected static async Task<T> CreateClient<T>(BaseClientConfiguration config, Func<T> ctor) where T : BaseClient
+    {
+        T client = ctor();
+
+        nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(client._successCallbackDelegate);
+        nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(client._failureCallbackDelegate);
+
+        using FFI.ConnectionConfig request = config.Request.ToFfi();
+        Message message = client._messageContainer.GetMessageForCall();
+        CreateClientFfi(request.ToPtr(), successCallbackPointer, failureCallbackPointer);
+        client._clientPointer = await message; // This will throw an error thru failure callback if any
+        return client._clientPointer != IntPtr.Zero
+            ? client
+            : throw new ConnectionException("Failed creating a client");
+    }
+
+    protected BaseClient()
     {
         _successCallbackDelegate = SuccessCallback;
-        nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(_successCallbackDelegate);
         _failureCallbackDelegate = FailureCallback;
-        nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(_failureCallbackDelegate);
-
-        FFI.ConnectionConfig request = config.Request.ToFfi();
-        _clientPointer = CreateClientFfi(request.ToPtr(), successCallbackPointer, failureCallbackPointer);
-        request.Dispose();
-        if (_clientPointer == IntPtr.Zero)
-        {
-            throw new Exception("Failed creating a client");
-        }
     }
 
     protected internal delegate T ResponseHandler<T>(IntPtr response);
@@ -115,7 +122,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
             }
             return value is R
                 ? converter((value as R)!)
-                : throw new Exception($"Unexpected return type from Glide: got {value?.GetType().Name} expected {typeof(T).Name}");
+                : throw new RequestException($"Unexpected return type from Glide: got {value?.GetType().Name} expected {typeof(T).Name}");
         }
         finally
         {
@@ -129,9 +136,12 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
         Task.Run(() => _messageContainer.GetMessage((int)index).SetResult(ptr));
 
-    private void FailureCallback(ulong index) =>
+    private void FailureCallback(ulong index, IntPtr strPtr, RequestErrorType errType)
+    {
+        string str = Marshal.PtrToStringAnsi(strPtr)!;
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
-        Task.Run(() => _messageContainer.GetMessage((int)index).SetException(new Exception("Operation failed")));
+        _ = Task.Run(() => _messageContainer.GetMessage((int)index).SetException(Create(errType, str)));
+    }
 
     ~BaseClient() => Dispose();
     #endregion private methods
@@ -156,7 +166,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     #region FFI function declarations
 
     private delegate void SuccessAction(ulong index, IntPtr ptr);
-    private delegate void FailureAction(ulong index);
+    private delegate void FailureAction(ulong index, IntPtr strPtr, RequestErrorType err);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "command")]
     private static extern void CommandFfi(IntPtr client, ulong index, IntPtr cmdInfo, IntPtr routeInfo);
@@ -165,7 +175,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     private static extern void FreeResponse(IntPtr response);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_client")]
-    private static extern IntPtr CreateClientFfi(IntPtr config, IntPtr successCallback, IntPtr failureCallback);
+    private static extern void CreateClientFfi(IntPtr config, IntPtr successCallback, IntPtr failureCallback);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_client")]
     private static extern void CloseClientFfi(IntPtr client);

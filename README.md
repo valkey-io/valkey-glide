@@ -21,6 +21,9 @@ In the current release, Valkey GLIDE is available for Python, Java and Node.js. 
 
 ## Getting Started
 
+**Documentation** 
+GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers documentation for the Python and Node wrappers. 
+
 **SDKs**
 - [Java](./java/README.md)
 - [Python](./python/README.md)

@@ -28,32 +28,30 @@ public class TestConfiguration : IDisposable
             .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
             .WithRequestTimeout(10000);
 
-    public static GlideClient DefaultStandaloneClient() => new(DefaultClientConfig().Build());
-    public static GlideClusterClient DefaultClusterClient() => new(DefaultClusterClientConfig().Build());
-
-    private static TheoryData<BaseClient> s_testClients = [];
+    public static GlideClient DefaultStandaloneClient() => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
+    public static GlideClusterClient DefaultClusterClient() => GlideClusterClient.CreateClient(DefaultClusterClientConfig().Build()).GetAwaiter().GetResult();
 
     public static TheoryData<BaseClient> TestClients
     {
         get
         {
-            if (s_testClients.Count == 0)
+            if (field.Count == 0)
             {
-                s_testClients = [(BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient()];
+                field = [(BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient()];
             }
-            return s_testClients;
+            return field;
         }
 
-        private set => s_testClients = value;
-    }
+        private set;
+    } = [];
 
     public static void ResetTestClients()
     {
-        foreach (TheoryDataRow<BaseClient> data in s_testClients)
+        foreach (TheoryDataRow<BaseClient> data in TestClients)
         {
             data.Data.Dispose();
         }
-        s_testClients = [];
+        TestClients = [];
     }
 
     public TestConfiguration()

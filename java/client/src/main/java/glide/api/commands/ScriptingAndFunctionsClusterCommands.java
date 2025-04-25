@@ -901,7 +901,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Returns information about the function that's currently running and information about the
      * available execution engines.<br>
-     * The command will be routed to all primary nodes.
+     * The command will be routed to all nodes.
      *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
@@ -935,7 +935,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Returns information about the function that's currently running and information about the
      * available execution engines.<br>
-     * The command will be routed to all primary nodes.
+     * The command will be routed to all nodes.
      *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.

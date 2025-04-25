@@ -56,6 +56,7 @@ from glide.config import ProtocolVersion
 from glide.constants import OK, TResult, TSingleNodeRoute
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import SlotIdRoute, SlotType
+
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
@@ -1056,9 +1057,9 @@ class TestTransaction:
 
         if not await check_if_server_version_lt(glide_client, "7.0.0"):
             transaction.pubsub_shardchannels()
-            expected.append([])
+            expected.append(cast(TResult, []))
             transaction.pubsub_shardnumsub()
-            expected.append({})
+            expected.append(cast(TResult, {}))
 
         result = await glide_client.exec(transaction)
         assert isinstance(result, list)
