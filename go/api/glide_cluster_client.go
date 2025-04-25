@@ -1778,3 +1778,30 @@ func (client *GlideClusterClient) ScriptFlushWithOptions(
 	}
 	return handleOkResponse(result)
 }
+
+// Kills the currently executing Lua script, assuming no write operation was yet performed by the
+// script.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
+//
+// Return value:
+//
+//	`OK` if script is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/script-kill
+func (client *GlideClusterClient) ScriptKillWithRoute(route options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(
+		C.ScriptKill,
+		[]string{},
+		route.Route,
+	)
+  if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}

@@ -1074,3 +1074,33 @@ func (suite *GlideTestSuite) TestScriptExists() {
 	script1.Close()
 	script2.Close()
 }
+
+func (suite *GlideTestSuite) TestScriptKill() {
+	invokeClient := suite.client(suite.defaultClientConfig())
+	killClient := suite.defaultClient()
+
+	// Ensure no script is running at the beginning
+	_, err := killClient.ScriptKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Kill Running Code
+	code := CreateLongRunningLuaScript(5, true)
+	script := options.NewScript(code)
+
+	go invokeClient.InvokeScript(*script)
+
+	time.Sleep(1 * time.Second)
+
+	result, err := killClient.ScriptKill()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+	script.Close()
+
+	time.Sleep(1 * time.Second)
+
+	// Ensure no script is running at the end
+	_, err = killClient.ScriptKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
