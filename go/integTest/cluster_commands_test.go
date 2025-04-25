@@ -2016,20 +2016,38 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 
 	// Create a script
 	script := options.NewScript("return 'Hello'")
-	routeOption := options.RouteOption{Route: config.AllPrimaries}
 
 	// Load script
-	_, err := client.InvokeScriptWithRoute(*script, routeOption)
+	_, err := client.InvokeScript(*script)
 	assert.Nil(suite.T(), err)
 
 	// Check existence of script
 	scriptHash := script.GetHash()
-	result, err := client.ScriptExistsWithRoute([]string{scriptHash}, routeOption)
+	result, err := client.ScriptExists([]string{scriptHash})
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), []bool{true}, result)
 
 	// Flush the script cache
-	flushResult, err := client.ScriptFlushWithRoute(routeOption)
+	flushResult, err := client.ScriptFlush()
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", flushResult)
+
+	// Create a script
+	script = options.NewScript("return 'Hello'")
+	routeOption := options.RouteOption{Route: config.AllPrimaries}
+
+	// Load script
+	_, err = client.InvokeScriptWithRoute(*script, routeOption)
+	assert.Nil(suite.T(), err)
+
+	// Check existence of script
+	scriptHash = script.GetHash()
+	result, err = client.ScriptExistsWithRoute([]string{scriptHash}, routeOption)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), []bool{true}, result)
+
+	// Flush the script cache
+	flushResult, err = client.ScriptFlushWithRoute(routeOption)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", flushResult)
 
