@@ -1190,8 +1190,11 @@ pub unsafe extern "C" fn request_cluster_scan(
     args: *const *const u8,
     args_len: *const usize,
 ) -> *mut CommandResult {
-    let client_adapter =
-        unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
     let c_str = unsafe { CStr::from_ptr(cursor.get_cursor()) };
     let temp_str = c_str.to_str().expect("Must be UTF-8");
     let cursor_id = temp_str.to_string();
@@ -1284,8 +1287,11 @@ pub unsafe extern "C" fn update_connection_password(
     password: *const c_char,
     immediate_auth: bool,
 ) -> *mut CommandResult {
-    let client_adapter =
-        unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
 
     // argument conversion to be used in the async block
     let password = unsafe { CStr::from_ptr(password).to_str().unwrap() };
