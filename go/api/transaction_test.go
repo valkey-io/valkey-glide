@@ -28,7 +28,7 @@ func ExampleTransaction_Exec() {
 
 func ExampleTransaction_Watch() {
 	var clientTx *Transaction = getExampleTransactionGlideClient() // example helper function
-	cmd := clientTx
+	cmd := clientTx.GlideClient
 	cmd.Set("key123", "Glide")
 	cmd.Watch([]string{"key123", "key345"})
 	cmd.Get("key123")
