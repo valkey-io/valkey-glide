@@ -163,65 +163,6 @@ func getExampleGlideClusterClientWithSubscription(mode PubSubClusterChannelMode,
 	return thisClient
 }
 
-func getExampleGlideClientWithSubscription(mode PubSubChannelMode, channelOrPattern string) *GlideClient {
-	standaloneSubOnce.Do(func() {
-		initFlags()
-	})
-	sConfig := NewStandaloneSubscriptionConfig().
-		WithSubscription(mode, channelOrPattern)
-
-	config := NewGlideClientConfiguration().
-		WithAddress(&standaloneAddresses[0]).
-		WithSubscriptionConfig(sConfig)
-
-	client, err := NewGlideClient(config)
-	if err != nil {
-		fmt.Println("error connecting to server: ", err)
-	}
-
-	thisClient := client.(*GlideClient)
-	standaloneClients = append(standaloneClients, thisClient)
-
-	// Flush the database before each test to ensure a clean state.
-	_, err = thisClient.FlushAllWithOptions(options.SYNC)
-	if err != nil {
-		fmt.Println("error flushing database: ", err)
-	}
-
-	return thisClient
-}
-
-func getExampleGlideClusterClientWithSubscription(mode PubSubClusterChannelMode, channelOrPattern string) *GlideClusterClient {
-	clusterSubOnce.Do(func() {
-		initFlags()
-	})
-	cConfig := NewClusterSubscriptionConfig().
-		WithSubscription(mode, channelOrPattern)
-
-	ccConfig := NewGlideClusterClientConfiguration().
-		WithAddress(&clusterAddresses[0]).
-		WithSubscriptionConfig(cConfig)
-
-	client, err := NewGlideClusterClient(ccConfig)
-	if err != nil {
-		fmt.Println("error connecting to server: ", err)
-	}
-
-	thisClient := client.(*GlideClusterClient)
-	clusterClients = append(clusterClients, thisClient)
-
-	// Flush the database before each test to ensure a clean state.
-	syncmode := options.SYNC
-	_, err = thisClient.FlushAllWithOptions(
-		options.FlushClusterOptions{FlushMode: &syncmode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
-	)
-	if err != nil {
-		fmt.Println("error flushing database: ", err)
-	}
-
-	return thisClient
-}
-
 func parseHosts(addresses string) []NodeAddress {
 	var result []NodeAddress
 
