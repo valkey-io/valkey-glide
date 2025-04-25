@@ -1137,52 +1137,6 @@ func ExampleGlideClusterClient_ScriptFlushWithOptions() {
 	}
 	fmt.Println("Script exists before flush:", exists[0])
 
-	// Flush all scripts on all primaries
-	scriptFlushOptions := options.NewScriptFlushOptions().WithRoute(&route)
-	result, err := client.ScriptFlushWithOptions(*scriptFlushOptions)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-		return
-	}
-	fmt.Println("Flush result:", result)
-
-	// Verify script no longer exists
-	exists, err = client.ScriptExistsWithRoute([]string{script.GetHash()}, route)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-		return
-	}
-	fmt.Println("Script exists after flush:", exists[0])
-
-	// Cleanup
-	script.Close()
-
-	// Output:
-	// Script exists before flush: true
-	// Flush result: OK
-	// Script exists after flush: false
-}
-
-func ExampleGlideClusterClient_ScriptFlushWithOptionsWithModeAndRoute() {
-	client := getExampleGlideClusterClient()
-	route := options.RouteOption{Route: config.AllPrimaries}
-
-	// First, load a script on all primaries
-	script := options.NewScript("return 'Hello World!'")
-	_, err := client.InvokeScriptWithRoute(*script, route)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-		return
-	}
-
-	// Verify script exists
-	exists, err := client.ScriptExistsWithRoute([]string{script.GetHash()}, route)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-		return
-	}
-	fmt.Println("Script exists before flush:", exists[0])
-
 	// Flush all scripts on all primaries with ASYNC mode
 	scriptFlushOptions := options.NewScriptFlushOptions().WithMode(options.ASYNC).WithRoute(&route)
 	result, err := client.ScriptFlushWithOptions(*scriptFlushOptions)
