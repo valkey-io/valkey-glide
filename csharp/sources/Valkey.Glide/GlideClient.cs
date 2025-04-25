@@ -4,6 +4,7 @@ using Valkey.Glide.Commands;
 using Valkey.Glide.Commands.Options;
 
 using static Valkey.Glide.ConnectionConfiguration;
+using static Valkey.Glide.Internals.FFI;
 
 namespace Valkey.Glide;
 
@@ -56,10 +57,12 @@ public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGe
         => await CreateClient(config, () => new GlideClient());
 
     public async Task<object?> CustomCommand(GlideString[] args)
-        => await Command(RequestType.CustomCommand, args, resp => HandleServerResponse<object?>(resp, true));
+        => await Command(RequestType.CustomCommand, args, resp
+            => HandleServerResponse<object?>(resp, true));
 
     public async Task<string> Info() => await Info([]);
 
     public async Task<string> Info(InfoOptions.Section[] sections)
-        => await Command(RequestType.Info, sections.ToGlideStrings(), resp => HandleServerResponse<GlideString, string>(resp, false, gs => gs.ToString()));
+        => await Command(RequestType.Info, sections.ToGlideStrings(), resp
+            => HandleServerResponse<GlideString, string>(resp, false, gs => gs.ToString()));
 }

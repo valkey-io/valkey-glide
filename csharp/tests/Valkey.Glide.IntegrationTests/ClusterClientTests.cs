@@ -28,7 +28,7 @@ public class ClusterClientTests
     [Fact]
     public async Task CustomCommandWithRandomRoute()
     {
-        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+        using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
         // if a command isn't routed in 100 tries to different nodes, you are a lucker or have a bug
         SortedSet<string> ports = [];
         foreach (int i in Enumerable.Range(0, 100))
@@ -53,7 +53,7 @@ public class ClusterClientTests
     [Fact]
     public async Task CustomCommandWithSingleNodeRoute()
     {
-        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+        using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
 
         string res = ((await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Primary))).SingleValue! as GlideString)!;
         Assert.Contains("role:master", res);
@@ -74,7 +74,7 @@ public class ClusterClientTests
     [Fact]
     public async Task CustomCommandWithMultiNodeRoute()
     {
-        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
+        using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
         _ = await client.Set("abc", "abc");
         _ = await client.Set("klm", "klm");
         _ = await client.Set("xyz", "xyz");

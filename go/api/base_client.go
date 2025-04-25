@@ -21,7 +21,6 @@ package api
 import "C"
 
 import (
-	goErr "errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -50,6 +49,7 @@ type BaseClient interface {
 	GeoSpatialCommands
 	ScriptingAndFunctionBaseCommands
 	PubSubCommands
+	PubSubHandler
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -80,6 +80,17 @@ func (client *baseClient) setMessageHandler(handler *MessageHandler) {
 // getMessageHandler returns the currently assigned message handler
 func (client *baseClient) getMessageHandler() *MessageHandler {
 	return client.messageHandler
+}
+
+// GetQueue returns the pub/sub queue for the client.
+// This method is only available for clients that have a subscription,
+// and returns an error if the client does not have a subscription.
+func (client *baseClient) GetQueue() (*PubSubMessageQueue, error) {
+	// MessageHandler is only configured when a subscription is defined
+	if client.getMessageHandler() == nil {
+		return nil, &errors.RequestError{Msg: "No subscriptions configured for this client"}
+	}
+	return client.getMessageHandler().GetQueue(), nil
 }
 
 // buildAsyncClientType safely initializes a C.ClientType with an AsyncClient_Body.
@@ -366,7 +377,7 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	return cStrings, stringLengths
 }
 
-func (client *baseClient) submitConnectionPasswordUpdate(password string, immediateAuth bool) (Result[string], error) {
+func (client *baseClient) submitConnectionPasswordUpdate(password string, immediateAuth bool) (string, error) {
 	// Create a channel to receive the result
 	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
@@ -378,7 +389,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return CreateNilStringResult(), &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
+		return DefaultStringResponse, &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
@@ -400,10 +411,10 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 	client.mu.Unlock()
 
 	if payload.error != nil {
-		return CreateNilStringResult(), payload.error
+		return DefaultStringResponse, payload.error
 	}
 
-	return handleStringOrNilResponse(payload.value)
+	return handleOkResponse(payload.value)
 }
 
 // Update the current connection with a new password.
@@ -430,7 +441,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 // Return value:
 //
 //	`"OK"` response on success.
-func (client *baseClient) UpdateConnectionPassword(password string, immediateAuth bool) (Result[string], error) {
+func (client *baseClient) UpdateConnectionPassword(password string, immediateAuth bool) (string, error) {
 	return client.submitConnectionPasswordUpdate(password, immediateAuth)
 }
 
@@ -450,7 +461,7 @@ func (client *baseClient) UpdateConnectionPassword(password string, immediateAut
 // Return value:
 //
 //	`"OK"` response on success.
-func (client *baseClient) ResetConnectionPassword() (Result[string], error) {
+func (client *baseClient) ResetConnectionPassword() (string, error) {
 	return client.submitConnectionPasswordUpdate("", false)
 }
 
@@ -474,7 +485,7 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
@@ -509,7 +520,7 @@ func (client *baseClient) SetWithOptions(key string, value string, options optio
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNilResponse(result)
+	return handleOkOrStringOrNilResponse(result)
 }
 
 // Get string value associated with the given key, or api.CreateNilStringResult() is returned if no such value
@@ -612,7 +623,7 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or more keys already exist,
@@ -2278,7 +2289,7 @@ func (client *baseClient) LTrim(key string, start int64, end int64) (string, err
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Returns the length of the list stored at key.
@@ -2758,7 +2769,7 @@ func (client *baseClient) LSet(key string, index int64, element string) (string,
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Atomically pops and removes the left/right-most element to the list stored at source depending on whereFrom, and pushes
@@ -3331,7 +3342,7 @@ func (client *baseClient) PfMerge(destination string, sourceKeys []string) (stri
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
@@ -3436,7 +3447,7 @@ func (client *baseClient) Rename(key string, newKey string) (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Renames key to newkey if newKey does not yet exist.
@@ -4876,7 +4887,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Create a key associated with a value that is obtained by
@@ -4893,7 +4904,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 //	Return OK if successfully create a key with a value </code>.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
-func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
+func (client *baseClient) Restore(key string, ttl int64, value string) (string, error) {
 	return client.RestoreWithOptions(key, ttl, value, *options.NewRestoreOptions())
 }
 
@@ -4914,19 +4925,19 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (Result[s
 // [valkey.io]: https://valkey.io/commands/restore/
 func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 	value string, options options.RestoreOptions,
-) (Result[string], error) {
+) (string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return CreateNilStringResult(), err
+		return DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Restore, append([]string{
 		key,
 		utils.IntToString(ttl), value,
 	}, optionArgs...))
 	if err != nil {
-		return CreateNilStringResult(), err
+		return DefaultStringResponse, err
 	}
-	return handleStringOrNilResponse(result)
+	return handleOkResponse(result)
 }
 
 // Serialize the value stored at key in a Valkey-specific format and return it to the user.
@@ -5062,7 +5073,7 @@ func (client *baseClient) XGroupSetIdWithOptions(
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Removes all elements in the sorted set stored at `key` with a lexicographical order
@@ -7564,7 +7575,7 @@ func (client *baseClient) FunctionFlush() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all function libraries in synchronous mode.
@@ -7585,7 +7596,7 @@ func (client *baseClient) FunctionFlushSync() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all function libraries in asynchronous mode.
@@ -7606,7 +7617,7 @@ func (client *baseClient) FunctionFlushAsync() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Invokes a previously loaded function.
@@ -7748,11 +7759,68 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 //
 // [valkey.io]: https://valkey.io/commands/publish
 func (client *baseClient) Publish(channel string, message string) (int64, error) {
-	if message == "" || channel == "" {
-		return 0, goErr.New("both message and channel are required for Publish command")
-	}
 	args := []string{channel, message}
 	result, err := client.executeCommand(C.Publish, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// Lists the currently active channels.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannels() ([]string, error) {
+	result, err := client.executeCommand(C.PubSubChannels, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// PubSubChannelsWithPattern lists the currently active channels matching the specified pattern.
+//
+// Pattern can be any glob-style pattern:
+// - h?llo matches hello, hallo and hxllo
+// - h*llo matches hllo and heeeello
+// - h[ae]llo matches hello and hallo, but not hillo
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
+	args := []string{pattern}
+	result, err := client.executeCommand(C.PubSubChannels, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// PubSubNumPat returns the number of patterns that are subscribed to by clients.
+//
+// This returns the total number of unique patterns that all clients are subscribed to,
+// not the count of clients subscribed to patterns.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numpat
+func (client *baseClient) PubSubNumPat() (int64, error) {
+	result, err := client.executeCommand(C.PubSubNumPat, []string{})
 	if err != nil {
 		return 0, err
 	}

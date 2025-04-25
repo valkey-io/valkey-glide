@@ -10,7 +10,7 @@ public class StandaloneClientTests
     [Fact]
     public void CustomCommand()
     {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
         // Assert.Multiple doesn't work with async tasks https://github.com/xunit/xunit/issues/3209
         Assert.Multiple(
             () => Assert.Equal("PONG", client.CustomCommand(["ping"]).Result!.ToString()),
@@ -22,7 +22,7 @@ public class StandaloneClientTests
     [Fact]
     public async Task CustomCommandWithBinary()
     {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
         string key1 = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
         string key3 = Guid.NewGuid().ToString();
@@ -75,7 +75,7 @@ public class StandaloneClientTests
     // TODO: remove this test once we add tests with these commands
     public async Task CustomCommandWithDifferentReturnTypes()
     {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
 
         string key1 = Guid.NewGuid().ToString();
         Assert.Equal(2, (long)(await client.CustomCommand(["hset", key1, "f1", "v1", "f2", "v2"]))!);

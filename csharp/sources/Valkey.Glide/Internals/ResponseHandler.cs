@@ -2,6 +2,8 @@
 
 using System.Runtime.InteropServices;
 
+using static Valkey.Glide.Errors;
+
 namespace Valkey.Glide.Internals;
 
 internal class ResponseHandler
@@ -26,6 +28,7 @@ internal class ResponseHandler
         Set = 7,
         BulkString = 8,
         OK = 9,
+        Error = 10,
     }
 
     public static object? HandleResponse(IntPtr valuePtr)
@@ -76,6 +79,7 @@ internal class ResponseHandler
         ValueType.Map => CreateMap(value),
         ValueType.Set => CreateArray(value).ToHashSet(),
         ValueType.OK => "OK",
+        ValueType.Error => new RequestException(CreateString(value)!),
         _ => throw new NotImplementedException(),
     };
 }

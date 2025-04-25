@@ -91,6 +91,8 @@ func parseInterface(response *C.struct_CommandResponse) (interface{}, error) {
 		return parseMap(response)
 	case C.Sets:
 		return parseSet(response)
+	case C.Ok:
+		return "OK", nil
 	}
 
 	return nil, &errors.RequestError{Msg: "Unexpected return type from Valkey"}
@@ -168,6 +170,27 @@ func handleStringResponse(response *C.struct_CommandResponse) (string, error) {
 
 func handleStringOrNilResponse(response *C.struct_CommandResponse) (Result[string], error) {
 	defer C.free_command_response(response)
+
+	return convertCharArrayToString(response, true)
+}
+
+func handleOkResponse(response *C.struct_CommandResponse) (string, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Ok, false)
+	if typeErr != nil {
+		return DefaultStringResponse, typeErr
+	}
+
+	return "OK", nil
+}
+
+func handleOkOrStringOrNilResponse(response *C.struct_CommandResponse) (Result[string], error) {
+	defer C.free_command_response(response)
+
+	if response.response_type == uint32(C.Ok) {
+		return CreateStringResult("OK"), nil
+	}
 
 	return convertCharArrayToString(response, true)
 }
