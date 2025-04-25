@@ -559,11 +559,11 @@ func (client *baseClient) SetWithOptions(key string, value string, options optio
 //
 // Return value:
 //
-//	If key exists, returns the value of key as a String. Otherwise, return [api.CreateNilStringResult()].
+//		If key exists, returns the value of key as a String. Otherwise, return [api.CreateNilStringResult()].
 //
-// 	In transaction: 
-//   Returns [api.CreateNilStringResult()] immediately while adding the command to the transaction queue.
-//   Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	  Returns [api.CreateNilStringResult()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/get/
 func (client *baseClient) Get(key string) (Result[string], error) {
@@ -591,7 +591,7 @@ func (client *baseClient) Get(key string) (Result[string], error) {
 //
 //	If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
 //
-//	In transaction: 
+//	In transaction:
 //	 Returns [api.CreateNilStringResult()] immediately while adding the command to the transaction queue.
 //	 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
@@ -621,7 +621,7 @@ func (client *baseClient) GetEx(key string) (Result[string], error) {
 //
 //	If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
 //
-//	In transaction: 
+//	In transaction:
 //	 Returns [api.CreateNilStringResult()] immediately while adding the command to the transaction queue.
 //	 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
@@ -661,11 +661,11 @@ func (client *baseClient) GetExWithOptions(key string, options options.GetExOpti
 //
 // Return value:
 //
-//	`"OK"` on success.
+//		`"OK"` on success.
 //
-//  In transaction: 
-//	 Returns a [api.DefaultStringResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.DefaultStringResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/mset/
 func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
@@ -695,11 +695,11 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 //
 // Return value:
 //
-//	A bool containing true, if all keys were set. false, if no key was set.
+//		A bool containing true, if all keys were set. false, if no key was set.
 //
-//  In transaction: 
-//	 Returns a [api.DefaultStringResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.DefaultStringResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/msetnx/
 func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
@@ -728,12 +728,12 @@ func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
 //
 // Return value:
 //
-//	An array of values corresponding to the provided keys.
-//	If a key is not found, its corresponding value in the list will be a [api.CreateNilStringResult()]
+//		An array of values corresponding to the provided keys.
+//		If a key is not found, its corresponding value in the list will be a [api.CreateNilStringResult()]
 //
-//  In transaction: 
-//	 Returns a [api.DefaultStringResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.DefaultStringResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/mget/
 func (client *baseClient) MGet(keys []string) ([]Result[string], error) {
@@ -755,11 +755,11 @@ func (client *baseClient) MGet(keys []string) ([]Result[string], error) {
 //
 // Return value:
 //
-//	The value of `key` after the increment.
+//		The value of `key` after the increment.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/incr/
 func (client *baseClient) Incr(key string) (int64, error) {
@@ -782,11 +782,11 @@ func (client *baseClient) Incr(key string) (int64, error) {
 //
 // Return value:
 //
-//	The value of `key` after the increment.
+//		The value of `key` after the increment.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/incrby/
 func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
@@ -811,11 +811,11 @@ func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
 //
 // Return value:
 //
-//	The value of key after the increment.
+//		The value of key after the increment.
 //
-//  In transaction: 
-//	 Returns a [api.defaultFloatResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultFloatResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/incrbyfloat/
 func (client *baseClient) IncrByFloat(key string, amount float64) (float64, error) {
@@ -840,11 +840,11 @@ func (client *baseClient) IncrByFloat(key string, amount float64) (float64, erro
 //
 // Return value:
 //
-//	The value of `key` after the decrement.
+//		The value of `key` after the decrement.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/decr/
 func (client *baseClient) Decr(key string) (int64, error) {
@@ -867,11 +867,11 @@ func (client *baseClient) Decr(key string) (int64, error) {
 //
 // Return value:
 //
-//	The value of `key` after the decrement.
+//		The value of `key` after the decrement.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/decrby/
 func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
@@ -893,12 +893,12 @@ func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 //
 // Return value:
 //
-//	The length of the string value stored at `key`.
-//	If key does not exist, it is treated as an empty string, and the command returns `0`.
+//		The length of the string value stored at `key`.
+//		If key does not exist, it is treated as an empty string, and the command returns `0`.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/strlen/
 func (client *baseClient) Strlen(key string) (int64, error) {
@@ -925,11 +925,11 @@ func (client *baseClient) Strlen(key string) (int64, error) {
 //
 // Return value:
 //
-//	The length of the string stored at `key` after it was modified.
+//		The length of the string stored at `key` after it was modified.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/setrange/
 func (client *baseClient) SetRange(key string, offset int, value string) (int64, error) {
@@ -956,11 +956,11 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 //
 // Return value:
 //
-//	A substring extracted from the value stored at key. Returns empty string if the offset is out of bounds.
+//		A substring extracted from the value stored at key. Returns empty string if the offset is out of bounds.
 //
-//  In transaction: 
-//	 Returns a [api.DefaultStringResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.DefaultStringResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/getrange/
 func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
@@ -984,11 +984,11 @@ func (client *baseClient) GetRange(key string, start int, end int) (string, erro
 //
 // Return value:
 //
-//	The length of the string after appending the value.
+//		The length of the string after appending the value.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/append/
 func (client *baseClient) Append(key string, value string) (int64, error) {
@@ -1022,12 +1022,12 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 //
 // Return value:
 //
-//	The longest common subsequence between the 2 strings.
-//	An empty string is returned if the keys do not exist or have no common subsequences.
+//		The longest common subsequence between the 2 strings.
+//		An empty string is returned if the keys do not exist or have no common subsequences.
 //
-//  In transaction: 
-//	 Returns a [api.DefaultStringResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.DefaultStringResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
@@ -1056,11 +1056,11 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 //
 // Return value:
 //
-//	The total length of all the longest common subsequences the 2 strings.
+//		The total length of all the longest common subsequences the 2 strings.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCSLen(key1, key2 string) (int64, error) {
@@ -1090,18 +1090,18 @@ func (client *baseClient) LCSLen(key1, key2 string) (int64, error) {
 //
 // Return value:
 //
-//	A Map containing the indices of the longest common subsequence between the 2 strings
-//	and the total length of all the longest common subsequences. The resulting map contains
-//	two keys, "matches" and "len":
-//	  - "len" is mapped to the total length of the all longest common subsequences between
-//	     the 2 strings.
-//	  - "matches" is mapped to a array that stores pairs of indices that represent the location
-//	     of the common subsequences in the strings held by key1 and key2.
+//		A Map containing the indices of the longest common subsequence between the 2 strings
+//		and the total length of all the longest common subsequences. The resulting map contains
+//		two keys, "matches" and "len":
+//		  - "len" is mapped to the total length of the all longest common subsequences between
+//		     the 2 strings.
+//		  - "matches" is mapped to a array that stores pairs of indices that represent the location
+//		     of the common subsequences in the strings held by key1 and key2.
 //
-//  In transaction: 
-//	 Upon transaction completion with Exec() a map containing the indices of the longest common
-//   subsequence between the 2 strings and the total length of all the longest common subsequences.
-//   value will be accessible in the returned results array.
+//	 In transaction:
+//		 Upon transaction completion with Exec() a map containing the indices of the longest common
+//	  subsequence between the 2 strings and the total length of all the longest common subsequences.
+//	  value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCSWithOptions(key1, key2 string, opts options.LCSIdxOptions) (map[string]interface{}, error) {
@@ -1124,12 +1124,12 @@ func (client *baseClient) LCSWithOptions(key1, key2 string, opts options.LCSIdxO
 //
 // Return value:
 //
-//	If key exists, returns the value of the key as a String and deletes the key.
-//	If key does not exist, returns a [api.NilResult[string]] (api.CreateNilStringResult()).
+//		If key exists, returns the value of the key as a String and deletes the key.
+//		If key does not exist, returns a [api.NilResult[string]] (api.CreateNilStringResult()).
 //
-//  In transaction: 
-//	 Returns a [api.CreateNilStringResult] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.CreateNilStringResult] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/getdel/
 func (client *baseClient) GetDel(key string) (Result[string], error) {
@@ -1159,12 +1159,12 @@ func (client *baseClient) GetDel(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	The Result[string] associated with field, or [api.NilResult[string]](api.CreateNilStringResult()) when field is not
-//	present in the hash or key does not exist.
+//		The Result[string] associated with field, or [api.NilResult[string]](api.CreateNilStringResult()) when field is not
+//		present in the hash or key does not exist.
 //
-//  In transaction: 
-//	 Returns a [api.CreateNilStringResult] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.CreateNilStringResult] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hget/
 func (client *baseClient) HGet(key string, field string) (Result[string], error) {
@@ -1189,11 +1189,11 @@ func (client *baseClient) HGet(key string, field string) (Result[string], error)
 //
 // Return value:
 //
-//	A map of all fields and their values as Result[string] in the hash, or an empty map when key does not exist.
-//	
-//  In transaction: 
-//	 Upon transaction completion with Exec(), a map with fields and their values as Result[string] in the hash 
-//   value will be accessible in the returned results array.
+//		A map of all fields and their values as Result[string] in the hash, or an empty map when key does not exist.
+//
+//	 In transaction:
+//		 Upon transaction completion with Exec(), a map with fields and their values as Result[string] in the hash
+//	  value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hgetall/
 func (client *baseClient) HGetAll(key string) (map[string]string, error) {
@@ -1216,16 +1216,16 @@ func (client *baseClient) HGetAll(key string) (map[string]string, error) {
 //
 // Return value:
 //
-//	An array of Result[string]s associated with the given fields, in the same order as they are requested.
+//		An array of Result[string]s associated with the given fields, in the same order as they are requested.
 //
-//	For every field that does not exist in the hash, a [api.NilResult[string]](api.CreateNilStringResult()) is
-//	returned.
+//		For every field that does not exist in the hash, a [api.NilResult[string]](api.CreateNilStringResult()) is
+//		returned.
 //
-//	If key does not exist, returns an empty string array.
+//		If key does not exist, returns an empty string array.
 //
-//	In transaction: 
-//	 Upon transaction completion with Exec(), the array of Result[string]s associated with the given fields,
-//   in the same order as they are requested  will be accessible in the returned results array.
+//		In transaction:
+//		 Upon transaction completion with Exec(), the array of Result[string]s associated with the given fields,
+//	  in the same order as they are requested  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hmget/
 func (client *baseClient) HMGet(key string, fields []string) ([]Result[string], error) {
@@ -1250,11 +1250,11 @@ func (client *baseClient) HMGet(key string, fields []string) ([]Result[string], 
 //
 // Return value:
 //
-//	The number of fields that were added or updated.
+//		The number of fields that were added or updated.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hset/
 func (client *baseClient) HSet(key string, values map[string]string) (int64, error) {
@@ -1280,12 +1280,12 @@ func (client *baseClient) HSet(key string, values map[string]string) (int64, err
 //
 // Return value:
 //
-//	A bool containing true if field is a new field in the hash and value was set.
-//	false if field already exists in the hash and no operation was performed.
+//		A bool containing true if field is a new field in the hash and value was set.
+//		false if field already exists in the hash and no operation was performed.
 //
-//  In transaction: 
-//	 Returns a [api.defaultBoolResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the bool value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultBoolResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hsetnx/
 func (client *baseClient) HSetNX(key string, field string, value string) (bool, error) {
@@ -1310,11 +1310,11 @@ func (client *baseClient) HSetNX(key string, field string, value string) (bool, 
 //
 // Return value:
 //
-//	The number of fields that were removed from the hash, not including specified but non-existing fields.
+//		The number of fields that were removed from the hash, not including specified but non-existing fields.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hdel/
 func (client *baseClient) HDel(key string, fields []string) (int64, error) {
@@ -1336,12 +1336,12 @@ func (client *baseClient) HDel(key string, fields []string) (int64, error) {
 //
 // Return value:
 //
-//	The number of fields in the hash, or `0` when key does not exist.
-//	If key holds a value that is not a hash, an error is returned.
+//		The number of fields in the hash, or `0` when key does not exist.
+//		If key holds a value that is not a hash, an error is returned.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hlen/
 func (client *baseClient) HLen(key string) (int64, error) {
@@ -1363,11 +1363,11 @@ func (client *baseClient) HLen(key string) (int64, error) {
 //
 // Return value:
 //
-//	A slice containing all the values in the hash, or an empty slice when key does not exist.
+//		A slice containing all the values in the hash, or an empty slice when key does not exist.
 //
-//  In transaction: 
-//	 Upon transaction completion with Exec(), a slice containing all the values in the hash,
-//   or an empty slice when key does not exist  will be accessible in the returned results array.
+//	 In transaction:
+//		 Upon transaction completion with Exec(), a slice containing all the values in the hash,
+//	  or an empty slice when key does not exist  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hvals/
 func (client *baseClient) HVals(key string) ([]string, error) {
@@ -1390,12 +1390,12 @@ func (client *baseClient) HVals(key string) ([]string, error) {
 //
 // Return value:
 //
-//	A bool containing true if the hash contains the specified field.
-//	false if the hash does not contain the field, or if the key does not exist.
+//		A bool containing true if the hash contains the specified field.
+//		false if the hash does not contain the field, or if the key does not exist.
 //
-//  In transaction: 
-//	 Returns a [api.defaultBoolResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the bool value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultBoolResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hexists/
 func (client *baseClient) HExists(key string, field string) (bool, error) {
@@ -1417,11 +1417,11 @@ func (client *baseClient) HExists(key string, field string) (bool, error) {
 //
 // Return value:
 //
-//	A slice containing all the field names in the hash, or an empty slice when key does not exist.
+//		A slice containing all the field names in the hash, or an empty slice when key does not exist.
 //
-//  In transaction: 
-//	 Upon transaction completion with Exec(), the slice containing all the field names in the hash,
-//   or an empty slice when key does not exist value will be accessible in the returned results array.
+//	 In transaction:
+//		 Upon transaction completion with Exec(), the slice containing all the field names in the hash,
+//	  or an empty slice when key does not exist value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hkeys/
 func (client *baseClient) HKeys(key string) ([]string, error) {
@@ -1445,11 +1445,11 @@ func (client *baseClient) HKeys(key string) ([]string, error) {
 //
 // Return value:
 //
-//	The length of the string value associated with field, or `0` when field or key do not exist.
+//		The length of the string value associated with field, or `0` when field or key do not exist.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hstrlen/
 func (client *baseClient) HStrLen(key string, field string) (int64, error) {
@@ -1475,11 +1475,11 @@ func (client *baseClient) HStrLen(key string, field string) (int64, error) {
 //
 // Return value:
 //
-//	The value of `field` in the hash stored at `key` after the increment.
+//		The value of `field` in the hash stored at `key` after the increment.
 //
-//  In transaction: 
-//	 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultIntResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hincrby/
 func (client *baseClient) HIncrBy(key string, field string, increment int64) (int64, error) {
@@ -1508,11 +1508,11 @@ func (client *baseClient) HIncrBy(key string, field string, increment int64) (in
 //
 // Return value:
 //
-//	The value of `field` in the hash stored at `key` after the increment.
+//		The value of `field` in the hash stored at `key` after the increment.
 //
-//  In transaction: 
-//	 Returns a [api.defaultFloatResponse] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the float value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.defaultFloatResponse] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the float value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hincrbyfloat/
 func (client *baseClient) HIncrByFloat(key string, field string, increment float64) (float64, error) {
@@ -1536,18 +1536,18 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//		An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
+//		for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
+//		The second element is always an array of the subset of the set held in `key`. The array in the
+//		second element is always a flattened series of String pairs, where the key is at even indices
+//		and the value is at odd indices.
 //
-//  In transaction: 
-//	 Upon transaction completion with Exec(), an array of the cursor and the subset of the hash held by 
-//  `key` where he first element is always the `cursor` for the next iteration of results, the `cursor` will be `"0"`
-//   on the last iteration of the subset, the second element is always an array of the subset of the set held
-//   in `key`. The array in the second element is always a flattened series of String pairs, where the key is
-//   at even indices and the value is at odd indices. This array value will be accessible in the returned results array.
+//	 In transaction:
+//		 Upon transaction completion with Exec(), an array of the cursor and the subset of the hash held by
+//	 `key` where he first element is always the `cursor` for the next iteration of results, the `cursor` will be `"0"`
+//	  on the last iteration of the subset, the second element is always an array of the subset of the set held
+//	  in `key`. The array in the second element is always a flattened series of String pairs, where the key is
+//	  at even indices and the value is at odd indices. This array value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScan(key string, cursor string) (string, []string, error) {
@@ -1571,15 +1571,15 @@ func (client *baseClient) HScan(key string, cursor string) (string, []string, er
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//		An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
+//		for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
+//		The second element is always an array of the subset of the set held in `key`. The array in the
+//		second element is always a flattened series of String pairs, where the key is at even indices
+//		and the value is at odd indices.
 //
-//  In transaction: 
-//	 Upon transaction completion with Exec(), an array of the cursor and the subset of the hash held by 
-//   `key` will be accessible in the returned results array.
+//	 In transaction:
+//		 Upon transaction completion with Exec(), an array of the cursor and the subset of the hash held by
+//	  `key` will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScanWithOptions(
@@ -1613,12 +1613,12 @@ func (client *baseClient) HScanWithOptions(
 //
 // Return value:
 //
-//	A random field name from the hash stored at `key`, or `nil` when
-//	  the key does not exist.
+//		A random field name from the hash stored at `key`, or `nil` when
+//		  the key does not exist.
 //
-//  In transaction: 
-//	 Returns a [api.CreateNilStringResult] immediately while adding the command to the transaction queue.
-//	 Upon transaction completion with Exec(), the string value will be accessible in the returned results array.
+//	 In transaction:
+//		 Returns a [api.CreateNilStringResult] immediately while adding the command to the transaction queue.
+//		 Upon transaction completion with Exec(), the string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandField(key string) (Result[string], error) {
