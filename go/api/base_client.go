@@ -7984,7 +7984,7 @@ func (client *baseClient) ScriptExists(
 	return handleBoolArrayResponse(response)
 }
 
-// ScriptFlush removes all the scripts from the script cache.
+// Removes all the scripts from the script cache.
 //
 // See [valkey.io] for details.
 //
@@ -8001,7 +8001,7 @@ func (client *baseClient) ScriptFlush() (string, error) {
 	return handleOkResponse(result)
 }
 
-// ScriptFlushWithMode removes all the scripts from the script cache with the specified flush mode.
+// Removes all the scripts from the script cache with the specified flush mode.
 // The mode can be either SYNC or ASYNC.
 //
 // See [valkey.io] for details.
@@ -8041,4 +8041,26 @@ func (client *baseClient) ScriptShow(sha1 string) (string, error) {
 		return DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
+}
+
+// Kills the currently executing Lua script, assuming no write operation was yet performed by the
+// script.
+//
+// Note:
+//
+//	When in cluster mode, this command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`OK` if script is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/script-kill
+func (client *baseClient) ScriptKill() (string, error) {
+	result, err := client.executeCommand(C.ScriptKill, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
 }

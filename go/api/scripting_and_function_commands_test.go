@@ -1092,7 +1092,7 @@ func ExampleGlideClusterClient_ScriptFlushWithMode() {
 	}
 	fmt.Println("Script exists before flush:", exists[0])
 
-	// Flush all scripts with SYNC mode
+	// Flush all scripts with ASYNC mode
 	result, err := client.ScriptFlushWithMode(options.ASYNC)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1161,4 +1161,49 @@ func ExampleGlideClusterClient_ScriptFlushWithOptions() {
 	// Script exists before flush: true
 	// Flush result: OK
 	// Script exists after flush: false
+}
+
+func ExampleGlideClient_ScriptKill() {
+	client := getExampleGlideClient()
+
+	// Try to kill scripts when no scripts are running
+	_, err := client.ScriptKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_ScriptKill_withoutRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Try to kill scripts when no scripts are running
+	_, err := client.ScriptKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_ScriptKill_withRoute() {
+	key := "{randomkey}1"
+	client := getExampleGlideClusterClient()
+
+	// Create a route with our specified key
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, key),
+	}
+
+	// Try to kill scripts when no scripts are running
+	_, err := client.ScriptKillWithRoute(route)
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
 }
