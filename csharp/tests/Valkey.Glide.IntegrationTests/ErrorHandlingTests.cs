@@ -29,8 +29,8 @@ public class ErrorHandlingTests
             _ = await client.CustomCommand(["debug", "sleep", "0.5"]);
             //TestContext.Current.TestOutputHelper?.WriteLine($"CustomCommand = {res}");
             // TODO try KeepAlive here
-            TestContext.Current.TestOutputHelper?.WriteLine($"{client} 2 {DateTime.Now:O}");
-            GC.KeepAlive(client);
+            //TestContext.Current.TestOutputHelper?.WriteLine($"{client} 2 {DateTime.Now:O}");
+            //GC.KeepAlive(client);
         });
         //*/
         TestContext.Current.TestOutputHelper?.WriteLine($"{client} 3 {DateTime.Now:O}");
