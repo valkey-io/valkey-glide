@@ -1,7 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Buffers;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 using Valkey.Glide.Commands;
@@ -16,8 +15,6 @@ namespace Valkey.Glide;
 
 public abstract class BaseClient : IDisposable, IStringBaseCommands
 {
-    public static Action<string> LOG = (str) => Trace.WriteLine(str);
-
     #region public methods
     public async Task<string> Set(GlideString key, GlideString value)
         => await Command(RequestType.Set, [key, value], HandleOk);

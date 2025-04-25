@@ -1,10 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
 
 namespace Valkey.Glide.Internals;
-
 
 internal class MessageContainer
 {
@@ -41,10 +39,10 @@ internal class MessageContainer
 
     internal void DisposeWithError(Exception? error)
     {
-        if (_messages.Any(message => !message.IsCompleted))
+        int countIncompleted = _messages.Count(message => !message.IsCompleted);
+        if (countIncompleted > 0)
         {
-            BaseClient.LOG($"MessageContainer::DisposeWithError {_client} {DateTime.Now:O}");
-            BaseClient.LOG(new StackTrace().ToString());
+            Logger.Log(Level.Error, GetType().Name, $"Client is closing, but there are {countIncompleted} ongoing requests");
         }
         lock (_messages)
         {
@@ -52,7 +50,7 @@ internal class MessageContainer
             {
                 try
                 {
-                    message.SetException(new TaskCanceledException($"Client {_client} closed {DateTime.Now:O}", error));
+                    message.SetException(new TaskCanceledException($"Client {_client} closed", error));
                 }
                 catch (Exception) { }
             }
