@@ -298,7 +298,7 @@ func (client *baseClient) executeCommandWithRoute(
 	args []string,
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
-	var cArgsPtr *C.uintptr_t = nil
+	var cArgsPtr **C.uchar = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
 		cArgs, argLengths := toCStrings(args)
@@ -340,7 +340,7 @@ func (client *baseClient) executeCommandWithRoute(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
 		uint32(requestType),
-		C.size_t(len(args)),
+		C.ulong(len(args)),
 		cArgsPtr,
 		argLengthsPtr,
 		routeBytesPtr,
@@ -363,16 +363,16 @@ func (client *baseClient) executeCommandWithRoute(
 }
 
 // Zero copying conversion from go's []string into C pointers
-func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
-	cStrings := make([]C.uintptr_t, len(args))
+func toCStrings(args []string) ([]*C.uchar, []C.ulong) {
+	cStrings := make([]*C.uchar, len(args))
 	stringLengths := make([]C.ulong, len(args))
 	for i, str := range args {
 		bytes := utils.StringToBytes(str)
-		var ptr uintptr
+		var ptr *C.uchar
 		if len(str) > 0 {
-			ptr = uintptr(unsafe.Pointer(&bytes[0]))
+			ptr = (*C.uchar)(&bytes[0])
 		}
-		cStrings[i] = C.uintptr_t(ptr)
+		cStrings[i] = ptr
 		stringLengths[i] = C.size_t(len(str))
 	}
 	return cStrings, stringLengths
@@ -7858,7 +7858,7 @@ func (client *baseClient) executeScriptWithRoute(
 	args []string,
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
-	var cKeysPtr *C.uintptr_t = nil
+	var cKeysPtr **C.uchar = nil
 	var keysLengthsPtr *C.ulong = nil
 	if len(keys) > 0 {
 		cKeys, keysLengths := toCStrings(keys)
@@ -7866,7 +7866,7 @@ func (client *baseClient) executeScriptWithRoute(
 		keysLengthsPtr = &keysLengths[0]
 	}
 
-	var cArgsPtr *C.uintptr_t = nil
+	var cArgsPtr **C.uchar = nil
 	var argsLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
 		cArgs, argsLengths := toCStrings(args)
@@ -7908,10 +7908,10 @@ func (client *baseClient) executeScriptWithRoute(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
 		C.CString(hash),
-		C.size_t(len(keys)),
+		C.ulong(len(keys)),
 		cKeysPtr,
 		keysLengthsPtr,
-		C.size_t(len(args)),
+		C.ulong(len(args)),
 		cArgsPtr,
 		argsLengthsPtr,
 		routeBytesPtr,

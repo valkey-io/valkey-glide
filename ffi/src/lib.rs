@@ -22,13 +22,14 @@ use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, RedisResult, Value};
 use std::ffi::CStr;
 use std::future::Future;
+use std::ptr::null;
 use std::slice::from_raw_parts;
 use std::str;
 use std::sync::Arc;
 use std::{
     ffi::{c_void, CString},
     mem,
-    os::raw::{c_char, c_double, c_long, c_ulong},
+    os::raw::{c_char, c_double, c_long},
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
@@ -808,15 +809,15 @@ pub unsafe extern "C" fn free_error_message(error_message: *mut c_char) {
 /// strings. The returned `Vec<&'a [u8]>` is meant to be copied into Rust code. Storing them
 /// for later use will cause the program to crash as the pointers will be freed by go's gc
 unsafe fn convert_double_pointer_to_vec<'a>(
-    data: *const *const c_void,
-    len: c_ulong,
-    data_len: *const c_ulong,
+    data: *const *const u8,
+    len: usize,
+    data_len: *const usize,
 ) -> Vec<&'a [u8]> {
-    let string_ptrs = unsafe { from_raw_parts(data, len as usize) };
-    let string_lengths = unsafe { from_raw_parts(data_len, len as usize) };
+    let string_ptrs = unsafe { from_raw_parts(data, len) };
+    let string_lengths = unsafe { from_raw_parts(data_len, len) };
     let mut result = Vec::<&[u8]>::with_capacity(string_ptrs.len());
     for (i, &str_ptr) in string_ptrs.iter().enumerate() {
-        let slice = unsafe { from_raw_parts(str_ptr as *const u8, string_lengths[i] as usize) };
+        let slice = unsafe { from_raw_parts(str_ptr, string_lengths[i]) };
         result.push(slice);
     }
     result
@@ -956,9 +957,9 @@ pub unsafe extern "C" fn command(
     client_adapter_ptr: *const c_void,
     channel: usize,
     command_type: RequestType,
-    arg_count: c_ulong,
-    args: *const usize,
-    args_len: *const c_ulong,
+    arg_count: usize,
+    args: *const *const u8,
+    args_len: *const usize,
     route_bytes: *const u8,
     route_bytes_len: usize,
 ) -> *mut CommandResult {
@@ -969,7 +970,7 @@ pub unsafe extern "C" fn command(
     };
 
     let arg_vec: Vec<&[u8]> = if !args.is_null() && !args_len.is_null() {
-        unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) }
+        unsafe { convert_double_pointer_to_vec(args, arg_count, args_len) }
     } else {
         Vec::new()
     };
@@ -1179,9 +1180,9 @@ pub unsafe extern "C" fn request_cluster_scan(
     client_adapter_ptr: *const c_void,
     channel: usize,
     cursor: ClusterScanCursor,
-    arg_count: c_ulong,
-    args: *const usize,
-    args_len: *const c_ulong,
+    arg_count: usize,
+    args: *const *const u8,
+    args_len: *const usize,
 ) -> *mut CommandResult {
     let client_adapter =
         unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
@@ -1191,14 +1192,14 @@ pub unsafe extern "C" fn request_cluster_scan(
 
     let cluster_scan_args: ClusterScanArgs = if arg_count > 0 {
         let arg_vec = unsafe {
-            convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len)
+            convert_double_pointer_to_vec(args, arg_count, args_len)
         };
 
         let mut pattern: &[u8] = &[];
         let mut object_type: &[u8] = &[];
         let mut count: &[u8] = &[];
 
-        for i in 0..arg_count as usize {
+        for i in 0..arg_count {
             match arg_vec[i] {
                 b"MATCH" => pattern = arg_vec[i + 1],
                 b"TYPE" => object_type = arg_vec[i + 1],
@@ -1334,12 +1335,12 @@ pub unsafe extern "C" fn invoke_script(
     client_adapter_ptr: *const c_void,
     channel: usize,
     hash: *const c_char,
-    keys_count: c_ulong,
-    keys: *const usize,
-    keys_len: *const c_ulong,
-    args_count: c_ulong,
-    args: *const usize,
-    args_len: *const c_ulong,
+    keys_count: usize,
+    keys: *const *const u8,
+    keys_len: *const usize,
+    args_count: usize,
+    args: *const *const u8,
+    args_len: *const usize,
     route_bytes: *const u8,
     route_bytes_len: usize,
 ) -> *mut CommandResult {
@@ -1354,14 +1355,14 @@ pub unsafe extern "C" fn invoke_script(
 
     // Convert keys to Vec<&[u8]>
     let keys_vec: Vec<&[u8]> = if !keys.is_null() && !keys_len.is_null() && keys_count > 0 {
-        unsafe { convert_double_pointer_to_vec(keys as *const *const c_void, keys_count, keys_len) }
+        unsafe { convert_double_pointer_to_vec(keys, keys_count, keys_len) }
     } else {
         Vec::new()
     };
 
     // Convert args to Vec<&[u8]>
     let args_vec: Vec<&[u8]> = if !args.is_null() && !args_len.is_null() && args_count > 0 {
-        unsafe { convert_double_pointer_to_vec(args as *const *const c_void, args_count, args_len) }
+        unsafe { convert_double_pointer_to_vec(args, args_count, args_len) }
     } else {
         Vec::new()
     };

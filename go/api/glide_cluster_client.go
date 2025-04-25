@@ -468,7 +468,7 @@ func (client *GlideClusterClient) clusterScan(
 		return nil, err
 	}
 
-	var cArgsPtr *C.uintptr_t = nil
+	var cArgsPtr **C.uchar = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
 		cArgs, argLengths := toCStrings(args)
@@ -480,7 +480,7 @@ func (client *GlideClusterClient) clusterScan(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
 		c_cursor,
-		C.size_t(len(args)),
+		C.ulong(len(args)),
 		cArgsPtr,
 		argLengthsPtr,
 	)
