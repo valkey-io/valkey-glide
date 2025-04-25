@@ -9,6 +9,7 @@ import (
 func ExampleTransaction_Exec() {
 	var tx *Transaction = getExampleTransactionGlideClient() // example helper function
 	cmd := tx.GlideClient
+	tx.Discard()
 	cmd.Set("key123", "Glide")
 	cmd.Set("key1", "Glide")
 	cmd.Set("key2", "Hello")
@@ -29,6 +30,7 @@ func ExampleTransaction_Exec() {
 func ExampleTransaction_Watch() {
 	var clientTx *Transaction = getExampleTransactionGlideClient() // example helper function
 	cmd := clientTx.GlideClient
+	tx.Discard()
 	cmd.Set("key123", "Glide")
 	cmd.Watch([]string{"key123", "key345"})
 	cmd.Get("key123")
@@ -44,6 +46,7 @@ func ExampleTransaction_Watch() {
 func ExampleTransaction_Unwatch() {
 	var clientTx *Transaction = getExampleTransactionGlideClient() // example helper function
 	cmd := clientTx.GlideClient
+	tx.Discard()
 	cmd.Set("key123", "Glide")
 	cmd.Watch([]string{"key123", "key345"})
 	cmd.Get("key123")
