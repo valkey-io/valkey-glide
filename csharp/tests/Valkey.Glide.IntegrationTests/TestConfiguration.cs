@@ -45,7 +45,14 @@ public class TestConfiguration : IDisposable
         private set;
     } = [];
 
-    public static void ResetTestClients() => TestClients = [];
+    public static void ResetTestClients()
+    {
+        foreach (TheoryDataRow<BaseClient> data in TestClients)
+        {
+            data.Data.Dispose();
+        }
+        TestClients = [];
+    }
 
     public TestConfiguration()
     {
@@ -88,9 +95,12 @@ public class TestConfiguration : IDisposable
 
     ~TestConfiguration() => Dispose();
 
-    public void Dispose() =>
+    public void Dispose()
+    {
+        ResetTestClients();
         // Stop all
         StopServer(true);
+    }
 
     private readonly string _scriptDir;
 

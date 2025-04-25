@@ -1,6 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using Valkey.Glide.Commands;
+using Valkey.Glide.Internals;
 
 using static Valkey.Glide.ConnectionConfiguration;
 
@@ -55,5 +56,5 @@ public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGe
         => await CreateClient(config, () => new GlideClient());
 
     public async Task<object?> CustomCommand(GlideString[] args)
-        => await Command(RequestType.CustomCommand, args, resp => HandleServerResponse<object?>(resp, true));
+        => await Command(FFI.RequestType.CustomCommand, args, resp => HandleServerResponse<object?>(resp, true));
 }
