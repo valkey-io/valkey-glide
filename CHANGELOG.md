@@ -18,6 +18,7 @@
 * Python: Add source distribution upload to the PyPi-cd workflow ([#3214](https://github.com/valkey-io/valkey-glide/pull/3214))
 * Core: Move UDS Socket Filename to tmp ([#3615](https://github.com/valkey-io/valkey-glide/pull/3615))
 * Node: Fix comment for keepExisting in SetOptions ([#3648](https://github.com/valkey-io/valkey-glide/pull/3648))
+* Node: Move npmignore to dev dependencies ([#3655](https://github.com/valkey-io/valkey-glide/pull/3655))
 
 ## 1.3.2 (2025-04-06)
 
