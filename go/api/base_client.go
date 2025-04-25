@@ -7772,6 +7772,46 @@ func (client *baseClient) Publish(channel string, message string) (int64, error)
 	return handleIntResponse(result)
 }
 
+// Lists the currently active channels.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannels() ([]string, error) {
+	result, err := client.executeCommand(C.PubSubChannels, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// PubSubChannelsWithPattern lists the currently active channels matching the specified pattern.
+//
+// Pattern can be any glob-style pattern:
+// - h?llo matches hello, hallo and hxllo
+// - h*llo matches hllo and heeeello
+// - h[ae]llo matches hello and hallo, but not hillo
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
+	args := []string{pattern}
+	result, err := client.executeCommand(C.PubSubChannels, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
 // Kills a function that is currently executing.
 //
 // `FUNCTION KILL` terminates read-only functions only.
