@@ -2,8 +2,19 @@
 
 import sys
 import threading
-from functools import partial
-from typing import Any, Awaitable, Dict, List, Optional, Set, Tuple, Type, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
 
 import anyio
 import sniffio
@@ -46,6 +57,14 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import Self
 
+if TYPE_CHECKING:
+    import asyncio
+
+    import trio
+
+    TTask = Union[asyncio.Task[None], trio.lowlevel.Task]
+    TFuture = Union[asyncio.Future[Any], "_CompatFuture"]
+
 
 def get_request_error_class(
     error_type: Optional[RequestErrorType.ValueType],
@@ -61,8 +80,8 @@ def get_request_error_class(
     return RequestError
 
 
-class Future:
-    """anyio shim for Future-like functionality"""
+class _CompatFuture:
+    """anyio shim for asyncio.Future-like functionality"""
 
     def __init__(self) -> None:
         self._is_done = anyio.Event()
@@ -80,12 +99,26 @@ class Future:
     def done(self) -> bool:
         return self._is_done.is_set()
 
-    async def result(self) -> Any:
-        await self._is_done.wait()
+    def __await__(self):
+        return self._is_done.wait().__await__()
+
+    def result(self) -> Any:
         if self._exception:
             raise self._exception
 
         return self._result
+
+
+def _get_new_future_instance() -> "TFuture":
+    if sniffio.current_async_library() == "asyncio":
+        import asyncio
+
+        return asyncio.get_running_loop().create_future()
+
+    # _CompatFuture is also compatible with asyncio, but is not as closely integrated
+    # into the asyncio event loop and thus introduces a noticeable performance
+    # degradation. so we only use it for trio
+    return _CompatFuture()
 
 
 class BaseClient(CoreCommands):
@@ -94,14 +127,14 @@ class BaseClient(CoreCommands):
         To create a new client, use the `create` classmethod
         """
         self.config: BaseClientConfiguration = config
-        self._available_futures: Dict[int, Future] = {}
+        self._available_futures: Dict[int, "TFuture"] = {}
         self._available_callback_indexes: List[int] = list()
         self._buffered_requests: List[TRequest] = list()
         self._writer_lock = threading.Lock()
         self.socket_path: Optional[str] = None
-        self._reader_task: Any = None
+        self._reader_task: Optional["TTask"] = None
         self._is_closed: bool = False
-        self._pubsub_futures: List[Future] = []
+        self._pubsub_futures: List["TFuture"] = []
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[Response] = list()
 
@@ -112,9 +145,11 @@ class BaseClient(CoreCommands):
         """framework agnostic free-floating task shim"""
         framework = sniffio.current_async_library()
         if framework == "trio":
+            from functools import partial
+
             import trio
 
-            return trio.lowlevel.spawn_system_task(partial(task, *args, **kwargs))
+            return trio.lowlevel.spawn_system_task(partial(task, **kwargs), *args)
         elif framework == "asyncio":
             import asyncio
 
@@ -274,8 +309,8 @@ class BaseClient(CoreCommands):
 
             await self._stream.aclose()
 
-    def _get_future(self, callback_idx: int) -> Future:
-        response_future: Future = Future()
+    def _get_future(self, callback_idx: int) -> "TFuture":
+        response_future: "TFuture" = _get_new_future_instance()
         self._available_futures.update({callback_idx: response_future})
         return response_future
 
@@ -284,9 +319,10 @@ class BaseClient(CoreCommands):
 
     async def _set_connection_configurations(self) -> None:
         conn_request = self._get_protobuf_conn_request()
-        response_future: Future = self._get_future(0)
+        response_future: "TFuture" = self._get_future(0)
         self._create_write_task(conn_request)
-        res = await response_future.result()
+        await response_future
+        res = response_future.result()
         if res is not OK:
             raise ClosingError(res)
 
@@ -302,12 +338,18 @@ class BaseClient(CoreCommands):
             except Exception as e:
                 # trio system tasks cannot raise exceptions, so gracefully propagate
                 # any error to the pending future instead
-                res_future = self._available_futures.pop(
-                    request.callback_idx if isinstance(request, CommandRequest) else 0,
-                    None,
+                callback_idx = (
+                    request.callback_idx if isinstance(request, CommandRequest) else 0
                 )
+                res_future = self._available_futures.pop(callback_idx, None)
                 if res_future:
                     res_future.set_exception(e)
+                else:
+                    ClientLogger.log(
+                        LogLevel.WARN,
+                        "unhandled response error",
+                        f"Unhandled response error for unknown request: {callback_idx}",
+                    )
             finally:
                 self._writer_lock.release()
 
@@ -471,14 +513,15 @@ class BaseClient(CoreCommands):
             )
 
         # locking might not be required
-        response_future: Future = Future()
+        response_future: "TFuture" = _get_new_future_instance()
         try:
             self._pubsub_lock.acquire()
             self._pubsub_futures.append(response_future)
             self._complete_pubsub_futures_safe()
         finally:
             self._pubsub_lock.release()
-        return await response_future.result()
+        await response_future
+        return response_future.result()
 
     def try_get_pubsub_message(self) -> Optional[CoreCommands.PubSubMsg]:
         if self._is_closed:
@@ -573,7 +616,8 @@ class BaseClient(CoreCommands):
         # futures map
         response_future = self._get_future(request.callback_idx)
         self._create_write_task(request)
-        return await response_future.result()
+        await response_future
+        return response_future.result()
 
     def _get_callback_index(self) -> int:
         try:
@@ -593,6 +637,12 @@ class BaseClient(CoreCommands):
             exc = ClosingError(err_msg)
             if res_future is not None:
                 res_future.set_exception(exc)
+            else:
+                ClientLogger.log(
+                    LogLevel.WARN,
+                    "unhandled response error",
+                    f"Unhandled response error for unknown request: {response.callback_idx}",
+                )
             raise exc
         else:
             self._available_callback_indexes.append(response.callback_idx)
