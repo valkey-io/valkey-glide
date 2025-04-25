@@ -16,7 +16,7 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::ObjectType;
+use redis::{ErrorKind, ObjectType};
 use redis::ScanStateRC;
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, RedisResult, Value};
@@ -986,7 +986,13 @@ pub unsafe extern "C" fn command(
 
     let route = if !route_bytes.is_null() {
         let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
-        Routes::parse_from_bytes(r_bytes).unwrap()
+        match Routes::parse_from_bytes(r_bytes) {
+            Ok(route) => route,
+            Err(err ) => {
+                let err = RedisError::from((ErrorKind::ParseError, "Decoding route failed", err.to_string()));
+                return ClientAdapter::handle_error(&client_adapter, err, channel);
+            }
+        }
     } else {
         Routes::default()
     };
@@ -1370,7 +1376,13 @@ pub unsafe extern "C" fn invoke_script(
     // Parse routing information if provided
     let route = if !route_bytes.is_null() {
         let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
-        Routes::parse_from_bytes(r_bytes).unwrap()
+        match Routes::parse_from_bytes(r_bytes) {
+            Ok(route) => route,
+            Err(err ) => {
+                let err = RedisError::from((ErrorKind::ParseError, "Decoding route failed", err.to_string()));
+                return ClientAdapter::handle_error(&client_adapter, err, channel);
+            }
+        }
     } else {
         Routes::default()
     };
