@@ -35,5 +35,9 @@ type ScriptingAndFunctionBaseCommands interface {
 
 	ScriptExists(sha1s []string) ([]bool, error)
 
+	ScriptFlush() (string, error)
+
+	ScriptFlushWithMode(mode options.FlushMode) (string, error)
+
 	ScriptKill() (string, error)
 }

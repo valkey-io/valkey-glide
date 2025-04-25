@@ -1730,6 +1730,55 @@ func (client *GlideClusterClient) ScriptExistsWithRoute(
 	return handleBoolArrayResponse(response)
 }
 
+// Removes all the scripts from the script cache.
+// The command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	OK on success.
+//
+// [valkey.io]: https://valkey.io/commands/script-flush/
+func (client *GlideClusterClient) ScriptFlush() (string, error) {
+	return client.baseClient.ScriptFlush()
+}
+
+// Removes all the scripts from the script cache with the specified route options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	options - The ScriptFlushOptions containing the flush mode and route.
+//			  The mode can be either SYNC or ASYNC.
+//
+// Return value:
+//
+//	OK on success.
+//
+// [valkey.io]: https://valkey.io/commands/script-flush/
+func (client *GlideClusterClient) ScriptFlushWithOptions(
+	options options.ScriptFlushOptions,
+) (string, error) {
+	args := []string{}
+	if options.Mode != "" {
+		args = append(args, string(options.Mode))
+	}
+	if options.Route == nil {
+		result, err := client.executeCommand(C.ScriptFlush, args)
+		if err != nil {
+			return DefaultStringResponse, err
+		}
+		return handleOkResponse(result)
+	}
+	result, err := client.executeCommandWithRoute(C.ScriptFlush, args, options.Route.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
 // Kills the currently executing Lua script, assuming no write operation was yet performed by the
 // script.
 //
