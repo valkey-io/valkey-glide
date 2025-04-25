@@ -8034,6 +8034,8 @@ func (client *baseClient) ScriptFlushWithMode(mode options.FlushMode) (string, e
 //	The original source code of the script, if present in the cache.
 //	If the script is not found in the cache, an error is thrown.
 //
+// Since: Valkey 8.0.0
+//
 // [valkey.io]: https://valkey.io/commands/script-show
 func (client *baseClient) ScriptShow(sha1 string) (string, error) {
 	result, err := client.executeCommand(C.ScriptShow, []string{sha1})
