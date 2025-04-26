@@ -1207,3 +1207,54 @@ func ExampleGlideClusterClient_ScriptKill_withRoute() {
 	// Output:
 	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
 }
+
+// ScriptShow Examples
+func ExampleGlideClient_ScriptShow() {
+	client := getExampleGlideClient()
+
+	// First, create and invoke a script
+	scriptText := "return 'Hello, World!'"
+	script := options.NewScript(scriptText)
+	_, err := client.InvokeScript(*script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Now show the script source using ScriptShow
+	scriptSource, err := client.ScriptShow(script.GetHash())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(scriptSource)
+
+	// Output:
+	// return 'Hello, World!'
+}
+
+func ExampleGlideClusterClient_ScriptShow() {
+	client := getExampleGlideClusterClient()
+
+	// First, create and invoke a script
+	scriptText := "return 'Hello World'"
+	script := options.NewScript(scriptText)
+	_, err := client.InvokeScript(*script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Now show the script source using ScriptShow
+	scriptSource, err := client.ScriptShow(script.GetHash())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(scriptSource)
+
+	// Output:
+	// return 'Hello World'
+}

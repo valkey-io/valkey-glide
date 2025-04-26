@@ -39,5 +39,7 @@ type ScriptingAndFunctionBaseCommands interface {
 
 	ScriptFlushWithMode(mode options.FlushMode) (string, error)
 
+	ScriptShow(sha1 string) (string, error)
+
 	ScriptKill() (string, error)
 }

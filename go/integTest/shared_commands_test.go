@@ -10381,3 +10381,34 @@ func (suite *GlideTestSuite) TestScriptFlush() {
 		script.Close()
 	})
 }
+
+func (suite *GlideTestSuite) TestScriptShow() {
+	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Create a unique script code
+		uuid1 := uuid.NewString()
+		code := fmt.Sprintf("return '%s'", uuid1[:5])
+		script := options.NewScript(code)
+
+		// Load the script
+		_, err := client.InvokeScript(*script)
+		assert.Nil(suite.T(), err)
+
+		// Get the SHA1 digest of the script
+		sha1 := script.GetHash()
+
+		// Test with String
+		scriptSource, err := client.ScriptShow(sha1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), code, scriptSource)
+
+		// Test with non-existing SHA1
+		nonExistingSha1 := uuid.NewString()
+		_, err = client.ScriptShow(nonExistingSha1)
+		assert.NotNil(suite.T(), err)
+
+		// Clean up
+		script.Close()
+	})
+}

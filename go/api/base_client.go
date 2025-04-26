@@ -8023,6 +8023,28 @@ func (client *baseClient) ScriptFlushWithMode(mode options.FlushMode) (string, e
 	return handleOkResponse(result)
 }
 
+// ScriptShow returns the original source code of a script in the script cache.
+//
+// Arguments:
+//
+//	sha1: The SHA1 digest of the script.
+//
+// Return value:
+//
+//	The original source code of the script, if present in the cache.
+//	If the script is not found in the cache, an error is thrown.
+//
+// Since: Valkey 8.0.0
+//
+// [valkey.io]: https://valkey.io/commands/script-show
+func (client *baseClient) ScriptShow(sha1 string) (string, error) {
+	result, err := client.executeCommand(C.ScriptShow, []string{sha1})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Kills the currently executing Lua script, assuming no write operation was yet performed by the
 // script.
 //
