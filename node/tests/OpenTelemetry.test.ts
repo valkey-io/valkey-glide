@@ -11,6 +11,7 @@ import {
     ProtocolVersion,
 } from "..";
 import ValkeyCluster from "../../utils/TestUtils";
+import { OpenTelemetry, OpenTelemetryConfig } from "../src/OpenTelemetry";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
@@ -115,14 +116,18 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
                     protocol,
-                ),
-                advancedConfiguration: {
-                    openTelemetryConfig: {
-                        tracesCollectorEndpoint: VALID_ENDPOINT_TRACES,
-                        metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
-                    },
+                )});
+            const openTelemetryConfig = new OpenTelemetryConfig({
+                traces: {
+                endpoint: VALID_ENDPOINT_TRACES,
+                requestsPercentage: 1,
                 },
+                metrics: {
+                    endpoint: VALID_ENDPOINT_METRICS,
+                },
+                flushIntervalMs: 100,
             });
+            OpenTelemetry.init(openTelemetryConfig);
 
             // Execute a series of commands sequentially
             for (let i = 0; i < 100; i++) {
@@ -139,6 +144,65 @@ describe("OpenTelemetry GlideClusterClient", () => {
             const endMemory = process.memoryUsage().heapUsed;
 
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow 10% growth
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClusterClient test otel global config_%p`,
+        async (protocol) => {
+            const openTelemetryConfig = new OpenTelemetryConfig({
+                traces: {
+                    endpoint: VALID_ENDPOINT_TRACES,
+                    requestsPercentage: 1,
+                },
+                metrics: {
+                    endpoint: VALID_ENDPOINT_METRICS,
+                },
+                flushIntervalMs: 100,
+            });
+            OpenTelemetry.init(openTelemetryConfig);
+
+            const client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+
+            const path = "/tmp/spans.json";
+
+            // Remove the span file if it exists
+            if (fs.existsSync(path)) {
+                fs.unlinkSync(path);
+            }
+
+            client.set("GlideClusterClient_test_otel_global_config", "value");
+
+            // Read the span file and check span name
+            const { spanNames } = readAndParseSpanFile(path);
+
+            expect(spanNames).toContain("Set");
+
+            // Update the open telemetry config
+            const path2 = "/tmp/spans2.json";
+            const openTelemetryConfig2 = new OpenTelemetryConfig({
+                traces: {
+                    endpoint: "file://" + path2,
+                },
+            });
+
+            // Remove the span file if it exists
+            if (fs.existsSync(path2)) {
+                fs.unlinkSync(path2);
+            }
+
+            client.set("GlideClusterClient_test_otel_global_config", "value");
+
+            // Read the span file and check span name
+            const { spanNames: spanNames2 } = readAndParseSpanFile(path2);
+
+            expect(spanNames2).toContain("Set");
         },
         TIMEOUT,
     );
@@ -330,47 +394,47 @@ describe("OpenTelemetry GlideClusterClient", () => {
     );
 
     // TODO: fix this test both failed due to client config change in already exit OTEL object
-    // it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-    //     "opentelemetry folder path config_%p",
-    //     async (protocol) => {
-    //         const path = "/tmp/glide-test/";
-    //         const file = path + "signals.json";
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "opentelemetry folder path config_%p",
+        async (protocol) => {
+            const path = "/tmp/glide-test/";
+            const file = path + "signals.json";
 
-    //         // Remove the span file if it exists
-    //         if (fs.existsSync(file)) {
-    //             fs.unlinkSync(file);
-    //         }
+            // Remove the span file if it exists
+            if (fs.existsSync(file)) {
+                fs.unlinkSync(file);
+            }
 
-    //         // Create the directory if it doesn't exist
-    //         if (!fs.existsSync(path)) {
-    //             fs.mkdirSync(path, { recursive: true });
-    //         }
+            // Create the directory if it doesn't exist
+            if (!fs.existsSync(path)) {
+                fs.mkdirSync(path, { recursive: true });
+            }
 
-    //         const client = await GlideClusterClient.createClient({
-    //             ...getClientConfigurationOption(
-    //                 cluster.getAddresses(),
-    //                 protocol,
-    //             ),
-    //             advancedConfiguration: {
-    //                 openTelemetryConfig: {
-    //                     tracesCollectorEndpoint: "file://" + path,
-    //                     metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
-    //                     flushIntervalMs: 400,
-    //                 },
-    //             },
-    //         });
-    //         await client.set("test_key", "foo");
-    //         await client.get("test_key");
+            const client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+                advancedConfiguration: {
+                    openTelemetryConfig: {
+                        tracesCollectorEndpoint: "file://" + path,
+                        metricsCollectorEndpoint: VALID_ENDPOINT_METRICS,
+                        flushIntervalMs: 400,
+                    },
+                },
+            });
+            await client.set("test_key", "foo");
+            await client.get("test_key");
 
-    //         // Wait for spans to be flushed to file
-    //         await new Promise((resolve) => setTimeout(resolve, 400));
+            // Wait for spans to be flushed to file
+            await new Promise((resolve) => setTimeout(resolve, 400));
 
-    //         const { spanNames } = readAndParseSpanFile(file);
-    //         expect(spanNames).toContain("Set");
-    //         expect(spanNames).toContain("Get");
-    //     },
-    //     TIMEOUT,
-    // );
+            const { spanNames } = readAndParseSpanFile(file);
+            expect(spanNames).toContain("Set");
+            expect(spanNames).toContain("Get");
+        },
+        TIMEOUT,
+    );
 
     // it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
     //     "opentelemetry differents clients with differents configs_%p",

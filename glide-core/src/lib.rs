@@ -15,5 +15,7 @@ pub mod scripts_container;
 pub use client::ConnectionRequest;
 pub mod cluster_scan_container;
 pub mod request_type;
-pub use telemetrylib::Telemetry;
-pub use telemetrylib::{GlideOpenTelemetry, GlideSpan};
+pub use telemetrylib::{
+    GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder, GlideOpenTelemetryTraceExporter,
+    GlideSpan, Telemetry, DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_REQUESTS_PRESCENTAGE,
+};

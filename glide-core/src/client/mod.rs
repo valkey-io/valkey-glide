@@ -5,7 +5,7 @@ mod types;
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_error, log_info, log_warn};
+use logger_core::{log_info, log_warn};
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
@@ -18,7 +18,6 @@ use redis::{
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,7 +28,6 @@ mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
 use redis::InfoDict;
-use telemetrylib::*;
 use tokio::sync::mpsc;
 use versions::Versioning;
 
@@ -958,10 +956,9 @@ impl Client {
         let inflight_requests_allowed = Arc::new(AtomicIsize::new(
             inflight_requests_limit.try_into().unwrap(),
         ));
-
         // initilaize open telemetry traces exporter
         if let Some(endpoint_str) = &request.otel_traces_endpoint {
-            let trace_exporter = GlideOpenTelemetrySignalsExporter::from_str(endpoint_str.as_str())
+            let trace_exporter = GlideOpenTelemetryTraceExporter::from_str(endpoint_str.as_str())
                 .map_err(ConnectionError::IoError)?;
             let config = GlideOpenTelemetryConfigBuilder::default()
                 .with_flush_interval(std::time::Duration::from_millis(
