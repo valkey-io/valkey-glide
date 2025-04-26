@@ -11,6 +11,7 @@ using static Valkey.Glide.Errors;
 using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Internals.ResponseHandler;
 using static Valkey.Glide.Pipeline.Options;
+using static Valkey.Glide.Route;
 
 namespace Valkey.Glide;
 
@@ -106,19 +107,48 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     }
 
     protected internal static string HandleOk(IntPtr response)
-        => HandleServerResponse<GlideString, string>(response, false, gs => gs.GetString());
+        => HandleServerResponse<string>(response, false);
 
     protected internal static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
         => HandleServerResponse<T, T>(response, isNullable, o => o);
 
+    protected static ClusterValue<object?> HandleCustomCommandClusterResponse(IntPtr response, Route? route = null)
+        => HandleServerResponse<object, ClusterValue<object?>>(response, true, data
+            => (data is string str && str == "OK") || route is SingleNodeRoute || data is not Dictionary<GlideString, object?>
+                ? ClusterValue<object?>.OfSingleValue(data)
+                : ClusterValue<object?>.OfMultiValue((Dictionary<GlideString, object?>)data));
+
     /// <summary>
-    /// Process and convert server response.
+    /// Process and convert a server response that may be a multi-node response.
+    /// </summary>
+    /// <typeparam name="R">GLIDE's return type per node.</typeparam>
+    /// <typeparam name="T">Command's return type.</typeparam>
+    /// <param name="response"></param>
+    /// <param name="isNullable"></param>
+    /// <param name="converter">Function to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
+    protected static ClusterValue<T> HandleClusterValueResponse<R, T>(IntPtr response, bool isNullable, Route route, Func<R, T> converter) where T : class?
+        => HandleServerResponse<object, ClusterValue<T>>(response, isNullable, data => route is SingleNodeRoute
+            ? ClusterValue<T>.OfSingleValue(converter((R)data))
+            : ClusterValue<T>.OfMultiValue(((Dictionary<GlideString, object>)data).ConvertValues(converter)));
+
+    /// <summary>
+    /// Process and convert a cluster multi-node response.
+    /// </summary>
+    /// <typeparam name="R">GLIDE's return type per node.</typeparam>
+    /// <typeparam name="T">Command's return type.</typeparam>
+    /// <param name="response"></param>
+    /// <param name="converter">Function to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
+    protected static Dictionary<string, T> HandleMultiNodeResponse<R, T>(IntPtr response, Func<R, T> converter) where T : class?
+        => HandleServerResponse<Dictionary<GlideString, object>, Dictionary<string, T>>(response, false, dict => dict.DownCastKeys().ConvertValues(converter));
+
+    /// <summary>
+    /// Process and convert a server response.
     /// </summary>
     /// <typeparam name="R">GLIDE's return type.</typeparam>
     /// <typeparam name="T">Command's return type.</typeparam>
     /// <param name="response"></param>
     /// <param name="isNullable"></param>
-    /// <param name="converter">Optional converted to convert <typeparamref name="R" /> to <typeparamref name="T" />.</param>
+    /// <param name="converter">Optional function to convert <typeparamref name="R" /> to <typeparamref name="T" />.</param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
     protected internal static T HandleServerResponse<R, T>(IntPtr response, bool isNullable, Func<R, T> converter) where T : class? where R : class?
@@ -134,11 +164,11 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
                     return null;
 #pragma warning restore CS8603 // Possible null reference return.
                 }
-                throw new Exception($"Unexpected return type from Glide: got null expected {typeof(T).Name}");
+                throw new Exception($"Unexpected return type from Glide: got null expected {typeof(T).GetRealTypeName()}");
             }
             return value is R
                 ? converter((value as R)!)
-                : throw new RequestException($"Unexpected return type from Glide: got {value?.GetType().Name} expected {typeof(T).Name}");
+                : throw new RequestException($"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(T).GetRealTypeName()}");
         }
         finally
         {

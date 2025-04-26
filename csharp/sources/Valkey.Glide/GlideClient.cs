@@ -1,11 +1,13 @@
-﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using Valkey.Glide.Commands;
-using Valkey.Glide.Internals;
+using Valkey.Glide.Commands.Options;
 using Valkey.Glide.Pipeline;
 
 using static Valkey.Glide.ConnectionConfiguration;
 using static Valkey.Glide.Pipeline.Options;
+
+using RequestType = Valkey.Glide.Internals.FFI.RequestType;
 
 namespace Valkey.Glide;
 
@@ -13,7 +15,7 @@ namespace Valkey.Glide;
 /// <summary>
 /// Client used for connection to standalone servers. Use <see cref="CreateClient"/> to request a client.
 /// </summary>
-public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGenericCommands
+public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGenericCommands, IServerManagementCommands
 {
     private GlideClient() { }
 
@@ -58,10 +60,17 @@ public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGe
     public static async Task<GlideClient> CreateClient(StandaloneClientConfiguration config)
         => await CreateClient(config, () => new GlideClient());
 
-    public async Task<object?> CustomCommand(GlideString[] args)
-        => await Command(FFI.RequestType.CustomCommand, args, resp => HandleServerResponse<object?>(resp, true));
-
     public async Task<object?[]?> Exec(Batch batch) => await Batch(batch);
 
     public async Task<object?[]?> Exec(Batch batch, BatchOptions options) => await Batch(batch, options);
+
+    public async Task<object?> CustomCommand(GlideString[] args)
+    => await Command(RequestType.CustomCommand, args, resp
+        => HandleServerResponse<object?>(resp, true));
+
+    public async Task<string> Info() => await Info([]);
+
+    public async Task<string> Info(InfoOptions.Section[] sections)
+        => await Command(RequestType.Info, sections.ToGlideStrings(), resp
+            => HandleServerResponse<GlideString, string>(resp, false, gs => gs.ToString()));
 }

@@ -78,7 +78,7 @@ internal class ResponseHandler
         ValueType.Array => CreateArray(value),
         ValueType.Map => CreateMap(value),
         ValueType.Set => CreateArray(value).ToHashSet(),
-        ValueType.OK => new GlideString("OK"), // TODO changed to "OK" in #3589 https://github.com/valkey-io/valkey-glide/pull/3589
+        ValueType.OK => "OK",
         ValueType.Error => new RequestException(CreateString(value)!),
         _ => throw new NotImplementedException(),
     };
