@@ -102,7 +102,7 @@ public class ClusterClientTests
     {
         using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
 
-        ClusterBatch batch = new ClusterBatch(isAtomic).CustomCommand(["info", "replication"]);
+        ClusterBatch batch = new ClusterBatch(isAtomic).Info([Section.REPLICATION]);
 
         object?[]? res = await client.Exec(batch, new(route: new SlotKeyRoute("abc", SlotType.Primary)));
         Assert.Contains("role:master", res![0] as gs);

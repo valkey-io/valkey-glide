@@ -2,6 +2,8 @@
 
 using Valkey.Glide.Internals;
 
+using static Valkey.Glide.Commands.Options.InfoOptions;
+
 using RequestType = Valkey.Glide.Internals.FFI.RequestType;
 
 namespace Valkey.Glide.Pipeline;
@@ -49,7 +51,23 @@ public abstract class BaseBatch<T>(bool isAtomic) : IBatch where T : BaseBatch<T
         return (T)this;
     }
 
+    /// <inheritdoc cref="IBatch.Info()" />
+    public T Info()
+    {
+        _commands.Add(new(RequestType.Info, []));
+        return (T)this;
+    }
+
+    /// <inheritdoc cref="IBatch.Info(Section[])" />
+    public T Info(Section[] sections)
+    {
+        _commands.Add(new(RequestType.Info, sections.ToGlideStrings()));
+        return (T)this;
+    }
+
     IBatch IBatch.CustomCommand(GlideString[] args) => CustomCommand(args);
     IBatch IBatch.Get(GlideString key) => Get(key);
     IBatch IBatch.Set(GlideString key, GlideString value) => Set(key, value);
+    IBatch IBatch.Info() => Info();
+    IBatch IBatch.Info(Section[] sections) => Info(sections);
 }

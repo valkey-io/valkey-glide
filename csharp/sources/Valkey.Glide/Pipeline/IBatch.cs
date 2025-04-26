@@ -2,6 +2,8 @@
 
 using Valkey.Glide.Commands;
 
+using static Valkey.Glide.Commands.Options.InfoOptions;
+
 namespace Valkey.Glide.Pipeline;
 
 // BaseBatch was split into two types, one for docs, another for the impl. This also ease the testing.
@@ -22,4 +24,13 @@ internal interface IBatch
     /// <inheritdoc cref="IStringBaseCommands.Set(GlideString, GlideString)" path="/param" />
     /// <returns>Command Response - <inheritdoc cref="IStringBaseCommands.Set(GlideString, GlideString)" /></returns>
     IBatch Set(GlideString key, GlideString value);
+
+    /// <inheritdoc cref="IServerManagementCommands.Info()" path="/summary" />
+    /// <returns>Command Response - <inheritdoc cref="IServerManagementCommands.Info()" /></returns>
+    IBatch Info();
+
+    /// <inheritdoc cref="IServerManagementCommands.Info(Section[])" path="/summary" />
+    /// <inheritdoc cref="IServerManagementCommands.Info(Section[])" path="/param" />
+    /// <returns>Command Response - <inheritdoc cref="IServerManagementCommands.Info()" /></returns>
+    IBatch Info(Section[] sections);
 }
