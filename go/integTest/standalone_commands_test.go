@@ -960,7 +960,6 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 	libInfo := functionList[0]
 	assert.Equal(suite.T(), libName, libInfo.Name)
 	assert.Equal(suite.T(), "LUA", libInfo.Engine)
-	//assert.Contains(suite.T(), libInfo.Code, libName)
 
 	// Check function info
 	assert.Len(suite.T(), libInfo.Functions, 1)

@@ -767,20 +767,17 @@ func ExampleGlideClient_FunctionList() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	for _, lib := range libs {
-		fmt.Println(lib.Name)
-		for _, function := range lib.Functions {
-			fmt.Println(function.Name)
+	fmt.Printf("There are %d libraries loaded.\n", len(libs))
+	for i, lib := range libs {
+		fmt.Printf("%d) Library name '%s', on engine %s, with %d functions\n", i+1, lib.Name, lib.Engine, len(lib.Functions))
+		for j, fn := range lib.Functions {
+			fmt.Printf("   %d) function '%s'\n", j+1, fn.Name)
 		}
-		fmt.Println("Engine:")
-		fmt.Println(lib.Engine)
 	}
-
 	// Output:
-	// mylib
-	// myfunc
-	// Engine:
-	// LUA
+	// There are 1 libraries loaded.
+	// 1) Library name 'mylib', on engine LUA, with 1 functions
+	//    1) function 'myfunc'
 }
 
 func ExampleGlideClusterClient_FunctionList() {
@@ -803,20 +800,17 @@ func ExampleGlideClusterClient_FunctionList() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	for _, lib := range libs {
-		fmt.Println(lib.Name)
-		for _, function := range lib.Functions {
-			fmt.Println(function.Name)
+	fmt.Printf("There are %d libraries loaded.\n", len(libs))
+	for i, lib := range libs {
+		fmt.Printf("%d) Library name '%s', on engine %s, with %d functions\n", i+1, lib.Name, lib.Engine, len(lib.Functions))
+		for j, fn := range lib.Functions {
+			fmt.Printf("   %d) function '%s'\n", j+1, fn.Name)
 		}
-		fmt.Println("Engine:")
-		fmt.Println(lib.Engine)
 	}
-
 	// Output:
-	// mylib
-	// myfunc
-	// Engine:
-	// LUA
+	// There are 1 libraries loaded.
+	// 1) Library name 'mylib', on engine LUA, with 1 functions
+	//    1) function 'myfunc'
 }
 
 func ExampleGlideClusterClient_FunctionListWithRoute() {
@@ -863,5 +857,7 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 	//   Engine: LUA
 	//   Functions: 1
 	//   Code: #!lua name=mylib
-	// redis.register_function{ function_name = 'myfunc', callback = function(keys, args) return 42 end, flags = { 'no-writes' } }
+	// redis.register_function{ function_name = 'myfunc',
+	//   callback = function(keys, args) return 42 end,
+	//   flags = { 'no-writes' } }
 }

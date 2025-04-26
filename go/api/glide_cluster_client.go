@@ -1582,7 +1582,7 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 	return handleOkResponse(result)
 }
 
-// FunctionListWithRoute returns information about the functions and libraries.
+// Returns information about the functions and libraries.
 //
 // Since:
 //
