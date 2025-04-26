@@ -7828,6 +7828,7 @@ func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, e
 
 	return handleStringArrayResponse(result)
 }
+
 // Returns the number of patterns that are subscribed to by clients.
 //
 // This returns the total number of unique patterns that all clients are subscribed to,
@@ -7841,55 +7842,6 @@ func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, e
 // Return value:
 //
 //	The number of patterns that are subscribed to by clients.
-//
-// [valkey.io]: https://valkey.io/commands/pubsub-numpat
-func (client *baseClient) PubSubNumPat() (int64, error) {
-	result, err := client.executeCommand(C.PubSubNumPat, []string{})
-	if err != nil {
-		return 0, err
-	}
-
-	return handleIntResponse(result)
-}
-
-// Returns the number of subscribers for the specified channels.
-//
-// The count only includes clients subscribed to exact channels, not pattern subscriptions.
-// If no channels are specified, an empty map is returned.
-//
-// When used in cluster mode, the command is routed to all nodes and aggregates
-// the responses into a single map.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	channels - The channel names to get subscriber counts for.
-//
-// Return value:
-//
-//	A map of channel names to their subscriber counts.
-//
-// [valkey.io]: https://valkey.io/commands/pubsub-numsub
-func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, error) {
-	result, err := client.executeCommand(C.PubSubNumSub, channels)
-	if err != nil {
-		return nil, err
-	}
-
-	return handleStringIntMapResponse(result)
-}
-
-
-// PubSubNumPat returns the number of patterns that are subscribed to by clients.
-//
-// This returns the total number of unique patterns that all clients are subscribed to,
-// not the count of clients subscribed to patterns.
-//
-// When used in cluster mode, the command is routed to all nodes and aggregates
-// the responses.
-//
-// See [valkey.io] for details.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-numpat
 func (client *baseClient) PubSubNumPat() (int64, error) {
