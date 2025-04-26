@@ -163,7 +163,6 @@ func getExampleGlideClusterClientWithSubscription(mode PubSubClusterChannelMode,
 	return thisClient
 }
 
-
 func parseHosts(addresses string) []NodeAddress {
 	var result []NodeAddress
 
