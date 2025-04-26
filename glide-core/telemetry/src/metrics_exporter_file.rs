@@ -11,18 +11,38 @@ use std::any::Any;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic;
+use std::result::Result;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// An OpenTelemetry exporter that writes Metrics to a file on export.
 pub struct FileMetricExporter {
-    is_shutdown: atomic::AtomicBool,
+    is_shutdown: AtomicBool,
     path: PathBuf,
 }
 
 impl FileMetricExporter {
-    pub fn new(path: PathBuf) -> std::result::Result<Self, MetricError> {
-        Ok(FileMetricExporter {
-            is_shutdown: atomic::AtomicBool::new(false),
+    /// Creates a new FileMetricExporter that writes metrics to the specified path.
+    ///
+    /// # Arguments
+    /// * `path` - The path where metrics will be written. This can be either a file or directory path.
+    ///
+    /// # Behavior
+    /// - If the path points to a directory:
+    ///   - The directory must exist
+    ///   - Metrics will be written to a file named "signals.json" within that directory
+    /// - If the path points to a file:
+    ///   - If the file exists, new metrics will be appended to it (existing data is preserved)
+    ///   - If the file doesn't exist, it will be created
+    ///   - The parent directory must exist
+    ///
+    /// # Errors
+    /// Returns a MetricError if:
+    /// - The parent directory doesn't exist
+    /// - The path points to a directory that doesn't exist
+    /// - The user doesn't have write permissions for the target location
+    pub fn new(path: PathBuf) -> Result<Self, MetricError> {
+        Ok(Self {
+            is_shutdown: AtomicBool::new(false),
             path,
         })
     }
@@ -35,42 +55,35 @@ impl PushMetricExporter for FileMetricExporter {
     }
 
     async fn export(&self, metrics: &mut ResourceMetrics) -> MetricResult<()> {
-        println!("Start to export:: metrics: {:?}", metrics);
-        if self.is_shutdown.load(atomic::Ordering::SeqCst) {
-            return Ok(());
+        if self.is_shutdown.load(Ordering::SeqCst) {
+            return Err(MetricError::Other("Exporter is shutdown".to_string()));
         }
 
-        let Ok(mut data_file) = OpenOptions::new()
+        let mut data_file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
-        else {
-            return Err(MetricError::Other(format!(
-                "Unable to open exporter file: {} for append.",
-                self.path.display()
-            )));
-        };
+            .map_err(|err| MetricError::Other(format!("Unable to open exporter file: {err}")))?;
 
-        let metrics_json = to_json(metrics).map_err(|e| {
-            MetricError::Other(format!("Failed to serialize metrics to JSON: {}", e))
-        })?;
-        let s = serde_json::to_string(&metrics_json).map_err(|e| {
-            MetricError::Other(format!("Failed to serialize metrics to JSON: {}", e))
-        })?;
+        let metrics_json = to_json(metrics)
+            .map_err(|e| MetricError::Other(format!("Failed to serialize metrics to JSON: {e}")))?;
+        let json_string = serde_json::to_string(&metrics_json)
+            .map_err(|e| MetricError::Other(format!("Failed to serialize metrics to JSON: {e}")))?;
 
-        if let Err(e) = data_file.write(format!("{}\n", s).as_bytes()) {
-            return Err(MetricError::Other(format!("File write error: {}", e)));
-        }
+        data_file
+            .write(format!("{}\n", json_string).as_bytes())
+            .map_err(|e| MetricError::Other(format!("File write error: {e}")))?;
 
         Ok(())
     }
 
+    /// No-op implementation since metrics are written immediately in export()
     async fn force_flush(&self) -> MetricResult<()> {
         Ok(())
     }
 
     fn shutdown(&self) -> MetricResult<()> {
-        self.is_shutdown.store(true, atomic::Ordering::SeqCst);
+        self.is_shutdown.store(true, Ordering::SeqCst);
         Ok(())
     }
 }
@@ -89,19 +102,21 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
     let mut scope_metrics = Vec::new();
     for scope_metric in metrics.scope_metrics.iter() {
         let mut scope = Map::new();
-        scope.insert(
+        let mut scope_info = Map::new();
+        scope_info.insert(
             "name".to_string(),
             Value::String(scope_metric.scope.name().to_string()),
         );
         if let Some(version) = scope_metric.scope.version() {
-            scope.insert("version".to_string(), Value::String(version.to_string()));
+            scope_info.insert("version".to_string(), Value::String(version.to_string()));
         }
         if let Some(schema_url) = scope_metric.scope.schema_url() {
-            scope.insert(
+            scope_info.insert(
                 "schema_url".to_string(),
                 Value::String(schema_url.to_string()),
             );
         }
+        scope.insert("scope".to_string(), Value::Object(scope_info));
 
         // Add metrics
         let mut metrics = Vec::new();
@@ -121,7 +136,7 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
             if let Some(sum) = aggregation.downcast_ref::<Sum<u64>>() {
                 for point in sum.data_points.iter() {
                     let mut dp = Map::new();
-                    dp.insert("value".to_string(), Value::String(point.value.to_string()));
+                    dp.insert("value".to_string(), Value::Number(point.value.into()));
                     let start_time = point
                         .start_time
                         .ok_or_else(|| MetricError::Other("Missing start time".to_string()))?;
@@ -140,13 +155,10 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
                         Value::String(time.timestamp_micros().to_string()),
                     );
 
-                    // Add attributes
-                    let mut attributes = Map::new();
-                    for kv in point.attributes.iter() {
-                        attributes.insert(kv.key.to_string(), Value::String(kv.value.to_string()));
-                    }
-                    dp.insert("attributes".to_string(), Value::Object(attributes));
-
+                    dp.insert(
+                        "attributes".to_string(),
+                        attributes_to_json(&point.attributes),
+                    );
                     data_points.push(Value::Object(dp));
                 }
             } else if let Some(gauge) = aggregation.downcast_ref::<Gauge<f64>>() {
@@ -162,13 +174,10 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
                         Value::String(time.timestamp_micros().to_string()),
                     );
 
-                    // Add attributes
-                    let mut attributes = Map::new();
-                    for kv in point.attributes.iter() {
-                        attributes.insert(kv.key.to_string(), Value::String(kv.value.to_string()));
-                    }
-                    dp.insert("attributes".to_string(), Value::Object(attributes));
-
+                    dp.insert(
+                        "attributes".to_string(),
+                        attributes_to_json(&point.attributes),
+                    );
                     data_points.push(Value::Object(dp));
                 }
             } else if let Some(histogram) = aggregation.downcast_ref::<Histogram<f64>>() {
@@ -204,15 +213,14 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
                         Value::String(time.timestamp_micros().to_string()),
                     );
 
-                    // Add attributes
-                    let mut attributes = Map::new();
-                    for kv in point.attributes.iter() {
-                        attributes.insert(kv.key.to_string(), Value::String(kv.value.to_string()));
-                    }
-                    dp.insert("attributes".to_string(), Value::Object(attributes));
-
+                    dp.insert(
+                        "attributes".to_string(),
+                        attributes_to_json(&point.attributes),
+                    );
                     data_points.push(Value::Object(dp));
                 }
+            } else {
+                return Err(MetricError::Other("Unsupported metric type".to_string()));
             }
             metric_obj.insert("data_points".to_string(), Value::Array(data_points));
             metrics.push(Value::Object(metric_obj));
@@ -223,4 +231,13 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
     root.insert("scope_metrics".to_string(), Value::Array(scope_metrics));
 
     Ok(Value::Object(root))
+}
+
+// Helper function to convert attributes to JSON
+fn attributes_to_json(attributes: &[opentelemetry::KeyValue]) -> Value {
+    let mut json_attributes = Map::new();
+    for kv in attributes.iter() {
+        json_attributes.insert(kv.key.to_string(), Value::String(kv.value.to_string()));
+    }
+    Value::Object(json_attributes)
 }

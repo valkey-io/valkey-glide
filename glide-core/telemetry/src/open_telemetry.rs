@@ -44,7 +44,7 @@ pub enum GlideOTELError {
 /// Default interval in milliseconds for flushing open telemetry data to the collector.
 pub const DEFAULT_FLUSH_SIGNAL_INTERVAL_MS: u32 = 5000;
 
-/// Default filename for the open telemetry data file.
+/// Default filename for the file exporter.
 pub const DEFAULT_SIGNAL_FILENAME: &str = "signals.json";
 
 pub enum GlideSpanStatus {
@@ -766,12 +766,12 @@ mod tests {
             );
             assert_eq!(
                 metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-                "1"
+                1
             );
             let metric_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
             assert_eq!(
                 metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-                "3"
+                3
             );
         });
     }

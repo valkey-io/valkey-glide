@@ -25,6 +25,25 @@ impl fmt::Debug for SpanExporterFile {
 }
 
 impl SpanExporterFile {
+    /// Creates a new SpanExporterFile that writes Spans to a file on export.
+    ///
+    /// # Arguments
+    /// * `path` - The path where metrics will be written. This can be either a file or directory path.
+    ///
+    /// # Behavior
+    /// - If the path points to a directory:
+    ///   - The directory must exist
+    ///   - Metrics will be written to a file named "signals.json" within that directory
+    /// - If the path points to a file:
+    ///   - If the file exists, new metrics will be appended to it (existing data is preserved)
+    ///   - If the file doesn't exist, it will be created
+    ///   - The parent directory must exist
+    ///
+    /// # Errors
+    /// Returns a MetricError if:
+    /// - The parent directory doesn't exist
+    /// - The path points to a directory that doesn't exist
+    /// - The user doesn't have write permissions for the target location
     pub fn new(path: PathBuf) -> Self {
         SpanExporterFile {
             resource: Resource::default(),

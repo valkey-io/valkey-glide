@@ -29,7 +29,6 @@ use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use std::{env, str};
 use std::{io, thread};
-use telemetrylib::GlideOpenTelemetry;
 use telemetrylib::GlideSpan;
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};

@@ -3,11 +3,11 @@ use serde::Serialize;
 use std::sync::RwLock as StdRwLock;
 mod metrics_exporter_file;
 mod open_telemetry;
-mod open_telemetry_exporter_file;
+mod span_exporter_file;
 
 pub use metrics_exporter_file::FileMetricExporter;
 pub use open_telemetry::*;
-pub use open_telemetry_exporter_file::SpanExporterFile;
+pub use span_exporter_file::SpanExporterFile;
 
 #[derive(Default, Serialize)]
 #[allow(dead_code)]

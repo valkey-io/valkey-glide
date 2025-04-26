@@ -701,7 +701,7 @@ export interface BaseClientConfiguration {
  * - gRPC: Use `grpc://` prefix (e.g., `grpc://localhost:4317`)
  * - File: Use file:// followed by a full path to export the signals to a local file.
  *   - The file:// endpoint supports both directory paths and explicit file paths:
- *     - If the path is a directory or lacks a file extension (e.g., file:///tmp/otel), it will default to writing to a file named spans.json in that directory (e.g., /tmp/otel/spans.json).
+ *     - If the path is a directory or lacks a file extension (e.g., file:///tmp/otel), it will default to writing to a file named signals.json in that directory (e.g., /tmp/otel/signals.json).
  *     - If the path includes a filename with an extension (e.g., file:///tmp/otel/traces.json), the specified file will be used as-is.
  *     - The parent directory must already exist. If it does not, the client will fail to initialize with an InvalidInput error.
  *     - If the target file already exists, new data will be appended to it (the file will not be overwritten).
