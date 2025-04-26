@@ -78,7 +78,7 @@ public class SharedCommandTests(TestConfiguration config)
         object?[]? res = isCluster
             ? await ((GlideClusterClient)client).Exec((ClusterBatch)batch, (ClusterBatchOptions)options)
             : await ((GlideClient)client).Exec((Batch)batch, (BatchOptions)options);
-        Assert.Equal([new gs("OK")], res); // TODO changed to "OK" in #3589 https://github.com/valkey-io/valkey-glide/pull/3589
+        Assert.Equal(["OK"], res);
 
     }
 
@@ -101,7 +101,7 @@ public class SharedCommandTests(TestConfiguration config)
         // Exceptions aren't raised, but stored in the result set
         Assert.Multiple(
             () => Assert.Equal(4, res.Length),
-            () => Assert.Equal(new gs("OK"), res[0]), // TODO changed to "OK" in #3589 https://github.com/valkey-io/valkey-glide/pull/3589
+            () => Assert.Equal("OK", res[0]),
             () => Assert.Equal(1L, (long)res[2]!),
             () => Assert.IsType<RequestException>(res[1]),
             () => Assert.IsType<RequestException>(res[3]),
