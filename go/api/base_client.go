@@ -7853,7 +7853,7 @@ func (client *baseClient) PubSubNumPat() (int64, error) {
 	return handleIntResponse(result)
 }
 
-// PubSubNumSub returns the number of subscribers for the specified channels.
+// Returns the number of subscribers for the specified channels.
 //
 // The count only includes clients subscribed to exact channels, not pattern subscriptions.
 // If no channels are specified, an empty map is returned.
@@ -7862,6 +7862,14 @@ func (client *baseClient) PubSubNumPat() (int64, error) {
 // the responses into a single map.
 //
 // See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channels - The channel names to get subscriber counts for.
+//
+// Return value:
+//
+//	A map of channel names to their subscriber counts.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-numsub
 func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, error) {
