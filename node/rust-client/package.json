@@ -15,13 +15,11 @@
             "defaults": true,
             "additional": [
                 "x86_64-unknown-linux-musl",
+                "x86_64-unknown-linux-gnu",
                 "aarch64-unknown-linux-gnu",
-                "armv7-unknown-linux-gnueabihf",
                 "aarch64-apple-darwin",
-                "aarch64-linux-android",
-                "x86_64-unknown-freebsd",
-                "aarch64-unknown-linux-musl",
-                "armv7-linux-androideabi"
+                "x86_64-apple-darwin",
+                "aarch64-unknown-linux-musl"
             ]
         }
     },
@@ -45,9 +43,9 @@
         "globals": "npm install --global @napi-rs/cli prettier"
     },
     "devDependencies": {
-        "@napi-rs/cli": "^2.18.4",
-        "lint-staged": "^15.2.10",
-        "prettier": "^3.3.3"
+        "@napi-rs/cli": "2",
+        "lint-staged": "15",
+        "prettier": "3"
     },
     "lint-staged": {
         "*.@(js|ts|tsx)": [
