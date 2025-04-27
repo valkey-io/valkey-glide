@@ -485,8 +485,12 @@ describe("PubSub", () => {
                     0,
                 );
 
-                expect(pubsubMessage!.message).toEqual(Buffer.from(message));
-                expect(pubsubMessage!.channel).toEqual(Buffer.from(channel));
+                expect(pubsubMessage!.message).toEqual(
+                    Buffer.from(String(message)),
+                );
+                expect(pubsubMessage!.channel).toEqual(
+                    Buffer.from(String(channel)),
+                );
                 expect(pubsubMessage!.pattern).toBeNull();
 
                 await checkNoMessagesLeft(method, listeningClient, context, 1);
