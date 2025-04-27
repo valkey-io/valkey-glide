@@ -1092,26 +1092,19 @@ export class BaseClient {
                 options as ClusterBatchOptions,
             );
         }).then((result: T) => {
-            if (Array.isArray(command)) {
-                if (Array.isArray(result)) {
-                    for (const item of result) {
-                        if (typeof item === "object" && item !== null) {
-                            if (
-                                item.constructor &&
-                                item.constructor.name === "Error" &&
-                                Object.prototype.hasOwnProperty.call(
-                                    item,
-                                    "code",
-                                ) &&
-                                (item as { code: unknown }).code ===
-                                    "RequestError"
-                            ) {
-                                Object.setPrototypeOf(
-                                    item,
-                                    RequestError.prototype,
-                                );
-                                delete (item as { code: unknown }).code;
-                            }
+            if (Array.isArray(command) && Array.isArray(result)) {
+                for (const item of result) {
+                    if (
+                        item &&
+                        typeof item === "object" &&
+                        item.constructor?.name === "Error"
+                    ) {
+                        if (
+                            "code" in item &&
+                            (item as { code: string }).code === "RequestError"
+                        ) {
+                            Object.setPrototypeOf(item, RequestError.prototype);
+                            delete item.code;
                         }
                     }
                 }

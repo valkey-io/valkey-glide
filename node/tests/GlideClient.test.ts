@@ -24,7 +24,6 @@ import {
     ProtocolVersion,
     RequestError,
     Script,
-    Transaction,
     convertGlideRecordToRecord,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
@@ -1188,46 +1187,6 @@ describe("GlideClient", () => {
                 client.close();
             }
         },
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "shoham (protocol: %p)",
-        async (protocol) => {
-            // Create a client configuration with a generous request timeout
-            const config = getClientConfigurationOption(
-                cluster.getAddresses(),
-                protocol,
-                { requestTimeout: 20000 }, // Long timeout to allow debugging operations (sleep for 7 seconds)
-            );
-
-            // Initialize the primary client
-            const client = await GlideClient.createClient(config);
-
-            try {
-                const transaction = new Transaction();
-                transaction.set("key", "value").lpop("key");
-                const result = await client.exec(transaction, true);
-                console.log(result);
-
-                if (result) {
-                    for (const entry of result) {
-                        console.log("Entry:", entry, "Type:", typeof entry);
-                        console.log(entry instanceof Error);
-                        console.log(entry instanceof RequestError);
-
-                        if (typeof entry === "object" && entry != null) {
-                            console.log(entry.constructor.name);
-                        }
-                    }
-                } else {
-                    console.log("Transaction result is null");
-                }
-            } finally {
-                // Clean up the test client and ensure everything is flushed and closed
-                client.close();
-            }
-        },
-        TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(

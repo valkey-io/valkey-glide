@@ -12528,7 +12528,7 @@ export function runBaseTests(config: {
                     "no such key",
                 );
 
-                await expect(async () => {
+                try {
                     if (isCluster) {
                         await (client as GlideClusterClient).exec(
                             batch as ClusterBatch,
@@ -12540,14 +12540,15 @@ export function runBaseTests(config: {
                             true,
                         );
                     }
-                })
-                    .rejects.toThrow(RequestError)
-                    .then((error) => {
-                        expect(error).toBeInstanceOf(RequestError);
-                        expect(
-                            (error as unknown as RequestError).message,
-                        ).toContain("WRONGTYPE");
-                    });
+
+                    // to make sure we are raising an error and not getting into this part
+                    fail("Expected an error to be thrown");
+                } catch (error) {
+                    expect(error).toBeInstanceOf(RequestError);
+                    expect((error as RequestError).message).toContain(
+                        "WRONGTYPE",
+                    );
+                }
             }, protocol);
         },
         config.timeout,
