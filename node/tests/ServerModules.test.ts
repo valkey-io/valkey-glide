@@ -11,7 +11,7 @@ import {
 } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
 import {
-    ClusterTransaction,
+    ClusterBatch,
     ConditionalChange,
     convertGlideRecordToRecord,
     Decoder,
@@ -39,7 +39,7 @@ import {
     getServerVersion,
     JsonBatchForArrCommands,
     parseEndpoints,
-    validateTransactionResponse,
+    validateBatchResponse,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -2313,37 +2313,41 @@ describe("Server Module Tests", () => {
                 ).toBeNull();
             });
 
-            it("can send JsonBatch transactions for ARR commands", async () => {
-                client = await GlideClusterClient.createClient(
-                    getClientConfigurationOption(
-                        cluster.getAddresses(),
-                        protocol,
-                    ),
-                );
-                const clusterTransaction = new ClusterTransaction();
-                const expectedRes =
-                    await JsonBatchForArrCommands(clusterTransaction);
-                const result = await client.exec(clusterTransaction);
+            it.each([true, false])(
+                "can send JsonBatch transactions for ARR commands with isAtomic=%s",
+                async (isAtomic) => {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const batch = new ClusterBatch(isAtomic);
+                    const expectedRes = await JsonBatchForArrCommands(batch);
+                    const result = await client.exec(batch, true);
 
-                validateTransactionResponse(result, expectedRes);
-                client.close();
-            });
+                    validateBatchResponse(result, expectedRes);
+                    client.close();
+                },
+            );
 
-            it("can send JsonBatch transactions general commands", async () => {
-                client = await GlideClusterClient.createClient(
-                    getClientConfigurationOption(
-                        cluster.getAddresses(),
-                        protocol,
-                    ),
-                );
-                const clusterTransaction = new ClusterTransaction();
-                const expectedRes =
-                    await CreateJsonBatchCommands(clusterTransaction);
-                const result = await client.exec(clusterTransaction);
+            it.each([true, false])(
+                "can send JsonBatch transactions general commands with isAtomic=%s",
+                async (isAtomic) => {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const batch = new ClusterBatch(isAtomic);
+                    const expectedRes = await CreateJsonBatchCommands(batch);
+                    const result = await client.exec(batch, true);
 
-                validateTransactionResponse(result, expectedRes);
-                client.close();
-            });
+                    validateBatchResponse(result, expectedRes);
+                    client.close();
+                },
+            );
         },
     );
 

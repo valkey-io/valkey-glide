@@ -15,6 +15,7 @@ import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
     BaseScanOptions,
+    BatchOptions,
     BitFieldGet,
     BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -25,6 +26,7 @@ import {
     BitOffsetOptions,
     BitwiseOperation,
     Boundary,
+    ClusterBatchOptions,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
@@ -281,6 +283,7 @@ export type GlideReturnType =
     | ReturnTypeRecord
     | ReturnTypeMap
     | ReturnTypeAttribute
+    | RequestError
     | GlideReturnType[];
 
 /**
@@ -747,7 +750,9 @@ export interface PubSubMsg {
  * A type to combine RouterOption and DecoderOption to be used for creating write promises for the command.
  * See - {@link DecoderOption} and {@link RouteOption}
  */
-export type WritePromiseOptions = RouteOption & DecoderOption;
+export type WritePromiseOptions = RouteOption &
+    DecoderOption &
+    Partial<ClusterBatchOptions & BatchOptions>;
 
 /**
  * Base client interface for GLIDE
@@ -1058,18 +1063,54 @@ export class BaseClient {
     protected createWritePromise<T>(
         command: command_request.Command | command_request.Command[],
         options: WritePromiseOptions = {},
+        isAtomic = false,
+        raiseOnError = false,
     ): Promise<T> {
         this.ensureClientIsOpen();
 
         const route = this.toProtobufRoute(options?.route);
-        return new Promise((resolve, reject) => {
+        return new Promise<T>((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
                 options?.decoder,
             ];
-            this.writeOrBufferCommandRequest(callbackIndex, command, route);
+            this.writeOrBufferCommandRequest(
+                callbackIndex,
+                command,
+                route,
+                isAtomic,
+                raiseOnError,
+                options as ClusterBatchOptions,
+            );
+        }).then((result: T) => {
+            if (Array.isArray(command)) {
+                if (Array.isArray(result)) {
+                    for (const item of result) {
+                        if (typeof item === "object" && item !== null) {
+                            if (
+                                item.constructor &&
+                                item.constructor.name === "Error" &&
+                                Object.prototype.hasOwnProperty.call(
+                                    item,
+                                    "code",
+                                ) &&
+                                (item as { code: unknown }).code ===
+                                    "RequestError"
+                            ) {
+                                Object.setPrototypeOf(
+                                    item,
+                                    RequestError.prototype,
+                                );
+                                delete (item as { code: unknown }).code;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return result as T;
         });
     }
 
@@ -1131,14 +1172,34 @@ export class BaseClient {
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
+        isAtomic = false,
+        raiseOnError = false,
+        options: ClusterBatchOptions | BatchOptions = {},
     ) {
-        const message = Array.isArray(command)
+        const isBatch = Array.isArray(command);
+
+        const isClusterOptions = (
+            opt: ClusterBatchOptions | BatchOptions,
+        ): opt is ClusterBatchOptions =>
+            "retryStrategy" in opt || "route" in opt;
+
+        const batchOptions = isClusterOptions(options)
+            ? {
+                  retryConnectionError:
+                      options.retryStrategy?.retryConnectionError,
+                  retryServerError: options.retryStrategy?.retryServerError,
+              }
+            : {};
+
+        const message = isBatch
             ? command_request.CommandRequest.create({
                   callbackIdx,
                   batch: command_request.Batch.create({
-                      isAtomic: true,
+                      isAtomic,
                       commands: command,
-                      // TODO: add support for timeout, raiseOnError and retryStrategy
+                      raiseOnError,
+                      timeout: options.timeout,
+                      ...batchOptions,
                   }),
                   route,
               })

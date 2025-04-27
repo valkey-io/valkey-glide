@@ -3,15 +3,21 @@
  */
 
 import {
-    BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ElementAndScore,
     GlideRecord,
     GlideString,
     HashDataType,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    convertGlideRecord,
     Score,
-    ElementAndScore,
+    convertGlideRecord,
 } from "./BaseClient";
+
+import {
+    GlideClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+} from "./GlideClient";
+import {
+    GlideClusterClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+} from "./GlideClusterClient";
 
 import {
     AggregationType,
@@ -269,25 +275,19 @@ import {
 import { command_request } from "./ProtobufMessage";
 
 /**
- * Base class encompassing shared commands for both standalone and cluster mode implementations in a transaction.
- * Transactions allow the execution of a group of commands in a single step.
+ * Base class encompassing shared commands for both standalone and cluster mode implementations in a Batch.
+ * Batches allow the execution of a group of commands in a single step.
  *
- * Command Response:
+ * ### Batch Response:
  *  An array of command responses is returned by the client exec command, in the order they were given.
- *  Each element in the array represents a command given to the transaction.
+ *  Each element in the array represents a command given to the batch.
  *  The response for each command depends on the executed Valkey command.
  *  Specific response types are documented alongside each method.
  *
- * @example
- * ```typescript
- * const transaction = new BaseTransaction()
- *    .set("key", "value")
- *    .get("key");
- * const result = await client.exec(transaction);
- * console.log(result); // Output: ['OK', 'value']
- * ```
+ * @param isAtomic - Indicates whether the batch is atomic or non-atomic. If `true`, the batch will be executed as an atomic transaction.
+ * If `false`, the batch will be executed as a non-atomic pipeline.
  */
-class BaseTransaction<T extends BaseTransaction<T>> {
+class BaseBatch<T extends BaseBatch<T>> {
     /**
      * @internal
      */
@@ -297,6 +297,13 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      * @internal
      */
     readonly setCommandsIndexes: number[] = [];
+
+    /**
+     * @param isAtomic - Determines whether the batch is atomic or non-atomic. If `true`, the
+     *     batch will be executed as an atomic transaction. If `false`, the batch will be
+     *     executed as a non-atomic pipeline.
+     */
+    constructor(public readonly isAtomic: boolean) {}
 
     /**
      * Adds a command to the transaction and returns the transaction instance.
@@ -4043,26 +4050,51 @@ class BaseTransaction<T extends BaseTransaction<T>> {
 }
 
 /**
- * Extends BaseTransaction class for Valkey standalone commands.
- * Transactions allow the execution of a group of commands in a single step.
+ * Batch implementation for standalone {@link GlideClient}.
+ * Batches allow the execution of a group of commands in a single step.
  *
- * Command Response:
- *  An array of command responses is returned by the GlideClient.exec command, in the order they were given.
- *  Each element in the array represents a command given to the transaction.
+ * ### Batch Response:
+ *  An array of command responses is returned by the client {@link GlideClient.exec | exec} command, in the order they were given.
+ *  Each element in the array represents a command given to the batch.
  *  The response for each command depends on the executed Valkey command.
  *  Specific response types are documented alongside each method.
  *
+ * @param isAtomic - Indicates whether the batch is atomic or non-atomic. If `true`, the batch will be executed as an atomic transaction.
+ * If `false`, the batch will be executed as a non-atomic pipeline.
+ *
+ * @see {@link https://valkey.io/docs/topics/transactions/ | Valkey Transactions (Atomic Batches)}
+ * @see {@link https://valkey.io/topics/pipelining | Valkey Pipelines (Non-Atomic Batches)}
+ * @remarks Standalone Batches are executed on the primary node.
+ *
  * @example
  * ```typescript
- * const transaction = new Transaction()
- *    .set("key", "value")
- *    .select(1)  /// Standalone command
- *    .get("key");
- * const result = await GlideClient.exec(transaction);
- * console.log(result); // Output: ['OK', 'OK', null]
+ * // Example of Atomic Batch (Transaction)
+ * const transaction = new Batch(true) // Atomic (Transactional)
+ *     .set("key", "value")
+ *     .get("key");
+ * const result = await client.exec(transaction);
+ * // result contains: OK and "value"
+ * console.assert(result[0] === "OK");
+ * console.assert(result[1] === "value");
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Example of Non-Atomic Batch (Pipeline)
+ * const pipeline = new Batch(false) // Non-Atomic (Pipeline)
+ *     .set("key1", "value1")
+ *     .set("key2", "value2")
+ *     .get("key1")
+ *     .get("key2");
+ * const result = await client.exec(pipeline);
+ * // result contains: OK, OK, "value1", "value2"
+ * console.assert(result[0] === "OK");
+ * console.assert(result[1] === "OK");
+ * console.assert(result[2] === "value1");
+ * console.assert(result[3] === "value2");
  * ```
  */
-export class Transaction extends BaseTransaction<Transaction> {
+export class Batch extends BaseBatch<Batch> {
     /// TODO: add MOVE, SLAVEOF and all SENTINEL commands
 
     /**
@@ -4074,7 +4106,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      *
      * Command Response - A simple `"OK"` response.
      */
-    public select(index: number): Transaction {
+    public select(index: number): Batch {
         return this.addAndReturn(createSelect(index));
     }
 
@@ -4100,7 +4132,7 @@ export class Transaction extends BaseTransaction<Transaction> {
         source: GlideString,
         destination: GlideString,
         options?: { destinationDB?: number; replace?: boolean },
-    ): Transaction {
+    ): Batch {
         return this.addAndReturn(createCopy(source, destination, options));
     }
 
@@ -4115,7 +4147,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response - `true` if `key` was moved, or `false` if the `key` already exists in the destination
      *     database or does not exist in the source database.
      */
-    public move(key: GlideString, dbIndex: number): Transaction {
+    public move(key: GlideString, dbIndex: number): Batch {
         return this.addAndReturn(createMove(key, dbIndex));
     }
 
@@ -4129,23 +4161,56 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response -  Number of subscriptions in primary node that received the message.
      * Note that this value does not include subscriptions that configured on replicas.
      */
-    public publish(message: GlideString, channel: GlideString): Transaction {
+    public publish(message: GlideString, channel: GlideString): Batch {
         return this.addAndReturn(createPublish(message, channel));
     }
 }
 
 /**
- * Extends BaseTransaction class for cluster mode commands.
- * Transactions allow the execution of a group of commands in a single step.
+ * Batch implementation for standalone {@link GlideClusterClient | GlideClusterClient}.
+ * Batches allow the execution of a group of commands in a single step.
  *
- * Command Response:
- *  An array of command responses is returned by the GlideClusterClient.exec command, in the order they were given.
- *  Each element in the array represents a command given to the transaction.
+ * ### Batch Response:
+ *  An array of command responses is returned by the client {@link GlideClusterClient.exec | exec} command, in the order they were given.
+ *  Each element in the array represents a command given to the batch.
  *  The response for each command depends on the executed Valkey command.
  *  Specific response types are documented alongside each method.
  *
+ * @param isAtomic - Indicates whether the batch is atomic or non-atomic. If `true`, the batch will be executed as an atomic transaction.
+ * If `false`, the batch will be executed as a non-atomic pipeline.
+ *
+ * @see {@link https://valkey.io/docs/topics/transactions/ | Valkey Transactions (Atomic Batches)}
+ * @see {@link https://valkey.io/topics/pipelining | Valkey Pipelines (Non-Atomic Batches)}
+ *
+ * @example
+ * ```typescript
+ * // Example of Atomic Batch (Transaction) in a Cluster
+ * const transaction = new ClusterBatch(true) // Atomic (Transactional)
+ *     .set("key", "value")
+ *     .get("key");
+ * const result = await client.exec(transaction);
+ * // result contains: OK and "value"
+ * console.assert(result[0] === "OK");
+ * console.assert(result[1] === "value");
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Example of Non-Atomic Batch (Pipeline) in a Cluster
+ * const pipeline = new ClusterBatch(false) // Non-Atomic (Pipeline)
+ *     .set("key1", "value1")
+ *     .set("key2", "value2")
+ *     .get("key1")
+ *     .get("key2");
+ * const result = await client.exec(pipeline);
+ * // result contains: OK, OK, "value1", "value2"
+ * console.assert(result[0] === "OK");
+ * console.assert(result[1] === "OK");
+ * console.assert(result[2] === "value1");
+ * console.assert(result[3] === "value2");
+ * ```
  */
-export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
+export class ClusterBatch extends BaseBatch<ClusterBatch> {
     /// TODO: add all CLUSTER commands
 
     /**
@@ -4166,7 +4231,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
         source: GlideString,
         destination: GlideString,
         options?: { replace?: boolean },
-    ): ClusterTransaction {
+    ): ClusterBatch {
         return this.addAndReturn(createCopy(source, destination, options));
     }
 
@@ -4187,7 +4252,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
         message: GlideString,
         channel: GlideString,
         sharded = false,
-    ): ClusterTransaction {
+    ): ClusterBatch {
         return this.addAndReturn(createPublish(message, channel, sharded));
     }
 
@@ -4203,7 +4268,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response - A list of currently active shard channels matching the given pattern.
      *          If no pattern is specified, all active shard channels are returned.
      */
-    public pubsubShardChannels(pattern?: GlideString): ClusterTransaction {
+    public pubsubShardChannels(pattern?: GlideString): ClusterBatch {
         return this.addAndReturn(createPubsubShardChannels(pattern));
     }
 
@@ -4217,7 +4282,25 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      *
      * Command Response - A list of the shard channel names and their numbers of subscribers.
      */
-    public pubsubShardNumSub(channels: GlideString[]): ClusterTransaction {
+    public pubsubShardNumSub(channels: GlideString[]): ClusterBatch {
         return this.addAndReturn(createPubSubShardNumSub(channels));
+    }
+}
+
+/**
+ * @deprecated This class is deprecated and should no longer be used. Use {@link ClusterBatch} instead.
+ */
+export class ClusterTransaction extends ClusterBatch {
+    constructor() {
+        super(true);
+    }
+}
+
+/**
+ * @deprecated This class is deprecated and should no longer be used. Use {@link Batch} instead.
+ */
+export class Transaction extends Batch {
+    constructor() {
+        super(true);
     }
 }
