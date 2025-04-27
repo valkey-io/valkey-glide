@@ -55,3 +55,8 @@ utils/TestUtils.js
 memory-bank/
 # Rust generated files
 generated/
+
+# docs
+docs/markdown/node/**
+docs/site/**
+copilot.yml
