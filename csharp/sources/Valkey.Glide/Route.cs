@@ -1,8 +1,9 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using System.Runtime.InteropServices;
+using Valkey.Glide.Internals;
 
 using static Valkey.Glide.ConnectionConfiguration;
+using static Valkey.Glide.Internals.FFI;
 
 namespace Valkey.Glide;
 
@@ -19,36 +20,34 @@ namespace Valkey.Glide;
 /// </summary>
 public abstract class Route
 {
-    public interface ISingleNodeRoute { }
+    public abstract class SingleNodeRoute : Route { }
 
-    public interface IMultiNodeRoute { }
-
-    internal interface ISimpleRoute { }
+    public abstract class MultiNodeRoute : Route { }
 
     /// <summary>
     /// Route request to a random node.<br />
     /// <b>Warning:</b> Don't use it with write commands, they could be routed to a replica (RO) node and fail.
     /// </summary>
-    public sealed class RandomRoute : Route, ISingleNodeRoute, ISimpleRoute
+    public sealed class RandomRoute : SingleNodeRoute
     {
-        internal override RouteInfo ToFfi() => ToFfi(RouteType.Random);
+        internal override FFI.Route ToFfi() => new(RouteType.Random);
     }
 
     /// <summary>
     /// Route request to all nodes.<br />
     /// <b>Warning:</b> Don't use it with write commands, they could be routed to a replica (RO) node and fail.
     /// </summary>
-    public sealed class AllNodesRoute : Route, IMultiNodeRoute, ISimpleRoute
+    public sealed class AllNodesRoute : MultiNodeRoute
     {
-        internal override RouteInfo ToFfi() => ToFfi(RouteType.AllNodes);
+        internal override FFI.Route ToFfi() => new(RouteType.AllNodes);
     }
 
     /// <summary>
     /// Route request to all primary nodes.
     /// </summary>
-    public sealed class AllPrimariesRoute : Route, IMultiNodeRoute, ISimpleRoute
+    public sealed class AllPrimariesRoute : MultiNodeRoute
     {
-        internal override RouteInfo ToFfi() => ToFfi(RouteType.AllPrimaries);
+        internal override FFI.Route ToFfi() => new(RouteType.AllPrimaries);
     }
 
     /// <inheritdoc cref="RandomRoute"/>
@@ -80,12 +79,12 @@ public abstract class Route
     /// <param name="slotId">Slot number. There are 16384 slots in a Valkey cluster, and each shard manages a slot range.
     /// Unless the slot is known, it's better to route using <see cref="SlotKeyRoute"/>.</param>
     /// <param name="slotType">Defines type of the node being addressed.</param>
-    public class SlotIdRoute(int slotId, SlotType slotType) : Route, ISingleNodeRoute
+    public class SlotIdRoute(int slotId, SlotType slotType) : SingleNodeRoute
     {
         public readonly int SlotId = slotId;
         public new readonly SlotType SlotType = slotType;
 
-        internal override RouteInfo ToFfi() => ToFfi(RouteType.SlotId, slotIdInfo: (SlotId, SlotType));
+        internal override FFI.Route ToFfi() => new(RouteType.SlotId, slotIdInfo: (SlotId, SlotType));
     }
 
     /// <summary>
@@ -94,18 +93,18 @@ public abstract class Route
     /// </summary>
     /// <param name="slotKey">The request will be sent to nodes managing this key.</param>
     /// <param name="slotType">Defines type of the node being addressed.</param>
-    public class SlotKeyRoute(string slotKey, SlotType slotType) : Route, ISingleNodeRoute
+    public class SlotKeyRoute(string slotKey, SlotType slotType) : SingleNodeRoute
     {
         public readonly string SlotKey = slotKey;
         public new readonly SlotType SlotType = slotType;
 
-        internal override RouteInfo ToFfi() => ToFfi(RouteType.SlotId, slotKeyInfo: (SlotKey, SlotType));
+        internal override FFI.Route ToFfi() => new(RouteType.SlotId, slotKeyInfo: (SlotKey, SlotType));
     }
 
     /// <summary>
     /// Routes a request to a node by its address.
     /// </summary>
-    public class ByAddressRoute : Route, ISingleNodeRoute
+    public class ByAddressRoute : SingleNodeRoute
     {
         public readonly string Host;
         public readonly int Port;
@@ -139,43 +138,10 @@ public abstract class Route
             Port = int.Parse(parts[1]);
         }
 
-        internal override RouteInfo ToFfi() => ToFfi(RouteType.SlotId, address: (Host, Port));
+        internal override FFI.Route ToFfi() => new(RouteType.SlotId, address: (Host, Port));
     }
 
     internal Route() { }
 
-    internal abstract RouteInfo ToFfi();
-
-    internal static RouteInfo ToFfi(RouteType requestType, (int slotId, SlotType slotType)? slotIdInfo = null, (string slotKey, SlotType slotType)? slotKeyInfo = null, (string host, int port)? address = null) => new()
-    {
-        Type = requestType,
-        SlotId = slotIdInfo?.slotId ?? 0,
-        SlotKey = slotKeyInfo?.slotKey,
-        SlotType = slotIdInfo?.slotType ?? slotKeyInfo?.slotType ?? 0,
-        Host = address?.host,
-        Port = address?.port ?? 0,
-    };
-
-    internal enum RouteType : uint
-    {
-        Random,
-        AllNodes,
-        AllPrimaries,
-        SlotId,
-        SlotType,
-        ByAddress,
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct RouteInfo
-    {
-        public RouteType Type;
-        public int SlotId;
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string? SlotKey;
-        public SlotType SlotType;
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string? Host;
-        public int Port;
-    }
+    internal abstract FFI.Route ToFfi();
 }
