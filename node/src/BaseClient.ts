@@ -756,12 +756,19 @@ export interface PubSubMsg {
 
 /**
  * @internal
- * A type to combine RouterOption and DecoderOption to be used for creating write promises for the command.
- * See - {@link DecoderOption} and {@link RouteOption}
+ * Options used when creating a write promise for a command.
+ *
+ * This type combines {@link RouteOption} and {@link DecoderOption} with optional support for
+ * {@link ClusterBatchOptions} or {@link BatchOptions}.
+ *
+ * @see {@link DecoderOption}
+ * @see {@link RouteOption}
+ * @see {@link ClusterBatchOptions}
+ * @see {@link BatchOptions}
  */
-export type WritePromiseOptions = RouteOption &
-    DecoderOption &
-    Partial<ClusterBatchOptions & BatchOptions>;
+export type WritePromiseOptions =
+    | (RouteOption & DecoderOption)
+    | (RouteOption & DecoderOption & (ClusterBatchOptions | BatchOptions));
 
 /**
  * Base client interface for GLIDE
