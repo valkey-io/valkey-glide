@@ -22,7 +22,6 @@ import {
     BitmapIndexType,
     BitwiseOperation,
     ClusterBatch,
-    ClusterTransaction,
     ConditionalChange,
     Decoder,
     ElementAndScore,
@@ -51,7 +50,6 @@ import {
     SortedSetDataType,
     TimeUnit,
     TimeoutError,
-    Transaction,
     UnsignedEncoding,
     UpdateByScore,
     convertElementsAndScores,
@@ -7852,6 +7850,7 @@ export function runBaseTests(config: {
 
                 // Transaction tests
                 for (const isAtomic of [true, false]) {
+                    await client.del([key4, key5]);
                     let response =
                         client instanceof GlideClient
                             ? await client.exec(
@@ -12349,83 +12348,83 @@ export function runBaseTests(config: {
                     ]);
 
                     // transaction test
-                    const transaction =
-                        client instanceof GlideClient
-                            ? new Transaction()
-                            : new ClusterTransaction();
-                    transaction
-                        .hset(hashPrefix + 1, [
-                            { field: "name", value: "Alice" },
-                            { field: "age", value: "30" },
-                        ])
-                        .hset(hashPrefix + 2, {
-                            name: "Bob",
-                            age: "25",
-                        })
-                        .del([list])
-                        .lpush(list, ["2", "1"])
-                        .sort(list, {
-                            byPattern: hashPrefix + "*->age",
-                            getPatterns: [hashPrefix + "*->name"],
-                        })
-                        .sort(list, {
-                            byPattern: hashPrefix + "*->age",
-                            getPatterns: [hashPrefix + "*->name"],
-                            orderBy: SortOrder.DESC,
-                        })
-                        .sortStore(list, store, {
-                            byPattern: hashPrefix + "*->age",
-                            getPatterns: [hashPrefix + "*->name"],
-                        })
-                        .lrange(store, 0, -1)
-                        .sortStore(list, store, {
-                            byPattern: hashPrefix + "*->age",
-                            getPatterns: [hashPrefix + "*->name"],
-                            orderBy: SortOrder.DESC,
-                        })
-                        .lrange(store, 0, -1);
-
-                    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                        transaction
-                            .sortReadOnly(list, {
-                                byPattern: hashPrefix + "*->age",
-                                getPatterns: [hashPrefix + "*->name"],
-                            })
-                            .sortReadOnly(list, {
-                                byPattern: hashPrefix + "*->age",
-                                getPatterns: [hashPrefix + "*->name"],
-                                orderBy: SortOrder.DESC,
-                            });
-                    }
-
-                    const expectedResult = [
-                        2,
-                        2,
-                        1,
-                        2,
-                        ["Bob", "Alice"],
-                        ["Alice", "Bob"],
-                        2,
-                        ["Bob", "Alice"],
-                        2,
-                        ["Alice", "Bob"],
-                    ];
-
-                    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                        expectedResult.push(["Bob", "Alice"], ["Alice", "Bob"]);
-                    }
-
                     for (const isAtomic of [true, false]) {
+                        await client.del([hashPrefix + 1, hashPrefix + 2]);
                         const batch =
                             client instanceof GlideClient
                                 ? new Batch(isAtomic)
                                 : new ClusterBatch(isAtomic);
+                        batch
+                            .hset(hashPrefix + 1, [
+                                { field: "name", value: "Alice" },
+                                { field: "age", value: "30" },
+                            ])
+                            .hset(hashPrefix + 2, {
+                                name: "Bob",
+                                age: "25",
+                            })
+                            .del([list])
+                            .lpush(list, ["2", "1"])
+                            .sort(list, {
+                                byPattern: hashPrefix + "*->age",
+                                getPatterns: [hashPrefix + "*->name"],
+                            })
+                            .sort(list, {
+                                byPattern: hashPrefix + "*->age",
+                                getPatterns: [hashPrefix + "*->name"],
+                                orderBy: SortOrder.DESC,
+                            })
+                            .sortStore(list, store, {
+                                byPattern: hashPrefix + "*->age",
+                                getPatterns: [hashPrefix + "*->name"],
+                            })
+                            .lrange(store, 0, -1)
+                            .sortStore(list, store, {
+                                byPattern: hashPrefix + "*->age",
+                                getPatterns: [hashPrefix + "*->name"],
+                                orderBy: SortOrder.DESC,
+                            })
+                            .lrange(store, 0, -1);
+
+                        if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                            batch
+                                .sortReadOnly(list, {
+                                    byPattern: hashPrefix + "*->age",
+                                    getPatterns: [hashPrefix + "*->name"],
+                                })
+                                .sortReadOnly(list, {
+                                    byPattern: hashPrefix + "*->age",
+                                    getPatterns: [hashPrefix + "*->name"],
+                                    orderBy: SortOrder.DESC,
+                                });
+                        }
+
+                        const expectedResult = [
+                            2,
+                            2,
+                            1,
+                            2,
+                            ["Bob", "Alice"],
+                            ["Alice", "Bob"],
+                            2,
+                            ["Bob", "Alice"],
+                            2,
+                            ["Alice", "Bob"],
+                        ];
+
+                        if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                            expectedResult.push(
+                                ["Bob", "Alice"],
+                                ["Alice", "Bob"],
+                            );
+                        }
+
                         const result =
                             client instanceof GlideClient
-                                ? await client.exec(batch as Batch, isAtomic)
+                                ? await client.exec(batch as Batch, true)
                                 : await client.exec(
                                       batch as ClusterBatch,
-                                      isAtomic,
+                                      true,
                                   );
                         expect(result).toEqual(expectedResult);
                     }
