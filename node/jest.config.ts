@@ -7,7 +7,7 @@ const config: Config = {
     },
     testEnvironment: "node",
     testRegex: "/tests/.*\\.(test|spec)?\\.(ts|tsx)$",
-    moduleFileExtensions: ["ts", "json", "node", "js"],
+    moduleFileExtensions: ["ts", "json", "node"],
     modulePathIgnorePatterns: ["rust-client/"],
     reporters: [
         "default",
