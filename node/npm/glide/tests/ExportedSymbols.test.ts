@@ -12,6 +12,7 @@ const skippedListForExports: string[] = [
     "ClusterScanOptions",
     "GlideMultiJson",
     "BaseClient",
+    "BaseBatch",
     "convertFieldsAndValuesToHashDataType",
     "parseInfoResponse",
     "command_request",
