@@ -10,6 +10,7 @@
 import { expect, it } from "@jest/globals";
 import {
     BaseClientConfiguration,
+    Batch,
     BitFieldGet,
     BitFieldIncrBy,
     BitFieldOverflow,
@@ -19,6 +20,7 @@ import {
     BitOverflowControl,
     BitmapIndexType,
     BitwiseOperation,
+    ClusterBatch,
     ClusterTransaction,
     ConditionalChange,
     Decoder,
@@ -47,6 +49,7 @@ import {
     SortOrder,
     SortedSetDataType,
     TimeUnit,
+    TimeoutError,
     Transaction,
     UnsignedEncoding,
     UpdateByScore,
@@ -359,13 +362,20 @@ export function runBaseTests(config: {
                     ).forEach((v) => expect(v).toBeGreaterThan(yesterday));
                 }
 
-                const response =
-                    client instanceof GlideClient
-                        ? await client.exec(new Transaction().lastsave())
-                        : await client.exec(
-                              new ClusterTransaction().lastsave(),
-                          );
-                expect(response?.[0]).toBeGreaterThan(yesterday);
+                for (const isAtomic of [true, false]) {
+                    const response =
+                        client instanceof GlideClient
+                            ? await client.exec(
+                                  new Batch(isAtomic).lastsave(),
+                                  isAtomic,
+                              )
+                            : await client.exec(
+                                  new ClusterBatch(isAtomic).lastsave(),
+                                  isAtomic,
+                              );
+
+                    expect(response?.[0]).toBeGreaterThan(yesterday);
+                }
             }, protocol);
         },
         config.timeout,
@@ -7847,53 +7857,64 @@ export function runBaseTests(config: {
                 ).rejects.toThrow("DUMP payload version or checksum are wrong");
 
                 // Transaction tests
-                let response =
-                    client instanceof GlideClient
-                        ? await client.exec(new Transaction().dump(key1), {
-                              decoder: Decoder.Bytes,
-                          })
-                        : await client.exec(
-                              new ClusterTransaction().dump(key1),
-                              { decoder: Decoder.Bytes },
-                          );
-                expect(response?.[0]).not.toBeNull();
-                data = response?.[0] as Buffer;
+                for (const isAtomic of [true, false]) {
+                    let response =
+                        client instanceof GlideClient
+                            ? await client.exec(
+                                  new Batch(isAtomic).dump(key1),
+                                  true,
+                                  {
+                                      decoder: Decoder.Bytes,
+                                  },
+                              )
+                            : await client.exec(
+                                  new ClusterBatch(isAtomic).dump(key1),
+                                  true,
+                                  { decoder: Decoder.Bytes },
+                              );
+                    expect(response?.[0]).not.toBeNull();
+                    data = response?.[0] as Buffer;
 
-                // Restore with `String` exec decoder
-                response =
-                    client instanceof GlideClient
-                        ? await client.exec(
-                              new Transaction()
-                                  .restore(key4, 0, data)
-                                  .get(key4),
-                              { decoder: Decoder.String },
-                          )
-                        : await client.exec(
-                              new ClusterTransaction()
-                                  .restore(key4, 0, data)
-                                  .get(key4),
-                              { decoder: Decoder.String },
-                          );
-                expect(response?.[0]).toEqual("OK");
-                expect(response?.[1]).toEqual(value);
+                    // Restore with `String` exec decoder
+                    response =
+                        client instanceof GlideClient
+                            ? await client.exec(
+                                  new Batch(isAtomic)
+                                      .restore(key4, 0, data)
+                                      .get(key4),
+                                  true,
+                                  { decoder: Decoder.String },
+                              )
+                            : await client.exec(
+                                  new ClusterBatch(isAtomic)
+                                      .restore(key4, 0, data)
+                                      .get(key4),
+                                  true,
+                                  { decoder: Decoder.String },
+                              );
+                    expect(response?.[0]).toEqual("OK");
+                    expect(response?.[1]).toEqual(value);
 
-                // Restore with `Bytes` exec decoder
-                response =
-                    client instanceof GlideClient
-                        ? await client.exec(
-                              new Transaction()
-                                  .restore(key5, 0, data)
-                                  .get(key5),
-                              { decoder: Decoder.Bytes },
-                          )
-                        : await client.exec(
-                              new ClusterTransaction()
-                                  .restore(key5, 0, data)
-                                  .get(key5),
-                              { decoder: Decoder.Bytes },
-                          );
-                expect(response?.[0]).toEqual("OK");
-                expect(response?.[1]).toEqual(valueEncode);
+                    // Restore with `Bytes` exec decoder
+                    response =
+                        client instanceof GlideClient
+                            ? await client.exec(
+                                  new Batch(isAtomic)
+                                      .restore(key5, 0, data)
+                                      .get(key5),
+                                  true,
+                                  { decoder: Decoder.Bytes },
+                              )
+                            : await client.exec(
+                                  new ClusterBatch(isAtomic)
+                                      .restore(key5, 0, data)
+                                      .get(key5),
+                                  true,
+                                  { decoder: Decoder.Bytes },
+                              );
+                    expect(response?.[0]).toEqual("OK");
+                    expect(response?.[1]).toEqual(valueEncode);
+                }
             }, protocol);
         },
         config.timeout,
@@ -12403,18 +12424,140 @@ export function runBaseTests(config: {
                         expectedResult.push(["Bob", "Alice"], ["Alice", "Bob"]);
                     }
 
-                    const result =
-                        client instanceof GlideClient
-                            ? await client.exec(transaction as Transaction)
-                            : await client.exec(
-                                  transaction as ClusterTransaction,
-                              );
-                    expect(result).toEqual(expectedResult);
+                    for (const isAtomic of [true, false]) {
+                        const batch =
+                            client instanceof GlideClient
+                                ? new Batch(isAtomic)
+                                : new ClusterBatch(isAtomic);
+                        const result =
+                            client instanceof GlideClient
+                                ? await client.exec(batch as Batch, isAtomic)
+                                : await client.exec(
+                                      batch as ClusterBatch,
+                                      isAtomic,
+                                  );
+                        expect(result).toEqual(expectedResult);
+                    }
 
                     client.close();
                 },
                 protocol,
             );
+        },
+        config.timeout,
+    );
+
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        `batch timeout test_%p isAtomic=%p`,
+        async (protocol, isAtomic) => {
+            await runTest(async (client: BaseClient) => {
+                const isCluster = client instanceof GlideClusterClient;
+
+                const batch = isCluster
+                    ? new ClusterBatch(isAtomic)
+                    : new Batch(isAtomic);
+
+                batch.customCommand(["DEBUG", "sleep", "0.5"]);
+
+                // Expect a timeout exception on short timeout
+                await expect(async () => {
+                    if (isCluster) {
+                        const clusterClient = client as GlideClusterClient;
+                        const clusterBatch = batch as ClusterBatch;
+                        await clusterClient.exec(clusterBatch, true, {
+                            timeout: 100,
+                        });
+                    } else {
+                        const standaloneClient = client as GlideClient;
+                        const standaloneBatch = batch as Batch;
+                        await standaloneClient.exec(standaloneBatch, true, {
+                            timeout: 100,
+                        });
+                    }
+                }).rejects.toThrow(TimeoutError);
+                await new Promise((resolve) => setTimeout(resolve, 500));
+
+                // Retry with a longer timeout
+                const result = isCluster
+                    ? await (client as GlideClusterClient).exec(
+                          batch as ClusterBatch,
+                          true,
+                          { timeout: 1000 },
+                      )
+                    : await (client as GlideClient).exec(batch as Batch, true, {
+                          timeout: 1000,
+                      });
+
+                expect(result?.length).toBe(1);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        `batch raiseOnError test_%p isAtomic=%p`,
+        async (protocol, isAtomic) => {
+            await runTest(async (client: BaseClient) => {
+                const isCluster = client instanceof GlideClusterClient;
+                const key = uuidv4();
+                const key2 = `{${key}}${uuidv4()}`;
+
+                const batch = isCluster
+                    ? new ClusterBatch(isAtomic)
+                    : new Batch(isAtomic);
+
+                batch.set(key, "hello").lpop(key).del([key]).rename(key, key2);
+
+                const result = isCluster
+                    ? await (client as GlideClusterClient).exec(
+                          batch as ClusterBatch,
+                          false,
+                      )
+                    : await (client as GlideClient).exec(batch as Batch, false);
+
+                expect(result?.length).toBe(4);
+                expect(result?.[0]).toBe("OK");
+                expect(result?.[2]).toBe(1);
+                expect(result?.[1]).toBeInstanceOf(RequestError);
+                expect((result?.[1] as RequestError).message).toContain(
+                    "WRONGTYPE",
+                );
+                expect(result?.[3]).toBeInstanceOf(RequestError);
+                expect((result?.[3] as RequestError).message).toContain(
+                    "no such key",
+                );
+
+                await expect(async () => {
+                    if (isCluster) {
+                        await (client as GlideClusterClient).exec(
+                            batch as ClusterBatch,
+                            true,
+                        );
+                    } else {
+                        await (client as GlideClient).exec(
+                            batch as Batch,
+                            true,
+                        );
+                    }
+                })
+                    .rejects.toThrow(RequestError)
+                    .then((error) => {
+                        expect(error).toBeInstanceOf(RequestError);
+                        expect(
+                            (error as unknown as RequestError).message,
+                        ).toContain("WRONGTYPE");
+                    });
+            }, protocol);
         },
         config.timeout,
     );
