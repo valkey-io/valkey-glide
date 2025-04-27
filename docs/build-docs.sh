@@ -9,10 +9,10 @@ BASE_DIR=$(readlink -f $(dirname $(readlink -f $0))/..)
 
 # For building the docs, we require mkdocs + mkdocstrings-python
 function install_mkdocs() {
-    MKDOCS=$(command -v mkdocs)
-    if [ -z ${MKDOCS} ]; then
+    if ! command -v mkdocs >/dev/null 2>&1; then
         echo "-- Installing mkdocs ..."
-        pip3 install --break-system-packages    \
+        pip3 install --upgrade pip
+        pip3 install                           \
             mkdocs                             \
             mkdocstrings-python==1.13.0        \
             pymdown-extensions                 \

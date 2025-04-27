@@ -20,7 +20,7 @@ nav:
       - Exceptions: python/exceptions.md
       - Logger: python/logger.md
   - TypeScript:
-      - Client:
+      - Client and Commands:
           - Standalone: node/GlideClient/classes/GlideClient.md
           - Cluster: node/GlideClusterClient/classes/GlideClusterClient.md
           - Base: node/BaseClient/classes/BaseClient.md
@@ -40,6 +40,8 @@ nav:
       - Logger: node/Logger/classes/Logger.md
 theme:
   name: material
+  palette: 
+    scheme: valkey-glide
   features:
     - navigation.sections
     - content.code.copy
