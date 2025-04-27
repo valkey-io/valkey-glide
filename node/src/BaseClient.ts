@@ -1378,8 +1378,8 @@ export class BaseClient {
      * const result = await client.get("key");
      * console.log(result); // Output: 'value'
      * // Example usage of get method to retrieve the value of a key with Bytes decoder
-     * const result = await client.get("key", Decoder.Bytes);
-     * console.log(result); // Output: {"data": [118, 97, 108, 117, 101], "type": "Buffer"}
+     * const result = await client.get("key", { decoder: Decoder.Bytes });
+     * console.log(result); // Output: <Buffer 76 61 6c 75 65>
      * ```
      */
     public async get(
