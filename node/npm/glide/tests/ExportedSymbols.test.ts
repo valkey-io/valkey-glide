@@ -13,6 +13,7 @@ const skippedListForExports: string[] = [
     "GlideMultiJson",
     "BaseClient",
     "BaseBatch",
+    "BaseBatchOptions",
     "convertFieldsAndValuesToHashDataType",
     "parseInfoResponse",
     "command_request",
