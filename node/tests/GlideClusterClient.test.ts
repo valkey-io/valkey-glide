@@ -972,6 +972,7 @@ describe("GlideClusterClient", () => {
             ]);
 
             for (const isAtomic of [true, false]) {
+                await client.del([key5, key4]);
                 // check batch and options
                 const batch = new ClusterBatch(isAtomic)
                     .lpush(key4, ["3", "1", "2"])
