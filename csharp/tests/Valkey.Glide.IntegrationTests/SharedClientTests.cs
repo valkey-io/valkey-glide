@@ -6,8 +6,6 @@ namespace Valkey.Glide.IntegrationTests;
 [CollectionDefinition(DisableParallelization = true)]
 public class SharedClientTests(TestConfiguration config)
 {
-    // TODO: investigate and fix tests failing/flaky on MacOS
-
     public TestConfiguration Config { get; } = config;
 
     [Theory(DisableDiscoveryEnumeration = true)]
