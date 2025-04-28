@@ -7913,3 +7913,75 @@ func (client *baseClient) FunctionList(query FunctionListQuery) ([]LibraryInfo, 
 	}
 	return handleFunctionListResponse(response)
 }
+
+// Returns the serialized payload of all loaded libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Return value:
+//
+//	The serialized payload of all loaded libraries.
+//
+// [valkey.io]: https://valkey.io/commands/function-dump/
+func (client *baseClient) FunctionDump() (Result[string], error) {
+	result, err := client.executeCommand(C.FunctionDump, []string{})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	payload - The serialized data from `FunctionDump`.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *baseClient) FunctionRestore(payload string) (string, error) {
+	result, err := client.executeCommand(C.FunctionRestore, []string{payload})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	payload - The serialized data from `FunctionDump`.
+//	policy - A policy for handling existing libraries.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *baseClient) FunctionRestoreWithPolicy(payload string, policy options.FunctionRestorePolicy) (string, error) {
+	result, err := client.executeCommand(C.FunctionRestore, []string{payload, string(policy)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}

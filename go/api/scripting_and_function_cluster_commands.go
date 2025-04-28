@@ -3,6 +3,7 @@
 package api
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -44,4 +45,10 @@ type ScriptingAndFunctionClusterCommands interface {
 	FunctionKillWithRoute(route options.RouteOption) (string, error)
 
 	FunctionListWithRoute(query FunctionListQuery, route options.RouteOption) (ClusterValue[[]LibraryInfo], error)
+
+	FunctionDumpWithRoute(route config.Route) (ClusterValue[Result[string]], error)
+
+	FunctionRestoreWithRoute(payload string, route config.Route) (string, error)
+
+	FunctionRestoreWithPolicyWithRoute(payload string, policy options.FunctionRestorePolicy, route config.Route) (string, error)
 }

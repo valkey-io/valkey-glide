@@ -1173,3 +1173,101 @@ func (suite *GlideTestSuite) TestFunctionKillWrite() {
 	}
 	suite.testFunctionKill(false)
 }
+
+func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
+	client := suite.defaultClient()
+
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	// Flush all functions first
+	suite.verifyOK(client.FunctionFlushSync())
+
+	// Dumping an empty lib
+	emptyDump, err := client.FunctionDump()
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), emptyDump)
+	assert.Greater(suite.T(), len(emptyDump.Value()), 0)
+
+	name1 := "Foster"
+	name2 := "Dogster"
+
+	// function name1 returns first argument
+	// function name2 returns argument array len
+	code := GenerateLuaLibCode(name1, map[string]string{
+		name1: "return args[1]",
+		name2: "return #args",
+	}, false)
+
+	// Load the functions
+	loadResult, err := client.FunctionLoad(code, true)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), name1, loadResult)
+
+	// Verify functions work
+	result1, err := client.FCallWithKeysAndArgs(name1, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "meow", result1)
+
+	result2, err := client.FCallWithKeysAndArgs(name2, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), int64(2), result2)
+
+	// Dump the library
+	dump, err := client.FunctionDump()
+	assert.Nil(suite.T(), err)
+
+	// Restore without cleaning the lib and/or overwrite option causes an error
+	_, err = client.FunctionRestore(dump.Value())
+	assert.NotNil(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Library "+name1+" already exists")
+
+	// APPEND policy also fails for the same reason (name collision)
+	_, err = client.FunctionRestoreWithPolicy(dump.Value(), options.AppendPolicy)
+	assert.NotNil(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Library "+name1+" already exists")
+
+	// REPLACE policy succeeds
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump.Value(), options.ReplacePolicy))
+
+	// Functions still work the same after replace
+	result1, err = client.FCallWithKeysAndArgs(name1, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "meow", result1)
+
+	result2, err = client.FCallWithKeysAndArgs(name2, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), int64(2), result2)
+
+	// create lib with another name, but with the same function names
+	suite.verifyOK(client.FunctionFlushSync())
+	code = GenerateLuaLibCode(name2, map[string]string{
+		name1: "return args[1]",
+		name2: "return #args",
+	}, false)
+	loadResult, err = client.FunctionLoad(code, true)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), name2, loadResult)
+
+	// REPLACE policy now fails due to a name collision
+	_, err = client.FunctionRestoreWithPolicy(dump.Value(), options.ReplacePolicy)
+	assert.NotNil(suite.T(), err)
+	errMsg := err.Error()
+	// valkey checks names in random order and blames on first collision
+	assert.True(suite.T(),
+		strings.Contains(errMsg, "Function "+name1+" already exists") ||
+			strings.Contains(errMsg, "Function "+name2+" already exists"))
+
+	// FLUSH policy succeeds, but deletes the second lib
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump.Value(), options.FlushPolicy))
+
+	// Original functions work again
+	result1, err = client.FCallWithKeysAndArgs(name1, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "meow", result1)
+
+	result2, err = client.FCallWithKeysAndArgs(name2, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), int64(2), result2)
+}

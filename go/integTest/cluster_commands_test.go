@@ -2140,3 +2140,118 @@ func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
 	foundUnkillable := <-unkillable
 	assert.True(suite.T(), foundUnkillable, "Function should be unkillable")
 }
+
+func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
+	client := suite.defaultClusterClient()
+
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	// Flush all functions first
+	suite.verifyOK(client.FunctionFlushSync())
+
+	// Dumping an empty lib
+	emptyDump, err := client.FunctionDump()
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), emptyDump)
+	assert.Greater(suite.T(), len(emptyDump.Value()), 0)
+
+	name1 := "Foster"
+	libname1 := "FosterLib"
+	name2 := "Dogster"
+	libname2 := "DogsterLib"
+
+	// function name1 returns first argument
+	// function name2 returns argument array len
+	code := GenerateLuaLibCode(libname1, map[string]string{
+		name1: "return args[1]",
+		name2: "return #args",
+	}, true)
+
+	// Load the functions
+	loadResult, err := client.FunctionLoad(code, true)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), libname1, loadResult)
+
+	// Dump the library
+	dump, err := client.FunctionDump()
+	assert.Nil(suite.T(), err)
+
+	// Restore without cleaning the lib and/or overwrite option causes an error
+	_, err = client.FunctionRestore(dump.Value())
+	assert.NotNil(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Library "+libname1+" already exists")
+
+	// APPEND policy also fails for the same reason (name collision)
+	_, err = client.FunctionRestoreWithPolicy(dump.Value(), options.AppendPolicy)
+	assert.NotNil(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Library "+libname1+" already exists")
+
+	// REPLACE policy succeeds
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump.Value(), options.ReplacePolicy))
+
+	// Verify functions still work after replace
+	result1, err := client.FCallReadOnlyWithArgs(name1, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result1.IsSingleValue() {
+		assert.Equal(suite.T(), "meow", result1.SingleValue())
+	} else {
+		for _, value := range result1.MultiValue() {
+			assert.Equal(suite.T(), "meow", value)
+		}
+	}
+
+	result2, err := client.FCallReadOnlyWithArgs(name2, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result2.IsSingleValue() {
+		assert.Equal(suite.T(), int64(2), result2.SingleValue())
+	} else {
+		for _, value := range result2.MultiValue() {
+			assert.Equal(suite.T(), int64(2), value)
+		}
+	}
+
+	// create lib with another name, but with the same function names
+	suite.verifyOK(client.FunctionFlushSync())
+	code = GenerateLuaLibCode(libname2, map[string]string{
+		name1: "return args[1]",
+		name2: "return #args",
+	}, true)
+	loadResult, err = client.FunctionLoad(code, true)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), libname2, loadResult)
+
+	// REPLACE policy now fails due to a name collision
+	_, err = client.FunctionRestoreWithPolicy(dump.Value(), options.ReplacePolicy)
+	assert.NotNil(suite.T(), err)
+	errMsg := err.Error()
+	// valkey checks names in random order and blames on first collision
+	assert.True(suite.T(),
+		strings.Contains(errMsg, "Function "+name1+" already exists") ||
+			strings.Contains(errMsg, "Function "+name2+" already exists"))
+
+	// FLUSH policy succeeds, but deletes the second lib
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump.Value(), options.FlushPolicy))
+
+	// Verify original functions work again
+	result1, err = client.FCallReadOnlyWithArgs(name1, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result1.IsSingleValue() {
+		assert.Equal(suite.T(), "meow", result1.SingleValue())
+	} else {
+		for _, value := range result1.MultiValue() {
+			assert.Equal(suite.T(), "meow", value)
+		}
+	}
+
+	result2, err = client.FCallReadOnlyWithArgs(name2, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result2.IsSingleValue() {
+		assert.Equal(suite.T(), int64(2), result2.SingleValue())
+	} else {
+		for _, value := range result2.MultiValue() {
+			assert.Equal(suite.T(), int64(2), value)
+		}
+	}
+}

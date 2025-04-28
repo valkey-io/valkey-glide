@@ -2,6 +2,8 @@
 
 package api
 
+import "github.com/valkey-io/valkey-glide/go/api/options"
+
 // Supports commands and transactions for the "Scripting and Function" group for a standalone
 // or cluster client.
 //
@@ -28,4 +30,10 @@ type ScriptingAndFunctionBaseCommands interface {
 	FunctionKill() (string, error)
 
 	FunctionList(query FunctionListQuery) ([]LibraryInfo, error)
+
+	FunctionDump() (Result[string], error)
+
+	FunctionRestore(payload string) (string, error)
+
+	FunctionRestoreWithPolicy(payload string, policy options.FunctionRestorePolicy) (string, error)
 }
