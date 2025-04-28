@@ -3657,7 +3657,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurren
 }
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T()) suite.T())
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
