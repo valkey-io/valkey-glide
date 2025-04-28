@@ -1572,3 +1572,47 @@ func handleFunctionStatsResponse(response *C.struct_CommandResponse) (map[string
 
 	return result, nil
 }
+
+func handleZRangeWithScoresResponse(response *C.struct_CommandResponse, reverse bool) ([]MemberAndScore, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	aMap := data.(map[string]interface{})
+
+	converted, err := mapConverter[float64]{
+		nil, false,
+	}.convert(aMap)
+	if err != nil {
+		return nil, err
+	}
+	result, ok := converted.(map[string]float64)
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of map: %T", converted)}
+	}
+
+	zRangeResponseArray := make([]MemberAndScore, 0, len(result))
+
+	for k, v := range result {
+		zRangeResponseArray = append(zRangeResponseArray, MemberAndScore{k, v})
+	}
+
+	if !reverse {
+		sort.Slice(zRangeResponseArray, func(i, j int) bool {
+			return zRangeResponseArray[i].Score < zRangeResponseArray[j].Score
+		})
+	} else {
+		sort.Slice(zRangeResponseArray, func(i, j int) bool {
+			return zRangeResponseArray[i].Score > zRangeResponseArray[j].Score
+		})
+	}
+
+	return zRangeResponseArray, nil
+}
