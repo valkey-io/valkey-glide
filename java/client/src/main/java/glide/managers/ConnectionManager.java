@@ -219,10 +219,10 @@ public class ConnectionManager {
 
             ConnectionRequestOuterClass.OpenTelemetryConfig.Builder outerOtelBuilder = ConnectionRequestOuterClass.OpenTelemetryConfig.newBuilder();
             if (otelConfig.getTracesCollectorEndPoint() != null) {
-                outerOtelBuilder.setTracesCollectorEndPoint(otelConfig.getTracesCollectorEndPoint());
+                outerOtelBuilder.setTracesCollectorEndpoint(otelConfig.getTracesCollectorEndPoint());
             }
             if (otelConfig.getMetricsCollectorEndPoint() != null) {
-                outerOtelBuilder.setMetricsCollectorEndPoint(otelConfig.getMetricsCollectorEndPoint());
+                outerOtelBuilder.setMetricsCollectorEndpoint(otelConfig.getMetricsCollectorEndPoint());
             }
             if (otelConfig.getFlushIntervalMs() != null) {
                 outerOtelBuilder.setFlushInterval(otelConfig.getFlushIntervalMs());

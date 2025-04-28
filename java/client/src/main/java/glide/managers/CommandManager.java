@@ -264,9 +264,9 @@ public class CommandManager {
         // TODO: Add a condition to create a span statistic, such as only 1% of the requests
         String commandName = determineCommandName(command);
         long spanPtr = SpanManager.createSpan(commandName);
-        
+
         // Add the span pointer to the command
-        command.setSpanCommand(spanPtr);
+        command.setRootSpanPtr(spanPtr);
 
         // write command request to channel
         // when complete, convert the response to our expected type T using the given responseHandler
@@ -275,7 +275,7 @@ public class CommandManager {
                 .exceptionally(this::exceptionHandler)
                 .thenApplyAsync(responseHandler::apply);
     }
-    
+
     /**
      * Determines a meaningful name for the command for telemetry purposes.
      *

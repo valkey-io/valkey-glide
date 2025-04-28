@@ -39,8 +39,8 @@ public class BaseResponseResolver implements GlideExceptionCheckedFunction<Respo
             return null;
         } finally {
             // Clean up the span if one was created
-            if (response.hasSpanCommand()) {
-                SpanManager.closeSpan(response.getSpanCommand());
+            if (response.hasRootSpanPtr()) {
+                SpanManager.closeSpan(response.getRootSpanPtr());
             }
         }
     }
