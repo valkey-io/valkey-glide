@@ -61,8 +61,8 @@ const PORT: u32 = 6379;
 // Benchmark constants - adjusting these will change the meaning of the benchmark.
 const PROB_GET: f64 = 0.5;
 const PROB_GET_EXISTING_KEY: f64 = 0.5;
-const SIZE_GET_KEYSPACE: u32 = 100_000;
-const SIZE_SET_KEYSPACE: u32 = 100_000;
+const SIZE_GET_KEYSPACE: u32 = 10_000;
+const SIZE_SET_KEYSPACE: u32 = 10_000;
 
 #[derive(Eq, PartialEq, Hash)]
 enum ChosenAction {
