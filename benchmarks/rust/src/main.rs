@@ -59,8 +59,8 @@ struct Args {
 const PORT: u32 = 6379;
 
 // Benchmark constants - adjusting these will change the meaning of the benchmark.
-const PROB_GET: f64 = 0.8;
-const PROB_GET_EXISTING_KEY: f64 = 0.1;
+const PROB_GET: f64 = 0.5;
+const PROB_GET_EXISTING_KEY: f64 = 0.5;
 const SIZE_GET_KEYSPACE: u32 = 100_000;
 const SIZE_SET_KEYSPACE: u32 = 100_000;
 
@@ -101,7 +101,8 @@ async fn perform_benchmark(args: Args) {
         let number_of_operations = if args.minimal {
             1000
         } else {
-            max(100000, concurrent_tasks_count * 100000)
+            20000000
+            // max(100000, concurrent_tasks_count * 100000)
         };
 
         let connections = stream::iter(0..args.client_count)
@@ -181,31 +182,36 @@ async fn perform_benchmark(args: Args) {
 }
 
 fn calculate_latencies(values: &[Duration], prefix: &str) -> HashMap<String, Value> {
-    let values: Vec<f64> = values
+    let mut latencies: Vec<f64> = values
         .iter()
-        .map(|duration| duration.as_secs_f64() * 1000.0) // seconds -> ms
+        .map(|duration| duration.as_secs_f64() * 1000.0) // Convert to milliseconds
         .collect();
+
+    latencies.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
     let mut map = HashMap::new();
-    map.insert(
-        format!("{prefix}_p50_latency"),
-        values[values.len() / 2].into(),
-    );
-    map.insert(
-        format!("{prefix}_p90_latency"),
-        values[values.len() / 100 * 90].into(),
-    );
-    map.insert(
-        format!("{prefix}_p99_latency"),
-        values[values.len() / 100 * 99].into(),
-    );
-    map.insert(
-        format!("{prefix}_average_latency"),
-        statistical::mean(values.as_slice()).into(),
-    );
-    map.insert(
-        format!("{prefix}_std_dev"),
-        statistical::standard_deviation(values.as_slice(), None).into(),
-    );
+    let len = latencies.len();
+    if len == 0 {
+        map.insert(format!("{prefix}_p50_latency"), Value::Number(0.into()));
+        map.insert(format!("{prefix}_p90_latency"), Value::Number(0.into()));
+        map.insert(format!("{prefix}_p99_latency"), Value::Number(0.into()));
+        map.insert(format!("{prefix}_average_latency"), Value::Number(0.into()));
+        map.insert(format!("{prefix}_std_dev"), Value::Number(0.into()));
+        return map;
+    }
+
+    let p50 = latencies[len * 50 / 100];
+    let p90 = latencies[len * 90 / 100];
+    let p99 = latencies[len * 99 / 100];
+    let avg = statistical::mean(&latencies);
+    let stddev = statistical::standard_deviation(&latencies, None);
+
+    map.insert(format!("{prefix}_p50_latency"), p50.into());
+    map.insert(format!("{prefix}_p90_latency"), p90.into());
+    map.insert(format!("{prefix}_p99_latency"), p99.into());
+    map.insert(format!("{prefix}_average_latency"), avg.into());
+    map.insert(format!("{prefix}_std_dev"), stddev.into());
+
     map
 }
 
@@ -226,7 +232,7 @@ async fn get_connection(args: &Args) -> Client {
         addresses: vec![address_info],
         cluster_mode_enabled: args.cluster_mode_enabled,
         read_from: Some(ReadFrom::PreferReplica),
-        request_timeout: Some(5000),
+        request_timeout: Some(15000),
         tls_mode: if args.tls {
             Some(TlsMode::SecureTls)
         } else {
@@ -270,10 +276,13 @@ async fn perform_operation(
             }
         } else {
             cmd.arg("SET")
-                .arg(buffer.format(thread_rng().gen_range(0..SIZE_SET_KEYSPACE)))
-                .arg(value);
-            // .arg("PX") // TTL in milliseconds
-            // .arg(10_000); // 10 seconds
+                .arg(buffer.format(thread_rng().gen_range(
+                    (SIZE_GET_KEYSPACE + SIZE_SET_KEYSPACE)
+                        ..2 * (SIZE_GET_KEYSPACE + SIZE_SET_KEYSPACE),
+                )))
+                .arg(value)
+                .arg("PX") // TTL in milliseconds
+                .arg(10_000); // 10 seconds
             ChosenAction::Set
         }
     };
@@ -304,8 +313,8 @@ async fn single_benchmark_task(
     );
 
     let mut last_burst = Instant::now();
-    let burst_interval = Duration::from_secs(120); // every 2 minutes
-    let value = generate_random_string(data_size);
+    let burst_interval = Duration::from_secs(30); // every 2 minutes
+    let value = generate_random_string(1000);
     loop {
         let current_op = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if current_op >= number_of_operations {
@@ -316,7 +325,7 @@ async fn single_benchmark_task(
         let mut connection = connections[index].clone();
 
         let now = Instant::now();
-        let is_burst = now.duration_since(last_burst) <= Duration::from_secs(10); // burst lasts 30s
+        let is_burst = now.duration_since(last_burst) <= Duration::from_secs(5); // burst lasts 30s
         if now.duration_since(last_burst) > burst_interval {
             last_burst = now;
         }

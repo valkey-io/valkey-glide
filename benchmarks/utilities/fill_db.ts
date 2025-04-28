@@ -19,7 +19,7 @@ async function fill_database(
     const client = await createRedisClient(host, isCluster, tls, port);
     const data = generateValue(data_size);
     await client.connect();
-
+    console.log("fillling uppp");
     const CONCURRENT_SETS = 1000;
     const sets = Array.from(Array(CONCURRENT_SETS).keys()).map(
         async (index) => {
