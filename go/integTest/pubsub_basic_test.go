@@ -139,7 +139,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 			publisher := suite.createAnyClient(tt.clientType, nil)
 
 			channels := []ChannelDefn{
-				{Channel: tt.channelName, Mode: ExactMode},
+				{Channel: tt.channelName, Mode: getChannelMode(tt.sharded)},
 			}
 			expectedMessages := map[string]string{
 				tt.channelName: tt.messageContent,
@@ -306,7 +306,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 			publisher := suite.createAnyClient(tt.clientType, nil)
 
 			channels := []ChannelDefn{
-				{Channel: tt.channelName, Mode: ExactMode},
+				{Channel: tt.channelName, Mode: getChannelMode(tt.sharded)},
 			}
 			expectedMessages := map[string]string{
 				tt.channelName: tt.messageContent,
@@ -496,6 +496,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		clientType     ClientType
 		readMethod     MessageReadMethod
 		useCallback    bool
+		sharded        bool
 		channelNames   []string
 		messageContent string
 	}{
@@ -504,6 +505,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			clientType:     GlideClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
+			sharded:        false,
 			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
 			messageContent: "test message",
 		},
@@ -512,6 +514,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			clientType:     GlideClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
+			sharded:        false,
 			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
 			messageContent: "test message",
 		},
@@ -520,6 +523,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			clientType:     GlideClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
+			sharded:        false,
 			channelNames:   []string{"test-channel-2", "test-channel-1", "test-channel-3"},
 			messageContent: "test message",
 		},
@@ -528,6 +532,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			clientType:     GlideClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
+			sharded:        false,
 			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
 			messageContent: "test message",
 		},
@@ -536,6 +541,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			clientType:     GlideClusterClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
+			sharded:        false,
 			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
 			messageContent: "test message",
 		},
@@ -544,6 +550,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			clientType:     GlideClusterClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
+			sharded:        false,
 			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
 			messageContent: "test message",
 		},
@@ -552,6 +559,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			clientType:     GlideClusterClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
+			sharded:        false,
 			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
 			messageContent: "test message",
 		},
@@ -560,6 +568,43 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			clientType:     GlideClusterClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
+			sharded:        false,
+			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
+			messageContent: "test message",
+		},
+		{
+			name:           "Cluster with Callback Sharded",
+			clientType:     GlideClusterClient,
+			readMethod:     CallbackMethod,
+			useCallback:    true,
+			sharded:        true,
+			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
+			messageContent: "test message",
+		},
+		{
+			name:           "Cluster with WaitForMessage Sharded",
+			clientType:     GlideClusterClient,
+			readMethod:     WaitForMessageMethod,
+			useCallback:    false,
+			sharded:        true,
+			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
+			messageContent: "test message",
+		},
+		{
+			name:           "Cluster with SignalChannel Sharded",
+			clientType:     GlideClusterClient,
+			readMethod:     SignalChannelMethod,
+			useCallback:    false,
+			sharded:        true,
+			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
+			messageContent: "test message",
+		},
+		{
+			name:           "Cluster with SyncLoop Sharded",
+			clientType:     GlideClusterClient,
+			readMethod:     SyncLoopMethod,
+			useCallback:    false,
+			sharded:        true,
 			channelNames:   []string{"test-channel-1", "test-channel-2", "test-channel-3"},
 			messageContent: "test message",
 		},
@@ -567,12 +612,15 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
+			if tt.sharded {
+				suite.SkipIfServerVersionLowerThanBy("7.0.0")
+			}
 			publisher := suite.createAnyClient(tt.clientType, nil)
 
 			// Create channel definitions for all channels
 			channels := make([]ChannelDefn, len(tt.channelNames))
 			for i, channelName := range tt.channelNames {
-				channels[i] = ChannelDefn{Channel: channelName, Mode: ExactMode}
+				channels[i] = ChannelDefn{Channel: channelName, Mode: getChannelMode(tt.sharded)}
 			}
 
 			// Create expected messages map
@@ -597,7 +645,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 
 			for _, channelName := range tt.channelNames {
 				if tt.clientType == GlideClusterClient {
-					_, err := publisher.(*api.GlideClusterClient).Publish(channelName, tt.messageContent, false)
+					_, err := publisher.(*api.GlideClusterClient).Publish(channelName, tt.messageContent, tt.sharded)
 					assert.Nil(t, err)
 				} else {
 					_, err := publisher.(*api.GlideClient).Publish(channelName, tt.messageContent)
