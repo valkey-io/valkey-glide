@@ -221,10 +221,12 @@ func (suite *GlideTestSuite) TearDownTest() {
 	for _, client := range suite.clients {
 		client.Close()
 	}
+	suite.clients = nil // Clear the slice
 
 	for _, client := range suite.clusterClients {
 		client.Close()
 	}
+	suite.clusterClients = nil // Clear the slice
 
 	// Clear the callback context for the next test
 	callbackCtx.Range(func(key, value any) bool {
