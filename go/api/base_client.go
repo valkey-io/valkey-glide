@@ -7750,12 +7750,21 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 	return handleAnyResponse(result)
 }
 
-// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+// Posts a message to the specified channel. Returns the number of clients that received the message.
 //
 // Channel can be any string, but common patterns include using "." to create namespaces like
 // "news.sports" or "news.weather".
 //
 // See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channel - The channel to publish to.
+//	message - The message to publish.
+//
+// Return value:
+//
+//	The number of clients that received the message.
 //
 // [valkey.io]: https://valkey.io/commands/publish
 func (client *baseClient) Publish(channel string, message string) (int64, error) {
@@ -7775,6 +7784,10 @@ func (client *baseClient) Publish(channel string, message string) (int64, error)
 //
 // See [valkey.io] for details.
 //
+// Return value:
+//
+//	An array of active channel names.
+//
 // [valkey.io]: https://valkey.io/commands/pubsub-channels
 func (client *baseClient) PubSubChannels() ([]string, error) {
 	result, err := client.executeCommand(C.PubSubChannels, []string{})
@@ -7785,7 +7798,7 @@ func (client *baseClient) PubSubChannels() ([]string, error) {
 	return handleStringArrayResponse(result)
 }
 
-// PubSubChannelsWithPattern lists the currently active channels matching the specified pattern.
+// Lists the currently active channels matching the specified pattern.
 //
 // Pattern can be any glob-style pattern:
 // - h?llo matches hello, hallo and hxllo
@@ -7796,6 +7809,14 @@ func (client *baseClient) PubSubChannels() ([]string, error) {
 // the responses into a single array.
 //
 // See [valkey.io] for details.
+//
+// Parameters:
+//
+//	pattern - The pattern to match channel names against.
+//
+// Return value:
+//
+//	An array of active channel names matching the pattern.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-channels
 func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
@@ -7808,7 +7829,7 @@ func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, e
 	return handleStringArrayResponse(result)
 }
 
-// PubSubNumPat returns the number of patterns that are subscribed to by clients.
+// Returns the number of patterns that are subscribed to by clients.
 //
 // This returns the total number of unique patterns that all clients are subscribed to,
 // not the count of clients subscribed to patterns.
@@ -7818,6 +7839,10 @@ func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, e
 //
 // See [valkey.io] for details.
 //
+// Return value:
+//
+//	The number of patterns that are subscribed to by clients.
+//
 // [valkey.io]: https://valkey.io/commands/pubsub-numpat
 func (client *baseClient) PubSubNumPat() (int64, error) {
 	result, err := client.executeCommand(C.PubSubNumPat, []string{})
@@ -7826,6 +7851,34 @@ func (client *baseClient) PubSubNumPat() (int64, error) {
 	}
 
 	return handleIntResponse(result)
+}
+
+// Returns the number of subscribers for the specified channels.
+//
+// The count only includes clients subscribed to exact channels, not pattern subscriptions.
+// If no channels are specified, an empty map is returned.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single map.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channels - The channel names to get subscriber counts for.
+//
+// Return value:
+//
+//	A map of channel names to their subscriber counts.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numsub
+func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, error) {
+	result, err := client.executeCommand(C.PubSubNumSub, channels)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringIntMapResponse(result)
 }
 
 // Kills a function that is currently executing.
