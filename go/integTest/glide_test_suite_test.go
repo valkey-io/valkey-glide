@@ -386,9 +386,9 @@ func (suite *GlideTestSuite) verifyOK(result string, err error) {
 	assert.Equal(suite.T(), api.OK, result)
 }
 
-func (suite *GlideTestSuite) SkipIfServerVersionLowerThanBy(version string) {
+func (suite *GlideTestSuite) SkipIfServerVersionLowerThanBy(version string, t *testing.T) {
 	if suite.serverVersion < version {
-		suite.T().Skipf("This feature is added in version %s", version)
+		t.Skipf("This feature is added in version %s", version)
 	}
 }
 
@@ -453,6 +453,7 @@ type TestChannelMode int
 const (
 	ExactMode TestChannelMode = iota
 	PatternMode
+	ShardedMode
 )
 
 type ChannelDefn struct {
@@ -622,6 +623,11 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 	}
 	switch clientType {
 	case GlideClient:
+		if channels[0].Mode == ShardedMode {
+			assert.Fail(suite.T(), "Sharded mode is not supported for standalone client")
+			return nil
+		}
+
 		sConfig := api.NewStandaloneSubscriptionConfig()
 		for _, channel := range channels {
 			mode := api.PubSubChannelMode(channel.Mode)
@@ -645,4 +651,11 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 		assert.Fail(suite.T(), "Unsupported client type")
 		return nil
 	}
+}
+
+func getChannelMode(sharded bool) TestChannelMode {
+	if sharded {
+		return ShardedMode
+	}
+	return ExactMode
 }
