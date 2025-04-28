@@ -9,11 +9,9 @@ use glide_core::{
     client::Client as GlideClient,
     errors::{error_message, error_type, RequestErrorType},
     request_type::RequestType,
-    ConnectionRequest,
 };
 use std::{
     ffi::{c_char, c_void, CStr, CString},
-    fmt::Debug,
     sync::Arc,
 };
 use tokio::runtime::{Builder, Runtime};
@@ -75,42 +73,6 @@ struct CommandExecutionCore {
     failure_callback: FailureCallback,
 }
 
-/// This function handles Rust panics by logging them and reporting them into logs and via `failure_callback`.
-/// `func` returns an [`Option<E>`], where `E` is an error type. It is supposed that `func` uses callbacks to report result or error,
-/// and returns only an error if it happens.
-///
-/// # Safety
-/// Unsafe, becase calls to an `unsafe` function [`report_error`]. Please see the safety section of [`report_error`].
-unsafe fn handle_panics<E: Debug, F: std::panic::UnwindSafe + FnOnce() -> Option<E>>(
-    func: F,
-    ffi_func_name: &str,
-    failure_callback: FailureCallback,
-    callback_index: usize,
-    error_type: Option<RequestErrorType>,
-) {
-    let error_type = match error_type {
-        Some(t) => t,
-        None => RequestErrorType::Unspecified,
-    };
-    match std::panic::catch_unwind(func) {
-        Ok(None) => (), // no error
-        Ok(Some(err)) => {
-            // function returned an error
-            let err_str = format!("Native function {} failed: {:?}", ffi_func_name, err);
-            unsafe {
-                report_error(failure_callback, callback_index, err_str, error_type);
-            }
-        }
-        Err(err) => {
-            // function panicked
-            let err_str = format!("Native function {} panicked: {:?}", ffi_func_name, err);
-            unsafe {
-                report_error(failure_callback, callback_index, err_str, error_type);
-            }
-        }
-    }
-}
-
 /// # Safety
 /// Unsafe, becase calls to an FFI function. See the safety documentation of [`FailureCallback`].
 unsafe fn report_error(
@@ -150,35 +112,6 @@ impl Drop for PanicGuard {
     }
 }
 
-/// # Safety
-/// Unsafe, becase calls to an FFI function. See the safety documentation of [`SuccessCallback`].
-unsafe fn create_client_internal(
-    request: ConnectionRequest,
-    success_callback: SuccessCallback,
-    failure_callback: FailureCallback,
-) -> Result<(), String> {
-    let runtime = Builder::new_multi_thread()
-        .enable_all()
-        .thread_name("GLIDE C# thread")
-        .build()
-        .map_err(|err| error_message(&err.into()))?;
-
-    let _runtime_handle = runtime.enter();
-    let client = runtime
-        .block_on(GlideClient::new(request, None))
-        .map_err(|err| err.to_string())?;
-
-    let core = Arc::new(CommandExecutionCore {
-        success_callback,
-        failure_callback,
-        client,
-    });
-
-    let client_ptr = Arc::into_raw(Arc::new(Client { runtime, core }));
-    unsafe { success_callback(0, client_ptr as *const ResponseValue) };
-    Ok(())
-}
-
 /// Creates a new client with the given configuration.
 /// The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns.
 /// All callbacks should be offloaded to separate threads in order not to exhaust the client's thread pool.
@@ -195,17 +128,46 @@ pub unsafe extern "C" fn create_client(
     success_callback: SuccessCallback,
     failure_callback: FailureCallback,
 ) {
-    handle_panics(
-        move || {
-            let request = unsafe { create_connection_request(config) };
-            let res = create_client_internal(request, success_callback, failure_callback);
-            res.err()
-        },
-        "create_client",
+    let mut panic_guard = PanicGuard {
+        panicked: true,
         failure_callback,
-        0,
-        Some(RequestErrorType::Disconnect),
-    );
+        callback_index: 0,
+    };
+
+    let request = unsafe { create_connection_request(config) };
+    let runtime = Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("GLIDE C# thread")
+        .build()
+        .unwrap();
+
+    let _runtime_handle = runtime.enter();
+    let res = runtime.block_on(GlideClient::new(request, None));
+    match res {
+        Ok(client) => {
+            let core = Arc::new(CommandExecutionCore {
+                success_callback,
+                failure_callback,
+                client,
+            });
+
+            let client_ptr = Arc::into_raw(Arc::new(Client { runtime, core }));
+            unsafe { success_callback(0, client_ptr as *const ResponseValue) };
+        }
+        Err(err) => {
+            unsafe {
+                report_error(
+                    failure_callback,
+                    0,
+                    err.to_string(),
+                    RequestErrorType::Disconnect,
+                )
+            };
+        }
+    }
+
+    panic_guard.panicked = false;
+    drop(panic_guard);
 }
 
 /// Closes the given client, deallocating it from the heap.
@@ -223,7 +185,6 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
     unsafe { Arc::decrement_strong_count(client_ptr as *const Client) };
 }
 
-// TODO handle panic if possible
 /// Execute a command.
 /// Expects that arguments will be kept valid until the callback is called.
 ///
