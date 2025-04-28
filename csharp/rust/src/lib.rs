@@ -2,13 +2,12 @@
 
 mod ffi;
 use ffi::{
-    convert_double_pointer_to_vec, create_connection_request, create_route, ConnectionConfig,
-    ResponseValue, RouteInfo,
+    create_cmd, create_connection_request, create_route, CmdInfo, ConnectionConfig, ResponseValue,
+    RouteInfo,
 };
 use glide_core::{
     client::Client as GlideClient,
     errors::{error_message, error_type, RequestErrorType},
-    request_type::RequestType,
 };
 use std::{
     ffi::{c_char, c_void, CStr, CString},
@@ -193,19 +192,14 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
 /// * `client_ptr` must be able to be safely casted to a valid [`Arc<Client>`] via [`Arc::from_raw`]. See the safety documentation of [`Arc::from_raw`].
 /// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
 /// * Pointers to callbacks stored in [`Client`] should remain valid. See the safety documentation of [`SuccessCallback`] and [`FailureCallback`].
-/// * `args` and `args_len` must not be `null`.
-/// * `data` must point to `arg_count` consecutive string pointers.
-/// * `args_len` must point to `arg_count` consecutive string lengths. See the safety documentation of [`convert_double_pointer_to_vec`].
+/// * `cmd_ptr` must not be `null`. See the safety documentation of [`create_cmd`].
 /// * `route_info` could be `null`, but if it is not `null`, it must be a valid [`RouteInfo`] pointer. See the safety documentation of [`create_route`].
 #[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
 pub unsafe extern "C-unwind" fn command(
     client_ptr: *const c_void,
     callback_index: usize,
-    request_type: RequestType,
-    args: *const *mut c_char,
-    arg_count: u32,
-    args_len: *const u32,
+    cmd_ptr: *const CmdInfo,
     route_info: *const RouteInfo,
 ) {
     let client = unsafe {
@@ -221,27 +215,22 @@ pub unsafe extern "C-unwind" fn command(
         callback_index,
     };
 
-    let arg_vec =
-        unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) };
-
-    // Create the command outside of the task to ensure that the command arguments passed are still valid
-    let Some(mut cmd) = request_type.get_command() else {
-        let err_str = "Couldn't fetch command type".into();
-        unsafe {
-            report_error(
-                core.failure_callback,
-                callback_index,
-                err_str,
-                RequestErrorType::ExecAbort,
-            );
+    let cmd = match unsafe { create_cmd(cmd_ptr) } {
+        Ok(cmd) => cmd,
+        Err(err) => {
+            unsafe {
+                report_error(
+                    core.failure_callback,
+                    callback_index,
+                    err,
+                    RequestErrorType::Unspecified,
+                );
+            }
+            return;
         }
-        return;
     };
-    for command_arg in arg_vec {
-        cmd.arg(command_arg);
-    }
 
-    let route = create_route(route_info, &cmd);
+    let route = unsafe { create_route(route_info, Some(&cmd)) };
 
     client.runtime.spawn(async move {
         let mut panic_guard = PanicGuard {

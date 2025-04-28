@@ -21,7 +21,6 @@ package api
 import "C"
 
 import (
-	goErr "errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -7760,11 +7759,68 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 //
 // [valkey.io]: https://valkey.io/commands/publish
 func (client *baseClient) Publish(channel string, message string) (int64, error) {
-	if message == "" || channel == "" {
-		return 0, goErr.New("both message and channel are required for Publish command")
-	}
 	args := []string{channel, message}
 	result, err := client.executeCommand(C.Publish, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// Lists the currently active channels.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannels() ([]string, error) {
+	result, err := client.executeCommand(C.PubSubChannels, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// PubSubChannelsWithPattern lists the currently active channels matching the specified pattern.
+//
+// Pattern can be any glob-style pattern:
+// - h?llo matches hello, hallo and hxllo
+// - h*llo matches hllo and heeeello
+// - h[ae]llo matches hello and hallo, but not hillo
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
+	args := []string{pattern}
+	result, err := client.executeCommand(C.PubSubChannels, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// PubSubNumPat returns the number of patterns that are subscribed to by clients.
+//
+// This returns the total number of unique patterns that all clients are subscribed to,
+// not the count of clients subscribed to patterns.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numpat
+func (client *baseClient) PubSubNumPat() (int64, error) {
+	result, err := client.executeCommand(C.PubSubNumPat, []string{})
 	if err != nil {
 		return 0, err
 	}
