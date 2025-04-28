@@ -7885,3 +7885,28 @@ func (client *baseClient) FunctionKill() (string, error) {
 	}
 	return handleStringResponse(result)
 }
+
+// Returns information about the functions and libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	query - The query to use to filter the functions and libraries.
+//
+// Return value:
+//
+//	A list of info about queried libraries and their functions.
+//
+// [valkey.io]: https://valkey.io/commands/function-list/
+func (client *baseClient) FunctionList(query FunctionListQuery) ([]LibraryInfo, error) {
+	response, err := client.executeCommand(C.FunctionList, query.ToArgs())
+	if err != nil {
+		return nil, err
+	}
+	return handleFunctionListResponse(response)
+}
