@@ -1589,11 +1589,18 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	channel - The channel to publish the message to.
+//	message - The message to publish.
+//	sharded - Whether the channel is sharded.
+//
+// Return value:
+//
+//	The number of clients that received the message.
+//
 // [valkey.io]: https://valkey.io/commands/publish
 func (client *GlideClusterClient) Publish(channel string, message string, sharded bool) (int64, error) {
-	if message == "" || channel == "" {
-		return 0, &errors.RequestError{Msg: "both message and channel are required for Publish command"}
-	}
 	args := []string{channel, message}
 
 	var requestType C.RequestType
