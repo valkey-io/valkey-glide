@@ -334,12 +334,12 @@ class BaseClient(CoreCommands):
     async def _execute_batch(
         self,
         commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
-        route: Optional[Route] = None,
-        timeout: Optional[int] = None,
-        is_atomic: bool = True,
+        is_atomic: bool,
         raise_on_error: bool = False,
         retry_server_error: bool = False,
         retry_connection_error: bool = False,
+        route: Optional[Route] = None,
+        timeout: Optional[int] = None,
     ) -> List[TResult]:
         if self._is_closed:
             raise ClosingError(

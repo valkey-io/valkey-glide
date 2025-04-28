@@ -2137,7 +2137,7 @@ class TestJson:
         json_batch.arrtrim(transaction, key, "$.b", 1, 2)
         json_batch.get(transaction, key, ".")
 
-        result = await glide_client.exec(transaction)
+        result = await glide_client.exec(transaction, raise_on_error=False)
         assert isinstance(result, list)
 
         assert result[0] == "OK"  # set
@@ -2204,7 +2204,7 @@ class TestJson:
         # Test forget command
         json_batch.forget(transaction, key, "$.c")
 
-        result = await glide_client.exec(transaction)
+        result = await glide_client.exec(transaction, raise_on_error=False)
         assert isinstance(result, list)
 
         assert result[0] == "OK"  # set

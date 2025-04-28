@@ -68,7 +68,7 @@ class StandaloneCommands(CoreCommands):
     async def exec(
         self,
         batch: Batch,
-        raise_on_error: bool = True,
+        raise_on_error: bool,
         timeout: Optional[int] = None,
     ) -> Optional[List[TResult]]:
         """
@@ -78,20 +78,18 @@ class StandaloneCommands(CoreCommands):
         [valkey.io](https://valkey.io/docs/topics/pipelining/) for details.
 
 
-        Args:
-            batch (Batch): The batch of commands to execute.
+         Args:
+            batch (ClusterBatch): A `ClusterBatch` object containing a list of commands to be executed.
             raise_on_error (bool): Determines how errors are handled within the batch response.
-                When set to True, the first encountered error in the batch will be raised as an
-                exception after all retries and reconnections have been executed.
-                When set to False, errors will be included as part of the batch response, allowing
-                the caller to process both successful and failed commands together.
-            timeout (Optional[int]): The duration in milliseconds for the client to wait for the batch request to complete.
-                This timeout applies to the entire batch execution, including:
-                - Sending the request to the server
-                - Waiting for the response
-                - Any necessary reconnections or retries
-                If the timeout is exceeded, a timeout error will be raised.
-                If not specified, the default request timeout will be used.
+                When set to `True`, the first encountered error in the batch will be raised as a
+                `RequestError` exception after all retries and reconnections have been executed.
+                When set to `False`, errors will be included as part of the batch response array, allowing
+                the caller to process both successful and failed commands together. In this case, error details
+                will be provided as instances of `RequestError`.
+            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+                to complete. This duration encompasses sending the request, awaiting for a response from the server, and any
+                required reconnections or retries. If the specified timeout is exceeded for the request,
+                a timeout error will be raised. If not explicitly set, the client's default request timeout will be used.
 
         Returns:
             Optional[List[TResult]]: A list of results corresponding to the execution of each command
@@ -813,7 +811,7 @@ class StandaloneCommands(CoreCommands):
 
     async def unwatch(self) -> TOK:
         """
-        Flushes all the previously watched keys for a transaction. Executing a transaction will
+        Flushes all the previously watched keys for a batch. Executing a batch will
         automatically flush all previously watched keys.
 
         See [valkey.io](https://valkey.io/commands/unwatch) for more details.

@@ -449,12 +449,12 @@ class CoreCommands(Protocol):
     async def _execute_batch(
         self,
         commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
-        route: Optional[Route] = None,
-        timeout: Optional[int] = None,
-        is_atomic: bool = True,
-        raise_on_error: bool = True,
+        is_atomic: bool,
+        raise_on_error: bool,
         retry_server_error: bool = False,
         retry_connection_error: bool = False,
+        route: Optional[Route] = None,
+        timeout: Optional[int] = None,
     ) -> List[TResult]: ...
 
     async def _execute_script(
@@ -6980,9 +6980,9 @@ class CoreCommands(Protocol):
 
     async def watch(self, keys: List[TEncodable]) -> TOK:
         """
-        Marks the given keys to be watched for conditional execution of a transaction. Transactions
+        Marks the given keys to be watched for conditional execution of a batch. Batches
         will only execute commands if the watched keys are not modified before execution of the
-        transaction.
+        batch.
 
         See [valkey.io](https://valkey.io/commands/watch) for more details.
 
@@ -7004,17 +7004,17 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.watch("sampleKey")
                 'OK'
-            >>> transaction.set("sampleKey", "foobar")
-            >>> await client.exec(transaction)
+            >>> batch.set("sampleKey", "foobar")
+            >>> await client.exec(batch)
                 'OK' # Executes successfully and keys are unwatched.
 
             >>> await client.watch("sampleKey")
                 'OK'
-            >>> transaction.set("sampleKey", "foobar")
+            >>> batch.set("sampleKey", "foobar")
             >>> await client.set("sampleKey", "hello world")
                 'OK'
-            >>> await client.exec(transaction)
-                None  # None is returned when the watched key is modified before transaction execution.
+            >>> await client.exec(batch)
+                None  # None is returned when the watched key is modified before batch execution.
         """
 
         return cast(

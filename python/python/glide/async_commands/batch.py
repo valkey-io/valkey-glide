@@ -1,7 +1,15 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import threading
-from typing import List, Mapping, Optional, Tuple, TypeVar, Union
+from abc import ABC
+from typing import (
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from deprecated import deprecated
 from glide.async_commands.bitmap import (
@@ -60,36 +68,26 @@ from glide.protobuf.command_request_pb2 import RequestType
 TBatch = TypeVar("TBatch", bound="BaseBatch")
 
 
-class BaseBatch:
+class BaseBatch(ABC):
     """
     Base class encompassing shared commands for both standalone and cluster mode implementations in batch.
+
+    See [Transactions](https://valkey.io/topics/transactions/) and
+      [Pipelines](https://valkey.io/topics/pipelines/) for details.
 
     Batch Response:
         The response for each command depends on the executed command. Specific response types
         are documented alongside each method.
 
-    Transaction vs Pipeline:
-        - Transactions (is_atomic=True) ensure that all commands are executed atomically.
-          In a transaction, all keys must belong to the same slot. This means if any key is in a different slot,
-          the transaction will not work.
-        - Pipelines (is_atomic=False) send multiple commands to the server without waiting for each command's
-          response. However, pipeline commands are not atomic and can be sent to different slots in a cluster,
-          meaning they are executed independently.
-
-    Transaction Example:
-        transaction = BaseBatch(is_atomic=True)
-        >>> transaction.set("key", "value").get("key")
-        >>> await client.exec(transaction)
-        [OK , "value"]
-
-    Pipeline Example:
-        pipeline = BaseBatch(is_atomic=False)
-        >>> pipeline.set("key", "value").get("key")
-        >>> await client.exec(pipeline)
-        [OK , "value"]
+    Args:
+        is_atomic (bool): Determines whether the batch is atomic or non-atomic.
+            If `True`, the batch will be executed as an atomic transaction.
+            If `False`, the batch will be executed as a non-atomic pipeline.
+            See [Valkey Transactions](https://valkey.io/topics/transactions/) and
+            [Valkey Pipelines](https://valkey.io/topics/pipelines/) for more details.
     """
 
-    def __init__(self, is_atomic=False) -> None:
+    def __init__(self, is_atomic: bool) -> None:
         self.commands: List[Tuple[RequestType.ValueType, List[TEncodable]]] = []
         self.lock = threading.Lock()
         self.is_atomic = is_atomic
@@ -247,7 +245,7 @@ class BaseBatch:
 
         Command response:
             OK: If the `key` was successfully renamed, return "OK". If `key` does not exist,
-                the batch fails with an error.
+                the command fails with an error.
         """
         return self.append_command(RequestType.Rename, [key, new_key])
 
@@ -272,7 +270,8 @@ class BaseBatch:
         """
         Executes a single command, without checking inputs.
 
-        See the `Valkey GLIDE Wiki <https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command>`_
+        See the Valkey GLIDE Wiki
+        [custom command](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
         Args:
@@ -372,7 +371,8 @@ class BaseBatch:
             parameters and their respective values to set.
 
         Command response:
-            OK: Returns OK if all configurations have been successfully set. Otherwise, the batch fails with an error.
+            OK: Returns OK if all configurations have been successfully set.
+            Otherwise, the transaction fails with an error.
         """
         parameters: List[TEncodable] = []
         for pair in parameters_map.items():
@@ -402,9 +402,13 @@ class BaseBatch:
         Command response:
             OK: a simple OK response.
 
-        Note:
-            If the batch is a transaction (is_atomic = True), then all keys must map to the same slot.
-            In a pipeline, the keys do not have to map to the same slot.
+            Note:
+                In cluster mode, if this command is used in a non-atomic batch (pipeline)
+                and the keys in `key_value_map` map to different hash slots,
+                the command will be split across these slots and executed separately for each.
+                This means the command is atomic only at the slot level.
+
+        See [valkey.io](https://valkey.io/commands/mset/) for more details.
         """
         parameters: List[TEncodable] = []
         for pair in key_value_map.items():
@@ -446,8 +450,10 @@ class BaseBatch:
             its corresponding value in the list will be None.
 
         Note:
-            If the batch is a transaction (is_atomic = True), then all keys must map to the same slot.
-            In a pipeline, the keys do not have to map to the same slot.
+            If the batch is a transaction (is_atomic=True), then all keys must map to the same slot.
+            In cluster mode, if this command is used in a non-atomic batch (pipeline)
+            and the keys map to different hash slots, the command will be split across these slots
+            and executed separately for each. This means the command is atomic only at the slot level.
         """
         return self.append_command(RequestType.MGet, keys)
 
@@ -472,7 +478,8 @@ class BaseBatch:
         See [valkey.io](https://valkey.io/commands/config-rewrite/) for details.
 
         Command response:
-            OK: OK is returned when the configuration was rewritten properly. Otherwise, the batch fails with an error.
+            OK: OK is returned when the configuration was rewritten properly.
+            Otherwise, the transaction fails with an error.
         """
         return self.append_command(RequestType.ConfigRewrite, [])
 
@@ -750,6 +757,7 @@ class BaseBatch:
 
         Command response:
             int: The number of fields in the hash, or 0 when the key does not exist.
+
             If `key` holds a value that is not a hash, the batch fails with an error.
         """
         return self.append_command(RequestType.HLen, [key])
@@ -1737,7 +1745,7 @@ class BaseBatch:
         Unlink (delete) multiple keys from the database.
         A key is ignored if it does not exist.
         This command, similar to DEL, removes specified keys and ignores non-existent ones.
-        However, this command does not block the server, while `DEL <See [valkey.io](https://valkey.io/commands/del>`_) does.
+        However, this command does not block the server, while `DEL <[valkey.io](https://valkey.io/commands/del>`_) does.
 
         See [valkey.io](https://valkey.io/commands/unlink/) for more details.
 
@@ -2510,7 +2518,7 @@ class BaseBatch:
             key (TEncodable): The key of the stream.
             group_name (TEncodable): The newly created consumer group name.
             group_id (TEncodable): The stream entry ID that specifies the last delivered entry in the stream from the new
-                group’s perspective. The special ID "$" can be used to specify the last entry in the stream.
+                group's perspective. The special ID "$" can be used to specify the last entry in the stream.
             options (Optional[StreamGroupOptions]): Options for creating the stream group.
 
         Command response:
@@ -5298,21 +5306,11 @@ class Batch(BaseBatch):
         The response for each command depends on the executed command. Specific response types
         are documented alongside each method.
 
-
-    Transaction vs Pipeline:
-        - Transactions (is_atomic=True) ensure that all commands are executed atomically.
-          In a transaction, all keys must belong to the same slot. This means if any key is in a different slot,
-          the transaction will not work.
-        - Pipelines (is_atomic=False) send multiple commands to the server without waiting for each command's
-          response. However, pipeline commands are not atomic and can be sent to different slots in a cluster,
-          meaning they are executed independently.
-
     Note for Standalone Mode (Cluster Mode Disabled):
-        In standalone mode, pipeline commands are supported only on the primary connection.
-        They are not distributed to replica connections.
+        Standalone Batches are executed on the primary node.
 
     Transaction Example:
-        transaction = Batch(is_atomic=True)
+        >>> transaction = Batch(is_atomic=True)
         >>> transaction.set("key", "value")
         >>> transaction.select(1)  # Standalone command
         >>> transaction.get("key")
@@ -5320,14 +5318,12 @@ class Batch(BaseBatch):
         [OK , OK , None]
 
     Pipeline Example:
-        pipeline = Batch(is_atomic=True)
+        >>> pipeline = Batch(is_atomic=True)
         >>> pipeline.set("key", "value")
         >>> pipeline.select(1)  # Standalone command
         >>> pipeline.get("key")
         >>> await client.exec(pipeline)
         [OK , OK , None]
-
-
     """
 
     # TODO: add SLAVEOF and all SENTINEL commands
@@ -5424,17 +5420,8 @@ class ClusterBatch(BaseBatch):
         The response for each command depends on the executed command. Specific response types
         are documented alongside each method.
 
-    Transaction vs Pipeline:
-        - Transactions (is_atomic=True) ensure that all commands are executed atomically.
-          In a transaction, all keys must belong to the same slot. This means if any key is in a different slot,
-          the transaction will not work.
-        - Pipelines (is_atomic=False) send multiple commands to the server without waiting for each command's
-          response. However, pipeline commands are not atomic and can be sent to different slots in a cluster,
-          meaning they are executed independently.
-
-    Note for Cluster Mode:
-        When cluster mode is enabled and the client is configured to read from replicas, read commands
-        in a pipeline will be distributed in a round-robin manner across the replicas.
+    When the client is configured to read from replicas, read commands
+    in a non-atomic batches will be distributed in a round-robin manner across the replicas.
     """
 
     def copy(
@@ -5475,7 +5462,8 @@ class ClusterBatch(BaseBatch):
         This command aggregates PUBLISH and SPUBLISH commands functionalities.
         The mode is selected using the 'sharded' parameter
 
-        See [valkey.io](https://valkey.io/commands/publish) and https://valkey.io/commands/spublish for more details.
+        See [PUBLISH](https://valkey.io/commands/publish) and [SPUBLISH](https://valkey.io/commands/spublish)
+        for more details.
 
         Args:
             message (str): Message to publish
@@ -5536,11 +5524,11 @@ class ClusterBatch(BaseBatch):
 
 @deprecated(reason="Use ClusterBatch(is_atomic=True) instead.")
 class Transaction(Batch):
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__(is_atomic=True)
 
 
 @deprecated(reason="Use ClusterBatch(is_atomic=True) instead.")
 class ClusterTransaction(ClusterBatch):
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__(is_atomic=True)
