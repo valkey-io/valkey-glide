@@ -232,7 +232,7 @@ async fn get_connection(args: &Args) -> Client {
         addresses: vec![address_info],
         cluster_mode_enabled: args.cluster_mode_enabled,
         read_from: Some(ReadFrom::PreferReplica),
-        request_timeout: Some(15000),
+        request_timeout: Some(60000),
         tls_mode: if args.tls {
             Some(TlsMode::SecureTls)
         } else {
