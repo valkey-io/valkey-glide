@@ -7859,7 +7859,6 @@ func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, err
 	return handleStringIntMapResponse(result)
 }
 
-
 // Returns the number of patterns that are subscribed to by clients.
 //
 // This returns the total number of unique patterns that all clients are subscribed to,
@@ -7879,7 +7878,6 @@ func (client *baseClient) PubSubNumPat() (int64, error) {
 
 	return handleIntResponse(result)
 }
-
 
 // Returns information about the functions and libraries.
 //
