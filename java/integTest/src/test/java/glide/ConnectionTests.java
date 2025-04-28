@@ -2,9 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
-import static glide.TestUtilities.azClusterClientConfig;
-import static glide.TestUtilities.commonClientConfig;
-import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.TestUtilities.*;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
@@ -20,12 +18,7 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.configuration.AdvancedGlideClientConfiguration;
-import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
-import glide.api.models.configuration.BackoffStrategy;
-import glide.api.models.configuration.ProtocolVersion;
-import glide.api.models.configuration.ReadFrom;
-import glide.api.models.configuration.RequestRoutingConfiguration;
+import glide.api.models.configuration.*;
 import glide.api.models.exceptions.ClosingException;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +30,7 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -99,6 +93,28 @@ public class ConnectionTests {
                                 .requestTimeout(requestTimeout)
                                 .reconnectStrategy(backoffStrategy)
                                 .build())
+                .get();
+    }
+
+    @SneakyThrows
+    public BaseClient createClientWithTLSMode(boolean isCluster, boolean useInsecureTLS) {
+        if (isCluster) {
+            var advancedConfiguration =
+                    AdvancedGlideClusterClientConfiguration.builder()
+                            .tlsAdvancedConfiguration(
+                                    TlsAdvancedConfiguration.builder().useInsecureTLS(useInsecureTLS).build())
+                            .build();
+            return GlideClusterClient.createClient(
+                            commonClusterClientConfig().advancedConfiguration(advancedConfiguration).build())
+                    .get();
+        }
+        var advancedConfiguration =
+                AdvancedGlideClientConfiguration.builder()
+                        .tlsAdvancedConfiguration(
+                                TlsAdvancedConfiguration.builder().useInsecureTLS(useInsecureTLS).build())
+                        .build();
+        return GlideClient.createClient(
+                        commonClientConfig().advancedConfiguration(advancedConfiguration).build())
                 .get();
     }
 
@@ -409,5 +425,21 @@ public class ConnectionTests {
         assertEquals(nGetCalls, totalGetCalls, "Total GET calls mismatch");
 
         azTestClient.close();
+    }
+
+    /**
+     * Test that the client can connect using both secure and insecure TLS modes, meaning the client
+     * bypasses the SSL certificate validation.
+     */
+    @SneakyThrows
+    @ParameterizedTest
+    @CsvSource(value = {"true, true", "true, false", "false, true", "false, false"})
+    public void test_connection_tls_mode(String clusterMode, String insecureTls) {
+        try (BaseClient client =
+                createClientWithTLSMode(Boolean.getBoolean(clusterMode), Boolean.getBoolean(insecureTls))) {
+            assertEquals("OK", client.set("key", "val").get());
+            assertEquals("val", client.get("key").get());
+            assertEquals(1, client.del(new String[] {"key"}).get());
+        }
     }
 }
