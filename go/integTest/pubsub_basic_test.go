@@ -134,7 +134,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
 			if tt.sharded {
-				suite.SkipIfServerVersionLowerThanBy("7.0.0")
+				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
 			}
 			publisher := suite.createAnyClient(tt.clientType, nil)
 
@@ -301,7 +301,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
 			if tt.sharded {
-				suite.SkipIfServerVersionLowerThanBy("7.0.0")
+				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
 			}
 			publisher := suite.createAnyClient(tt.clientType, nil)
 
@@ -613,7 +613,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
 			if tt.sharded {
-				suite.SkipIfServerVersionLowerThanBy("7.0.0")
+				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
 			}
 			publisher := suite.createAnyClient(tt.clientType, nil)
 
