@@ -1,8 +1,5 @@
 #include <glide/callback.h>
-
-#include <iostream>
-
-#include "glide/glide_base.h"
+#include <glide/glide_base.h>
 
 namespace glide {
 

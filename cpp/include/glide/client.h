@@ -1,11 +1,11 @@
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 
-#include <functional>
+#include <absl/status/status.h>
+#include <absl/status/statusor.h>
+
 #include <future>
 #include <map>
-#include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -43,7 +43,8 @@ class Client {
    * @param value The value to associate with the key.
    * @return True if the operation is successful, false otherwise.
    */
-  std::future<bool> set(const std::string &key, const std::string &value);
+  std::future<absl::StatusOr<bool>> set(const std::string &key,
+                                        const std::string &value);
 
   /**
    * Retrieves the value associated with the given key from the client's
@@ -53,7 +54,7 @@ class Client {
    * @return The value associated with the specified key, or an empty string
    * if the key is not found or an error occurs.
    */
-  std::future<std::string> get(const std::string &key);
+  std::future<absl::StatusOr<std::string>> get(const std::string &key);
 
   /**
    * Gets a value associated with the given string `key` and deletes the key.
@@ -63,7 +64,7 @@ class Client {
    * @return The value associated with the specified key, or an empty string
    * if the key is not found or an error occurs.
    */
-  std::future<std::string> getdel(const std::string &key);
+  std::future<absl::StatusOr<std::string>> getdel(const std::string &key);
 
   /**
    * Sets multiple field-value pairs in a hash stored at the given key.
@@ -73,7 +74,7 @@ class Client {
    * hash.
    * @return True if the operation is successful, false otherwise.
    */
-  std::future<bool> hset(
+  std::future<absl::StatusOr<bool>> hset(
       const std::string &key,
       const std::map<std::string, std::string> &field_values);
 
@@ -86,8 +87,8 @@ class Client {
    * @return The value associated with the specified field, or an empty string
    * if the key or field is not found or an error occurs.
    */
-  std::future<std::string> hget(const std::string &key,
-                                const std::string &field);
+  std::future<absl::StatusOr<std::string>> hget(const std::string &key,
+                                                const std::string &field);
 
   /**
    * Executes a command with the given request type and arguments.

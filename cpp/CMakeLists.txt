@@ -36,6 +36,7 @@ target_link_libraries(
     protobuf::libprotobuf
     glide_rs
     absl::log_internal_check_op
+    absl::statusor
     dl
     pthread
 )

@@ -1,10 +1,9 @@
 #include <glide/client.h>
+#include <glide/glide_base.h>
+#include <glide/helper.h>
 
-#include <cstddef>
 #include <future>
-#include <iostream>
-
-#include "glide/glide_base.h"
+#include <optional>
 
 namespace glide {
 
@@ -30,10 +29,10 @@ bool Client::connect() {
 /**
  * Sets a key-value pair in the client's configuration.
  */
-std::future<bool> Client::set(const std::string &key,
-                              const std::string &value) {
+std::future<absl::StatusOr<bool>> Client::set(const std::string &key,
+                                              const std::string &value) {
   std::vector<std::string> args = {key, value};
-  std::promise<bool> channel;
+  std::promise<absl::StatusOr<bool>> channel;
   auto future = channel.get_future();
 
   std::promise<Response> response_channel;
@@ -42,7 +41,12 @@ std::future<bool> Client::set(const std::string &key,
 
   // Get the response and set the result
   Response r = response_future.get();
-  channel.set_value(r.error_type == std::nullopt);
+  if (r.error_type == std::nullopt) {
+    channel.set_value(true);
+  } else {
+    channel.set_value(
+        ConvertRequestError(r.error_type.value(), r.error_message));
+  }
 
   return future;
 }
@@ -51,9 +55,9 @@ std::future<bool> Client::set(const std::string &key,
  * Retrieves the value associated with the given key from the client's
  * configuration.
  */
-std::future<std::string> Client::get(const std::string &key) {
+std::future<absl::StatusOr<std::string>> Client::get(const std::string &key) {
   std::vector<std::string> args = {key};
-  std::promise<std::string> channel;
+  std::promise<absl::StatusOr<std::string>> channel;
   auto future = channel.get_future();
 
   std::promise<Response> response_channel;
@@ -61,8 +65,13 @@ std::future<std::string> Client::get(const std::string &key) {
   this->exec_command(core::RequestType::Get, args, &response_channel);
 
   Response r = response_future.get();
-  channel.set_value(
-      std::string(r.value->string_value, r.value->string_value_len));
+  if (r.error_type == std::nullopt) {
+    channel.set_value(
+        std::string(r.value->string_value, r.value->string_value_len));
+  } else {
+    channel.set_value(
+        ConvertRequestError(r.error_type.value(), r.error_message));
+  }
 
   return future;
 }
@@ -71,9 +80,10 @@ std::future<std::string> Client::get(const std::string &key) {
  * Retrieves the value associated with the given key from the client's
  * configuration.
  */
-std::future<std::string> Client::getdel(const std::string &key) {
+std::future<absl::StatusOr<std::string>> Client::getdel(
+    const std::string &key) {
   std::vector<std::string> args = {key};
-  std::promise<std::string> channel;
+  std::promise<absl::StatusOr<std::string>> channel;
   auto future = channel.get_future();
 
   std::promise<Response> response_channel;
@@ -81,8 +91,13 @@ std::future<std::string> Client::getdel(const std::string &key) {
   this->exec_command(core::RequestType::GetDel, args, &response_channel);
 
   Response r = response_future.get();
-  channel.set_value(
-      std::string(r.value->string_value, r.value->string_value_len));
+  if (r.error_type == std::nullopt) {
+    channel.set_value(
+        std::string(r.value->string_value, r.value->string_value_len));
+  } else {
+    channel.set_value(
+        ConvertRequestError(r.error_type.value(), r.error_message));
+  }
 
   return future;
 }
@@ -90,7 +105,7 @@ std::future<std::string> Client::getdel(const std::string &key) {
 /**
  * Sets multiple field-value pairs in a hash stored at the given key.
  */
-std::future<bool> Client::hset(
+std::future<absl::StatusOr<bool>> Client::hset(
     const std::string &key,
     const std::map<std::string, std::string> &field_values) {
   std::vector<std::string> args = {key};
@@ -99,7 +114,7 @@ std::future<bool> Client::hset(
     args.push_back(pair.second);
   }
 
-  std::promise<bool> channel;
+  std::promise<absl::StatusOr<bool>> channel;
   auto future = channel.get_future();
 
   std::promise<Response> response_channel;
@@ -107,7 +122,12 @@ std::future<bool> Client::hset(
   this->exec_command(core::RequestType::HSet, args, &response_channel);
 
   Response r = response_future.get();
-  channel.set_value(r.value->bool_value);
+  if (r.error_type == std::nullopt) {
+    channel.set_value(r.value->bool_value);
+  } else {
+    channel.set_value(
+        ConvertRequestError(r.error_type.value(), r.error_message));
+  }
 
   return future;
 }
@@ -116,10 +136,10 @@ std::future<bool> Client::hset(
  * Retrieves the value associated with a field in a hash stored at the given
  * key.
  */
-std::future<std::string> Client::hget(const std::string &key,
-                                      const std::string &field) {
+std::future<absl::StatusOr<std::string>> Client::hget(
+    const std::string &key, const std::string &field) {
   std::vector<std::string> args = {key, field};
-  std::promise<std::string> channel;
+  std::promise<absl::StatusOr<std::string>> channel;
   auto future = channel.get_future();
 
   std::promise<Response> response_channel;
@@ -127,8 +147,13 @@ std::future<std::string> Client::hget(const std::string &key,
   this->exec_command(core::RequestType::HGet, args, &response_channel);
 
   Response r = response_future.get();
-  channel.set_value(
-      std::string(r.value->string_value, r.value->string_value_len));
+  if (r.error_type == std::nullopt) {
+    channel.set_value(
+        std::string(r.value->string_value, r.value->string_value_len));
+  } else {
+    channel.set_value(
+        ConvertRequestError(r.error_type.value(), r.error_message));
+  }
 
   return future;
 }

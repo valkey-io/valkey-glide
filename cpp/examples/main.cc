@@ -18,37 +18,48 @@ int main() {
   }
 
   // Set a key-value pair.
-  auto f = c.set("test", "hello-world");
-  if (f.get()) {
-    std::cout << "set completed!" << std::endl;
-  } else {
-    std::cout << "set failed!" << std::endl;
+  auto f = c.set("test", "hello-world").get();
+  if (!f.ok()) {
+    std::cout << "set failed!" << f.status().message() << std::endl;
   }
 
   // Get the value of the key.
-  auto f2 = c.get("test");
-  f2.wait();
-  std::cout << "get: " << f2.get() << std::endl;
+  auto f2 = c.get("test").get();
+  if (f2.ok()) {
+    std::cout << "get: " << f2 << std::endl;
+  } else {
+    std::cout << "set failed!" << f.status().message() << std::endl;
+  }
 
   // Get the value of the key and delete the key.
-  auto f3 = c.getdel("test");
-  f3.wait();
-  std::cout << "getdel: " << f3.get() << std::endl;
+  auto f3 = c.getdel("test").get();
+  if (f3.ok()) {
+    std::cout << "getdel: " << f3 << std::endl;
+  } else {
+    std::cout << "set failed!" << f.status().message() << std::endl;
+  }
 
   // Set multiple field-value pairs in a hash.
   std::map<std::string, std::string> field_values = {{"field1", "value1"},
                                                      {"field2", "value2"}};
-  auto f4 = c.hset("test", field_values);
-  f4.wait();
-  f4.get();
+  auto f4 = c.hset("test", field_values).get();
+  if (!f4.ok()) {
+    std::cout << "hset failed!" << f.status().message() << std::endl;
+  }
 
   // Get the value of a field in a hash.
-  auto f5 = c.hget("test", "field1");
-  f5.wait();
-  std::cout << "hget: " << f5.get() << std::endl;
-  auto f6 = c.hget("test", "field2");
-  f6.wait();
-  std::cout << "hget: " << f6.get() << std::endl;
+  auto f5 = c.hget("test", "field1").get();
+  if (f5.ok()) {
+    std::cout << "hget: " << f5 << std::endl;
+  } else {
+    std::cout << "hget failed!" << f.status().message() << std::endl;
+  }
+  auto f6 = c.hget("test", "field2").get();
+  if (f6.ok()) {
+    std::cout << "hget: " << f6 << std::endl;
+  } else {
+    std::cout << "hget failed!" << f.status().message() << std::endl;
+  }
 
   return 0;
 }
