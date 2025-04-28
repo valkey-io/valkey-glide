@@ -217,7 +217,8 @@ public class ConnectionManager {
         if (configuration.getOpenTelemetryConfig() != null) {
             OpenTelemetryConfig otelConfig = configuration.getOpenTelemetryConfig();
 
-            ConnectionRequestOuterClass.OpenTelemetryConfig.Builder outerOtelBuilder = ConnectionRequestOuterClass.OpenTelemetryConfig.newBuilder();
+            ConnectionRequestOuterClass.OpenTelemetryConfig.Builder outerOtelBuilder =
+                    ConnectionRequestOuterClass.OpenTelemetryConfig.newBuilder();
             if (otelConfig.getTracesCollectorEndPoint() != null) {
                 outerOtelBuilder.setTracesCollectorEndpoint(otelConfig.getTracesCollectorEndPoint());
             }

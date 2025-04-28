@@ -3,9 +3,7 @@ package glide.telemetry;
 
 import glide.ffi.resolvers.OpenTelemetryResolver;
 
-/**
- * Manages OpenTelemetry spans for the Valkey GLIDE Java client.
- */
+/** Manages OpenTelemetry spans for the Valkey GLIDE Java client. */
 public class SpanManager {
 
     /**

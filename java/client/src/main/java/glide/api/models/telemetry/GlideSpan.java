@@ -5,12 +5,12 @@ import glide.ffi.resolvers.OpenTelemetryResolver;
 
 /**
  * Represents an OpenTelemetry span for tracing operations in Valkey GLIDE.
- * 
- * <p>This class provides a wrapper around the native OpenTelemetry span implementation.
- * It manages the lifecycle of the span, ensuring proper creation and cleanup of resources.
- * 
- * <p>Spans are used to track the execution of operations and collect telemetry data.
- * Each span represents a single operation or unit of work.
+ *
+ * <p>This class provides a wrapper around the native OpenTelemetry span implementation. It manages
+ * the lifecycle of the span, ensuring proper creation and cleanup of resources.
+ *
+ * <p>Spans are used to track the execution of operations and collect telemetry data. Each span
+ * represents a single operation or unit of work.
  */
 public class GlideSpan implements AutoCloseable {
     private final long spanPtr;
@@ -26,8 +26,8 @@ public class GlideSpan implements AutoCloseable {
     }
 
     /**
-     * Returns the native pointer to the span.
-     * This is used internally by the GLIDE client to associate commands with spans.
+     * Returns the native pointer to the span. This is used internally by the GLIDE client to
+     * associate commands with spans.
      *
      * @return The native pointer to the span
      */
@@ -36,8 +36,8 @@ public class GlideSpan implements AutoCloseable {
     }
 
     /**
-     * Closes the span, releasing any resources associated with it.
-     * This method is automatically called when using try-with-resources.
+     * Closes the span, releasing any resources associated with it. This method is automatically
+     * called when using try-with-resources.
      */
     @Override
     public void close() {
@@ -48,9 +48,9 @@ public class GlideSpan implements AutoCloseable {
     }
 
     /**
-     * Ensures the span is properly closed when the object is garbage collected.
-     * This is a safety mechanism, but spans should be explicitly closed using {@link #close()}
-     * or try-with-resources for deterministic resource management.
+     * Ensures the span is properly closed when the object is garbage collected. This is a safety
+     * mechanism, but spans should be explicitly closed using {@link #close()} or try-with-resources
+     * for deterministic resource management.
      */
     @Override
     protected void finalize() throws Throwable {

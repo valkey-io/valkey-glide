@@ -16,7 +16,7 @@ import lombok.experimental.SuperBuilder;
  * AdvancedGlideClientConfiguration config = AdvancedGlideClientConfiguration.builder()
  *     .connectionTimeout(500)
  *     .build();
- *     
+ *
  * // Configuration with OpenTelemetry enabled
  * AdvancedGlideClientConfiguration configWithOtel = AdvancedGlideClientConfiguration.builder()
  *     .connectionTimeout(500)
@@ -26,7 +26,7 @@ import lombok.experimental.SuperBuilder;
  *         .flushIntervalMs(5000)
  *         .build())
  *     .build();
- *     
+ *
  * // Configuration with OpenTelemetry using file output
  * AdvancedGlideClientConfiguration configWithFileOtel = AdvancedGlideClientConfiguration.builder()
  *     .connectionTimeout(500)

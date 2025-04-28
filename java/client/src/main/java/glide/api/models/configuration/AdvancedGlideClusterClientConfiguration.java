@@ -16,7 +16,7 @@ import lombok.experimental.SuperBuilder;
  * AdvancedGlideClusterClientConfiguration config = AdvancedGlideClusterClientConfiguration.builder()
  *     .connectionTimeout(500)
  *     .build();
- *     
+ *
  * // Configuration with OpenTelemetry enabled
  * AdvancedGlideClusterClientConfiguration configWithOtel = AdvancedGlideClusterClientConfiguration.builder()
  *     .connectionTimeout(500)
@@ -26,7 +26,7 @@ import lombok.experimental.SuperBuilder;
  *         .flushIntervalMs(5000)
  *         .build())
  *     .build();
- *     
+ *
  * // Configuration with OpenTelemetry using gRPC
  * AdvancedGlideClusterClientConfiguration configWithGrpcOtel = AdvancedGlideClusterClientConfiguration.builder()
  *     .connectionTimeout(500)

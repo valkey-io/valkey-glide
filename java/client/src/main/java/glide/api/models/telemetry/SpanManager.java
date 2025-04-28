@@ -6,9 +6,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Manages OpenTelemetry spans for Valkey GLIDE operations.
- * 
- * <p>This class provides centralized management of spans, including creation,
- * tracking, and cleanup of spans associated with commands and operations.
+ *
+ * <p>This class provides centralized management of spans, including creation, tracking, and cleanup
+ * of spans associated with commands and operations.
  */
 public class SpanManager {
     private static final ConcurrentHashMap<Long, GlideSpan> activeSpans = new ConcurrentHashMap<>();
@@ -40,8 +40,8 @@ public class SpanManager {
     }
 
     /**
-     * Gets the current count of active spans.
-     * This method is primarily intended for testing and monitoring.
+     * Gets the current count of active spans. This method is primarily intended for testing and
+     * monitoring.
      *
      * @return The number of currently active spans
      */
@@ -50,8 +50,8 @@ public class SpanManager {
     }
 
     /**
-     * Closes all active spans.
-     * This method should be called during client shutdown to ensure proper cleanup.
+     * Closes all active spans. This method should be called during client shutdown to ensure proper
+     * cleanup.
      */
     public static void closeAllSpans() {
         activeSpans.values().forEach(GlideSpan::close);
