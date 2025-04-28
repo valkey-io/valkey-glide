@@ -1582,6 +1582,49 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 	return handleOkResponse(result)
 }
 
+// Returns information about the functions and libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	query - The query to use to filter the functions and libraries.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	A [ClusterValue] containing a list of info about queried libraries and their functions.
+//
+// [valkey.io]: https://valkey.io/commands/function-list/
+func (client *GlideClusterClient) FunctionListWithRoute(
+	query FunctionListQuery,
+	route options.RouteOption,
+) (ClusterValue[[]LibraryInfo], error) {
+	response, err := client.executeCommandWithRoute(C.FunctionList, query.ToArgs(), route.Route)
+	if err != nil {
+		return createEmptyClusterValue[[]LibraryInfo](), err
+	}
+
+	if route.Route != nil && route.Route.IsMultiNode() {
+		multiNodeLibs, err := handleFunctionListMultiNodeResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[[]LibraryInfo](), err
+		}
+		return createClusterMultiValue[[]LibraryInfo](multiNodeLibs), nil
+	}
+
+	libs, err := handleFunctionListResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[[]LibraryInfo](), err
+	}
+	return createClusterSingleValue[[]LibraryInfo](libs), nil
+}
+
 // Publish posts a message to the specified channel. Returns the number of clients that received the message.
 //
 // Channel can be any string, but common patterns include using "." to create namespaces like
