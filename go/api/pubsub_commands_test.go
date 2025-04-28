@@ -55,7 +55,7 @@ func ExampleGlideClusterClient_Publish() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Publish a message
-	result, err := publisher.Publish("my_channel", "Hello, World!")
+	result, err := publisher.Publish("my_channel", "Hello, World!", false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

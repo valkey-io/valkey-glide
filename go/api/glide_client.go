@@ -611,3 +611,30 @@ func (client *GlideClient) FunctionDelete(libName string) (string, error) {
 	}
 	return handleOkResponse(result)
 }
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channel - The channel to publish the message to.
+//	message - The message to publish.
+//
+// Return value:
+//
+//	The number of clients that received the message.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *GlideClient) Publish(channel string, message string) (int64, error) {
+	args := []string{channel, message}
+	result, err := client.executeCommand(C.Publish, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
