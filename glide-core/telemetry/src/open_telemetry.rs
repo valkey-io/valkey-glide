@@ -469,7 +469,9 @@ impl GlideOpenTelemetry {
 
         let trace_exporter = match trace_exporter {
             GlideOpenTelemetrySignalsExporter::File(p) => {
-                let exporter = crate::SpanExporterFile::new(p.clone());
+                let exporter = crate::SpanExporterFile::new(p.clone()).map_err(|e| {
+                    GlideOTELError::Other(format!("Failed to create traces exporter: {}", e))
+                })?;
                 build_span_exporter(batch_config, exporter)
             }
             GlideOpenTelemetrySignalsExporter::Http(url) => {

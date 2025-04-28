@@ -8,16 +8,17 @@ use opentelemetry_sdk::metrics::MetricResult;
 use opentelemetry_sdk::metrics::Temporality;
 use serde_json::{Map, Value};
 use std::any::Any;
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::result::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 /// An OpenTelemetry exporter that writes Metrics to a file on export.
 pub struct FileMetricExporter {
     is_shutdown: AtomicBool,
-    path: PathBuf,
+    file: Arc<Mutex<File>>,
 }
 
 impl FileMetricExporter {
@@ -40,10 +41,17 @@ impl FileMetricExporter {
     /// - The parent directory doesn't exist
     /// - The path points to a directory that doesn't exist
     /// - The user doesn't have write permissions for the target location
+    /// - The file cannot be opened
     pub fn new(path: PathBuf) -> Result<Self, MetricError> {
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .map_err(|err| MetricError::Other(format!("Unable to open exporter file: {err}")))?;
+
         Ok(Self {
             is_shutdown: AtomicBool::new(false),
-            path,
+            file: Arc::new(Mutex::new(file)),
         })
     }
 }
@@ -59,19 +67,17 @@ impl PushMetricExporter for FileMetricExporter {
             return Err(MetricError::Other("Exporter is shutdown".to_string()));
         }
 
-        let mut data_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .map_err(|err| MetricError::Other(format!("Unable to open exporter file: {err}")))?;
-
         let metrics_json = to_json(metrics)
             .map_err(|e| MetricError::Other(format!("Failed to serialize metrics to JSON: {e}")))?;
         let json_string = serde_json::to_string(&metrics_json)
             .map_err(|e| MetricError::Other(format!("Failed to serialize metrics to JSON: {e}")))?;
 
-        data_file
-            .write(format!("{}\n", json_string).as_bytes())
+        // Use the stored file handle for writing
+        let mut file = self
+            .file
+            .lock()
+            .map_err(|e| MetricError::Other(format!("Failed to lock file: {e}")))?;
+        writeln!(file, "{}", json_string)
             .map_err(|e| MetricError::Other(format!("File write error: {e}")))?;
 
         Ok(())
@@ -96,7 +102,7 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
     for (key, value) in metrics.resource.iter() {
         resource_attrs.insert(key.to_string(), Value::String(value.to_string()));
     }
-    root.insert("resource".to_string(), Value::Object(resource_attrs));
+    root.insert("resource".to_owned(), Value::Object(resource_attrs));
 
     // Add scope metrics
     let mut scope_metrics = Vec::new();
@@ -104,30 +110,30 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
         let mut scope = Map::new();
         let mut scope_info = Map::new();
         scope_info.insert(
-            "name".to_string(),
+            "name".to_owned(),
             Value::String(scope_metric.scope.name().to_string()),
         );
         if let Some(version) = scope_metric.scope.version() {
-            scope_info.insert("version".to_string(), Value::String(version.to_string()));
+            scope_info.insert("version".to_owned(), Value::String(version.to_string()));
         }
         if let Some(schema_url) = scope_metric.scope.schema_url() {
             scope_info.insert(
-                "schema_url".to_string(),
+                "schema_url".to_owned(),
                 Value::String(schema_url.to_string()),
             );
         }
-        scope.insert("scope".to_string(), Value::Object(scope_info));
+        scope.insert("scope".to_owned(), Value::Object(scope_info));
 
         // Add metrics
         let mut metrics = Vec::new();
         for metric in scope_metric.metrics.iter() {
             let mut metric_obj = Map::new();
-            metric_obj.insert("name".to_string(), Value::String(metric.name.to_string()));
+            metric_obj.insert("name".to_owned(), Value::String(metric.name.to_string()));
             metric_obj.insert(
-                "description".to_string(),
+                "description".to_owned(),
                 Value::String(metric.description.to_string()),
             );
-            metric_obj.insert("unit".to_string(), Value::String(metric.unit.to_string()));
+            metric_obj.insert("unit".to_owned(), Value::String(metric.unit.to_string()));
 
             // Add data points
             let mut data_points = Vec::new();
@@ -136,13 +142,13 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
             if let Some(sum) = aggregation.downcast_ref::<Sum<u64>>() {
                 for point in sum.data_points.iter() {
                     let mut dp = Map::new();
-                    dp.insert("value".to_string(), Value::Number(point.value.into()));
+                    dp.insert("value".to_owned(), Value::Number(point.value.into()));
                     let start_time = point
                         .start_time
                         .ok_or_else(|| MetricError::Other("Missing start time".to_string()))?;
                     let start_time: DateTime<Utc> = start_time.into();
                     dp.insert(
-                        "start_time".to_string(),
+                        "start_time".to_owned(),
                         Value::String(start_time.timestamp_micros().to_string()),
                     );
 
@@ -151,12 +157,12 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
                         .ok_or_else(|| MetricError::Other("Missing time".to_string()))?;
                     let time: DateTime<Utc> = time.into();
                     dp.insert(
-                        "time".to_string(),
+                        "time".to_owned(),
                         Value::String(time.timestamp_micros().to_string()),
                     );
 
                     dp.insert(
-                        "attributes".to_string(),
+                        "attributes".to_owned(),
                         attributes_to_json(&point.attributes),
                     );
                     data_points.push(Value::Object(dp));
@@ -164,18 +170,18 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
             } else if let Some(gauge) = aggregation.downcast_ref::<Gauge<f64>>() {
                 for point in gauge.data_points.iter() {
                     let mut dp = Map::new();
-                    dp.insert("value".to_string(), Value::String(point.value.to_string()));
+                    dp.insert("value".to_owned(), Value::String(point.value.to_string()));
                     let time = point
                         .time
                         .ok_or_else(|| MetricError::Other("Missing time".to_string()))?;
                     let time: DateTime<Utc> = time.into();
                     dp.insert(
-                        "time".to_string(),
+                        "time".to_owned(),
                         Value::String(time.timestamp_micros().to_string()),
                     );
 
                     dp.insert(
-                        "attributes".to_string(),
+                        "attributes".to_owned(),
                         attributes_to_json(&point.attributes),
                     );
                     data_points.push(Value::Object(dp));
@@ -183,8 +189,8 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
             } else if let Some(histogram) = aggregation.downcast_ref::<Histogram<f64>>() {
                 for point in histogram.data_points.iter() {
                     let mut dp = Map::new();
-                    dp.insert("count".to_string(), Value::Number(point.count.into()));
-                    dp.insert("sum".to_string(), Value::String(point.sum.to_string()));
+                    dp.insert("count".to_owned(), Value::Number(point.count.into()));
+                    dp.insert("sum".to_owned(), Value::String(point.sum.to_string()));
 
                     // Add bucket counts
                     let bucket_counts: Vec<Value> = point
@@ -192,7 +198,7 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
                         .iter()
                         .map(|&count| Value::Number(count.into()))
                         .collect();
-                    dp.insert("bucket_counts".to_string(), Value::Array(bucket_counts));
+                    dp.insert("bucket_counts".to_owned(), Value::Array(bucket_counts));
 
                     // Add bounds
                     let bounds: Vec<Value> = point
@@ -200,21 +206,21 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
                         .iter()
                         .map(|&bound| Value::String(bound.to_string()))
                         .collect();
-                    dp.insert("bounds".to_string(), Value::Array(bounds));
+                    dp.insert("bounds".to_owned(), Value::Array(bounds));
 
                     let start_time: DateTime<Utc> = point.start_time.into();
                     dp.insert(
-                        "start_time".to_string(),
+                        "start_time".to_owned(),
                         Value::String(start_time.timestamp_micros().to_string()),
                     );
                     let time: DateTime<Utc> = point.time.into();
                     dp.insert(
-                        "time".to_string(),
+                        "time".to_owned(),
                         Value::String(time.timestamp_micros().to_string()),
                     );
 
                     dp.insert(
-                        "attributes".to_string(),
+                        "attributes".to_owned(),
                         attributes_to_json(&point.attributes),
                     );
                     data_points.push(Value::Object(dp));
@@ -222,13 +228,13 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
             } else {
                 return Err(MetricError::Other("Unsupported metric type".to_string()));
             }
-            metric_obj.insert("data_points".to_string(), Value::Array(data_points));
+            metric_obj.insert("data_points".to_owned(), Value::Array(data_points));
             metrics.push(Value::Object(metric_obj));
         }
-        scope.insert("metrics".to_string(), Value::Array(metrics));
+        scope.insert("metrics".to_owned(), Value::Array(metrics));
         scope_metrics.push(Value::Object(scope));
     }
-    root.insert("scope_metrics".to_string(), Value::Array(scope_metrics));
+    root.insert("scope_metrics".to_owned(), Value::Array(scope_metrics));
 
     Ok(Value::Object(root))
 }

@@ -130,6 +130,9 @@ mod cluster_async {
             .with_trace_exporter(
                 GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
             )
+            .with_metrics_exporter(
+                GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
+            )
             .build();
         let result = GlideOpenTelemetry::initialise(glide_ot_config.clone());
         assert!(result.is_ok(), "Expected Ok(()), but got Err: {:?}", result);

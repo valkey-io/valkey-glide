@@ -4,10 +4,11 @@ use futures_util::future::BoxFuture;
 use opentelemetry::trace::TraceError;
 use opentelemetry_sdk::export::{self, trace::ExportResult};
 use serde_json::{Map, Value};
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic;
+use std::sync::{Arc, Mutex};
 
 use opentelemetry_sdk::resource::Resource;
 
@@ -15,7 +16,7 @@ use opentelemetry_sdk::resource::Resource;
 pub struct SpanExporterFile {
     resource: Resource,
     is_shutdown: atomic::AtomicBool,
-    path: PathBuf,
+    file: Arc<Mutex<File>>,
 }
 
 impl fmt::Debug for SpanExporterFile {
@@ -40,22 +41,29 @@ impl SpanExporterFile {
     ///   - The parent directory must exist
     ///
     /// # Errors
-    /// Returns a MetricError if:
+    /// Returns a TraceError if:
     /// - The parent directory doesn't exist
     /// - The path points to a directory that doesn't exist
     /// - The user doesn't have write permissions for the target location
-    pub fn new(path: PathBuf) -> Self {
-        SpanExporterFile {
+    /// - The file cannot be opened
+    pub fn new(path: PathBuf) -> Result<Self, TraceError> {
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .map_err(|err| TraceError::from(format!("Unable to open exporter file: {err}")))?;
+
+        Ok(Self {
             resource: Resource::default(),
             is_shutdown: atomic::AtomicBool::new(false),
-            path,
-        }
+            file: Arc::new(Mutex::new(file)),
+        })
     }
 }
 
 macro_rules! file_writeln {
     ($file:expr, $content:expr) => {{
-        if let Err(e) = $file.write(format!("{}\n", $content).as_bytes()) {
+        if let Err(e) = writeln!($file, "{}", $content) {
             return Box::pin(std::future::ready(Err(TraceError::from(format!(
                 "File write error. {e}",
             )))));
@@ -66,21 +74,25 @@ macro_rules! file_writeln {
 impl opentelemetry_sdk::export::trace::SpanExporter for SpanExporterFile {
     /// Write Spans to JSON file
     fn export(&mut self, batch: Vec<export::trace::SpanData>) -> BoxFuture<'static, ExportResult> {
-        let Ok(mut data_file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-        else {
-            return Box::pin(std::future::ready(Err(TraceError::from(format!(
-                "Unable to open exporter file: {} for append.",
-                self.path.display()
-            )))));
-        };
+        if self.is_shutdown.load(atomic::Ordering::SeqCst) {
+            return Box::pin(std::future::ready(Err(TraceError::from(
+                "Exporter is shutdown",
+            ))));
+        }
 
         let spans = to_jsons(batch);
+        let mut file = match self.file.lock() {
+            Ok(file) => file,
+            Err(e) => {
+                return Box::pin(std::future::ready(Err(TraceError::from(format!(
+                    "Failed to lock file: {e}"
+                )))))
+            }
+        };
+
         for span in &spans {
             if let Ok(s) = serde_json::to_string(&span) {
-                file_writeln!(data_file, s);
+                file_writeln!(file, s);
             }
         }
         Box::pin(std::future::ready(Ok(())))
@@ -100,15 +112,15 @@ fn to_jsons(batch: Vec<export::trace::SpanData>) -> Vec<Value> {
     for span in &batch {
         let mut map = Map::new();
         map.insert(
-            "scope".to_string(),
+            "scope".to_owned(),
             Value::String(span.instrumentation_scope.name().to_string()),
         );
         if let Some(version) = &span.instrumentation_scope.version() {
-            map.insert("version".to_string(), Value::String(version.to_string()));
+            map.insert("version".to_owned(), Value::String(version.to_string()));
         }
         if let Some(schema_url) = &span.instrumentation_scope.schema_url() {
             map.insert(
-                "schema_url".to_string(),
+                "schema_url".to_owned(),
                 Value::String(schema_url.to_string()),
             );
         }
@@ -120,41 +132,41 @@ fn to_jsons(batch: Vec<export::trace::SpanData>) -> Vec<Value> {
             scope_attributes.push(Value::Object(attr));
         }
         map.insert(
-            "scope_attributes".to_string(),
+            "scope_attributes".to_owned(),
             Value::Array(scope_attributes),
         );
-        map.insert("name".to_string(), Value::String(span.name.to_string()));
+        map.insert("name".to_owned(), Value::String(span.name.to_string()));
         map.insert(
-            "span_id".to_string(),
+            "span_id".to_owned(),
             Value::String(span.span_context.span_id().to_string()),
         );
         map.insert(
-            "parent_span_id".to_string(),
+            "parent_span_id".to_owned(),
             Value::String(span.parent_span_id.to_string()),
         );
         map.insert(
-            "trace_id".to_string(),
+            "trace_id".to_owned(),
             Value::String(span.span_context.trace_id().to_string()),
         );
         map.insert(
-            "kind".to_string(),
+            "kind".to_owned(),
             Value::String(format!("{:?}", span.span_kind)),
         );
 
         let datetime: DateTime<Utc> = span.start_time.into();
         map.insert(
-            "start_time".to_string(),
+            "start_time".to_owned(),
             Value::String(datetime.timestamp_micros().to_string()),
         );
 
         let datetime: DateTime<Utc> = span.end_time.into();
         map.insert(
-            "end_time".to_string(),
+            "end_time".to_owned(),
             Value::String(datetime.timestamp_micros().to_string()),
         );
 
         map.insert(
-            "status".to_string(),
+            "status".to_owned(),
             Value::String(format!("{:?}", span.status)),
         );
 
@@ -165,16 +177,16 @@ fn to_jsons(batch: Vec<export::trace::SpanData>) -> Vec<Value> {
             attr.insert(kv.key.to_string(), Value::String(kv.value.to_string()));
             span_attributes.push(Value::Object(attr));
         }
-        map.insert("span_attributes".to_string(), Value::Array(span_attributes));
+        map.insert("span_attributes".to_owned(), Value::Array(span_attributes));
 
         // Add span events
         let mut events = Vec::<Value>::new();
         for event in span.events.iter() {
             let mut evt = Map::new();
-            evt.insert("name".to_string(), Value::String(event.name.to_string()));
+            evt.insert("name".to_owned(), Value::String(event.name.to_string()));
             let datetime: DateTime<Utc> = event.timestamp.into();
             evt.insert(
-                "timestamp".to_string(),
+                "timestamp".to_owned(),
                 Value::String(datetime.format("%Y-%m-%d %H:%M:%S%.6f").to_string()),
             );
 
@@ -185,27 +197,27 @@ fn to_jsons(batch: Vec<export::trace::SpanData>) -> Vec<Value> {
                 event_attributes.push(Value::Object(attr));
             }
             evt.insert(
-                "event_attributes".to_string(),
+                "event_attributes".to_owned(),
                 Value::Array(event_attributes),
             );
             events.push(Value::Object(evt));
         }
-        map.insert("events".to_string(), Value::Array(events));
+        map.insert("events".to_owned(), Value::Array(events));
 
         let mut links = Vec::<Value>::new();
         for link in span.links.iter() {
             let mut lk = Map::new();
             lk.insert(
-                "trace_id".to_string(),
+                "trace_id".to_owned(),
                 Value::String(link.span_context.trace_id().to_string()),
             );
             lk.insert(
-                "span_id".to_string(),
+                "span_id".to_owned(),
                 Value::String(link.span_context.span_id().to_string()),
             );
             links.push(Value::Object(lk));
         }
-        map.insert("links".to_string(), Value::Array(links));
+        map.insert("links".to_owned(), Value::Array(links));
         spans.push(Value::Object(map));
     }
     spans
