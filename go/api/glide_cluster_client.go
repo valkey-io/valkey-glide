@@ -1659,3 +1659,51 @@ func (client *GlideClusterClient) Publish(channel string, message string, sharde
 
 	return handleIntResponse(result)
 }
+
+// PubSubShardChannels returns a list of all shard channels.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	A list of shard channels.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-channels
+func (client *GlideClusterClient) PubSubShardChannels() ([]string, error) {
+	result, err := client.executeCommand(C.PubSubShardChannels, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// PubSubShardChannelsWithPattern returns a list of all shard channels that match the given pattern.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	pattern - A glob-style pattern to match active shard channels.
+//
+// Return value:
+//
+//	A list of shard channels that match the given pattern.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-channels-with-pattern
+func (client *GlideClusterClient) PubSubShardChannelsWithPattern(pattern string) ([]string, error) {
+	result, err := client.executeCommand(C.PubSubShardChannels, []string{pattern})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
