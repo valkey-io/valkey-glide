@@ -1187,6 +1187,12 @@ export class BaseClient {
         raiseOnError = false,
         options: ClusterBatchOptions | BatchOptions = {},
     ) {
+        if ("retryStrategy" in options && isAtomic) {
+            throw new RequestError(
+                "Retry strategy is not supported for atomic batches.",
+            );
+        }
+
         const isBatch = Array.isArray(command);
 
         const isClusterOptions = (
@@ -1241,7 +1247,7 @@ export class BaseClient {
         this.writeBufferedRequestsToSocket();
     }
 
-    // Define a common function to process the result of a transaction with set commands
+    // Define a common function to process the result of a batch with set commands
     /**
      * @internal
      */
@@ -1254,6 +1260,10 @@ export class BaseClient {
         }
 
         for (const index of setCommandsIndexes) {
+            if (result[index] instanceof RequestError) {
+                continue;
+            }
+
             result[index] = new Set<GlideReturnType>(
                 result[index] as GlideReturnType[],
             );
@@ -7348,14 +7358,14 @@ export class BaseClient {
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
      * console.log(response); // Output: "OK"
-     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * const transaction = new Batch(true).set("SampleKey", "foobar");
      * const result = await client.exec(transaction);
      * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
      * ```
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
      * console.log(response); // Output: "OK"
-     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * const transaction = new Batch(true).set("SampleKey", "foobar");
      * await client.set("sampleKey", "hello world");
      * const result = await client.exec(transaction);
      * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
