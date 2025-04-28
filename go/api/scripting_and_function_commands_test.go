@@ -844,9 +844,6 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 			fmt.Printf("  Library: %s\n", lib.Name)
 			fmt.Printf("  Engine: %s\n", lib.Engine)
 			fmt.Printf("  Functions: %d\n", len(lib.Functions))
-			if lib.Code != "" {
-				fmt.Printf("  Code: %s\n", lib.Code)
-			}
 		}
 		break
 	}
@@ -856,8 +853,4 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 	//   Library: mylib
 	//   Engine: LUA
 	//   Functions: 1
-	//   Code: #!lua name=mylib
-	// redis.register_function{ function_name = 'myfunc',
-	//   callback = function(keys, args) return 42 end,
-	//   flags = { 'no-writes' } }
 }
