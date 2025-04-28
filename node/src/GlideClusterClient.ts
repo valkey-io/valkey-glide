@@ -788,6 +788,8 @@ export class GlideClusterClient extends BaseClient {
      *
      * - **Atomic Batches (Transactions):** All key-based commands must map to the same hash slot. If keys span different slots, the transaction will fail. If the transaction fails due to a `WATCH` command, `exec` will return `null`.
      *
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
+     *
      * **Retry and Redirection:**
      *
      * - If a redirection error occurs:

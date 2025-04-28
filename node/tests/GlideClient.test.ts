@@ -387,7 +387,7 @@ describe("GlideClient", () => {
         [ProtocolVersion.RESP3, true],
         [ProtocolVersion.RESP3, false],
     ])(
-        `can send transaction with default bytes decoder_%p with isAtomic=%p`,
+        `can send batch with default bytes decoder_%p with isAtomic=%p`,
         async (protocol, isAtomic) => {
             const clientConfig = getClientConfigurationOption(
                 cluster.getAddresses(),
@@ -439,7 +439,7 @@ describe("GlideClient", () => {
         [ProtocolVersion.RESP3, true],
         [ProtocolVersion.RESP3, false],
     ])(
-        "object freq transaction test_%p with isAtomic=%p",
+        "object freq batch test_%p with isAtomic=%p",
         async (protocol, isAtomic) => {
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -485,7 +485,7 @@ describe("GlideClient", () => {
         [ProtocolVersion.RESP3, true],
         [ProtocolVersion.RESP3, false],
     ])(
-        "object idletime transaction test_%p with isAtomic=%p",
+        "object idletime batch test_%p with isAtomic=%p",
         async (protocol, isAtomic) => {
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),

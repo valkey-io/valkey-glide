@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BaseClient,
     BaseClientConfiguration,
+    Batch,
     BitFieldGet,
     BitFieldSet,
     BitOffset,
@@ -17,7 +18,6 @@ import {
     BitmapIndexType,
     BitwiseOperation,
     ClusterBatch,
-    ClusterTransaction,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -39,7 +39,6 @@ import {
     SignedEncoding,
     SortOrder,
     TimeUnit,
-    Transaction,
     UnsignedEncoding,
     convertRecordToGlideRecord,
 } from "..";
@@ -668,8 +667,7 @@ export function validateBatchResponse(
 
     if (failedChecks.length > 0) {
         throw new Error(
-            "Checks failed in transaction response:\n" +
-                failedChecks.join("\n"),
+            "Checks failed in batch response:\n" + failedChecks.join("\n"),
         );
     }
 }
@@ -681,7 +679,7 @@ export function validateBatchResponse(
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
  */
 export async function encodableBatchTest(
-    baseBatch: Transaction | ClusterTransaction,
+    baseBatch: Batch | ClusterBatch,
     valueEncodedResponse: GlideReturnType,
 ): Promise<[string, GlideReturnType][]> {
     const key = "{key}" + uuidv4(); // string
@@ -698,12 +696,12 @@ export async function encodableBatchTest(
 }
 
 /**
- * Populates a transaction with commands to test the decoded response.
- * @param baseTransaction - A transaction.
+ * Populates a batch with commands to test the decoded response.
+ * @param baseBatch - A batch.
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
  */
-export async function encodedTransactionTest(
-    baseTransaction: Transaction | ClusterTransaction,
+export async function encodedBatchTest(
+    baseBatch: Batch | ClusterBatch,
 ): Promise<[string, GlideReturnType][]> {
     const key1 = "{key}" + uuidv4(); // string
     const key2 = "{key}" + uuidv4(); // string
@@ -716,29 +714,29 @@ export async function encodedTransactionTest(
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, GlideReturnType][] = [];
 
-    baseTransaction.set(key1, value);
+    baseBatch.set(key1, value);
     responseData.push(["set(key1, value)", "OK"]);
-    baseTransaction.set(key2, value);
+    baseBatch.set(key2, value);
     responseData.push(["set(key2, value)", "OK"]);
-    baseTransaction.get(key1);
+    baseBatch.get(key1);
     responseData.push(["get(key1)", valueEncoded]);
-    baseTransaction.get(key2);
+    baseBatch.get(key2);
     responseData.push(["get(key2)", valueEncoded]);
 
-    baseTransaction.set(key, value);
+    baseBatch.set(key, value);
     responseData.push(["set(key, value)", "OK"]);
-    baseTransaction.customCommand(["DUMP", key]);
+    baseBatch.customCommand(["DUMP", key]);
     responseData.push(['customCommand(["DUMP", key])', dumpResult]);
-    baseTransaction.del([key]);
+    baseBatch.del([key]);
     responseData.push(["del(key)", 1]);
-    baseTransaction.get(key);
+    baseBatch.get(key);
     responseData.push(["get(key)", null]);
-    baseTransaction.customCommand(["RESTORE", key, "0", dumpResult]);
+    baseBatch.customCommand(["RESTORE", key, "0", dumpResult]);
     responseData.push([
         'customCommand(["RESTORE", key, "0", dumpResult])',
         "OK",
     ]);
-    baseTransaction.get(key);
+    baseBatch.get(key);
     responseData.push(["get(key)", valueEncoded]);
 
     return responseData;
@@ -761,7 +759,7 @@ function decodeString(str: string, decoder: Decoder): GlideString {
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
  */
 export async function batchTest(
-    baseBatch: Transaction | ClusterTransaction,
+    baseBatch: Batch | ClusterBatch,
     cluster: ValkeyCluster,
     decoder: Decoder,
 ): Promise<[string, GlideReturnType][]> {
@@ -1996,7 +1994,7 @@ export async function batchTest(
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
  */
 export async function JsonBatchForArrCommands(
-    baseBatch: ClusterTransaction,
+    baseBatch: ClusterBatch,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
     const key = "{key}:1" + uuidv4();
@@ -2083,71 +2081,71 @@ export async function JsonBatchForArrCommands(
 }
 
 export async function CreateJsonBatchCommands(
-    baseTransaction: ClusterTransaction,
+    baseBatch: ClusterBatch,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
     const key = "{key}:1" + uuidv4();
     const jsonValue = { a: [1, 2], b: [3, 4], c: "c", d: true };
 
     // JSON.SET to create a key for testing commands.
-    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    JsonBatch.set(baseBatch, key, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key, "$")', "OK"]);
 
     // JSON.DEBUG MEMORY
-    JsonBatch.debugMemory(baseTransaction, key, { path: "$.a" });
+    JsonBatch.debugMemory(baseBatch, key, { path: "$.a" });
     responseData.push(['debugMemory(key, "{ path: "$.a" }")', [48]]);
 
     // JSON.DEBUG FIELDS
-    JsonBatch.debugFields(baseTransaction, key, { path: "$.a" });
+    JsonBatch.debugFields(baseBatch, key, { path: "$.a" });
     responseData.push(['debugFields(key, "{ path: "$.a" }")', [2]]);
 
     // JSON.OBJLEN
-    JsonBatch.objlen(baseTransaction, key, { path: "." });
+    JsonBatch.objlen(baseBatch, key, { path: "." });
     responseData.push(["objlen(key)", 4]);
 
     // JSON.OBJKEY
-    JsonBatch.objkeys(baseTransaction, key, { path: "." });
+    JsonBatch.objkeys(baseBatch, key, { path: "." });
     responseData.push(['objkeys(key, "$.")', ["a", "b", "c", "d"]]);
 
     // JSON.NUMINCRBY
-    JsonBatch.numincrby(baseTransaction, key, "$.a[*]", 10.0);
+    JsonBatch.numincrby(baseBatch, key, "$.a[*]", 10.0);
     responseData.push(['numincrby(key, "$.a[*]", 10.0)', "[11,12]"]);
 
     // JSON.NUMMULTBY
-    JsonBatch.nummultby(baseTransaction, key, "$.a[*]", 10.0);
+    JsonBatch.nummultby(baseBatch, key, "$.a[*]", 10.0);
     responseData.push(['nummultby(key, "$.a[*]", 10.0)', "[110,120]"]);
 
     // // JSON.STRAPPEND
-    JsonBatch.strappend(baseTransaction, key, '"-test"', { path: "$.c" });
+    JsonBatch.strappend(baseBatch, key, '"-test"', { path: "$.c" });
     responseData.push(['strappend(key, \'"-test"\', "$.c")', [6]]);
 
     // // JSON.STRLEN
-    JsonBatch.strlen(baseTransaction, key, { path: "$.c" });
+    JsonBatch.strlen(baseBatch, key, { path: "$.c" });
     responseData.push(['strlen(key, "$.c")', [6]]);
 
     // JSON.TYPE
-    JsonBatch.type(baseTransaction, key, { path: "$.a" });
+    JsonBatch.type(baseBatch, key, { path: "$.a" });
     responseData.push(['type(key, "$.a")', ["array"]]);
 
     // JSON.MGET
     const key2 = "{key}:2" + uuidv4();
     const key3 = "{key}:3" + uuidv4();
     const jsonValue2 = { b: [3, 4], c: "c", d: true };
-    JsonBatch.set(baseTransaction, key2, "$", JSON.stringify(jsonValue2));
+    JsonBatch.set(baseBatch, key2, "$", JSON.stringify(jsonValue2));
     responseData.push(['set(key2, "$")', "OK"]);
 
-    JsonBatch.mget(baseTransaction, [key, key2, key3], "$.a");
+    JsonBatch.mget(baseBatch, [key, key2, key3], "$.a");
     responseData.push([
         'json.mget([key, key2, key3], "$.a")',
         ["[[110,120]]", "[]", null],
     ]);
 
     // JSON.TOGGLE
-    JsonBatch.toggle(baseTransaction, key, { path: "$.d" });
+    JsonBatch.toggle(baseBatch, key, { path: "$.d" });
     responseData.push(['toggle(key2, "$.d")', [false]]);
 
     // JSON.RESP
-    JsonBatch.resp(baseTransaction, key, { path: "$" });
+    JsonBatch.resp(baseBatch, key, { path: "$" });
     responseData.push([
         'resp(key, "$")',
         [
@@ -2162,11 +2160,11 @@ export async function CreateJsonBatchCommands(
     ]);
 
     // JSON.DEL
-    JsonBatch.del(baseTransaction, key, { path: "$.d" });
+    JsonBatch.del(baseBatch, key, { path: "$.d" });
     responseData.push(['del(key, { path: "$.d" })', 1]);
 
     // JSON.FORGET
-    JsonBatch.forget(baseTransaction, key, { path: "$.c" });
+    JsonBatch.forget(baseBatch, key, { path: "$.c" });
     responseData.push(['forget(key, {path: "$.c" })', 1]);
 
     return responseData;

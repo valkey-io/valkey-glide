@@ -2314,7 +2314,7 @@ describe("Server Module Tests", () => {
             });
 
             it.each([true, false])(
-                "can send JsonBatch transactions for ARR commands with isAtomic=%s",
+                "can send JsonBatch batches for ARR commands with isAtomic=%s",
                 async (isAtomic) => {
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -2332,7 +2332,7 @@ describe("Server Module Tests", () => {
             );
 
             it.each([true, false])(
-                "can send JsonBatch transactions general commands with isAtomic=%s",
+                "can send JsonBatch batches general commands with isAtomic=%s",
                 async (isAtomic) => {
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(

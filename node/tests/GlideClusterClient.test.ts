@@ -2273,6 +2273,112 @@ describe("GlideClusterClient", () => {
         },
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should handle crosslot pipeline using protocol %p",
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 2000,
+                }),
+            );
+
+            try {
+                const pipeline = new ClusterBatch(false);
+                pipeline.set("abc", "value");
+                pipeline.get("xyz");
+                const results = await client.exec(pipeline, true);
+
+                expect(results).toEqual(["OK", null]);
+            } finally {
+                client.close();
+            }
+        },
+    );
+
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        "should handle route batch using protocol %p and isAtomic=%p",
+        async (protocol, isAtomic) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 2000,
+                }),
+            );
+
+            try {
+                expect(await client.configResetStat()).toEqual("OK");
+                const key = uuidv4();
+                const pipeline = new ClusterBatch(isAtomic);
+                pipeline.set(key, "value");
+                pipeline.get(key);
+                const results = await client.exec(pipeline, true, {
+                    route: { type: "primarySlotKey", key: key },
+                });
+
+                expect(results).toEqual(["OK", "value"]);
+
+                // Check that no MOVED error occurred
+                const errorStats = (await client.info({
+                    sections: [InfoOptions.Errorstats],
+                    route: "allNodes",
+                })) as Record<string, string>;
+
+                for (const infoStr of Object.values(errorStats)) {
+                    expect(infoStr).toBe("# Errorstats\r\n");
+                }
+            } finally {
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "batch with retry configurations using protocol %p",
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 2000,
+                }),
+            );
+
+            try {
+                expect(await client.configResetStat()).toEqual("OK");
+                const key = uuidv4();
+                const transaction = new ClusterBatch(true);
+                transaction.set(key, "value");
+                transaction.get(key);
+                await expect(
+                    client.exec(transaction, true, {
+                        retryStrategy: {
+                            retryConnectionError: true,
+                            retryServerError: true,
+                        },
+                    }),
+                ).rejects.toThrow(
+                    "Retry strategy is not supported for atomic batches.",
+                );
+
+                const pipeline = new ClusterBatch(false);
+                pipeline.set(key, "value");
+                pipeline.get(key);
+                expect(
+                    await client.exec(pipeline, true, {
+                        retryStrategy: {
+                            retryConnectionError: true,
+                            retryServerError: true,
+                        },
+                    }),
+                ).toEqual(["OK", "value"]);
+            } finally {
+                client.close();
+            }
+        },
+    );
+
     describe("AZAffinity Read Strategy Tests", () => {
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "should route GET commands to all replicas with the same AZ using protocol %p",

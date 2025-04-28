@@ -22,6 +22,7 @@ import {
     BitmapIndexType,
     BitwiseOperation,
     ClusterBatch,
+    ClusterTransaction,
     ConditionalChange,
     Decoder,
     ElementAndScore,
@@ -50,6 +51,7 @@ import {
     SortedSetDataType,
     TimeUnit,
     TimeoutError,
+    Transaction,
     UnsignedEncoding,
     UpdateByScore,
     convertElementsAndScores,
@@ -12666,6 +12668,31 @@ export function runCommonTests(config: {
                 }
 
                 await Promise.all(operations);
+            });
+        },
+        config.timeout,
+    );
+
+    it(
+        "test deprecated transaction",
+        async () => {
+            await runTest(async (client: Client) => {
+                const clusterMode = client instanceof GlideClusterClient;
+                const key = uuidv4();
+                const batch = clusterMode
+                    ? new ClusterTransaction()
+                    : new Transaction();
+                batch.set(key, "hello").get(key);
+
+                const result = clusterMode
+                    ? await client.exec(batch as ClusterTransaction, true)
+                    : await (client as GlideClient).exec(
+                          batch as Transaction,
+                          true,
+                      );
+                expect(result?.length).toBe(2);
+                expect(result?.[0]).toBe("OK");
+                expect(result?.[1]).toBe("hello");
             });
         },
         config.timeout,

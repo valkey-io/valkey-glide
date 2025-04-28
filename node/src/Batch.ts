@@ -293,7 +293,7 @@ class BaseBatch<T extends BaseBatch<T>> {
      */
     readonly commands: command_request.Command[] = [];
     /**
-     * Array of command indexes indicating commands that need to be converted into a `Set` within the transaction.
+     * Array of command indexes indicating commands that need to be converted into a `Set` within the batch.
      * @internal
      */
     readonly setCommandsIndexes: number[] = [];
@@ -306,17 +306,17 @@ class BaseBatch<T extends BaseBatch<T>> {
     constructor(public readonly isAtomic: boolean) {}
 
     /**
-     * Adds a command to the transaction and returns the transaction instance.
+     * Adds a command to the batch and returns the batch instance.
      * @param command - The command to add.
      * @param shouldConvertToSet - Indicates if the command should be converted to a `Set`.
-     * @returns The updated transaction instance.
+     * @returns The updated batch instance.
      */
     protected addAndReturn(
         command: command_request.Command,
         shouldConvertToSet = false,
     ): T {
         if (shouldConvertToSet) {
-            // The command's index within the transaction is saved for later conversion of its response to a Set type.
+            // The command's index within the batch is saved for later conversion of its response to a Set type.
             this.setCommandsIndexes.push(this.commands.length);
         }
 
@@ -448,7 +448,7 @@ class BaseBatch<T extends BaseBatch<T>> {
      * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
      *
      * @see {@link https://valkey.io/commands/dump/|valkey.io} for details.
-     * @remarks To execute a transaction with a `dump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     * @remarks To execute a batch with a `dump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
      *
      * @param key - The `key` to serialize.
      *
@@ -482,7 +482,7 @@ class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Gets the name of the connection on which the transaction is being executed.
+     * Gets the name of the connection on which the batch is being executed.
      *
      * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for details.
      *
@@ -497,7 +497,7 @@ class BaseBatch<T extends BaseBatch<T>> {
      *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
-     * Command Response - "OK" when the configuration was rewritten properly. Otherwise, the transaction fails with an error.
+     * Command Response - "OK" when the configuration was rewritten properly. Otherwise, the command fails with an error.
      */
     public configRewrite(): T {
         return this.addAndReturn(createConfigRewrite());
@@ -772,7 +772,7 @@ class BaseBatch<T extends BaseBatch<T>> {
      *
      * @param parameters - A map consisting of configuration parameters and their respective values to set.
      *
-     * Command Response - "OK" when the configuration was set properly. Otherwise, the transaction fails with an error.
+     * Command Response - "OK" when the configuration was set properly. Otherwise, the command fails with an error.
      */
     public configSet(parameters: Record<string, GlideString>): T {
         return this.addAndReturn(createConfigSet(parameters));
@@ -3397,7 +3397,7 @@ class BaseBatch<T extends BaseBatch<T>> {
      *
      * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
-     * @remarks To execute a transaction with a `functionDump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     * @remarks To execute a batch with a `functionDump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
      *
      * Command Response - The serialized payload of all loaded libraries.
      */
