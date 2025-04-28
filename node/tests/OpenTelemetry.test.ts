@@ -82,12 +82,12 @@ describe("OpenTelemetry GlideClusterClient", () => {
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
-                true,
-                parseEndpoints(clusterAddresses),
-                getServerVersion,
-            )
+                  true,
+                  parseEndpoints(clusterAddresses),
+                  getServerVersion,
+              )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-            await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+              await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, 40000);
 
     afterEach(async () => {
@@ -503,16 +503,16 @@ describe("OpenTelemetry GlideClient", () => {
         const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
         cluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
-                false,
-                parseEndpoints(standaloneAddresses),
-                getServerVersion,
-            )
+                  false,
+                  parseEndpoints(standaloneAddresses),
+                  getServerVersion,
+              )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 20000);
 
-    // afterEach(async () => {
-    //     await flushAndCloseClient(false, cluster.getAddresses(), client);
-    // });
+    afterEach(async () => {
+        await flushAndCloseClient(false, cluster.getAddresses(), client);
+    });
 
     afterAll(async () => {
         if (testsFailed === 0) {

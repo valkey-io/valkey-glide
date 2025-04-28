@@ -957,7 +957,7 @@ export class BaseClient {
                 if (split.length !== 2) {
                     throw new RequestError(
                         "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                        host,
+                            host,
                     );
                 }
 
@@ -971,7 +971,7 @@ export class BaseClient {
         }
     }
 
-    private dropCommandSpan(spanPtr: number | ProtoLong | null | undefined) {
+    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
         if (spanPtr === null || spanPtr === undefined) return;
 
         if (typeof spanPtr === "number") {
@@ -1213,21 +1213,21 @@ export class BaseClient {
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
-                callbackIdx,
-                batch: command_request.Batch.create({
-                    isAtomic: true,
-                    commands: command,
-                    // TODO: add support for timeout, raiseOnError and retryStrategy
-                }),
-                route,
-                rootSpanPtr: commandSpanPtr,
-            })
+                  callbackIdx,
+                  batch: command_request.Batch.create({
+                      isAtomic: true,
+                      commands: command,
+                      // TODO: add support for timeout, raiseOnError and retryStrategy
+                  }),
+                  route,
+                  rootSpanPtr: commandSpanPtr,
+              })
             : command_request.CommandRequest.create({
-                callbackIdx,
-                singleCommand: command,
-                route,
-                rootSpanPtr: commandSpanPtr,
-            });
+                  callbackIdx,
+                  singleCommand: command,
+                  route,
+                  rootSpanPtr: commandSpanPtr,
+              });
 
         this.writeOrBufferRequest(
             message,
@@ -6172,12 +6172,12 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-            primary: connection_request.ReadFrom.Primary,
-            preferReplica: connection_request.ReadFrom.PreferReplica,
-            AZAffinity: connection_request.ReadFrom.AZAffinity,
-            AZAffinityReplicasAndPrimary:
-                connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
-        };
+        primary: connection_request.ReadFrom.Primary,
+        preferReplica: connection_request.ReadFrom.PreferReplica,
+        AZAffinity: connection_request.ReadFrom.AZAffinity,
+        AZAffinityReplicasAndPrimary:
+            connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
+    };
 
     /**
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
@@ -7486,8 +7486,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                    return { key: r.key, elements: r.value };
-                })[0],
+                      return { key: r.key, elements: r.value };
+                  })[0],
         );
     }
 
@@ -7529,8 +7529,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                    return { key: r.key, elements: r.value };
-                })[0],
+                      return { key: r.key, elements: r.value };
+                  })[0],
         );
     }
 
@@ -7737,11 +7737,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-                "password" in options.credentials
+            "password" in options.credentials
                 ? {
-                    password: options.credentials.password,
-                    username: options.credentials.username,
-                }
+                      password: options.credentials.password,
+                      username: options.credentials.username,
+                  }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
