@@ -2,14 +2,7 @@
 
 import threading
 from abc import ABC
-from typing import (
-    List,
-    Mapping,
-    Optional,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
 from deprecated import deprecated
 from glide.async_commands.bitmap import (
@@ -1450,7 +1443,7 @@ class BaseBatch(ABC):
         """
         Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
 
-        See [valkey.io](https://valkey-io.github.io/commands/spop/) for more details.
+        See [valkey.io](https://valkey.io/commands/spop/) for more details.
 
         To pop a single member, see `spop`.
 
