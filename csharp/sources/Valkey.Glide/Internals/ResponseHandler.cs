@@ -2,6 +2,8 @@
 
 using System.Runtime.InteropServices;
 
+using static Valkey.Glide.Errors;
+
 namespace Valkey.Glide.Internals;
 
 internal class ResponseHandler
@@ -76,8 +78,8 @@ internal class ResponseHandler
         ValueType.Array => CreateArray(value),
         ValueType.Map => CreateMap(value),
         ValueType.Set => CreateArray(value).ToHashSet(),
-        ValueType.OK => new GlideString("OK"), //  TODO changed to "OK" in another PR
-        ValueType.Error => new Exception(CreateString(value)), // TODO RequestException from https://github.com/valkey-io/valkey-glide/pull/3411
+        ValueType.OK => "OK",
+        ValueType.Error => new RequestException(CreateString(value)!),
         _ => throw new NotImplementedException(),
     };
 }
