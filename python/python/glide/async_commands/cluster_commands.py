@@ -102,29 +102,28 @@ class ClusterCommands(CoreCommands):
 
         **Routing Behavior:**
 
-        *   If a `route` is specified:
-            *   The entire batch is sent to the specified node.
-        *   If no `route` is specified:
-            *   **Atomic batches (Transactions):** Routed to the slot owner of the first key in the batch.
-                If no key is found, the request is sent to a random node.
-            *   **Non-atomic batches (Pipelines):** Each command is routed to the node owning the corresponding
-                key's slot. If no key is present, routing follows the command's default request policy.
-                Multi-node commands are automatically split and dispatched to the appropriate nodes.
+            *   If a `route` is specified:
+                *   The entire batch is sent to the specified node.
+            *   If no `route` is specified:
+                *   **Atomic batches (Transactions):** Routed to the slot owner of the first key in the batch.
+                    If no key is found, the request is sent to a random node.
+                *   **Non-atomic batches (Pipelines):** Each command is routed to the node owning the corresponding
+                    key's slot. If no key is present, routing follows the command's default request policy.
+                    Multi-node commands are automatically split and dispatched to the appropriate nodes.
 
         **Behavior notes:**
 
-        *   **Atomic Batches (Transactions):** All key-based commands must map to the same hash slot.
-            If keys span different slots, the transaction will fail. If the transaction fails due to a
-            `WATCH` command, `exec` will return `None`.
+            *   **Atomic Batches (Transactions):** All key-based commands must map to the same hash slot.
+                If keys span different slots, the transaction will fail. If the transaction fails due to a
+                `WATCH` command, `exec` will return `None`.
 
         **Retry and Redirection:**
 
-        *   If a redirection error occurs:
-            *   **Atomic batches (Transactions):** The entire transaction will be redirected.
-            *   **Non-atomic batches:** Only commands that encountered redirection errors will be redirected.
-        *   Retries for failures will be handled according to the `retry_server_error` and
-            `retry_connection_error` parameters.
-
+            *   If a redirection error occurs:
+                *   **Atomic batches (Transactions):** The entire transaction will be redirected.
+                *   **Non-atomic batches:** Only commands that encountered redirection errors will be redirected.
+            *   Retries for failures will be handled according to the `retry_server_error` and
+                `retry_connection_error` parameters.
 
         Args:
             batch (ClusterBatch): A `ClusterBatch` object containing a list of commands to be executed.

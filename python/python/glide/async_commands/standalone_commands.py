@@ -78,8 +78,8 @@ class StandaloneCommands(CoreCommands):
         [valkey.io](https://valkey.io/docs/topics/pipelining/) for details.
 
 
-         Args:
-            batch (ClusterBatch): A `ClusterBatch` object containing a list of commands to be executed.
+        Args:
+            batch (Batch): A `Batch` object containing a list of commands to be executed.
             raise_on_error (bool): Determines how errors are handled within the batch response.
                 When set to `True`, the first encountered error in the batch will be raised as a
                 `RequestError` exception after all retries and reconnections have been executed.
