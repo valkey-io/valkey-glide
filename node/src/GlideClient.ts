@@ -704,7 +704,7 @@ export class GlideClient extends BaseClient {
      * @example
      * ```typescript
      * const code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * const result = await client.functionLoad(code, true);
+     * const result = await client.functionLoad(code, { replace: true });
      * console.log(result); // Output: 'mylib'
      * ```
      */
