@@ -262,7 +262,7 @@ class TestFt:
         # Search the index for string inputs.
         result1 = await ft.search(
             client=glide_client,
-            index=json_index,
+            index_name=json_index,
             query="*",
             options=ft_search_options,
         )
