@@ -37,6 +37,8 @@ const (
 	MinIdKeyword        string = "MINID"
 	GroupKeyword        string = "GROUP"
 	StreamsKeyword      string = "STREAMS"
+	WithCodeKeyword     string = "WITHCODE"
+	LibraryNameKeyword  string = "LIBRARYNAME"
 )
 
 type InfBoundary string

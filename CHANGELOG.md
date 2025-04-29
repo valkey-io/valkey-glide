@@ -52,6 +52,9 @@
 * Go: Add `Publish` ([#3417](https://github.com/valkey-io/valkey-glide/pull/3417))
 * Go: Add `PubSubChannels` ([#3665](https://github.com/valkey-io/valkey-glide/pull/3665))
 * Go: Add `PubSubNumPat` ([#3666](https://github.com/valkey-io/valkey-glide/pull/3666))
+* Go: Add `PubSubNumSub` ([#3667](https://github.com/valkey-io/valkey-glide/pull/3667))
+* Go: Add `Sharded Publish` ([#3692](https://github.com/valkey-io/valkey-glide/pull/3692))
+* Go: Add `PubSub ShardChannels` ([#](https://github.com/valkey-io/valkey-glide/pull/))
 * Go: Add `Config Rewrite` ([#3156](https://github.com/valkey-io/valkey-glide/pull/3156))
 * Go: Add `Random Key` ([#3358](https://github.com/valkey-io/valkey-glide/pull/3358))
 * Go: Add Function Load, Function Flush, FCall and FCall_RO ([#3474](https://github.com/valkey-io/valkey-glide/pull/3474))
@@ -62,6 +65,7 @@
 * Go: Add Function Kill ([#3604](https://github.com/valkey-io/valkey-glide/pull/3604))
 * Benchmarks: Fix rust benchmark latencies calculation
 * Python: Moved the tests folder to be under the root folder ([#3661](https://github.com/valkey-io/valkey-glide/pull/3661))
+* Go: Add Function List ([#3673](https://github.com/valkey-io/valkey-glide/pull/3673))
 
 #### Breaking Changes
 
