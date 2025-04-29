@@ -23,6 +23,8 @@ type PubSubStandaloneCommands interface {
 type PubSubClusterCommands interface {
 	// Publish publishes a message to a channel. Returns the number of clients that received the message.
 	Publish(channel string, message string, sharded bool) (int64, error)
+	PubSubShardChannels() ([]string, error)
+	PubSubShardChannelsWithPattern(pattern string) ([]string, error)
 }
 
 type PubSubHandler interface {

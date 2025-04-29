@@ -19,6 +19,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 		channelNames  []string
 		pattern       string
 		expectedNames []string
+		sharded       bool
 	}{
 		{
 			name:          "Standalone Empty Pattern",
@@ -26,6 +27,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 			channelNames:  []string{"news.sports", "news.weather", "events.local"},
 			pattern:       "",
 			expectedNames: []string{"news.sports", "news.weather", "events.local"},
+			sharded:       false,
 		},
 		{
 			name:          "Standalone Exact Match",
@@ -33,6 +35,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 			channelNames:  []string{"news.sports", "news.weather", "events.local"},
 			pattern:       "news.sports",
 			expectedNames: []string{"news.sports"},
+			sharded:       false,
 		},
 		{
 			name:          "Standalone Glob Pattern",
@@ -40,6 +43,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 			channelNames:  []string{"news.sports", "news.weather", "events.local"},
 			pattern:       "news.*",
 			expectedNames: []string{"news.sports", "news.weather"},
+			sharded:       false,
 		},
 		{
 			name:          "Cluster Empty Pattern",
@@ -47,6 +51,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 			channelNames:  []string{"cluster.news.sports", "cluster.news.weather", "cluster.events.local"},
 			pattern:       "",
 			expectedNames: []string{"cluster.news.sports", "cluster.news.weather", "cluster.events.local"},
+			sharded:       false,
 		},
 		{
 			name:          "Cluster Exact Match",
@@ -54,6 +59,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 			channelNames:  []string{"cluster.news.sports", "cluster.news.weather", "cluster.events.local"},
 			pattern:       "cluster.news.sports",
 			expectedNames: []string{"cluster.news.sports"},
+			sharded:       false,
 		},
 		{
 			name:          "Cluster Glob Pattern",
@@ -61,15 +67,43 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 			channelNames:  []string{"cluster.news.sports", "cluster.news.weather", "cluster.events.local"},
 			pattern:       "cluster.news.*",
 			expectedNames: []string{"cluster.news.sports", "cluster.news.weather"},
+			sharded:       false,
+		},
+		{
+			name:          "Cluster Sharded Empty Pattern",
+			clientType:    GlideClusterClient,
+			channelNames:  []string{"cluster.shard.news.sports", "cluster.shard.news.weather", "cluster.shard.events.local"},
+			pattern:       "",
+			expectedNames: []string{"cluster.shard.news.sports", "cluster.shard.news.weather", "cluster.shard.events.local"},
+			sharded:       true,
+		},
+		{
+			name:          "Cluster Sharded Exact Match",
+			clientType:    GlideClusterClient,
+			channelNames:  []string{"cluster.shard.news.sports", "cluster.shard.news.weather", "cluster.shard.events.local"},
+			pattern:       "cluster.shard.news.sports",
+			expectedNames: []string{"cluster.shard.news.sports"},
+			sharded:       true,
+		},
+		{
+			name:          "Cluster Sharded Glob Pattern",
+			clientType:    GlideClusterClient,
+			channelNames:  []string{"cluster.shard.news.sports", "cluster.shard.news.weather", "cluster.shard.events.local"},
+			pattern:       "cluster.shard.news.*",
+			expectedNames: []string{"cluster.shard.news.sports", "cluster.shard.news.weather"},
+			sharded:       true,
 		},
 	}
 
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
+			if tt.sharded {
+				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
+			}
 			// Create channel definitions for all channels
 			channels := make([]ChannelDefn, len(tt.channelNames))
 			for i, channelName := range tt.channelNames {
-				channels[i] = ChannelDefn{Channel: channelName, Mode: 0} // ExactMode
+				channels[i] = ChannelDefn{Channel: channelName, Mode: getChannelMode(tt.sharded)}
 			}
 
 			// Create a client with subscriptions
@@ -82,10 +116,23 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 			// Get active channels
 			var activeChannels []string
 			var err error
-			if tt.pattern == "" {
-				activeChannels, err = receiver.PubSubChannels()
+			if tt.sharded {
+				// For sharded channels, we need to use the cluster-specific methods
+				clusterClient, ok := receiver.(*api.GlideClusterClient)
+				if !ok {
+					t.Fatal("Expected GlideClusterClient for sharded channels")
+				}
+				if tt.pattern == "" {
+					activeChannels, err = clusterClient.PubSubShardChannels()
+				} else {
+					activeChannels, err = clusterClient.PubSubShardChannelsWithPattern(tt.pattern)
+				}
 			} else {
-				activeChannels, err = receiver.PubSubChannelsWithPattern(tt.pattern)
+				if tt.pattern == "" {
+					activeChannels, err = receiver.PubSubChannels()
+				} else {
+					activeChannels, err = receiver.PubSubChannelsWithPattern(tt.pattern)
+				}
 			}
 			assert.NoError(t, err)
 
