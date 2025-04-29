@@ -365,6 +365,7 @@ class BaseBatch(ABC):
 
         Command response:
             OK: Returns OK if all configurations have been successfully set.
+            
             Otherwise, the transaction fails with an error.
         """
         parameters: List[TEncodable] = []
