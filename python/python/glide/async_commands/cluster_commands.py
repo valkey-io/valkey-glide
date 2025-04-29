@@ -140,10 +140,11 @@ class ClusterCommands(CoreCommands):
                 If a redirection error occurs:
                 - For Atomic Batches (Transactions), the entire transaction will be redirected.
                 - For Non-Atomic Batches (Pipelines), only the commands that encountered redirection errors
-                  will be redirected.
+                will be redirected.
             timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
                 to complete. This duration encompasses sending the request, awaiting a response from the server,
                 and any required reconnections or retries.
+
                 If the specified timeout is exceeded, a timeout error will be raised. If not explicitly set,
                 the client's default request timeout will be used.
             retry_server_error (bool): If `True`, retriable server errors (e.g., `TRYAGAIN`) will trigger a retry.
