@@ -831,7 +831,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * const pipelineOptions = { retryStrategy: { retryServerError: true, retryConnectionError: false } };
      * const nonAtomicResult = await clusterClient.exec(nonAtomicBatch, false, pipelineOptions);
-     * console.log('Non-Atomic Batch Result:', nonAtomicResult);
+     * console.log(nonAtomicResult);
      * // Output: ['OK', 'OK', 'value1', 'value2']
      * ```
      */
