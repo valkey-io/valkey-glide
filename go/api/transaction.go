@@ -73,18 +73,18 @@ func (t *Transaction) sendCommandWithRoute(
 
 // Exec executes all queued commands as a transaction
 func (t *Transaction) Exec() ([]any, error) {
-	result, err := t.baseClient.executeTransactionCommand(t.commands) // Use BaseClient for execution
+	result, err := t.executeTransactionCommand(t.commands) // Use BaseClient for execution
 	if err != nil {
 		return nil, err
 	}
 	return handleAnyArrayResponse(result)
 }
 
-func (client *baseClient) executeTransactionCommand(commands []Cmder) (*C.CommandResponse, error) {
+func (client *Transaction) executeTransactionCommand(commands []Cmder) (*C.CommandResponse, error) {
 	return client.executeTransactionWithRoute(commands, nil)
 }
 
-func (client *baseClient) executeTransactionWithRoute(cmds []Cmder, route config.Route) (*C.struct_CommandResponse, error) {
+func (client *Transaction) executeTransactionWithRoute(cmds []Cmder, route config.Route) (*C.struct_CommandResponse, error) {
 	if len(cmds) == 0 {
 		return nil, &errors.RequestError{Msg: "Transaction must contain at least one command"}
 	}
