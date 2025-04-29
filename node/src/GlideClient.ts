@@ -331,7 +331,7 @@ export class GlideClient extends BaseClient {
      * // Example 2: Non-Atomic Batch (Pipelining) with Options
      * const pipeline = new Batch(false) // Non-Atomic (Pipelining)
      *    .set("key1", "value1")
-     *   .set("key2", "value2")
+     *    .set("key2", "value2")
      *   .get("key1")
      *   .get("key2");
      *

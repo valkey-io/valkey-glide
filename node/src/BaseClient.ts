@@ -1111,11 +1111,10 @@ export class BaseClient {
                         item.constructor?.name === "Error"
                     ) {
                         if (
-                            "code" in item &&
-                            (item as { code: string }).code === "RequestError"
+                            "name" in item &&
+                            (item as { name: string }).name === "RequestError"
                         ) {
                             Object.setPrototypeOf(item, RequestError.prototype);
-                            delete item.code;
                         }
                     }
                 }

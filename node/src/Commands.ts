@@ -4248,48 +4248,43 @@ export type BatchOptions = {} & BaseBatchOptions;
 
 /**
  * Options for a batch request for a cluster client.
- * 
+ *
  * ### Route
  * Configures single-node routing for the batch request. The client will send the batch to the
  * specified node defined by <code>route</code>.
- * 
+ *
  * ### Retry Strategy
  * ⚠️ **Please read {@link ClusterBatchRetryStrategy} carefully before enabling these configurations.**
- * Defines the retry strategy for handling batch request failures. 
- * 
+ * Defines the retry strategy for handling batch request failures.
+ *
  * This strategy determines whether failed commands should be retried, potentially impacting
  * execution order.
- * 
- * This strategy determines whether failed commands should be retried, potentially impacting
-     * execution order.
-     *
-     * - If `retryServerError` is `true`, retriable errors (e.g., `TRYAGAIN`) will trigger a retry.
-     * - If `retryConnectionError` is `true`, connection failures will trigger a retry.
-     *
-     * **Warnings:**
-     *
-     * - Retrying server errors may cause commands targeting the same slot to execute out of order.
-     * - Retrying connection errors may lead to duplicate executions, as it is unclear which
-     *   commands have already been processed.
-     *
-     * **Note:** Currently, retry strategies are supported only for non-atomic batches.
-     *
-     * **Recommendation:** It is recommended to increase the timeout in {@link BaseBatchOptions.timeout | BaseBatchOptions}
-     * when enabling these strategies.
-     * 
-     * **Default:** Both `retryServerError` and `retryConnectionError` are set to `false`.
-
- * 
- * 
+ *
+ * - If `retryServerError` is `true`, retriable errors (e.g., `TRYAGAIN`) will trigger a retry.
+ * - If `retryConnectionError` is `true`, connection failures will trigger a retry.
+ *
+ * **Warnings:**
+ *
+ * - Retrying server errors may cause commands targeting the same slot to execute out of order.
+ * - Retrying connection errors may lead to duplicate executions, as it is unclear which
+ *   commands have already been processed.
+ *
+ * **Note:** Currently, retry strategies are supported only for non-atomic batches.
+ *
+ * **Recommendation:** It is recommended to increase the timeout in {@link BaseBatchOptions.timeout | BaseBatchOptions}
+ * when enabling these strategies.
+ *
+ * **Default:** Both `retryServerError` and `retryConnectionError` are set to `false`.
+ *
  * @example
  * ```javascript
  * const options: ClusterBatchOptions = {
  *   timeout: 5000, // 5 seconds
- *  route: "randomNode", 
+ *   route: "randomNode",
  *   retryStrategy: {
- *    retryServerError: false,
- *   retryConnectionError: false,
- *  },
+ *     retryServerError: false,
+ *     retryConnectionError: false,
+ *   },
  * };
  * ```
  */

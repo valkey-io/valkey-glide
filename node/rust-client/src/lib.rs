@@ -281,7 +281,7 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             let err_msg = error_message(&error.into());
             let err = Error::new(Status::Ok, err_msg);
             let mut js_error = js_env.create_error(err)?;
-            js_error.set_named_property("code", "RequestError")?;
+            js_error.set_named_property("name", "RequestError")?;
             Ok(js_error.into_unknown())
         }
     }

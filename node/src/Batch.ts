@@ -4074,8 +4074,7 @@ class BaseBatch<T extends BaseBatch<T>> {
  *     .get("key");
  * const result = await client.exec(transaction);
  * // result contains: OK and "value"
- * console.assert(result[0] === "OK");
- * console.assert(result[1] === "value");
+ * console.log(result); // ["OK", "value"]
  * ```
  *
  * @example
@@ -4088,15 +4087,10 @@ class BaseBatch<T extends BaseBatch<T>> {
  *     .get("key2");
  * const result = await client.exec(pipeline);
  * // result contains: OK, OK, "value1", "value2"
- * console.assert(result[0] === "OK");
- * console.assert(result[1] === "OK");
- * console.assert(result[2] === "value1");
- * console.assert(result[3] === "value2");
+ * console.log(result); // ["OK", "OK", "value1", "value2"]
  * ```
  */
 export class Batch extends BaseBatch<Batch> {
-    /// TODO: add MOVE, SLAVEOF and all SENTINEL commands
-
     /**
      * Change the currently selected database.
      *
