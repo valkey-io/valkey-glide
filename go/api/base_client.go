@@ -4219,14 +4219,14 @@ func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]
 //
 // Return value:
 //
-//	A map of elements and their scores within the specified range.
-//	If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
+//	An array of elements and their scores within the specified range.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
 func (client *baseClient) ZRangeWithScores(
 	key string,
 	rangeQuery options.ZRangeQueryWithScores,
-) (map[string]float64, error) {
+) ([]MemberAndScore, error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 	queryArgs, err := rangeQuery.ToArgs()
@@ -4240,7 +4240,15 @@ func (client *baseClient) ZRangeWithScores(
 		return nil, err
 	}
 
-	return handleStringDoubleMapResponse(result)
+	needsReverse := false
+	for _, arg := range args {
+		if arg == "REV" {
+			needsReverse = true
+			break
+		}
+	}
+
+	return handleZRangeWithScoresResponse(result, needsReverse)
 }
 
 // Stores a specified range of elements from the sorted set at `key`, into a new
