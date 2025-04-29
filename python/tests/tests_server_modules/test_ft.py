@@ -260,7 +260,12 @@ class TestFt:
         )
 
         # Search the index for string inputs.
-        result1 = await ft.search(glide_client, json_index, "*", options=ft_search_options)
+        result1 = await ft.search(
+            client=glide_client,
+            index=json_index,
+            query="*",
+            options=ft_search_options,
+        )
         # Check if we get the expected result from ft.search for string inputs.
         TestFt._ft_search_deep_compare_json_result(
             self,
@@ -349,8 +354,8 @@ class TestFt:
         vector_prefix = "vector-search:"
         vector_key1 = vector_prefix + str(uuid.uuid4())
         vector_key2 = vector_prefix + str(uuid.uuid4())
-        vector_value1 = array.array('f', [0., 0.]).tobytes()
-        vector_value2 = array.array('f', [1., 1.]).tobytes()
+        vector_value1 = array.array("f", [0.0, 0.0]).tobytes()
+        vector_value2 = array.array("f", [1.0, 1.0]).tobytes()
         vector_index = vector_prefix + str(uuid.uuid4())
         vector_field_name = "vector"
 
@@ -395,15 +400,15 @@ class TestFt:
             params={vector_param_name: vector_value1},  # searching for vector1
             return_fields=[
                 ReturnField(vector_field_name),
-                ReturnField(f"__{vector_field_name}_score")
-            ]
+                ReturnField(f"__{vector_field_name}_score"),
+            ],
         )
 
         knn_result = await ft.search(
             client=glide_client,
             index_name=vector_index,
             query=knn_query,
-            options= knn_query_options,
+            options=knn_query_options,
         )
 
         assert len(knn_result) == 2
@@ -411,7 +416,9 @@ class TestFt:
         expected_result = {
             vector_key1.encode(): {
                 vector_field_name.encode(): vector_value1,
-                f"__{vector_field_name}_score".encode(): str(1).encode(),  # <- cos score of 1 means identical
+                f"__{vector_field_name}_score".encode(): str(
+                    1  # <- cos score of 1 means identical vectors
+                ).encode(),
             }
         }
         assert knn_result[1] == expected_result
