@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import array
 import json
 import time
 import uuid
@@ -27,6 +28,7 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     TextField,
     VectorAlgorithm,
     VectorField,
+    VectorFieldAttributesFlat,
     VectorFieldAttributesHnsw,
     VectorType,
 )
@@ -216,18 +218,18 @@ class TestFt:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_search(self, glide_client: GlideClusterClient):
-        prefix = "{json-search-" + str(uuid.uuid4()) + "}:"
-        json_key1 = prefix + str(uuid.uuid4())
-        json_key2 = prefix + str(uuid.uuid4())
+        json_prefix = "{json-search-" + str(uuid.uuid4()) + "}:"
+        json_key1 = json_prefix + str(uuid.uuid4())
+        json_key2 = json_prefix + str(uuid.uuid4())
         json_value1 = {"a": 11111, "b": 2, "c": 3}
         json_value2 = {"a": 22222, "b": 2, "c": 3}
-        index = prefix + str(uuid.uuid4())
+        json_index = json_prefix + str(uuid.uuid4())
 
         # Create an index.
         assert (
             await ft.create(
                 glide_client,
-                index,
+                json_index,
                 schema=[
                     NumericField("$.a", "a"),
                     NumericField("$.b", "b"),
@@ -258,9 +260,14 @@ class TestFt:
         )
 
         # Search the index for string inputs.
-        result1 = await ft.search(glide_client, index, "*", options=ft_search_options)
+        result1 = await ft.search(
+            client=glide_client,
+            index_name=json_index,
+            query="*",
+            options=ft_search_options,
+        )
         # Check if we get the expected result from ft.search for string inputs.
-        TestFt._ft_search_deep_compare_result(
+        TestFt._ft_search_deep_compare_json_result(
             self,
             result=result1,
             json_key1=json_key1,
@@ -275,7 +282,7 @@ class TestFt:
 
         ft_profile_result = await ft.profile(
             glide_client,
-            index,
+            json_index,
             FtProfileOptions.from_query_options(
                 query="*", query_options=ft_search_options
             ),
@@ -283,7 +290,7 @@ class TestFt:
         assert len(ft_profile_result) > 0
 
         # Check if we get the expected result from FT.PROFILE for string inputs.
-        TestFt._ft_search_deep_compare_result(
+        TestFt._ft_search_deep_compare_json_result(
             self,
             result=cast(FtSearchResponse, ft_profile_result[0]),
             json_key1=json_key1,
@@ -303,13 +310,13 @@ class TestFt:
         # Search the index for byte type inputs.
         result2 = await ft.search(
             glide_client,
-            index.encode("utf-8"),
+            json_index.encode("utf-8"),
             b"*",
             options=ft_search_options_bytes_input,
         )
 
         # Check if we get the expected result from ft.search for byte type inputs.
-        TestFt._ft_search_deep_compare_result(
+        TestFt._ft_search_deep_compare_json_result(
             self,
             result=result2,
             json_key1=json_key1,
@@ -323,7 +330,7 @@ class TestFt:
         # Test FT.PROFILE for the above mentioned FT.SEARCH query and search options for byte type inputs.
         ft_profile_result = await ft.profile(
             glide_client,
-            index.encode("utf-8"),
+            json_index.encode("utf-8"),
             FtProfileOptions.from_query_options(
                 query=b"*", query_options=ft_search_options_bytes_input
             ),
@@ -331,7 +338,7 @@ class TestFt:
         assert len(ft_profile_result) > 0
 
         # Check if we get the expected result from FT.PROFILE for byte type inputs.
-        TestFt._ft_search_deep_compare_result(
+        TestFt._ft_search_deep_compare_json_result(
             self,
             result=cast(FtSearchResponse, ft_profile_result[0]),
             json_key1=json_key1,
@@ -342,9 +349,86 @@ class TestFt:
             fieldName2="b",
         )
 
-        assert await ft.dropindex(glide_client, index) == OK
+        # Create an index for knn vector search.
 
-    def _ft_search_deep_compare_result(
+        vector_prefix = "vector-search:"
+        vector_key1 = vector_prefix + str(uuid.uuid4())
+        vector_key2 = vector_prefix + str(uuid.uuid4())
+        vector1 = array.array("f", [0.0, 0.0])
+        vector2 = array.array("f", [1.0, 1.0])
+        vector_value1 = vector1.tobytes()
+        vector_value2 = vector2.tobytes()
+        vector_index = vector_prefix + str(uuid.uuid4())
+        vector_field_name = "vector"
+
+        assert (
+            await ft.create(
+                glide_client,
+                vector_index,
+                schema=[
+                    VectorField(
+                        name=vector_field_name,
+                        algorithm=VectorAlgorithm.FLAT,
+                        attributes=VectorFieldAttributesFlat(
+                            dimensions=len(vector1),  # each float32 is 4 bytes
+                            distance_metric=DistanceMetricType.COSINE,
+                            type=VectorType.FLOAT32,
+                        ),
+                    ),
+                ],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH,
+                    prefixes=[vector_prefix],
+                ),
+            )
+            == OK
+        )
+
+        # Create vector keys.
+        assert (
+            await glide_client.hset(vector_key1, {vector_field_name: vector_value1})
+            == 1
+        )
+        assert (
+            await glide_client.hset(vector_key2, {vector_field_name: vector_value2})
+            == 1
+        )
+
+        time.sleep(self.sleep_wait_time)
+
+        vector_param_name = "query_vector"
+        knn_query = f"*=>[KNN 1 @{vector_field_name} ${vector_param_name}]"
+        knn_query_options = FtSearchOptions(
+            params={vector_param_name: vector_value1},  # searching for vector1
+            return_fields=[
+                ReturnField(vector_field_name),
+                ReturnField(f"__{vector_field_name}_score"),
+            ],
+        )
+
+        knn_result = await ft.search(
+            client=glide_client,
+            index_name=vector_index,
+            query=knn_query,
+            options=knn_query_options,
+        )
+
+        assert len(knn_result) == 2
+        assert knn_result[0] == 1  # first index is number of results
+        expected_result = {
+            vector_key1.encode(): {
+                vector_field_name.encode(): vector_value1,
+                f"__{vector_field_name}_score".encode(): str(
+                    1  # <- cos score of 1 means identical vectors
+                ).encode(),
+            }
+        }
+        assert knn_result[1] == expected_result
+
+        assert await ft.dropindex(glide_client, json_index) == OK
+        assert await ft.dropindex(glide_client, vector_index) == OK
+
+    def _ft_search_deep_compare_json_result(
         self,
         result: List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]],
         json_key1: str,

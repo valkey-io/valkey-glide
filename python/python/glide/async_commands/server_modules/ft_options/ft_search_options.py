@@ -126,7 +126,7 @@ class FtSearchOptions:
             args.append(str(self.timeout))
         if self.params:
             args.append(FtSearchKeywords.PARAMS)
-            args.append(str(len(self.params)))
+            args.append(str(len(self.params) * 2))
             for name, value in self.params.items():
                 args.append(name)
                 args.append(value)
