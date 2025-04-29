@@ -90,6 +90,9 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 //
 //	The returned value for the custom command.
 //
+//	In transaction:
+//	  Upon transaction completion with Exec(), the returned value for the custom command will be accessible in the returned results array.
+//
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[interface{}], error) {
 	res, err := client.executor.sendCommand(C.CustomCommand, args)
@@ -112,6 +115,9 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 // Return value:
 //
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
+//
+//	In transaction:
+//	  Upon transaction completion with Exec(), the actual map value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClusterClient) Info() (map[string]string, error) {
@@ -203,6 +209,10 @@ func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOpt
 //
 //	The returning value depends on the executed command and route.
 //
+//	In transaction:
+//	  Upon transaction completion with Exec(), the returning value depends on the executed command
+//	  will be accessible in the returned results array.
+//
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClusterClient) CustomCommandWithRoute(
 	args []string,
@@ -228,6 +238,10 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 // Return value:
 //
 //	Returns "PONG".
+//
+//	In transaction:
+//	  Returns a [api.handleStringResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) Ping() (string, error) {
@@ -255,6 +269,10 @@ func (client *GlideClusterClient) Ping() (string, error) {
 //	opts  := options.ClusterPingOptions{ &options.PingOptions{ "Hello" }, &route }
 //	result, err := clusterClient.PingWithOptions(opts)
 //	fmt.Println(result) // Output: Hello
+//
+//	In transaction:
+//	  Returns a [api.handleStringResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (string, error) {
@@ -298,6 +316,11 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 // The current server time as a String array with two elements: A UNIX TIME and the amount
 // of microseconds already elapsed in the current second.
 // The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
+//
+//	In transaction:
+//	  Returns a [api.handleTimeClusterResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the current server time as a String array value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/time/
 func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (ClusterValue[[]string], error) {
 	result, err := client.executor.sendCommandWithRoute(C.Time, []string{}, opts.Route)
@@ -317,6 +340,10 @@ func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (Clu
 //
 //	The number of keys in the database.
 //
+//	In transaction:
+//	  Returns a [api.handleIntResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/dbsize/
 func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (int64, error) {
 	result, err := client.executor.sendCommandWithRoute(C.DBSize, []string{}, opts.Route)
@@ -335,8 +362,13 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 // Return value:
 //
 //		`"OK"` response on success.
+//
 //	 In Transaction,
 //		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClusterClient) FlushAll() (string, error) {
@@ -358,6 +390,10 @@ func (client *GlideClusterClient) FlushAll() (string, error) {
 // Return value:
 //
 //	`"OK"` response on success.
+//
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.FlushClusterOptions) (string, error) {
@@ -384,6 +420,10 @@ func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.Flush
 //
 //	`"OK"` response on success.
 //
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClusterClient) FlushDB() (string, error) {
 	result, err := client.executor.sendCommand(C.FlushDB, []string{})
@@ -404,6 +444,10 @@ func (client *GlideClusterClient) FlushDB() (string, error) {
 // Return value:
 //
 //	`"OK"` response on success.
+//
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushClusterOptions) (string, error) {
@@ -431,6 +475,9 @@ func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushC
 // Return value:
 //
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
+//
+//	In transaction:
+//	  Upon transaction completion with Exec(), the actual map value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
@@ -547,6 +594,9 @@ func (client *GlideClusterClient) clusterScan(
 //
 //	The ID of the next cursor and a list of keys found for this cursor ID.
 //
+//	In transaction:
+//	 Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClusterClient) Scan(
 	cursor options.ClusterScanCursor,
@@ -585,6 +635,9 @@ func (client *GlideClusterClient) Scan(
 //
 //	The ID of the next cursor and a list of keys found for this cursor ID.
 //
+//	In transaction:
+//	 Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClusterClient) ScanWithOptions(
 	cursor options.ClusterScanCursor,
@@ -605,6 +658,10 @@ func (client *GlideClusterClient) ScanWithOptions(
 //
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
 //
+//	In transaction:
+//	  Returns a [api.handleStringResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/lolwut/
 func (client *GlideClusterClient) Lolwut() (string, error) {
 	result, err := client.executor.sendCommand(C.Lolwut, []string{})
@@ -623,6 +680,9 @@ func (client *GlideClusterClient) Lolwut() (string, error) {
 // Return value:
 //
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+//	In transaction:
+//	 Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
 func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error) {
@@ -670,6 +730,9 @@ func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.Cluste
 //
 //	The id of the client.
 //
+//	In transaction:
+//	  Upon transaction completion with Exec(), the actual inat array value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/client-id/
 func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
 	response, err := client.executor.sendCommand(C.ClientId, []string{})
@@ -693,6 +756,9 @@ func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
 // Return value:
 //
 //	The id of the client.
+//
+//	In transaction:
+//	  Upon transaction completion with Exec(), the actual id of the client will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
 func (client *GlideClusterClient) ClientIdWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
@@ -746,6 +812,10 @@ func (client *GlideClusterClient) LastSave() (ClusterValue[int64], error) {
 //
 //	UNIX TIME of the last DB save executed with success.
 //
+//	In transaction:
+//	  Upon transaction completion with Exec(), the actual UNIX TIME of the last DB save executed with success
+//	  will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/lastsave/
 func (client *GlideClusterClient) LastSaveWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
 	response, err := client.executor.sendCommandWithRoute(C.LastSave, []string{}, opts.Route)
@@ -773,6 +843,10 @@ func (client *GlideClusterClient) LastSaveWithOptions(opts options.RouteOption) 
 //
 //	OK to confirm that the statistics were successfully reset.
 //
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/config-resetstat/
 func (client *GlideClusterClient) ConfigResetStat() (string, error) {
 	response, err := client.executor.sendCommand(C.ConfigResetStat, []string{})
@@ -792,6 +866,10 @@ func (client *GlideClusterClient) ConfigResetStat() (string, error) {
 // Return value:
 //
 //	OK to confirm that the statistics were successfully reset.
+//
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/config-resetstat/
 func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteOption) (string, error) {
@@ -813,6 +891,10 @@ func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteO
 // Return value:
 //
 //	OK if all configurations have been successfully set. Otherwise, raises an error.
+//
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual map value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *GlideClusterClient) ConfigSet(
@@ -838,6 +920,10 @@ func (client *GlideClusterClient) ConfigSet(
 //
 //	OK if all configurations have been successfully set. Otherwise, raises an error.
 //
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual map value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *GlideClusterClient) ConfigSetWithOptions(
 	parameters map[string]string, opts options.RouteOption,
@@ -860,6 +946,10 @@ func (client *GlideClusterClient) ConfigSetWithOptions(
 // Return value:
 //
 //	A map of values corresponding to the configuration parameters.
+//
+//	In transaction:
+//	  Upon transaction completion with Exec(), the map of values corresponding to the configuration parameters
+//	  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClusterClient) ConfigGet(
@@ -888,6 +978,10 @@ func (client *GlideClusterClient) ConfigGet(
 // Return value:
 //
 //	A map of values corresponding to the configuration parameters.
+//
+//	In transaction:
+//	  Upon transaction completion with Exec(), the map of values corresponding to the configuration parameters
+//	  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClusterClient) ConfigGetWithOptions(
@@ -921,6 +1015,10 @@ func (client *GlideClusterClient) ConfigGetWithOptions(
 //
 //	OK - when connection name is set
 //
+//	 In transaction:
+//	   Returns a [api.createClusterSingleValue] immediately while adding the command to the transaction queue.
+//	   Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/client-setname/
 func (client *GlideClusterClient) ClientSetName(connectionName string) (ClusterValue[string], error) {
 	response, err := client.executor.sendCommand(C.ClientSetName, []string{connectionName})
@@ -945,6 +1043,10 @@ func (client *GlideClusterClient) ClientSetName(connectionName string) (ClusterV
 // Return value:
 //
 //	OK - when connection name is set
+//
+//	 In transaction:
+//	   Returns a [api.createClusterSingleValue] immediately while adding the command to the transaction queue.
+//	   Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
 func (client *GlideClusterClient) ClientSetNameWithOptions(
@@ -976,6 +1078,10 @@ func (client *GlideClusterClient) ClientSetNameWithOptions(
 //
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
 //
+//	In transaction:
+//	  Returns a [api.createClusterSingleValue] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/client-getname/
 func (client *GlideClusterClient) ClientGetName() (ClusterValue[string], error) {
 	response, err := client.executor.sendCommand(C.ClientGetName, []string{})
@@ -999,6 +1105,10 @@ func (client *GlideClusterClient) ClientGetName() (ClusterValue[string], error) 
 // Return value:
 //
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//
+//	In transaction:
+//	  Returns a [api.createClusterSingleValue()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
 func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOption) (ClusterValue[string], error) {
@@ -1028,6 +1138,10 @@ func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOpt
 //
 //	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
 //
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *GlideClusterClient) ConfigRewrite() (string, error) {
 	response, err := client.executor.sendCommand(C.ConfigRewrite, []string{})
@@ -1048,6 +1162,11 @@ func (client *GlideClusterClient) ConfigRewrite() (string, error) {
 //
 //	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
 //
+//
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *GlideClusterClient) ConfigRewriteWithOptions(opts options.RouteOption) (string, error) {
 	response, err := client.executor.sendCommandWithRoute(C.ConfigRewrite, []string{}, opts.Route)
@@ -1062,6 +1181,11 @@ func (client *GlideClusterClient) ConfigRewriteWithOptions(opts options.RouteOpt
 // Return value:
 //
 //	A random key from the database.
+//
+//
+//	In transaction:
+//	  Returns a [api.CreateNilStringResult()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
 func (client *GlideClusterClient) RandomKey() (Result[string], error) {
@@ -1087,6 +1211,10 @@ func (client *GlideClusterClient) RandomKey() (Result[string], error) {
 // Return value:
 //
 //	A random key from the database.
+//
+//	In transaction:
+//	  Returns a [api.CreateNilStringResult()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
 func (client *GlideClusterClient) RandomKeyWithRoute(opts options.RouteOption) (Result[string], error) {
@@ -1119,6 +1247,10 @@ func (client *GlideClusterClient) RandomKeyWithRoute(opts options.RouteOption) (
 // Return value:
 //
 //	The library name that was loaded.
+//
+//	In transaction:
+//	  Returns a [api.handleStringResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-load/
 func (client *GlideClusterClient) FunctionLoadWithRoute(
@@ -1155,6 +1287,10 @@ func (client *GlideClusterClient) FunctionLoadWithRoute(
 //
 //	`OK`
 //
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/function-flush/
 func (client *GlideClusterClient) FunctionFlushWithRoute(route options.RouteOption) (string, error) {
 	result, err := client.executor.sendCommandWithRoute(C.FunctionFlush, []string{}, route.Route)
@@ -1181,6 +1317,11 @@ func (client *GlideClusterClient) FunctionFlushWithRoute(route options.RouteOpti
 //
 //	`OK`
 //
+//
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/function-flush/
 func (client *GlideClusterClient) FunctionFlushSyncWithRoute(route options.RouteOption) (string, error) {
 	result, err := client.executor.sendCommandWithRoute(C.FunctionFlush, []string{string(options.SYNC)}, route.Route)
@@ -1206,6 +1347,11 @@ func (client *GlideClusterClient) FunctionFlushSyncWithRoute(route options.Route
 // Return value:
 //
 //	`OK`
+//
+//
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
 func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(route options.RouteOption) (string, error) {
@@ -1234,6 +1380,10 @@ func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(route options.Rout
 // Return value:
 //
 //	The invoked function's return value.
+//
+//	In transaction:
+//	  Returns a [api.createClusterSingleValue()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
 func (client *GlideClusterClient) FCallWithRoute(function string, route options.RouteOption) (ClusterValue[any], error) {
@@ -1277,6 +1427,9 @@ func (client *GlideClusterClient) FCallWithRoute(function string, route options.
 // Return value:
 //
 //	The invoked function's return value.
+//
+//	In transaction:
+//	  Upon transaction completion with Exec(), the invoked function's return value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
 func (client *GlideClusterClient) FCallReadOnlyWithRoute(
@@ -1324,6 +1477,10 @@ func (client *GlideClusterClient) FCallReadOnlyWithRoute(
 //
 //	The invoked function's return value wrapped by a [ClusterValue].
 //
+//	In transaction:
+//	  Upon transaction completion with Exec(), the invoked function's return value wrapped by a [ClusterValue]
+//	  will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/fcall/
 func (client *GlideClusterClient) FCallWithArgs(function string, args []string) (ClusterValue[any], error) {
 	return client.FCallWithArgsWithRoute(function, args, options.RouteOption{})
@@ -1347,6 +1504,10 @@ func (client *GlideClusterClient) FCallWithArgs(function string, args []string) 
 // Return value:
 //
 //	The invoked function's return value wrapped by a [ClusterValue].
+//
+//	In transaction:
+//	  Upon transaction completion with Exec(), the invoked function's return value wrapped by a [ClusterValue]
+//	  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
 func (client *GlideClusterClient) FCallWithArgsWithRoute(
@@ -1397,6 +1558,10 @@ func (client *GlideClusterClient) FCallWithArgsWithRoute(
 //
 //	The invoked function's return value wrapped by a [ClusterValue].
 //
+//	In transaction:
+//	  Upon transaction completion with Exec(), the invoked function's return value wrapped by a [ClusterValue]
+//	  will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
 func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(
 	function string,
@@ -1445,6 +1610,10 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(
 //
 //	The invoked function's return value wrapped by a [ClusterValue].
 //
+//	In transaction:
+//	  Upon transaction completion with Exec(), the invoked function's return value wrapped by a [ClusterValue]
+//	  will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
 func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []string) (ClusterValue[any], error) {
 	return client.FCallReadOnlyWithArgsWithRoute(function, args, options.RouteOption{})
@@ -1466,6 +1635,10 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []
 //	[FunctionStatsResult] object containing the following information:
 //	running_script - Information about the running script.
 //	engines - Information about available engines and their stats.
+//
+//	In transaction:
+//	  Upon transaction completion with Exec(), the map of running_script and engines information
+//	  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-stats/
 func (client *GlideClusterClient) FunctionStats() (
@@ -1503,6 +1676,10 @@ func (client *GlideClusterClient) FunctionStats() (
 // Return value:
 //
 //	A [ClusterValue] containing a map of node addresses to their function statistics.
+//
+//	In transaction:
+//	  Upon transaction completion with Exec(), the [ClusterValue] containing a map of node addresses to their function statistics
+//	  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-stats/
 func (client *GlideClusterClient) FunctionStatsWithRoute(
@@ -1546,6 +1723,10 @@ func (client *GlideClusterClient) FunctionStatsWithRoute(
 //
 //	"OK" if the library exists, otherwise an error is thrown.
 //
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *GlideClusterClient) FunctionDelete(libName string) (string, error) {
 	return client.FunctionDeleteWithRoute(libName, options.RouteOption{})
@@ -1568,6 +1749,10 @@ func (client *GlideClusterClient) FunctionDelete(libName string) (string, error)
 // Return value:
 //
 //	"OK" if the library exists, otherwise an error is thrown.
+//
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *GlideClusterClient) FunctionDeleteWithRoute(libName string, route options.RouteOption) (string, error) {
@@ -1596,6 +1781,10 @@ func (client *GlideClusterClient) FunctionDeleteWithRoute(libName string, route 
 // Return value:
 //
 //	`OK` if function is terminated. Otherwise, throws an error.
+//
+//	In transaction:
+//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-kill/
 func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOption) (string, error) {
@@ -1627,6 +1816,10 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 // Return value:
 //
 //	A [ClusterValue] containing a list of info about queried libraries and their functions.
+//
+//	In transaction:
+//	  Upon transaction completion with Exec(), the [ClusterValue] containing a list of info about queried libraries and their functions value
+//	  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-list/
 func (client *GlideClusterClient) FunctionListWithRoute(
@@ -1669,6 +1862,10 @@ func (client *GlideClusterClient) FunctionListWithRoute(
 // Return value:
 //
 //	The number of clients that received the message.
+//
+//	In transaction:
+//	  Returns a [api.handleIntResponse()] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/publish
 func (client *GlideClusterClient) Publish(channel string, message string, sharded bool) (int64, error) {
