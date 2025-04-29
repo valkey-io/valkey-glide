@@ -1660,7 +1660,7 @@ func (client *GlideClusterClient) Publish(channel string, message string, sharde
 	return handleIntResponse(result)
 }
 
-// PubSubShardChannels returns a list of all shard channels.
+// Returns a list of all sharded channels.
 //
 // Since:
 //
@@ -1682,7 +1682,7 @@ func (client *GlideClusterClient) PubSubShardChannels() ([]string, error) {
 	return handleStringArrayResponse(result)
 }
 
-// PubSubShardChannelsWithPattern returns a list of all shard channels that match the given pattern.
+// Returns a list of all sharded channels that match the given pattern.
 //
 // Since:
 //

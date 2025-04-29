@@ -7859,24 +7859,31 @@ func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, err
 	return handleStringIntMapResponse(result)
 }
 
-// Returns the number of patterns that are subscribed to by clients.
+// Kills a function that is currently executing.
 //
-// This returns the total number of unique patterns that all clients are subscribed to,
-// not the count of clients subscribed to patterns.
+// `FUNCTION KILL` terminates read-only functions only.
 //
-// When used in cluster mode, the command is routed to all nodes and aggregates
-// the responses.
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// Note:
+//
+//	When in cluster mode, this command will be routed to all nodes.
 //
 // See [valkey.io] for details.
 //
-// [valkey.io]: https://valkey.io/commands/pubsub-numpat
-func (client *baseClient) PubSubNumPat() (int64, error) {
-	result, err := client.executeCommand(C.PubSubNumPat, []string{})
+// Return value:
+//
+//	`OK` if function is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/function-kill/
+func (client *baseClient) FunctionKill() (string, error) {
+	result, err := client.executeCommand(C.FunctionKill, []string{})
 	if err != nil {
-		return 0, err
+		return DefaultStringResponse, err
 	}
-
-	return handleIntResponse(result)
+	return handleStringResponse(result)
 }
 
 // Returns information about the functions and libraries.
