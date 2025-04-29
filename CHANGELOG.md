@@ -55,7 +55,7 @@
 * Go: Add `PubSubNumSub` ([#3667](https://github.com/valkey-io/valkey-glide/pull/3667))
 * Go: Add `Sharded Publish` ([#3692](https://github.com/valkey-io/valkey-glide/pull/3692))
 * Go: Add `PubSub ShardChannels` ([#3695](https://github.com/valkey-io/valkey-glide/pull/3695))
-* Go: Add `PubSub ShardNumSub` ([#](https://github.com/valkey-io/valkey-glide/pull/))
+* Go: Add `PubSub ShardNumSub` ([#3708](https://github.com/valkey-io/valkey-glide/pull/3708))
 * Go: Add `Config Rewrite` ([#3156](https://github.com/valkey-io/valkey-glide/pull/3156))
 * Go: Add `Random Key` ([#3358](https://github.com/valkey-io/valkey-glide/pull/3358))
 * Go: Add Function Load, Function Flush, FCall and FCall_RO ([#3474](https://github.com/valkey-io/valkey-glide/pull/3474))
