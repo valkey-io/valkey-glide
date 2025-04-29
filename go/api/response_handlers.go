@@ -1687,10 +1687,16 @@ func handleZRangeWithScoresResponse(response *C.struct_CommandResponse, reverse 
 
 	if !reverse {
 		sort.Slice(zRangeResponseArray, func(i, j int) bool {
+			if zRangeResponseArray[i].Score == zRangeResponseArray[j].Score {
+				return zRangeResponseArray[i].Member < zRangeResponseArray[j].Member
+			}
 			return zRangeResponseArray[i].Score < zRangeResponseArray[j].Score
 		})
 	} else {
 		sort.Slice(zRangeResponseArray, func(i, j int) bool {
+			if zRangeResponseArray[i].Score == zRangeResponseArray[j].Score {
+				return zRangeResponseArray[i].Member > zRangeResponseArray[j].Member
+			}
 			return zRangeResponseArray[i].Score > zRangeResponseArray[j].Score
 		})
 	}

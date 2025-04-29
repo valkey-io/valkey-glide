@@ -5246,12 +5246,15 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		t := suite.T()
 		key := uuid.New().String()
 		memberScoreMap := map[string]float64{
-			"a": 2.0,
-			"b": 4.0,
-			"c": 3.0,
-			"d": 8.0,
-			"e": 5.0,
-			"f": 1.0,
+			"a":  2.0,
+			"ab": 2.0,
+			"b":  4.0,
+			"c":  3.0,
+			"d":  8.0,
+			"e":  5.0,
+			"f":  1.0,
+			"ac": 2.0,
+			"g":  2.0,
 		}
 		_, err := client.ZAdd(key, memberScoreMap)
 		assert.NoError(t, err)
@@ -5268,6 +5271,9 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		expected = []api.MemberAndScore{
 			{Member: "f", Score: float64(1.0)},
 			{Member: "a", Score: float64(2.0)},
+			{Member: "ab", Score: float64(2.0)},
+			{Member: "ac", Score: float64(2.0)},
+			{Member: "g", Score: float64(2.0)},
 			{Member: "c", Score: float64(3.0)},
 			{Member: "b", Score: float64(4.0)},
 			{Member: "e", Score: float64(5.0)},
@@ -5287,6 +5293,9 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		expected = []api.MemberAndScore{
 			{Member: "f", Score: float64(1.0)},
 			{Member: "a", Score: float64(2.0)},
+			{Member: "ab", Score: float64(2.0)},
+			{Member: "ac", Score: float64(2.0)},
+			{Member: "g", Score: float64(2.0)},
 			{Member: "c", Score: float64(3.0)},
 		}
 		assert.NoError(t, err)
@@ -5299,6 +5308,9 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		expected = []api.MemberAndScore{
 			{Member: "f", Score: float64(1.0)},
 			{Member: "a", Score: float64(2.0)},
+			{Member: "ab", Score: float64(2.0)},
+			{Member: "ac", Score: float64(2.0)},
+			{Member: "g", Score: float64(2.0)},
 		}
 		assert.NoError(t, err)
 		assert.Equal(t, expected, res)
@@ -5309,6 +5321,9 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 			SetReverse()
 		res, err = client.ZRangeWithScores(key, query)
 		expected = []api.MemberAndScore{
+			{Member: "g", Score: float64(2.0)},
+			{Member: "ac", Score: float64(2.0)},
+			{Member: "ab", Score: float64(2.0)},
 			{Member: "a", Score: float64(2.0)},
 			{Member: "f", Score: float64(1.0)},
 		}
@@ -5325,19 +5340,22 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 			{Member: "e", Score: float64(5.0)},
 			{Member: "b", Score: float64(4.0)},
 			{Member: "c", Score: float64(3.0)},
+			{Member: "g", Score: float64(2.0)},
+			{Member: "ac", Score: float64(2.0)},
+			{Member: "ab", Score: float64(2.0)},
 			{Member: "a", Score: float64(2.0)},
 			{Member: "f", Score: float64(1.0)},
 		}
 		assert.NoError(t, err)
 		assert.Equal(t, expected, res)
-		// score [-inf:+inf] limit 1 2
+		// score [-inf:+inf] limit 4 2
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
 			options.NewInfiniteScoreBoundary(options.PositiveInfinity)).
-			SetLimit(1, 2)
+			SetLimit(4, 2)
 		res, err = client.ZRangeWithScores(key, query)
 		expected = []api.MemberAndScore{
-			{Member: "a", Score: float64(2.0)},
+			{Member: "g", Score: float64(2.0)},
 			{Member: "c", Score: float64(3.0)},
 		}
 		assert.NoError(t, err)
