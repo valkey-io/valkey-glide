@@ -97,6 +97,9 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
+			if tt.sharded {
+				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
+			}
 			// Create channel definitions for all channels
 			channels := make([]ChannelDefn, len(tt.channelNames))
 			for i, channelName := range tt.channelNames {
