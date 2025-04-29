@@ -23,6 +23,7 @@
 * Node: Fix get command example with Bytes decoder ([#3682](https://github.com/valkey-io/valkey-glide/pull/3682))
 * Python: fix PARAMS count in ft.search query ([#3706](https://github.com/valkey-io/valkey-glide/pull/3706))
 * Node: Fix functionLoad examples ([#3710](https://github.com/valkey-io/valkey-glide/pull/3710))
+* Go: Fix ZRangeWithScores Order ([#3694](https://github.com/valkey-io/valkey-glide/pull/3694))
 
 ## 1.3.2 (2025-04-06)
 
