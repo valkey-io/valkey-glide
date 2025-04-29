@@ -354,8 +354,10 @@ class TestFt:
         vector_prefix = "vector-search:"
         vector_key1 = vector_prefix + str(uuid.uuid4())
         vector_key2 = vector_prefix + str(uuid.uuid4())
-        vector_value1 = array.array("f", [0.0, 0.0]).tobytes()
-        vector_value2 = array.array("f", [1.0, 1.0]).tobytes()
+        vector1 = array.array("f", [0.0, 0.0])
+        vector2 = array.array("f", [1.0, 1.0])
+        vector_value1 = vector1.tobytes()
+        vector_value2 = vector2.tobytes()
         vector_index = vector_prefix + str(uuid.uuid4())
         vector_field_name = "vector"
 
@@ -368,7 +370,7 @@ class TestFt:
                         name=vector_field_name,
                         algorithm=VectorAlgorithm.FLAT,
                         attributes=VectorFieldAttributesFlat(
-                            dimensions=len(vector_value1) * 2,  # float64 -> float32
+                            dimensions=len(vector1),  # each float32 is 4 bytes
                             distance_metric=DistanceMetricType.COSINE,
                             type=VectorType.FLOAT32,
                         ),
@@ -412,7 +414,7 @@ class TestFt:
         )
 
         assert len(knn_result) == 2
-        assert knn_result[0] == 1
+        assert knn_result[0] == 1  # first index is number of results
         expected_result = {
             vector_key1.encode(): {
                 vector_field_name.encode(): vector_value1,
