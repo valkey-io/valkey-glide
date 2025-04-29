@@ -256,8 +256,7 @@ async fn perform_operation(
     let mut cmd = redis::Cmd::new();
     let action = if is_burst {
         // Always GET during bursts (random key, may exist or not)
-        cmd.arg("GET")
-            .arg(buffer.format(thread_rng().gen_range(0..SIZE_GET_KEYSPACE)));
+        cmd.arg("GET").arg(1);
         ChosenAction::GetExisting
     } else {
         if rand::thread_rng().gen_bool(PROB_GET) {
