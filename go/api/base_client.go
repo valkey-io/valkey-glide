@@ -501,11 +501,11 @@ func (client *baseClient) ResetConnectionPassword() (string, error) {
 //
 // Return value:
 //
-//	`"OK"` response on success.
+//		`"OK"` response on success.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	  In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) Set(key string, value string) (string, error) {
@@ -535,14 +535,14 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 //
 // Return value:
 //
-//	If the value is successfully set, return api.Result[string] containing "OK".
-//	If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist
-//	or ConditionalSet.OnlyIfEquals conditions, return api.CreateNilStringResult().
-//	If SetOptions.returnOldValue is set, return the old value as a String.
+//		If the value is successfully set, return api.Result[string] containing "OK".
+//		If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist
+//		or ConditionalSet.OnlyIfEquals conditions, return api.CreateNilStringResult().
+//		If SetOptions.returnOldValue is set, return the old value as a String.
 //
-//  In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	 In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) SetWithOptions(key string, value string, options options.SetOptions) (Result[string], error) {
@@ -573,11 +573,11 @@ func (client *baseClient) SetWithOptions(key string, value string, options optio
 //
 // Return value:
 //
-//		If key exists, returns the value of key as a String. Otherwise, return [api.CreateNilStringResult()].
+//			If key exists, returns the value of key as a String. Otherwise, return [api.CreateNilStringResult()].
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	  In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/get/
 func (client *baseClient) Get(key string) (Result[string], error) {
@@ -603,11 +603,11 @@ func (client *baseClient) Get(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
+//		If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
 //
-//	In transaction:
-//   It adds the command to the transaction queue instead of executing immediately.
-//	 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	 In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/getex/
 func (client *baseClient) GetEx(key string) (Result[string], error) {
@@ -633,11 +633,11 @@ func (client *baseClient) GetEx(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
+//		If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
 //
-//	In transaction:
-//   It adds the command to the transaction queue instead of executing immediately.
-//	 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	 In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/getex/
 func (client *baseClient) GetExWithOptions(key string, options options.GetExOptions) (Result[string], error) {
@@ -675,11 +675,11 @@ func (client *baseClient) GetExWithOptions(key string, options options.GetExOpti
 //
 // Return value:
 //
-//		`"OK"` on success.
+//			`"OK"` on success.
 //
-//	 In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/mset/
 func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
@@ -709,11 +709,11 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 //
 // Return value:
 //
-//		A bool containing true, if all keys were set. false, if no key was set.
+//			A bool containing true, if all keys were set. false, if no key was set.
 //
-//	 In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/msetnx/
 func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
@@ -742,12 +742,12 @@ func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
 //
 // Return value:
 //
-//		An array of values corresponding to the provided keys.
-//		If a key is not found, its corresponding value in the list will be a [api.CreateNilStringResult()]
+//			An array of values corresponding to the provided keys.
+//			If a key is not found, its corresponding value in the list will be a [api.CreateNilStringResult()]
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/mget/
 func (client *baseClient) MGet(keys []string) ([]Result[string], error) {
@@ -769,11 +769,11 @@ func (client *baseClient) MGet(keys []string) ([]Result[string], error) {
 //
 // Return value:
 //
-//		The value of `key` after the increment.
+//			The value of `key` after the increment.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/incr/
 func (client *baseClient) Incr(key string) (int64, error) {
@@ -796,11 +796,11 @@ func (client *baseClient) Incr(key string) (int64, error) {
 //
 // Return value:
 //
-//		The value of `key` after the increment.
+//			The value of `key` after the increment.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/incrby/
 func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
@@ -825,11 +825,11 @@ func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
 //
 // Return value:
 //
-//		The value of key after the increment.
+//			The value of key after the increment.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/incrbyfloat/
 func (client *baseClient) IncrByFloat(key string, amount float64) (float64, error) {
@@ -854,11 +854,11 @@ func (client *baseClient) IncrByFloat(key string, amount float64) (float64, erro
 //
 // Return value:
 //
-//		The value of `key` after the decrement.
+//			The value of `key` after the decrement.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/decr/
 func (client *baseClient) Decr(key string) (int64, error) {
@@ -881,11 +881,11 @@ func (client *baseClient) Decr(key string) (int64, error) {
 //
 // Return value:
 //
-//		The value of `key` after the decrement.
+//			The value of `key` after the decrement.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/decrby/
 func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
@@ -907,12 +907,12 @@ func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 //
 // Return value:
 //
-//		The length of the string value stored at `key`.
-//		If key does not exist, it is treated as an empty string, and the command returns `0`.
+//			The length of the string value stored at `key`.
+//			If key does not exist, it is treated as an empty string, and the command returns `0`.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/strlen/
 func (client *baseClient) Strlen(key string) (int64, error) {
@@ -939,11 +939,11 @@ func (client *baseClient) Strlen(key string) (int64, error) {
 //
 // Return value:
 //
-//		The length of the string stored at `key` after it was modified.
+//			The length of the string stored at `key` after it was modified.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/setrange/
 func (client *baseClient) SetRange(key string, offset int, value string) (int64, error) {
@@ -970,11 +970,11 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 //
 // Return value:
 //
-//		A substring extracted from the value stored at key. Returns empty string if the offset is out of bounds.
+//			A substring extracted from the value stored at key. Returns empty string if the offset is out of bounds.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/getrange/
 func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
@@ -998,11 +998,11 @@ func (client *baseClient) GetRange(key string, start int, end int) (string, erro
 //
 // Return value:
 //
-//		The length of the string after appending the value.
+//			The length of the string after appending the value.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/append/
 func (client *baseClient) Append(key string, value string) (int64, error) {
@@ -1036,12 +1036,12 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 //
 // Return value:
 //
-//		The longest common subsequence between the 2 strings.
-//		An empty string is returned if the keys do not exist or have no common subsequences.
+//			The longest common subsequence between the 2 strings.
+//			An empty string is returned if the keys do not exist or have no common subsequences.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
@@ -1070,11 +1070,11 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 //
 // Return value:
 //
-//		The total length of all the longest common subsequences the 2 strings.
+//			The total length of all the longest common subsequences the 2 strings.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCSLen(key1, key2 string) (int64, error) {
@@ -1104,19 +1104,19 @@ func (client *baseClient) LCSLen(key1, key2 string) (int64, error) {
 //
 // Return value:
 //
-//		A Map containing the indices of the longest common subsequence between the 2 strings
-//		and the total length of all the longest common subsequences. The resulting map contains
-//		two keys, "matches" and "len":
-//		  - "len" is mapped to the total length of the all longest common subsequences between
-//		     the 2 strings.
-//		  - "matches" is mapped to a array that stores pairs of indices that represent the location
-//		     of the common subsequences in the strings held by key1 and key2.
+//			A Map containing the indices of the longest common subsequence between the 2 strings
+//			and the total length of all the longest common subsequences. The resulting map contains
+//			two keys, "matches" and "len":
+//			  - "len" is mapped to the total length of the all longest common subsequences between
+//			     the 2 strings.
+//			  - "matches" is mapped to a array that stores pairs of indices that represent the location
+//			     of the common subsequences in the strings held by key1 and key2.
 //
 //	 In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec() a map containing the indices of the longest common
-//	  subsequence between the 2 strings and the total length of all the longest common subsequences.
-//	  value will be accessible in the returned results array.
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec() a map containing the indices of the longest common
+//	   subsequence between the 2 strings and the total length of all the longest common subsequences.
+//	   value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCSWithOptions(key1, key2 string, opts options.LCSIdxOptions) (map[string]interface{}, error) {
@@ -1139,12 +1139,12 @@ func (client *baseClient) LCSWithOptions(key1, key2 string, opts options.LCSIdxO
 //
 // Return value:
 //
-//		If key exists, returns the value of the key as a String and deletes the key.
-//		If key does not exist, returns a [api.NilResult[string]] (api.CreateNilStringResult()).
+//			If key exists, returns the value of the key as a String and deletes the key.
+//			If key does not exist, returns a [api.NilResult[string]] (api.CreateNilStringResult()).
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/getdel/
 func (client *baseClient) GetDel(key string) (Result[string], error) {
@@ -1174,12 +1174,12 @@ func (client *baseClient) GetDel(key string) (Result[string], error) {
 //
 // Return value:
 //
-//		The Result[string] associated with field, or [api.NilResult[string]](api.CreateNilStringResult()) when field is not
-//		present in the hash or key does not exist.
+//			The Result[string] associated with field, or [api.NilResult[string]](api.CreateNilStringResult()) when field is not
+//			present in the hash or key does not exist.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hget/
 func (client *baseClient) HGet(key string, field string) (Result[string], error) {
@@ -1204,12 +1204,12 @@ func (client *baseClient) HGet(key string, field string) (Result[string], error)
 //
 // Return value:
 //
-//		A map of all fields and their values as Result[string] in the hash, or an empty map when key does not exist.
+//			A map of all fields and their values as Result[string] in the hash, or an empty map when key does not exist.
 //
-//	 In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//    Upon transaction completion with Exec(), a map with fields and their values as Result[string] in the hash
-//	  value will be accessible in the returned results array.
+//	In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), a map with fields and their values as Result[string] in the hash
+//	   value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hgetall/
 func (client *baseClient) HGetAll(key string) (map[string]string, error) {
@@ -1232,17 +1232,17 @@ func (client *baseClient) HGetAll(key string) (map[string]string, error) {
 //
 // Return value:
 //
-//		An array of Result[string]s associated with the given fields, in the same order as they are requested.
+//			An array of Result[string]s associated with the given fields, in the same order as they are requested.
 //
-//		For every field that does not exist in the hash, a [api.NilResult[string]](api.CreateNilStringResult()) is
-//		returned.
+//			For every field that does not exist in the hash, a [api.NilResult[string]](api.CreateNilStringResult()) is
+//			returned.
 //
-//		If key does not exist, returns an empty string array.
+//			If key does not exist, returns an empty string array.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the array of Result[string]s associated with the given fields,
-//	  in the same order as they are requested  will be accessible in the returned results array.
+//	 In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the array of Result[string]s associated with the given fields,
+//	   in the same order as they are requested  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hmget/
 func (client *baseClient) HMGet(key string, fields []string) ([]Result[string], error) {
@@ -1267,11 +1267,11 @@ func (client *baseClient) HMGet(key string, fields []string) ([]Result[string], 
 //
 // Return value:
 //
-//		The number of fields that were added or updated.
+//			The number of fields that were added or updated.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hset/
 func (client *baseClient) HSet(key string, values map[string]string) (int64, error) {
@@ -1297,12 +1297,12 @@ func (client *baseClient) HSet(key string, values map[string]string) (int64, err
 //
 // Return value:
 //
-//		A bool containing true if field is a new field in the hash and value was set.
-//		false if field already exists in the hash and no operation was performed.
+//			A bool containing true if field is a new field in the hash and value was set.
+//			false if field already exists in the hash and no operation was performed.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the bool value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hsetnx/
 func (client *baseClient) HSetNX(key string, field string, value string) (bool, error) {
@@ -1327,11 +1327,11 @@ func (client *baseClient) HSetNX(key string, field string, value string) (bool, 
 //
 // Return value:
 //
-//		The number of fields that were removed from the hash, not including specified but non-existing fields.
+//			The number of fields that were removed from the hash, not including specified but non-existing fields.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hdel/
 func (client *baseClient) HDel(key string, fields []string) (int64, error) {
@@ -1353,12 +1353,12 @@ func (client *baseClient) HDel(key string, fields []string) (int64, error) {
 //
 // Return value:
 //
-//		The number of fields in the hash, or `0` when key does not exist.
-//		If key holds a value that is not a hash, an error is returned.
+//			The number of fields in the hash, or `0` when key does not exist.
+//			If key holds a value that is not a hash, an error is returned.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hlen/
 func (client *baseClient) HLen(key string) (int64, error) {
@@ -1380,12 +1380,12 @@ func (client *baseClient) HLen(key string) (int64, error) {
 //
 // Return value:
 //
-//		A slice containing all the values in the hash, or an empty slice when key does not exist.
+//			A slice containing all the values in the hash, or an empty slice when key does not exist.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), a slice containing all the values in the hash,
-//	     or an empty slice when key does not exist  will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a slice containing all the values in the hash,
+//		  or an empty slice when key does not exist  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hvals/
 func (client *baseClient) HVals(key string) ([]string, error) {
@@ -1408,12 +1408,12 @@ func (client *baseClient) HVals(key string) ([]string, error) {
 //
 // Return value:
 //
-//		A bool containing true if the hash contains the specified field.
-//		false if the hash does not contain the field, or if the key does not exist.
+//			A bool containing true if the hash contains the specified field.
+//			false if the hash does not contain the field, or if the key does not exist.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the bool value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hexists/
 func (client *baseClient) HExists(key string, field string) (bool, error) {
@@ -1435,12 +1435,12 @@ func (client *baseClient) HExists(key string, field string) (bool, error) {
 //
 // Return value:
 //
-//		A slice containing all the field names in the hash, or an empty slice when key does not exist.
+//			A slice containing all the field names in the hash, or an empty slice when key does not exist.
 //
-//	 In transaction:
-//     It adds the command to the transaction queue instead of executing immediately.
-//	   Upon transaction completion with Exec(), the slice containing all the field names in the hash,
-//	   or an empty slice when key does not exist value will be accessible in the returned results array.
+//	  In transaction:
+//	    It adds the command to the transaction queue instead of executing immediately.
+//		Upon transaction completion with Exec(), the slice containing all the field names in the hash,
+//		or an empty slice when key does not exist value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hkeys/
 func (client *baseClient) HKeys(key string) ([]string, error) {
@@ -1464,11 +1464,11 @@ func (client *baseClient) HKeys(key string) ([]string, error) {
 //
 // Return value:
 //
-//		The length of the string value associated with field, or `0` when field or key do not exist.
+//			The length of the string value associated with field, or `0` when field or key do not exist.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hstrlen/
 func (client *baseClient) HStrLen(key string, field string) (int64, error) {
@@ -1494,11 +1494,11 @@ func (client *baseClient) HStrLen(key string, field string) (int64, error) {
 //
 // Return value:
 //
-//		The value of `field` in the hash stored at `key` after the increment.
+//			The value of `field` in the hash stored at `key` after the increment.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hincrby/
 func (client *baseClient) HIncrBy(key string, field string, increment int64) (int64, error) {
@@ -1527,11 +1527,11 @@ func (client *baseClient) HIncrBy(key string, field string, increment int64) (in
 //
 // Return value:
 //
-//		The value of `field` in the hash stored at `key` after the increment.
+//			The value of `field` in the hash stored at `key` after the increment.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the float value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the float value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hincrbyfloat/
 func (client *baseClient) HIncrByFloat(key string, field string, increment float64) (float64, error) {
@@ -1555,19 +1555,19 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 //
 // Return value:
 //
-//		An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//		for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//		The second element is always an array of the subset of the set held in `key`. The array in the
-//		second element is always a flattened series of String pairs, where the key is at even indices
-//		and the value is at odd indices.
+//			An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
+//			for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
+//			The second element is always an array of the subset of the set held in `key`. The array in the
+//			second element is always a flattened series of String pairs, where the key is at even indices
+//			and the value is at odd indices.
 //
-//	 In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of the cursor and the subset of the hash held by
-//	 `key` where he first element is always the `cursor` for the next iteration of results, the `cursor` will be `"0"`
-//	  on the last iteration of the subset, the second element is always an array of the subset of the set held
-//	  in `key`. The array in the second element is always a flattened series of String pairs, where the key is
-//	  at even indices and the value is at odd indices. This array value will be accessible in the returned results array.
+//	  In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of the cursor and the subset of the hash held by
+//		 `key` where he first element is always the `cursor` for the next iteration of results, the `cursor` will be `"0"`
+//		  on the last iteration of the subset, the second element is always an array of the subset of the set held
+//		  in `key`. The array in the second element is always a flattened series of String pairs, where the key is
+//		  at even indices and the value is at odd indices. This array value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScan(key string, cursor string) (string, []string, error) {
@@ -1591,16 +1591,16 @@ func (client *baseClient) HScan(key string, cursor string) (string, []string, er
 //
 // Return value:
 //
-//		An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//		for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//		The second element is always an array of the subset of the set held in `key`. The array in the
-//		second element is always a flattened series of String pairs, where the key is at even indices
-//		and the value is at odd indices.
+//			An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
+//			for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
+//			The second element is always an array of the subset of the set held in `key`. The array in the
+//			second element is always a flattened series of String pairs, where the key is at even indices
+//			and the value is at odd indices.
 //
-//	 In transaction:
-//     It adds the command to the transaction queue instead of executing immediately.
-//	   Upon transaction completion with Exec(), an array of the cursor and the subset of the hash held by
-//	  `key` will be accessible in the returned results array.
+//	  In transaction:
+//	    It adds the command to the transaction queue instead of executing immediately.
+//		Upon transaction completion with Exec(), an array of the cursor and the subset of the hash held by
+//		`key` will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScanWithOptions(
@@ -1634,12 +1634,12 @@ func (client *baseClient) HScanWithOptions(
 //
 // Return value:
 //
-//		A random field name from the hash stored at `key`, or `nil` when
-//		  the key does not exist.
+//			A random field name from the hash stored at `key`, or `nil` when
+//			  the key does not exist.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the string value will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandField(key string) (Result[string], error) {
@@ -1669,13 +1669,13 @@ func (client *baseClient) HRandField(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	An array of random field names from the hash stored at `key`,
-//	   or an empty array when the key does not exist.
+//		An array of random field names from the hash stored at `key`,
+//		   or an empty array when the key does not exist.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the string array response
-//       will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the string array response
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string, error) {
@@ -1703,14 +1703,14 @@ func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string
 //
 // Return value:
 //
-//	A 2D `array` of `[field, value]` arrays, where `field` is a random
-//	  field name from the hash and `value` is the associated value of the field name.
-//	  If the hash does not exist or is empty, the response will be an empty array.
+//		A 2D `array` of `[field, value]` arrays, where `field` is a random
+//		  field name from the hash and `value` is the associated value of the field name.
+//		  If the hash does not exist or is empty, the response will be an empty array.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the 2d string array response
-//       will be accessible in the returned results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the 2d string array response
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCountWithValues(key string, count int64) ([][]string, error) {
@@ -1737,11 +1737,11 @@ func (client *baseClient) HRandFieldWithCountWithValues(key string, count int64)
 //
 // Return value:
 //
-//	The length of the list after the push operation.
+//		The length of the list after the push operation.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lpush/
 func (client *baseClient) LPush(key string, elements []string) (int64, error) {
@@ -1764,14 +1764,14 @@ func (client *baseClient) LPush(key string, elements []string) (int64, error) {
 //
 // Return value:
 //
-//	The Result[string] containing the value of the first element.
-//	If key does not exist, [api.CreateNilStringResult()] will be returned.
+//		The Result[string] containing the value of the first element.
+//		If key does not exist, [api.CreateNilStringResult()] will be returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual Result[string] containing the value of the first element
-//    will be accessible in the returned results array.
-//	  If key does not exist, [api.CreateNilStringResult()] will be returned.
+//	  In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the actual Result[string] containing the value of the first element
+//	   will be accessible in the returned results array.
+//	   If key does not exist, [api.CreateNilStringResult()] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/lpop/
 func (client *baseClient) LPop(key string) (Result[string], error) {
@@ -1797,14 +1797,14 @@ func (client *baseClient) LPop(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	An array of the popped elements as strings will be returned depending on the list's length
-//	If key does not exist, nil will be returned.
+//		An array of the popped elements as strings will be returned depending on the list's length
+//		If key does not exist, nil will be returned.
 //
-//	 In transaction:
-//       It adds the command to the transaction queue instead of executing immediately.
-//		 Upon transaction completion with Exec(), the string array response of the popped elements
-//       as strings will be returned depending on the list's length will be accessible in the returned
-//       results array. If key does not exist, nil will be returned in the results array.
+//		 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the string array response of the popped elements
+//	      as strings will be returned depending on the list's length will be accessible in the returned
+//	      results array. If key does not exist, nil will be returned in the results array.
 //
 // [valkey.io]: https://valkey.io/commands/lpop/
 func (client *baseClient) LPopCount(key string, count int64) ([]string, error) {
@@ -1828,12 +1828,13 @@ func (client *baseClient) LPopCount(key string, count int64) ([]string, error) {
 //
 // Return value:
 //
-//	The Result[int64] containing the index of the first occurrence of element, or [api.CreateNilInt64Result()] if element is
-//	not in the list.
+//			The Result[int64] containing the index of the first occurrence of element, or [api.CreateNilInt64Result()] if element is
+//			not in the list.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual Result[int64] value will be accessible in the returned results array.
+//		In transaction:
+//		   It adds the command to the transaction queue instead of executing immediately.
+//		   Upon transaction completion with Exec(), the actual Result[int64] value will be accessible in the returned results
+//	       array.
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (client *baseClient) LPos(key string, element string) (Result[int64], error) {
@@ -1861,11 +1862,12 @@ func (client *baseClient) LPos(key string, element string) (Result[int64], error
 //
 // Return value:
 //
-//	The Result[int64] containing the index of element, or [api.CreateNilInt64Result()] if element is not in the list.
+//			The Result[int64] containing the index of element, or [api.CreateNilInt64Result()] if element is not in the list.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual Result[int64] value will be accessible in the returned results array.
+//		  In transaction:
+//		   It adds the command to the transaction queue instead of executing immediately.
+//		   Upon transaction completion with Exec(), the actual Result[int64] value will be accessible in the returned results
+//	       array.
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (client *baseClient) LPosWithOptions(key string, element string, options options.LPosOptions) (Result[int64], error) {
@@ -1893,11 +1895,11 @@ func (client *baseClient) LPosWithOptions(key string, element string, options op
 //
 // Return value:
 //
-//	An array that holds the indices of the matching elements within the list.
+//	  An array that holds the indices of the matching elements within the list.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int array value will be accessible in the returned results array.
+//	  In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int array value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (client *baseClient) LPosCount(key string, element string, count int64) ([]int64, error) {
@@ -1923,11 +1925,11 @@ func (client *baseClient) LPosCount(key string, element string, count int64) ([]
 //
 // Return value:
 //
-//	An array that holds the indices of the matching elements within the list.
+//		An array that holds the indices of the matching elements within the list.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int array value will be accessible in the returned results array.
+//	 In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the actual int array value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (client *baseClient) LPosCountWithOptions(
@@ -1964,11 +1966,11 @@ func (client *baseClient) LPosCountWithOptions(
 //
 // Return value:
 //
-//	The length of the list after the push operation.
+//		The length of the list after the push operation.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/rpush/
 func (client *baseClient) RPush(key string, elements []string) (int64, error) {
@@ -1991,11 +1993,11 @@ func (client *baseClient) RPush(key string, elements []string) (int64, error) {
 //
 // Return value:
 //
-//	The number of members that were added to the set, excluding members already present.
+//		The number of members that were added to the set, excluding members already present.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//	  In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sadd/
 func (client *baseClient) SAdd(key string, members []string) (int64, error) {
@@ -2018,11 +2020,11 @@ func (client *baseClient) SAdd(key string, members []string) (int64, error) {
 //
 // Return value:
 //
-//	The number of members that were removed from the set, excluding non-existing members.
+//		The number of members that were removed from the set, excluding non-existing members.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//	  In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/srem/
 func (client *baseClient) SRem(key string, members []string) (int64, error) {
@@ -2047,11 +2049,11 @@ func (client *baseClient) SRem(key string, members []string) (int64, error) {
 //
 // Return value:
 //
-//	The number of elements in the resulting set.
+//		The number of elements in the resulting set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//	  In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sunionstore/
 func (client *baseClient) SUnionStore(destination string, keys []string) (int64, error) {
@@ -2073,13 +2075,13 @@ func (client *baseClient) SUnionStore(destination string, keys []string) (int64,
 //
 // Return value:
 //
-//	A `map[string]struct{}` containing all members of the set.
-//	Returns an empty collection if key does not exist.
+//		A `map[string]struct{}` containing all members of the set.
+//		Returns an empty collection if key does not exist.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a `map[string]struct{}` containing all members of the set
-//    will be accessible in the returned results array.
+//	  In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), a `map[string]struct{}` containing all members of the set
+//	   will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/smembers/
 func (client *baseClient) SMembers(key string) (map[string]struct{}, error) {
@@ -2101,11 +2103,11 @@ func (client *baseClient) SMembers(key string) (map[string]struct{}, error) {
 //
 // Return value:
 //
-//	The cardinality (number of elements) of the set, or `0` if the key does not exist.
+//	  The cardinality (number of elements) of the set, or `0` if the key does not exist.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		 In transaction:
+//		   It adds the command to the transaction queue instead of executing immediately.
+//		   Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/scard/
 func (client *baseClient) SCard(key string) (int64, error) {
@@ -2128,12 +2130,12 @@ func (client *baseClient) SCard(key string) (int64, error) {
 //
 // Return value:
 //
-//	A bool containing true if the member exists in the set, false otherwise.
-//	If key doesn't exist, it is treated as an empty set and the method returns false.
+//		A bool containing true if the member exists in the set, false otherwise.
+//		If key doesn't exist, it is treated as an empty set and the method returns false.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the bool value will be accessible in the returned results array.
+//	  In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sismember/
 func (client *baseClient) SIsMember(key string, member string) (bool, error) {
@@ -2161,9 +2163,9 @@ func (client *baseClient) SIsMember(key string, member string) (bool, error) {
 //	If a key does not exist, it is treated as an empty set.
 //
 //	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a `map[string]struct{}` representing
-//    the difference between the sets will be accessible in the returned results array.
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), a `map[string]struct{}` representing
+//	   the difference between the sets will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sdiff/
 func (client *baseClient) SDiff(keys []string) (map[string]struct{}, error) {
@@ -2189,11 +2191,11 @@ func (client *baseClient) SDiff(keys []string) (map[string]struct{}, error) {
 //
 // Return value:
 //
-//	The number of elements in the resulting set.
+//		The number of elements in the resulting set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//	 In transaction:
+//	   It adds the command to the transaction queue instead of executing immediately.
+//	   Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sdiffstore/
 func (client *baseClient) SDiffStore(destination string, keys []string) (int64, error) {
@@ -2217,13 +2219,13 @@ func (client *baseClient) SDiffStore(destination string, keys []string) (int64, 
 //
 // Return value:
 //
-//	A `map[string]struct{}` containing members which are present in all given sets.
-//	If one or more sets do not exist, an empty collection will be returned.
+//		A `map[string]struct{}` containing members which are present in all given sets.
+//		If one or more sets do not exist, an empty collection will be returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a `map[string]struct{}` containing
-//    members which are present in all given sets will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a `map[string]struct{}` containing
+//	      members which are present in all given sets will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sinter/
 func (client *baseClient) SInter(keys []string) (map[string]struct{}, error) {
@@ -2248,11 +2250,11 @@ func (client *baseClient) SInter(keys []string) (map[string]struct{}, error) {
 //
 // Return value:
 //
-//	The number of elements in the resulting set.
+//		The number of elements in the resulting set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	   In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sinterstore/
 func (client *baseClient) SInterStore(destination string, keys []string) (int64, error) {
@@ -2280,11 +2282,11 @@ func (client *baseClient) SInterStore(destination string, keys []string) (int64,
 //
 // Return value:
 //
-//	The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
+//		The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sintercard/
 func (client *baseClient) SInterCard(keys []string) (int64, error) {
@@ -2313,13 +2315,13 @@ func (client *baseClient) SInterCard(keys []string) (int64, error) {
 //
 // Return value:
 //
-//	The cardinality of the intersection result, or the limit if reached.
-//	If one or more sets do not exist, `0` is returned.
-//	If the intersection cardinality reaches 'limit' partway through the computation, returns 'limit' as the cardinality.
+//		The cardinality of the intersection result, or the limit if reached.
+//		If one or more sets do not exist, `0` is returned.
+//		If the intersection cardinality reaches 'limit' partway through the computation, returns 'limit' as the cardinality.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sintercard/
 func (client *baseClient) SInterCardLimit(keys []string, limit int64) (int64, error) {
@@ -2347,13 +2349,13 @@ func (client *baseClient) SInterCardLimit(keys []string, limit int64) (int64, er
 //
 // Return value:
 //
-//	A Result[string] containing a random element from the set.
-//	Returns api.CreateNilStringResult() if key does not exist.
+//		A Result[string] containing a random element from the set.
+//		Returns api.CreateNilStringResult() if key does not exist.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual Result[string] containing a random element from 
-//    the set will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual Result[string] containing a random element from
+//	      the set will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/srandmember/
 func (client *baseClient) SRandMember(key string) (Result[string], error) {
@@ -2378,12 +2380,12 @@ func (client *baseClient) SRandMember(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	A Result[string] containing the value of the popped member.
-//	Returns a NilResult if key does not exist.
+//		A Result[string] containing the value of the popped member.
+//		Returns a NilResult if key does not exist.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual Result[string] will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual Result[string] will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/spop/
 func (client *baseClient) SPop(key string) (Result[string], error) {
@@ -2408,12 +2410,12 @@ func (client *baseClient) SPop(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	A []bool containing whether each member is a member of the set stored at key.
+//		A []bool containing whether each member is a member of the set stored at key.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a []bool containing whether each member is a member of the set stored at key
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a []bool containing whether each member is a member of the set stored at key
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/smismember/
 func (client *baseClient) SMIsMember(key string, members []string) ([]bool, error) {
@@ -2437,13 +2439,13 @@ func (client *baseClient) SMIsMember(key string, members []string) ([]bool, erro
 //
 // Return value:
 //
-//	A `map[string]struct{}` of members which are present in at least one of the given sets.
-//	If none of the sets exist, an empty collection will be returned.
+//		A `map[string]struct{}` of members which are present in at least one of the given sets.
+//		If none of the sets exist, an empty collection will be returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a `map[string]struct{}` of members will be 
-//    accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a `map[string]struct{}` of members will be
+//	      accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sunion/
 func (client *baseClient) SUnion(keys []string) (map[string]struct{}, error) {
@@ -2536,11 +2538,11 @@ func (client *baseClient) SScanWithOptions(
 //
 // Return value:
 //
-//	`true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
+//		`true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/smove/
 func (client *baseClient) SMove(source string, destination string, member string) (bool, error) {
@@ -2566,14 +2568,14 @@ func (client *baseClient) SMove(source string, destination string, member string
 //
 // Return value:
 //
-//	Array of elements as Result[string] in the specified range.
-//	If start exceeds the end of the list, or if start is greater than end, an empty array will be returned.
-//	If end exceeds the actual end of the list, the range will stop at the actual end of the list.
-//	If key does not exist an empty array will be returned.
+//		Array of elements as Result[string] in the specified range.
+//		If start exceeds the end of the list, or if start is greater than end, an empty array will be returned.
+//		If end exceeds the actual end of the list, the range will stop at the actual end of the list.
+//		If key does not exist an empty array will be returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lrange/
 func (client *baseClient) LRange(key string, start int64, end int64) ([]string, error) {
@@ -2599,12 +2601,12 @@ func (client *baseClient) LRange(key string, start int64, end int64) ([]string, 
 //
 // Return value:
 //
-//	The Result[string] containing element at index in the list stored at key.
-//	If index is out of range or if key does not exist, [api.CreateNilStringResult()] is returned.
+//		The Result[string] containing element at index in the list stored at key.
+//		If index is out of range or if key does not exist, [api.CreateNilStringResult()] is returned.
 //
-//  In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	 In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lindex/
 func (client *baseClient) LIndex(key string, index int64) (Result[string], error) {
@@ -2634,15 +2636,15 @@ func (client *baseClient) LIndex(key string, index int64) (Result[string], error
 //
 // Return value:
 //
-//	Always `"OK"`.
-//	If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes
-//	key to be removed).
-//	If end exceeds the actual end of the list, it will be treated like the last element of the list.
-//	If key does not exist, `"OK"` will be returned without changes to the database.
+//		Always `"OK"`.
+//		If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes
+//		key to be removed).
+//		If end exceeds the actual end of the list, it will be treated like the last element of the list.
+//		If key does not exist, `"OK"` will be returned without changes to the database.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/ltrim/
 func (client *baseClient) LTrim(key string, start int64, end int64) (string, error) {
@@ -2664,12 +2666,12 @@ func (client *baseClient) LTrim(key string, start int64, end int64) (string, err
 //
 // Return value:
 //
-//	The length of the list at `key`.
-//	If `key` does not exist, it is interpreted as an empty list and `0` is returned.
+//		The length of the list at `key`.
+//		If `key` does not exist, it is interpreted as an empty list and `0` is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/llen/
 func (client *baseClient) LLen(key string) (int64, error) {
@@ -2697,12 +2699,12 @@ func (client *baseClient) LLen(key string) (int64, error) {
 //
 // Return value:
 //
-//	The number of the removed elements.
-//	If `key` does not exist, `0` is returned.
+//		The number of the removed elements.
+//		If `key` does not exist, `0` is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lrem/
 func (client *baseClient) LRem(key string, count int64, element string) (int64, error) {
@@ -2725,13 +2727,13 @@ func (client *baseClient) LRem(key string, count int64, element string) (int64, 
 //
 // Return value:
 //
-//	The Result[string] containing the value of the last element.
-//	If key does not exist, [api.CreateNilStringResult()] will be returned.
+//		The Result[string] containing the value of the last element.
+//		If key does not exist, [api.CreateNilStringResult()] will be returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the Result[string] containing the value of the last element
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the Result[string] containing the value of the last element
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/rpop/
 func (client *baseClient) RPop(key string) (Result[string], error) {
@@ -2757,12 +2759,12 @@ func (client *baseClient) RPop(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	An array of popped elements as strings will be returned depending on the list's length.
-//	If key does not exist, nil will be returned.
+//		An array of popped elements as strings will be returned depending on the list's length.
+//		If key does not exist, nil will be returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual []string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual []string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/rpop/
 func (client *baseClient) RPopCount(key string, count int64) ([]string, error) {
@@ -2787,13 +2789,13 @@ func (client *baseClient) RPopCount(key string, count int64) ([]string, error) {
 //
 // Return value:
 //
-//	The list length after a successful insert operation.
-//	If the `key` doesn't exist returns `-1`.
-//	If the `pivot` wasn't found, returns `0`.
+//		The list length after a successful insert operation.
+//		If the `key` doesn't exist returns `-1`.
+//		If the `pivot` wasn't found, returns `0`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/linsert/
 func (client *baseClient) LInsert(
@@ -2835,13 +2837,13 @@ func (client *baseClient) LInsert(
 //
 // Return value:
 //
-//	A two-element array containing the key from which the element was popped and the value of the popped
-//	element, formatted as [key, value].
-//	If no element could be popped and the timeout expired, returns `nil`.
+//		A two-element array containing the key from which the element was popped and the value of the popped
+//		element, formatted as [key, value].
+//		If no element could be popped and the timeout expired, returns `nil`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual array string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual array string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/blpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -2880,8 +2882,9 @@ func (client *baseClient) BLPop(keys []string, timeoutSecs float64) ([]string, e
 //
 //	In transaction:
 //    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
+// 	  Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
 
+//
 // [valkey.io]: https://valkey.io/commands/brpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]string, error) {
@@ -2908,11 +2911,11 @@ func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]string, e
 //
 // Return value:
 //
-//	The length of the list after the push operation.
+//		The length of the list after the push operation.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/rpushx/
 func (client *baseClient) RPushX(key string, elements []string) (int64, error) {
@@ -2936,11 +2939,11 @@ func (client *baseClient) RPushX(key string, elements []string) (int64, error) {
 //
 // Return value:
 //
-//	The length of the list after the push operation.
+//		The length of the list after the push operation.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/rpushx/
 func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
@@ -2967,12 +2970,12 @@ func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
+//		A map of key name mapped array of popped element.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual map of key name mapped array of popped element
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual map of key name mapped array of popped element
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (client *baseClient) LMPop(keys []string, listDirection options.ListDirection) (map[string][]string, error) {
@@ -3015,12 +3018,12 @@ func (client *baseClient) LMPop(keys []string, listDirection options.ListDirecti
 //
 // Return value:
 //
-//	A map of key name mapped array of popped elements.
+//		A map of key name mapped array of popped elements.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual map of key name mapped array of popped elements
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual map of key name mapped array of popped elements
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (client *baseClient) LMPopCount(
@@ -3072,13 +3075,13 @@ func (client *baseClient) LMPopCount(
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
-//	If no member could be popped and the timeout expired, returns nil.
+//		A map of key name mapped array of popped element.
+//		If no member could be popped and the timeout expired, returns nil.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual map of key name mapped array of popped element
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual map of key name mapped array of popped element
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -3134,13 +3137,13 @@ func (client *baseClient) BLMPop(
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
-//	If no member could be popped and the timeout expired, returns nil.
+//		A map of key name mapped array of popped element.
+//		If no member could be popped and the timeout expired, returns nil.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual map of
-//    key name mapped array of popped element will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual map of
+//	      key name mapped array of popped element will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -3188,11 +3191,11 @@ func (client *baseClient) BLMPopCount(
 //
 // Return value:
 //
-//	`"OK"`.
+//		`"OK"`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the `"OK` response will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the `"OK` response will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lset/
 func (client *baseClient) LSet(key string, index int64, element string) (string, error) {
@@ -3218,12 +3221,12 @@ func (client *baseClient) LSet(key string, index int64, element string) (string,
 //
 // Return value:
 //
-//	A Result[string] containing the popped element or api.CreateNilStringResult() if source does not exist.
+//		A Result[string] containing the popped element or api.CreateNilStringResult() if source does not exist.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a Result[string] containing the popped element value will 
-//    be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a Result[string] containing the popped element value will
+//	      be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lmove/
 func (client *baseClient) LMove(
@@ -3278,13 +3281,13 @@ func (client *baseClient) LMove(
 //
 // Return value:
 //
-//	A Result[string] containing the popped element or api.CreateNilStringResult() if source does not exist or if the
-//	operation timed-out.
+//		A Result[string] containing the popped element or api.CreateNilStringResult() if source does not exist or if the
+//		operation timed-out.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a Result[string] containing the popped element
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a Result[string] containing the popped element
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/blmove/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -3335,11 +3338,11 @@ func (client *baseClient) BLMove(
 //
 // Return value:
 //
-//	Returns the number of keys that were removed.
+//		Returns the number of keys that were removed.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/del/
 func (client *baseClient) Del(keys []string) (int64, error) {
@@ -3368,11 +3371,11 @@ func (client *baseClient) Del(keys []string) (int64, error) {
 //
 // Return value:
 //
-//	Returns the number of existing keys.
+//		Returns the number of existing keys.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/exists/
 func (client *baseClient) Exists(keys []string) (int64, error) {
@@ -3397,12 +3400,12 @@ func (client *baseClient) Exists(keys []string) (int64, error) {
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-//	or operation skipped due to the provided arguments.
+//		`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+//		or operation skipped due to the provided arguments.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
 func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
@@ -3429,12 +3432,12 @@ func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the    timeout was not set. e.g. key doesn't exist,
-//	or operation skipped due to the provided arguments.
+//		`true` if the timeout was set. `false` if the    timeout was not set. e.g. key doesn't exist,
+//		or operation skipped due to the provided arguments.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
 func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCondition options.ExpireCondition) (bool, error) {
@@ -3465,12 +3468,12 @@ func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCon
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-//	or operation skipped due to the provided arguments.
+//		`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+//		or operation skipped due to the provided arguments.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/expireat/
 func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (bool, error) {
@@ -3500,12 +3503,12 @@ func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (bo
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-//	or operation skipped due to the provided arguments.
+//		`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+//		or operation skipped due to the provided arguments.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/expireat/
 func (client *baseClient) ExpireAtWithOptions(
@@ -3539,12 +3542,12 @@ func (client *baseClient) ExpireAtWithOptions(
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-//	or operation skipped due to the provided arguments.
+//		`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+//		or operation skipped due to the provided arguments.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pexpire/
 func (client *baseClient) PExpire(key string, milliseconds int64) (bool, error) {
@@ -3568,12 +3571,12 @@ func (client *baseClient) PExpire(key string, milliseconds int64) (bool, error) 
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-//	or operation skipped due to the provided arguments.
+//		`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+//		or operation skipped due to the provided arguments.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pexpire/
 func (client *baseClient) PExpireWithOptions(
@@ -3607,12 +3610,12 @@ func (client *baseClient) PExpireWithOptions(
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-//	or operation skipped due to the provided arguments.
+//		`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+//		or operation skipped due to the provided arguments.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pexpireat/
 func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error) {
@@ -3638,12 +3641,12 @@ func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int6
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-//	or operation skipped due to the provided arguments.
+//		`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+//		or operation skipped due to the provided arguments.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pexpireat/
 func (client *baseClient) PExpireAtWithOptions(
@@ -3674,12 +3677,12 @@ func (client *baseClient) PExpireAtWithOptions(
 //
 // Return value:
 //
-//	The expiration Unix timestamp in seconds.
-//	`-2` if key does not exist or `-1` is key exists but has no associated expiration.
+//		The expiration Unix timestamp in seconds.
+//		`-2` if key does not exist or `-1` is key exists but has no associated expiration.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/expiretime/
 func (client *baseClient) ExpireTime(key string) (int64, error) {
@@ -3700,12 +3703,12 @@ func (client *baseClient) ExpireTime(key string) (int64, error) {
 //
 // Return value:
 //
-//	The expiration Unix timestamp in milliseconds.
-//	`-2` if key does not exist or `-1` is key exists but has no associated expiration.
+//		The expiration Unix timestamp in milliseconds.
+//		`-2` if key does not exist or `-1` is key exists but has no associated expiration.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pexpiretime/
 func (client *baseClient) PExpireTime(key string) (int64, error) {
@@ -3725,12 +3728,12 @@ func (client *baseClient) PExpireTime(key string) (int64, error) {
 //
 // Return value:
 //
-//	Returns TTL in seconds,
-//	`-2` if key does not exist, or `-1` if key exists but has no associated expiration.
+//		Returns TTL in seconds,
+//		`-2` if key does not exist, or `-1` if key exists but has no associated expiration.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/ttl/
 func (client *baseClient) TTL(key string) (int64, error) {
@@ -3750,12 +3753,12 @@ func (client *baseClient) TTL(key string) (int64, error) {
 //
 // Return value:
 //
-//	Returns TTL in milliseconds,
-//	`-2` if key does not exist, or `-1` if key exists but has no associated expiration.
+//		Returns TTL in milliseconds,
+//		`-2` if key does not exist, or `-1` if key exists but has no associated expiration.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pttl/
 func (client *baseClient) PTTL(key string) (int64, error) {
@@ -3779,12 +3782,12 @@ func (client *baseClient) PTTL(key string) (int64, error) {
 //
 // Return value:
 //
-//	If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-//	altered, then returns `1`. Otherwise, returns `0`.
+//		If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+//		altered, then returns `1`. Otherwise, returns `0`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pfadd/
 func (client *baseClient) PfAdd(key string, elements []string) (int64, error) {
@@ -3814,12 +3817,12 @@ func (client *baseClient) PfAdd(key string, elements []string) (int64, error) {
 //
 // Return value:
 //
-//	The approximated cardinality of given HyperLogLog data structures.
-//	The cardinality of a key that does not exist is `0`.
+//		The approximated cardinality of given HyperLogLog data structures.
+//		The cardinality of a key that does not exist is `0`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pfcount/
 func (client *baseClient) PfCount(keys []string) (int64, error) {
@@ -3846,11 +3849,11 @@ func (client *baseClient) PfCount(keys []string) (int64, error) {
 //
 // Return value:
 //
-//	If the HyperLogLog values is successfully merged  it returns "OK".
+//		If the HyperLogLog values is successfully merged  it returns "OK".
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pfmerge/
 func (client *baseClient) PfMerge(destination string, sourceKeys []string) (string, error) {
@@ -3883,11 +3886,11 @@ func (client *baseClient) PfMerge(destination string, sourceKeys []string) (stri
 //
 // Return value:
 //
-//	Return the number of keys that were unlinked.
+//		Return the number of keys that were unlinked.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/unlink/
 func (client *baseClient) Unlink(keys []string) (int64, error) {
@@ -3908,11 +3911,11 @@ func (client *baseClient) Unlink(keys []string) (int64, error) {
 //
 // Return value:
 //
-//	If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
+//		If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/type/
 func (client *baseClient) Type(key string) (string, error) {
@@ -3940,11 +3943,11 @@ func (client *baseClient) Type(key string) (string, error) {
 //
 // Return value:
 //
-//	The number of keys that were updated.
+//		The number of keys that were updated.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: Https://valkey.io/commands/touch/
 func (client *baseClient) Touch(keys []string) (int64, error) {
@@ -3971,11 +3974,11 @@ func (client *baseClient) Touch(keys []string) (int64, error) {
 //
 // Return value:
 //
-//	If the key was successfully renamed, return "OK". If key does not exist, an error is thrown.
+//		If the key was successfully renamed, return "OK". If key does not exist, an error is thrown.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/rename/
 func (client *baseClient) Rename(key string, newKey string) (string, error) {
@@ -3999,11 +4002,11 @@ func (client *baseClient) Rename(key string, newKey string) (string, error) {
 //
 // Return value:
 //
-//	`true` if key was renamed to `newKey`, `false` if `newKey` already exists.
+//		`true` if key was renamed to `newKey`, `false` if `newKey` already exists.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/renamenx/
 func (client *baseClient) RenameNX(key string, newKey string) (bool, error) {
@@ -4025,11 +4028,11 @@ func (client *baseClient) RenameNX(key string, newKey string) (bool, error) {
 //
 // Return value:
 //
-//	The id of the added entry.
+//		The id of the added entry.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the id of the added entry will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the id of the added entry will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (client *baseClient) XAdd(key string, values [][]string) (Result[string], error) {
@@ -4048,11 +4051,11 @@ func (client *baseClient) XAdd(key string, values [][]string) (Result[string], e
 //
 // Return value:
 //
-//	The id of the added entry.
+//		The id of the added entry.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the id of the added entry will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the id of the added entry will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (client *baseClient) XAddWithOptions(
@@ -4102,13 +4105,13 @@ func (client *baseClient) XAddWithOptions(
 //
 // Return value:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requiested entries.
+//		A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//		a key does not exist or does not contain requiested entries.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a `map[string]map[string][][]string` of stream keys to a map of stream entry
-//    IDs mapped to an array entries will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a `map[string]map[string][][]string` of stream keys to a map of stream entry
+//	      IDs mapped to an array entries will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error) {
@@ -4130,13 +4133,13 @@ func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[st
 //
 // Return value:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requiested entries.
+//		A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//		a key does not exist or does not contain requiested entries.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a `map[string]map[string][][]string` of stream keys to a map of stream entry
-//    IDs mapped to an array entries will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a `map[string]map[string][][]string` of stream keys to a map of stream entry
+//	      IDs mapped to an array entries will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
@@ -4173,13 +4176,13 @@ func (client *baseClient) XReadWithOptions(
 //
 // Return value:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//		A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//		a key does not exist or does not contain requested entries.
 //
-//	In transaction:
-//   It adds the command to the transaction queue instead of executing immediately.
-//	 Upon transaction completion with Exec(), a `map[string]map[string][][]string` of stream keys to a map of 
-//   stream entry IDs mapped to an array entries will be accessible in the returned results array.
+//		In transaction:
+//	     It adds the command to the transaction queue instead of executing immediately.
+//		 Upon transaction completion with Exec(), a `map[string]map[string][][]string` of stream keys to a map of
+//	     stream entry IDs mapped to an array entries will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (client *baseClient) XReadGroup(
@@ -4207,13 +4210,13 @@ func (client *baseClient) XReadGroup(
 //
 // Return value:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requiested entries.
+//		A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//		a key does not exist or does not contain requiested entries.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a `map[string]map[string][][]string` of stream keys to a map of 
-//    stream entry IDs mapped to an array entries will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a `map[string]map[string][][]string` of stream keys to a map of
+//	      stream entry IDs mapped to an array entries will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (client *baseClient) XReadGroupWithOptions(
@@ -4272,11 +4275,11 @@ func createStreamCommandArgs(
 //
 // Return value:
 //
-//	The number of members added to the set.
+//		The number of members added to the set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
 func (client *baseClient) ZAdd(
@@ -4306,11 +4309,11 @@ func (client *baseClient) ZAdd(
 //
 // Return value:
 //
-//	The number of members added to the set. If `CHANGED` is set, the number of members that were updated.
+//		The number of members added to the set. If `CHANGED` is set, the number of members that were updated.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
 func (client *baseClient) ZAddWithOptions(
@@ -4360,12 +4363,12 @@ func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (R
 //
 // Return value:
 //
-//	Result[float64] - The new score of the member.
+//		Result[float64] - The new score of the member.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual `Result[float64]` value
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual `Result[float64]` value
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
 func (client *baseClient) ZAddIncr(
@@ -4394,12 +4397,12 @@ func (client *baseClient) ZAddIncr(
 //
 // Return value:
 //
-//	The new score of the member.
-//	If there was a conflict with the options, the operation aborts and `nil` is returned.
+//		The new score of the member.
+//		If there was a conflict with the options, the operation aborts and `nil` is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
 func (client *baseClient) ZAddIncrWithOptions(
@@ -4431,11 +4434,11 @@ func (client *baseClient) ZAddIncrWithOptions(
 //
 // Return value:
 //
-//	The new score of member.
+//		The new score of member.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zincrby/
 func (client *baseClient) ZIncrBy(key string, increment float64, member string) (float64, error) {
@@ -4458,14 +4461,14 @@ func (client *baseClient) ZIncrBy(key string, increment float64, member string) 
 //
 // Return value:
 //
-//	A map containing the removed member and its corresponding score.
-//	If `key` doesn't exist, it will be treated as an empty sorted set and the
-//	command returns an empty map.
+//		A map containing the removed member and its corresponding score.
+//		If `key` doesn't exist, it will be treated as an empty sorted set and the
+//		command returns an empty map.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a map containing the removed member
-//    and its corresponding score will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a map containing the removed member
+//	      and its corresponding score will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
 func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
@@ -4488,14 +4491,14 @@ func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 //
 // Return value:
 //
-//	A map containing the removed members and their corresponding scores.
-//	If `key` doesn't exist, it will be treated as an empty sorted set and the
-//	command returns an empty map.
+//		A map containing the removed members and their corresponding scores.
+//		If `key` doesn't exist, it will be treated as an empty sorted set and the
+//		command returns an empty map.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a map containing the removed members and their corresponding scores
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a map containing the removed members and their corresponding scores
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
 func (client *baseClient) ZPopMinWithOptions(key string, options options.ZPopOptions) (map[string]float64, error) {
@@ -4521,14 +4524,14 @@ func (client *baseClient) ZPopMinWithOptions(key string, options options.ZPopOpt
 //
 // Return value:
 //
-//	A map containing the removed member and its corresponding score.
-//	If `key` doesn't exist, it will be treated as an empty sorted set and the
-//	command returns an empty map.
+//		A map containing the removed member and its corresponding score.
+//		If `key` doesn't exist, it will be treated as an empty sorted set and the
+//		command returns an empty map.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a map containing the removed member
-//    and its corresponding score will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a map containing the removed member
+//	      and its corresponding score will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
 func (client *baseClient) ZPopMax(key string) (map[string]float64, error) {
@@ -4551,14 +4554,14 @@ func (client *baseClient) ZPopMax(key string) (map[string]float64, error) {
 //
 // Return value:
 //
-//	A map containing the removed members and their corresponding scores.
-//	If `key` doesn't exist, it will be treated as an empty sorted set and the
-//	command returns an empty map.
+//		A map containing the removed members and their corresponding scores.
+//		If `key` doesn't exist, it will be treated as an empty sorted set and the
+//		command returns an empty map.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a map containing the removed members
-//    and their corresponding scores will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a map containing the removed members
+//	      and their corresponding scores will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
 func (client *baseClient) ZPopMaxWithOptions(key string, options options.ZPopOptions) (map[string]float64, error) {
@@ -4585,12 +4588,12 @@ func (client *baseClient) ZPopMaxWithOptions(key string, options options.ZPopOpt
 //
 // Return value:
 //
-//	The number of members that were removed from the sorted set, not including non-existing members.
-//	If `key` does not exist, it is treated as an empty sorted set, and this command returns `0`.
+//		The number of members that were removed from the sorted set, not including non-existing members.
+//		If `key` does not exist, it is treated as an empty sorted set, and this command returns `0`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zrem/
 func (client *baseClient) ZRem(key string, members []string) (int64, error) {
@@ -4611,13 +4614,13 @@ func (client *baseClient) ZRem(key string, members []string) (int64, error) {
 //
 // Return value:
 //
-//	The number of elements in the sorted set.
-//	If `key` does not exist, it is treated as an empty sorted set, and this command returns `0`.
-//	If `key` holds a value that is not a sorted set, an error is returned.
+//		The number of elements in the sorted set.
+//		If `key` does not exist, it is treated as an empty sorted set, and this command returns `0`.
+//		If `key` holds a value that is not a sorted set, an error is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zcard/
 func (client *baseClient) ZCard(key string) (int64, error) {
@@ -4648,14 +4651,14 @@ func (client *baseClient) ZCard(key string) (int64, error) {
 //
 // Return value:
 //
-//	A `KeyWithMemberAndScore` struct containing the key where the member was popped out, the member
-//	itself, and the member score. If no member could be popped and the `timeout` expired, returns `nil`.
+//		A `KeyWithMemberAndScore` struct containing the key where the member was popped out, the member
+//		itself, and the member score. If no member could be popped and the `timeout` expired, returns `nil`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a `KeyWithMemberAndScore` struct containing the key where
-//    the member was popped out, the member itself, and the member score will be accessible in the
-//    returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a `KeyWithMemberAndScore` struct containing the key where
+//	      the member was popped out, the member itself, and the member score will be accessible in the
+//	      returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/bzpopmin/
 //
@@ -4693,17 +4696,17 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 //
 // Return value:
 //
-//	An object containing the following elements:
-//	- The key name of the set from which the element was popped.
-//	- An array of member scores of the popped elements.
-//	Returns `nil` if no member could be popped and the timeout expired.
+//		An object containing the following elements:
+//		- The key name of the set from which the element was popped.
+//		- An array of member scores of the popped elements.
+//		Returns `nil` if no member could be popped and the timeout expired.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an object containing the
-//    elements, the key name of the set from which the element was popped 
-//    and an array of member scores of the popped elements 
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an object containing the
+//	      elements, the key name of the set from which the element was popped
+//	      and an array of member scores of the popped elements
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/bzmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -4766,16 +4769,16 @@ func (client *baseClient) BZMPop(
 //
 // Return value:
 //
-//	An object containing the following elements:
-//	- The key name of the set from which the element was popped.
-//	- An array of member scores of the popped elements.
-//	Returns `nil` if no member could be popped and the timeout expired.
+//		An object containing the following elements:
+//		- The key name of the set from which the element was popped.
+//		- An array of member scores of the popped elements.
+//		Returns `nil` if no member could be popped and the timeout expired.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), sn object containing the
-//    following elements: the key name of the set from which the element was popped
-//	  and array of member scores of the popped elements will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), sn object containing the
+//	      following elements: the key name of the set from which the element was popped
+//		  and array of member scores of the popped elements will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/bzmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -4835,13 +4838,13 @@ func (client *baseClient) BZMPopWithOptions(
 //
 // Return value:
 //
-//	An array of elements within the specified range.
-//	If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
+//		An array of elements within the specified range.
+//		If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of elements within the specified range will be 
-//    accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of elements within the specified range will be
+//	      accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
 func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error) {
@@ -4874,13 +4877,13 @@ func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]
 //
 // Return value:
 //
-//	A map of elements and their scores within the specified range.
-//	If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
+//		A map of elements and their scores within the specified range.
+//		If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a map of elements and their scores within the specified range
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a map of elements and their scores within the specified range
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
 func (client *baseClient) ZRangeWithScores(
@@ -4924,11 +4927,11 @@ func (client *baseClient) ZRangeWithScores(
 //
 // Return value:
 //
-//	The number of elements in the resulting sorted set.
+//		The number of elements in the resulting sorted set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zrangestore/
 func (client *baseClient) ZRangeStore(
@@ -4961,11 +4964,11 @@ func (client *baseClient) ZRangeStore(
 //
 // Return value:
 //
-//	`false` if key does not exist or does not have an associated timeout, `true` if the timeout has been removed.
+//		`false` if key does not exist or does not have an associated timeout, `true` if the timeout has been removed.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/persist/
 func (client *baseClient) Persist(key string) (bool, error) {
@@ -4989,11 +4992,11 @@ func (client *baseClient) Persist(key string) (bool, error) {
 //
 // Return value:
 //
-//	The number of members in the specified score range.
+//		The number of members in the specified score range.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zcount/
 func (client *baseClient) ZCount(key string, rangeOptions options.ZCountRange) (int64, error) {
@@ -5021,13 +5024,13 @@ func (client *baseClient) ZCount(key string, rangeOptions options.ZCountRange) (
 //
 // Return value:
 //
-//	The rank of `member` in the sorted set.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//		The rank of `member` in the sorted set.
+//		If `key` doesn't exist, or if `member` is not present in the set,
+//		`nil` will be returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRank(key string, member string) (Result[int64], error) {
@@ -5053,13 +5056,13 @@ func (client *baseClient) ZRank(key string, member string) (Result[int64], error
 //
 // Return value:
 //
-//	A tuple containing the rank of `member` and its score.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//		A tuple containing the rank of `member` and its score.
+//		If `key` doesn't exist, or if `member` is not present in the set,
+//		`nil` will be returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
@@ -5086,14 +5089,14 @@ func (client *baseClient) ZRankWithScore(key string, member string) (Result[int6
 //
 // Return value:
 //
-//	The rank of `member` in the sorted set, where ranks are ordered from high to
-//	low based on scores.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//		The rank of `member` in the sorted set, where ranks are ordered from high to
+//		low based on scores.
+//		If `key` doesn't exist, or if `member` is not present in the set,
+//		`nil` will be returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRank(key string, member string) (Result[int64], error) {
@@ -5120,13 +5123,13 @@ func (client *baseClient) ZRevRank(key string, member string) (Result[int64], er
 //
 // Return value:
 //
-//	A tuple containing the rank of `member` and its score.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.s
+//		A tuple containing the rank of `member` and its score.
+//		If `key` doesn't exist, or if `member` is not present in the set,
+//		`nil` will be returned.s
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
@@ -5151,11 +5154,11 @@ func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[i
 //
 // Return value:
 //
-//	The number of entries deleted from the stream.
+//		The number of entries deleted from the stream.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xtrim/
 func (client *baseClient) XTrim(key string, options options.XTrimOptions) (int64, error) {
@@ -5180,11 +5183,11 @@ func (client *baseClient) XTrim(key string, options options.XTrimOptions) (int64
 //
 // Return value:
 //
-//	The number of entries in the stream. If `key` does not exist, return 0.
+//		The number of entries in the stream. If `key` does not exist, return 0.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xlen/
 func (client *baseClient) XLen(key string) (int64, error) {
@@ -5213,19 +5216,19 @@ func (client *baseClient) XLen(key string) (int64, error) {
 //
 // Return value:
 //
-//	An object containing the following elements:
-//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
-//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
-//	    the entire stream was scanned.
-//	  - A map of the claimed entries.
-//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
-//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
-//	    These IDs are deleted from the Pending Entries List.
+//		An object containing the following elements:
+//		  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//		    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//		    the entire stream was scanned.
+//		  - A map of the claimed entries.
+//		  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//		    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//		    These IDs are deleted from the Pending Entries List.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the [api.XAutoClaimResponse] will be accessible
-//    in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the [api.XAutoClaimResponse] will be accessible
+//	      in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xautoclaim/
 func (client *baseClient) XAutoClaim(
@@ -5257,19 +5260,19 @@ func (client *baseClient) XAutoClaim(
 //
 // Return value:
 //
-//	An object containing the following elements:
-//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
-//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
-//	    the entire stream was scanned.
-//	  - A map of the claimed entries.
-//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
-//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
-//	    These IDs are deleted from the Pending Entries List.
+//		An object containing the following elements:
+//		  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//		    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//		    the entire stream was scanned.
+//		  - A map of the claimed entries.
+//		  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//		    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//		    These IDs are deleted from the Pending Entries List.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the [api.XAutoClaimResponse] will be accessible
-//    in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the [api.XAutoClaimResponse] will be accessible
+//	      in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xautoclaim/
 func (client *baseClient) XAutoClaimWithOptions(
@@ -5311,19 +5314,19 @@ func (client *baseClient) XAutoClaimWithOptions(
 //
 // Return value:
 //
-//	An object containing the following elements:
-//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
-//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
-//	    the entire stream was scanned.
-//	  - An array of IDs for the claimed entries.
-//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
-//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
-//	    These IDs are deleted from the Pending Entries List.
+//		An object containing the following elements:
+//		  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//		    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//		    the entire stream was scanned.
+//		  - An array of IDs for the claimed entries.
+//		  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//		    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//		    These IDs are deleted from the Pending Entries List.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the [api.XAutoClaimJustIdResponse] will be accessible
-//    in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the [api.XAutoClaimJustIdResponse] will be accessible
+//	      in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xautoclaim/
 func (client *baseClient) XAutoClaimJustId(
@@ -5355,19 +5358,19 @@ func (client *baseClient) XAutoClaimJustId(
 //
 // Return value:
 //
-//	An object containing the following elements:
-//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
-//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
-//	    the entire stream was scanned.
-//	  - An array of IDs for the claimed entries.
-//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
-//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
-//	    These IDs are deleted from the Pending Entries List.
+//		An object containing the following elements:
+//		  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//		    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//		    the entire stream was scanned.
+//		  - An array of IDs for the claimed entries.
+//		  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//		    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//		    These IDs are deleted from the Pending Entries List.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the [api.XAutoClaimJustIdResponse] will be accessible
-//    in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the [api.XAutoClaimJustIdResponse] will be accessible
+//	      in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xautoclaim/
 func (client *baseClient) XAutoClaimJustIdWithOptions(
@@ -5403,12 +5406,12 @@ func (client *baseClient) XAutoClaimJustIdWithOptions(
 //
 // Return value:
 //
-//	The number of entries removed from the stream. This number may be less than the number
-//	of entries in `ids`, if the specified `ids` don't exist in the stream.
+//		The number of entries removed from the stream. This number may be less than the number
+//		of entries in `ids`, if the specified `ids` don't exist in the stream.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xdel/
 func (client *baseClient) XDel(key string, ids []string) (int64, error) {
@@ -5430,12 +5433,12 @@ func (client *baseClient) XDel(key string, ids []string) (int64, error) {
 //
 // Return value:
 //
-//	The score of the member. If `member` does not exist in the sorted set, `nil` is returned.
-//	If `key` does not exist, `nil` is returned.
+//		The score of the member. If `member` does not exist in the sorted set, `nil` is returned.
+//		If `key` does not exist, `nil` is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zscore/
 func (client *baseClient) ZScore(key string, member string) (Result[float64], error) {
@@ -5462,15 +5465,15 @@ func (client *baseClient) ZScore(key string, member string) (Result[float64], er
 //
 // Return value:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
-//	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
+//		The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
+//		   returned on the last iteration of the sorted set.
+//		The second return value is always an array of the subset of the sorted set held in `key`.
+//		The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value and []string
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value and []string
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
 func (client *baseClient) ZScan(key string, cursor string) (string, []string, error) {
@@ -5493,15 +5496,16 @@ func (client *baseClient) ZScan(key string, cursor string) (string, []string, er
 //
 // Return value:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
-//	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
-//	If [ZScanOptions.noScores] is to `true`, the second return value will only contain the members without scores.
+//			The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
+//			   returned on the last iteration of the sorted set.
+//			The second return value is always an array of the subset of the sorted set held in `key`.
+//			The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
+//			If [ZScanOptions.noScores] is to `true`, the second return value will only contain the members without scores.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value and []string will be accessible in the returned results array.
+//			In transaction:
+//		      It adds the command to the transaction queue instead of executing immediately.
+//			  Upon transaction completion with Exec(), the actual string value and []string will be accessible in the returned
+//	          results array.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
 func (client *baseClient) ZScanWithOptions(
@@ -5534,16 +5538,16 @@ func (client *baseClient) ZScanWithOptions(
 //
 // An XPendingSummary struct that includes a summary with the following fields:
 //
-//	NumOfMessages - The total number of pending messages for this consumer group.
-//	StartId - The smallest ID among the pending messages or nil if no pending messages exist.
-//	EndId - The greatest ID among the pending messages or nil if no pending messages exists.
-//	GroupConsumers - An array of ConsumerPendingMessages with the following fields:
-//	ConsumerName - The name of the consumer.
-//	MessageCount - The number of pending messages for this consumer.
+//		NumOfMessages - The total number of pending messages for this consumer group.
+//		StartId - The smallest ID among the pending messages or nil if no pending messages exist.
+//		EndId - The greatest ID among the pending messages or nil if no pending messages exists.
+//		GroupConsumers - An array of ConsumerPendingMessages with the following fields:
+//		ConsumerName - The name of the consumer.
+//		MessageCount - The number of pending messages for this consumer.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a [api.XPendingSummary] will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a [api.XPendingSummary] will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xpending/
 func (client *baseClient) XPending(key string, group string) (XPendingSummary, error) {
@@ -5572,14 +5576,15 @@ func (client *baseClient) XPending(key string, group string) (XPendingSummary, e
 //
 // A slice of XPendingDetail structs, where each detail struct includes the following fields:
 //
-//	Id - The ID of the pending message.
-//	ConsumerName - The name of the consumer that fetched the message and has still to acknowledge it.
-//	IdleTime - The time in milliseconds since the last time the message was delivered to the consumer.
-//	DeliveryCount - The number of times this message was delivered.
+//			Id - The ID of the pending message.
+//			ConsumerName - The name of the consumer that fetched the message and has still to acknowledge it.
+//			IdleTime - The time in milliseconds since the last time the message was delivered to the consumer.
+//			DeliveryCount - The number of times this message was delivered.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a slice of [api.XPendingSummary] will be accessible in the returned results array.
+//			In transaction:
+//		      It adds the command to the transaction queue instead of executing immediately.
+//			  Upon transaction completion with Exec(), a slice of [api.XPendingSummary] will be accessible in the returned results
+//	          array.
 //
 // [valkey.io]: https://valkey.io/commands/xpending/
 func (client *baseClient) XPendingWithOptions(
@@ -5610,11 +5615,11 @@ func (client *baseClient) XPendingWithOptions(
 //
 // Return value:
 //
-//	`"OK"`.
+//		`"OK"`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupCreate(key string, group string, id string) (string, error) {
@@ -5635,11 +5640,11 @@ func (client *baseClient) XGroupCreate(key string, group string, id string) (str
 //
 // Return value:
 //
-//	`"OK"`.
+//		`"OK"`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupCreateWithOptions(
@@ -5671,11 +5676,11 @@ func (client *baseClient) XGroupCreateWithOptions(
 //
 // Return value:
 //
-//	Return OK if successfully create a key with a value.
+//		Return OK if successfully create a key with a value.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
 func (client *baseClient) Restore(key string, ttl int64, value string) (string, error) {
@@ -5694,11 +5699,11 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (string, 
 //
 // Return value:
 //
-//	Return OK if successfully create a key with a value.
+//		Return OK if successfully create a key with a value.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
 func (client *baseClient) RestoreWithOptions(key string, ttl int64,
@@ -5729,12 +5734,12 @@ func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 //
 // Return value:
 //
-//	The serialized value of the data stored at key.
-//	If key does not exist, null will be returned.
+//		The serialized value of the data stored at key.
+//		If key does not exist, null will be returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/dump/
 func (client *baseClient) Dump(key string) (Result[string], error) {
@@ -5760,12 +5765,12 @@ func (client *baseClient) Dump(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	If key exists, returns the internal encoding of the object stored at
-//	key as a String. Otherwise, returns `null`.
+//		If key exists, returns the internal encoding of the object stored at
+//		key as a String. Otherwise, returns `null`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/object-encoding/
 func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
@@ -5789,11 +5794,11 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 //
 // Return value:
 //
-//	The provided message
+//		The provided message
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *baseClient) Echo(message string) (Result[string], error) {
@@ -5815,11 +5820,11 @@ func (client *baseClient) Echo(message string) (Result[string], error) {
 //
 // Return value:
 //
-//	`true` if the consumer group is destroyed. Otherwise, `false`.
+//		`true` if the consumer group is destroyed. Otherwise, `false`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-destroy/
 func (client *baseClient) XGroupDestroy(key string, group string) (bool, error) {
@@ -5842,11 +5847,11 @@ func (client *baseClient) XGroupDestroy(key string, group string) (bool, error) 
 //
 // Return value:
 //
-//	`"OK"`.
+//		`"OK"`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-setid/
 func (client *baseClient) XGroupSetId(key string, group string, id string) (string, error) {
@@ -5866,11 +5871,11 @@ func (client *baseClient) XGroupSetId(key string, group string, id string) (stri
 //
 // Return value:
 //
-//	`"OK"`.
+//		`"OK"`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-setid/
 func (client *baseClient) XGroupSetIdWithOptions(
@@ -5900,13 +5905,13 @@ func (client *baseClient) XGroupSetIdWithOptions(
 //
 // Return value:
 //
-//	The number of members removed from the sorted set.
-//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
-//	If `rangeQuery.Start` is greater than `rangeQuery.End`, `0` is returned.
+//		The number of members removed from the sorted set.
+//		If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//		If `rangeQuery.Start` is greater than `rangeQuery.End`, `0` is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zremrangebylex/
 func (client *baseClient) ZRemRangeByLex(key string, rangeQuery options.RangeByLex) (int64, error) {
@@ -5934,13 +5939,13 @@ func (client *baseClient) ZRemRangeByLex(key string, rangeQuery options.RangeByL
 //
 // Return value:
 //
-//	The number of members removed from the sorted set.
-//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
-//	If `start` is greater than `stop`, `0` is returned.
+//		The number of members removed from the sorted set.
+//		If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//		If `start` is greater than `stop`, `0` is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zremrangebyrank/
 func (client *baseClient) ZRemRangeByRank(key string, start int64, stop int64) (int64, error) {
@@ -5966,13 +5971,13 @@ func (client *baseClient) ZRemRangeByRank(key string, start int64, stop int64) (
 //
 // Return value:
 //
-//	The number of members removed from the sorted set.
-//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
-//	If `rangeQuery.Start` is greater than `rangeQuery.End`, `0` is returned.
+//		The number of members removed from the sorted set.
+//		If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//		If `rangeQuery.Start` is greater than `rangeQuery.End`, `0` is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zremrangebyscore/
 func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error) {
@@ -5997,12 +6002,12 @@ func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeB
 //
 // Return value:
 //
-//	A string representing a random member from the sorted set.
-//	If the sorted set does not exist or is empty, the response will be `nil`.
+//		A string representing a random member from the sorted set.
+//		If the sorted set does not exist or is empty, the response will be `nil`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zrandmember/
 func (client *baseClient) ZRandMember(key string) (Result[string], error) {
@@ -6036,6 +6041,7 @@ func (client *baseClient) ZRandMember(key string) (Result[string], error) {
 //	  Upon transaction completion with Exec(), an array of members from the sorted set
 //    will be accessible in the returned results array.
 
+//
 // [valkey.io]: https://valkey.io/commands/zrandmember/
 func (client *baseClient) ZRandMemberWithCount(key string, count int64) ([]string, error) {
 	result, err := client.executor.sendCommand(C.ZRandMember, []string{key, utils.IntToString(count)})
@@ -6057,13 +6063,13 @@ func (client *baseClient) ZRandMemberWithCount(key string, count int64) ([]strin
 //
 // Return value:
 //
-//	An array of `MemberAndScore` objects, which store member names and their respective scores.
-//	If the sorted set does not exist or is empty, the response will be an empty array.
+//		An array of `MemberAndScore` objects, which store member names and their respective scores.
+//		If the sorted set does not exist or is empty, the response will be an empty array.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of `MemberAndScore` objects, which store 
-//    member names and their respective scores will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of `MemberAndScore` objects, which store
+//	      member names and their respective scores will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zrandmember/
 func (client *baseClient) ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error) {
@@ -6090,13 +6096,13 @@ func (client *baseClient) ZRandMemberWithCountWithScores(key string, count int64
 //
 // Return value:
 //
-//	An array of scores corresponding to `members`.
-//	If a member does not exist in the sorted set, the corresponding value in the list will be `nil`.
+//		An array of scores corresponding to `members`.
+//		If a member does not exist in the sorted set, the corresponding value in the list will be `nil`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of scores corresponding to `members`
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of scores corresponding to `members`
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zmscore/
 func (client *baseClient) ZMScore(key string, members []string) ([]Result[float64], error) {
@@ -6115,12 +6121,12 @@ func (client *baseClient) ZMScore(key string, members []string) ([]Result[float6
 //
 // Return value:
 //
-//	If key exists, returns the logarithmic access frequency counter of the
-//	object stored at key as a long. Otherwise, returns `nil`.
+//		If key exists, returns the logarithmic access frequency counter of the
+//		object stored at key as a long. Otherwise, returns `nil`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/object-freq/
 func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
@@ -6143,11 +6149,11 @@ func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
 //
 // Return value:
 //
-//	If key exists, returns the idle time in seconds. Otherwise, returns `nil`.
+//		If key exists, returns the idle time in seconds. Otherwise, returns `nil`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/object-idletime/
 func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
@@ -6169,12 +6175,12 @@ func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
 //
 // Return value:
 //
-//	If key exists, returns the reference count of the object stored at key.
-//	Otherwise, returns `nil`.
+//		If key exists, returns the reference count of the object stored at key.
+//		Otherwise, returns `nil`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/object-refcount/
 func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
@@ -6199,12 +6205,12 @@ func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
 //
 // Return value:
 //
-//	An Array of sorted elements.
+//		An Array of sorted elements.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of sorted elements 
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of sorted elements
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) Sort(key string) ([]Result[string], error) {
@@ -6238,12 +6244,12 @@ func (client *baseClient) Sort(key string) ([]Result[string], error) {
 //
 // Return value:
 //
-//	An Array of sorted elements.
+//		An Array of sorted elements.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of sorted elements 
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of sorted elements
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortWithOptions(key string, options options.SortOptions) ([]Result[string], error) {
@@ -6269,12 +6275,12 @@ func (client *baseClient) SortWithOptions(key string, options options.SortOption
 //
 // Return value:
 //
-//	An Array of sorted elements.
+//		An Array of sorted elements.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of sorted elements 
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of sorted elements
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sort_ro/
 func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
@@ -6308,12 +6314,12 @@ func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
 //
 // Return value:
 //
-//	An Array of sorted elements.
+//		An Array of sorted elements.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of sorted elements 
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of sorted elements
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sort_ro/
 func (client *baseClient) SortReadOnlyWithOptions(key string, options options.SortOptions) ([]Result[string], error) {
@@ -6352,11 +6358,11 @@ func (client *baseClient) SortReadOnlyWithOptions(key string, options options.So
 //
 // Return value:
 //
-//	The number of elements in the sorted key stored at destination.
+//		The number of elements in the sorted key stored at destination.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortStore(key string, destination string) (int64, error) {
@@ -6394,11 +6400,11 @@ func (client *baseClient) SortStore(key string, destination string) (int64, erro
 //
 // Return value:
 //
-//	The number of elements in the sorted key stored at destination.
+//		The number of elements in the sorted key stored at destination.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortStoreWithOptions(
@@ -6430,11 +6436,11 @@ func (client *baseClient) SortStoreWithOptions(
 //
 // Return value:
 //
-//	Returns `true` if the consumer is created. Otherwise, returns `false`.
+//		Returns `true` if the consumer is created. Otherwise, returns `false`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-createconsumer/
 func (client *baseClient) XGroupCreateConsumer(
@@ -6464,11 +6470,11 @@ func (client *baseClient) XGroupCreateConsumer(
 //
 // Return value:
 //
-//	The number of pending messages the `consumer` had before it was deleted.
+//		The number of pending messages the `consumer` had before it was deleted.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-delconsumer/
 func (client *baseClient) XGroupDelConsumer(
@@ -6497,11 +6503,11 @@ func (client *baseClient) XGroupDelConsumer(
 //
 // Return value:
 //
-//	The number of messages that were successfully acknowledged.
+//		The number of messages that were successfully acknowledged.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xack/
 func (client *baseClient) XAck(key string, group string, ids []string) (int64, error) {
@@ -6527,11 +6533,11 @@ func (client *baseClient) XAck(key string, group string, ids []string) (int64, e
 //
 // Return value:
 //
-//	The bit value that was previously stored at offset.
+//		The bit value that was previously stored at offset.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/setbit/
 func (client *baseClient) SetBit(key string, offset int64, value int64) (int64, error) {
@@ -6553,12 +6559,12 @@ func (client *baseClient) SetBit(key string, offset int64, value int64) (int64, 
 //
 // Return value:
 //
-//	The bit at offset of the string. Returns zero if the key is empty or if the positive
-//	offset exceeds the length of the string.
+//		The bit at offset of the string. Returns zero if the key is empty or if the positive
+//		offset exceeds the length of the string.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/getbit/
 func (client *baseClient) GetBit(key string, offset int64) (int64, error) {
@@ -6581,11 +6587,11 @@ func (client *baseClient) GetBit(key string, offset int64) (int64, error) {
 //
 // Return value:
 //
-//	The number of replicas reached by all the writes performed in the context of the current connection.
+//		The number of replicas reached by all the writes performed in the context of the current connection.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/wait/
 func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (int64, error) {
@@ -6607,12 +6613,12 @@ func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (int64, er
 //
 // Return value:
 //
-//	The number of set bits in the string. Returns zero if the key is missing as it is
-//	treated as an empty string.
+//		The number of set bits in the string. Returns zero if the key is missing as it is
+//		treated as an empty string.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
 func (client *baseClient) BitCount(key string) (int64, error) {
@@ -6637,11 +6643,11 @@ func (client *baseClient) BitCount(key string) (int64, error) {
 //
 // Return value:
 //
-//	The size of the string stored in destination.
+//		The size of the string stored in destination.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/bitop/
 func (client *baseClient) BitOp(bitwiseOperation options.BitOpType, destination string, keys []string) (int64, error) {
@@ -6673,12 +6679,12 @@ func (client *baseClient) BitOp(bitwiseOperation options.BitOpType, destination 
 //
 // Return value:
 //
-//	The number of set bits in the string interval specified by start, end, and options.
-//	Returns zero if the key is missing as it is treated as an empty string.
+//		The number of set bits in the string interval specified by start, end, and options.
+//		Returns zero if the key is missing as it is treated as an empty string.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
 func (client *baseClient) BitCountWithOptions(key string, opts options.BitCountOptions) (int64, error) {
@@ -6708,14 +6714,14 @@ func (client *baseClient) BitCountWithOptions(key string, opts options.BitCountO
 //
 // Return value:
 //
-//	A `map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
-//	the consumer.
+//		A `map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
+//		the consumer.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a map of message entries with the format
-//    `{"entryId": [["entry", "data"], ...], ...}` that were claimed by the consumer will be accessible 
-//    in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a map of message entries with the format
+//	      `{"entryId": [["entry", "data"], ...], ...}` that were claimed by the consumer will be accessible
+//	      in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaim(
@@ -6743,14 +6749,14 @@ func (client *baseClient) XClaim(
 //
 // Return value:
 //
-//	A `map` of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
-//	the consumer.
+//		A `map` of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
+//		the consumer.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a map of message entries with the format
-//    `{"entryId": [["entry", "data"], ...], ...}` that were claimed by the consumer will be accessible 
-//    in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a map of message entries with the format
+//	      `{"entryId": [["entry", "data"], ...], ...}` that were claimed by the consumer will be accessible
+//	      in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimWithOptions(
@@ -6790,12 +6796,12 @@ func (client *baseClient) XClaimWithOptions(
 //
 // Return value:
 //
-//	An array of the ids of the entries that were claimed by the consumer.
+//		An array of the ids of the entries that were claimed by the consumer.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of the ids of the
-//    entries that were claimed by the consumer will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of the ids of the
+//	      entries that were claimed by the consumer will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimJustId(
@@ -6824,12 +6830,12 @@ func (client *baseClient) XClaimJustId(
 //
 // Return value:
 //
-//	An array of the ids of the entries that were claimed by the consumer.
+//		An array of the ids of the entries that were claimed by the consumer.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of the ids of the
-//    entries that were claimed by the consumer will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of the ids of the
+//	      entries that were claimed by the consumer will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimJustIdWithOptions(
@@ -6863,12 +6869,12 @@ func (client *baseClient) XClaimJustIdWithOptions(
 //
 // Return value:
 //
-//	The position of the first occurrence matching bit in the binary value of
-//	the string held at key. If bit is not found, a -1 is returned.
+//		The position of the first occurrence matching bit in the binary value of
+//		the string held at key. If bit is not found, a -1 is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/bitpos/
 func (client *baseClient) BitPos(key string, bit int64) (int64, error) {
@@ -6889,12 +6895,12 @@ func (client *baseClient) BitPos(key string, bit int64) (int64, error) {
 //
 // Return value:
 //
-//	The position of the first occurrence matching bit in the binary value of
-//	the string held at key. If bit is not found, a -1 is returned.
+//		The position of the first occurrence matching bit in the binary value of
+//		the string held at key. If bit is not found, a -1 is returned.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/bitpos/
 func (client *baseClient) BitPosWithOptions(key string, bit int64, bitposOptions options.BitPosOptions) (int64, error) {
@@ -6924,11 +6930,11 @@ func (client *baseClient) BitPosWithOptions(key string, bit int64, bitposOptions
 //
 // Return value:
 //
-//	`true` if source was copied, `false` if source was not copied.
+//		`true` if source was copied, `false` if source was not copied.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/copy/
 func (client *baseClient) Copy(source string, destination string) (bool, error) {
@@ -6955,11 +6961,11 @@ func (client *baseClient) Copy(source string, destination string) (bool, error) 
 //
 // Return value:
 //
-//	`true` if source was copied, `false` if source was not copied.
+//		`true` if source was copied, `false` if source was not copied.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/copy/
 func (client *baseClient) CopyWithOptions(
@@ -6996,12 +7002,13 @@ func (client *baseClient) CopyWithOptions(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
-//	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
+//			An `array` of stream entry data, where entry data is an array of
+//			pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of [api.XRangeResponse] will be accessible in the returned results array.
+//			In transaction:
+//		      It adds the command to the transaction queue instead of executing immediately.
+//			  Upon transaction completion with Exec(), an array of [api.XRangeResponse] will be accessible in the returned results
+//	          array.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(
@@ -7029,12 +7036,13 @@ func (client *baseClient) XRange(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
-//	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
+//			An `array` of stream entry data, where entry data is an array of
+//			pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of [api.XRangeResponse] will be accessible in the returned results array.
+//			In transaction:
+//		      It adds the command to the transaction queue instead of executing immediately.
+//			  Upon transaction completion with Exec(), an array of [api.XRangeResponse] will be accessible in the returned results
+//	          array.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRangeWithOptions(
@@ -7076,12 +7084,13 @@ func (client *baseClient) XRangeWithOptions(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
-//	pairings with format `[[field, entry], [field, entry], ...]`.
+//			An `array` of stream entry data, where entry data is an array of
+//			pairings with format `[[field, entry], [field, entry], ...]`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of [api.XRangeResponse] will be accessible in the returned results array.
+//			In transaction:
+//		      It adds the command to the transaction queue instead of executing immediately.
+//			  Upon transaction completion with Exec(), an array of [api.XRangeResponse] will be accessible in the returned results
+//	          array.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (client *baseClient) XRevRange(
@@ -7110,13 +7119,14 @@ func (client *baseClient) XRevRange(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
-//	pairings with format `[[field, entry], [field, entry], ...]`.
-//	Returns `nil` if `count` is non-positive.
+//			An `array` of stream entry data, where entry data is an array of
+//			pairings with format `[[field, entry], [field, entry], ...]`.
+//			Returns `nil` if `count` is non-positive.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of [api.XRangeResponse] will be accessible in the returned results array.
+//			In transaction:
+//		      It adds the command to the transaction queue instead of executing immediately.
+//			  Upon transaction completion with Exec(), an array of [api.XRangeResponse] will be accessible in the returned results
+//	          array.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (client *baseClient) XRevRangeWithOptions(
@@ -7152,12 +7162,12 @@ func (client *baseClient) XRevRangeWithOptions(
 //
 // Return value:
 //
-//	A stream information for the given `key`. See the example for a sample response.
+//		A stream information for the given `key`. See the example for a sample response.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a stream information for the given `key`
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a stream information for the given `key`
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
 func (client *baseClient) XInfoStream(key string) (map[string]interface{}, error) {
@@ -7179,12 +7189,12 @@ func (client *baseClient) XInfoStream(key string) (map[string]interface{}, error
 //
 // Return value:
 //
-//	A detailed stream information for the given `key`. See the example for a sample response.
+//		A detailed stream information for the given `key`. See the example for a sample response.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a stream information for the given `key`
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a stream information for the given `key`
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
 func (client *baseClient) XInfoStreamFullWithOptions(
@@ -7218,13 +7228,13 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 //
 // Return value:
 //
-//	An array of [api.XInfoConsumerInfo], where each element contains the attributes
-//	of a consumer for the given consumer group of the stream at `key`.
+//		An array of [api.XInfoConsumerInfo], where each element contains the attributes
+//		of a consumer for the given consumer group of the stream at `key`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of [api.XInfoConsumerInfo] information
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of [api.XInfoConsumerInfo] information
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-consumers/
 func (client *baseClient) XInfoConsumers(key string, group string) ([]XInfoConsumerInfo, error) {
@@ -7245,13 +7255,13 @@ func (client *baseClient) XInfoConsumers(key string, group string) ([]XInfoConsu
 //
 // Return value:
 //
-//	An array of [api.XInfoGroupInfo], where each element represents the
-//	attributes of a consumer group for the stream at `key`.
+//		An array of [api.XInfoGroupInfo], where each element represents the
+//		attributes of a consumer group for the stream at `key`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of [api.XInfoGroupInfo] information
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of [api.XInfoGroupInfo] information
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-groups/
 func (client *baseClient) XInfoGroups(key string) ([]XInfoGroupInfo, error) {
@@ -7283,17 +7293,17 @@ func (client *baseClient) XInfoGroups(key string) ([]XInfoGroupInfo, error) {
 //
 // Return value:
 //
-//	Result from the executed subcommands.
-//	  - BitFieldGet returns the value in the binary representation of the string.
-//	  - BitFieldSet returns the previous value before setting the new value in the binary representation.
-//	  - BitFieldIncrBy returns the updated value after increasing or decreasing the bits.
-//	  - BitFieldOverflow controls the behavior of subsequent operations and returns
-//	    a result based on the specified overflow type (WRAP, SAT, FAIL).
+//		Result from the executed subcommands.
+//		  - BitFieldGet returns the value in the binary representation of the string.
+//		  - BitFieldSet returns the previous value before setting the new value in the binary representation.
+//		  - BitFieldIncrBy returns the updated value after increasing or decreasing the bits.
+//		  - BitFieldOverflow controls the behavior of subsequent operations and returns
+//		    a result based on the specified overflow type (WRAP, SAT, FAIL).
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the []Result[int64] from the executed subcommands
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the []Result[int64] from the executed subcommands
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/bitfield/
 func (client *baseClient) BitField(key string, subCommands []options.BitFieldSubCommands) ([]Result[int64], error) {
@@ -7334,13 +7344,13 @@ func (client *baseClient) BitField(key string, subCommands []options.BitFieldSub
 //
 // Return value:
 //
-//	Result from the executed GET subcommands.
-//	  - BitFieldGet returns the value in the binary representation of the string.
+//		Result from the executed GET subcommands.
+//		  - BitFieldGet returns the value in the binary representation of the string.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the []Result[int64] from the executed 
-//    GET subcommands will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the []Result[int64] from the executed
+//	      GET subcommands will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/bitfield_ro/
 func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCommands) ([]Result[int64], error) {
@@ -7366,14 +7376,14 @@ func (client *baseClient) BitFieldRO(key string, commands []options.BitFieldROCo
 //
 // Return value:
 //
-//	The current server time as a String array with two elements:
-//	A UNIX TIME and the amount of microseconds already elapsed in the current second.
-//	The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
+//		The current server time as a String array with two elements:
+//		A UNIX TIME and the amount of microseconds already elapsed in the current second.
+//		The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the current server time string array
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the current server time string array
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/time/
 func (client *baseClient) Time() ([]string, error) {
@@ -7399,12 +7409,12 @@ func (client *baseClient) Time() ([]string, error) {
 //
 // Return value:
 //
-//	The resulting sorted set from the intersection.
+//		The resulting sorted set from the intersection.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the resulting sorted set
-//    from the intersection will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the resulting sorted set
+//	      from the intersection will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zinter/
 func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
@@ -7439,12 +7449,12 @@ func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
 //
 // Return value:
 //
-//	A map of members to their scores.
+//		A map of members to their scores.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a map of members to their scores
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a map of members to their scores
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zinter/
 func (client *baseClient) ZInterWithScores(
@@ -7487,13 +7497,13 @@ func (client *baseClient) ZInterWithScores(
 //
 // Return value:
 //
-//	The number of elements in the resulting sorted set stored at `destination`.
+//		The number of elements in the resulting sorted set stored at `destination`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the number of elements 
-//    in the resulting sorted set stored at `destination` will be 
-//    accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the number of elements
+//	      in the resulting sorted set stored at `destination` will be
+//	      accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error) {
@@ -7522,13 +7532,13 @@ func (client *baseClient) ZInterStore(destination string, keysOrWeightedKeys opt
 //
 // Return value:
 //
-//	The number of elements in the resulting sorted set stored at `destination`.
+//		The number of elements in the resulting sorted set stored at `destination`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the number of elements 
-//    in the resulting sorted set stored at `destination` will be 
-//    accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the number of elements
+//	      in the resulting sorted set stored at `destination` will be
+//	      accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (client *baseClient) ZInterStoreWithOptions(
@@ -7570,14 +7580,14 @@ func (client *baseClient) ZInterStoreWithOptions(
 //
 // Return value:
 //
-//	An array of elements representing the difference between the sorted sets.
-//	If the first `key` does not exist, it is treated as an empty sorted set, and the
-//	command returns an empty array.
+//		An array of elements representing the difference between the sorted sets.
+//		If the first `key` does not exist, it is treated as an empty sorted set, and the
+//		command returns an empty array.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the array of elements representing the
-//    difference between the sorted sets value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the array of elements representing the
+//	      difference between the sorted sets value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
 func (client *baseClient) ZDiff(keys []string) ([]string, error) {
@@ -7601,14 +7611,14 @@ func (client *baseClient) ZDiff(keys []string) ([]string, error) {
 //
 // Return value:
 //
-//	A `Map` of elements and their scores representing the difference between the sorted sets.
-//	If the first `key` does not exist, it is treated as an empty sorted set, and the
-//	command returns an empty `Map`.
+//		A `Map` of elements and their scores representing the difference between the sorted sets.
+//		If the first `key` does not exist, it is treated as an empty sorted set, and the
+//		command returns an empty `Map`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a `Map` of elements and their scores representing
-//    the difference between the sorted sets will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a `Map` of elements and their scores representing
+//	      the difference between the sorted sets will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
 func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, error) {
@@ -7640,11 +7650,11 @@ func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, er
 //
 // Return value:
 //
-//	The number of members in the resulting sorted set stored at `destination`.
+//		The number of members in the resulting sorted set stored at `destination`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zdiffstore/
 func (client *baseClient) ZDiffStore(destination string, keys []string) (int64, error) {
@@ -7675,12 +7685,12 @@ func (client *baseClient) ZDiffStore(destination string, keys []string) (int64, 
 //
 // Return Value:
 //
-//	The resulting sorted set from the union.
+//		The resulting sorted set from the union.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the resulting sorted set
-//    from the union will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the resulting sorted set
+//	      from the union will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zunion/
 func (client *baseClient) ZUnion(keys options.KeyArray) ([]string, error) {
@@ -7715,12 +7725,12 @@ func (client *baseClient) ZUnion(keys options.KeyArray) ([]string, error) {
 //
 // Return Value:
 //
-//	The resulting sorted set from the union.
+//		The resulting sorted set from the union.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the resulting sorted set
-//    from the union will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the resulting sorted set
+//	      from the union will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zunion/
 func (client *baseClient) ZUnionWithScores(
@@ -7765,12 +7775,12 @@ func (client *baseClient) ZUnionWithScores(
 //
 // Return Value:
 //
-//	The number of elements in the resulting sorted set stored at `destination`.
+//		The number of elements in the resulting sorted set stored at `destination`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), number of elements in the resulting 
-//    sorted set stored at `destination` will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), number of elements in the resulting
+//	      sorted set stored at `destination` will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zunionstore/
 func (client *baseClient) ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error) {
@@ -7801,11 +7811,11 @@ func (client *baseClient) ZUnionStore(destination string, keysOrWeightedKeys opt
 //
 // Return Value:
 //
-//	The number of elements in the resulting sorted set stored at `destination`.
+//		The number of elements in the resulting sorted set stored at `destination`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zunionstore/
 func (client *baseClient) ZUnionStoreWithOptions(
@@ -7842,11 +7852,11 @@ func (client *baseClient) ZUnionStoreWithOptions(
 //
 // Return value:
 //
-//	The cardinality of the intersection of the sorted sets.
+//		The cardinality of the intersection of the sorted sets.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zintercard/
 func (client *baseClient) ZInterCard(keys []string) (int64, error) {
@@ -7866,11 +7876,11 @@ func (client *baseClient) ZInterCard(keys []string) (int64, error) {
 //
 // Return value:
 //
-//	The cardinality of the intersection of the sorted sets.
+//		The cardinality of the intersection of the sorted sets.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zintercard/
 func (client *baseClient) ZInterCardWithOptions(keys []string, options *options.ZInterCardOptions) (int64, error) {
@@ -7902,11 +7912,11 @@ func (client *baseClient) ZInterCardWithOptions(keys []string, options *options.
 //
 // Return value:
 //
-//	The number of elements in the sorted set at key with a value between min and max.
+//		The number of elements in the sorted set at key with a value between min and max.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zlexcount/
 func (client *baseClient) ZLexCount(key string, rangeQuery *options.RangeByLex) (int64, error) {
@@ -7935,14 +7945,14 @@ func (client *baseClient) ZLexCount(key string, rangeQuery *options.RangeByLex) 
 //
 // Return value:
 //
-//	A `KeyWithMemberAndScore` struct containing the key from which the member was popped,
-//	the popped member, and its score. If no element could be popped and the timeout expired,
-//	returns `nil`.
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the [api.KeyWithMemberAndScore] struct containing 
-//    the key from which the member was popped, the popped member, and its score 
-//    will be accessible in the returned results array.
+//		A `KeyWithMemberAndScore` struct containing the key from which the member was popped,
+//		the popped member, and its score. If no element could be popped and the timeout expired,
+//		returns `nil`.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the [api.KeyWithMemberAndScore] struct containing
+//	      the key from which the member was popped, the popped member, and its score
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/bzpopmax/
 func (client *baseClient) BZPopMax(
@@ -7973,13 +7983,13 @@ func (client *baseClient) BZPopMax(
 //
 // Return value:
 //
-//	A `Result` containing a `KeyWithArrayOfMembersAndScores` object.
-//	If no elements could be popped from the provided keys, returns `nil`.
+//		A `Result` containing a `KeyWithArrayOfMembersAndScores` object.
+//		If no elements could be popped from the provided keys, returns `nil`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a `Result` containing a
-//   `KeyWithArrayOfMembersAndScores` object will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a `Result` containing a
+//	      `KeyWithArrayOfMembersAndScores` object will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zmpop/
 func (client *baseClient) ZMPopWithOptions(
@@ -8021,15 +8031,15 @@ func (client *baseClient) ZMPopWithOptions(
 //
 // Return value:
 //
-//	 A `KeyWithArrayOfMembersAndScores` struct containing:
-//	- The key from which the elements were popped.
-//	- An array of member-score pairs of the popped elements.
-//	  Returns `nil` if no member could be popped.
+//		 A `KeyWithArrayOfMembersAndScores` struct containing:
+//		- The key from which the elements were popped.
+//		- An array of member-score pairs of the popped elements.
+//		  Returns `nil` if no member could be popped.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a `Result` containing a
-//   `KeyWithArrayOfMembersAndScores` object will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a `Result` containing a
+//	      `KeyWithArrayOfMembersAndScores` object will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/zmpop/
 func (client *baseClient) ZMPop(
@@ -8067,11 +8077,11 @@ func (client *baseClient) ZMPop(
 //
 // Return value:
 //
-//	The number of elements added to the sorted set.
+//		The number of elements added to the sorted set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geoadd/
 func (client *baseClient) GeoAdd(key string, membersToGeospatialData map[string]options.GeospatialData) (int64, error) {
@@ -8099,11 +8109,11 @@ func (client *baseClient) GeoAdd(key string, membersToGeospatialData map[string]
 //
 // Return value:
 //
-//	The number of elements added to the sorted set.
+//		The number of elements added to the sorted set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geoadd/
 func (client *baseClient) GeoAddWithOptions(
@@ -8137,14 +8147,14 @@ func (client *baseClient) GeoAddWithOptions(
 //
 // Returns value:
 //
-//	An array of GeoHash strings representing the positions of the specified members stored
-//	at key. If a member does not exist in the sorted set, a `nil` value is returned
-//	for that member.
+//		An array of GeoHash strings representing the positions of the specified members stored
+//		at key. If a member does not exist in the sorted set, a `nil` value is returned
+//		for that member.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of GeoHash strings representing the 
-//    positions of the specified members stored at key will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of GeoHash strings representing the
+//	      positions of the specified members stored at key will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
 func (client *baseClient) GeoHash(key string, members []string) ([]string, error) {
@@ -8170,13 +8180,13 @@ func (client *baseClient) GeoHash(key string, members []string) ([]string, error
 //
 // Return value:
 //
-//	A 2D `array` which represent positions (longitude and latitude) corresponding to the given members.
-//	If a member does not exist, its position will be `nil`.
+//		A 2D `array` which represent positions (longitude and latitude) corresponding to the given members.
+//		If a member does not exist, its position will be `nil`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), a 2D array which represent positions (longitude and latitude)
-//    corresponding to the given members will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), a 2D array which represent positions (longitude and latitude)
+//	      corresponding to the given members will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geopos/
 func (client *baseClient) GeoPos(key string, members []string) ([][]float64, error) {
@@ -8202,13 +8212,13 @@ func (client *baseClient) GeoPos(key string, members []string) ([][]float64, err
 //
 // Return value:
 //
-//	The distance between `member1` and `member2`. If one or both members do not exist,
-//	or if the key does not exist, returns `nil`. The default
-//	unit is meters, see - [options.Meters]
+//		The distance between `member1` and `member2`. If one or both members do not exist,
+//		or if the key does not exist, returns `nil`. The default
+//		unit is meters, see - [options.Meters]
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geodist/
 func (client *baseClient) GeoDist(key string, member1 string, member2 string) (Result[float64], error) {
@@ -8239,12 +8249,12 @@ func (client *baseClient) GeoDist(key string, member1 string, member2 string) (R
 //
 // Return value:
 //
-//	The distance between `member1` and `member2`. If one or both members
-//	do not exist, or if the key does not exist, returns `nil`.
+//		The distance between `member1` and `member2`. If one or both members
+//		do not exist, or if the key does not exist, returns `nil`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual float value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geodist/
 func (client *baseClient) GeoDistWithUnit(
@@ -8287,17 +8297,17 @@ func (client *baseClient) GeoDistWithUnit(
 //
 // Return value:
 //
-//	An array of [options.Location] containing the following information:
-//	 - The coordinates as a [options.GeospatialData] object.
-//	 - The member (location) name.
-//	 - The distance from the center as a `float64`, in the same unit specified for
-//	   `searchByShape`.
-//	 - The geohash of the location as a `int64`.
+//		An array of [options.Location] containing the following information:
+//		 - The coordinates as a [options.GeospatialData] object.
+//		 - The member (location) name.
+//		 - The distance from the center as a `float64`, in the same unit specified for
+//		   `searchByShape`.
+//		 - The geohash of the location as a `int64`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of [options.Location]
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of [options.Location]
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geosearch/
 func (client *baseClient) GeoSearchWithFullOptions(
@@ -8358,12 +8368,12 @@ func (client *baseClient) GeoSearchWithFullOptions(
 //
 // Return value:
 //
-//	An array of matched member names.
+//		An array of matched member names.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of matched member names
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of matched member names
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geosearch/
 func (client *baseClient) GeoSearchWithResultOptions(
@@ -8419,17 +8429,17 @@ func (client *baseClient) GeoSearchWithResultOptions(
 //
 // Return value:
 //
-//	An array of [options.Location] containing the following information:
-//	 - The coordinates as a [options.GeospatialData] object.
-//	 - The member (location) name.
-//	 - The distance from the center as a `float64`, in the same unit specified for
-//	   `searchByShape`.
-//	 - The geohash of the location as a `int64`.
+//		An array of [options.Location] containing the following information:
+//		 - The coordinates as a [options.GeospatialData] object.
+//		 - The member (location) name.
+//		 - The distance from the center as a `float64`, in the same unit specified for
+//		   `searchByShape`.
+//		 - The geohash of the location as a `int64`.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of [options.Location]
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of [options.Location]
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geosearch/
 func (client *baseClient) GeoSearchWithInfoOptions(
@@ -8469,12 +8479,12 @@ func (client *baseClient) GeoSearchWithInfoOptions(
 //
 // Return value:
 //
-//	An array of matched member names.
+//		An array of matched member names.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), an array of matched member names
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), an array of matched member names
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geosearch/
 func (client *baseClient) GeoSearch(
@@ -8519,11 +8529,11 @@ func (client *baseClient) GeoSearch(
 //
 // Return value:
 //
-//	The number of elements in the resulting set.
+//		The number of elements in the resulting set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geosearchstore/
 func (client *baseClient) GeoSearchStoreWithFullOptions(
@@ -8590,11 +8600,11 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 //
 // Return value:
 //
-//	The number of elements in the resulting set.
+//		The number of elements in the resulting set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geosearchstore/
 func (client *baseClient) GeoSearchStore(
@@ -8641,11 +8651,11 @@ func (client *baseClient) GeoSearchStore(
 //
 // Return value:
 //
-//	The number of elements in the resulting set.
+//		The number of elements in the resulting set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geosearchstore/
 func (client *baseClient) GeoSearchStoreWithResultOptions(
@@ -8693,11 +8703,11 @@ func (client *baseClient) GeoSearchStoreWithResultOptions(
 //
 // Return value:
 //
-//	The number of elements in the resulting set.
+//		The number of elements in the resulting set.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/geosearchstore/
 func (client *baseClient) GeoSearchStoreWithInfoOptions(
@@ -8733,11 +8743,11 @@ func (client *baseClient) GeoSearchStoreWithInfoOptions(
 //
 // Return value:
 //
-//	The library name that was loaded.
+//		The library name that was loaded.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-load/
 func (client *baseClient) FunctionLoad(libraryCode string, replace bool) (string, error) {
@@ -8763,11 +8773,11 @@ func (client *baseClient) FunctionLoad(libraryCode string, replace bool) (string
 //
 // Return value:
 //
-//	`OK`
+//		`OK`
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
 func (client *baseClient) FunctionFlush() (string, error) {
@@ -8791,11 +8801,11 @@ func (client *baseClient) FunctionFlush() (string, error) {
 //
 // Return value:
 //
-//	`OK`
+//		`OK`
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
 func (client *baseClient) FunctionFlushSync() (string, error) {
@@ -8816,11 +8826,11 @@ func (client *baseClient) FunctionFlushSync() (string, error) {
 //
 // Return value:
 //
-//	`OK`
+//		`OK`
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
 func (client *baseClient) FunctionFlushAsync() (string, error) {
@@ -8847,12 +8857,12 @@ func (client *baseClient) FunctionFlushAsync() (string, error) {
 //
 // Return value:
 //
-//	The invoked function's return value.
+//		The invoked function's return value.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the invoked function's return value
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the invoked function's return value
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
 func (client *baseClient) FCall(function string) (any, error) {
@@ -8878,12 +8888,12 @@ func (client *baseClient) FCall(function string) (any, error) {
 //
 // Return value:
 //
-//	The invoked function's return value.
+//		The invoked function's return value.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the invoked function's return value
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the invoked function's return value
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
 func (client *baseClient) FCallReadOnly(function string) (any, error) {
@@ -8914,12 +8924,12 @@ func (client *baseClient) FCallReadOnly(function string) (any, error) {
 //
 // Return value:
 //
-//	The invoked function's return value.
+//		The invoked function's return value.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the invoked function's return value
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the invoked function's return value
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
 func (client *baseClient) FCallWithKeysAndArgs(
@@ -8958,12 +8968,12 @@ func (client *baseClient) FCallWithKeysAndArgs(
 //
 // Return value:
 //
-//	The invoked function's return value.
+//		The invoked function's return value.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the invoked function's return value
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the invoked function's return value
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
 func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
@@ -8990,12 +9000,12 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 //
 // Return value:
 //
-//	An array of active channel names.
+//		An array of active channel names.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), array of active channel names
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), array of active channel names
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-channels
 func (client *baseClient) PubSubChannels() ([]string, error) {
@@ -9025,12 +9035,12 @@ func (client *baseClient) PubSubChannels() ([]string, error) {
 //
 // Return value:
 //
-//	An array of active channel names matching the pattern.
+//		An array of active channel names matching the pattern.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), array of active channel names matching
-//    the pattern will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), array of active channel names matching
+//	      the pattern will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-channels
 func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
@@ -9055,12 +9065,12 @@ func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, e
 //
 // Return value:
 //
-//	The number of patterns that are subscribed to by clients.
+//		The number of patterns that are subscribed to by clients.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), number of patterns that are subscribed
-//    to by clients will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), number of patterns that are subscribed
+//	      to by clients will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-numpat
 func (client *baseClient) PubSubNumPat() (int64, error) {
@@ -9088,12 +9098,12 @@ func (client *baseClient) PubSubNumPat() (int64, error) {
 //
 // Return value:
 //
-//	A map of channel names to their subscriber counts.
+//		A map of channel names to their subscriber counts.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), map of channel names to their subscriber
-//    counts will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), map of channel names to their subscriber
+//	      counts will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-numsub
 func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, error) {
@@ -9126,11 +9136,11 @@ func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, err
 //
 // Return value:
 //
-//	`OK` if function is terminated. Otherwise, throws an error.
+//		`OK` if function is terminated. Otherwise, throws an error.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-kill/
 func (client *baseClient) FunctionKill() (string, error) {
@@ -9155,12 +9165,12 @@ func (client *baseClient) FunctionKill() (string, error) {
 //
 // Return value:
 //
-//	A list of info about queried libraries and their functions.
+//		A list of info about queried libraries and their functions.
 //
-//	In transaction:
-//    It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), slice of [api.LibraryInfo] 
-//    will be accessible in the returned results array.
+//		In transaction:
+//	      It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), slice of [api.LibraryInfo]
+//	      will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-list/
 func (client *baseClient) FunctionList(query FunctionListQuery) ([]LibraryInfo, error) {
