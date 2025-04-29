@@ -4,11 +4,10 @@ use futures_util::future::BoxFuture;
 use opentelemetry::trace::TraceError;
 use opentelemetry_sdk::export::{self, trace::ExportResult};
 use serde_json::{Map, Value};
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic;
-use std::sync::{Arc, Mutex};
 
 use opentelemetry_sdk::resource::Resource;
 
@@ -16,7 +15,7 @@ use opentelemetry_sdk::resource::Resource;
 pub struct SpanExporterFile {
     resource: Resource,
     is_shutdown: atomic::AtomicBool,
-    file: Arc<Mutex<File>>,
+    path: PathBuf,
 }
 
 impl fmt::Debug for SpanExporterFile {
@@ -45,18 +44,11 @@ impl SpanExporterFile {
     /// - The parent directory doesn't exist
     /// - The path points to a directory that doesn't exist
     /// - The user doesn't have write permissions for the target location
-    /// - The file cannot be opened
     pub fn new(path: PathBuf) -> Result<Self, TraceError> {
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .map_err(|err| TraceError::from(format!("Unable to open exporter file: {err}")))?;
-
         Ok(Self {
             resource: Resource::default(),
             is_shutdown: atomic::AtomicBool::new(false),
-            file: Arc::new(Mutex::new(file)),
+            path,
         })
     }
 }
@@ -80,15 +72,19 @@ impl opentelemetry_sdk::export::trace::SpanExporter for SpanExporterFile {
             ))));
         }
 
-        let spans = to_jsons(batch);
-        let mut file = match self.file.lock() {
-            Ok(file) => file,
-            Err(e) => {
-                return Box::pin(std::future::ready(Err(TraceError::from(format!(
-                    "Failed to lock file: {e}"
-                )))))
-            }
+        // TODO: Move the writes to Tokio task - https://github.com/valkey-io/valkey-glide/issues/3720
+        let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+        else {
+            return Box::pin(std::future::ready(Err(TraceError::from(format!(
+                "Unable to open exporter file: {} for append.",
+                self.path.display()
+            )))));
         };
+
+        let spans = to_jsons(batch);
 
         for span in &spans {
             if let Ok(s) = serde_json::to_string(&span) {

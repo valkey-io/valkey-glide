@@ -8,17 +8,16 @@ use opentelemetry_sdk::metrics::MetricResult;
 use opentelemetry_sdk::metrics::Temporality;
 use serde_json::{Map, Value};
 use std::any::Any;
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::result::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 
 /// An OpenTelemetry exporter that writes Metrics to a file on export.
 pub struct FileMetricExporter {
     is_shutdown: AtomicBool,
-    file: Arc<Mutex<File>>,
+    path: PathBuf,
 }
 
 impl FileMetricExporter {
@@ -41,17 +40,10 @@ impl FileMetricExporter {
     /// - The parent directory doesn't exist
     /// - The path points to a directory that doesn't exist
     /// - The user doesn't have write permissions for the target location
-    /// - The file cannot be opened
     pub fn new(path: PathBuf) -> Result<Self, MetricError> {
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .map_err(|err| MetricError::Other(format!("Unable to open exporter file: {err}")))?;
-
         Ok(Self {
             is_shutdown: AtomicBool::new(false),
-            file: Arc::new(Mutex::new(file)),
+            path,
         })
     }
 }
@@ -67,16 +59,18 @@ impl PushMetricExporter for FileMetricExporter {
             return Err(MetricError::Other("Exporter is shutdown".to_string()));
         }
 
+        // TODO: Move the writes to Tokio task - https://github.com/valkey-io/valkey-glide/issues/3720
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .map_err(|err| MetricError::Other(format!("Unable to open exporter file: {err}")))?;
+
         let metrics_json = to_json(metrics)
             .map_err(|e| MetricError::Other(format!("Failed to serialize metrics to JSON: {e}")))?;
         let json_string = serde_json::to_string(&metrics_json)
             .map_err(|e| MetricError::Other(format!("Failed to serialize metrics to JSON: {e}")))?;
 
-        // Use the stored file handle for writing
-        let mut file = self
-            .file
-            .lock()
-            .map_err(|e| MetricError::Other(format!("Failed to lock file: {e}")))?;
         writeln!(file, "{}", json_string)
             .map_err(|e| MetricError::Other(format!("File write error: {e}")))?;
 
