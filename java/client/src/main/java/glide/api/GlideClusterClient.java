@@ -65,13 +65,17 @@ import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
+import glide.api.models.configuration.ServerCredentials;
 import glide.ffi.resolvers.ClusterScanCursorResolver;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,7 +86,14 @@ import java.util.stream.Stream;
 import lombok.NonNull;
 import response.ResponseOuterClass.Response;
 
-/** Async (non-blocking) client for Cluster mode. Use {@link #createClient} to request a client. */
+/**
+ * Client used for connection to cluster servers.<br>
+ * Use {@link #createClient} to request a client.
+ *
+ * @see For full documentation refer to <a
+ *     href="https://github.com/valkey-io/valkey-glide/wiki/Java-Wrapper#cluster">Valkey Glide
+ *     Wiki</a>.
+ */
 public class GlideClusterClient extends BaseClient
         implements ConnectionManagementClusterCommands,
                 GenericClusterCommands,
@@ -97,10 +108,49 @@ public class GlideClusterClient extends BaseClient
     }
 
     /**
-     * Async request for an async (non-blocking) client in Cluster mode.
+     * Creates a new {@link GlideClusterClient} instance and establishes connections to a Valkey
+     * Cluster.
      *
-     * @param config Glide cluster client Configuration.
-     * @return A Future to connect and return a GlideClusterClient.
+     * @param config The configuration options for the client, including cluster addresses,
+     *     authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
+     * @return A Future that resolves to a connected {@link GlideClusterClient} instance.
+     * @remarks Use this static method to create and connect a {@link GlideClusterClient} to a Valkey
+     *     Cluster. The client will automatically handle connection establishment, including cluster
+     *     topology discovery and handling of authentication and TLS configurations.
+     *     <ul>
+     *       <li><b>Cluster Topology Discovery</b>: The client will automatically discover the cluster
+     *           topology based on the seed addresses provided.
+     *       <li><b>Authentication</b>: If {@link ServerCredentials} are provided, the client will
+     *           attempt to authenticate using the specified username and password.
+     *       <li><b>TLS</b>: If {@link
+     *           BaseClientConfiguration.BaseClientConfigurationBuilder#useTLS(boolean)} is set to
+     *           <code>true</code>, the client will establish secure connections using TLS.
+     *       <li><b>Pub/Sub Subscriptions</b>: Any channels or patterns specified in {@link
+     *           ClusterSubscriptionConfiguration} will be subscribed to upon connection.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * GlideClusterClientConfiguration config =
+     *     GlideClusterClientConfiguration.builder()
+     *         .address(node1address)
+     *         .address(node2address)
+     *         .useTLS(true)
+     *         .readFrom(ReadFrom.PREFER_REPLICA)
+     *         .credentials(credentialsConfiguration)
+     *         .requestTimeout(2000)
+     *         .clientName("GLIDE")
+     *         .subscriptionConfiguration(
+     *             ClusterSubscriptionConfiguration.builder()
+     *                 .subscription(EXACT, "notifications")
+     *                 .subscription(EXACT, "news")
+     *                 .subscription(SHARDED, "data")
+     *                 .callback(callback)
+     *                 .build())
+     *         .inflightRequestsLimit(1000)
+     *         .build();
+     * GlideClusterClient client = GlideClusterClient.createClient(config).get();
+     * }</pre>
      */
     public static CompletableFuture<GlideClusterClient> createClient(
             @NonNull GlideClusterClientConfiguration config) {
@@ -137,6 +187,7 @@ public class GlideClusterClient extends BaseClient
                 CustomCommand, args, route, response -> handleCustomCommandBinaryResponse(route, response));
     }
 
+    @SuppressWarnings("unchecked")
     protected ClusterValue<Object> handleCustomCommandResponse(Route route, Response response) {
         if (route instanceof SingleNodeRoute) {
             return ClusterValue.ofSingleValue(handleObjectOrNullResponse(response));
@@ -144,9 +195,15 @@ public class GlideClusterClient extends BaseClient
         if (response.hasConstantResponse()) {
             return ClusterValue.ofSingleValue(handleStringResponse(response));
         }
-        return ClusterValue.ofMultiValue(handleMapResponse(response));
+        var data =
+                handleValkeyResponse(Object.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+        if (data instanceof Map) {
+            return ClusterValue.ofMultiValue((Map<String, Object>) data);
+        }
+        return ClusterValue.ofSingleValue(data);
     }
 
+    @SuppressWarnings("unchecked")
     protected ClusterValue<Object> handleCustomCommandBinaryResponse(Route route, Response response) {
         if (route instanceof SingleNodeRoute) {
             return ClusterValue.ofSingleValue(handleBinaryObjectOrNullResponse(response));
@@ -154,7 +211,11 @@ public class GlideClusterClient extends BaseClient
         if (response.hasConstantResponse()) {
             return ClusterValue.ofSingleValue(handleStringResponse(response));
         }
-        return ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response));
+        var data = handleValkeyResponse(Object.class, EnumSet.noneOf(ResponseFlags.class), response);
+        if (data instanceof Map) {
+            return ClusterValue.ofMultiValueBinary((Map<GlideString, Object>) data);
+        }
+        return ClusterValue.ofSingleValue(data);
     }
 
     @Deprecated

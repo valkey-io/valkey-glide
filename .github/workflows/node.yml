@@ -99,6 +99,16 @@ jobs:
               with:
                   node-version: ${{ matrix.node }}
 
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      node/rust-client/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.TARGET }}-node
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
+
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
@@ -215,6 +225,15 @@ jobs:
               with:
                   node-version: ${{ matrix.node }}
 
+            - uses: actions/cache@v4
+              if: ${{ matrix.host.ARCH != 'arm64' }} # JavaScript Actions in Alpine containers are not supported on arm
+              with:
+                  path: |
+                      node/rust-client/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.IMAGE }}-node
+                  restore-keys: ${{ matrix.host.IMAGE }}
+
             - name: Build Node wrapper
               if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
               uses: ./.github/workflows/build-node-wrapper
@@ -264,6 +283,16 @@ jobs:
               uses: actions/setup-node@v4
               with:
                   node-version: 20.x
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      node/rust-client/target
+                      glide-core/src/generated
+                  key: aarch64-unknown-linux-gnu-node
+                  restore-keys: |
+                      aarch64-unknown-linux-gnu-glide-core
+                      aarch64-unknown-linux-gnu
 
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper

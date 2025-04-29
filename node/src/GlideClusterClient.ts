@@ -494,8 +494,9 @@ export type SingleNodeRoute =
 
 /**
  * Client used for connection to cluster servers.
+ * Use {@link createClient} to request a client.
  *
- * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster|Valkey Glide Wiki}.
+ * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster | Valkey Glide Wiki}.
  */
 export class GlideClusterClient extends BaseClient {
     /**
@@ -534,17 +535,20 @@ export class GlideClusterClient extends BaseClient {
 
         return configuration;
     }
+
     /**
-     * Creates a new `GlideClusterClient` instance and establishes connections to a Valkey GLIDE Cluster.
+     * Creates a new `GlideClusterClient` instance and establishes connections to a Valkey Cluster.
      *
      * @param options - The configuration options for the client, including cluster addresses, authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
      * @returns A promise that resolves to a connected `GlideClusterClient` instance.
      *
      * @remarks
-     * Use this static method to create and connect a `GlideClusterClient` to a Valkey GLIDE Cluster. The client will automatically handle connection establishment, including cluster topology discovery and handling of authentication and TLS configurations.
+     * Use this static method to create and connect a `GlideClusterClient` to a Valkey Cluster.
+     * The client will automatically handle connection establishment, including cluster topology discovery and handling of authentication and TLS configurations.
      *
-     * ### Example - Connecting to a Cluster
+     * @example
      * ```typescript
+     * // Connecting to a Cluster
      * import { GlideClusterClient, GlideClusterClientConfiguration } from '@valkey/valkey-glide';
      *
      * const client = await GlideClusterClient.createClient({
@@ -1377,7 +1381,7 @@ export class GlideClusterClient extends BaseClient {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
-     * The command will be routed to all primary nodes, unless `route` is provided.
+     * The command will be routed to all nodes, unless `route` is provided.
      *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
