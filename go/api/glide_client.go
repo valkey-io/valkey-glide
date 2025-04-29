@@ -106,7 +106,7 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 
 // Sets configuration parameters to the specified values.
 //
-// Note: Prior to Version 7.0.0, only one parameter can be send.
+// Note (non transaction): Prior to Version 7.0.0, only one parameter can be send.
 //
 // See [valkey.io] for details.
 //
@@ -133,7 +133,7 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 
 // Gets the values of configuration parameters.
 //
-// Note: Prior to Version 7.0.0, only one parameter can be send.
+// Note (non transaction): Prior to Version 7.0.0, only one parameter can be send.
 //
 // See [valkey.io] for details.
 //
