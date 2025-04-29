@@ -1278,7 +1278,7 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * const code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * const result = await client.functionLoad(code, true, 'allNodes');
+     * const result = await client.functionLoad(code, { replace: true, route: 'allNodes' });
      * console.log(result); // Output: 'mylib'
      * ```
      */
