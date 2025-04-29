@@ -92,7 +92,7 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 //	The returned value for the custom command.
 //
 //	In transaction:
-//	  Immediately add the command to the transaction queue.
+//	  It adds the command to the transaction queue instead of executing immediately.
 //	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
@@ -119,8 +119,8 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 //	`"OK"` if all configurations have been successfully set. Otherwise, raises an error.
 //
 //	In transaction:
-//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *GlideClient) ConfigSet(parameters map[string]string) (string, error) {
@@ -146,8 +146,9 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 //	A map of api.Result[string] corresponding to the configuration parameters.
 //
 //	In transaction:
-//	  Returns a empty map immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual map of api.Result[string] corresponding to the configuration parameters value
+//	  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
@@ -172,8 +173,8 @@ func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 //	A simple `"OK"` response.
 //
 //	In transaction:
-//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/select/
 func (client *GlideClient) Select(index int64) (string, error) {
@@ -197,7 +198,7 @@ func (client *GlideClient) Select(index int64) (string, error) {
 //	A string with the information for the default sections.
 //
 //	In transaction:
-//	  Returns a [api.handleStringResponse()] immediately while adding the command to the transaction queue.
+//	  It adds the command to the transaction queue instead of executing immediately.
 //	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/info/
@@ -218,8 +219,8 @@ func (client *GlideClient) Info() (string, error) {
 //	A string containing the information for the sections requested.
 //
 //	In transaction:
-//	  Returns a [api.handleStringResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string, error) {
@@ -242,7 +243,7 @@ func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string,
 //	The number of keys in the currently selected database.
 //
 //	In transaction:
-//	  Returns a [api.handleIntResponse()] immediately while adding the command to the transaction queue.
+//	  It adds the command to the transaction queue instead of executing immediately.
 //	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
@@ -266,8 +267,8 @@ func (client *GlideClient) DBSize() (int64, error) {
 //	The provided message
 //
 //	In transaction:
-//	  Returns a [api.handleStringOrNilResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual provided message value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClient) Echo(message string) (Result[string], error) {
@@ -285,8 +286,8 @@ func (client *GlideClient) Echo(message string) (Result[string], error) {
 //	  Returns "PONG".
 //
 //	In transaction:
-//	  Returns a [api.handleStringResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClient) Ping() (string, error) {
@@ -304,8 +305,8 @@ func (client *GlideClient) Ping() (string, error) {
 //	  Returns the copy of message.
 //
 //	In transaction:
-//	  Returns a [api.handleStringResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the copy of message will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
@@ -329,8 +330,8 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 //	`"OK"` response on success.
 //
 //	In transaction:
-//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClient) FlushAll() (string, error) {
@@ -354,8 +355,8 @@ func (client *GlideClient) FlushAll() (string, error) {
 //	`"OK"` response on success.
 //
 //	In transaction:
-//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, error) {
@@ -375,8 +376,8 @@ func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, 
 //	`"OK"` response on success.
 //
 //	In transaction:
-//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClient) FlushDB() (string, error) {
@@ -400,8 +401,8 @@ func (client *GlideClient) FlushDB() (string, error) {
 //	`"OK"` response on success.
 //
 //	In transaction:
-//	  Returns a [api.handleOkResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, error) {
@@ -419,8 +420,9 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
 //
 //	In transaction:
-//	  Returns a [api.handleStringResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), piece of generative computer art of that specific valkey version along with the Valkey version
+//	  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
 func (client *GlideClient) Lolwut() (string, error) {
@@ -443,8 +445,9 @@ func (client *GlideClient) Lolwut() (string, error) {
 // `
 //
 //	In transaction:
-//	  Returns a [api.handleStringResponse] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), piece of generative computer art of that specific valkey version
+//	  along with the Valkey version will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
 func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string, error) {
@@ -466,8 +469,8 @@ func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string,
 //	The id of the client.
 //
 //	In transaction:
-//	  Returns a [api.handleIntResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	 It adds the command to the transaction queue instead of executing immediately.
+//	 Upon transaction completion with Exec(), the id of the client will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
 func (client *GlideClient) ClientId() (int64, error) {
@@ -485,8 +488,9 @@ func (client *GlideClient) ClientId() (int64, error) {
 //	UNIX TIME of the last DB save executed with success.
 //
 //	In transaction:
-//	  Returns a [api.handleIntResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	 It adds the command to the transaction queue instead of executing immediately.
+//	 Upon transaction completion with Exec(), UNIX TIME of the last DB save executed
+//	 will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lastsave/
 func (client *GlideClient) LastSave() (int64, error) {
@@ -523,8 +527,8 @@ func (client *GlideClient) ConfigResetStat() (string, error) {
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
 //
 //	In transaction:
-//	  Returns a [api.handleStringResponse] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the name of the client connection as a string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
 func (client *GlideClient) ClientGetName() (string, error) {
@@ -546,7 +550,7 @@ func (client *GlideClient) ClientGetName() (string, error) {
 //	OK - when connection name is set
 //
 //	In transaction:
-//	  Returns a [api.handleOkResponse] immediately while adding the command to the transaction queue.
+//	  It adds the command to the transaction queue instead of executing immediately.
 //	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
@@ -570,7 +574,7 @@ func (client *GlideClient) ClientSetName(connectionName string) (string, error) 
 //	Returns "OK".
 //
 //	In transaction:
-//	  Returns a [api.handleBoolResponse] immediately while adding the command to the transaction queue.
+//	  It adds the command to the transaction queue instead of executing immediately.
 //	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/move/
@@ -597,8 +601,8 @@ func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
 //	of the scan. The second element is always an Array of matched keys from the database.
 //
 //	In transaction:
-//	  Returns a [api.handleScanResponse] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
@@ -624,8 +628,8 @@ func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
 //	of the scan. The second element is always an Array of matched keys from the database.
 //
 //	In transaction:
-//	  Returns a [api.handleStringResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string, error) {
@@ -650,7 +654,7 @@ func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.Sca
 //	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
 //
 //	In transaction:
-//	  Returns a [handleOkResponse] immediately while adding the command to the transaction queue.
+//	  It adds the command to the transaction queue instead of executing immediately.
 //	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
@@ -669,8 +673,9 @@ func (client *GlideClient) ConfigRewrite() (string, error) {
 //	A random existing key name from the currently selected database.
 //
 //	In transaction:
-//	  Returns a [CreateNilStringResult()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the arandom existing key name from the
+//	  currently selected database will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
 func (client *GlideClient) RandomKey() (Result[string], error) {
@@ -703,8 +708,9 @@ func (client *GlideClient) RandomKey() (Result[string], error) {
 //	engines - Information about available engines and their stats.
 //
 //	In transaction:
-//	  Upon transaction completion with Exec(),
-//	  the running_script and engines information value will be accessible in the returned results array.
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the running_script and engines information value
+//	  will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-stats/
 func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, error) {
@@ -732,7 +738,7 @@ func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, erro
 //	"OK" if the library exists, otherwise an error is thrown.
 //
 //	In transaction:
-//	  Returns a [api.handleOkResponse] immediately while adding the command to the transaction queue.
+//	  It adds the command to the transaction queue instead of executing immediately.
 //	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
@@ -761,8 +767,8 @@ func (client *GlideClient) FunctionDelete(libName string) (string, error) {
 //	The number of clients that received the message.
 //
 //	In transaction:
-//	  Returns a [api.handleIntResponse()] immediately while adding the command to the transaction queue.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	 It adds the command to the transaction queue instead of executing immediately.
+//	 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/publish
 func (client *GlideClient) Publish(channel string, message string) (int64, error) {
