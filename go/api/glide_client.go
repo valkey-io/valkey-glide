@@ -93,7 +93,7 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 //
 //	In transaction:
 //	  It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//	  Upon transaction completion with Exec(), the returned value for the custom command will be accessible in the returned results array.
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
@@ -199,7 +199,7 @@ func (client *GlideClient) Select(index int64) (string, error) {
 //
 //	In transaction:
 //	  It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//	  Upon transaction completion with Exec(), the actual string with the information for the default sections will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) Info() (string, error) {
