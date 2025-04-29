@@ -13,6 +13,9 @@ import (
 
 // TestPubSubChannels tests the PubSubChannels command for standalone client
 func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
+	if !*pubsubtest {
+		suite.T().Skip("Pubsub tests are disabled")
+	}
 	tests := []struct {
 		name          string
 		clientType    ClientType
@@ -148,6 +151,9 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 
 // TestPubSubNumPat tests the PubSubNumPat command for standalone and cluster clients
 func (suite *GlideTestSuite) TestPubSub_Commands_NumPat() {
+	if !*pubsubtest {
+		suite.T().Skip("Pubsub tests are disabled")
+	}
 	tests := []struct {
 		name          string
 		clientType    ClientType
@@ -227,6 +233,9 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumPat() {
 
 // TestPubSubNumSub tests the PubSubNumSub command for standalone and cluster clients
 func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
+	if !*pubsubtest {
+		suite.T().Skip("Pubsub tests are disabled")
+	}
 	tests := []struct {
 		name           string
 		clientType     ClientType
