@@ -109,7 +109,8 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 
 // Gets information and statistics about the server.
 //
-// The command will be routed to all primary nodes.
+// In non transaction the command will be routed to all primary nodes.
+// When executed within a transaction, the command is routed to a single node.
 //
 // See [valkey.io] for details.
 //
@@ -155,7 +156,7 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //	 In transaction:
 //	   It adds the command to the transaction queue instead of executing immediately.
 //	   Upon transaction completion with Exec(), the map where each address is the key
-//	   and its corresponding node response is the information for the default sections will be accessible in the returned results array.
+//	   and its corresponding node response is the information for the requested sections will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOptions) (ClusterValue[string], error) {
@@ -240,6 +241,7 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 
 // Pings the server.
 // In non transaction the command will be routed to all primary nodes.
+// When executed within a transaction, the command is routed to a single node.
 //
 // Return value:
 //
@@ -259,7 +261,8 @@ func (client *GlideClusterClient) Ping() (string, error) {
 }
 
 // Pings the server.
-// The command will be routed to all primary nodes, unless `Route` is provided in `pingOptions`.
+// In non transaction the command will be routed to all primary nodes, unless `Route` is provided in `pingOptions`.
+// When executed within a transaction, the command is routed to a single node.
 //
 // Parameters:
 //
@@ -418,7 +421,8 @@ func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.Flush
 }
 
 // Deletes all the keys of the currently selected database.
-// The command will be routed to all primary nodes.
+// In non transaction, the command will be routed to all primary nodes.
+// When executed within a transaction, the command is routed to a single node.
 //
 // See [valkey.io] for details.
 //
@@ -1739,7 +1743,8 @@ func (client *GlideClusterClient) FunctionStatsWithRoute(
 }
 
 // Deletes a library and all its functions.
-// The command will be routed to all primary nodes.
+// In non transaction, the command will be routed to all primary nodes.
+// When executed within a transaction, the command is routed to a single node.
 //
 // Since:
 //

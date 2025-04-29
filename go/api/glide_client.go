@@ -674,7 +674,7 @@ func (client *GlideClient) ConfigRewrite() (string, error) {
 //
 //	In transaction:
 //	  It adds the command to the transaction queue instead of executing immediately.
-//	  Upon transaction completion with Exec(), the arandom existing key name from the
+//	  Upon transaction completion with Exec(), a random existing key name from the
 //	  currently selected database will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
