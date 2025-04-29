@@ -1,5 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using static Valkey.Glide.Commands.Options.InfoOptions;
+
 using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
@@ -8,7 +10,7 @@ public class StandaloneClientTests
     [Fact]
     public void CustomCommand()
     {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
         // Assert.Multiple doesn't work with async tasks https://github.com/xunit/xunit/issues/3209
         Assert.Multiple(
             () => Assert.Equal("PONG", client.CustomCommand(["ping"]).Result!.ToString()),
@@ -20,7 +22,7 @@ public class StandaloneClientTests
     [Fact]
     public async Task CustomCommandWithBinary()
     {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
         string key1 = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
         string key3 = Guid.NewGuid().ToString();
@@ -29,7 +31,7 @@ public class StandaloneClientTests
 
         gs dump = (await client.CustomCommand(["DUMP", key1]) as gs)!;
 
-        Assert.Equal("OK".ToGlideString(), await client.CustomCommand(["RESTORE", key2, "0", dump!]));
+        Assert.Equal("OK", await client.CustomCommand(["RESTORE", key2, "0", dump!]));
         Assert.Equal(value, (await client.Get(key2))!);
 
         // Set and get a binary value
@@ -73,7 +75,7 @@ public class StandaloneClientTests
     // TODO: remove this test once we add tests with these commands
     public async Task CustomCommandWithDifferentReturnTypes()
     {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
 
         string key1 = Guid.NewGuid().ToString();
         Assert.Equal(2, (long)(await client.CustomCommand(["hset", key1, "f1", "v1", "f2", "v2"]))!);
@@ -102,5 +104,25 @@ public class StandaloneClientTests
         _ = await client.CustomCommand(["xadd", key3, "0-2", "str-1-id-2-field-1", "str-1-id-2-value-1", "str-1-id-2-field-2", "str-1-id-2-value-2"]);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xread", "streams", key3, "stream", "0-1", "0-2"]))!);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xinfo", "stream", key3, "full"]))!);
+    }
+
+    [Fact]
+    public async Task Info()
+    {
+        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+
+        string info = await client.Info();
+        Assert.Multiple([
+            () => Assert.Contains("# Server", info),
+            () => Assert.Contains("# Replication", info),
+            () => Assert.DoesNotContain("# Latencystats", info),
+        ]);
+
+        info = await client.Info([Section.REPLICATION]);
+        Assert.Multiple([
+            () => Assert.DoesNotContain("# Server", info),
+            () => Assert.Contains("# Replication", info),
+            () => Assert.DoesNotContain("# Latencystats", info),
+        ]);
     }
 }

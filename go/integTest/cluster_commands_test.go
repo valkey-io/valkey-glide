@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/api/options"
@@ -1521,6 +1522,26 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 		}
 	}
 
+	// Test FunctionList with WithCode and query for all libraries
+	query := api.FunctionListQuery{
+		WithCode: true,
+	}
+	functionList, err := client.FunctionListWithRoute(query, route)
+	assert.NoError(t, err)
+	assert.True(t, functionList.IsSingleValue())
+
+	// Check results from each node
+	lib := functionList.SingleValue()[0]
+	assert.Equal(t, libName, lib.Name)
+	assert.Equal(t, "LUA", lib.Engine)
+	assert.Contains(t, lib.Code, libName)
+
+	assert.Len(t, lib.Functions, 1)
+	funcInfo := lib.Functions[0]
+	assert.Equal(t, funcName, funcInfo.Name)
+	assert.Empty(t, funcInfo.Description)
+	assert.Contains(t, funcInfo.Flags, "no-writes")
+
 	// load new lib and delete it with single node route - first lib remains loaded
 	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
 	result, err = client.FunctionLoadWithRoute(anotherLib, true, route)
@@ -1574,6 +1595,26 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 		for _, value := range functionResult.MultiValue() {
 			assert.Equal(t, "one", value)
 		}
+	}
+
+	// Test FunctionList with WithCode and query for all libraries
+	functionList, err = client.FunctionListWithRoute(query, route)
+	assert.NoError(t, err)
+	assert.False(t, functionList.IsSingleValue())
+
+	// Check results from each node
+	for _, libs := range functionList.MultiValue() {
+		assert.Len(t, libs, 1)
+		libInfo := libs[0]
+		assert.Equal(t, libName, libInfo.Name)
+		assert.Equal(t, "LUA", libInfo.Engine)
+		assert.Contains(t, libInfo.Code, libName)
+
+		assert.Len(t, libInfo.Functions, 1)
+		funcInfo := libInfo.Functions[0]
+		assert.Equal(t, funcName, funcInfo.Name)
+		assert.Empty(t, funcInfo.Description)
+		assert.Contains(t, funcInfo.Flags, "no-writes")
 	}
 
 	// load new lib and delete it with all primaries route - first lib remains loaded
