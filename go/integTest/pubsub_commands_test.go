@@ -233,6 +233,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 		channelDefns   []ChannelDefn
 		queryChannels  []string
 		expectedCounts map[string]int64
+		sharded        bool
 	}{
 		{
 			name:          "Standalone Single Channel",
@@ -242,6 +243,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 			expectedCounts: map[string]int64{
 				"news.sports": 1,
 			},
+			sharded: false,
 		},
 		{
 			name:       "Standalone Multiple Channels",
@@ -258,6 +260,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 				"news.weather": 2,
 				"events.local": 1,
 			},
+			sharded: false,
 		},
 		{
 			name:       "Standalone Mixed Modes",
@@ -273,6 +276,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 				"events.local":    1,
 				"sports.football": 0, // Pattern subscribers don't count for exact channel queries
 			},
+			sharded: false,
 		},
 		{
 			name:          "Cluster Single Channel",
@@ -282,6 +286,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 			expectedCounts: map[string]int64{
 				"cluster.news.sports": 1,
 			},
+			sharded: false,
 		},
 		{
 			name:       "Cluster Multiple Channels",
@@ -298,6 +303,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 				"cluster.news.weather": 2,
 				"cluster.events.local": 1,
 			},
+			sharded: false,
 		},
 		{
 			name:       "Cluster Mixed Modes",
@@ -313,11 +319,59 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 				"cluster.events.local":    1,
 				"cluster.sports.football": 0, // Pattern subscribers don't count for exact channel queries
 			},
+			sharded: false,
+		},
+		{
+			name:          "Cluster Sharded Single Channel",
+			clientType:    GlideClusterClient,
+			channelDefns:  []ChannelDefn{{Channel: "cluster.shard.news.sports", Mode: ShardedMode}},
+			queryChannels: []string{"cluster.shard.news.sports"},
+			expectedCounts: map[string]int64{
+				"cluster.shard.news.sports": 1,
+			},
+			sharded: true,
+		},
+		{
+			name:       "Cluster Sharded Multiple Channels",
+			clientType: GlideClusterClient,
+			channelDefns: []ChannelDefn{
+				{Channel: "cluster.shard.news.sports", Mode: ShardedMode},
+				{Channel: "cluster.shard.news.weather", Mode: ShardedMode},
+				{Channel: "cluster.shard.news.weather", Mode: ShardedMode}, // Second subscriber
+				{Channel: "cluster.shard.events.local", Mode: ShardedMode},
+			},
+			queryChannels: []string{"cluster.shard.news.sports", "cluster.shard.news.weather", "cluster.shard.events.local"},
+			expectedCounts: map[string]int64{
+				"cluster.shard.news.sports":  1,
+				"cluster.shard.news.weather": 2,
+				"cluster.shard.events.local": 1,
+			},
+			sharded: true,
+		},
+		{
+			name:       "Cluster Sharded Mixed Modes",
+			clientType: GlideClusterClient,
+			channelDefns: []ChannelDefn{
+				{Channel: "cluster.shard.news.*", Mode: PatternMode},
+				{Channel: "cluster.shard.events.local", Mode: ShardedMode},
+				{Channel: "cluster.shard.sports.*", Mode: PatternMode},
+			},
+			queryChannels: []string{"cluster.shard.news.sports", "cluster.shard.events.local", "cluster.shard.sports.football"},
+			expectedCounts: map[string]int64{
+				"cluster.shard.news.sports":     0, // Pattern subscribers don't count for exact channel queries
+				"cluster.shard.events.local":    1,
+				"cluster.shard.sports.football": 0, // Pattern subscribers don't count for exact channel queries
+			},
+			sharded: true,
 		},
 	}
 
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
+			if tt.sharded {
+				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
+			}
+
 			clients := make([]api.BaseClient, 0, len(tt.channelDefns))
 			for _, defn := range tt.channelDefns {
 				client := suite.CreatePubSubReceiver(tt.clientType, []ChannelDefn{defn}, 1, false)
@@ -329,7 +383,18 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Get subscriber counts using the first client
-			counts, err := clients[0].PubSubNumSub(tt.queryChannels)
+			var counts map[string]int64
+			var err error
+			if tt.sharded {
+				// For sharded channels, we need to use the cluster-specific methods
+				clusterClient, ok := clients[0].(*api.GlideClusterClient)
+				if !ok {
+					t.Fatal("Expected GlideClusterClient for sharded channels")
+				}
+				counts, err = clusterClient.PubSubShardNumSub(tt.queryChannels...)
+			} else {
+				counts, err = clients[0].PubSubNumSub(tt.queryChannels...)
+			}
 			assert.NoError(t, err)
 
 			// Verify counts match expected values
