@@ -102,60 +102,72 @@ class ClusterCommands(CoreCommands):
 
         **Routing Behavior:**
 
-            *   If a `route` is specified:
-                *   The entire batch is sent to the specified node.
-            *   If no `route` is specified:
-                *   **Atomic batches (Transactions):** Routed to the slot owner of the first key in the batch.
-                    If no key is found, the request is sent to a random node.
-                *   **Non-atomic batches (Pipelines):** Each command is routed to the node owning the corresponding
-                    key's slot. If no key is present, routing follows the command's default request policy.
-                    Multi-node commands are automatically split and dispatched to the appropriate nodes.
+        *   If a `route` is specified:
+            *   The entire batch is sent to the specified node.
+
+        *   If no `route` is specified:
+            *   **Atomic batches (Transactions):** Routed to the slot owner of the first key in the batch.
+                If no key is found, the request is sent to a random node.
+
+            *   **Non-atomic batches (Pipelines):** Each command is routed to the node owning the corresponding
+                key's slot. If no key is present, routing follows the command's default request policy.
+                Multi-node commands are automatically split and dispatched to the appropriate nodes.
 
         **Behavior notes:**
 
-            *   **Atomic Batches (Transactions):** All key-based commands must map to the same hash slot.
-                If keys span different slots, the transaction will fail. If the transaction fails due to a
-                `WATCH` command, `exec` will return `None`.
+        *   **Atomic Batches (Transactions):** All key-based commands must map to the same hash slot.
+            If keys span different slots, the transaction will fail. If the transaction fails due to a
+            `WATCH` command, `exec` will return `None`.
 
         **Retry and Redirection:**
 
-            *   If a redirection error occurs:
-                *   **Atomic batches (Transactions):** The entire transaction will be redirected.
-                *   **Non-atomic batches:** Only commands that encountered redirection errors will be redirected.
-            *   Retries for failures will be handled according to the `retry_server_error` and
-                `retry_connection_error` parameters.
+        *   If a redirection error occurs:
+            *   **Atomic batches (Transactions):** The entire transaction will be redirected.
+
+            *   **Non-atomic batches (Pipelines):** Only commands that encountered redirection errors will be redirected.
+
+        *   Retries for failures will be handled according to the `retry_server_error` and
+            `retry_connection_error` parameters.
 
         Args:
             batch (ClusterBatch): A `ClusterBatch` object containing a list of commands to be executed.
-            route (Optional[TSingleNodeRoute]): Configures single-node routing for the batch request.
-                The client will send the batch to the specified node defined by `route`.
+            route (Optional[TSingleNodeRoute]): Configures single-node routing for the batch request. The client
+                will send the batch to the specified node defined by `route`.
+
                 If a redirection error occurs:
-                *   For Atomic Batches (Transactions), the entire transaction will be redirected.
-                *   For Non-Atomic Batches (Pipelines), only the commands that
-                     encountered redirection errors will be redirected.
+
+                * For Atomic Batches (Transactions), the entire transaction will be redirected.
+                * For Non-Atomic Batches (Pipelines), only the commands that encountered redirection errors
+                will be redirected.
+
             timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
-                to complete. This duration encompasses sending the request, awaiting for a response from the server, and any
-                required reconnections or retries. If the specified timeout is exceeded for the request,
-                a timeout error will be raised. If not explicitly set, the client's default request timeout will be used.
-            raise_on_error (bool): Determines how errors are handled within the batch response.
-                When set to `True`, the first encountered error in the batch will be raised as a
-                `RequestError` exception after all retries and reconnections have been executed.
-                When set to `False`, errors will be included as part of the batch response array, allowing
-                the caller to process both successful and failed commands together. In this case, error details
-                will be provided as instances of `RequestError`.
-            retry_server_error (bool): If `True`, retriable server errors (e.g., TRYAGAIN) will trigger a retry.
+                to complete. This duration encompasses sending the request, awaiting a response from the server,
+                and any required reconnections or retries.
+
+                If the specified timeout is exceeded, a timeout error will be raised. If not explicitly set,
+                the client's default request timeout will be used.
+
+            raise_on_error (bool): Determines how errors are handled within the batch response. When set to
+                `True`, the first encountered error in the batch will be raised as a `RequestError`
+                exception after all retries and reconnections have been executed. When set to `False`,
+                errors will be included as part of the batch response array, allowing the caller to process both
+                successful and failed commands together. In this case, error details will be provided as
+                instances of `RequestError`.
+
+            retry_server_error (bool): If `True`, retriable server errors (e.g., `TRYAGAIN`) will trigger a retry.
                 Warning: Retrying server errors may cause commands targeting the same slot to execute out of order.
                 Note: Currently supported only for non-atomic batches. Recommended to increase timeout when enabled.
-            retry_connection_error (bool): If `True`, connection failures will trigger a retry.
-                Warning: Retrying connection errors may lead to duplicate executions, as it is unclear which
-                commands have already been processed.
-                Note: Currently supported only for non-atomic batches. Recommended to increase timeout when enabled.
+
+            retry_connection_error (bool): If `True`, connection failures will trigger a retry. Warning:
+                Retrying connection errors may lead to duplicate executions, as it is unclear which commands have
+                already been processed. Note: Currently supported only for non-atomic batches. Recommended to increase
+                timeout when enabled.
 
         Returns:
-            Optional[List[TResult]]: A list of results corresponding to the execution of each command
-            in the batch. If a command returns a value, it will be included in the list.
-            If a command doesn't return a value, the list entry will be `None`.
-            If the batch failed due to a WATCH command, `exec` will return `None`.
+            Optional[List[TResult]]: A list of results corresponding to the execution of each command in the batch.
+            If a command returns a value, it will be included in the list. If a command doesn't return a value,
+            the list entry will be `None`. If the batch failed due to a `WATCH` command, `exec` will return
+            `None`.
 
         Examples:
             # Example 1: Atomic Batch (Transaction)
@@ -190,7 +202,7 @@ class ClusterCommands(CoreCommands):
             >>> print(f"Atomic Batch Result: {atomic_result}")
             # Output: [OK, 2, 2]
 
-            >>> # Example 4: Non-atomic batch with retry options
+            # Example 4: Non-atomic batch with retry options
             >>> non_atomic_batch = ClusterBatch(is_atomic=False)
             >>> non_atomic_batch.set("key1", "value1")
             >>> non_atomic_batch.set("key2", "value2")
