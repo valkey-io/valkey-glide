@@ -854,3 +854,138 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 	//   Engine: LUA
 	//   Functions: 1
 }
+
+func ExampleGlideClient_FunctionDumpAndRestore() {
+	client := getExampleGlideClient()
+
+	// First, flush all functions
+	_, err := client.FunctionFlushSync()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Load a function
+	_, err = client.FunctionLoad(libraryCodeWithArgs, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Dump the functions
+	dump, err := client.FunctionDump()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Flush all functions
+	_, err = client.FunctionFlushSync()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Restore the functions
+	result, err := client.FunctionRestore(dump.Value())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClusterClient_FunctionDumpAndRestore() {
+	client := getExampleGlideClusterClient()
+
+	// First, flush all functions
+	_, err := client.FunctionFlushSync()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Load a function
+	_, err = client.FunctionLoad(libraryCodeWithArgs, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Dump the functions
+	dump, err := client.FunctionDump()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Flush all functions
+	_, err = client.FunctionFlushSync()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Restore the functions with FLUSH policy to ensure clean restore
+	result, err := client.FunctionRestoreWithPolicy(dump.Value(), options.FlushPolicy)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClusterClient_FunctionDumpAndRestoreWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Use AllPrimaries route for cluster-wide operations
+	route := options.RouteOption{Route: config.AllPrimaries}
+
+	// First, flush all functions
+	_, err := client.FunctionFlushSyncWithRoute(route)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Load a function
+	_, err = client.FunctionLoadWithRoute(libraryCodeWithArgs, true, route)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Dump the functions
+	dump, err := client.FunctionDumpWithRoute(route.Route)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Flush all functions
+	_, err = client.FunctionFlushSyncWithRoute(route)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Restore the functions with FLUSH policy to ensure clean restore
+	result, err := client.FunctionRestoreWithPolicyWithRoute(dump.SingleValue().Value(), options.FlushPolicy, route.Route)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
