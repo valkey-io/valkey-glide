@@ -5,6 +5,11 @@ const config: Config = {
     transform: {
         "^.+\\.(t|j)s$": "ts-jest",
     },
+    transformIgnorePatterns: [
+        "node_modules/",
+        "\\.(js|jsx)$",
+        "<rootDir>/build-js/",
+    ],
     testEnvironment: "node",
     testRegex: "/tests/.*\\.(test|spec)?\\.(ts|tsx)$",
     moduleFileExtensions: ["ts", "json", "node", "js"],

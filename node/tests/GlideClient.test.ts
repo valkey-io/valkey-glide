@@ -45,7 +45,7 @@ import {
     validateTransactionResponse,
     waitForNotBusy,
 } from "./TestUtilities";
-
+// This timeout is used for tests like transactions and copy with DB, it should not be used for other tests
 const TIMEOUT = 50000;
 
 describe("GlideClient", () => {
@@ -934,7 +934,7 @@ describe("GlideClient", () => {
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
-                { requestTimeout: 10000 },
+                { requestTimeout: 5000 },
             );
             const client = await GlideClient.createClient(config);
             const testClient = await GlideClient.createClient(config);
@@ -968,25 +968,53 @@ describe("GlideClient", () => {
                         );
 
                     let killed = false;
-                    let timeout = 4000;
+                    let pendingCallbacks = 0;
+                    let callbacksCompleted = 0;
+
+                    // Wait for the function to start executing
                     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                    while (timeout >= 0) {
-                        try {
-                            expect(await client.functionKill()).toEqual("OK");
-                            killed = true;
-                            break;
-                        } catch {
-                            // do nothing
-                        }
+                    // Create a promise that resolves when 'killed' becomes true or all attempts fail
+                    const killPromise = new Promise<boolean>((resolve) => {
+                        const attemptKill = (remainingTime: number) => {
+                            if (killed || remainingTime <= 0) {
+                                resolve(killed);
+                                return;
+                            }
 
+                            pendingCallbacks++;
+                            client
+                                .functionKill()
+                                .then(() => {
+                                    killed = true;
+                                    callbacksCompleted++;
+                                    resolve(true);
+                                })
+                                .catch(() => {
+                                    callbacksCompleted++;
+                                    // If not killed and still have time, try again
+                                    setTimeout(
+                                        () => attemptKill(remainingTime - 500),
+                                        500,
+                                    );
+                                });
+                        };
+
+                        // Start the first attempt
+                        attemptKill(4000);
+                    });
+
+                    // Wait for the kill to succeed or all attempts to fail
+                    const killSucceeded = await killPromise;
+
+                    // Wait for all pending callbacks to complete
+                    while (callbacksCompleted < pendingCallbacks) {
                         await new Promise((resolve) =>
-                            setTimeout(resolve, 500),
+                            setTimeout(resolve, 100),
                         );
-                        timeout -= 500;
                     }
 
-                    expect(killed).toBeTruthy();
+                    expect(killSucceeded).toBeTruthy();
                     await promise;
                 } finally {
                     await waitForNotBusy(client);
