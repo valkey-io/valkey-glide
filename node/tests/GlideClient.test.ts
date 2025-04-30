@@ -1026,6 +1026,7 @@ describe("GlideClient", () => {
                 client.close();
             }
         },
+        6 * 1000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
