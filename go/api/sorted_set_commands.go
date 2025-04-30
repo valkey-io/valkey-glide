@@ -83,7 +83,7 @@ type SortedSetCommands interface {
 
 	ZDiff(keys []string) ([]string, error)
 
-	ZDiffWithScores(keys []string) (map[string]float64, error)
+	ZDiffWithScores(keys []string) ([]MemberAndScore, error)
 
 	ZRandMember(key string) (Result[string], error)
 
@@ -97,7 +97,7 @@ type SortedSetCommands interface {
 
 	ZInter(keys options.KeyArray) ([]string, error)
 
-	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options options.ZInterOptions) (map[string]float64, error)
+	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options options.ZInterOptions) ([]MemberAndScore, error)
 
 	ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 
@@ -106,4 +106,22 @@ type SortedSetCommands interface {
 		keysOrWeightedKeys options.KeysOrWeightedKeys,
 		options options.ZInterOptions,
 	) (int64, error)
+
+	ZUnion(keys options.KeyArray) ([]string, error)
+
+	ZUnionWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZUnionOptions) ([]MemberAndScore, error)
+
+	ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
+
+	ZUnionStoreWithOptions(
+		destination string,
+		keysOrWeightedKeys options.KeysOrWeightedKeys,
+		zUnionOptions *options.ZUnionOptions,
+	) (int64, error)
+
+	ZInterCard(keys []string) (int64, error)
+
+	ZInterCardWithOptions(keys []string, options *options.ZInterCardOptions) (int64, error)
+
+	ZLexCount(key string, rangeQuery *options.RangeByLex) (int64, error)
 }

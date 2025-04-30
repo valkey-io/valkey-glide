@@ -3976,7 +3976,7 @@ func (client *baseClient) ZRangeWithScores(
 		}
 	}
 
-	return handleZRangeWithScoresResponse(result, needsReverse)
+	return handleSortedSetWithScoresResponse(result, needsReverse)
 }
 
 // Removes the existing timeout on key, turning the key from volatile
@@ -5900,13 +5900,13 @@ func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
 //
 // Return value:
 //
-//	A map of members to their scores.
+//	An array of members to their scores.
 //
 // [valkey.io]: https://valkey.io/commands/zinter/
 func (client *baseClient) ZInterWithScores(
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 	zInterOptions options.ZInterOptions,
-) (map[string]float64, error) {
+) ([]MemberAndScore, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return nil, err
@@ -5921,7 +5921,7 @@ func (client *baseClient) ZInterWithScores(
 	if err != nil {
 		return nil, err
 	}
-	return handleStringDoubleMapResponse(result)
+	return handleSortedSetWithScoresResponse(result, false)
 }
 
 // Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
@@ -6040,19 +6040,19 @@ func (client *baseClient) ZDiff(keys []string) ([]string, error) {
 //
 // Return value:
 //
-//	A `Map` of elements and their scores representing the difference between the sorted sets.
+//	An `Array` of elements and their scores representing the difference between the sorted sets.
 //	If the first `key` does not exist, it is treated as an empty sorted set, and the
-//	command returns an empty `Map`.
+//	command returns an empty `Array`.
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
-func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, error) {
+func (client *baseClient) ZDiffWithScores(keys []string) ([]MemberAndScore, error) {
 	args := append([]string{}, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	result, err := client.executeCommand(C.ZDiff, append(args, options.WithScoresKeyword))
 	if err != nil {
 		return nil, err
 	}
-	return handleStringDoubleMapResponse(result)
+	return handleSortedSetWithScoresResponse(result, false)
 }
 
 // Calculates the difference between the first sorted set and all the successive sorted sets at
@@ -6086,4 +6086,1338 @@ func (client *baseClient) ZDiffStore(destination string, keys []string) (int64, 
 		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
+}
+
+// Returns the union of members from sorted sets specified by the given `keys`.
+// To get the elements with their scores, see `ZUnionWithScores`.
+//
+// Available for Valkey 6.2 and above.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - The keys of the sorted sets.
+//
+// Return Value:
+//
+//	The resulting sorted set from the union.
+//
+// [valkey.io]: https://valkey.io/commands/zunion/
+func (client *baseClient) ZUnion(keys options.KeyArray) ([]string, error) {
+	args, err := keys.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	result, err := client.executeCommand(C.ZUnion, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the union of members and their scores from sorted sets specified by the given
+// `keysOrWeightedKeys`.
+//
+// Available for Valkey 6.2 and above.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keysOrWeightedKeys - The keys of the sorted sets with possible formats:
+//	 - Use `KeyArray` for keys only.
+//	 - Use `WeightedKeys` for weighted keys with score multipliers.
+//	aggregate - Specifies the aggregation strategy to apply when combining the scores of elements.
+//
+// Return Value:
+//
+//	The resulting sorted set from the union.
+//
+// [valkey.io]: https://valkey.io/commands/zunion/
+func (client *baseClient) ZUnionWithScores(
+	keysOrWeightedKeys options.KeysOrWeightedKeys,
+	zUnionOptions *options.ZUnionOptions,
+) ([]MemberAndScore, error) {
+	args, err := keysOrWeightedKeys.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	optionsArgs, err := zUnionOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, optionsArgs...)
+	args = append(args, options.WithScoresKeyword)
+	result, err := client.executeCommand(C.ZUnion, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleSortedSetWithScoresResponse(result, false)
+}
+
+// Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
+// stores the result in `destination`. If `destination` already exists, it
+// is overwritten. Otherwise, a new sorted set will be created.
+//
+// Available for Valkey 6.2 and above.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	destination - The key of the destination sorted set.
+//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
+//	                   - Use `options.NewKeyArray()` for keys only.
+//	                   - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
+//
+// Return Value:
+//
+//	The number of elements in the resulting sorted set stored at `destination`.
+//
+// [valkey.io]: https://valkey.io/commands/zunionstore/
+func (client *baseClient) ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error) {
+	return client.ZUnionStoreWithOptions(destination, keysOrWeightedKeys, nil)
+}
+
+// Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
+// stores the result in `destination`. If `destination` already exists, it
+// is overwritten. Otherwise, a new sorted set will be created.
+//
+// Available for Valkey 6.2 and above.
+//
+// Note:
+//
+//	When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	destination - The key of the destination sorted set.
+//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
+//	                   - Use `options.NewKeyArray()` for keys only.
+//	                   - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
+//	zUnionOptions   - The options for the ZUnionStore command, see - [options.ZUnionOptions].
+//	           Optional `aggregate` option specifies the aggregation strategy to apply when combining the scores of
+//	           elements.
+//
+// Return Value:
+//
+//	The number of elements in the resulting sorted set stored at `destination`.
+//
+// [valkey.io]: https://valkey.io/commands/zunionstore/
+func (client *baseClient) ZUnionStoreWithOptions(
+	destination string,
+	keysOrWeightedKeys options.KeysOrWeightedKeys,
+	zUnionOptions *options.ZUnionOptions,
+) (int64, error) {
+	keysArgs, err := keysOrWeightedKeys.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args := append([]string{destination}, keysArgs...)
+	if zUnionOptions != nil {
+		optionsArgs, err := zUnionOptions.ToArgs()
+		if err != nil {
+			return defaultIntResponse, err
+		}
+		args = append(args, optionsArgs...)
+	}
+	result, err := client.executeCommand(C.ZUnionStore, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns the cardinality of the intersection of the sorted sets specified by `keys`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - The keys of the sorted sets.
+//
+// Return value:
+//
+//	The cardinality of the intersection of the sorted sets.
+//
+// [valkey.io]: https://valkey.io/commands/zintercard/
+func (client *baseClient) ZInterCard(keys []string) (int64, error) {
+	return client.ZInterCardWithOptions(keys, nil)
+}
+
+// Returns the cardinality of the intersection of the sorted sets specified by `keys`.
+// If the intersection cardinality reaches `options.limit` partway through the computation, the
+// algorithm will exit early and yield `options.limit` as the cardinality.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - The keys of the sorted sets.
+//	options - The options for the ZInterCard command, see - [options.ZInterCardOptions].
+//
+// Return value:
+//
+//	The cardinality of the intersection of the sorted sets.
+//
+// [valkey.io]: https://valkey.io/commands/zintercard/
+func (client *baseClient) ZInterCardWithOptions(keys []string, options *options.ZInterCardOptions) (int64, error) {
+	args := append([]string{strconv.Itoa(len(keys))}, keys...)
+	if options != nil {
+		optionsArgs, err := options.ToArgs()
+		if err != nil {
+			return defaultIntResponse, err
+		}
+		args = append(args, optionsArgs...)
+	}
+	result, err := client.executeCommand(C.ZInterCard, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns the number of elements in the sorted set at key with a value between min and max.
+//
+// Available for Valkey 6.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	rangeQuery - The range query to apply to the sorted set.
+//
+// Return value:
+//
+//	The number of elements in the sorted set at key with a value between min and max.
+//
+// [valkey.io]: https://valkey.io/commands/zlexcount/
+func (client *baseClient) ZLexCount(key string, rangeQuery *options.RangeByLex) (int64, error) {
+	args := []string{key}
+	args = append(args, rangeQuery.ToArgsLexCount()...)
+	result, err := client.executeCommand(C.ZLexCount, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+//	Blocks the connection until it pops and returns a member-score pair
+//	with the highest score from the first non-empty sorted set.
+//
+// See [valkey.io] for details.
+//
+// Note :
+//
+// When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// Parameters:
+//
+//	keys - An array of keys to check for elements.
+//	timeoutSecs - The maximum number of seconds to block (0 blocks indefinitely).
+//
+// Return value:
+//
+//	A `KeyWithMemberAndScore` struct containing the key from which the member was popped,
+//	the popped member, and its score. If no element could be popped and the timeout expired,
+//	returns `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/bzpopmax/
+func (client *baseClient) BZPopMax(
+	keys []string,
+	timeoutSecs float64,
+) (Result[KeyWithMemberAndScore], error) {
+	args := append(keys, utils.FloatToString(timeoutSecs))
+
+	result, err := client.executeCommand(C.BZPopMax, args)
+	if err != nil {
+		return CreateNilKeyWithMemberAndScoreResult(), err
+	}
+
+	return handleKeyWithMemberAndScoreResponse(result)
+}
+
+// ZMPopWithOptions Removes and returns up to `count` members from the first non-empty sorted set
+// among the provided `keys`, based on the specified `scoreFilter` criteria.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - A list of keys representing sorted sets to check for elements.
+//	scoreFilter - Specifies whether to pop members with the lowest (`options.MIN`)
+//	 or highest (`options.MAX`) scores.
+//	opts -  Additional options, such as specifying the maximum number of elements to pop.
+//
+// Return value:
+//
+//	A `Result` containing a `KeyWithArrayOfMembersAndScores` object.
+//	If no elements could be popped from the provided keys, returns `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/zmpop/
+func (client *baseClient) ZMPopWithOptions(
+	keys []string,
+	scoreFilter options.ScoreFilter,
+	opts options.ZPopOptions,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.ToString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	optArgs, err := opts.ToArgs(true)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	args := append([]string{strconv.Itoa(len(keys))}, keys...)
+	args = append(args, scoreFilterStr)
+	args = append(args, optArgs...)
+
+	result, err := client.executeCommand(C.ZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
+}
+
+// Pops one or more member-score pairs from the first non-empty sorted set,
+// with the given keys being checked in the order provided.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keys - An array of keys to check for elements.
+//	scoreFilter - Pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest scores.
+//
+// Return value:
+//
+//	 A `KeyWithArrayOfMembersAndScores` struct containing:
+//	- The key from which the elements were popped.
+//	- An array of member-score pairs of the popped elements.
+//	  Returns `nil` if no member could be popped.
+//
+// [valkey.io]: https://valkey.io/commands/zmpop/
+func (client *baseClient) ZMPop(
+	keys []string,
+	scoreFilter options.ScoreFilter,
+) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilterStr, err := scoreFilter.ToString()
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	args := make([]string, 0, len(keys)+3)
+	args = append(args, strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, scoreFilterStr)
+
+	result, err := client.executeCommand(C.ZMPop, args)
+	if err != nil {
+		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+	}
+
+	return handleKeyWithArrayOfMembersAndScoresResponse(result)
+}
+
+// Adds geospatial members with their positions to the specified sorted set stored at `key`.
+// If a member is already a part of the sorted set, its position is updated.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	membersToGeospatialData - A map of member names to their corresponding positions. See [options.GeospatialData].
+//	  The command will report an error when index coordinates are out of the specified range.
+//
+// Return value:
+//
+//	The number of elements added to the sorted set.
+//
+// [valkey.io]: https://valkey.io/commands/geoadd/
+func (client *baseClient) GeoAdd(key string, membersToGeospatialData map[string]options.GeospatialData) (int64, error) {
+	result, err := client.executeCommand(
+		C.GeoAdd,
+		append([]string{key}, options.MapGeoDataToArray(membersToGeospatialData)...),
+	)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Adds geospatial members with their positions to the specified sorted set stored at `key`.
+// If a member is already a part of the sorted set, its position is updated.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	membersToGeospatialData - A map of member names to their corresponding positions. See [options.GeospatialData].
+//	  The command will report an error when index coordinates are out of the specified range.
+//	geoAddOptions - The options for the GeoAdd command, see - [options.GeoAddOptions].
+//
+// Return value:
+//
+//	The number of elements added to the sorted set.
+//
+// [valkey.io]: https://valkey.io/commands/geoadd/
+func (client *baseClient) GeoAddWithOptions(
+	key string,
+	membersToGeospatialData map[string]options.GeospatialData,
+	geoAddOptions options.GeoAddOptions,
+) (int64, error) {
+	args := []string{key}
+	optionsArgs, err := geoAddOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, optionsArgs...)
+	args = append(args, options.MapGeoDataToArray(membersToGeospatialData)...)
+	result, err := client.executeCommand(C.GeoAdd, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns the GeoHash strings representing the positions of all the specified
+// `members` in the sorted set stored at the `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key -  The key of the sorted set.
+//	members - The array of members whose GeoHash strings are to be retrieved.
+//
+// Returns value:
+//
+//	An array of GeoHash strings representing the positions of the specified members stored
+//	at key. If a member does not exist in the sorted set, a `nil` value is returned
+//	for that member.
+//
+// [valkey.io]: https://valkey.io/commands/geohash/
+func (client *baseClient) GeoHash(key string, members []string) ([]string, error) {
+	result, err := client.executeCommand(
+		C.GeoHash,
+		append([]string{key}, members...),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the positions (longitude,latitude) of all the specified members of the
+// geospatial index represented by the sorted set at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	members - The members of the sorted set.
+//
+// Return value:
+//
+//	A 2D `array` which represent positions (longitude and latitude) corresponding to the given members.
+//	If a member does not exist, its position will be `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/geopos/
+func (client *baseClient) GeoPos(key string, members []string) ([][]float64, error) {
+	args := []string{key}
+	args = append(args, members...)
+	result, err := client.executeCommand(C.GeoPos, args)
+	if err != nil {
+		return nil, err
+	}
+	return handle2DFloat64OrNullArrayResponse(result)
+}
+
+// Returns the distance between `member1` and `member2` saved in the
+// geospatial index stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member1 - The name of the first member.
+//	member2 - The name of the second member.
+//
+// Return value:
+//
+//	The distance between `member1` and `member2`. If one or both members do not exist,
+//	or if the key does not exist, returns `nil`. The default
+//	unit is meters, see - [options.Meters]
+//
+// [valkey.io]: https://valkey.io/commands/geodist/
+func (client *baseClient) GeoDist(key string, member1 string, member2 string) (Result[float64], error) {
+	result, err := client.executeCommand(
+		C.GeoDist,
+		[]string{key, member1, member2},
+	)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+}
+
+// Returns the distance between `member1` and `member2` saved in the
+// geospatial index stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member1 - The name of the first member.
+//	member2 - The name of the second member.
+//	unit - The unit of distance measurement - see [options.GeoUnit].
+//
+// Return value:
+//
+//	The distance between `member1` and `member2`. If one or both members
+//	do not exist, or if the key does not exist, returns `nil`.
+//
+// [valkey.io]: https://valkey.io/commands/geodist/
+func (client *baseClient) GeoDistWithUnit(
+	key string,
+	member1 string,
+	member2 string,
+	unit options.GeoUnit,
+) (Result[float64], error) {
+	result, err := client.executeCommand(
+		C.GeoDist,
+		[]string{key, member1, member2, string(unit)},
+	)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	An array of [options.Location] containing the following information:
+//	 - The coordinates as a [options.GeospatialData] object.
+//	 - The member (location) name.
+//	 - The distance from the center as a `float64`, in the same unit specified for
+//	   `searchByShape`.
+//	 - The geohash of the location as a `int64`.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearchWithFullOptions(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+	infoOptions options.GeoSearchInfoOptions,
+) ([]options.Location, error) {
+	args := []string{key}
+	searchFromArgs, err := searchFrom.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchFromArgs...)
+	searchByShapeArgs, err := searchByShape.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchByShapeArgs...)
+	infoOptionsArgs, err := infoOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, infoOptionsArgs...)
+	resultOptionsArgs, err := resultOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, resultOptionsArgs...)
+	result, err := client.executeCommand(C.GeoSearch, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleLocationArrayResponse(result)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//
+// Return value:
+//
+//	An array of matched member names.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearchWithResultOptions(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+) ([]string, error) {
+	args := []string{key}
+	searchFromArgs, err := searchFrom.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchFromArgs...)
+	searchByShapeArgs, err := searchByShape.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, searchByShapeArgs...)
+	resultOptionsArgs, err := resultOptions.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, resultOptionsArgs...)
+
+	result, err := client.executeCommand(C.GeoSearch, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	An array of [options.Location] containing the following information:
+//	 - The coordinates as a [options.GeospatialData] object.
+//	 - The member (location) name.
+//	 - The distance from the center as a `float64`, in the same unit specified for
+//	   `searchByShape`.
+//	 - The geohash of the location as a `int64`.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearchWithInfoOptions(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	infoOptions options.GeoSearchInfoOptions,
+) ([]options.Location, error) {
+	return client.GeoSearchWithFullOptions(
+		key,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+		infoOptions,
+	)
+}
+
+// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// which are within the borders of the area specified by a given shape.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	searchFrom - The query's center point options, could be one of:
+//		- `MemberOrigin` to use the position of the given existing member in the sorted
+//	         set.
+//		- `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		- `BYRADIUS` to search inside circular area according to given radius.
+//		- `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//
+// Return value:
+//
+//	An array of matched member names.
+//
+// [valkey.io]: https://valkey.io/commands/geosearch/
+func (client *baseClient) GeoSearch(
+	key string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+) ([]string, error) {
+	return client.GeoSearchWithResultOptions(
+		key,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+	)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStoreWithFullOptions(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+	infoOptions options.GeoSearchStoreInfoOptions,
+) (int64, error) {
+	args := []string{destinationKey, sourceKey}
+	searchFromArgs, err := searchFrom.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, searchFromArgs...)
+	searchByShapeArgs, err := searchByShape.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, searchByShapeArgs...)
+	resultOptionsArgs, err := resultOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, resultOptionsArgs...)
+	infoOptionsArgs, err := infoOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	args = append(args, infoOptionsArgs...)
+
+	result, err := client.executeCommand(C.GeoSearchStore, args)
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStore(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+) (int64, error) {
+	return client.GeoSearchStoreWithFullOptions(
+		destinationKey,
+		sourceKey,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+		*options.NewGeoSearchStoreInfoOptions(),
+	)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	resultOptions - Optional inputs for sorting/limiting the results.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStoreWithResultOptions(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	resultOptions options.GeoSearchResultOptions,
+) (int64, error) {
+	return client.GeoSearchStoreWithFullOptions(
+		destinationKey,
+		sourceKey,
+		searchFrom,
+		searchByShape,
+		resultOptions,
+		*options.NewGeoSearchStoreInfoOptions(),
+	)
+}
+
+// Searches for members in a sorted set stored at `sourceKey` representing geospatial data
+// within a circular or rectangular area and stores the result in `destinationKey`. If
+// `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
+// created. To get the result directly, see [GeoSearchWithFullOptions].
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// Note: When in cluster mode, `destinationKey` and `sourceKey` must map to the same hash slot.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	destinationKey - The key of the sorted set to store the result.
+//	sourceKey - The key of the sorted set to search.
+//	searchFrom - The query's center point options, could be one of:
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted
+//	          set.
+//		 - `CoordOrigin` to use the given longitude and latitude coordinates.
+//	searchByShape - The query's shape options:
+//		 - `BYRADIUS` to search inside circular area according to given radius.
+//		 - `BYBOX` to search inside an axis-aligned rectangle, determined by height and width.
+//	infoOptions - The optional inputs to request additional information.
+//
+// Return value:
+//
+//	The number of elements in the resulting set.
+//
+// [valkey.io]: https://valkey.io/commands/geosearchstore/
+func (client *baseClient) GeoSearchStoreWithInfoOptions(
+	destinationKey string,
+	sourceKey string,
+	searchFrom options.GeoSearchOrigin,
+	searchByShape options.GeoSearchShape,
+	infoOptions options.GeoSearchStoreInfoOptions,
+) (int64, error) {
+	return client.GeoSearchStoreWithFullOptions(
+		destinationKey,
+		sourceKey,
+		searchFrom,
+		searchByShape,
+		*options.NewGeoSearchResultOptions(),
+		infoOptions,
+	)
+}
+
+// Loads a library to Valkey.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	libraryCode - The source code that implements the library.
+//	replace - Whether the given library should overwrite a library with the same name if it
+//	already exists.
+//
+// Return value:
+//
+//	The library name that was loaded.
+//
+// [valkey.io]: https://valkey.io/commands/function-load/
+func (client *baseClient) FunctionLoad(libraryCode string, replace bool) (string, error) {
+	args := []string{}
+	if replace {
+		args = append(args, options.ReplaceKeyword)
+	}
+	args = append(args, libraryCode)
+	result, err := client.executeCommand(C.FunctionLoad, args)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Deletes all function libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-flush/
+func (client *baseClient) FunctionFlush() (string, error) {
+	result, err := client.executeCommand(C.FunctionFlush, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Deletes all function libraries in synchronous mode.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-flush/
+func (client *baseClient) FunctionFlushSync() (string, error) {
+	result, err := client.executeCommand(C.FunctionFlush, []string{string(options.SYNC)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Deletes all function libraries in asynchronous mode.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-flush/
+func (client *baseClient) FunctionFlushAsync() (string, error) {
+	result, err := client.executeCommand(C.FunctionFlush, []string{string(options.ASYNC)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Invokes a previously loaded function.
+// The command will be routed to a primary random node.
+// To route to a replica please refer to [FCallReadOnly].
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall/
+func (client *baseClient) FCall(function string) (any, error) {
+	result, err := client.executeCommand(C.FCall, []string{function, utils.IntToString(0)})
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
+}
+
+// Invokes a previously loaded read-only function.
+// This command is routed depending on the client's {@link ReadFrom} strategy.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall_ro/
+func (client *baseClient) FCallReadOnly(function string) (any, error) {
+	result, err := client.executeCommand(C.FCallReadOnly, []string{function, utils.IntToString(0)})
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
+}
+
+// Invokes a previously loaded function.
+// This command is routed to primary nodes only.
+// To route to a replica please refer to [FCallReadOnly].
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//	keys - An `array` of keys accessed by the function. To ensure the correct
+//	   execution of functions, both in standalone and clustered deployments, all names of keys
+//	   that a function accesses must be explicitly provided as `keys`.
+//	arguments - An `array` of `function` arguments. `arguments` should not represent names of keys.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall/
+func (client *baseClient) FCallWithKeysAndArgs(
+	function string,
+	keys []string,
+	args []string,
+) (any, error) {
+	cmdArgs := []string{function, utils.IntToString(int64(len(keys)))}
+	cmdArgs = append(cmdArgs, keys...)
+	cmdArgs = append(cmdArgs, args...)
+	result, err := client.executeCommand(C.FCall, cmdArgs)
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
+}
+
+// Invokes a previously loaded read-only function.
+// This command is routed depending on the client's {@link ReadFrom} strategy.
+//
+// Note: When in cluster mode, all `keys` must map to the same hash slot.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	function - The function name.
+//	keys - An `array` of keys accessed by the function. To ensure the correct
+//	   execution of functions, both in standalone and clustered deployments, all names of keys
+//	   that a function accesses must be explicitly provided as `keys`.
+//	arguments - An `array` of `function` arguments. `arguments` should not represent names of keys.
+//
+// Return value:
+//
+//	The invoked function's return value.
+//
+// [valkey.io]: https://valkey.io/commands/fcall_ro/
+func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
+	function string,
+	keys []string,
+	args []string,
+) (any, error) {
+	cmdArgs := []string{function, utils.IntToString(int64(len(keys)))}
+	cmdArgs = append(cmdArgs, keys...)
+	cmdArgs = append(cmdArgs, args...)
+	result, err := client.executeCommand(C.FCallReadOnly, cmdArgs)
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyResponse(result)
+}
+
+// Lists the currently active channels.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	An array of active channel names.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannels() ([]string, error) {
+	result, err := client.executeCommand(C.PubSubChannels, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// Lists the currently active channels matching the specified pattern.
+//
+// Pattern can be any glob-style pattern:
+// - h?llo matches hello, hallo and hxllo
+// - h*llo matches hllo and heeeello
+// - h[ae]llo matches hello and hallo, but not hillo
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	pattern - The pattern to match channel names against.
+//
+// Return value:
+//
+//	An array of active channel names matching the pattern.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
+	args := []string{pattern}
+	result, err := client.executeCommand(C.PubSubChannels, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// Returns the number of patterns that are subscribed to by clients.
+//
+// This returns the total number of unique patterns that all clients are subscribed to,
+// not the count of clients subscribed to patterns.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	The number of patterns that are subscribed to by clients.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numpat
+func (client *baseClient) PubSubNumPat() (int64, error) {
+	result, err := client.executeCommand(C.PubSubNumPat, []string{})
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// Returns the number of subscribers for the specified channels.
+//
+// The count only includes clients subscribed to exact channels, not pattern subscriptions.
+// If no channels are specified, an empty map is returned.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single map.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channels - The channel names to get subscriber counts for.
+//
+// Return value:
+//
+//	A map of channel names to their subscriber counts.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numsub
+func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, error) {
+	if len(channels) == 0 {
+		// If no channels specified, just return an empty map
+		return make(map[string]int64), nil
+	}
+
+	result, err := client.executeCommand(C.PubSubNumSub, channels)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringIntMapResponse(result)
+}
+
+// Kills a function that is currently executing.
+//
+// `FUNCTION KILL` terminates read-only functions only.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// Note:
+//
+//	When in cluster mode, this command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`OK` if function is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/function-kill/
+func (client *baseClient) FunctionKill() (string, error) {
+	result, err := client.executeCommand(C.FunctionKill, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Returns information about the functions and libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	query - The query to use to filter the functions and libraries.
+//
+// Return value:
+//
+//	A list of info about queried libraries and their functions.
+//
+// [valkey.io]: https://valkey.io/commands/function-list/
+func (client *baseClient) FunctionList(query FunctionListQuery) ([]LibraryInfo, error) {
+	response, err := client.executeCommand(C.FunctionList, query.ToArgs())
+	if err != nil {
+		return nil, err
+	}
+	return handleFunctionListResponse(response)
 }
