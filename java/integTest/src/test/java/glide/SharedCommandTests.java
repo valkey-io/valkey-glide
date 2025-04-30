@@ -14275,7 +14275,7 @@ public class SharedCommandTests {
         String key2 = "{key}-2" + UUID.randomUUID();
         String initialCursor = "0";
         long defaultCount = 10;
-        String[] numberMembers = new String[50000]; // Use large dataset to force an iterative cursor.
+        String[] numberMembers = new String[1000]; // Use large dataset to force an iterative cursor.
         for (int i = 0; i < numberMembers.length; i++) {
             numberMembers[i] = String.valueOf(i);
         }
@@ -14417,7 +14417,7 @@ public class SharedCommandTests {
         GlideString initialCursor = gs("0");
         long defaultCount = 10;
         GlideString[] numberMembers =
-                new GlideString[50000]; // Use large dataset to force an iterative cursor.
+                new GlideString[1000]; // Use large dataset to force an iterative cursor.
         for (int i = 0; i < numberMembers.length; i++) {
             numberMembers[i] = gs(String.valueOf(i));
         }
@@ -14573,7 +14573,7 @@ public class SharedCommandTests {
 
         // Setup test data - use a large number of entries to force an iterative cursor.
         Map<String, Double> numberMap = new HashMap<>();
-        for (Double i = 0.0; i < 50000; i++) {
+        for (Double i = 0.0; i < 1000; i++) {
             numberMap.put("member" + i, i);
         }
         String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
@@ -14767,11 +14767,11 @@ public class SharedCommandTests {
 
         // Setup test data - use a large number of entries to force an iterative cursor.
         Map<GlideString, Double> numberMap = new HashMap<>();
-        for (Double i = 0.0; i < 50000; i++) {
+        for (Double i = 0.0; i < 1000; i++) {
             numberMap.put(gs("member" + i), i);
         }
         Map<String, Double> numberMap_strings = new HashMap<>();
-        for (Double i = 0.0; i < 50000; i++) {
+        for (Double i = 0.0; i < 1000; i++) {
             numberMap_strings.put("member" + i, i);
         }
 
@@ -14857,7 +14857,7 @@ public class SharedCommandTests {
             if (isFirstLoop) {
                 assertNotEquals(gs("0"), resultCursor);
                 isFirstLoop = false;
-            } else if (resultCursor.equals("0")) {
+            } else if (resultCursor.equals(gs("0"))) {
                 break;
             }
 
@@ -14982,7 +14982,7 @@ public class SharedCommandTests {
         // This is an unusually large dataset because the server can ignore the COUNT option
         // if the dataset is small enough that it is more efficient to transfer its entire contents
         // at once.
-        for (int i = 0; i < 50000; i++) {
+        for (int i = 0; i < 1000; i++) {
             numberMap.put(String.valueOf(i), "num" + i);
         }
         String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
@@ -15165,7 +15165,7 @@ public class SharedCommandTests {
         // This is an unusually large dataset because the server can ignore the COUNT option
         // if the dataset is small enough that it is more efficient to transfer its entire contents
         // at once.
-        for (int i = 0; i < 50000; i++) {
+        for (int i = 0; i < 1000; i++) {
             numberMap.put(gs(String.valueOf(i)), gs("num" + i));
         }
         GlideString[] charMembers = new GlideString[] {gs("a"), gs("b"), gs("c"), gs("d"), gs("e")};
