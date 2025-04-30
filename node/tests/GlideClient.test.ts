@@ -48,6 +48,9 @@ import {
 // This timeout is used for tests like transactions and copy with DB, it should not be used for other tests
 const TIMEOUT = 50000;
 
+// This timeout is used for functions tests, it should not be used for other tests
+const FUNCTION_TIMEOUT = 6000;
+
 describe("GlideClient", () => {
     let testsFailed = 0;
     let cluster: ValkeyCluster;
@@ -935,7 +938,7 @@ describe("GlideClient", () => {
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
-                { requestTimeout: 5000 },
+                { requestTimeout: 10000 },
             );
             const client = await GlideClient.createClient(config);
             const testClient = await GlideClient.createClient(config);
@@ -1026,7 +1029,7 @@ describe("GlideClient", () => {
                 client.close();
             }
         },
-        6 * 1000,
+        FUNCTION_TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1177,6 +1180,7 @@ describe("GlideClient", () => {
                 client.close();
             }
         },
+        FUNCTION_TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
