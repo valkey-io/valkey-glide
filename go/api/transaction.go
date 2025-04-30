@@ -73,18 +73,18 @@ func (t *Transaction) sendCommandWithRoute(
 
 // Exec executes all queued commands as a transaction
 func (t *Transaction) Exec() ([]any, error) {
-	result, err := t.baseClient.executeTransactionCommand(t.commands) // Use BaseClient for execution
+	result, err := t.executeTransactionCommand(t.commands) // Use BaseClient for execution
 	if err != nil {
 		return nil, err
 	}
 	return handleAnyArrayResponse(result)
 }
 
-func (client *baseClient) executeTransactionCommand(commands []Cmder) (*C.CommandResponse, error) {
-	return client.executeTransactionWithRoute(commands, nil)
+func (t *Transaction) executeTransactionCommand(commands []Cmder) (*C.CommandResponse, error) {
+	return t.executeTransactionWithRoute(commands, nil)
 }
 
-func (client *baseClient) executeTransactionWithRoute(cmds []Cmder, route config.Route) (*C.struct_CommandResponse, error) {
+func (t *Transaction) executeTransactionWithRoute(cmds []Cmder, route config.Route) (*C.struct_CommandResponse, error) {
 	if len(cmds) == 0 {
 		return nil, &errors.RequestError{Msg: "Transaction must contain at least one command"}
 	}
@@ -147,30 +147,30 @@ func (client *baseClient) executeTransactionWithRoute(cmds []Cmder, route config
 	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
 	defer pinner.Unpin()
 
-	client.mu.Lock()
-	if client.coreClient == nil {
-		client.mu.Unlock()
+	t.mu.Lock()
+	if t.coreClient == nil {
+		t.mu.Unlock()
 		return nil, &errors.ClosingError{Msg: "Transaction failed. The client is closed."}
 	}
-	client.pending[resultChannelPtr] = struct{}{}
+	t.pending[resultChannelPtr] = struct{}{}
 
 	C.execute_transaction(
-		client.coreClient,
+		t.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
 		&transaction,
 		routeBytesPtr,
 		routeBytesCount,
 	)
 
-	client.mu.Unlock()
+	t.mu.Unlock()
 
 	payload := <-resultChannel
 
-	client.mu.Lock()
-	if client.pending != nil {
-		delete(client.pending, resultChannelPtr)
+	t.mu.Lock()
+	if t.pending != nil {
+		delete(t.pending, resultChannelPtr)
 	}
-	client.mu.Unlock()
+	t.mu.Unlock()
 
 	if payload.error != nil {
 		return nil, payload.error
