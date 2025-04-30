@@ -459,8 +459,8 @@ func ExampleGlideClient_ZRangeWithScores() {
 
 	// Output:
 	// 3
-	// map[one:1 three:3 two:2]
-	// map[one:1 two:2]
+	// [{one 1} {two 2} {three 3}]
+	// [{two 2} {one 1}]
 }
 
 func ExampleGlideClusterClient_ZRangeWithScores() {
@@ -482,8 +482,8 @@ func ExampleGlideClusterClient_ZRangeWithScores() {
 
 	// Output:
 	// 3
-	// map[one:1 three:3 two:2]
-	// map[one:1 two:2]
+	// [{one 1} {two 2} {three 3}]
+	// [{two 2} {one 1}]
 }
 
 func ExampleGlideClient_ZRangeStore() {
