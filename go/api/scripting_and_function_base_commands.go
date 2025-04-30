@@ -31,7 +31,7 @@ type ScriptingAndFunctionBaseCommands interface {
 
 	FunctionList(query FunctionListQuery) ([]LibraryInfo, error)
 
-	FunctionDump() (Result[string], error)
+	FunctionDump() (string, error)
 
 	FunctionRestore(payload string) (string, error)
 

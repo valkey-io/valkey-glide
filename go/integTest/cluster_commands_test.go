@@ -2155,7 +2155,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 	emptyDump, err := client.FunctionDump()
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), emptyDump)
-	assert.Greater(suite.T(), len(emptyDump.Value()), 0)
+	assert.Greater(suite.T(), len(emptyDump), 0)
 
 	name1 := "Foster"
 	libname1 := "FosterLib"
@@ -2179,17 +2179,17 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 	assert.Nil(suite.T(), err)
 
 	// Restore without cleaning the lib and/or overwrite option causes an error
-	_, err = client.FunctionRestore(dump.Value())
+	_, err = client.FunctionRestore(dump)
 	assert.NotNil(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Library "+libname1+" already exists")
 
 	// APPEND policy also fails for the same reason (name collision)
-	_, err = client.FunctionRestoreWithPolicy(dump.Value(), options.AppendPolicy)
+	_, err = client.FunctionRestoreWithPolicy(dump, options.AppendPolicy)
 	assert.NotNil(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Library "+libname1+" already exists")
 
 	// REPLACE policy succeeds
-	suite.verifyOK(client.FunctionRestoreWithPolicy(dump.Value(), options.ReplacePolicy))
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump, options.ReplacePolicy))
 
 	// Verify functions still work after replace
 	result1, err := client.FCallReadOnlyWithArgs(name1, []string{"meow", "woem"})
@@ -2223,7 +2223,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 	assert.Equal(suite.T(), libname2, loadResult)
 
 	// REPLACE policy now fails due to a name collision
-	_, err = client.FunctionRestoreWithPolicy(dump.Value(), options.ReplacePolicy)
+	_, err = client.FunctionRestoreWithPolicy(dump, options.ReplacePolicy)
 	assert.NotNil(suite.T(), err)
 	errMsg := err.Error()
 	// valkey checks names in random order and blames on first collision
@@ -2232,7 +2232,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 			strings.Contains(errMsg, "Function "+name2+" already exists"))
 
 	// FLUSH policy succeeds, but deletes the second lib
-	suite.verifyOK(client.FunctionRestoreWithPolicy(dump.Value(), options.FlushPolicy))
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump, options.FlushPolicy))
 
 	// Verify original functions work again
 	result1, err = client.FCallReadOnlyWithArgs(name1, []string{"meow", "woem"})

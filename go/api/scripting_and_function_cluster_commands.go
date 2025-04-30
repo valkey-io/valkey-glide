@@ -46,9 +46,13 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	FunctionListWithRoute(query FunctionListQuery, route options.RouteOption) (ClusterValue[[]LibraryInfo], error)
 
-	FunctionDumpWithRoute(route config.Route) (ClusterValue[Result[string]], error)
+	FunctionDumpWithRoute(route config.Route) (ClusterValue[string], error)
 
 	FunctionRestoreWithRoute(payload string, route config.Route) (string, error)
 
-	FunctionRestoreWithPolicyWithRoute(payload string, policy options.FunctionRestorePolicy, route config.Route) (string, error)
+	FunctionRestoreWithPolicyWithRoute(
+		payload string,
+		policy options.FunctionRestorePolicy,
+		route config.Route,
+	) (string, error)
 }

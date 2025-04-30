@@ -855,7 +855,7 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 	//   Functions: 1
 }
 
-func ExampleGlideClient_FunctionDumpAndRestore() {
+func ExampleGlideClient_FunctionDump() {
 	client := getExampleGlideClient()
 
 	// First, flush all functions
@@ -887,7 +887,7 @@ func ExampleGlideClient_FunctionDumpAndRestore() {
 	}
 
 	// Restore the functions
-	result, err := client.FunctionRestore(dump.Value())
+	result, err := client.FunctionRestore(dump)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -899,7 +899,7 @@ func ExampleGlideClient_FunctionDumpAndRestore() {
 	// OK
 }
 
-func ExampleGlideClusterClient_FunctionDumpAndRestore() {
+func ExampleGlideClusterClient_FunctionDump() {
 	client := getExampleGlideClusterClient()
 
 	// First, flush all functions
@@ -931,7 +931,7 @@ func ExampleGlideClusterClient_FunctionDumpAndRestore() {
 	}
 
 	// Restore the functions with FLUSH policy to ensure clean restore
-	result, err := client.FunctionRestoreWithPolicy(dump.Value(), options.FlushPolicy)
+	result, err := client.FunctionRestoreWithPolicy(dump, options.FlushPolicy)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -943,7 +943,7 @@ func ExampleGlideClusterClient_FunctionDumpAndRestore() {
 	// OK
 }
 
-func ExampleGlideClusterClient_FunctionDumpAndRestoreWithRoute() {
+func ExampleGlideClusterClient_FunctionDumpWithRoute() {
 	client := getExampleGlideClusterClient()
 
 	// Use AllPrimaries route for cluster-wide operations
@@ -957,14 +957,21 @@ func ExampleGlideClusterClient_FunctionDumpAndRestoreWithRoute() {
 	}
 
 	// Load a function
+	// 	code := `#!lua name=mylib
+	// redis.register_function{
+	// 	function_name = 'myfunc',
+	// 	callback = function(keys, args) return args[1] end,
+	// 	flags = { 'no-writes' }
+	// }`
+
 	_, err = client.FunctionLoadWithRoute(libraryCodeWithArgs, true, route)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
-	// Dump the functions
-	dump, err := client.FunctionDumpWithRoute(route.Route)
+	// Dump the functions from a single node
+	dump, err := client.FunctionDumpWithRoute(config.RandomRoute)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -978,7 +985,7 @@ func ExampleGlideClusterClient_FunctionDumpAndRestoreWithRoute() {
 	}
 
 	// Restore the functions with FLUSH policy to ensure clean restore
-	result, err := client.FunctionRestoreWithPolicyWithRoute(dump.SingleValue().Value(), options.FlushPolicy, route.Route)
+	result, err := client.FunctionRestoreWithPolicyWithRoute(dump.SingleValue(), options.FlushPolicy, route.Route)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return

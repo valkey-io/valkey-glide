@@ -1188,7 +1188,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 	emptyDump, err := client.FunctionDump()
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), emptyDump)
-	assert.Greater(suite.T(), len(emptyDump.Value()), 0)
+	assert.Greater(suite.T(), len(emptyDump), 0)
 
 	name1 := "Foster"
 	name2 := "Dogster"
@@ -1219,17 +1219,17 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 	assert.Nil(suite.T(), err)
 
 	// Restore without cleaning the lib and/or overwrite option causes an error
-	_, err = client.FunctionRestore(dump.Value())
+	_, err = client.FunctionRestore(dump)
 	assert.NotNil(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Library "+name1+" already exists")
 
 	// APPEND policy also fails for the same reason (name collision)
-	_, err = client.FunctionRestoreWithPolicy(dump.Value(), options.AppendPolicy)
+	_, err = client.FunctionRestoreWithPolicy(dump, options.AppendPolicy)
 	assert.NotNil(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Library "+name1+" already exists")
 
 	// REPLACE policy succeeds
-	suite.verifyOK(client.FunctionRestoreWithPolicy(dump.Value(), options.ReplacePolicy))
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump, options.ReplacePolicy))
 
 	// Functions still work the same after replace
 	result1, err = client.FCallWithKeysAndArgs(name1, []string{}, []string{"meow", "woem"})
@@ -1251,7 +1251,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 	assert.Equal(suite.T(), name2, loadResult)
 
 	// REPLACE policy now fails due to a name collision
-	_, err = client.FunctionRestoreWithPolicy(dump.Value(), options.ReplacePolicy)
+	_, err = client.FunctionRestoreWithPolicy(dump, options.ReplacePolicy)
 	assert.NotNil(suite.T(), err)
 	errMsg := err.Error()
 	// valkey checks names in random order and blames on first collision
@@ -1260,7 +1260,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 			strings.Contains(errMsg, "Function "+name2+" already exists"))
 
 	// FLUSH policy succeeds, but deletes the second lib
-	suite.verifyOK(client.FunctionRestoreWithPolicy(dump.Value(), options.FlushPolicy))
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump, options.FlushPolicy))
 
 	// Original functions work again
 	result1, err = client.FCallWithKeysAndArgs(name1, []string{}, []string{"meow", "woem"})

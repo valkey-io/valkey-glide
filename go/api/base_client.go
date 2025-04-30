@@ -7927,12 +7927,12 @@ func (client *baseClient) FunctionList(query FunctionListQuery) ([]LibraryInfo, 
 //	The serialized payload of all loaded libraries.
 //
 // [valkey.io]: https://valkey.io/commands/function-dump/
-func (client *baseClient) FunctionDump() (Result[string], error) {
+func (client *baseClient) FunctionDump() (string, error) {
 	result, err := client.executeCommand(C.FunctionDump, []string{})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return DefaultStringResponse, err
 	}
-	return handleStringOrNilResponse(result)
+	return handleStringResponse(result)
 }
 
 // Restores libraries from the serialized payload returned by `FunctionDump`.

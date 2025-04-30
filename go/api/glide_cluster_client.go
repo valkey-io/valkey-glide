@@ -1753,16 +1753,23 @@ func (client *GlideClusterClient) PubSubShardNumSub(channels ...string) (map[str
 //	A [ClusterValue] containing the serialized payload of all loaded libraries.
 //
 // [valkey.io]: https://valkey.io/commands/function-dump/
-func (client *GlideClusterClient) FunctionDumpWithRoute(route config.Route) (ClusterValue[Result[string]], error) {
+func (client *GlideClusterClient) FunctionDumpWithRoute(route config.Route) (ClusterValue[string], error) {
 	response, err := client.executeCommandWithRoute(C.FunctionDump, []string{}, route)
 	if err != nil {
-		return createEmptyClusterValue[Result[string]](), err
+		return createEmptyClusterValue[string](), err
 	}
-	result, err := handleStringOrNilResponse(response)
+	if route != nil && route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[Result[string]](), err
+		return createEmptyClusterValue[string](), err
 	}
-	return createClusterSingleValue[Result[string]](result), nil
+	return createClusterSingleValue[string](data), nil
 }
 
 // Restores libraries from the serialized payload.
