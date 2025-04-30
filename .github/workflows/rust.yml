@@ -176,5 +176,5 @@ jobs:
 
             - name: Install rust-license and check license headers
               run: |
-                cargo install rust-license
-                rust-license license-header --config rust-license/rust-license.yaml --check $(find . -name '*.rs')
+                  cargo install rust-license
+                  rust-license license-header --config rust-license/rust-license.yaml --check $(find . -name '*.rs')
