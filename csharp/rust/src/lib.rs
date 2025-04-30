@@ -122,7 +122,7 @@ impl Drop for PanicGuard {
 ///   See the safety documentation of [`SuccessCallback`] and [`FailureCallback`].
 #[allow(rustdoc::private_intra_doc_links)]
 #[no_mangle]
-pub unsafe extern "C" fn create_client(
+pub unsafe extern "C-unwind" fn create_client(
     config: *const ConnectionConfig,
     success_callback: SuccessCallback,
     failure_callback: FailureCallback,
@@ -276,8 +276,7 @@ pub unsafe extern "C-unwind" fn command(
 #[no_mangle]
 pub unsafe extern "C" fn free_respose(ptr: *mut ResponseValue) {
     unsafe {
-        let val = Box::leak(Box::from_raw(ptr));
-        val.free_memory();
+        Box::leak(Box::from_raw(ptr)).free_memory();
     }
 }
 
