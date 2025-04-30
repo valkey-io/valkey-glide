@@ -3,7 +3,7 @@ import type { Config } from "jest";
 const config: Config = {
     preset: "ts-jest",
     transform: {
-        "^.+\\.(t|j)s$": "ts-jest",
+        "^.+\\.(ts|tsx)$": "ts-jest",
     },
     transformIgnorePatterns: [
         "node_modules/",

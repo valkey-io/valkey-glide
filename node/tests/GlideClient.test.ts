@@ -55,7 +55,8 @@ describe("GlideClient", () => {
     let client: GlideClient;
     let azClient: GlideClient;
     beforeAll(async () => {
-        const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
+        const standaloneAddresses: string =
+            global.STAND_ALONE_ENDPOINT as string;
         cluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   false,
