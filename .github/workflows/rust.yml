@@ -173,3 +173,8 @@ jobs:
                   cargo-toml-folder: benchmarks/rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint benchmark
+
+            - name: Install rust-license and check license headers
+              run: |
+                cargo install rust-license
+                rust-license license-header --config rust-license/rust-license.yaml --check $(find . -name '*.rs')
