@@ -4,7 +4,7 @@ package glide.managers;
 import static glide.api.BaseClient.OK;
 
 import glide.api.models.exceptions.GlideException;
-import glide.api.models.telemetry.SpanManager;
+import glide.ffi.resolvers.OpenTelemetryResolver;
 import lombok.AllArgsConstructor;
 import response.ResponseOuterClass.Response;
 
@@ -40,7 +40,7 @@ public class BaseResponseResolver implements GlideExceptionCheckedFunction<Respo
         } finally {
             // Clean up the span if one was created
             if (response.hasRootSpanPtr()) {
-                SpanManager.closeSpan(response.getRootSpanPtr());
+                OpenTelemetryResolver.dropOtelSpan(response.getRootSpanPtr());
             }
         }
     }

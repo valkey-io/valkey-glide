@@ -6,7 +6,6 @@ import static glide.TestUtilities.commonClusterClientConfig;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.io.CleanupMode.NEVER;
 
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
@@ -125,16 +124,14 @@ public class OpenTelemetryIntegrationTest {
      * OpenTelemetry integration works end-to-end by checking the content of the exported spans file.
      */
     @ParameterizedTest
-    // TODO: revert to testing with both protocols after fixing the OTel global config issue
+    // TODO: revert to testing with both protocols after fixing the OTel global config issue (Java
+    // equivalent of Node issue #3631)
     //    @EnumSource(ProtocolVersion.class)
     @EnumSource(
             value = ProtocolVersion.class,
             names = {"RESP3"})
     @Order(1)
-    void testSpanExportToFile(ProtocolVersion protocol, @TempDir(cleanup = NEVER) Path tempDir)
-            throws Exception {
-        //        Logger.init(Logger.Level.INFO, "jamesx.log");
-        //        Logger.log(Logger.Level.INFO, "JAXIN", "test");
+    void testSpanExportToFile(ProtocolVersion protocol, @TempDir Path tempDir) throws Exception {
         // The commonClientConfig() method will handle connection details
         String tracesPath = "file://" + tempDir.toAbsolutePath() + "/";
 
@@ -175,13 +172,13 @@ public class OpenTelemetryIntegrationTest {
         boolean hasDelCommand = false;
 
         for (String line : lines) {
-            if (line.contains("\"name\":\"set\"")) {
+            if (line.contains("\"name\":\"Set\"")) {
                 hasSetCommand = true;
             }
-            if (line.contains("\"name\":\"get\"")) {
+            if (line.contains("\"name\":\"Get\"")) {
                 hasGetCommand = true;
             }
-            if (line.contains("\"name\":\"del\"")) {
+            if (line.contains("\"name\":\"Del\"")) {
                 hasDelCommand = true;
             }
         }
@@ -192,7 +189,7 @@ public class OpenTelemetryIntegrationTest {
     }
 
     // TODO: uncomment below tests after fixing the OTel global config issue which only allow the
-    // first client to set the config
+    // first client to set the config (Java equivalent of Node issue #3631)
     //    /**
     //     * Test that transaction spans are properly created and exported.
     //     */

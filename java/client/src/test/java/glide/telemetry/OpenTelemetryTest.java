@@ -27,19 +27,6 @@ public class OpenTelemetryTest {
         // No assertion needed for cleanup - if it doesn't crash, it worked
     }
 
-    /** Test that spans are properly created and cleaned up when using null span name. */
-    //    @Test
-    //    void testSpanLifecycleWithNullName() {
-    //        // This should not throw an exception
-    //        long spanPtr = OpenTelemetryResolver.createOtelSpan(null);
-    //
-    //        // Verify span was created even with null name
-    //        assertNotEquals(0, spanPtr, "Span pointer should not be zero even with null name");
-    //
-    //        // Clean up span
-    //        OpenTelemetryResolver.dropOtelSpan(spanPtr);
-    //    }
-
     /** Test that dropping a zero span pointer doesn't cause issues. */
     @Test
     void testDropZeroSpan() {
