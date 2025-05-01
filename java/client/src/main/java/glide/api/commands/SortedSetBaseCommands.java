@@ -2017,6 +2017,14 @@ public interface SortedSetBaseCommands {
      * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter)}.
      *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BZMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
@@ -2027,14 +2035,6 @@ public interface SortedSetBaseCommands {
      * @return A <code>Map</code> containing the key name of the set from which an element was popped,
      *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
-     * @apiNote
-     *     <ol>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     *       <li><code>BZMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
-     *           Commands</a> for more details and best practices.
-     *     </ol>
-     *
      * @example
      *     <pre>{@code
      * Map<String, Object> result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1).get();
@@ -2051,6 +2051,14 @@ public interface SortedSetBaseCommands {
      * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter)}.
      *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BZMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
@@ -2061,14 +2069,6 @@ public interface SortedSetBaseCommands {
      * @return A <code>map</code> containing the key name of the set from which an element was popped,
      *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
-     * @apiNote
-     *     <ol>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     *       <li><code>BZMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
-     *           Commands</a> for more details and best practices.
-     *     </ol>
-     *
      * @example
      *     <pre>{@code
      * Map<GlideString, Object> result = client.bzmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 0.1).get();
@@ -2086,6 +2086,14 @@ public interface SortedSetBaseCommands {
      * provided.<br>
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter, long)}.
      *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BZMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
@@ -2097,14 +2105,6 @@ public interface SortedSetBaseCommands {
      * @return A <code>map</code> containing the key name of the set from which elements were popped,
      *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no members could be popped and the timeout expired, returns <code>null</code>.
-     * @apiNote
-     *     <ol>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     *       <li><code>BZMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
-     *           Commands</a> for more details and best practices.
-     *     </ol>
-     *
      * @example
      *     <pre>{@code
      * Map<String, Object> result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1, 2).get();
@@ -2123,6 +2123,14 @@ public interface SortedSetBaseCommands {
      * provided.<br>
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter, long)}.
      *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BZMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
@@ -2134,14 +2142,6 @@ public interface SortedSetBaseCommands {
      * @return A <code>map</code> containing the key name of the set from which elements were popped,
      *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no members could be popped and the timeout expired, returns <code>null</code>.
-     * @apiNote
-     *     <ol>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     *       <li><code>BZMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
-     *           Commands</a> for more details and best practices.
-     *     </ol>
-     *
      * @example
      *     <pre>{@code
      * Map<GlideString, Object> result = client.bzmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 0.1, 2).get();
