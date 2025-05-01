@@ -40,6 +40,7 @@ var (
 	clusterHosts    = flag.String("cluster-endpoints", "", "two")
 	standaloneHosts = flag.String("standalone-endpoints", "", "three")
 	pubsubtest      = flag.Bool("pubsub", false, "Set to true to run pubsub tests")
+	timeoutTests    = flag.Bool("timeout-tests", false, "Set to true to run tests with longer timeouts")
 )
 
 func (suite *GlideTestSuite) SetupSuite() {
