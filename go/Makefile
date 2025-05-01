@@ -143,7 +143,7 @@ modules-test: __it
 __it:
 	mkdir -p reports
 	set -o pipefail; \
-	go test -v ./integTest/... \
+	CC="gcc -fsanitize=address" go test -v ./integTest/... \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
