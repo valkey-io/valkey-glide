@@ -188,76 +188,58 @@ public class ArrayTransformUtils {
 
     /**
      * Processes a two-element array where the first element is used as a key and the second element
-     * is either a Map or a regular object. If the second element is a Map, each value in that Map is
-     * cast to type U. If it's a regular object, it's directly cast to type U.
+     * is a Map where its values are cast to type <code>U</code>.
      *
-     * @param outerObjectArr A two-element array with array[0] as the key, array[1] as the value(s).
+     * @param outerObjectArr A two-element array with array[0] as the key, array[1] as the value/map.
      * @param clazz The class to which values should be cast.
-     * @return A Map with a single entry with first element as the key, and second element of type U
-     *     or Map<String, U>
-     * @param <T> The base type from which the elements are being cast.
+     * @return A Map with a single entry with the first element as the key, and the second element is
+     *     the value of type Map<String, U>
      * @param <U> The type to which the elements are cast.
      */
-    public static <T, U extends T> Map<String, Object> convertKeyValueArrayToMap(
-            T[] outerObjectArr, Class<U> clazz) {
+    public static <U> Map<String, Object> convertKeyValueArrayToMap(
+            Object[] outerObjectArr, Class<U> clazz) {
         if (outerObjectArr == null) {
             return null;
         }
 
         String key = outerObjectArr[0].toString();
+        Map<?, ?> values = (Map<?, ?>) outerObjectArr[1];
+        Map<String, U> innerMap = new LinkedHashMap<>();
 
-        if (outerObjectArr[1] instanceof LinkedHashMap) {
-            Map<?, ?> values = (Map<?, ?>) outerObjectArr[1];
-            Map<String, U> innerMap = new LinkedHashMap<>();
-
-            // Ensure types are consistent
-            for (Map.Entry<?, ?> entry : values.entrySet()) {
-                String subKey = entry.getKey().toString();
-                U score = clazz.cast(entry.getValue());
-                innerMap.put(subKey, score);
-            }
-            return Map.of(key, innerMap);
+        for (Map.Entry<?, ?> entry : values.entrySet()) {
+            String subKey = entry.getKey().toString();
+            U score = clazz.cast(entry.getValue());
+            innerMap.put(subKey, score);
         }
-
-        // Value is a regular non-collection object
-        return Map.of(key, clazz.cast(outerObjectArr[1]));
+        return Map.of(key, innerMap);
     }
 
     /**
      * Processes a two-element array where the first element is used as a key and the second element
-     * is either a Map or a regular object. If the second element is a Map, each value in that Map is
-     * cast to type U. If it's a regular object, it's directly cast to type U.
+     * is a Map where its values are cast to type <code>U</code>.
      *
-     * @param outerObjectArr A two-element array with array[0] as the key, array[1] as the value(s).
+     * @param outerObjectArr A two-element array with array[0] as the key, array[1] as the value/map.
      * @param clazz The class to which values should be cast.
-     * @return A Map with a single entry with first element as the key, and second element of type U
-     *     or Map<GlideString, U>
-     * @param <T> The base type from which the elements are being cast.
+     * @return A Map with a single entry with the first element as the key, and the second element is
+     *     the value of type Map<GlideString, U>
      * @param <U> The type to which the elements are cast.
      */
-    public static <T, U extends T> Map<GlideString, Object> convertBinaryStringKeyValueArrayToMap(
-            T[] outerObjectArr, Class<U> clazz) {
+    public static <U> Map<GlideString, Object> convertBinaryStringKeyValueArrayToMap(
+            Object[] outerObjectArr, Class<U> clazz) {
         if (outerObjectArr == null) {
             return null;
         }
 
         GlideString key = gs(outerObjectArr[0].toString());
+        Map<?, ?> values = (Map<?, ?>) outerObjectArr[1];
+        Map<GlideString, U> innerMap = new LinkedHashMap<>();
 
-        if (outerObjectArr[1] instanceof LinkedHashMap) {
-            Map<?, ?> values = (Map<?, ?>) outerObjectArr[1];
-            Map<GlideString, U> innerMap = new LinkedHashMap<>();
-
-            // Ensure types are consistent
-            for (Map.Entry<?, ?> entry : values.entrySet()) {
-                GlideString subKey = gs(entry.getKey().toString());
-                U score = clazz.cast(entry.getValue());
-                innerMap.put(subKey, score);
-            }
-            return Map.of(key, innerMap);
+        for (Map.Entry<?, ?> entry : values.entrySet()) {
+            GlideString subKey = gs(entry.getKey().toString());
+            U score = clazz.cast(entry.getValue());
+            innerMap.put(subKey, score);
         }
-
-        // Value is a regular non-collection object
-        return Map.of(key, clazz.cast(outerObjectArr[1]));
+        return Map.of(key, innerMap);
     }
 
     /**
