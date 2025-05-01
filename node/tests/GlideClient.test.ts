@@ -11,7 +11,6 @@ import {
     it,
 } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
-import { v4 as uuidv4 } from "uuid";
 import {
     Decoder,
     FlushMode,
@@ -39,6 +38,7 @@ import {
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
+    getRandomKey,
     getServerVersion,
     parseEndpoints,
     transactionTest,
@@ -197,8 +197,8 @@ describe("GlideClient", () => {
             );
             expect(await client.select(0)).toEqual("OK");
 
-            const key = uuidv4();
-            const value = uuidv4();
+            const key = getRandomKey();
+            const value = getRandomKey();
             const result = await client.set(key, value);
             expect(result).toEqual("OK");
 
@@ -228,8 +228,8 @@ describe("GlideClient", () => {
             client = await GlideClient.createClient(clientConfig);
             expect(await client.select(0)).toEqual("OK");
 
-            const key = uuidv4();
-            const value = uuidv4();
+            const key = getRandomKey();
+            const value = getRandomKey();
             const valueEncoded = Buffer.from(value);
             const result = await client.set(key, value);
             expect(result).toEqual("OK");
@@ -256,8 +256,8 @@ describe("GlideClient", () => {
             client = await GlideClient.createClient(clientConfig);
             expect(await client.select(0)).toEqual("OK");
 
-            const key = uuidv4();
-            const value = uuidv4();
+            const key = getRandomKey();
+            const value = getRandomKey();
             const valueEncoded = Buffer.from(value);
             const result = await client.set(key, value);
             expect(result).toEqual("OK");
@@ -317,8 +317,8 @@ describe("GlideClient", () => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const key1 = uuidv4();
-            const key2 = uuidv4();
+            const key1 = getRandomKey();
+            const key2 = getRandomKey();
             const value = "value";
 
             const transaction1 = new Transaction().set(key1, value).dump(key1);
@@ -426,7 +426,7 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = uuidv4();
+            const key = getRandomKey();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
             const maxmemoryPolicy = config[maxmemoryPolicyKey];
@@ -467,7 +467,7 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = uuidv4();
+            const key = getRandomKey();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
             const maxmemoryPolicy = config[maxmemoryPolicyKey];
@@ -512,7 +512,7 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = uuidv4();
+            const key = getRandomKey();
             const transaction = new Transaction();
             transaction.set(key, "foo");
             transaction.objectRefcount(key);
@@ -587,10 +587,10 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const source = `{key}-${uuidv4()}`;
-            const destination = `{key}-${uuidv4()}`;
-            const value1 = uuidv4();
-            const value2 = uuidv4();
+            const source = `{key}-${getRandomKey()}`;
+            const destination = `{key}-${getRandomKey()}`;
+            const value1 = getRandomKey();
+            const value2 = getRandomKey();
             const index0 = 0;
             const index1 = 1;
             const index2 = 2;
@@ -679,9 +679,9 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key1 = "{key}-1" + uuidv4();
-            const key2 = "{key}-2" + uuidv4();
-            const value = uuidv4();
+            const key1 = "{key}-1" + getRandomKey();
+            const key2 = "{key}-2" + getRandomKey();
+            const value = getRandomKey();
 
             expect(await client.select(0)).toEqual("OK");
             expect(await client.move(key1, 1)).toEqual(false);
@@ -722,8 +722,9 @@ describe("GlideClient", () => {
             );
 
             try {
-                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
-                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const libName = "mylib1C" + getRandomKey().replaceAll("-", "");
+                const funcName =
+                    "myfunc1c" + getRandomKey().replaceAll("-", "");
                 const code = generateLuaLibCode(
                     libName,
                     new Map([[funcName, "return args[1]"]]),
@@ -790,7 +791,8 @@ describe("GlideClient", () => {
                 ).toEqual(Buffer.from(libName));
 
                 // overwrite lib with new code
-                const func2Name = "myfunc2c" + uuidv4().replaceAll("-", "");
+                const func2Name =
+                    "myfunc2c" + getRandomKey().replaceAll("-", "");
                 const newCode = generateLuaLibCode(
                     libName,
                     new Map([
@@ -858,8 +860,9 @@ describe("GlideClient", () => {
             );
 
             try {
-                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
-                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const libName = "mylib1C" + getRandomKey().replaceAll("-", "");
+                const funcName =
+                    "myfunc1c" + getRandomKey().replaceAll("-", "");
                 const code = generateLuaLibCode(
                     libName,
                     new Map([[funcName, "return args[1]"]]),
@@ -901,8 +904,9 @@ describe("GlideClient", () => {
             );
 
             try {
-                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
-                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const libName = "mylib1C" + getRandomKey().replaceAll("-", "");
+                const funcName =
+                    "myfunc1c" + getRandomKey().replaceAll("-", "");
                 const code = generateLuaLibCode(
                     libName,
                     new Map([[funcName, "return args[1]"]]),
@@ -1180,7 +1184,7 @@ describe("GlideClient", () => {
                 client.close();
             }
         },
-        FUNCTION_TIMEOUT,
+        10000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1333,7 +1337,7 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = uuidv4();
+            const key = getRandomKey();
 
             // setup: delete all keys in DB 0 and DB 1
             expect(await client.select(0)).toEqual("OK");
@@ -1369,10 +1373,10 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key1 = "{key}-1" + uuidv4();
-            const key2 = "{key}-2" + uuidv4();
-            const key3 = "{key}-3" + uuidv4();
-            const key4 = "{key}-4" + uuidv4();
+            const key1 = "{key}-1" + getRandomKey();
+            const key2 = "{key}-2" + getRandomKey();
+            const key3 = "{key}-3" + getRandomKey();
+            const key4 = "{key}-4" + getRandomKey();
             const setFoobarTransaction = new Transaction();
             const setHelloTransaction = new Transaction();
 
@@ -1442,8 +1446,8 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key1 = "{key}-1" + uuidv4();
-            const key2 = "{key}-2" + uuidv4();
+            const key1 = "{key}-1" + getRandomKey();
+            const key2 = "{key}-2" + getRandomKey();
 
             const setFoobarTransaction = new Transaction();
 
@@ -1473,7 +1477,7 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = uuidv4();
+            const key = getRandomKey();
 
             const transaction = new Transaction();
             transaction.xadd(key, [["field1", "value1"]], { id: "0-1" });
@@ -1550,7 +1554,7 @@ describe("GlideClient", () => {
             try {
                 // call the script without await
                 promise = client2.invokeScript(longScript, {
-                    keys: ["{key}-" + uuidv4()],
+                    keys: ["{key}-" + getRandomKey()],
                 });
 
                 let foundUnkillable = false;
@@ -1577,7 +1581,7 @@ describe("GlideClient", () => {
                                 .includes("no scripts in execution right now")
                         ) {
                             promise = client2.invokeScript(longScript, {
-                                keys: ["{key}-" + uuidv4()],
+                                keys: ["{key}-" + getRandomKey()],
                             });
                             await new Promise((resolve) =>
                                 setTimeout(resolve, 1000),
@@ -1613,7 +1617,7 @@ describe("GlideClient", () => {
                                 .includes("no scripts in execution right now")
                         ) {
                             promise = client2.invokeScript(longScript, {
-                                keys: ["{key}-" + uuidv4()],
+                                keys: ["{key}-" + getRandomKey()],
                             });
                             await new Promise((resolve) =>
                                 setTimeout(resolve, 2000),
@@ -1655,7 +1659,7 @@ describe("GlideClient", () => {
             const client = await GlideClient.createClient(config);
 
             try {
-                const key1 = `{nonexistinglist}:1-${uuidv4()}`;
+                const key1 = `{nonexistinglist}:1-${getRandomKey()}`;
                 const tasks: Promise<[GlideString, GlideString] | null>[] = [];
 
                 // Start inflightRequestsLimit blocking tasks
