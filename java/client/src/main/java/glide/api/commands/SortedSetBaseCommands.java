@@ -1919,13 +1919,15 @@ public interface SortedSetBaseCommands {
      * Pops a member-score pair from the first non-empty sorted set, with the given <code>keys</code>
      * being checked in the order they are provided.
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
      * @return A <code>map</code> containing the key name of the set from which the element was
      *     popped, and a member-score <code>Map</code> of the popped element.<br>
      *     If no member could be popped, returns <code>null</code>.
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @example
      *     <pre>{@code
      * Map<String, Object> result = client.zmpop(new String[] { "zSet1", "zSet2" }, MAX).get();
@@ -1933,9 +1935,6 @@ public interface SortedSetBaseCommands {
      * String element = data.keySet().toArray(String[]::new)[0];
      * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
      * }</pre>
-     *
-     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
-     * @since Valkey 7.0 and above.
      */
     CompletableFuture<Map<String, Object>> zmpop(String[] keys, ScoreFilter modifier);
 
@@ -1943,13 +1942,15 @@ public interface SortedSetBaseCommands {
      * Pops a member-score pair from the first non-empty sorted set, with the given <code>keys</code>
      * being checked in the order they are provided.
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
      * @return A <code>map</code> containing the key name of the set from which the element was
      *     popped, and a member-score <code>Map</code> of the popped element.<br>
      *     If no member could be popped, returns <code>null</code>.
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @example
      *     <pre>{@code
      * Map<GlideString, Object> result = client.zmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX).get();
@@ -1957,9 +1958,6 @@ public interface SortedSetBaseCommands {
      * GlideString element = data.keySet().toArray(GlideString[]::new)[0];
      * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
      * }</pre>
-     *
-     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
-     * @since Valkey 7.0 and above.
      */
     CompletableFuture<Map<GlideString, Object>> zmpop(GlideString[] keys, ScoreFilter modifier);
 
@@ -1967,6 +1965,9 @@ public interface SortedSetBaseCommands {
      * Pops multiple member-score pairs from the first non-empty sorted set, with the given <code>keys
      * </code> being checked in the order they are provided.
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
@@ -1974,7 +1975,6 @@ public interface SortedSetBaseCommands {
      * @return A <code>map</code> containing the key name of the set from which elements were popped,
      *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no member could be popped, returns <code>null</code>.
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @example
      *     <pre>{@code
      * Map<String, Object> result = client.zmpop(new String[] { "zSet1", "zSet2" }, MAX, 2).get();
@@ -1983,9 +1983,6 @@ public interface SortedSetBaseCommands {
      *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
      * }
      * }</pre>
-     *
-     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
-     * @since Valkey 7.0 and above.
      */
     CompletableFuture<Map<String, Object>> zmpop(String[] keys, ScoreFilter modifier, long count);
 
@@ -1993,6 +1990,9 @@ public interface SortedSetBaseCommands {
      * Pops multiple member-score pairs from the first non-empty sorted set, with the given <code>keys
      * </code> being checked in the order they are provided.
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
@@ -2000,7 +2000,6 @@ public interface SortedSetBaseCommands {
      * @return A <code>map</code> containing the key name of the set from which elements were popped,
      *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no member could be popped, returns <code>null</code>.
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @example
      *     <pre>{@code
      * Map<GlideString, Object> result = client.zmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 2).get();
@@ -2009,9 +2008,6 @@ public interface SortedSetBaseCommands {
      *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
      * }
      * }</pre>
-     *
-     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
-     * @since Valkey 7.0 and above.
      */
     CompletableFuture<Map<GlideString, Object>> zmpop(
             GlideString[] keys, ScoreFilter modifier, long count);
@@ -2021,6 +2017,8 @@ public interface SortedSetBaseCommands {
      * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter)}.
      *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
@@ -2044,9 +2042,6 @@ public interface SortedSetBaseCommands {
      * String element = data.keySet().toArray(String[]::new)[0];
      * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
      * }</pre>
-     *
-     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
-     * @since Valkey 7.0 and above.
      */
     CompletableFuture<Map<String, Object>> bzmpop(
             String[] keys, ScoreFilter modifier, double timeout);
@@ -2056,6 +2051,8 @@ public interface SortedSetBaseCommands {
      * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter)}.
      *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
@@ -2079,9 +2076,6 @@ public interface SortedSetBaseCommands {
      * GlideString element = data.keySet().toArray(GlideString[]::new)[0];
      * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
      * }</pre>
-     *
-     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
-     * @since Valkey 7.0 and above.
      */
     CompletableFuture<Map<GlideString, Object>> bzmpop(
             GlideString[] keys, ScoreFilter modifier, double timeout);
@@ -2092,6 +2086,8 @@ public interface SortedSetBaseCommands {
      * provided.<br>
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter, long)}.
      *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
@@ -2117,9 +2113,6 @@ public interface SortedSetBaseCommands {
      *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
      * }
      * }</pre>
-     *
-     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
-     * @since Valkey 7.0 and above.
      */
     CompletableFuture<Map<String, Object>> bzmpop(
             String[] keys, ScoreFilter modifier, double timeout, long count);
@@ -2130,6 +2123,8 @@ public interface SortedSetBaseCommands {
      * provided.<br>
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter, long)}.
      *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
@@ -2155,9 +2150,6 @@ public interface SortedSetBaseCommands {
      *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
      * }
      * }</pre>
-     *
-     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
-     * @since Valkey 7.0 and above.
      */
     CompletableFuture<Map<GlideString, Object>> bzmpop(
             GlideString[] keys, ScoreFilter modifier, double timeout, long count);
