@@ -35,6 +35,6 @@
         "esm": true
     },
     "compileOnSave": false,
-    "include": ["./*.ts", "src/*.ts", "src/*.js"],
+    "include": ["./*.ts", "src/*.ts", "src/*.js", "types/**/*.d.ts"],
     "exclude": ["node_modules", "build-ts"]
 }
