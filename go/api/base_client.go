@@ -4248,7 +4248,7 @@ func (client *baseClient) ZRangeWithScores(
 		}
 	}
 
-	return handleZRangeWithScoresResponse(result, needsReverse)
+	return handleSortedSetWithScoresResponse(result, needsReverse)
 }
 
 // Stores a specified range of elements from the sorted set at `key`, into a new
@@ -6397,13 +6397,13 @@ func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
 //
 // Return value:
 //
-//	A map of members to their scores.
+//	An array of members to their scores.
 //
 // [valkey.io]: https://valkey.io/commands/zinter/
 func (client *baseClient) ZInterWithScores(
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 	zInterOptions options.ZInterOptions,
-) (map[string]float64, error) {
+) ([]MemberAndScore, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return nil, err
@@ -6418,7 +6418,7 @@ func (client *baseClient) ZInterWithScores(
 	if err != nil {
 		return nil, err
 	}
-	return handleStringDoubleMapResponse(result)
+	return handleSortedSetWithScoresResponse(result, false)
 }
 
 // Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
@@ -6537,19 +6537,19 @@ func (client *baseClient) ZDiff(keys []string) ([]string, error) {
 //
 // Return value:
 //
-//	A `Map` of elements and their scores representing the difference between the sorted sets.
+//	An `Array` of elements and their scores representing the difference between the sorted sets.
 //	If the first `key` does not exist, it is treated as an empty sorted set, and the
-//	command returns an empty `Map`.
+//	command returns an empty `Array`.
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
-func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, error) {
+func (client *baseClient) ZDiffWithScores(keys []string) ([]MemberAndScore, error) {
 	args := append([]string{}, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	result, err := client.executeCommand(C.ZDiff, append(args, options.WithScoresKeyword))
 	if err != nil {
 		return nil, err
 	}
-	return handleStringDoubleMapResponse(result)
+	return handleSortedSetWithScoresResponse(result, false)
 }
 
 // Calculates the difference between the first sorted set and all the successive sorted sets at
@@ -6643,7 +6643,7 @@ func (client *baseClient) ZUnion(keys options.KeyArray) ([]string, error) {
 func (client *baseClient) ZUnionWithScores(
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 	zUnionOptions *options.ZUnionOptions,
-) (map[string]float64, error) {
+) ([]MemberAndScore, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return nil, err
@@ -6658,7 +6658,7 @@ func (client *baseClient) ZUnionWithScores(
 	if err != nil {
 		return nil, err
 	}
-	return handleStringDoubleMapResponse(result)
+	return handleSortedSetWithScoresResponse(result, false)
 }
 
 // Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
