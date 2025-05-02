@@ -987,6 +987,17 @@ pub struct Transaction {
     commands: *const Cmder,
 }
 
+#[repr(C)]
+pub struct TransactionParam {
+    client_adapter_ptr: *const c_void,
+    channel: usize,
+    transaction: *const Transaction,
+    route_bytes: *const u8,
+    route_bytes_len: usize,
+    raise_on_error: bool,
+    timeout: u32,
+}
+
 /// This will executes all queued commands as a transaction
 /// Transaction is a batch of commands that are sent in a single request.
 ///
@@ -1002,15 +1013,10 @@ pub struct Transaction {
 /// * This function should only be called should with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
 #[no_mangle]
 pub unsafe extern "C" fn execute_transaction(
-    client_adapter_ptr: *const c_void,
-    channel: usize,
-    transaction: *const Transaction,
-    route_bytes: *const u8,
-    route_bytes_len: usize,
-    raise_on_error: bool,
-    timeout: u32,
+    transaction_param: TransactionParam,
 ) -> *mut CommandResult {
-    let transaction = unsafe { transaction.as_ref() }.expect("Transaction pointer is NULL");
+    let transaction =
+        unsafe { transaction_param.transaction.as_ref() }.expect("Transaction pointer is NULL");
 
     let _commands =
         unsafe { transaction.commands.as_ref() }.expect("Transaction commands pointer is NULL");
@@ -1040,34 +1046,46 @@ pub unsafe extern "C" fn execute_transaction(
     }
 
     // Ensure route_bytes_len is reasonable
-    if route_bytes_len > 1024 {
-        panic!("Error: route_bytes_len ({}) is too large!", route_bytes_len);
+    if transaction_param.route_bytes_len > 1024 {
+        panic!(
+            "Error: route_bytes_len ({}) is too large!",
+            transaction_param.route_bytes_len
+        );
     }
 
     // Check if route_bytes is valid
-    let route = if !route_bytes.is_null() {
-        let r_bytes: &[u8] = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
+    let route = if !transaction_param.route_bytes.is_null() {
+        let r_bytes: &[u8] = unsafe {
+            std::slice::from_raw_parts(
+                transaction_param.route_bytes,
+                transaction_param.route_bytes_len,
+            )
+        };
         Routes::parse_from_bytes(r_bytes).unwrap()
     } else {
         Routes::default()
     };
 
     let client_adapter = unsafe {
-        Arc::increment_strong_count(client_adapter_ptr);
-        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+        Arc::increment_strong_count(transaction_param.client_adapter_ptr);
+        Arc::from_raw(transaction_param.client_adapter_ptr as *mut ClientAdapter)
     };
 
     let mut client = client_adapter.core.client.clone();
 
-    let timeout_ms = if timeout > 0 { Some(timeout) } else { None };
+    let timeout_ms = if transaction_param.timeout > 0 {
+        Some(transaction_param.timeout)
+    } else {
+        None
+    };
 
-    client_adapter.execute_command(channel, async move {
+    client_adapter.execute_command(transaction_param.channel, async move {
         client
             .send_transaction(
                 &pipeline,
                 get_route(route, None),
                 timeout_ms,
-                raise_on_error,
+                transaction_param.raise_on_error,
             )
             .await
     })

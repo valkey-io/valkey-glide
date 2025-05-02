@@ -186,14 +186,18 @@ func (t *Transaction) executeTransactionWithRoute(
 	}
 	t.pending[resultChannelPtr] = struct{}{}
 
+	transactionParam := C.TransactionParam{
+		client_adapter_ptr: t.coreClient,
+		channel:            C.uintptr_t(pinnedChannelPtr),
+		transaction:        &transaction,
+		route_bytes:        routeBytesPtr,
+		route_bytes_len:    routeBytesCount,
+		raise_on_error:     C.bool(raiseOnError),
+		timeout:            C.uint32_t(timeout),
+	}
+
 	C.execute_transaction(
-		t.coreClient,
-		C.uintptr_t(pinnedChannelPtr),
-		&transaction,
-		routeBytesPtr,
-		routeBytesCount,
-		C.bool(raiseOnError),
-		C.uint32_t(timeout),
+		transactionParam,
 	)
 
 	t.mu.Unlock()
