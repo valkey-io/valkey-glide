@@ -187,6 +187,8 @@ import static glide.utils.ArrayTransformUtils.castBinaryStringMapOfArrays;
 import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static glide.utils.ArrayTransformUtils.convertBinaryStringKeyValueArrayToMap;
+import static glide.utils.ArrayTransformUtils.convertKeyValueArrayToMap;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
@@ -3683,37 +3685,49 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Object[]> zmpop(@NonNull String[] keys, @NonNull ScoreFilter modifier) {
+    public CompletableFuture<Map<String, Object>> zmpop(
+            @NonNull String[] keys, @NonNull ScoreFilter modifier) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Integer.toString(keys.length)}, keys, new String[] {modifier.toString()});
-        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                ZMPop,
+                arguments,
+                response -> convertKeyValueArrayToMap(handleArrayOrNullResponse(response), Double.class));
     }
 
     @Override
-    public CompletableFuture<Object[]> zmpop(
+    public CompletableFuture<Map<GlideString, Object>> zmpop(
             @NonNull GlideString[] keys, @NonNull ScoreFilter modifier) {
         GlideString[] arguments =
                 concatenateArrays(
                         new GlideString[] {gs(Integer.toString(keys.length))},
                         keys,
                         new GlideString[] {gs(modifier.toString())});
-        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponseBinary);
+        return commandManager.submitNewCommand(
+                ZMPop,
+                arguments,
+                response ->
+                        convertBinaryStringKeyValueArrayToMap(
+                                handleArrayOrNullResponseBinary(response), Double.class));
     }
 
     @Override
-    public CompletableFuture<Object[]> zmpop(
+    public CompletableFuture<Map<String, Object>> zmpop(
             @NonNull String[] keys, @NonNull ScoreFilter modifier, long count) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Integer.toString(keys.length)},
                         keys,
                         new String[] {modifier.toString(), COUNT_VALKEY_API, Long.toString(count)});
-        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                ZMPop,
+                arguments,
+                response -> convertKeyValueArrayToMap(handleArrayOrNullResponse(response), Double.class));
     }
 
     @Override
-    public CompletableFuture<Object[]> zmpop(
+    public CompletableFuture<Map<GlideString, Object>> zmpop(
             @NonNull GlideString[] keys, @NonNull ScoreFilter modifier, long count) {
         GlideString[] arguments =
                 concatenateArrays(
@@ -3722,22 +3736,30 @@ public abstract class BaseClient
                         new GlideString[] {
                             gs(modifier.toString()), gs(COUNT_VALKEY_API), gs(Long.toString(count))
                         });
-        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponseBinary);
+        return commandManager.submitNewCommand(
+                ZMPop,
+                arguments,
+                response ->
+                        convertBinaryStringKeyValueArrayToMap(
+                                handleArrayOrNullResponseBinary(response), Double.class));
     }
 
     @Override
-    public CompletableFuture<Object[]> bzmpop(
+    public CompletableFuture<Map<String, Object>> bzmpop(
             @NonNull String[] keys, @NonNull ScoreFilter modifier, double timeout) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Double.toString(timeout), Integer.toString(keys.length)},
                         keys,
                         new String[] {modifier.toString()});
-        return commandManager.submitNewCommand(BZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                BZMPop,
+                arguments,
+                response -> convertKeyValueArrayToMap(handleArrayOrNullResponse(response), Double.class));
     }
 
     @Override
-    public CompletableFuture<Object[]> bzmpop(
+    public CompletableFuture<Map<GlideString, Object>> bzmpop(
             @NonNull GlideString[] keys, @NonNull ScoreFilter modifier, double timeout) {
         GlideString[] arguments =
                 concatenateArrays(
@@ -3745,22 +3767,29 @@ public abstract class BaseClient
                         keys,
                         new GlideString[] {gs(modifier.toString())});
         return commandManager.submitNewCommand(
-                BZMPop, arguments, this::handleArrayOrNullResponseBinary);
+                BZMPop,
+                arguments,
+                response ->
+                        convertBinaryStringKeyValueArrayToMap(
+                                handleArrayOrNullResponseBinary(response), Double.class));
     }
 
     @Override
-    public CompletableFuture<Object[]> bzmpop(
+    public CompletableFuture<Map<String, Object>> bzmpop(
             @NonNull String[] keys, @NonNull ScoreFilter modifier, double timeout, long count) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Double.toString(timeout), Integer.toString(keys.length)},
                         keys,
                         new String[] {modifier.toString(), COUNT_VALKEY_API, Long.toString(count)});
-        return commandManager.submitNewCommand(BZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                BZMPop,
+                arguments,
+                response -> convertKeyValueArrayToMap(handleArrayOrNullResponse(response), Double.class));
     }
 
     @Override
-    public CompletableFuture<Object[]> bzmpop(
+    public CompletableFuture<Map<GlideString, Object>> bzmpop(
             @NonNull GlideString[] keys, @NonNull ScoreFilter modifier, double timeout, long count) {
         GlideString[] arguments =
                 concatenateArrays(
@@ -3770,7 +3799,11 @@ public abstract class BaseClient
                             gs(modifier.toString()), gs(COUNT_VALKEY_API), gs(Long.toString(count))
                         });
         return commandManager.submitNewCommand(
-                BZMPop, arguments, this::handleArrayOrNullResponseBinary);
+                BZMPop,
+                arguments,
+                response ->
+                        convertBinaryStringKeyValueArrayToMap(
+                                handleArrayOrNullResponseBinary(response), Double.class));
     }
 
     @Override

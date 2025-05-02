@@ -187,6 +187,62 @@ public class ArrayTransformUtils {
     }
 
     /**
+     * Processes a two-element array where the first element is used as a key and the second element
+     * is a Map where its values are cast to type <code>U</code>.
+     *
+     * @param outerObjectArr A two-element array with array[0] as the key, array[1] as the value/map.
+     * @param clazz The class to which values should be cast.
+     * @return A Map with a single entry with the first element as the key, and the second element is
+     *     the value of type Map<String, U>
+     * @param <U> The type to which the elements are cast.
+     */
+    public static <U> Map<String, Object> convertKeyValueArrayToMap(
+            Object[] outerObjectArr, Class<U> clazz) {
+        if (outerObjectArr == null) {
+            return null;
+        }
+
+        String key = outerObjectArr[0].toString();
+        Map<?, ?> values = (Map<?, ?>) outerObjectArr[1];
+        Map<String, U> innerMap = new LinkedHashMap<>();
+
+        for (Map.Entry<?, ?> entry : values.entrySet()) {
+            String subKey = entry.getKey().toString();
+            U score = clazz.cast(entry.getValue());
+            innerMap.put(subKey, score);
+        }
+        return Map.of(key, innerMap);
+    }
+
+    /**
+     * Processes a two-element array where the first element is used as a key and the second element
+     * is a Map where its values are cast to type <code>U</code>.
+     *
+     * @param outerObjectArr A two-element array with array[0] as the key, array[1] as the value/map.
+     * @param clazz The class to which values should be cast.
+     * @return A Map with a single entry with the first element as the key, and the second element is
+     *     the value of type Map<GlideString, U>
+     * @param <U> The type to which the elements are cast.
+     */
+    public static <U> Map<GlideString, Object> convertBinaryStringKeyValueArrayToMap(
+            Object[] outerObjectArr, Class<U> clazz) {
+        if (outerObjectArr == null) {
+            return null;
+        }
+
+        GlideString key = gs(outerObjectArr[0].toString());
+        Map<?, ?> values = (Map<?, ?>) outerObjectArr[1];
+        Map<GlideString, U> innerMap = new LinkedHashMap<>();
+
+        for (Map.Entry<?, ?> entry : values.entrySet()) {
+            GlideString subKey = gs(entry.getKey().toString());
+            U score = clazz.cast(entry.getValue());
+            innerMap.put(subKey, score);
+        }
+        return Map.of(key, innerMap);
+    }
+
+    /**
      * Casts an <code>Object[][][]</code> to <code>T[][][]</code> by casting each nested array and
      * every array element.
      *
