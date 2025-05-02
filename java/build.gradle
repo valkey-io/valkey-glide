@@ -26,8 +26,11 @@ subprojects {
         mavenCentral()
     }
     // minimal java compatibility level
-    plugins.withId('java') {
-        sourceCompatibility = targetCompatibility = "11"
+    apply plugin: 'java'
+    java {
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(11))
+        }
     }
     tasks.withType(Test) {
         useJUnitPlatform()
