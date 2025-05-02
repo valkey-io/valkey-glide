@@ -12,13 +12,31 @@ Valkey GLIDE is API-compatible with the following engine versions:
 ## Current Status and upcoming releases
 In the current release, Valkey GLIDE is available for Python, Java and Node.js. Support for Go is currently in **public preview** and support for C# is **under active development**, with plans to include more programming languages in the future.
 
-#### v1.2 (Nov. 2024 - GA)
-- Support JSON and Vector Similarity Search(VSS) modules
-- Support Availability Zone(AZ) Awareness (AZ Affinity) as a reading strategy
-- Monitoring for tracking resources (connections, clients)
+### Current version : v1.3.2
+- **Date** : Apr 06, 2025
+- **Key features** : N/A
+- **Bugs fixes** :
+    - [Backport to release 1.3.2] Bump pyo3 version to ^0.24
+    - [Backport to release 1.3.2] Authentication - fix update_connection_password to use username
+    - Node: Enable +/-inf as score for ZADD
+    - Fix node type issues
+- **Security fixes** : N/A
 
-#### v1.3 (Feb. 2025)
-- Public preview for GO support
+For the full release note, see [release note](https://github.com/valkey-io/valkey-glide/releases/tag/v1.3.2)
+
+### Next-version roadmap
+- **Version** : 1.4
+- **Key features** :
+    - Support Go language in valkey-glide
+    - Add Open Telemetry(OTel) functionality
+    - Support Batch pipeline
+- **Planned realease date** : TBU
+
+### Previous Releases (version, date, release note, key features)
+- v1.3.1 / Mar 4, 2025 / [release note](https://github.com/valkey-io/valkey-glide/releases/tag/v1.3.1)
+- v1.3.0 / Feb 16, 2025 / [release note](https://github.com/valkey-io/valkey-glide/releases/tag/v1.3.0) / Public preview for GO support
+
+For the all release histories, see [release notes](https://github.com/valkey-io/valkey-glide/releases)
 
 ## Getting Started
 
