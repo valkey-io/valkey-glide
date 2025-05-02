@@ -154,7 +154,7 @@ def convert_bytes_to_string_object(
             Mapping[str, Any],
             Dict[str, Any],
         ]
-    ]
+    ],
 ) -> Optional[
     Union[
         List[Any],
@@ -193,7 +193,7 @@ def convert_string_to_bytes_object(
             Mapping[str, Any],
             Dict[str, Any],
         ]
-    ]
+    ],
 ) -> Optional[
     Union[
         List[Any],
