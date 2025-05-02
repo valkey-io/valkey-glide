@@ -59,3 +59,28 @@ func ExampleTransaction_Unwatch() {
 	// Output:
 	// [OK Glide 1]
 }
+
+func ExampleTransaction_ExecWithOptions() {
+	var tx *Transaction = getExampleTransactionGlideClient() // example helper function
+	cmd := tx.GlideClient
+	tx.Discard()
+    
+	cmd.Set("mykey", "hello")
+	cmd.CustomCommand([]string{"HGET", "mykey", "field"})
+	cmd.Set("lastkey", "world")
+	
+	options := &TransactionOption{
+		RaiseOnError: true,
+		Timeout:    3000,
+	}
+	
+	result, err := tx.ExecWithOptions(options)
+		if err != nil {
+		fmt.Println("Transaction failed:", err)
+		return
+	}
+	
+	fmt.Println(result)
+	// Output:
+	//  Transaction failed: WRONGTYPE: Operation against a key holding the wrong kind of value
+}

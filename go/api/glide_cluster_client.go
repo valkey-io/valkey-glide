@@ -111,7 +111,6 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 // Gets information and statistics about the server.
 //
 // In non transaction the command will be routed to all primary nodes.
-// When executed within a transaction, the command is routed to a single node.
 //
 // See [valkey.io] for details.
 //
@@ -141,7 +140,6 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 // Gets information and statistics about the server.
 //
 // In non transaction the command will be routed to all primary nodes, unless `route` in [ClusterInfoOptions] is provided.
-// When executed within a transaction, the command is routed to a single node.
 //
 // See [valkey.io] for details.
 //
@@ -244,7 +242,6 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 
 // Pings the server.
 // In non transaction the command will be routed to all primary nodes.
-// When executed within a transaction, the command is routed to a single node.
 //
 // Return value:
 //
@@ -265,7 +262,6 @@ func (client *GlideClusterClient) Ping() (string, error) {
 
 // Pings the server.
 // In non transaction the command will be routed to all primary nodes, unless `Route` is provided in `pingOptions`.
-// When executed within a transaction, the command is routed to a single node.
 //
 // Parameters:
 //
@@ -370,7 +366,6 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 
 // Deletes all the keys of all the existing databases.
 // In non transaction, the command will be routed to all primary nodes.
-// When executed within a transaction, the command is routed to a single node.
 //
 // See [valkey.io] for details.
 //
@@ -429,7 +424,6 @@ func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.Flush
 
 // Deletes all the keys of the currently selected database.
 // In non transaction, the command will be routed to all primary nodes.
-// When executed within a transaction, the command is routed to a single node.
 //
 // See [valkey.io] for details.
 //
@@ -1756,7 +1750,6 @@ func (client *GlideClusterClient) FunctionStatsWithRoute(
 
 // Deletes a library and all its functions.
 // In non transaction, the command will be routed to all primary nodes.
-// When executed within a transaction, the command is routed to a single node.
 //
 // Since:
 //

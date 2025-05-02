@@ -1007,6 +1007,8 @@ pub unsafe extern "C" fn execute_transaction(
     transaction: *const Transaction,
     route_bytes: *const u8,
     route_bytes_len: usize,
+    raise_on_error: bool,
+    timeout: u32,
 ) -> *mut CommandResult {
     let transaction = unsafe { transaction.as_ref() }.expect("Transaction pointer is NULL");
 
@@ -1055,17 +1057,18 @@ pub unsafe extern "C" fn execute_transaction(
         Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
     };
 
-    let routing_info = if let Some(info) = get_route(route, None) {
-        info
-    } else {
-        RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random) // Default routing
-    };
-
     let mut client = client_adapter.core.client.clone();
+
+    let timeout_ms = if timeout > 0 { Some(timeout) } else { None };
 
     client_adapter.execute_command(channel, async move {
         client
-            .send_transaction(&pipeline, Some(routing_info), None, false)
+            .send_transaction(
+                &pipeline,
+                get_route(route, None),
+                timeout_ms,
+                raise_on_error,
+            )
             .await
     })
 }

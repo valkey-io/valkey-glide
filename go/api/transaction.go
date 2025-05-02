@@ -23,6 +23,12 @@ type Transaction struct {
 	commands []Cmder
 }
 
+// TransactionOptions contains configurable options for transaction execution
+type TransactionOption struct {
+    RaiseOnError bool
+    Timeout    uint32
+}
+
 type Cmder interface {
 	Name() C.RequestType
 	Args() []string
@@ -73,18 +79,35 @@ func (t *Transaction) sendCommandWithRoute(
 
 // Exec executes all queued commands as a transaction
 func (t *Transaction) Exec() ([]any, error) {
-	result, err := t.executeTransactionCommand(t.commands) // Use BaseClient for execution
+	result, err := t.executeTransactionCommand(t.commands,false,0) // Use BaseClient for execution
 	if err != nil {
 		return nil, err
 	}
 	return handleAnyArrayResponse(result)
 }
 
-func (t *Transaction) executeTransactionCommand(commands []Cmder) (*C.CommandResponse, error) {
-	return t.executeTransactionWithRoute(commands, nil)
+// ExecWithOptions executes all queued commands as a transaction with custom options
+func (t *Transaction) ExecWithOptions(options *TransactionOption) ([]any, error) {
+	var raiseOnError bool
+    var timeout uint32
+    
+    if options != nil {
+        raiseOnError = options.RaiseOnError
+        timeout = options.Timeout
+    }
+
+    result, err := t.executeTransactionCommand(t.commands, raiseOnError, timeout)
+    if err != nil {
+        return nil, err
+    }
+    return handleAnyArrayResponse(result)
 }
 
-func (t *Transaction) executeTransactionWithRoute(cmds []Cmder, route config.Route) (*C.struct_CommandResponse, error) {
+func (t *Transaction) executeTransactionCommand(commands []Cmder, raiseOnError bool, timeout uint32) (*C.CommandResponse, error) {
+	return t.executeTransactionWithRoute(commands, nil, raiseOnError, timeout)
+}
+
+func (t *Transaction) executeTransactionWithRoute(cmds []Cmder, route config.Route, raiseOnError bool, timeout uint32) (*C.struct_CommandResponse, error) {
 	if len(cmds) == 0 {
 		return nil, &errors.RequestError{Msg: "Transaction must contain at least one command"}
 	}
@@ -160,6 +183,8 @@ func (t *Transaction) executeTransactionWithRoute(cmds []Cmder, route config.Rou
 		&transaction,
 		routeBytesPtr,
 		routeBytesCount,
+		C.bool(raiseOnError),
+		C.uint32_t(timeout),
 	)
 
 	t.mu.Unlock()

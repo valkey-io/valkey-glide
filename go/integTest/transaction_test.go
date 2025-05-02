@@ -90,3 +90,21 @@ func (suite *GlideTestSuite) TestExec() {
 	resultString := anyToString(result)
 	strings.Contains(resultString, "OK hello 1")
 }
+
+func (suite *GlideTestSuite) TestExecWithOptions() {
+	client := suite.defaultClient()
+	key := uuid.New().String()
+	
+	suite.verifyOK(client.Set(key, "hello"))
+	
+	tx := api.NewTransaction(client)
+	cmd := tx.GlideClient
+	
+	cmd.CustomCommand([]string{"HGET", key, "field"})
+	options := &api.TransactionOption{
+		RaiseOnError: true,
+	}
+	_, err := tx.ExecWithOptions(options)
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "WRONGTYPE")
+}
