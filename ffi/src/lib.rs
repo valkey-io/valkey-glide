@@ -977,13 +977,13 @@ pub unsafe extern "C" fn command(
 #[repr(C)]
 pub struct Cmder {
     request_type: RequestType, // Equivalent to Go's C.RequestType
-    args_count: c_ulong,
+    args_count: usize,
     args: *const *const c_char, // Array of C strings
 }
 
 #[repr(C)]
 pub struct Transaction {
-    cmd_count: c_ulong,
+    cmd_count: usize,
     commands: *const Cmder,
 }
 
@@ -1054,11 +1054,6 @@ pub unsafe extern "C" fn execute_transaction(
         Arc::increment_strong_count(client_adapter_ptr);
         Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
     };
-
-    // Get routing info with fallback
-    // let routing_info = get_route(route, None).unwrap_or_else(|| {
-    //     RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random) // Default routing
-    // });
 
     let routing_info = if let Some(info) = get_route(route, None) {
         info
