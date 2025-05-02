@@ -309,7 +309,7 @@ export enum Decoder {
  *
  * Be aware that if decoding fails during a command execution (due to
  * invalid inputs, incorrect decoder), data COULD BE UNRECOVERABLY LOST.
- * 
+ *
  * Use with caution.
  */
 export interface DecoderOption {
