@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- These are individual for each asset project -->
+    <DisplayRuntimeIdentifier>Win32</DisplayRuntimeIdentifier>
+    <RuntimeIdentifier>win-x86</RuntimeIdentifier>
+    <Platform>x86</Platform>
+    <PlatformTarget>x86</PlatformTarget>
+    <RustTuple>i686-pc-windows-msvc</RustTuple>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)../../props/version.props"/>
+  <Import Project="$(MSBuildThisFileDirectory)../../props/assets.props"/>
+</Project>

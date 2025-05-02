@@ -1,12 +1,13 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using Valkey.Glide.Internals;
+using Valkey.Glide.InterOp;
+using Valkey.Glide.InterOp.Internals;
 
 namespace Valkey.Glide;
 
 /// <summary>
 /// Represents a returned value object from a server with cluster-mode enabled. The response type
-/// may depend on the submitted <see cref="Route"/>.<br />
+/// may depend on the submitted <see cref="InterOp.Native.Route"/>.<br />
 /// See also <seealso href="https://valkey.io/docs/topics/cluster-spec/">Valkey cluster specification</seealso>.
 /// </summary>
 /// <remarks>

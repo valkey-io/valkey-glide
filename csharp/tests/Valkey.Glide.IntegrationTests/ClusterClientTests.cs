@@ -1,7 +1,10 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.InterOp;
+using Valkey.Glide.InterOp.Native;
+
 using static Valkey.Glide.Commands.Options.InfoOptions;
-using static Valkey.Glide.Route;
+using Route = Valkey.Glide.InterOp.Route;
 
 namespace Valkey.Glide.IntegrationTests;
 
@@ -79,7 +82,7 @@ public class ClusterClientTests
         _ = await client.Set("klm", "klm");
         _ = await client.Set("xyz", "xyz");
 
-        long res = (long)(await client.CustomCommand(["dbsize"], AllPrimaries)).SingleValue!;
+        long res = (long)(await client.CustomCommand(["dbsize"], Route.AllPrimaries)).SingleValue!;
         Assert.True(res >= 3);
     }
 
@@ -121,7 +124,7 @@ public class ClusterClientTests
             () => Assert.DoesNotContain("# Latencystats", info.SingleValue),
         ]);
 
-        info = await client.Info(AllPrimaries);
+        info = await client.Info(Route.AllPrimaries);
         foreach (string nodeInfo in info.MultiValue.Values)
         {
             Assert.Multiple([
@@ -131,7 +134,7 @@ public class ClusterClientTests
             ]);
         }
 
-        info = await client.Info([Section.ERRORSTATS], AllNodes);
+        info = await client.Info([Section.ERRORSTATS], Route.AllNodes);
 
         foreach (string nodeInfo in info.MultiValue.Values)
         {

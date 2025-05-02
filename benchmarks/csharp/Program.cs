@@ -9,8 +9,8 @@ using CommandLine;
 using LinqStatistics;
 
 using StackExchange.Redis;
-
-using static Valkey.Glide.ConnectionConfiguration;
+using Valkey.Glide.InterOp;
+using Valkey.Glide.InterOp.Native;
 
 namespace Valkey.Glide.CustomBenchmark;
 
@@ -277,13 +277,13 @@ public static class MainClass
                 {
                     StandaloneClientConfiguration config = new StandaloneClientConfigurationBuilder()
                         .WithAddress(host, port).WithTls(useTLS).Build();
-                    glideClient = GlideClient.CreateClient(config).GetAwaiter().GetResult();
+                    glideClient = new GlideClient(config);
                 }
                 else
                 {
                     ClusterClientConfiguration config = new ClusterClientConfigurationBuilder()
                         .WithAddress(host, port).WithTls(useTLS).Build();
-                    glideClient = GlideClusterClient.CreateClient(config).GetAwaiter().GetResult();
+                    glideClient = new GlideClusterClient(config);
                 }
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await glideClient.Get(key),

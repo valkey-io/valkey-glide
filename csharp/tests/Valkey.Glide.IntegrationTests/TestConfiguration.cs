@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 using Valkey.Glide.IntegrationTests;
 
-using static Valkey.Glide.ConnectionConfiguration;
+using Route = Valkey.Glide.InterOp.Route;
 
 [assembly: AssemblyFixture(typeof(TestConfiguration))]
 
@@ -28,8 +28,20 @@ public class TestConfiguration : IDisposable
             .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
             .WithRequestTimeout(10000);
 
-    public static GlideClient DefaultStandaloneClient() => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
-    public static GlideClusterClient DefaultClusterClient() => GlideClusterClient.CreateClient(DefaultClusterClientConfig().Build()).GetAwaiter().GetResult();
+    public static GlideClient DefaultStandaloneClient()
+    {
+        GlideClient glideClient = new GlideClient(DefaultClientConfig().Build());
+        glideClient.EnsureInitializedAsync().GetAwaiter().GetResult();
+        return glideClient;
+    }
+
+    public static GlideClusterClient DefaultClusterClient()
+    {
+        GlideClusterClient glideClient = new GlideClusterClient(DefaultClusterClientConfig().Build());
+        glideClient.EnsureInitializedAsync().GetAwaiter()
+            .GetResult();
+        return glideClient;
+    }
 
     public static TheoryData<BaseClient> TestClients
     {
@@ -39,6 +51,7 @@ public class TestConfiguration : IDisposable
             {
                 field = [(BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient()];
             }
+
             return field;
         }
 
@@ -51,6 +64,7 @@ public class TestConfiguration : IDisposable
         {
             data.Data.Dispose();
         }
+
         TestClients = [];
     }
 
@@ -64,7 +78,8 @@ public class TestConfiguration : IDisposable
 
         if (projectDir == null)
         {
-            throw new FileNotFoundException("Can't detect the project dir. Are you running tests from `csharp` directory?");
+            throw new FileNotFoundException(
+                "Can't detect the project dir. Are you running tests from `csharp` directory?");
         }
 
         _scriptDir = Path.Combine(projectDir, "..", "utils");
@@ -109,7 +124,8 @@ public class TestConfiguration : IDisposable
 
     internal List<(string host, ushort port)> StartServer(bool cluster, bool tls = false, string? name = null)
     {
-        string cmd = $"start {(cluster ? "--cluster-mode" : "")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
+        string cmd =
+            $"start {(cluster ? "--cluster-mode" : "")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
         return ParseHostsFromOutput(RunClusterManager(cmd, false));
     }
 
@@ -139,7 +155,8 @@ public class TestConfiguration : IDisposable
         string? output = script?.StandardOutput.ReadToEnd();
         int? exit_code = script?.ExitCode;
 
-        TestConsoleWriteLine($"cluster_manager.py stdout\n====\n{output}\n====\ncluster_manager.py stderr\n====\n{error}\n====\n");
+        TestConsoleWriteLine(
+            $"cluster_manager.py stdout\n====\n{output}\n====\ncluster_manager.py stderr\n====\n{error}\n====\n");
 
         return !ignoreExitCode && exit_code != 0
             ? throw new ApplicationException($"cluster_manager.py script failed: exit code {exit_code}.")
@@ -163,6 +180,7 @@ public class TestConfiguration : IDisposable
                 hosts.Add((parts[0], ushort.Parse(parts[1])));
             }
         }
+
         return hosts;
     }
 
@@ -181,6 +199,7 @@ public class TestConfiguration : IDisposable
                 err = e;
             }
         }
+
         if (CLUSTER_HOSTS.Count > 0)
         {
             GlideClusterClient client = DefaultClusterClient();
@@ -194,10 +213,12 @@ public class TestConfiguration : IDisposable
                 {
                     TestConsoleWriteLine(err.ToString());
                 }
+
                 TestConsoleWriteLine(e.ToString());
                 throw;
             }
         }
+
         throw new Exception("No servers are given");
     }
 
@@ -207,7 +228,8 @@ public class TestConfiguration : IDisposable
             ? ((GlideClient)client).Info().GetAwaiter().GetResult()
             : ((GlideClusterClient)client).Info(Route.Random).GetAwaiter().GetResult().SingleValue;
         string[] lines = info.Split();
-        string line = lines.FirstOrDefault(l => l.Contains("valkey_version")) ?? lines.First(l => l.Contains("redis_version"));
+        string line = lines.FirstOrDefault(l => l.Contains("valkey_version")) ??
+                      lines.First(l => l.Contains("redis_version"));
         return new(line.Split(':')[1]);
     }
 }

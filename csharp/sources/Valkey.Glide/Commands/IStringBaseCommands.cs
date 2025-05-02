@@ -1,5 +1,8 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.InterOp;
+using Valkey.Glide.InterOp.Native;
+
 namespace Valkey.Glide.Commands;
 
 /// <summary>

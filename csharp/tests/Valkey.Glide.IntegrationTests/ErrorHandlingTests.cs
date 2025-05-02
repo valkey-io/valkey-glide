@@ -1,9 +1,8 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using static Valkey.Glide.ConnectionConfiguration;
-using static Valkey.Glide.Errors;
+using Valkey.Glide.InterOp.Errors;
 
-using TimeoutException = Valkey.Glide.Errors.TimeoutException;
+using TimeoutException = Valkey.Glide.InterOp.Errors.TimeoutException;
 
 namespace Valkey.Glide.IntegrationTests;
 
@@ -12,8 +11,10 @@ public class ErrorHandlingTests
     [Fact]
     public async Task ErrorIfConnectionFailed() =>
         await Assert.ThrowsAsync<ConnectionException>(async () =>
-            await GlideClient.CreateClient(new StandaloneClientConfigurationBuilder().WithAddress(null, 42).Build())
-        );
+        {
+            using GlideClient glideClient = new GlideClient(new StandaloneClientConfigurationBuilder().WithAddress("localhost", 42).Build());
+            glideClient.EnsureInitializedAsync();
+        });
 
     [Fact(Skip = "Deactivated until #3395 merged")]
     public async Task ErrorIfTimedOut() =>

@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="$(MSBuildThisFileDirectory)../../props/version.props"/>
+  <Import Project="$(MSBuildThisFileDirectory)../../props/common.props"/>
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <PackageId>Valkey.Glide.InterOp</PackageId>
+    <RootNamespace>Valkey.Glide.InterOp</RootNamespace>
+    <AssemblyName>Valkey.Glide.InterOp</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ToDo: For the final NuGet, we should include either _all_ assets or _none_
+               This could be done by integrating this into the pack target and changing the project references then eg.
+               Still need to discuss this, so this package, for now, will default to _none_ -->
+
+    <ProjectReference Condition="'$(OS)' == 'Windows_NT' And '$(Architecture)' == 'X86'" Include="..\..\assets\Valkey.Glide.Assets.Win32\Valkey.Glide.Assets.Win32.csproj"/>
+    <ProjectReference Condition="'$(OS)' == 'Windows_NT' And '$(Architecture)' == 'X64'" Include="..\..\assets\Valkey.Glide.Assets.Win64\Valkey.Glide.Assets.Win64.csproj"/>
+    <ProjectReference Condition="'$(OS)' == 'OSX' And '$(Architecture)' == 'Arm64'" Include="..\..\assets\Valkey.Glide.Assets.MacOSArm64\Valkey.Glide.Assets.MacOSArm64.csproj"/>
+    <ProjectReference Condition="'$(OS)' == 'Unix' And '$(Architecture)' == 'X64'" Include="..\..\assets\Valkey.Glide.Assets.Linux64Gnu\Valkey.Glide.Assets.Linux64Gnu.csproj"/>
+    <ProjectReference Condition="'$(OS)' == 'Unix' And '$(Architecture)' == 'Arm64'" Include="..\..\assets\Valkey.Glide.Assets.LinuArm64Gnu\Valkey.Glide.Assets.LinuArm64Gnu.csproj"/>
+  </ItemGroup>
+
+</Project>
