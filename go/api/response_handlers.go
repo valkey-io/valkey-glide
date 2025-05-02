@@ -1391,7 +1391,7 @@ func handleFunctionListMultiNodeResponse(response *C.struct_CommandResponse) (ma
 	return multiNodeLibs, nil
 }
 
-func handleSortedSetWithScoresResponse(response *C.struct_CommandResponse, reverse bool) ([]MemberAndScore, error) {
+func handleZRangeWithScoresResponse(response *C.struct_CommandResponse, reverse bool) ([]MemberAndScore, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Map, false)

@@ -7913,7 +7913,7 @@ func (suite *GlideTestSuite) TestZInter() {
 			*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "two", Score: 5.5}}, zinterWithScoresResult)
+		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithScoresResult)
 
 		// intersect results with max aggregate
 		zinterWithMaxAggregateResult, err := client.ZInterWithScores(
@@ -7921,7 +7921,7 @@ func (suite *GlideTestSuite) TestZInter() {
 			*options.NewZInterOptions().SetAggregate(options.AggregateMax),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "two", Score: 3.5}}, zinterWithMaxAggregateResult)
+		assert.Equal(suite.T(), map[string]float64{"two": 3.5}, zinterWithMaxAggregateResult)
 
 		// intersect results with min aggregate
 		zinterWithMinAggregateResult, err := client.ZInterWithScores(
@@ -7929,7 +7929,7 @@ func (suite *GlideTestSuite) TestZInter() {
 			*options.NewZInterOptions().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "two", Score: 2.0}}, zinterWithMinAggregateResult)
+		assert.Equal(suite.T(), map[string]float64{"two": 2.0}, zinterWithMinAggregateResult)
 
 		// intersect results with sum aggregate
 		zinterWithSumAggregateResult, err := client.ZInterWithScores(
@@ -7937,7 +7937,7 @@ func (suite *GlideTestSuite) TestZInter() {
 			*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "two", Score: 5.5}}, zinterWithSumAggregateResult)
+		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithSumAggregateResult)
 
 		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
 		zinterWithWeightedKeysResult, err := client.ZInterWithScores(
@@ -7950,7 +7950,7 @@ func (suite *GlideTestSuite) TestZInter() {
 			*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "two", Score: 11.0}}, zinterWithWeightedKeysResult)
+		assert.Equal(suite.T(), map[string]float64{"two": 11.0}, zinterWithWeightedKeysResult)
 
 		// non-existent key - empty intersection
 		zinterWithNonExistentKeyResult, err := client.ZInterWithScores(
@@ -8147,17 +8147,13 @@ func (suite *GlideTestSuite) TestZDiff() {
 
 		zDiffResultWithScores, err := client.ZDiffWithScores([]string{key1, key2})
 		assert.NoError(t, err)
-		assert.Equal(
-			t,
-			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}},
-			zDiffResultWithScores,
-		)
+		assert.Equal(t, map[string]float64{"one": 1.0, "three": 3.0}, zDiffResultWithScores)
 		zDiffResultWithScores, err = client.ZDiffWithScores([]string{key1, key3})
 		assert.NoError(t, err)
-		assert.Equal(t, []api.MemberAndScore{}, zDiffResultWithScores)
+		assert.Equal(t, map[string]float64{}, zDiffResultWithScores)
 		zDiffResultWithScores, err = client.ZDiffWithScores([]string{nonExistentKey, key3})
 		assert.NoError(t, err)
-		assert.Equal(t, []api.MemberAndScore{}, zDiffResultWithScores)
+		assert.Equal(t, map[string]float64{}, zDiffResultWithScores)
 
 		// Key exists, but it is not a set
 		setResult, _ := client.Set(nonExistentKey, "bar")
@@ -8286,11 +8282,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}, {Member: "two", Score: 5.5}},
-			zUnionWithScoresResult,
-		)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 5.5, "three": 3.0}, zUnionWithScoresResult)
 
 		// Union results with max aggregate
 		zUnionWithMaxAggregateResult, err := client.ZUnionWithScores(
@@ -8298,11 +8290,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMax),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}, {Member: "two", Score: 3.5}},
-			zUnionWithMaxAggregateResult,
-		)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 3.5, "three": 3.0}, zUnionWithMaxAggregateResult)
 
 		// Union results with min aggregate
 		zUnionWithMinAggregateResult, err := client.ZUnionWithScores(
@@ -8310,11 +8298,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "two", Score: 2.0}, {Member: "three", Score: 3.0}},
-			zUnionWithMinAggregateResult,
-		)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}, zUnionWithMinAggregateResult)
 
 		// Union results with sum aggregate
 		zUnionWithSumAggregateResult, err := client.ZUnionWithScores(
@@ -8322,11 +8306,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}, {Member: "two", Score: 5.5}},
-			zUnionWithSumAggregateResult,
-		)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 5.5, "three": 3.0}, zUnionWithSumAggregateResult)
 
 		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
 		zUnionWithWeightedKeysResult, err := client.ZUnionWithScores(
@@ -8339,11 +8319,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.MemberAndScore{{Member: "one", Score: 3.0}, {Member: "three", Score: 6.0}, {Member: "two", Score: 13.0}},
-			zUnionWithWeightedKeysResult,
-		)
+		assert.Equal(suite.T(), map[string]float64{"one": 3.0, "two": 13.0, "three": 6.0}, zUnionWithWeightedKeysResult)
 
 		// non-existent key - empty union
 		zUnionWithNonExistentKeyResult, err := client.ZUnionWithScores(
@@ -8351,11 +8327,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "two", Score: 2.0}},
-			zUnionWithNonExistentKeyResult,
-		)
+		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 2.0}, zUnionWithNonExistentKeyResult)
 
 		// empty key list - empty union
 		zUnionWithEmptyKeyArray, err := client.ZUnionWithScores(options.KeyArray{Keys: []string{}},
