@@ -12,7 +12,7 @@
     "napi": {
         "name": "glide-rs",
         "triples": {
-            "defaults": true,
+            "default": false,
             "additional": [
                 "x86_64-unknown-linux-musl",
                 "x86_64-unknown-linux-gnu",
@@ -32,8 +32,10 @@
     },
     "scripts": {
         "artifacts": "napi artifacts",
-        "build": "npm install && napi build --features testing_utilities --platform --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:release": "npm install --omit=dev && npm run globals && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
+        "prebuild:release": "npm install --omit=dev && npm install --global  @napi-rs/cli@latest",
+        "build": "npm install && npx napi build --features testing_utilities --platform --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release": "npm run prebuild:release &&  npx napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release:gnu": "npm run prebuild:release &&  npx napi build --platform --release --strip --zig --zig-abi-suffix=2.17 --pipe \"prettier -w\" $npm_config_build_flags",
         "build:benchmark": "npm install && napi build --features testing_utilities --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
         "format": "npm run format:prettier && npm run format:rs",
         "format:prettier": "prettier . -w",

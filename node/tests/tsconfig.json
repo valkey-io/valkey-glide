@@ -3,5 +3,7 @@
     "compilerOptions": {
         "rootDir": "../../"
     },
-    "include": ["*.ts", "./*.test.ts", "setup.ts"]
+    "include": ["*.ts", "./*.test.ts", "setup.ts"],
+    "exclude": ["node_modules", "**/*.spec.ts"],
+    "isolatedModules": true
 }
