@@ -1,8 +1,10 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.InterOp.Native;
+
 using static Valkey.Glide.Commands.Options.InfoOptions;
 
-using gs = Valkey.Glide.GlideString;
+using gs = Valkey.Glide.InterOp.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
 public class StandaloneClientTests
@@ -40,34 +42,34 @@ public class StandaloneClientTests
     }
 
     [Fact]
-    public void CanConnectWithDifferentParameters()
+    public async Task CanConnectWithDifferentParameters()
     {
-        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithClientName("GLIDE").Build());
+        await new GlideClient(TestConfiguration.DefaultClientConfig()
+        .WithClientName("GLIDE").Build()).EnsureInitializedAsync();
 
-        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithTls(false).Build());
+        await new GlideClient(TestConfiguration.DefaultClientConfig()
+        .WithTls(false).Build()).EnsureInitializedAsync();
 
-        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithConnectionTimeout(2000).Build());
+        await new GlideClient(TestConfiguration.DefaultClientConfig()
+        .WithConnectionTimeout(2000).Build()).EnsureInitializedAsync();
 
-        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithRequestTimeout(2000).Build());
+        await new GlideClient(TestConfiguration.DefaultClientConfig()
+        .WithRequestTimeout(2000).Build()).EnsureInitializedAsync();
 
-        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithDataBaseId(4).Build());
+        await new GlideClient(TestConfiguration.DefaultClientConfig()
+        .WithDataBaseId(4).Build()).EnsureInitializedAsync();
 
-        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithConnectionRetryStrategy(1, 2, 3).Build());
+        await new GlideClient(TestConfiguration.DefaultClientConfig()
+        .WithConnectionRetryStrategy(1, 2, 3).Build()).EnsureInitializedAsync();
 
-        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithAuthentication("default", "").Build());
+        await new GlideClient(TestConfiguration.DefaultClientConfig()
+        .WithAuthentication("default", "").Build()).EnsureInitializedAsync();
 
-        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2).Build());
+        await new GlideClient(TestConfiguration.DefaultClientConfig()
+        .WithProtocolVersion(Protocol.RESP2).Build()).EnsureInitializedAsync();
 
-        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithReadFrom(new ConnectionConfiguration.ReadFrom(ConnectionConfiguration.ReadFromStrategy.Primary)).Build());
+        await new GlideClient(TestConfiguration.DefaultClientConfig()
+            .WithReadFrom(new ReadFrom(ReadFromStrategy.Primary)).Build()).EnsureInitializedAsync();
     }
 
     [Fact]

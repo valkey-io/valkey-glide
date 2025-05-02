@@ -2,9 +2,8 @@
 
 using Valkey.Glide.Commands;
 using Valkey.Glide.Commands.Options;
-
-using static Valkey.Glide.ConnectionConfiguration;
-using static Valkey.Glide.Internals.FFI;
+using Valkey.Glide.InterOp;
+using Valkey.Glide.InterOp.Native;
 
 namespace Valkey.Glide;
 
@@ -14,8 +13,6 @@ namespace Valkey.Glide;
 /// </summary>
 public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGenericCommands, IServerManagementCommands
 {
-    private GlideClient() { }
-
     // TODO add pubsub and other params to example and remarks
     /// <summary>
     /// Creates a new <see cref="GlideClient" /> instance and establishes a connection to a standalone Valkey server.
@@ -53,16 +50,22 @@ public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGe
     /// </remarks>
     /// <param name="config">The configuration options for the client, including server addresses, authentication credentials, TLS settings, database selection, reconnection strategy, and Pub/Sub subscriptions.</param>
     /// <returns>A task that resolves to a connected <see cref="GlideClient" /> instance.</returns>
-    public static async Task<GlideClient> CreateClient(StandaloneClientConfiguration config)
-        => await CreateClient(config, () => new GlideClient());
+    public GlideClient(StandaloneClientConfiguration config) : base(config) { }
+
 
     public async Task<object?> CustomCommand(GlideString[] args)
-        => await Command(RequestType.CustomCommand, args, resp
+    {
+        NativeClient nativeClient = await this.GetNativeClientAsync();
+        return await nativeClient.CommandAsync(RequestType.CustomCommand, args, resp
             => HandleServerResponse<object?>(resp, true));
+    }
 
     public async Task<string> Info() => await Info([]);
 
     public async Task<string> Info(InfoOptions.Section[] sections)
-        => await Command(RequestType.Info, sections.ToGlideStrings(), resp
-            => HandleServerResponse<GlideString, string>(resp, false, gs => gs.ToString()));
+    {
+        NativeClient nativeClient = await this.GetNativeClientAsync();
+        return await nativeClient.CommandAsync(RequestType.Info, sections.ToGlideStrings(), resp
+            => NativeClient.HandleServerResponse<GlideString, string>(resp, false, gs => gs.ToString()));
+    }
 }

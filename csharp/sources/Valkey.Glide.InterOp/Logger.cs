@@ -1,21 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
-using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Valkey.Glide;
+using Valkey.Glide.InterOp.Native;
+
+namespace Valkey.Glide.InterOp;
 
 // TODO - use a bindings generator to create this enum.
-public enum Level
-{
-    Error = 0,
-    Warn = 1,
-    Info = 2,
-    Debug = 3,
-    Trace = 4,
-    Off = 5,
-}
 
 /*
 A class that allows logging which is consistent with logs from the internal rust core.
@@ -59,7 +51,7 @@ public class Logger
             return;
         }
 
-        log(Convert.ToInt32(logLevel), Encoding.UTF8.GetBytes(logIdentifier), Encoding.UTF8.GetBytes(message));
+        Imports.log(Convert.ToInt32(logLevel), Encoding.UTF8.GetBytes(logIdentifier), Encoding.UTF8.GetBytes(message));
     }
     #endregion internal methods
 
@@ -73,16 +65,11 @@ public class Logger
     public static void SetLoggerConfig(Level? level, string? filename = null)
     {
         byte[]? buffer = filename is null ? null : Encoding.UTF8.GetBytes(filename);
-        s_loggerLevel = InitInternalLogger(Convert.ToInt32(level), buffer);
+        s_loggerLevel = Imports.InitInternalLogger(Convert.ToInt32(level), buffer);
     }
     #endregion public methods
 
     #region FFI function declaration
-    [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "log")]
-    private static extern void log(int logLevel, byte[] logIdentifier, byte[] message);
-
-    [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "init")]
-    private static extern Level InitInternalLogger(int level, byte[]? filename);
 
     #endregion
 }

@@ -2,34 +2,13 @@
 
 using System.Runtime.InteropServices;
 
-using static Valkey.Glide.Errors;
+using Valkey.Glide.InterOp.Errors;
+using Valkey.Glide.InterOp.Native;
 
-namespace Valkey.Glide.Internals;
+namespace Valkey.Glide.InterOp.Internals;
 
 internal class ResponseHandler
 {
-    [StructLayout(LayoutKind.Sequential)]
-    private struct GlideValue
-    {
-        public ValueType Type;
-        public nuint Value;
-        public uint Size;
-    }
-
-    public enum ValueType : uint
-    {
-        Null = 0,
-        Int = 1,
-        Float = 2,
-        Bool = 3,
-        String = 4,
-        Array = 5,
-        Map = 6,
-        Set = 7,
-        BulkString = 8,
-        OK = 9,
-        Error = 10,
-    }
 
     public static object? HandleResponse(IntPtr valuePtr)
     {
