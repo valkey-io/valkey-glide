@@ -180,7 +180,23 @@ import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALK
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
-import static glide.utils.ArrayTransformUtils.*;
+import static glide.utils.ArrayTransformUtils.cast3DArray;
+import static glide.utils.ArrayTransformUtils.castArray;
+import static glide.utils.ArrayTransformUtils.castArrayofArrays;
+import static glide.utils.ArrayTransformUtils.castBinaryStringMapOfArrays;
+import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
+import static glide.utils.ArrayTransformUtils.castMapOfArrays;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static glide.utils.ArrayTransformUtils.convertBinaryStringKeyValueArrayToMap;
+import static glide.utils.ArrayTransformUtils.convertKeyValueArrayToMap;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
+import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArrayBinary;
+import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueGlideStringArray;
+import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueStringArray;
+import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
+import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 
 import glide.api.commands.BitmapBaseCommands;
 import glide.api.commands.GenericBaseCommands;
