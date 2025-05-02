@@ -3,7 +3,9 @@ package glide.standalone;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClientConfig;
+import static glide.TestUtilities.deleteAclUser;
 import static glide.TestUtilities.getRandomString;
+import static glide.TestUtilities.setNewAclUserPassword;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -23,8 +25,6 @@ import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(10) // seconds
 public class StandaloneClientTests {
@@ -244,41 +244,177 @@ public class StandaloneClientTests {
         }
     }
 
+    @Timeout(50)
     @SneakyThrows
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void update_connection_password_connection_lost_before_password_update(
-            boolean immediateAuth) {
-        GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
+    @Test
+    public void test_update_connection_password_acl_user() {
+        var username = "username";
         var pwd = UUID.randomUUID().toString();
+        var newPwd = UUID.randomUUID().toString();
 
-        try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
-            // validate that we can use the client
+        GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
+
+        try {
+            setNewAclUserPassword(adminClient, username, pwd);
+
+            // Create client with ACL user credentials
+            GlideClient testClient =
+                    GlideClient.createClient(
+                                    commonClientConfig()
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(pwd).build())
+                                            .requestTimeout(5000)
+                                            .build())
+                            .get();
+
+            // Validate client works
             assertNotNull(testClient.info().get());
 
-            // set the password and forcefully drop connection for the testClient
-            assertEquals("OK", adminClient.configSet(Map.of("requirepass", pwd)).get());
-            adminClient.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
+            // Update the password of the client with non immediate auth
+            assertEquals(OK, testClient.updateConnectionPassword(newPwd, false).get());
 
-            /*
-             * Some explanation for the curious mind:
-             * Our library is abstracting a connection or connections, with a lot of mechanism around it, making it behave like what we call a "client".
-             * When using standalone mode, the client is a single connection, so on disconnection the first thing it planned to do is to reconnect.
-             *
-             * There's no reason to get other commands and to take care of them since to serve commands we need to be connected.
-             *
-             * Hence, the client will try to reconnect and will not listen try to take care of new tasks, but will let them wait in line,
-             * so the update connection password will not be able to reach the connection and will return an error.
-             * For future versions, standalone will be considered as a different animal then it is now, since standalone is not necessarily one node.
-             * It can be replicated and have a lot of nodes, and to be what we like to call "one shard cluster".
-             * So, in the future, we will have many existing connection and request can be managed also when one connection is locked,
-             */
-            var exception =
+            // Delete the user (which will cause reconnection) and reset it with the new password
+            deleteAclUser(adminClient, username);
+            setNewAclUserPassword(adminClient, username, newPwd);
+
+            // Sleep to ensure password change in server and client reconnection
+            Thread.sleep(2000);
+
+            // Validate client reconnected succsessfuly
+            assertNotNull(testClient.info().get());
+
+            // Verify immediate auth with the same password works
+            assertEquals(OK, testClient.updateConnectionPassword(newPwd, true).get());
+
+            // Validate client still working
+            assertNotNull(testClient.info().get());
+
+        } finally {
+            deleteAclUser(adminClient, username);
+            adminClient.close();
+        }
+    }
+
+    @Timeout(50)
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_connection_lost_before_password_update_acl_user() {
+        var username = "username";
+        var pwd = UUID.randomUUID().toString();
+        var newPwd = UUID.randomUUID().toString();
+
+        GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
+
+        try {
+            setNewAclUserPassword(adminClient, username, pwd);
+
+            // Create client with ACL user credentials
+            GlideClient testClient =
+                    GlideClient.createClient(
+                                    commonClientConfig()
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(pwd).build())
+                                            .requestTimeout(5000)
+                                            .build())
+                            .get();
+
+            // Validate client works
+            assertNotNull(testClient.info().get());
+
+            // Delete user name and reset with new  password (this will cause disconnection)
+            deleteAclUser(adminClient, username);
+            setNewAclUserPassword(adminClient, username, newPwd);
+
+            // Sleep to ensure password change in server and client reconnection
+            Thread.sleep(2000);
+
+            // Ensure client can still update the password with non-immediate auth (this doesn't require
+            // server connection)
+            assertEquals(OK, testClient.updateConnectionPassword(newPwd, false).get());
+
+            // Check that the client is unable to perform operations that require server connection,
+            // as it is still trying to reconnect with the old password
+            var timeoutException =
                     assertThrows(
                             ExecutionException.class,
-                            () -> testClient.updateConnectionPassword(pwd, immediateAuth).get());
+                            () -> testClient.updateConnectionPassword(newPwd, true).get());
+
         } finally {
-            adminClient.configSet(Map.of("requirepass", "")).get();
+            deleteAclUser(adminClient, username);
+            adminClient.close();
+        }
+    }
+
+    @Timeout(50)
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_replace_password_immediateAuth_acl_user() {
+        var username = "username";
+        var pwd = UUID.randomUUID().toString();
+        var newPwd = UUID.randomUUID().toString();
+
+        GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
+
+        try {
+            setNewAclUserPassword(adminClient, username, pwd);
+
+            // Create client with ACL user credentials
+            GlideClient testClient =
+                    GlideClient.createClient(
+                                    commonClientConfig()
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(pwd).build())
+                                            .build())
+                            .get();
+
+            // Validate client works
+            assertNotNull(testClient.info().get());
+
+            // Add a new password to the client
+            setNewAclUserPassword(adminClient, username, newPwd);
+
+            // Ensure client can authenticate immediately with the new password
+            assertEquals(OK, testClient.updateConnectionPassword(newPwd, true).get());
+
+        } finally {
+            deleteAclUser(adminClient, username);
+            adminClient.close();
+        }
+    }
+
+    @Timeout(50)
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_non_valid_auth_acl_user() {
+        var username = "username";
+        var pwd = UUID.randomUUID().toString();
+        var newPwd = UUID.randomUUID().toString();
+
+        GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
+
+        try {
+            setNewAclUserPassword(adminClient, username, pwd);
+
+            // Create client with ACL user credentials
+            GlideClient testClient =
+                    GlideClient.createClient(
+                                    commonClientConfig()
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(pwd).build())
+                                            .build())
+                            .get();
+
+            var emptyPasswordException =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword("", true).get());
+            assertInstanceOf(RequestException.class, emptyPasswordException.getCause());
+
+            var noPasswordException =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword(true).get());
+            assertInstanceOf(RequestException.class, noPasswordException.getCause());
+        } finally {
+            deleteAclUser(adminClient, username);
             adminClient.close();
         }
     }

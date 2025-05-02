@@ -1,4 +1,5 @@
 use rand::Rng;
+use strum_macros::Display;
 
 use crate::cluster_topology::get_slot;
 use crate::cmd::{Arg, Cmd};
@@ -15,7 +16,8 @@ use std::sync::{RwLock, RwLockWriteGuard};
 #[derive(Clone)]
 pub(crate) enum Redirect {
     Moved(String),
-    Ask(String),
+    /// (addr, should_exec_asking) - if `should_exec_asking` is true,  the `ASKING` command would be executed as part of `get_connection`.
+    Ask(String, bool),
 }
 
 /// Logical bitwise aggregating operators.
@@ -623,6 +625,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"FUNCTION STATS" => RouteBy::AllNodes,
 
         b"DBSIZE"
+        | b"DEBUG"
         | b"FLUSHALL"
         | b"FLUSHDB"
         | b"FT._ALIASLIST"
@@ -671,7 +674,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"OBJECT ENCODING"
         | b"OBJECT FREQ"
         | b"OBJECT IDLETIME"
-        | b"OBJECT REFCOUNT" => RouteBy::SecondArg,
+        | b"OBJECT REFCOUNT"
+        | b"JSON.DEBUG" => RouteBy::SecondArg,
 
         b"LMPOP" | b"SINTERCARD" | b"ZDIFF" | b"ZINTER" | b"ZINTERCARD" | b"ZMPOP" | b"ZUNION" => {
             RouteBy::SecondArgAfterKeyCount
@@ -717,7 +721,6 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"COMMAND LIST"
         | b"COMMAND"
         | b"CONFIG GET"
-        | b"DEBUG"
         | b"ECHO"
         | b"FUNCTION LIST"
         | b"LASTSAVE"
@@ -1208,7 +1211,7 @@ impl Slot {
 }
 
 /// What type of node should a request be routed to, assuming read from replica is enabled.
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Hash)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Hash, Display)]
 pub enum SlotAddr {
     /// The request must be routed to primary node
     Master,

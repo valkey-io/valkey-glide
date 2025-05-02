@@ -3,7 +3,7 @@
 package main
 
 import (
-	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/api"
 )
 
 type glideBenchmarkClient struct {
@@ -46,12 +46,7 @@ func (glideBenchmarkClient *glideBenchmarkClient) get(key string) (string, error
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) set(key string, value string) (string, error) {
-	result, err := glideBenchmarkClient.client.Set(key, value)
-	if err != nil {
-		return "", err
-	}
-
-	return result.Value(), nil
+	return glideBenchmarkClient.client.Set(key, value)
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) close() error {

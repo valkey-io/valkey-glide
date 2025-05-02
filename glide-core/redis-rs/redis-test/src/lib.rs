@@ -26,7 +26,9 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-use redis::{Cmd, ConnectionLike, ErrorKind, Pipeline, RedisError, RedisResult, Value};
+use redis::{
+    Cmd, ConnectionLike, ErrorKind, Pipeline, PipelineRetryStrategy, RedisError, RedisResult, Value,
+};
 
 #[cfg(feature = "aio")]
 use futures::{future, FutureExt};
@@ -201,6 +203,7 @@ impl ConnectionLike for MockRedisConnection {
 
         next_cmd
             .responses
+            .and_then(Value::extract_error_vec)
             .and_then(|values| match values.as_slice() {
                 [value] => Ok(value.clone()),
                 [] => Err(RedisError::from((
@@ -274,6 +277,7 @@ impl AioConnectionLike for MockRedisConnection {
         cmd: &'a Pipeline,
         offset: usize,
         count: usize,
+        _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>> {
         let packed_cmd = cmd.get_packed_pipeline();
         let response = <MockRedisConnection as ConnectionLike>::req_packed_commands(

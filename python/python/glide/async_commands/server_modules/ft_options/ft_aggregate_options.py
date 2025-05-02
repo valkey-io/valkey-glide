@@ -1,6 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 from abc import ABC, abstractmethod
-from enum import Enum
 from typing import List, Mapping, Optional
 
 from glide.async_commands.command_args import OrderBy
@@ -55,7 +54,8 @@ class FtAggregateLimit(FtAggregateClause):
 
 class FtAggregateFilter(FtAggregateClause):
     """
-    A clause for filtering the results using predicate expression relating to values in each result. It is applied post query and relate to the current state of the pipeline.
+    A clause for filtering the results using predicate expression relating to values in each result. It is applied post query
+    and relate to the current state of the pipeline.
     """
 
     def __init__(self, expression: TEncodable):
@@ -79,7 +79,8 @@ class FtAggregateFilter(FtAggregateClause):
 
 class FtAggregateReducer:
     """
-    A clause for reducing the matching results in each group using a reduction function. The matching results are reduced into a single record.
+    A clause for reducing the matching results in each group using a reduction function. The matching results are reduced into
+    a single record.
     """
 
     def __init__(
@@ -130,7 +131,8 @@ class FtAggregateGroupBy(FtAggregateClause):
 
         Args:
             properties (List[TEncodable]): The list of properties to be used for grouping the results in the pipeline.
-            reducers (List[Reducer]): The list of functions that handles the group entries by performing multiple aggregate operations.
+            reducers (List[Reducer]): The list of functions that handles the group entries by performing multiple
+                aggregate operations.
         """
         self.properties = properties
         self.reducers = reducers
@@ -210,7 +212,8 @@ class FtAggregateSortBy(FtAggregateClause):
 
 class FtAggregateApply(FtAggregateClause):
     """
-    A clause for applying a 1-to-1 transformation on one or more properties and stores the result as a new property down the pipeline or replaces any property using this transformation.
+    A clause for applying a 1-to-1 transformation on one or more properties and stores the result as a new property down the
+    pipeline or replaces any property using this transformation.
     """
 
     def __init__(self, expression: TEncodable, name: TEncodable):
@@ -219,7 +222,8 @@ class FtAggregateApply(FtAggregateClause):
 
         Args:
             expression (TEncodable): The expression to be transformed.
-            name (TEncodable): The new property name to store the result of apply. This name can be referenced by further APPLY/SORTBY/GROUPBY/REDUCE operations down the pipeline.
+            name (TEncodable): The new property name to store the result of apply. This name can be referenced by further
+                APPLY/SORTBY/GROUPBY/REDUCE operations down the pipeline.
         """
         self.expression = expression
         self.name = name
@@ -259,8 +263,11 @@ class FtAggregateOptions:
             loadAll (Optional[bool]): An option to load all fields declared in the index.
             loadFields (Optional[List[TEncodable]]): An option to load only the fields passed in this list.
             timeout (Optional[int]): Overrides the timeout parameter of the module.
-            params (Optional[Mapping[TEncodable, TEncodable]]): The key/value pairs can be referenced from within the query expression.
-            clauses (Optional[List[FtAggregateClause]]): FILTER, LIMIT, GROUPBY, SORTBY and APPLY clauses, that can be repeated multiple times in any order and be freely intermixed. They are applied in the order specified, with the output of one clause feeding the input of the next clause.
+            params (Optional[Mapping[TEncodable, TEncodable]]): The key/value pairs can be referenced from within the
+                query expression.
+            clauses (Optional[List[FtAggregateClause]]): FILTER, LIMIT, GROUPBY, SORTBY and APPLY clauses, that can be
+                repeated multiple times in any order and be freely intermixed. They are applied in the order specified, with
+                the output of one clause feeding the input of the next clause.
         """
         self.loadAll = loadAll
         self.loadFields = loadFields

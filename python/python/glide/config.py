@@ -15,14 +15,15 @@ from glide.protobuf.connection_request_pb2 import TlsMode
 
 
 class NodeAddress:
-    def __init__(self, host: str = "localhost", port: int = 6379):
-        """
-        Represents the address and port of a node in the cluster.
+    """
+    Represents the address and port of a node in the cluster.
 
-        Args:
-            host (str, optional): The server host. Defaults to "localhost".
-            port (int, optional): The server port. Defaults to 6379.
-        """
+    Attributes:
+        host (str, optional): The server host. Defaults to "localhost".
+        port (int, optional): The server port. Defaults to 6379.
+    """
+
+    def __init__(self, host: str = "localhost", port: int = 6379):
         self.host = host
         self.port = port
 
@@ -46,6 +47,11 @@ class ReadFrom(Enum):
     Spread the read requests between replicas in the same client's AZ (Aviliablity zone) in a round robin manner,
     falling back to other replicas or the primary if needed
     """
+    AZ_AFFINITY_REPLICAS_AND_PRIMARY = ProtobufReadFrom.AZAffinityReplicasAndPrimary
+    """
+    Spread the read requests among nodes within the client's Availability Zone (AZ) in a round robin manner,
+    prioritizing local replicas, then the local primary, and falling back to any replica or the primary if needed.
+    """
 
 
 class ProtocolVersion(Enum):
@@ -64,52 +70,56 @@ class ProtocolVersion(Enum):
 
 
 class BackoffStrategy:
-    def __init__(self, num_of_retries: int, factor: int, exponent_base: int):
-        """
-        Represents the strategy used to determine how and when to reconnect, in case of connection failures.
-        The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N
-        is the number of failed attempts.
-        Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is succesful.
-        The client will attempt to reconnect indefinitely.
+    """
+    Represents the strategy used to determine how and when to reconnect, in case of connection failures.
+    The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N
+    is the number of failed attempts.
+    Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is
+    successful.
+    The client will attempt to reconnect indefinitely.
 
-        Args:
-            num_of_retries (int): Number of retry attempts that the client should perform when disconnected from the server,
-                where the time between retries increases. Once the retries have reached the maximum value, the time between
-                retries will remain constant until a reconnect attempt is succesful.
-            factor (int): The multiplier that will be applied to the waiting time between each retry.
-            exponent_base (int): The exponent base configured for the strategy.
-        """
+    Attributes:
+        num_of_retries (int): Number of retry attempts that the client should perform when disconnected from the server,
+            where the time between retries increases. Once the retries have reached the maximum value, the time between
+            retries will remain constant until a reconnect attempt is succesful.
+        factor (int): The multiplier that will be applied to the waiting time between each retry.
+        exponent_base (int): The exponent base configured for the strategy.
+    """
+
+    def __init__(self, num_of_retries: int, factor: int, exponent_base: int):
         self.num_of_retries = num_of_retries
         self.factor = factor
         self.exponent_base = exponent_base
 
 
 class ServerCredentials:
+    """
+    Represents the credentials for connecting to a server.
+
+    Attributes:
+        password (str): The password that will be used for authenticating connections to the servers.
+        username (Optional[str]): The username that will be used for authenticating connections to the servers.
+            If not supplied, "default" will be used.
+    """
+
     def __init__(
         self,
         password: str,
         username: Optional[str] = None,
     ):
-        """
-        Represents the credentials for connecting to a server.
-
-        Args:
-            password (str): The password that will be used for authenticating connections to the servers.
-            username (Optional[str]): The username that will be used for authenticating connections to the servers.
-                If not supplied, "default" will be used.
-        """
         self.password = password
         self.username = username
 
 
 class PeriodicChecksManualInterval:
-    def __init__(self, duration_in_sec: int) -> None:
-        """
-        Represents a manually configured interval for periodic checks.
+    """
+    Represents a manually configured interval for periodic checks.
 
-        Args:
-            duration_in_sec (int): The duration in seconds for the interval between periodic checks.
-        """
+    Attributes:
+        duration_in_sec (int): The duration in seconds for the interval between periodic checks.
+    """
+
+    def __init__(self, duration_in_sec: int) -> None:
         self.duration_in_sec = duration_in_sec
 
 
@@ -129,7 +139,72 @@ class PeriodicChecksStatus(Enum):
     """
 
 
+class AdvancedBaseClientConfiguration:
+    """
+    Represents the advanced configuration settings for a base Glide client.
+
+    Attributes:
+        connection_timeout (Optional[int]): The duration in milliseconds to wait for a TCP/TLS connection to complete.
+            This applies both during initial client creation and any reconnections that may occur during request processing.
+            **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
+            If not explicitly set, a default value of 250 milliseconds will be used.
+    """
+
+    def __init__(self, connection_timeout: Optional[int] = None):
+        self.connection_timeout = connection_timeout
+
+    def _create_a_protobuf_conn_request(
+        self, request: ConnectionRequest
+    ) -> ConnectionRequest:
+        if self.connection_timeout:
+            request.connection_timeout = self.connection_timeout
+        return request
+
+
 class BaseClientConfiguration:
+    """
+    Represents the configuration settings for a Glide client.
+
+    Attributes:
+        addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
+            If the server is in cluster mode the list can be partial, as the client will attempt to map out
+            the cluster and find all nodes.
+            If the server is in standalone mode, only nodes whose addresses were provided will be used by the
+            client.
+            For example::
+
+                [
+                    {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
+                    {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
+                ].
+
+        use_tls (bool): True if communication with the cluster should use Transport Level Security.
+            Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail
+        credentials (ServerCredentials): Credentials for authentication process.
+            If none are set, the client will not authenticate itself with the server.
+        read_from (ReadFrom): If not set, `PRIMARY` will be used.
+        request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to
+            complete.
+            This duration encompasses sending the request, awaiting for a response from the server, and any required
+            reconnections or retries.
+            If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not
+            explicitly set, a default value of 250 milliseconds will be used.
+        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command
+            during connection establishment.
+        protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
+        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
+            (sent but not yet completed).
+            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
+            stuck in case of a queue backlog.
+            If not set, a default value will be used.
+        client_az (Optional[str]): Availability Zone of the client.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas
+            within the specified AZ if exits.
+            If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed
+            to nodes (first replicas then primary) within the specified AZ if they exist.
+        advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
+    """
+
     def __init__(
         self,
         addresses: List[NodeAddress],
@@ -141,35 +216,8 @@ class BaseClientConfiguration:
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
+        advanced_config: Optional[AdvancedBaseClientConfiguration] = None,
     ):
-        """
-        Represents the configuration settings for a Glide client.
-
-        Args:
-            addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
-                    If the server is in cluster mode the list can be partial, as the client will attempt to map out
-                    the cluster and find all nodes.
-                    If the server is in standalone mode, only nodes whose addresses were provided will be used by the
-                    client.
-                    For example:
-                    [
-                        {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
-                        {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
-                    ].
-            use_tls (bool): True if communication with the cluster should use Transport Level Security.
-                Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail
-            credentials (ServerCredentials): Credentials for authentication process.
-                    If none are set, the client will not authenticate itself with the server.
-            read_from (ReadFrom): If not set, `PRIMARY` will be used.
-            request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to complete.
-                This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
-                If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
-            client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
-            inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
-                This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
-                If not set, a default value will be used.
-
-        """
         self.addresses = addresses
         self.use_tls = use_tls
         self.credentials = credentials
@@ -179,10 +227,16 @@ class BaseClientConfiguration:
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
         self.client_az = client_az
+        self.advanced_config = advanced_config
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
-                "client_az mus t be set when read_from is set to AZ_AFFINITY"
+                "client_az must be set when read_from is set to AZ_AFFINITY"
+            )
+
+        if read_from == ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY and not client_az:
+            raise ValueError(
+                "client_az must be set when read_from is set to AZ_AFFINITY_REPLICAS_AND_PRIMARY"
             )
 
     def _create_a_protobuf_conn_request(
@@ -218,6 +272,8 @@ class BaseClientConfiguration:
             request.inflight_requests_limit = self.inflight_requests_limit
         if self.client_az:
             request.client_az = self.client_az
+        if self.advanced_config:
+            self.advanced_config._create_a_protobuf_conn_request(request)
 
         return request
 
@@ -230,44 +286,67 @@ class BaseClientConfiguration:
         return None, None
 
 
+class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
+    """
+    Represents the advanced configuration settings for a Standalone Glide client.
+    """
+
+    def __init__(self, connection_timeout: Optional[int] = None):
+
+        super().__init__(connection_timeout)
+
+
 class GlideClientConfiguration(BaseClientConfiguration):
     """
     Represents the configuration settings for a Standalone Glide client.
 
-    Args:
+    Attributes:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
-                Only nodes whose addresses were provided will be used by the client.
-                For example:
+        Only nodes whose addresses were provided will be used by the client.
+            For example::
+
                 [
                     {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
                     {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
-                ].
+                ]
+
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
         credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
-                This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
+                This duration encompasses sending the request, awaiting for a response from the server, and any required
+                reconnections or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error.
-                If not set, a default value will be used.
+                If not explicitly set, a default value of 250 milliseconds will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
             connection failures.
             If not set, a default backoff strategy will be used.
         database_id (Optional[int]): index of the logical database to connect to.
-        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
+        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
+            connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
-        pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
+        pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
+                client.
                 Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
-        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
-            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
+        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
+            (sent but not yet completed).
+            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
+            stuck in case of a queue backlog.
             If not set, a default value will be used.
-
+        client_az (Optional[str]): Availability Zone of the client.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
+            the specified AZ if exits.
+            If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to
+            nodes (first replicas then primary) within the specified AZ if they exist.
+        advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client,
+            see `AdvancedGlideClientConfiguration`.
     """
 
     class PubSubChannelModes(IntEnum):
         """
         Describes pubsub subsciption modes.
-        See https://valkey.io/docs/topics/pubsub/ for more details
+        See [valkey.io](https://valkey.io/docs/topics/pubsub/) for more details
         """
 
         Exact = 0
@@ -308,6 +387,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
+        advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -319,6 +399,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
+            advanced_config=advanced_config,
         )
         self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
@@ -375,39 +456,62 @@ class GlideClientConfiguration(BaseClientConfiguration):
         return None, None
 
 
+class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
+    """
+    Represents the advanced configuration settings for a Glide Cluster client.
+    """
+
+    def __init__(self, connection_timeout: Optional[int] = None):
+        super().__init__(connection_timeout)
+
+
 class GlideClusterClientConfiguration(BaseClientConfiguration):
     """
     Represents the configuration settings for a Cluster Glide client.
 
-    Args:
+    Attributes:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
-                The list can be partial, as the client will attempt to map out the cluster and find all nodes.
-                For example:
+            The list can be partial, as the client will attempt to map out the cluster and find all nodes.
+            For example::
+
                 [
                     {address:configuration-endpoint.use1.cache.amazonaws.com, port:6379}
-                ].
+                ]
+
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
         credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
-            This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
-            If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
-        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
+            This duration encompasses sending the request, awaiting for a response from the server, and any required
+            reconnections or retries.
+            If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not explicitly
+            set, a default value of 250 milliseconds will be used.
+        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
+            connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
             Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
             Defaults to PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS.
-        pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
+        pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used
+            for the client.
             Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
-        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
-            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
+        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
+            (sent but not yet completed).
+            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
+            stuck in case of a queue backlog.
             If not set, a default value will be used.
+        client_az (Optional[str]): Availability Zone of the client.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
+            the specified AZ if exits.
+            If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to
+            nodes (first replicas then primary) within the specified AZ if they exist.
+        advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client,
+            see `AdvancedGlideClusterClientConfiguration`.
 
 
-
-    Notes:
+    Note:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
         with fixed values is used.
     """
@@ -415,7 +519,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
     class PubSubChannelModes(IntEnum):
         """
         Describes pubsub subsciption modes.
-        See https://valkey.io/docs/topics/pubsub/ for more details
+        See [valkey.io](https://valkey.io/docs/topics/pubsub/) for more details
         """
 
         Exact = 0
@@ -459,6 +563,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
+        advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -470,6 +575,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
+            advanced_config=advanced_config,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions

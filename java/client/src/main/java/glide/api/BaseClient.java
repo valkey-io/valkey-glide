@@ -282,7 +282,7 @@ import glide.managers.ConnectionManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.EnumSet;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -392,7 +392,7 @@ public abstract class BaseClient
      * @return Return a {@link Map} that contains the statistics collected internally by GLIDE core
      */
     public Map<String, String> getStatistics() {
-        return (HashMap<String, String>) StatisticsResolver.getStatistics();
+        return StatisticsResolver.getStatistics();
     }
 
     /**
@@ -1384,7 +1384,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 LPop,
                 new String[] {key, Long.toString(count)},
-                response -> castArray(handleArrayResponse(response), String.class));
+                response -> castArray(handleArrayOrNullResponse(response), String.class));
     }
 
     @Override
@@ -1392,7 +1392,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 LPop,
                 new GlideString[] {key, gs(Long.toString(count))},
-                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -2205,6 +2205,15 @@ public abstract class BaseClient
     public CompletableFuture<Object[]> zrankWithScore(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 ZRank, new String[] {key, member, WITH_SCORE_VALKEY_API}, this::handleArrayOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zrankWithScore(
+            @NonNull GlideString key, @NonNull GlideString member) {
+        return commandManager.submitNewCommand(
+                ZRank,
+                new GlideString[] {key, member, gs(WITH_SCORE_VALKEY_API)},
+                this::handleArrayOrNullResponse);
     }
 
     @Override
@@ -4714,12 +4723,12 @@ public abstract class BaseClient
             o =
                     map.entrySet().stream()
                             .collect(
-                                    HashMap::new,
+                                    LinkedHashMap::new,
                                     (m, e) ->
                                             m.put(
                                                     convertByteArrayToGlideString(e.getKey()),
                                                     convertByteArrayToGlideString(e.getValue())),
-                                    HashMap::putAll);
+                                    LinkedHashMap::putAll);
         }
         return o;
     }

@@ -10,3 +10,6 @@ lib.h
 benchmarks/results/**
 benchmarks/gobenchmarks.json
 benchmarks/benchmarks
+
+# directory where compiled static library files are copied to
+rustbin/

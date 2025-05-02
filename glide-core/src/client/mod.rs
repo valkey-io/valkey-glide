@@ -5,7 +5,7 @@ mod types;
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_info, log_warn};
+use logger_core::{log_error, log_info, log_warn};
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
@@ -13,10 +13,12 @@ use redis::cluster_routing::{
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{
-    ClusterScanArgs, Cmd, ErrorKind, PushInfo, RedisError, RedisResult, ScanStateRC, Value,
+    ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy, PushInfo, RedisError,
+    RedisResult, ScanStateRC, Value,
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,14 +28,18 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
+use redis::InfoDict;
+use telemetrylib::*;
 use tokio::sync::mpsc;
+use versions::Versioning;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 pub const DEFAULT_RETRIES: u32 = 3;
+/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
-pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
-pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
+/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
+pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 
 /// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
@@ -333,6 +339,7 @@ impl Client {
         mut values: Vec<Value>,
         command_count: usize,
         offset: usize,
+        raise_on_error: bool,
     ) -> RedisResult<Value> {
         assert_eq!(values.len(), 1);
         let value = values.pop();
@@ -361,18 +368,35 @@ impl Client {
                     .into());
             }
         };
-        Self::convert_transaction_values_to_expected_types(pipeline, values, command_count)
+        Self::convert_pipeline_values_to_expected_types(
+            pipeline,
+            values,
+            command_count,
+            raise_on_error,
+        )
     }
 
-    fn convert_transaction_values_to_expected_types(
+    fn convert_pipeline_values_to_expected_types(
         pipeline: &redis::Pipeline,
         values: Vec<Value>,
         command_count: usize,
+        raise_on_error: bool,
     ) -> RedisResult<Value> {
         let values = values
             .into_iter()
-            .zip(pipeline.cmd_iter().map(expected_type_for_cmd))
-            .map(|(value, expected_type)| convert_to_expected_type(value, expected_type))
+            .map(|value| {
+                if raise_on_error {
+                    value.extract_error()
+                } else {
+                    Ok(value)
+                }
+            })
+            .zip(
+                pipeline
+                    .cmd_iter()
+                    .map(|cmd| expected_type_for_cmd(cmd.as_ref())),
+            )
+            .map(|(value, expected_type)| convert_to_expected_type(value?, expected_type))
             .try_fold(
                 Vec::with_capacity(command_count),
                 |mut acc, result| -> RedisResult<_> {
@@ -383,29 +407,126 @@ impl Client {
         Ok(Value::Array(values))
     }
 
+    /// Send a pipeline to the server.
+    /// Transaction is a batch of commands that are sent in a single request.
+    /// Unlike a pipelines, transactions are atomic, and in cluster mode, the key-based commands must route to the same slot.
     pub fn send_transaction<'a>(
         &'a mut self,
         pipeline: &'a redis::Pipeline,
         routing: Option<RoutingInfo>,
+        transaction_timeout: Option<u32>,
+        raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         let command_count = pipeline.cmd_iter().count();
+        // The offset is set to command_count + 1 to account for:
+        // 1. The first command, which is the "MULTI" command, that returns "OK"
+        // 2. The "QUEUED" responses for each of the commands in the pipeline (before EXEC)
+        // After these initial responses (OK and QUEUED), we expect a single response,
+        // which is an array containing the results of all the commands in the pipeline.
         let offset = command_count + 1;
-        run_with_timeout(Some(self.request_timeout), async move {
-            let values = match self.internal_client {
-                ClientWrapper::Standalone(ref mut client) => {
-                    client.send_pipeline(pipeline, offset, 1).await
-                }
-
-                ClientWrapper::Cluster { ref mut client } => match routing {
-                    Some(RoutingInfo::SingleNode(route)) => {
-                        client.route_pipeline(pipeline, offset, 1, route).await
+        run_with_timeout(
+            Some(to_duration(transaction_timeout, self.request_timeout)),
+            async move {
+                let values = match self.internal_client {
+                    ClientWrapper::Standalone(ref mut client) => {
+                        client.send_pipeline(pipeline, offset, 1).await
                     }
-                    _ => client.req_packed_commands(pipeline, offset, 1).await,
-                },
-            }?;
 
-            Self::get_transaction_values(pipeline, values, command_count, offset)
-        })
+                    ClientWrapper::Cluster { ref mut client } => match routing {
+                        Some(RoutingInfo::SingleNode(route)) => {
+                            client
+                                .route_pipeline(pipeline, offset, 1, Some(route), None)
+                                .await
+                        }
+                        _ => client.req_packed_commands(pipeline, offset, 1, None).await,
+                    },
+                }?;
+
+                Self::get_transaction_values(
+                    pipeline,
+                    values,
+                    command_count,
+                    offset,
+                    raise_on_error,
+                )
+            },
+        )
+        .boxed()
+    }
+
+    /// Send a pipeline to the server.
+    /// Pipeline is a batch of commands that are sent in a single request.
+    /// Unlike a transaction, the commands are not executed atomically, and in cluster mode, the commands can be sent to different nodes.
+    ///
+    /// The `raise_on_error` parameter determines whether the pipeline should raise an error if any of the commands in the pipeline fail, or return the error as part of the response.
+    /// - `pipeline_retry_strategy`: Configures the retry behavior for pipeline commands.
+    ///   - If `retry_server_error` is `true`, failed commands with a retriable `RetryMethod` will be retried,
+    ///     potentially causing reordering within the same slot.
+    ///     ⚠️ **Caution**: This may lead to commands being executed in a different order than originally sent,
+    ///     which could affect operations that rely on strict execution sequence.
+    ///   - If `retry_connection_error` is `true`, sub-pipeline requests will be retried on connection errors.
+    ///     ⚠️ **Caution**: Retrying after a connection error may result in duplicate executions, since the server might have already received and processed the request before the error occurred.
+    ///     TODO: add wiki link.
+    pub fn send_pipeline<'a>(
+        &'a mut self,
+        pipeline: &'a redis::Pipeline,
+        routing: Option<RoutingInfo>,
+        raise_on_error: bool,
+        pipeline_timeout: Option<u32>,
+        pipeline_retry_strategy: PipelineRetryStrategy,
+    ) -> redis::RedisFuture<'a, Value> {
+        let command_count = pipeline.cmd_iter().count();
+        if pipeline.is_empty() {
+            return async {
+                Err(RedisError::from((
+                    ErrorKind::ResponseError,
+                    "Received empty pipeline",
+                )))
+            }
+            .boxed();
+        }
+
+        run_with_timeout(
+            Some(to_duration(pipeline_timeout, self.request_timeout)),
+            async move {
+                let values = match self.internal_client {
+                    ClientWrapper::Standalone(ref mut client) => {
+                        client.send_pipeline(pipeline, 0, command_count).await
+                    }
+
+                    ClientWrapper::Cluster { ref mut client } => match routing {
+                        Some(RoutingInfo::SingleNode(route)) => {
+                            client
+                                .route_pipeline(
+                                    pipeline,
+                                    0,
+                                    command_count,
+                                    Some(route),
+                                    Some(pipeline_retry_strategy),
+                                )
+                                .await
+                        }
+                        _ => {
+                            client
+                                .req_packed_commands(
+                                    pipeline,
+                                    0,
+                                    command_count,
+                                    Some(pipeline_retry_strategy),
+                                )
+                                .await
+                        }
+                    },
+                }?;
+
+                Self::convert_pipeline_values_to_expected_types(
+                    pipeline,
+                    values,
+                    command_count,
+                    raise_on_error,
+                )
+            },
+        )
         .boxed()
     }
 
@@ -519,9 +640,33 @@ impl Client {
                     Some(ResponsePolicy::AllSucceeded),
                 ));
                 let mut cmd = redis::cmd("AUTH");
+                if let Some(username) = self.get_username().await? {
+                    cmd.arg(username);
+                }
                 cmd.arg(password);
                 self.send_command(&cmd, Some(routing)).await
             }
+        }
+    }
+
+    /// Returns the username if one was configured during client creation. Otherwise, returns None.
+    async fn get_username(&mut self) -> RedisResult<Option<String>> {
+        match &mut self.internal_client {
+            ClientWrapper::Cluster { client } => match client.get_username().await {
+                Ok(Value::SimpleString(username)) => Ok(Some(username)),
+                Ok(Value::Nil) => Ok(None),
+                Ok(other) => Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Unexpected type",
+                    format!("Expected SimpleString or Nil, got: {other:?}"),
+                ))),
+                Err(e) => Err(RedisError::from((
+                    ErrorKind::ResponseError,
+                    "Error getting username",
+                    format!("Received error - {:?}.", e),
+                ))),
+            },
+            ClientWrapper::Standalone(client) => Ok(client.get_username()),
         }
     }
 }
@@ -568,12 +713,16 @@ async fn create_cluster_client(
         Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
         None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
+    let connection_timeout = to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
-        .connection_timeout(INTERNAL_CONNECTION_TIMEOUT)
+        .connection_timeout(connection_timeout)
         .retries(DEFAULT_RETRIES);
     let read_from_strategy = request.read_from.unwrap_or_default();
     builder = builder.read_from(match read_from_strategy {
         ReadFrom::AZAffinity(az) => ReadFromReplicaStrategy::AZAffinity(az),
+        ReadFrom::AZAffinityReplicasAndPrimary(az) => {
+            ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(az)
+        }
         ReadFrom::PreferReplica => ReadFromReplicaStrategy::RoundRobin,
         ReadFrom::Primary => ReadFromReplicaStrategy::AlwaysFromPrimary,
     });
@@ -592,15 +741,63 @@ async fn create_cluster_client(
         };
         builder = builder.tls(tls);
     }
-    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions {
+    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions.clone() {
         builder = builder.pubsub_subscriptions(pubsub_subscriptions);
     }
 
     // Always use with Glide
-    builder = builder.periodic_connections_checks(CONNECTION_CHECKS_INTERVAL);
+    builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
-    client.get_async_connection(push_sender).await
+    let mut con = client.get_async_connection(push_sender).await?;
+
+    // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
+    // preventing scenarios where the client becomes inoperable or, worse, unaware that sharded pubsub messages are not being received.
+    // The issue arises because `client.get_async_connection()` might succeed even if the engine does not support sharded pubsub.
+    // For example, initial connections may exclude the target node for sharded subscriptions, allowing the creation to succeed,
+    // but subsequent resubscription tasks will fail when `setup_connection()` cannot establish a connection to the node.
+    //
+    // One approach to handle this would be to check the engine version inside `setup_connection()` and skip applying sharded subscriptions.
+    // However, this approach would leave the application unaware that the subscriptions were not applied, requiring the user to analyze logs to identify the issue.
+    // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
+
+    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions {
+        if pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded) {
+            let info_res = con
+                .route_command(
+                    redis::cmd("INFO").arg("SERVER"),
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+                )
+                .await?;
+            let info_dict: InfoDict = FromRedisValue::from_redis_value(&info_res)?;
+            match info_dict.get::<String>("redis_version") {
+                Some(version) => match (Versioning::new(version), Versioning::new("7.0")) {
+                    (Some(server_ver), Some(min_ver)) => {
+                        if server_ver < min_ver {
+                            return Err(RedisError::from((
+                                ErrorKind::InvalidClientConfig,
+                                "Sharded subscriptions provided, but the engine version is < 7.0",
+                            )));
+                        }
+                    }
+                    _ => {
+                        return Err(RedisError::from((
+                            ErrorKind::ResponseError,
+                            "Failed to parse engine version",
+                        )))
+                    }
+                },
+                _ => {
+                    return Err(RedisError::from((
+                        ErrorKind::ResponseError,
+                        "Could not determine engine version from INFO result",
+                    )))
+                }
+            }
+        }
+    }
+
+    Ok(con)
 }
 
 #[derive(thiserror::Error)]
@@ -608,6 +805,7 @@ pub enum ConnectionError {
     Standalone(standalone_client::StandaloneClientConnectionError),
     Cluster(redis::RedisError),
     Timeout,
+    IoError(std::io::Error),
 }
 
 impl std::fmt::Debug for ConnectionError {
@@ -615,6 +813,7 @@ impl std::fmt::Debug for ConnectionError {
         match self {
             Self::Standalone(arg0) => f.debug_tuple("Standalone").field(arg0).finish(),
             Self::Cluster(arg0) => f.debug_tuple("Cluster").field(arg0).finish(),
+            Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
         }
     }
@@ -625,6 +824,7 @@ impl std::fmt::Display for ConnectionError {
         match self {
             ConnectionError::Standalone(err) => write!(f, "{err:?}"),
             ConnectionError::Cluster(err) => write!(f, "{err}"),
+            ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
         }
     }
@@ -667,6 +867,8 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         "\nStandalone mode"
     };
     let request_timeout = format_optional_value("Request timeout", request.request_timeout);
+    let connection_timeout =
+        format_optional_value("Connection timeout", request.connection_timeout);
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
         .read_from
@@ -678,6 +880,8 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
                     ReadFrom::Primary => "Only primary",
                     ReadFrom::PreferReplica => "Prefer replica",
                     ReadFrom::AZAffinity(_) => "Prefer replica in user's availability zone",
+                    ReadFrom::AZAffinityReplicasAndPrimary(_) =>
+                        "Prefer replica and primary in user's availability zone",
                 }
             )
         })
@@ -723,7 +927,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     );
 
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
     )
 }
 
@@ -745,6 +949,27 @@ impl Client {
         let inflight_requests_allowed = Arc::new(AtomicIsize::new(
             inflight_requests_limit.try_into().unwrap(),
         ));
+
+        if let Some(endpoint_str) = &request.otel_endpoint {
+            let trace_exporter = GlideOpenTelemetryTraceExporter::from_str(endpoint_str.as_str())
+                .map_err(ConnectionError::IoError)?;
+            let config = GlideOpenTelemetryConfigBuilder::default()
+                .with_flush_interval(std::time::Duration::from_millis(
+                    request
+                        .otel_span_flush_interval_ms
+                        .unwrap_or(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
+                ))
+                .with_trace_exporter(trace_exporter)
+                .build();
+
+            let _ = GlideOpenTelemetry::initialise(config).map_err(|e| {
+                log_error(
+                    "OpenTelemetry initialization",
+                    format!("OpenTelemetry initialization failed: {}", e),
+                )
+            });
+        };
+
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             let internal_client = if request.cluster_mode_enabled {
                 let client = create_cluster_client(request, push_sender)

@@ -1,10 +1,9 @@
 import asyncio
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
+from glide import AllNodes, ClosingError
+from glide import ConnectionError as GlideConnectionError
 from glide import (
-    AllNodes,
-    ClosingError,
-    ConnectionError as GlideConnectionError,
     GlideClusterClient,
     GlideClusterClientConfiguration,
     InfoSection,
@@ -12,8 +11,8 @@ from glide import (
     LogLevel,
     NodeAddress,
     RequestError,
-    TimeoutError as GlideTimeoutError,
 )
+from glide import TimeoutError as GlideTimeoutError
 
 
 async def create_client(

@@ -22,8 +22,9 @@ yanked = "deny"
 # A list of advisory IDs to ignore. Note that ignored advisories will still
 # output a note when they are encountered.
 ignore = [
-    # Unmaintained dependency error that needs more attention due to nested dependencies
-    "RUSTSEC-2024-0370",
+    # suppress this validation until #3226 not resolved
+    # https://github.com/valkey-io/valkey-glide/issues/3226
+    "RUSTSEC-2025-0007",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -55,6 +56,7 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
     "ISC",
     "OpenSSL",
     "MPL-2.0",

@@ -159,8 +159,10 @@ class TagField(Field):
         Args:
             name (TEncodable): The name of the tag field.
             alias (Optional[TEncodable]): An alias for the field.
-            separator (Optional[TEncodable]): Specify how text in the attribute is split into individual tags. Must be a single character.
-            case_sensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default.
+            separator (Optional[TEncodable]): Specify how text in the attribute is split into individual tags. Must be a
+                single character.
+            case_sensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to
+                lowercase by default.
         """
         super().__init__(name, FieldType.TAG, alias)
         self.separator = separator
@@ -209,7 +211,8 @@ class VectorFieldAttributes(ABC):
 
         Args:
             dimensions (int): Number of dimensions in the vector. Equivalent to `DIM` on the module API.
-            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
+            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of
+                `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
             type (VectorType): Vector type. The only supported type is `FLOAT32`. Equivalent to `TYPE` on the module API.
         """
         self.dimensions = dimensions
@@ -251,9 +254,11 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
 
         Args:
             dimensions (int): Number of dimensions in the vector. Equivalent to `DIM` on the module API.
-            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
+            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of
+                `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
             type (VectorType): Vector type. The only supported type is `FLOAT32`. Equivalent to `TYPE` on the module API.
-            initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to `1024`. Equivalent to `INITIAL_CAP` on the module API.
+            initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index.
+                Defaults to `1024`. Equivalent to `INITIAL_CAP` on the module API.
         """
         super().__init__(dimensions, distance_metric, type)
         self.initial_cap = initial_cap
@@ -285,12 +290,18 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
 
         Args:
             dimensions (int): Number of dimensions in the vector. Equivalent to `DIM` on the module API.
-            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
+            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of
+                `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
             type (VectorType): Vector type. The only supported type is `FLOAT32`. Equivalent to `TYPE` on the module API.
-            initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to `1024`. Equivalent to `INITIAL_CAP` on the module API.
-            number_of_edges (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is `16`, maximum is `512`. Equivalent to `M` on the module API.
-            vectors_examined_on_construction (Optional[int]): Controls the number of vectors examined during index construction. Default value is `200`, Maximum value is `4096`. Equivalent to `EF_CONSTRUCTION` on the module API.
-            vectors_examined_on_runtime (Optional[int]): Controls the number of vectors examined during query operations. Default value is `10`, Maximum value is `4096`. Equivalent to `EF_RUNTIME` on the module API.
+            initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index.
+                Defaults to `1024`. Equivalent to `INITIAL_CAP` on the module API.
+            number_of_edges (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer.
+                Default is `16`, maximum is `512`. Equivalent to `M` on the module API.
+            vectors_examined_on_construction (Optional[int]): Controls the number of vectors examined during index
+                construction. Default value is `200`, Maximum value is `4096`. Equivalent to `EF_CONSTRUCTION` on the
+                module API.
+            vectors_examined_on_runtime (Optional[int]): Controls the number of vectors examined during query operations.
+                Default value is `10`, Maximum value is `4096`. Equivalent to `EF_RUNTIME` on the module API.
         """
         super().__init__(dimensions, distance_metric, type)
         self.initial_cap = initial_cap
@@ -337,7 +348,8 @@ class VectorField(Field):
             name (TEncodable): The name of the vector field.
             algorithm (VectorAlgorithm): The vector indexing algorithm.
             alias (Optional[TEncodable]): An alias for the field.
-            attributes (VectorFieldAttributes): Additional attributes to be passed with the vector field after the algorithm name.
+            attributes (VectorFieldAttributes): Additional attributes to be passed with the vector field after the
+                algorithm name.
         """
         super().__init__(name, FieldType.VECTOR, alias)
         self.algorithm = algorithm

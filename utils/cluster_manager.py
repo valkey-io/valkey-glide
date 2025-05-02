@@ -341,6 +341,38 @@ def start_server(
     node_folder = f"{cluster_folder}/{port}"
     Path(node_folder).mkdir(exist_ok=True)
 
+    # Determine which server to use by checking `valkey-server` and `redis-server`
+    def get_server_command() -> str:
+        for server in ["valkey-server", "redis-server"]:
+            try:
+                result = subprocess.run(
+                    ["which", server],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    return server
+            except Exception as e:
+                logging.error(f"Error checking {server}: {e}")
+        raise Exception("Neither valkey-server nor redis-server found in the system.")
+
+    def get_server_version(server_name):
+        result = subprocess.run(
+            [server_name, "--version"], capture_output=True, text=True
+        )
+        version_output = result.stdout
+        version_match = re.search(
+            r"server v=(\d+\.\d+\.\d+)", version_output, re.IGNORECASE
+        )
+        if version_match:
+            return tuple(map(int, version_match.group(1).split(".")))
+        raise Exception("Unable to determine server version.")
+
+    server_name = get_server_command()
+    server_version = get_server_version(server_name)
+    logfile = f"{node_folder}/redis.log"
+
     # Define command arguments
     logfile = f"{node_folder}/server.log"
     cmd_args = [
@@ -358,6 +390,8 @@ def start_server(
         "--protected-mode",
         "no",
     ]
+    if server_version >= (7, 0, 0):
+        cmd_args.extend(["--enable-debug-command", "yes"])
     if load_module:
         if len(load_module) == 0:
             raise ValueError(
@@ -652,13 +686,13 @@ def wait_for_all_topology_views(
             "slots",
         ]
         logging.debug(f"Executing: {cmd_args}")
-        retries = 60
+        retries = 80
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
             if output is not None and output.count(f"{server.host}") == len(servers):
                 # Server is ready, get the node's role
                 cmd_args = [
-                    "redis-cli",
+                    CLI_COMMAND,
                     "-h",
                     server.host,
                     "-p",
@@ -777,10 +811,16 @@ def is_address_already_in_use(
 ):
     logging.debug(f"checking is address already bind for: {server}")
     timeout_start = time.time()
+    address_in_use_errors = [
+        "Address already in use",
+        "Address in use",
+        "address in use",
+    ]
     while time.time() < timeout_start + timeout:
         with open(log_file, "r") as f:
             server_log = f.read()
-            if "Address already in use" in server_log:
+            # Check for known error message variants because different C libraries
+            if any(error_msg in server_log for error_msg in address_in_use_errors):
                 logging.debug(f"Address is already bind for server {server}")
                 return True
             elif "Ready" in server_log:

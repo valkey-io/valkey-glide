@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Named.named;
 
 import glide.api.BaseClient;
 import glide.api.GlideClient;
@@ -41,6 +42,18 @@ public class SharedClientTests {
 
     @Getter private static List<Arguments> clients;
 
+    @SneakyThrows
+    private static GlideClient createGlideClientWithTimeout() {
+        return GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
+    }
+
+    @SneakyThrows
+    private static GlideClusterClient createGlideClusterClientWithTimeout() {
+        return GlideClusterClient.createClient(
+                        commonClusterClientConfig().requestTimeout(10000).build())
+                .get();
+    }
+
     @BeforeAll
     @SneakyThrows
     public static void init() {
@@ -49,6 +62,13 @@ public class SharedClientTests {
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get();
         clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
+    }
+
+    @SneakyThrows
+    public static Stream<Arguments> getTimeoutClients() {
+        return Stream.of(
+                Arguments.of(named("GlideClient", createGlideClientWithTimeout())),
+                Arguments.of(named("GlideClusterClient", createGlideClusterClientWithTimeout())));
     }
 
     @SneakyThrows
@@ -69,7 +89,7 @@ public class SharedClientTests {
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
+    @MethodSource("getTimeoutClients")
     public void send_and_receive_large_values(BaseClient client) {
         int length = 1 << 25; // 33mb
         String key = "0".repeat(length);
@@ -79,6 +99,8 @@ public class SharedClientTests {
         assertEquals(length, value.length());
         assertEquals(OK, client.set(key, value).get());
         assertEquals(value, client.get(key).get());
+
+        client.close();
     }
 
     @SneakyThrows
@@ -94,12 +116,13 @@ public class SharedClientTests {
 
     private static Stream<Arguments> clientAndDataSize() {
         return Stream.of(
-                Arguments.of(standaloneClient, 100),
-                Arguments.of(standaloneClient, 1 << 16),
-                Arguments.of(clusterClient, 100),
-                Arguments.of(clusterClient, 1 << 16));
+                Arguments.of(createGlideClientWithTimeout(), 100),
+                Arguments.of(createGlideClientWithTimeout(), 1 << 16),
+                Arguments.of(createGlideClusterClientWithTimeout(), 100),
+                Arguments.of(createGlideClusterClientWithTimeout(), 1 << 16));
     }
 
+    @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("clientAndDataSize")
     public void client_can_handle_concurrent_workload(BaseClient client, int valueSize) {
@@ -126,6 +149,7 @@ public class SharedClientTests {
         CompletableFuture.allOf(futures).join();
 
         executorService.shutdown();
+        client.close();
     }
 
     private static Stream<Arguments> inflightRequestsLimitSizeAndClusterMode() {
@@ -178,6 +202,24 @@ public class SharedClientTests {
             assertTrue(e.getCause().getMessage().contains("maximum inflight requests"));
         }
 
+        BaseClient cleanupClient;
+        if (clusterMode) {
+            cleanupClient =
+                    GlideClient.createClient(
+                                    commonClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
+                            .get();
+        } else {
+            cleanupClient =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
+                            .get();
+        }
+
+        for (int i = 0; i < inflightRequestsLimit; i++) {
+            cleanupClient.lpush(keyName, new String[] {"val"}).get();
+        }
+
+        cleanupClient.close();
         testClient.close();
     }
 }

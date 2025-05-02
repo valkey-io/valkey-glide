@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use glide_core::errors::error_message;
 use glide_core::start_socket_listener as start_socket_listener_core;
-
 // Protocol constants to expose to Java.
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::HASH as TYPE_HASH;
@@ -134,6 +134,15 @@ fn resp_value_to_java<'local>(
             )?;
 
             Ok(hash_map)
+        }
+        Value::ServerError(server_error) => {
+            let err_msg = error_message(&server_error.into());
+            let java_exception = env.new_object(
+                "glide/api/models/exceptions/RequestException",
+                "(Ljava/lang/String;)V",
+                &[(&env.new_string(err_msg)?).into()],
+            )?;
+            Ok(java_exception)
         }
     }
 }

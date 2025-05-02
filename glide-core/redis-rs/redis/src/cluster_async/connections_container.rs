@@ -5,10 +5,16 @@ use crate::cluster_topology::TopologyHash;
 use dashmap::DashMap;
 use futures::FutureExt;
 use rand::seq::IteratorRandom;
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use telemetrylib::Telemetry;
+
+use tracing::debug;
+
+use tokio::sync::Notify;
+use tokio::task::JoinHandle;
 
 /// Count the number of connections in a connections_map object
 macro_rules! count_connections {
@@ -134,11 +140,162 @@ impl<Connection> std::fmt::Display for ConnectionsMap<Connection> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct RefreshTaskNotifier {
+    notify: Arc<Notify>,
+}
+
+impl RefreshTaskNotifier {
+    pub fn new() -> Self {
+        RefreshTaskNotifier {
+            notify: Arc::new(Notify::new()),
+        }
+    }
+
+    pub fn get_notifier(&self) -> Arc<Notify> {
+        self.notify.clone()
+    }
+
+    pub fn notify(&self) {
+        self.notify.notify_waiters();
+    }
+}
+
+// Enum representing the task status during a connection refresh.
+//
+// - **Reconnecting**:
+//   Indicates that a refresh task is in progress. This status includes a dedicated
+//   notifier (`RefreshTaskNotifier`) so that other tasks can wait for the connection
+//   to be refreshed before proceeding.
+//
+// - **ReconnectingTooLong**:
+//   Represents a situation where a refresh task has taken too long to complete.
+//   The status transitions from `Reconnecting` to `ReconnectingTooLong` under specific
+//   conditions (e.g., after one attempt of reconnecting inside the task or after a timeout).
+//
+// When transitioning from `Reconnecting` to `ReconnectingTooLong`, the associated
+// notifier is triggered to unblock all awaiting tasks.
+#[derive(Clone, Debug)]
+pub(crate) enum RefreshTaskStatus {
+    // The task is actively reconnecting. Includes a notifier for tasks to wait on.
+    Reconnecting(RefreshTaskNotifier),
+    // The task has exceeded the allowed reconnection time.
+    // TODO - To remove it when adding exponential backoff reconnection logic.
+    #[allow(dead_code)]
+    ReconnectingTooLong,
+}
+
+impl Drop for RefreshTaskStatus {
+    fn drop(&mut self) {
+        if let RefreshTaskStatus::Reconnecting(notifier) = self {
+            debug!("RefreshTaskStatus: Dropped while in Reconnecting status. Notifying tasks.");
+            notifier.notify();
+        }
+    }
+}
+
+impl RefreshTaskStatus {
+    // Creates a new `RefreshTaskStatus` in the `Reconnecting` state with the provided notifier.
+    pub fn with_notifier(notifier: RefreshTaskNotifier) -> Self {
+        debug!("RefreshTaskStatus: Initialized in Reconnecting status with a provided notifier.");
+        RefreshTaskStatus::Reconnecting(notifier)
+    }
+
+    // Transitions the current status from `Reconnecting` to `ReconnectingTooLong` in place.
+    //
+    // If the current status is `Reconnecting`, this method notifies all waiting tasks
+    // using the embedded `RefreshTaskNotifier` and updates the status to `ReconnectingTooLong`.
+    //
+    // If the status is already `ReconnectingTooLong`, this method does nothing.
+    // TODO - To remove it when adding exponential backoff reconnection logic.
+    #[allow(dead_code)]
+    pub fn flip_status_to_too_long(&mut self) {
+        if let RefreshTaskStatus::Reconnecting(notifier) = self {
+            debug!(
+                "RefreshTaskStatus: Notifying tasks before transitioning to ReconnectingTooLong."
+            );
+            notifier.notify();
+            *self = RefreshTaskStatus::ReconnectingTooLong;
+        } else {
+            debug!("RefreshTaskStatus: Already in ReconnectingTooLong status.");
+        }
+    }
+}
+
+// Combines a background reconnection task's handle with its current status.
+//
+// This struct is used to track a Tokio task responsible for performing background reconnection.
+// It holds:
+// - `handle`: A `JoinHandle<()>` for the asynchronous reconnection task running in the background.
+// - `status`: The current state of the refresh task.
+#[derive(Debug)]
+pub(crate) struct RefreshTaskState {
+    // Handle to the background reconnection task.
+    pub handle: JoinHandle<()>,
+    // Current status of the refresh task.
+    pub status: RefreshTaskStatus,
+}
+
+impl RefreshTaskState {
+    // Creates a new `RefreshTaskState` with a `Reconnecting` status.
+    pub fn new(handle: JoinHandle<()>, notifier: RefreshTaskNotifier) -> Self {
+        debug!("RefreshTaskState: Creating a new instance with a Reconnecting state.");
+        RefreshTaskState {
+            handle,
+            status: RefreshTaskStatus::with_notifier(notifier),
+        }
+    }
+}
+
+impl Drop for RefreshTaskState {
+    fn drop(&mut self) {
+        if let RefreshTaskStatus::Reconnecting(ref notifier) = self.status {
+            debug!("RefreshTaskState: Dropped while in Reconnecting status. Notifying tasks.");
+            notifier.notify();
+        } else {
+            debug!("RefreshTaskState: Dropped while in ReconnectingTooLong status.");
+        }
+
+        // Abort the task handle if it's not yet finished
+        if !self.handle.is_finished() {
+            debug!("RefreshTaskState: Aborting unfinished task.");
+            self.handle.abort();
+        } else {
+            debug!("RefreshTaskState: Task already finished, no abort necessary.");
+        }
+    }
+}
+
+// This struct is used to track the status of each address refresh state
+// TODO move this struct logic into the connection_map itself
+#[derive(Default)]
+pub(crate) struct RefreshConnectionStates {
+    // Follow the refresh ops on the connections
+    pub(crate) refresh_address_in_progress: HashMap<String, RefreshTaskState>,
+}
+
+impl RefreshConnectionStates {
+    // Clears all ongoing refresh connection tasks and resets associated state tracking.
+    //
+    // - This method removes all entries in the `refresh_address_in_progress` map.
+    // - The `Drop` trait is responsible for notifying the associated notifiers and aborting any unfinished refresh tasks.
+    pub(crate) fn clear_refresh_state(&mut self) {
+        debug!(
+            "clear_refresh_state: removing all in-progress refresh connection tasks for addresses: {:?}",
+            self.refresh_address_in_progress.keys()
+        );
+
+        // Clear the entire map; Drop handles the cleanup
+        self.refresh_address_in_progress.clear();
+    }
+}
+
 pub(crate) struct ConnectionsContainer<Connection> {
     connection_map: DashMap<String, ClusterNode<Connection>>,
     pub(crate) slot_map: SlotMap,
     read_from_replica_strategy: ReadFromReplicaStrategy,
     topology_hash: TopologyHash,
+    pub(crate) refresh_conn_state: RefreshConnectionStates,
 }
 
 impl<Connection> Drop for ConnectionsContainer<Connection> {
@@ -155,6 +312,7 @@ impl<Connection> Default for ConnectionsContainer<Connection> {
             slot_map: Default::default(),
             read_from_replica_strategy: ReadFromReplicaStrategy::AlwaysFromPrimary,
             topology_hash: 0,
+            refresh_conn_state: Default::default(),
         }
     }
 }
@@ -182,6 +340,7 @@ where
             slot_map,
             read_from_replica_strategy,
             topology_hash,
+            refresh_conn_state: Default::default(),
         }
     }
 
@@ -254,16 +413,35 @@ where
         slot_map_value: &SlotMapValue,
         client_az: String,
     ) -> Option<ConnectionAndAddress<Connection>> {
+        self.get_connection_by_az_affinity_strategy(slot_map_value, client_az, false)
+    }
+
+    /// Returns the node's connection in the same availability zone as `client_az`,
+    /// checking replicas first, then primary, and falling back to any available node.
+    pub(crate) fn round_robin_read_from_replica_with_az_awareness_replicas_and_primary(
+        &self,
+        slot_map_value: &SlotMapValue,
+        client_az: String,
+    ) -> Option<ConnectionAndAddress<Connection>> {
+        self.get_connection_by_az_affinity_strategy(slot_map_value, client_az, true)
+    }
+
+    fn get_connection_by_az_affinity_strategy(
+        &self,
+        slot_map_value: &SlotMapValue,
+        client_az: String,
+        check_primary: bool, // Strategy flag
+    ) -> Option<ConnectionAndAddress<Connection>> {
         let addrs = &slot_map_value.addrs;
         let initial_index = slot_map_value.last_used_replica.load(Ordering::Relaxed);
         let mut retries = 0usize;
 
+        // Step 1: Try to find a replica in the same AZ
         loop {
             retries = retries.saturating_add(1);
             // Looped through all replicas; no connected replica found in the same availability zone.
             if retries > addrs.replicas().len() {
-                // Attempt a fallback to any available replica or primary if needed.
-                return self.round_robin_read_from_replica(slot_map_value);
+                break;
             }
 
             // Calculate index based on initial index and check count.
@@ -286,6 +464,20 @@ where
                 }
             }
         }
+
+        // Step 2: Check if primary is in the same AZ
+        if check_primary {
+            if let Some((address, connection_details)) =
+                self.connection_details_for_address(addrs.primary().as_str())
+            {
+                if self.az_for_address(&address) == Some(client_az) {
+                    return Some((address, connection_details.conn));
+                }
+            }
+        }
+
+        // Step 3: Fall back to any available replica using round-robin or primary if needed
+        self.round_robin_read_from_replica(slot_map_value)
     }
 
     fn lookup_route(&self, route: &Route) -> Option<ConnectionAndAddress<Connection>> {
@@ -311,11 +503,21 @@ where
                         slot_map_value,
                         az.to_string(),
                     ),
+                ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(az) => self
+                    .round_robin_read_from_replica_with_az_awareness_replicas_and_primary(
+                        slot_map_value,
+                        az.to_string(),
+                    ),
             },
             // when the user strategy per command is replica_preffered
             SlotAddr::ReplicaRequired => match &self.read_from_replica_strategy {
                 ReadFromReplicaStrategy::AZAffinity(az) => self
                     .round_robin_read_from_replica_with_az_awareness(
+                        slot_map_value,
+                        az.to_string(),
+                    ),
+                ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(az) => self
+                    .round_robin_read_from_replica_with_az_awareness_replicas_and_primary(
                         slot_map_value,
                         az.to_string(),
                     ),
@@ -335,6 +537,51 @@ where
                 None
             }
         })
+    }
+
+    // Fetches the master address for a given route.
+    // Returns `None` if no master address can be resolved.
+    pub(crate) fn address_for_route(&self, route: &Route) -> Option<String> {
+        let slot_map_value = self.slot_map.slot_value_for_route(route)?;
+        Some(slot_map_value.addrs.primary().clone().to_string())
+    }
+
+    // Retrieves the notifier for a reconnect task associated with a given route.
+    // Returns `Some(Arc<Notify>)` if a reconnect task is in the `Reconnecting` state.
+    // Returns `None` if:
+    // - There is no refresh task for the route's address.
+    // - The reconnect task is in `ReconnectingTooLong` state, with a debug log for clarity.
+    pub(crate) fn notifier_for_route(&self, route: &Route) -> Option<Arc<Notify>> {
+        let address = self.address_for_route(route)?;
+
+        if let Some(task_state) = self
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .get(&address)
+        {
+            match &task_state.status {
+                RefreshTaskStatus::Reconnecting(notifier) => {
+                    debug!(
+                        "notifier_for_route: Found reconnect notifier for address: {}",
+                        address
+                    );
+                    Some(notifier.get_notifier())
+                }
+                RefreshTaskStatus::ReconnectingTooLong => {
+                    debug!(
+                        "notifier_for_route: Address {} is in ReconnectingTooLong state. No notifier will be returned.",
+                        address
+                    );
+                    None
+                }
+            }
+        } else {
+            debug!(
+                "notifier_for_route: No refresh task exists for address: {}. No notifier will be returned.",
+                address
+            );
+            None
+        }
     }
 
     pub(crate) fn all_node_connections(
@@ -510,6 +757,7 @@ mod tests {
 
     fn create_container_with_az_strategy(
         use_management_connections: bool,
+        strategy: Option<ReadFromReplicaStrategy>,
     ) -> ConnectionsContainer<usize> {
         let slot_map = SlotMap::new(
             vec![
@@ -562,16 +810,14 @@ mod tests {
             "replica3-3".into(),
             create_cluster_node(33, use_management_connections, Some("use-1a".to_string())),
         );
-        connection_map.insert(
-            "replica3-3".into(),
-            create_cluster_node(33, use_management_connections, Some("use-1a".to_string())),
-        );
 
         ConnectionsContainer {
             slot_map,
             connection_map,
-            read_from_replica_strategy: ReadFromReplicaStrategy::AZAffinity("use-1a".to_string()),
+            read_from_replica_strategy: strategy
+                .unwrap_or(ReadFromReplicaStrategy::AZAffinity("use-1a".to_string())),
             topology_hash: 0,
+            refresh_conn_state: Default::default(),
         }
     }
 
@@ -628,6 +874,7 @@ mod tests {
             connection_map,
             read_from_replica_strategy: strategy,
             topology_hash: 0,
+            refresh_conn_state: Default::default(),
         }
     }
 
@@ -801,7 +1048,10 @@ mod tests {
 
     #[test]
     fn get_connection_for_az_affinity_route() {
-        let container = create_container_with_az_strategy(false);
+        let container = create_container_with_az_strategy(
+            false,
+            Some(ReadFromReplicaStrategy::AZAffinity("use-1a".to_string())),
+        );
 
         // slot number is not exits
         assert!(container
@@ -864,7 +1114,10 @@ mod tests {
 
     #[test]
     fn get_connection_for_az_affinity_route_round_robin() {
-        let container = create_container_with_az_strategy(false);
+        let container = create_container_with_az_strategy(
+            false,
+            Some(ReadFromReplicaStrategy::AZAffinity("use-1a".to_string())),
+        );
 
         let mut addresses = vec![
             container
@@ -886,6 +1139,133 @@ mod tests {
         ];
         addresses.sort();
         assert_eq!(addresses, vec![31, 31, 33, 33]);
+    }
+
+    #[test]
+    fn get_connection_for_az_affinity_replicas_and_primary_route() {
+        // Create a container with AZAffinityReplicasAndPrimary strategy
+        let container: ConnectionsContainer<usize> = create_container_with_az_strategy(
+            false,
+            Some(ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(
+                "use-1a".to_string(),
+            )),
+        );
+        // Modify the AZ of primary1
+        container
+            .connection_map
+            .get_mut("primary1")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1b".to_string());
+
+        // Modify the AZ of primary2
+        container
+            .connection_map
+            .get_mut("primary2")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1c".to_string());
+
+        // Modify the AZ of primary3
+        container
+            .connection_map
+            .get_mut("primary3")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1b".to_string());
+
+        // Modify the AZ of replica2-1
+        container
+            .connection_map
+            .get_mut("replica2-1")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1c".to_string());
+
+        // Slot number does not exist (slot 1001 wasn't assigned to any primary)
+        assert!(container
+            .connection_for_route(&Route::new(1001, SlotAddr::ReplicaOptional))
+            .is_none());
+
+        // Test getting replica in client's AZ for slot 2001
+        assert!(one_of(
+            container.connection_for_route(&Route::new(2001, SlotAddr::ReplicaRequired)),
+            &[31, 33],
+        ));
+
+        // Remove one replica in the client's AZ
+        remove_nodes(&container, &["replica3-3"]);
+
+        // Should still get the remaining replica in the client's AZ
+        assert_eq!(
+            31,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaRequired))
+                .unwrap()
+                .1
+        );
+
+        // Remove all replicas in the client's AZ
+        remove_nodes(&container, &["replica3-1"]);
+
+        // Test falling back to replica in different AZ
+        assert_eq!(
+            32,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaRequired))
+                .unwrap()
+                .1
+        );
+
+        // Set the primary to be in the client's AZ
+        container
+            .connection_map
+            .get_mut("primary3")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1a".to_string());
+
+        // Remove the last replica
+        remove_nodes(&container, &["replica3-2"]);
+
+        // Should now fall back to the primary in the client's AZ
+        assert_eq!(
+            3,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::Master))
+                .unwrap()
+                .1
+        );
+
+        // Move the primary out of the client's AZ
+        container
+            .connection_map
+            .get_mut("primary3")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1b".to_string());
+
+        // Test falling back to replica under different primary
+        assert_eq!(
+            21,
+            container
+                .connection_for_route(&Route::new(1002, SlotAddr::ReplicaRequired))
+                .unwrap()
+                .1
+        );
+
+        // Remove all replicas
+        remove_nodes(&container, &["replica2-1"]);
+
+        // Test falling back to available primaries with their respective slots
+        assert!(one_of(
+            container.connection_for_route(&Route::new(1002, SlotAddr::Master)),
+            &[2],
+        ));
+        assert!(one_of(
+            container.connection_for_route(&Route::new(500, SlotAddr::Master)),
+            &[1],
+        ));
     }
 
     #[test]

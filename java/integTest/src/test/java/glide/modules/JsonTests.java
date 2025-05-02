@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.modules;
 
+import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -16,12 +17,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.google.gson.JsonParser;
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.Json;
+import glide.api.commands.servermodules.JsonBatch;
+import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -29,6 +33,8 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class JsonTests {
 
@@ -1224,5 +1230,199 @@ public class JsonTests {
         assertArrayEquals(expectedResult, actualResult);
         // Check for all types in the JSON document using legacy path
         assertEquals("string", Json.type(client, key, "[*]").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void batch_tests(boolean isAtomic) {
+
+        ClusterBatch batch = new ClusterBatch(true);
+        ArrayList<Object> expectedResult = new ArrayList<>();
+
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String key4 = "{key}-4" + UUID.randomUUID();
+        String key5 = "{key}-5" + UUID.randomUUID();
+        String key6 = "{key}-6" + UUID.randomUUID();
+
+        JsonBatch.set(batch, key1, "$", "{\"a\": \"one\", \"b\": [\"one\", \"two\"]}");
+        expectedResult.add(OK);
+
+        JsonBatch.set(
+                batch,
+                key1,
+                "$",
+                "{\"a\": \"one\", \"b\": [\"one\", \"two\"]}",
+                ConditionalChange.ONLY_IF_DOES_NOT_EXIST);
+        expectedResult.add(null);
+
+        JsonBatch.get(batch, key1);
+        expectedResult.add("{\"a\":\"one\",\"b\":[\"one\",\"two\"]}");
+
+        JsonBatch.get(batch, key1, new String[] {"$.a", "$.b"});
+        expectedResult.add("{\"$.a\":[\"one\"],\"$.b\":[[\"one\",\"two\"]]}");
+
+        JsonBatch.get(batch, key1, JsonGetOptions.builder().space(" ").build());
+        expectedResult.add("{\"a\": \"one\",\"b\": [\"one\",\"two\"]}");
+
+        JsonBatch.get(
+                batch, key1, new String[] {"$.a", "$.b"}, JsonGetOptions.builder().space(" ").build());
+        expectedResult.add("{\"$.a\": [\"one\"],\"$.b\": [[\"one\",\"two\"]]}");
+
+        JsonBatch.arrappend(batch, key1, "$.b", new String[] {"\"3\"", "\"4\"", "\"5\"", "\"6\""});
+        expectedResult.add(new Object[] {6L});
+
+        JsonBatch.arrindex(batch, key1, "$..b", "\"one\"");
+        expectedResult.add(new Object[] {0L});
+
+        JsonBatch.arrindex(batch, key1, "$..b", "\"one\"", new JsonArrindexOptions(0L));
+        expectedResult.add(new Object[] {0L});
+
+        JsonBatch.arrinsert(batch, key1, "$..b", 4, new String[] {"\"7\""});
+        expectedResult.add(new Object[] {7L});
+
+        JsonBatch.arrlen(batch, key1, "$..b");
+        expectedResult.add(new Object[] {7L});
+
+        JsonBatch.arrpop(batch, key1, "$..b", 6L);
+        expectedResult.add(new Object[] {"\"6\""});
+
+        JsonBatch.arrpop(batch, key1, "$..b");
+        expectedResult.add(new Object[] {"\"5\""});
+
+        JsonBatch.arrtrim(batch, key1, "$..b", 2, 3);
+        expectedResult.add(new Object[] {2L});
+
+        JsonBatch.objlen(batch, key1);
+        expectedResult.add(2L);
+
+        JsonBatch.objlen(batch, key1, "$..b");
+        expectedResult.add(new Object[] {null});
+
+        JsonBatch.objkeys(batch, key1, "..");
+        expectedResult.add(new Object[] {"a", "b"});
+
+        JsonBatch.objkeys(batch, key1);
+        expectedResult.add(new Object[] {"a", "b"});
+
+        JsonBatch.del(batch, key1);
+        expectedResult.add(1L);
+
+        JsonBatch.set(
+                batch,
+                key1,
+                "$",
+                "{\"c\": [1, 2], \"d\": true, \"e\": [\"hello\", \"clouds\"], \"f\": {\"a\": \"hello\"}}");
+        expectedResult.add(OK);
+
+        JsonBatch.del(batch, key1, "$");
+        expectedResult.add(1L);
+
+        JsonBatch.set(
+                batch,
+                key1,
+                "$",
+                "{\"c\": [1, 2], \"d\": true, \"e\": [\"hello\", \"clouds\"], \"f\": {\"a\": \"hello\"}}");
+        expectedResult.add(OK);
+
+        JsonBatch.numincrby(batch, key1, "$.c[*]", 10.0);
+        expectedResult.add("[11,12]");
+
+        JsonBatch.nummultby(batch, key1, "$.c[*]", 10.0);
+        expectedResult.add("[110,120]");
+
+        JsonBatch.strappend(batch, key1, "\"bar\"", "$..a");
+        expectedResult.add(new Object[] {8L});
+
+        JsonBatch.strlen(batch, key1, "$..a");
+        expectedResult.add(new Object[] {8L});
+
+        JsonBatch.type(batch, key1, "$..a");
+        expectedResult.add(new Object[] {"string"});
+
+        JsonBatch.toggle(batch, key1, "..d");
+        expectedResult.add(false);
+
+        JsonBatch.resp(batch, key1, "$..a");
+        expectedResult.add(new Object[] {"hellobar"});
+
+        JsonBatch.del(batch, key1, "$..a");
+        expectedResult.add(1L);
+
+        // then delete the entire key
+        JsonBatch.del(batch, key1, "$");
+        expectedResult.add(1L);
+
+        // 2nd key
+        JsonBatch.set(batch, key2, "$", "[1, 2, true, null, \"tree\", \"tree2\" ]");
+        expectedResult.add(OK);
+
+        JsonBatch.arrlen(batch, key2);
+        expectedResult.add(6L);
+
+        JsonBatch.arrpop(batch, key2);
+        expectedResult.add("\"tree2\"");
+
+        JsonBatch.debugFields(batch, key2);
+        expectedResult.add(5L);
+
+        JsonBatch.debugFields(batch, key2, "$");
+        expectedResult.add(new Object[] {5L});
+
+        // 3rd key
+        JsonBatch.set(batch, key3, "$", "\"abc\"");
+        expectedResult.add(OK);
+
+        JsonBatch.strappend(batch, key3, "\"bar\"");
+        expectedResult.add(6L);
+
+        JsonBatch.strlen(batch, key3);
+        expectedResult.add(6L);
+
+        JsonBatch.type(batch, key3);
+        expectedResult.add("string");
+
+        JsonBatch.resp(batch, key3);
+        expectedResult.add("abcbar");
+
+        // 4th key
+        JsonBatch.set(batch, key4, "$", "true");
+        expectedResult.add(OK);
+
+        JsonBatch.toggle(batch, key4);
+        expectedResult.add(false);
+
+        JsonBatch.debugMemory(batch, key4);
+        expectedResult.add(24L);
+
+        JsonBatch.debugMemory(batch, key4, "$");
+        expectedResult.add(new Object[] {16L});
+
+        JsonBatch.clear(batch, key2, "$.a");
+        expectedResult.add(0L);
+
+        JsonBatch.clear(batch, key2);
+        expectedResult.add(1L);
+
+        JsonBatch.forget(batch, key3);
+        expectedResult.add(1L);
+
+        JsonBatch.forget(batch, key4, "$");
+        expectedResult.add(1L);
+
+        // mget, key5 and key6
+        JsonBatch.set(batch, key5, "$", "{\"a\": 1, \"b\": [\"one\", \"two\"]}");
+        expectedResult.add(OK);
+
+        JsonBatch.set(batch, key6, "$", "{\"a\": 1, \"c\": false}");
+        expectedResult.add(OK);
+
+        JsonBatch.mget(batch, new String[] {key5, key6}, "$.c");
+        expectedResult.add(new String[] {"[]", "[false]"});
+
+        Object[] results = client.exec(batch).get();
+        assertDeepEquals(expectedResult.toArray(), results);
     }
 }

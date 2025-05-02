@@ -4,7 +4,9 @@
 
 import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
+import { Writer } from "protobufjs";
 import {
+    AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
     Decoder,
@@ -16,6 +18,7 @@ import {
     convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
+    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -23,7 +26,6 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
-    ClusterScanOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -190,7 +192,25 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
      * Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
      */
     pubsubSubscriptions?: GlideClusterClientConfiguration.PubSubSubscriptions;
+    /**
+     * Advanced configuration settings for the client.
+     */
+    advancedConfiguration?: AdvancedGlideClusterClientConfiguration;
 };
+
+/**
+ * Represents advanced configuration settings for creating a {@link GlideClusterClient | GlideClusterClient} used in {@link GlideClusterClientConfiguration | GlideClusterClientConfiguration}.
+ *
+ *
+ * @example
+ * ```typescript
+ * const config: AdvancedGlideClusterClientConfiguration = {
+ *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ * };
+ * ```
+ */
+export type AdvancedGlideClusterClientConfiguration =
+    AdvancedBaseClientConfiguration & {};
 
 /**
  * If the command's routing is to one node we will get T as a response type,
@@ -474,8 +494,9 @@ export type SingleNodeRoute =
 
 /**
  * Client used for connection to cluster servers.
+ * Use {@link createClient} to request a client.
  *
- * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster|Valkey Glide Wiki}.
+ * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster | Valkey Glide Wiki}.
  */
 export class GlideClusterClient extends BaseClient {
     /**
@@ -504,19 +525,30 @@ export class GlideClusterClient extends BaseClient {
         }
 
         this.configurePubsub(options, configuration);
+
+        if (options.advancedConfiguration) {
+            this.configureAdvancedConfigurationBase(
+                options.advancedConfiguration,
+                configuration,
+            );
+        }
+
         return configuration;
     }
+
     /**
-     * Creates a new `GlideClusterClient` instance and establishes connections to a Valkey GLIDE Cluster.
+     * Creates a new `GlideClusterClient` instance and establishes connections to a Valkey Cluster.
      *
      * @param options - The configuration options for the client, including cluster addresses, authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
      * @returns A promise that resolves to a connected `GlideClusterClient` instance.
      *
      * @remarks
-     * Use this static method to create and connect a `GlideClusterClient` to a Valkey GLIDE Cluster. The client will automatically handle connection establishment, including cluster topology discovery and handling of authentication and TLS configurations.
+     * Use this static method to create and connect a `GlideClusterClient` to a Valkey Cluster.
+     * The client will automatically handle connection establishment, including cluster topology discovery and handling of authentication and TLS configurations.
      *
-     * ### Example - Connecting to a Cluster
+     * @example
      * ```typescript
+     * // Connecting to a Cluster
      * import { GlideClusterClient, GlideClusterClientConfiguration } from '@valkey/valkey-glide';
      *
      * const client = await GlideClusterClient.createClient({
@@ -585,7 +617,10 @@ export class GlideClusterClient extends BaseClient {
         command.cursor = cursor;
 
         if (options?.match) {
-            command.matchPattern = Buffer.from(options.match);
+            command.matchPattern =
+                typeof options.match === "string"
+                    ? Buffer.from(options.match)
+                    : options.match;
         }
 
         if (options?.count) {
@@ -607,11 +642,41 @@ export class GlideClusterClient extends BaseClient {
         cursor: ClusterScanCursor,
         options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
+        this.ensureClientIsOpen();
         // separate decoder option from scan options
-        const { decoder, ...scanOptions } = options || {};
+        const { decoder = this.defaultDecoder, ...scanOptions } = options || {};
         const cursorId = cursor.getCursor();
         const command = this.scanOptionsToProto(cursorId, scanOptions);
-        return this.createWritePromise(command, { decoder });
+
+        return new Promise((resolve, reject) => {
+            const callbackIdx = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIdx] = [
+                (resolveAns: [ClusterScanCursor, GlideString[]]) => {
+                    try {
+                        resolve([
+                            new ClusterScanCursor(resolveAns[0].toString()),
+                            resolveAns[1],
+                        ]);
+                    } catch (error) {
+                        reject(error);
+                    }
+                },
+                reject,
+                decoder,
+            ];
+            this.writeOrBufferRequest(
+                new command_request.CommandRequest({
+                    callbackIdx,
+                    clusterScan: command,
+                }),
+                (message: command_request.CommandRequest, writer: Writer) => {
+                    command_request.CommandRequest.encodeDelimited(
+                        message,
+                        writer,
+                    );
+                },
+            );
+        });
     }
 
     /**
@@ -916,6 +981,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Reads the configuration parameters of the running server.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
@@ -954,6 +1020,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Sets configuration parameters to the specified values.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * The command will be routed to all nodes, unless `route` is provided.
      *
@@ -1215,7 +1282,7 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * const code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * const result = await client.functionLoad(code, true, 'allNodes');
+     * const result = await client.functionLoad(code, { replace: true, route: 'allNodes' });
      * console.log(result); // Output: 'mylib'
      * ```
      */
@@ -1314,7 +1381,7 @@ export class GlideClusterClient extends BaseClient {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
-     * The command will be routed to all primary nodes, unless `route` is provided.
+     * The command will be routed to all nodes, unless `route` is provided.
      *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
@@ -1733,12 +1800,44 @@ export class GlideClusterClient extends BaseClient {
         const scriptInvocation = command_request.ScriptInvocation.create({
             hash: script.getHash(),
             keys: [],
-            args: options?.args?.map(Buffer.from),
+            args: options?.args?.map((arg) =>
+                typeof arg === "string" ? Buffer.from(arg) : arg,
+            ),
         });
-        return this.createWritePromise<ClusterGlideRecord<GlideReturnType>>(
-            scriptInvocation,
-            options,
-        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+        return this.createScriptInvocationWithRoutePromise<
+            ClusterGlideRecord<GlideReturnType>
+        >(scriptInvocation, options).then((res) =>
+            convertClusterGlideRecord(res, true, options?.route),
+        );
+    }
+
+    private async createScriptInvocationWithRoutePromise<T = GlideString>(
+        command: command_request.ScriptInvocation,
+        options?: { args?: GlideString[] } & DecoderOption & RouteOption,
+    ) {
+        this.ensureClientIsOpen();
+
+        return new Promise<T>((resolve, reject) => {
+            const callbackIdx = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIdx] = [
+                resolve,
+                reject,
+                options?.decoder,
+            ];
+            this.writeOrBufferRequest(
+                new command_request.CommandRequest({
+                    callbackIdx,
+                    scriptInvocation: command,
+                    route: this.toProtobufRoute(options?.route),
+                }),
+                (message: command_request.CommandRequest, writer: Writer) => {
+                    command_request.CommandRequest.encodeDelimited(
+                        message,
+                        writer,
+                    );
+                },
+            );
+        });
     }
 
     /**

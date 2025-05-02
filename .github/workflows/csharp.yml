@@ -75,6 +75,7 @@ jobs:
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
 
     test-csharp:
+        name: CSharp Tests - ${{ matrix.dotnet }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
         timeout-minutes: 35
         strategy:
@@ -88,10 +89,20 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
+
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
-                  dotnet-version: ${{ matrix.dotnet }}
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
+                      9
+                      ${{ matrix.dotnet }}
+              env:
+                  DOTNET_INSTALL_DIR: ~/.dotnet
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -101,11 +112,20 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - uses: actions/cache@v4
+              with:
+                  path: csharp/rust/target
+                  key: ${{ matrix.host.TARGET }}-csharp
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
+
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
-              run: dotnet test --framework net${{ matrix.dotnet }} "-l:html;LogFileName=TestReport.html" --results-directory . -warnaserror
+              run: dotnet test --configuration Debug --framework net${{ matrix.dotnet }} --logger "html;LogFileName=TestReport.html" --logger "console;verbosity=detailed" --results-directory .
 
             - uses: ./.github/workflows/test-benchmark
+              if: ${{ contains(matrix.host.RUNNER, 'ubuntu') }}
               with:
                   language-flag: -csharp -dotnet-framework net${{ matrix.dotnet }}
 
@@ -160,13 +180,14 @@ jobs:
                   echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
-                  dotnet-version: ${{ matrix.dotnet }}
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
+                      9
+                      ${{ matrix.dotnet }}
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -175,6 +196,12 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: csharp/rust/target
+                  key: ${{ matrix.host.IMAGE }}-csharp
+                  restore-keys: ${{ matrix.host.IMAGE }}
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
@@ -200,9 +227,19 @@ jobs:
             - name: lint rust
               uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: csharp/lib
+                  cargo-toml-folder: csharp/rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Set up dotnet ${{ matrix.dotnet }}
+              uses: actions/setup-dotnet@v4
+              with:
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
+                      9
+                      ${{ matrix.dotnet }}
 
             - name: Format
               working-directory: csharp
-              run: dotnet format --verify-no-changes --verbosity diagnostic
+              run: |
+                  dotnet format --verify-no-changes --verbosity diagnostic
+                  dotnet build --configuration Lint --framework net6.0

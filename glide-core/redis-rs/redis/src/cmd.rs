@@ -6,11 +6,12 @@ use futures_util::{
 };
 #[cfg(feature = "aio")]
 use std::pin::Pin;
-use std::{fmt, io};
+use std::{borrow::Borrow, fmt, io};
 
 use crate::connection::ConnectionLike;
 use crate::pipeline::Pipeline;
 use crate::types::{from_owned_redis_value, FromRedisValue, RedisResult, RedisWrite, ToRedisArgs};
+use telemetrylib::GlideSpan;
 
 /// An argument to a redis command
 #[derive(Clone)]
@@ -30,6 +31,8 @@ pub struct Cmd {
     cursor: Option<u64>,
     // If it's true command's response won't be read from socket. Useful for Pub/Sub.
     no_response: bool,
+    /// The span associated with this command
+    span: Option<GlideSpan>,
 }
 
 /// Represents a redis iterator.
@@ -214,8 +217,9 @@ where
     total_len
 }
 
-pub(crate) fn cmd_len(cmd: &Cmd) -> usize {
-    args_len(cmd.args_iter(), cmd.cursor.unwrap_or(0))
+pub(crate) fn cmd_len(cmd: &impl Borrow<Cmd>) -> usize {
+    let cmd_ref: &Cmd = cmd.borrow();
+    args_len(cmd_ref.args_iter(), cmd_ref.cursor.unwrap_or(0))
 }
 
 fn encode_command<'a, I>(args: I, cursor: u64) -> Vec<u8>
@@ -321,6 +325,7 @@ impl Cmd {
             args: vec![],
             cursor: None,
             no_response: false,
+            span: None,
         }
     }
 
@@ -331,6 +336,7 @@ impl Cmd {
             args: Vec::with_capacity(arg_count),
             cursor: None,
             no_response: false,
+            span: None,
         }
     }
 
@@ -357,6 +363,16 @@ impl Cmd {
     #[inline]
     pub fn arg<T: ToRedisArgs>(&mut self, arg: T) -> &mut Cmd {
         arg.write_redis_args(self);
+        self
+    }
+
+    /// Associate a trackable span to the command. This allow tracking the lifetime
+    /// of the command.
+    ///
+    /// A span is used by an OpenTelemetry backend to track the lifetime of the command
+    #[inline]
+    pub fn with_span(&mut self, name: &str) -> &mut Cmd {
+        self.span = Some(telemetrylib::GlideOpenTelemetry::new_span(name));
         self
     }
 
@@ -581,6 +597,12 @@ impl Cmd {
     #[inline]
     pub fn is_no_response(&self) -> bool {
         self.no_response
+    }
+
+    /// Return this command span
+    #[inline]
+    pub fn span(&self) -> Option<GlideSpan> {
+        self.span.clone()
     }
 }
 

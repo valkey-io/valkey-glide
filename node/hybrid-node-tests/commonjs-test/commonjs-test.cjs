@@ -1,57 +1,72 @@
 /* eslint no-undef: off */
 /* eslint @typescript-eslint/no-require-imports: off */
-const { AsyncClient } = require("glide-rs");
-const RedisServer = require("redis-server");
+"use strict";
+const { GlideClient } = require("@valkey/valkey-glide");
 const FreePort = require("find-free-port");
-const { execFile } = require("child_process");
+const { startServer, checkWhichCommandAvailable } = require("../utils.js");
 
 const PORT_NUMBER = 4001;
-let server;
-let port;
 
-function flushallOnPort(port) {
-    return new Promise((resolve, reject) => {
-        execFile("redis-cli", ["-p", port, "FLUSHALL"], (error, _, stderr) => {
-            if (error) {
-                console.error(stderr);
-                reject(error);
-            } else {
-                resolve();
-            }
-        });
+/**
+ * Run the test workflow
+ */
+async function runTest(port) {
+    const client = await GlideClient.createClient({
+        addresses: [{ host: "localhost", port }],
     });
+
+    try {
+        const setResult = await client.set("test", "test");
+        console.log(setResult);
+
+        const getResult = await client.get("test");
+        console.log(getResult);
+
+        if (getResult !== "test") {
+            throw new Error("Common Test failed");
+        } else {
+            console.log("Common Test passed");
+        }
+
+        await client.flushall();
+    } finally {
+        client.close();
+    }
 }
 
-FreePort(PORT_NUMBER)
-    .then(([free_port]) => {
-        port = free_port;
-        server = new RedisServer(port);
-        server.open(async (err) => {
-            if (err) {
-                console.error("Error opening server:", err);
-                throw err;
-            }
+/**
+ * Main function
+ */
+async function main() {
+    console.log("Starting main");
+    let serverProcess;
 
-            const client = AsyncClient.CreateConnection(
-                `redis://localhost:${port}`,
-            );
-            await client.set("test", "test");
-            let result = await client.get("test");
+    try {
+        // Get an available port
+        const port = await FreePort(PORT_NUMBER);
 
-            if (result !== "test") {
-                throw new Error("Common Test failed");
-            } else {
-                console.log("Common Test passed");
-            }
+        // Check which server is available
+        const serverCmd = await checkWhichCommandAvailable();
 
-            await flushallOnPort(port).then(() => {
-                console.log("db flushed");
-            });
-            await server.close().then(() => {
-                console.log("server closed");
-            });
-        });
-    })
-    .catch((error) => {
-        console.error("Error occurred while finding a free port:", error);
-    });
+        // Start the server
+        serverProcess = await startServer(serverCmd, port);
+
+        // Run the test
+        await runTest(port);
+
+        console.log("Done");
+        process.exit(0);
+    } catch (error) {
+        console.error("Error:", error.message);
+
+        if (serverProcess) {
+            serverProcess.kill();
+        }
+
+        process.exit(1);
+    }
+}
+
+if (require.main === module) {
+    main();
+}

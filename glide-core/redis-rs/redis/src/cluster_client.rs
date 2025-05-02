@@ -11,6 +11,7 @@ use rand::Rng;
 #[cfg(feature = "cluster-async")]
 use std::ops::Add;
 use std::time::Duration;
+use telemetrylib::GlideOpenTelemetryConfig;
 
 #[cfg(feature = "tls-rustls")]
 use crate::tls::TlsConnParams;
@@ -49,6 +50,7 @@ struct BuilderParams {
     response_timeout: Option<Duration>,
     protocol: ProtocolVersion,
     pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
+    open_telemetry_config: Option<GlideOpenTelemetryConfig>,
 }
 
 #[derive(Clone)]
@@ -392,6 +394,8 @@ impl ClusterClientBuilder {
     /// The parameter `read_strategy` can be one of:
     /// `ReadFromReplicaStrategy::AZAffinity(availability_zone)` - attempt to access replicas in the same availability zone.
     /// If no suitable replica is found (i.e. no replica could be found in the requested availability zone), choose any replica. Falling back to primary if needed.
+    /// `ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(availability_zone)` - attempt to access nodes in the same availability zone.
+    ///  prioritizing local replicas, then the local primary, and falling back to any replica or the primary if needed.
     /// `ReadFromReplicaStrategy::RoundRobin` - reads are distributed across replicas for load balancing using round-robin algorithm. Falling back to primary if needed.
     /// `ReadFromReplicaStrategy::AlwaysFromPrimary` ensures all read and write queries are directed to the primary node.
     ///
@@ -399,6 +403,18 @@ impl ClusterClientBuilder {
     /// - `read_strategy`: defines the replica routing strategy.
     pub fn read_from(mut self, read_strategy: ReadFromReplicaStrategy) -> ClusterClientBuilder {
         self.builder_params.read_from_replicas = read_strategy;
+        self
+    }
+
+    /// Set OpenTelemetry configuration for this client
+    ///
+    /// # Parameters
+    /// - `open_telemetry_config`: Use the `open_telemetry_config` property to specify the endpoint of the collector to export the measurments.
+    pub fn open_telemetry_config(
+        mut self,
+        open_telemetry_config: GlideOpenTelemetryConfig,
+    ) -> ClusterClientBuilder {
+        self.builder_params.open_telemetry_config = Some(open_telemetry_config);
         self
     }
 
@@ -419,8 +435,11 @@ impl ClusterClientBuilder {
     /// In addition, for tokio runtime, passive disconnections could be detected instantly,
     /// triggering reestablishment, w/o waiting for the next periodic check.
     #[cfg(feature = "cluster-async")]
-    pub fn periodic_connections_checks(mut self, interval: Duration) -> ClusterClientBuilder {
-        self.builder_params.connections_validation_interval = Some(interval);
+    pub fn periodic_connections_checks(
+        mut self,
+        interval: Option<Duration>,
+    ) -> ClusterClientBuilder {
+        self.builder_params.connections_validation_interval = interval;
         self
     }
 

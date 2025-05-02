@@ -11,8 +11,10 @@ import {
     GlideRecord,
     GlideString,
     HashDataType,
+    Score,
     ObjectType,
     SortedSetDataType,
+    ElementAndScore,
 } from "./BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "./GlideClient";
@@ -54,7 +56,7 @@ function toBuffersArray(args: GlideString[]) {
 }
 
 /**
- * @internal
+ * @test
  */
 export function parseInfoResponse(response: string): Record<string, string> {
     const lines = response.split("\n");
@@ -124,15 +126,29 @@ export function createGetRange(
     ]);
 }
 
-export interface SetOptions {
-    /**
-     *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-     * Equivalent to `NX` in the Valkey API. `onlyIfExists` - Only set the key if
-     * it already exist. Equivalent to `EX` in the Valkey API. if `conditional` is
-     * not set the value will be set regardless of prior value existence. If value
-     * isn't set because of the condition, return null.
-     */
-    conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+export type SetOptions = (
+    | {
+          /**
+           * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
+           * `NX` in the Valkey API.
+           *
+           * `onlyIfExists` - Only set the key if it already exists.
+           * `EX` in the Valkey API.
+           */
+          conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+      }
+    | {
+          /**
+           * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
+           * `IFEQ` in the Valkey API.
+           */
+          conditionalSet: "onlyIfEqual";
+          /**
+           * The value to compare the existing value with.
+           */
+          comparisonValue: GlideString;
+      }
+) & {
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
      * is returned and SET aborted if the value stored at key is not a string.
@@ -141,17 +157,17 @@ export interface SetOptions {
     returnOldValue?: boolean;
     /**
      * If not set, no expiry time will be set for the value.
+     *
+     * `keepExisting` - Retain the time to live associated with the key.
+     * Equivalent to `KEEPTTL` in the Valkey API.
      */
-    expiry?: /**
-     * Retain the time to live associated with the key. Equivalent to
-     * `KEEPTTL` in the Valkey API.
-     */
-    | "keepExisting"
+    expiry?:
+        | "keepExisting"
         | {
               type: TimeUnit;
               count: number;
           };
-}
+};
 
 /**
  * @internal
@@ -168,6 +184,8 @@ export function createSet(
             args.push("XX");
         } else if (options.conditionalSet === "onlyIfDoesNotExist") {
             args.push("NX");
+        } else if (options.conditionalSet === "onlyIfEqual") {
+            args.push("IFEQ", options.comparisonValue);
         }
 
         if (options.returnOldValue) {
@@ -1426,7 +1444,7 @@ export function convertElementsAndScores(
  */
 export function createZAdd(
     key: GlideString,
-    membersAndScores: SortedSetDataType,
+    membersAndScores: ElementAndScore[] | Record<string, Score>,
     options?: ZAddOptions,
     incr = false,
 ): command_request.Command {
@@ -1460,7 +1478,20 @@ export function createZAdd(
         args.push("INCR");
     }
 
-    membersAndScores.forEach((p) => args.push(p.score.toString(), p.element));
+    if (Array.isArray(membersAndScores)) {
+        for (let i = 0, len = membersAndScores.length; i < len; i++) {
+            const item = membersAndScores[i];
+            args.push(item.score.toString(), item.element);
+        }
+    } else {
+        const members = Object.keys(membersAndScores);
+
+        for (let i = 0, len = members.length; i < len; i++) {
+            const member = members[i];
+            args.push(membersAndScores[member].toString(), member);
+        }
+    }
+
     return createCommand(RequestType.ZAdd, args);
 }
 

@@ -4,6 +4,7 @@
 
 import * as net from "net";
 import {
+    AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
     convertGlideRecordToRecord,
@@ -171,12 +172,31 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
      * Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
      */
     pubsubSubscriptions?: GlideClientConfiguration.PubSubSubscriptions;
+    /**
+     * Advanced configuration settings for the client.
+     */
+    advancedConfiguration?: AdvancedGlideClientConfiguration;
 };
 
 /**
- * Client used for connection to standalone servers.
+ * Represents advanced configuration settings for creating a {@link GlideClient | GlideClient} used in {@link GlideClientConfiguration | GlideClientConfiguration}.
  *
- * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone|Valkey Glide Wiki}.
+ *
+ * @example
+ * ```typescript
+ * const config: AdvancedGlideClientConfiguration = {
+ *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ * };
+ * ```
+ */
+export type AdvancedGlideClientConfiguration =
+    AdvancedBaseClientConfiguration & {};
+
+/**
+ * Client used for connection to standalone servers.
+ * Use {@link createClient} to request a client.
+ *
+ * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone | Valkey Glide Wiki}.
  */
 export class GlideClient extends BaseClient {
     /**
@@ -189,16 +209,26 @@ export class GlideClient extends BaseClient {
         configuration.databaseId = options.databaseId;
         configuration.connectionRetryStrategy = options.connectionBackoff;
         this.configurePubsub(options, configuration);
+
+        if (options.advancedConfiguration) {
+            this.configureAdvancedConfigurationBase(
+                options.advancedConfiguration,
+                configuration,
+            );
+        }
+
         return configuration;
     }
+
     /**
-     * Creates a new `GlideClient` instance and establishes a connection to a standalone Valkey Glide server.
+     * Creates a new `GlideClient` instance and establishes a connection to a standalone Valkey server.
      *
      * @param options - The configuration options for the client, including server addresses, authentication credentials, TLS settings, database selection, reconnection strategy, and Pub/Sub subscriptions.
      * @returns A promise that resolves to a connected `GlideClient` instance.
      *
      * @remarks
-     * Use this static method to create and connect a `GlideClient` to a standalone Valkey Glide server. The client will automatically handle connection establishment, including any authentication and TLS configurations.
+     * Use this static method to create and connect a `GlideClient` to a standalone Valkey server.
+     * The client will automatically handle connection establishment, including any authentication and TLS configurations.
      *
      * @example
      * ```typescript
@@ -463,6 +493,7 @@ export class GlideClient extends BaseClient {
 
     /**
      * Reads the configuration parameters of the running server.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * @see {@link https://valkey.io/commands/config-get/|valkey.io} for details.
      *
@@ -490,6 +521,7 @@ export class GlideClient extends BaseClient {
 
     /**
      * Sets configuration parameters to the specified values.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * @see {@link  https://valkey.io/commands/config-set/|valkey.io} for details.
      * @param parameters - A map consisting of configuration parameters and their respective values to set.
@@ -672,7 +704,7 @@ export class GlideClient extends BaseClient {
      * @example
      * ```typescript
      * const code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * const result = await client.functionLoad(code, true);
+     * const result = await client.functionLoad(code, { replace: true });
      * console.log(result); // Output: 'mylib'
      * ```
      */

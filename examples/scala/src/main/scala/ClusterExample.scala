@@ -1,6 +1,6 @@
 import glide.api.GlideClusterClient
 import glide.api.logging.Logger
-import glide.api.models.commands.InfoOptions
+import glide.api.models.commands.InfoOptions.Section
 import glide.api.models.configuration.{GlideClusterClientConfiguration, NodeAddress}
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES
 import glide.api.models.exceptions.{ClosingException, ConnectionException, ExecAbortException, TimeoutException}
@@ -61,15 +61,13 @@ object ClusterExample {
 
             // Send INFO REPLICATION with routing option to all nodes
             infoReplResps <- client.info(
-                InfoOptions.builder()
-                    .section(InfoOptions.Section.REPLICATION)
-                    .build(),
+                Array(Section.REPLICATION),
                 ALL_NODES
             ).asScala
             _ = Logger.log(
                 Logger.Level.INFO,
                 "app",
-                "INFO REPLICATION responses from all nodes are=\n$infoReplResps",
+                s"INFO REPLICATION responses from all nodes are:\n${infoReplResps.getMultiValue()}",
             )
         } yield ()
     }
