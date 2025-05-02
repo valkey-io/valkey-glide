@@ -1013,11 +1013,11 @@ pub unsafe extern "C" fn execute_transaction(
     let _commands =
         unsafe { transaction.commands.as_ref() }.expect("Transaction commands pointer is NULL");
 
-    let mut pipeline = redis::Pipeline::with_capacity(transaction.cmd_count as usize);
+    let mut pipeline = redis::Pipeline::with_capacity(transaction.cmd_count);
     pipeline.atomic();
 
     for i in 0..transaction.cmd_count {
-        let cmder = unsafe { &*transaction.commands.add(i as usize) };
+        let cmder = unsafe { &*transaction.commands.add(i) };
 
         let mut cmd = cmder
             .request_type
@@ -1025,7 +1025,7 @@ pub unsafe extern "C" fn execute_transaction(
             .expect("Invalid command type");
 
         for j in 0..cmder.args_count {
-            let arg_ptr = unsafe { *cmder.args.add(j as usize) };
+            let arg_ptr = unsafe { *cmder.args.add(j) };
 
             let _arg = unsafe { arg_ptr.as_ref() }.expect("Argument pointer (arg_ptr) is NULL");
 
