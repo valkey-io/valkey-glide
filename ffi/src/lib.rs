@@ -994,23 +994,25 @@ pub struct TransactionParam {
     transaction: *const Transaction,
     route_bytes: *const u8,
     route_bytes_len: usize,
-    raise_on_error: bool,
     timeout: u32,
+    raise_on_error: bool,
 }
 
-/// This will executes all queued commands as a transaction
-/// Transaction is a batch of commands that are sent in a single request.
+/// CGO method which allows the Go client to executes all queued commands as a transaction
+///
+/// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
+/// `channel` is a pointer to a valid payload buffer which is created in the Go client.
+/// `transaction` must not be null. It contain the consolidated commands
+/// `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// `timeout` When set to true, any error encountered during the transaction will immediately raise an exception
+/// `raise_on_error` This setting allows you to configure the maximum duration (in seconds) a transaction can remain in progress
 ///
 /// # Safety
 ///
-/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
-/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`]. See the safety documentation of [`std::sync::Arc::from_raw`].
-/// * `channel` must be Go channel pointer and must be valid until either `success_callback` or `failure_callback` is finished.
-/// * `transaction` must not be null. It contain the consolidated commands
-/// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
-/// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
-/// * `route_bytes_len` must be 0 if `route_bytes` is null.
-/// * This function should only be called should with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+/// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be valid until `close_client` is called.
+/// * `channel` must be valid until it is passed in a call to [`free_command_response`].
+/// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 #[no_mangle]
 pub unsafe extern "C" fn execute_transaction(
     transaction_param: TransactionParam,

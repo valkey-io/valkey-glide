@@ -192,8 +192,8 @@ func (t *Transaction) executeTransactionWithRoute(
 		transaction:        &transaction,
 		route_bytes:        routeBytesPtr,
 		route_bytes_len:    routeBytesCount,
-		raise_on_error:     C.bool(raiseOnError),
 		timeout:            C.uint32_t(timeout),
+		raise_on_error:     C.bool(raiseOnError),
 	}
 
 	C.execute_transaction(
