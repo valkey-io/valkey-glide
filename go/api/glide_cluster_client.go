@@ -1975,3 +1975,29 @@ func (client *GlideClusterClient) PubSubShardChannelsWithPattern(pattern string)
 
 	return handleStringArrayResponse(result)
 }
+
+// Returns the number of subscribers for a sharded channel.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channels - The channel to get the number of subscribers for.
+//
+// Return value:
+//
+//	The number of subscribers for the sharded channel.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-numsub
+func (client *GlideClusterClient) PubSubShardNumSub(channels ...string) (map[string]int64, error) {
+	result, err := client.executeCommand(C.PubSubShardNumSub, channels)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringIntMapResponse(result)
+}

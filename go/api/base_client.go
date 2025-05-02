@@ -9114,12 +9114,7 @@ func (client *baseClient) PubSubNumPat() (int64, error) {
 //	      counts will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-numsub
-func (client *baseClient) PubSubNumSub(channels []string) (map[string]int64, error) {
-	if len(channels) == 0 {
-		// If no channels specified, just return an empty map
-		return make(map[string]int64), nil
-	}
-
+func (client *baseClient) PubSubNumSub(channels ...string) (map[string]int64, error) {
 	result, err := client.executeCommand(C.PubSubNumSub, channels)
 	if err != nil {
 		return nil, err
