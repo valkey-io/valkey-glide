@@ -11,7 +11,7 @@ type PubSubCommands interface {
 	// PubSubNumPat returns the number of patterns that are subscribed to by clients.
 	PubSubNumPat() (int64, error)
 	// PubSubNumSub returns the number of subscribers for a channel.
-	PubSubNumSub(channels []string) (map[string]int64, error)
+	PubSubNumSub(channels ...string) (map[string]int64, error)
 }
 
 type PubSubStandaloneCommands interface {
@@ -25,6 +25,7 @@ type PubSubClusterCommands interface {
 	Publish(channel string, message string, sharded bool) (int64, error)
 	PubSubShardChannels() ([]string, error)
 	PubSubShardChannelsWithPattern(pattern string) ([]string, error)
+	PubSubShardNumSub(channels ...string) (map[string]int64, error)
 }
 
 type PubSubHandler interface {
