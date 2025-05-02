@@ -252,7 +252,7 @@ func ExampleGlideClient_PubSubNumSub() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Get subscriber counts for specific channels
-	result, err := publisher.PubSubNumSub([]string{"news.sports", "news.weather", "events.local"})
+	result, err := publisher.PubSubNumSub("news.sports", "news.weather", "events.local")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -290,7 +290,45 @@ func ExampleGlideClusterClient_PubSubNumSub() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Get subscriber counts for specific channels
-	result, err := publisher.PubSubNumSub([]string{"news.sports", "news.weather", "events.local"})
+	result, err := publisher.PubSubNumSub("news.sports", "news.weather", "events.local")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// Sort the channels for consistent output
+	channels := make([]string, 0, len(result))
+	for channel := range result {
+		channels = append(channels, channel)
+	}
+	sort.Strings(channels)
+
+	// Print results in sorted order
+	for _, channel := range channels {
+		fmt.Printf("%s: %d\n", channel, result[channel])
+	}
+
+	// Output:
+	// events.local: 1
+	// news.sports: 1
+	// news.weather: 2
+}
+
+func ExampleGlideClusterClient_PubSubShardNumSub() {
+	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	defer closeAllClients()
+
+	// Create subscribers with subscriptions to different channels
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.sports")
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.weather")
+	// Second subscriber to same channel
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.weather")
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "events.local")
+
+	// Allow subscriptions to establish
+	time.Sleep(100 * time.Millisecond)
+
+	// Get subscriber counts for specific channels
+	result, err := publisher.PubSubShardNumSub("news.sports", "news.weather", "events.local")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
