@@ -94,12 +94,12 @@ func (suite *GlideTestSuite) TestExec() {
 func (suite *GlideTestSuite) TestExecWithOptions() {
 	client := suite.defaultClient()
 	key := uuid.New().String()
-	
+
 	suite.verifyOK(client.Set(key, "hello"))
-	
+
 	tx := api.NewTransaction(client)
 	cmd := tx.GlideClient
-	
+
 	cmd.CustomCommand([]string{"HGET", key, "field"})
 	options := &api.TransactionOption{
 		RaiseOnError: true,

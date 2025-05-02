@@ -25,8 +25,8 @@ type Transaction struct {
 
 // TransactionOptions contains configurable options for transaction execution
 type TransactionOption struct {
-    RaiseOnError bool
-    Timeout    uint32
+	RaiseOnError bool
+	Timeout      uint32
 }
 
 type Cmder interface {
@@ -79,7 +79,7 @@ func (t *Transaction) sendCommandWithRoute(
 
 // Exec executes all queued commands as a transaction
 func (t *Transaction) Exec() ([]any, error) {
-	result, err := t.executeTransactionCommand(t.commands,false,0) // Use BaseClient for execution
+	result, err := t.executeTransactionCommand(t.commands, false, 0) // Use BaseClient for execution
 	if err != nil {
 		return nil, err
 	}
@@ -89,25 +89,34 @@ func (t *Transaction) Exec() ([]any, error) {
 // ExecWithOptions executes all queued commands as a transaction with custom options
 func (t *Transaction) ExecWithOptions(options *TransactionOption) ([]any, error) {
 	var raiseOnError bool
-    var timeout uint32
-    
-    if options != nil {
-        raiseOnError = options.RaiseOnError
-        timeout = options.Timeout
-    }
+	var timeout uint32
 
-    result, err := t.executeTransactionCommand(t.commands, raiseOnError, timeout)
-    if err != nil {
-        return nil, err
-    }
-    return handleAnyArrayResponse(result)
+	if options != nil {
+		raiseOnError = options.RaiseOnError
+		timeout = options.Timeout
+	}
+
+	result, err := t.executeTransactionCommand(t.commands, raiseOnError, timeout)
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyArrayResponse(result)
 }
 
-func (t *Transaction) executeTransactionCommand(commands []Cmder, raiseOnError bool, timeout uint32) (*C.CommandResponse, error) {
+func (t *Transaction) executeTransactionCommand(
+	commands []Cmder,
+	raiseOnError bool,
+	timeout uint32,
+) (*C.CommandResponse, error) {
 	return t.executeTransactionWithRoute(commands, nil, raiseOnError, timeout)
 }
 
-func (t *Transaction) executeTransactionWithRoute(cmds []Cmder, route config.Route, raiseOnError bool, timeout uint32) (*C.struct_CommandResponse, error) {
+func (t *Transaction) executeTransactionWithRoute(
+	cmds []Cmder,
+	route config.Route,
+	raiseOnError bool,
+	timeout uint32,
+) (*C.struct_CommandResponse, error) {
 	if len(cmds) == 0 {
 		return nil, &errors.RequestError{Msg: "Transaction must contain at least one command"}
 	}
