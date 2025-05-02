@@ -47,15 +47,15 @@ type SortedSetCommands interface {
 
 	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
-	BZPopMax(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
+	// BZPopMax(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
 
-	ZMPop(keys []string, scoreFilter options.ScoreFilter) (Result[KeyWithArrayOfMembersAndScores], error)
+	// ZMPop(keys []string, scoreFilter options.ScoreFilter) (Result[KeyWithArrayOfMembersAndScores], error)
 
-	ZMPopWithOptions(
-		keys []string,
-		scoreFilter options.ScoreFilter,
-		opts options.ZPopOptions,
-	) (Result[KeyWithArrayOfMembersAndScores], error)
+	// ZMPopWithOptions(
+	// 	keys []string,
+	// 	scoreFilter options.ScoreFilter,
+	// 	opts options.ZPopOptions,
+	// ) (Result[KeyWithArrayOfMembersAndScores], error)
 
 	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) ([]MemberAndScore, error)
 
