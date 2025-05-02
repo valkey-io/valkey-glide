@@ -92,12 +92,11 @@ jobs:
 
             - uses: gradle/actions/wrapper-validation@v3
 
-            # TODO: Revert back to use original
-            - name: Set up JDK 21
+            - name: Set up JDK ${{ matrix.java }}
               uses: actions/setup-java@v4
               with:
                   distribution: "temurin"
-                  java-version: 21
+                  java-version: ${{ matrix.java }}
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -169,11 +168,11 @@ jobs:
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
 
-            - name: Set up JDK 21
+            - name: Set up JDK ${{ matrix.java }}
               uses: actions/setup-java@v4
               with:
                   distribution: "temurin"
-                  java-version: 21
+                  java-version: ${{ matrix.java }}
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -319,7 +318,7 @@ jobs:
               uses: actions/setup-java@v4
               with:
                   distribution: "temurin"
-                  java-version: 21
+                  java-version: 17
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
