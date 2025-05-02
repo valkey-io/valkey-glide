@@ -54,6 +54,7 @@ run-name:
 
 env:
     CARGO_TERM_COLOR: always
+    GLIDE_FFI_FOLDER: ${{ github.workspace }}/ffi
 
 jobs:
     get-matrices:
