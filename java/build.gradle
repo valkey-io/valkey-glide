@@ -30,6 +30,7 @@ subprojects {
     java {
         toolchain {
             languageVersion.set(JavaLanguageVersion.of(11))
+            vendor = JvmVendorSpec.ADOPTIUM // Temurin
         }
     }
     tasks.withType(Test) {
