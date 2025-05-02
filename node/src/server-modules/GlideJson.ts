@@ -2,11 +2,11 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { ClusterTransaction, Transaction } from "src/Transaction";
 import { BaseClient, DecoderOption, GlideString } from "../BaseClient";
 import { ConditionalChange } from "../Commands";
 import { GlideClient } from "../GlideClient";
 import { GlideClusterClient, RouteOption } from "../GlideClusterClient";
+import { ClusterTransaction, Transaction } from "../Transaction";
 
 export type ReturnTypeJson<T> = T | (T | null)[];
 export type UniversalReturnTypeJson<T> = T | T[];

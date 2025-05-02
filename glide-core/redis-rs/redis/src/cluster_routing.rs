@@ -1,4 +1,5 @@
 use rand::Rng;
+use strum_macros::Display;
 
 use crate::cluster_topology::get_slot;
 use crate::cmd::{Arg, Cmd};
@@ -15,7 +16,8 @@ use std::sync::{RwLock, RwLockWriteGuard};
 #[derive(Clone)]
 pub(crate) enum Redirect {
     Moved(String),
-    Ask(String),
+    /// (addr, should_exec_asking) - if `should_exec_asking` is true,  the `ASKING` command would be executed as part of `get_connection`.
+    Ask(String, bool),
 }
 
 /// Logical bitwise aggregating operators.
@@ -1209,7 +1211,7 @@ impl Slot {
 }
 
 /// What type of node should a request be routed to, assuming read from replica is enabled.
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Hash)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Hash, Display)]
 pub enum SlotAddr {
     /// The request must be routed to primary node
     Master,

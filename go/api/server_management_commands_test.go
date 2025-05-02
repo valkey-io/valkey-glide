@@ -5,6 +5,7 @@ package api
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -222,6 +223,37 @@ func ExampleGlideClient_ConfigResetStat() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(response)
+
+	// Output:
+	// OK
+}
+
+func ExampleGlideClient_ConfigRewrite() {
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
+	var resultRewrite string
+	response, err := client.InfoWithOptions(opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	lines := strings.Split(response, "\n")
+	var configFile string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "config_file:") {
+			configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+			break
+		}
+	}
+	if len(configFile) > 0 {
+		response, err = client.ConfigRewrite()
+		if err != nil {
+			fmt.Println("Glide example failed with an error: ", err)
+		}
+		resultRewrite = response
+	} else {
+		resultRewrite = "OK"
+	}
+	fmt.Println(resultRewrite)
 
 	// Output:
 	// OK

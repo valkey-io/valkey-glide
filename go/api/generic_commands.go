@@ -20,4 +20,6 @@ type GenericCommands interface {
 
 	ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string,
 		error)
+
+	RandomKey() (Result[string], error)
 }

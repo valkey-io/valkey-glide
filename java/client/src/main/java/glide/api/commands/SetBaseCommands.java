@@ -8,8 +8,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Set Commands" group for standalone and cluster
- * clients.
+ * Supports commands for the "Set Commands" group for standalone and cluster clients.
  *
  * @see <a href="https://valkey.io/commands/?group=set">Set Commands</a>
  */

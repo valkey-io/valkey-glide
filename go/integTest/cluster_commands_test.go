@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/api/options"
@@ -32,6 +33,38 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 	assert.Nil(suite.T(), err)
 	// ECHO is routed to a single random node
 	assert.Equal(suite.T(), "GO GLIDE GO", result.SingleValue().(string))
+}
+
+func (suite *GlideTestSuite) TestClusterCustomCommandDbSize() {
+	client := suite.defaultClusterClient()
+	// DBSIZE result is always a single number regardless of route
+	result, err := client.CustomCommand([]string{"dbsize"})
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+
+	result, err = client.CustomCommandWithRoute([]string{"dbsize"}, config.AllPrimaries)
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+
+	result, err = client.CustomCommandWithRoute([]string{"dbsize"}, config.RandomRoute)
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+}
+
+func (suite *GlideTestSuite) TestClusterCustomCommandConfigGet() {
+	client := suite.defaultClusterClient()
+
+	// CONFIG GET returns a map, but with a single node route it is handled as a single value
+	result, err := client.CustomCommandWithRoute([]string{"CONFIG", "GET", "*file"}, config.RandomRoute)
+	assert.NoError(suite.T(), err)
+	assert.Greater(suite.T(), len(result.SingleValue().(map[string]any)), 0)
+
+	result, err = client.CustomCommandWithRoute([]string{"CONFIG", "GET", "*file"}, config.AllPrimaries)
+	assert.NoError(suite.T(), err)
+	assert.Greater(suite.T(), len(result.MultiValue()), 0)
+	for _, val := range result.MultiValue() {
+		assert.Greater(suite.T(), len(val.(map[string]any)), 0)
+	}
 }
 
 func (suite *GlideTestSuite) TestInfoCluster() {
@@ -1318,4 +1351,589 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	response, err = client.ClientGetNameWithOptions(opts)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestConfigRewriteCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+	}
+	res, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range res.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	sections := []options.Section{options.Server}
+
+	// info with option or with multiple options without route
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: nil,
+	}
+	response, err := client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range response.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+			break
+		}
+	}
+
+	// same sections with random route
+	opts = options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: sections},
+		RouteOption: &options.RouteOption{Route: config.RandomRoute},
+	}
+	response, err = client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	lines := strings.Split(response.SingleValue(), "\n")
+	var configFile string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "config_file:") {
+			configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+			break
+		}
+	}
+	if len(configFile) > 0 {
+		responseRewrite, err := client.ConfigRewrite()
+		assert.NoError(t, err)
+		assert.Equal(t, "OK", responseRewrite)
+	}
+
+	// default sections, multi node route
+	opts = options.ClusterInfoOptions{
+		InfoOptions: nil,
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	}
+	response, err = client.InfoWithOptions(opts)
+	assert.NoError(t, err)
+	for _, data := range response.MultiValue() {
+		lines := strings.Split(data, "\n")
+		var configFile string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "config_file:") {
+				configFile = strings.TrimSpace(strings.TrimPrefix(line, "config_file:"))
+				break
+			}
+		}
+		if len(configFile) > 0 {
+			responseRewrite, err := client.ConfigRewrite()
+			assert.NoError(t, err)
+			assert.Equal(t, "OK", responseRewrite)
+			break
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterRandomKey() {
+	client := suite.defaultClusterClient()
+	// Test 1: Check if the command return random key
+	t := suite.T()
+	result, err := client.RandomKey()
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+}
+
+func (suite *GlideTestSuite) TestRandomKeyWithRoute() {
+	client := suite.defaultClusterClient()
+	// Test 1: Check if the command return random key
+	t := suite.T()
+	route := config.Route(config.RandomRoute)
+	options := options.RouteOption{Route: route}
+	result, err := client.RandomKeyWithRoute(options)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test with single node route
+	libName := "mylib1c_single"
+	funcName := "myfunc1c_single"
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, true)
+
+	// Flush all functions with SYNC option and single node route
+	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load function with single node route
+	result, err = client.FunctionLoadWithRoute(code, false, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Test FCALL with single node route
+	functionResult, err := client.FCallWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test FCALL_RO with single node route
+	functionResult, err = client.FCallReadOnlyWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test FunctionList with WithCode and query for all libraries
+	query := api.FunctionListQuery{
+		WithCode: true,
+	}
+	functionList, err := client.FunctionListWithRoute(query, route)
+	assert.NoError(t, err)
+	assert.True(t, functionList.IsSingleValue())
+
+	// Check results from each node
+	lib := functionList.SingleValue()[0]
+	assert.Equal(t, libName, lib.Name)
+	assert.Equal(t, "LUA", lib.Engine)
+	assert.Contains(t, lib.Code, libName)
+
+	assert.Len(t, lib.Functions, 1)
+	funcInfo := lib.Functions[0]
+	assert.Equal(t, funcName, funcInfo.Name)
+	assert.Empty(t, funcInfo.Description)
+	assert.Contains(t, funcInfo.Flags, "no-writes")
+
+	// load new lib and delete it with single node route - first lib remains loaded
+	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoadWithRoute(anotherLib, true, route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "anotherLib", result)
+
+	deleteResult, err := client.FunctionDeleteWithRoute("anotherLib", route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", deleteResult)
+
+	// delete missing lib returns a error
+	_, err = client.FunctionDeleteWithRoute("anotherLib", route)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+
+	// Test with all primaries route
+	libName = "mylib1c_all"
+	funcName = "myfunc1c_all"
+	functions = map[string]string{
+		funcName: "return args[1]",
+	}
+	code = GenerateLuaLibCode(libName, functions, true)
+
+	// Flush all functions with SYNC option and all primaries route
+	route = options.RouteOption{Route: config.AllPrimaries}
+	result, err = client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load function with all primaries route
+	result, err = client.FunctionLoadWithRoute(code, false, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Test FCALL with all primaries route
+	functionResult, err = client.FCallWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test FCALL_RO with all primaries route
+	functionResult, err = client.FCallReadOnlyWithArgsWithRoute(funcName, []string{"one", "two"}, route)
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test FunctionList with WithCode and query for all libraries
+	functionList, err = client.FunctionListWithRoute(query, route)
+	assert.NoError(t, err)
+	assert.False(t, functionList.IsSingleValue())
+
+	// Check results from each node
+	for _, libs := range functionList.MultiValue() {
+		assert.Len(t, libs, 1)
+		libInfo := libs[0]
+		assert.Equal(t, libName, libInfo.Name)
+		assert.Equal(t, "LUA", libInfo.Engine)
+		assert.Contains(t, libInfo.Code, libName)
+
+		assert.Len(t, libInfo.Functions, 1)
+		funcInfo := libInfo.Functions[0]
+		assert.Equal(t, funcName, funcInfo.Name)
+		assert.Empty(t, funcInfo.Description)
+		assert.Contains(t, funcInfo.Flags, "no-writes")
+	}
+
+	// load new lib and delete it with all primaries route - first lib remains loaded
+	anotherLib = GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoadWithRoute(anotherLib, true, route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "anotherLib", result)
+
+	deleteResult, err = client.FunctionDeleteWithRoute("anotherLib", route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", deleteResult)
+
+	// delete missing lib returns a error
+	_, err = client.FunctionDeleteWithRoute("anotherLib", route)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+}
+
+func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Flush all functions with SYNC option
+	result, err := client.FunctionFlushSync()
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Create function that returns first argument
+	libName := "mylib1c"
+	funcName := "myfunc1c"
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, true)
+
+	// Load function
+	result, err = client.FunctionLoad(code, false)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Test FCALL
+	functionResult, err := client.FCallWithArgs(funcName, []string{"one", "two"})
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// Test FCALL_RO
+	functionResult, err = client.FCallReadOnlyWithArgs(funcName, []string{"one", "two"})
+	assert.NoError(t, err)
+	if functionResult.IsSingleValue() {
+		assert.Equal(t, "one", functionResult.SingleValue())
+	} else {
+		for _, value := range functionResult.MultiValue() {
+			assert.Equal(t, "one", value)
+		}
+	}
+
+	// load new lib and delete it - first lib remains loaded
+	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoad(anotherLib, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "anotherLib", result)
+
+	deleteResult, err := client.FunctionDelete("anotherLib")
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", deleteResult)
+
+	// delete missing lib returns a error
+	_, err = client.FunctionDelete("anotherLib")
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+}
+
+func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Flush all functions with SYNC option
+	result, err := client.FunctionFlushSync()
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load first function
+	libName := "functionStats_without_route"
+	funcName := libName
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, false)
+	result, err = client.FunctionLoad(code, true)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Check stats after loading first function
+	stats, err := client.FunctionStats()
+	assert.NoError(t, err)
+	for _, nodeStats := range stats {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Load second function with multiple functions
+	libName2 := libName + "_2"
+	functions2 := map[string]string{
+		funcName + "_2": "return 'OK'",
+		funcName + "_3": "return 42",
+	}
+	code2 := GenerateLuaLibCode(libName2, functions2, false)
+	result, err = client.FunctionLoad(code2, true)
+	assert.NoError(t, err)
+	assert.Equal(t, libName2, result)
+
+	// Check stats after loading second function
+	stats, err = client.FunctionStats()
+	assert.NoError(t, err)
+	for _, nodeStats := range stats {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(3), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(2), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Flush all functions
+	result, err = client.FunctionFlushSync()
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Check stats after flushing
+	stats, err = client.FunctionStats()
+	assert.NoError(t, err)
+	for _, nodeStats := range stats {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].LibraryCount)
+	}
+}
+
+func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test with single node route
+	libName := "functionStats_with_route_single"
+	funcName := libName
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, false)
+
+	// Flush all functions with SYNC option and single node route
+	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load function with single node route
+	result, err = client.FunctionLoadWithRoute(code, true, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Check stats with single node route
+	stats, err := client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Load second function with multiple functions
+	libName2 := libName + "_2"
+	functions2 := map[string]string{
+		funcName + "_2": "return 'OK'",
+		funcName + "_3": "return 42",
+	}
+	code2 := GenerateLuaLibCode(libName2, functions2, false)
+	result, err = client.FunctionLoadWithRoute(code2, true, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName2, result)
+
+	// Check stats after loading second function
+	stats, err = client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(3), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(2), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Flush all functions
+	result, err = client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Check stats after flushing
+	stats, err = client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Test with all primaries route
+	libName = "functionStats_with_route_all"
+	funcName = libName
+	functions = map[string]string{
+		funcName: "return args[1]",
+	}
+	code = GenerateLuaLibCode(libName, functions, false)
+
+	// Flush all functions with SYNC option and all primaries route
+	route = options.RouteOption{Route: config.AllPrimaries}
+	result, err = client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Load function with all primaries route
+	result, err = client.FunctionLoadWithRoute(code, true, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName, result)
+
+	// Check stats with all primaries route
+	stats, err = client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Load second function with multiple functions
+	libName2 = libName + "_2"
+	functions2 = map[string]string{
+		funcName + "_2": "return 'OK'",
+		funcName + "_3": "return 42",
+	}
+	code2 = GenerateLuaLibCode(libName2, functions2, false)
+	result, err = client.FunctionLoadWithRoute(code2, true, route)
+	assert.NoError(t, err)
+	assert.Equal(t, libName2, result)
+
+	// Check stats after loading second function
+	stats, err = client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(3), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(2), nodeStats.Engines["LUA"].LibraryCount)
+	}
+
+	// Flush all functions
+	result, err = client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Check stats after flushing
+	stats, err = client.FunctionStatsWithRoute(route)
+	assert.NoError(t, err)
+	for _, nodeStats := range stats.MultiValue() {
+		assert.Empty(t, nodeStats.RunningScript.Name)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].FunctionCount)
+		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].LibraryCount)
+	}
+}
+
+func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+
+	// Flush before setup
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing loaded, nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+
+	// key for routing to a primary node
+	randomKey := uuid.NewString()
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, randomKey),
+	}
+
+	// Flush all functions with route
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKillWithRoute(route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }

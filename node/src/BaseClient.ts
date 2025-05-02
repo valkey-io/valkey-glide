@@ -1135,8 +1135,10 @@ export class BaseClient {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
                   callbackIdx,
-                  transaction: command_request.Transaction.create({
+                  batch: command_request.Batch.create({
+                      isAtomic: true,
                       commands: command,
+                      // TODO: add support for timeout, raiseOnError and retryStrategy
                   }),
                   route,
               })
@@ -1381,8 +1383,8 @@ export class BaseClient {
      * const result = await client.get("key");
      * console.log(result); // Output: 'value'
      * // Example usage of get method to retrieve the value of a key with Bytes decoder
-     * const result = await client.get("key", Decoder.Bytes);
-     * console.log(result); // Output: {"data": [118, 97, 108, 117, 101], "type": "Buffer"}
+     * const result = await client.get("key", { decoder: Decoder.Bytes });
+     * console.log(result); // Output: <Buffer 76 61 6c 75 65>
      * ```
      */
     public async get(

@@ -497,8 +497,13 @@ message ScriptInvocation {
     repeated bytes args = 3;
 }
 
-message Transaction {
-    repeated Command commands = 1;
+message Batch {
+    bool is_atomic = 1;
+    repeated Command commands = 2;
+    optional bool raise_on_error = 3;
+    optional uint32 timeout = 4;
+    optional bool retry_server_error = 5;
+    optional bool retry_connection_error = 6;
 }
 
 message ClusterScan {
@@ -519,7 +524,7 @@ message CommandRequest {
 
     oneof command {
         Command single_command = 2;
-        Transaction transaction = 3;
+        Batch batch = 3;
         ScriptInvocation script_invocation = 4;
         ScriptInvocationPointers script_invocation_pointers = 5;
         ClusterScan cluster_scan = 6;

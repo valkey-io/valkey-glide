@@ -331,6 +331,7 @@ where
             }
             Ok(())
         }
+        Value::ServerError(ref err) => write!(writer, "server-error({err})\r\n"),
     }
 }
 
@@ -740,6 +741,19 @@ pub async fn kill_connection(client: &mut impl glide_core::client::GlideClientFo
                 Some(redis::cluster_routing::ResponsePolicy::AllSucceeded),
             ))),
         )
+        .await
+        .unwrap();
+}
+
+pub async fn kill_connection_for_route(
+    client: &mut impl glide_core::client::GlideClientForTests,
+    route: RoutingInfo,
+) {
+    let mut client_kill_cmd = redis::cmd("CLIENT");
+    client_kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
+
+    let _ = client
+        .send_command(&client_kill_cmd, Some(route))
         .await
         .unwrap();
 }
