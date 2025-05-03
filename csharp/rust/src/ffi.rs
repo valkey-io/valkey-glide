@@ -73,7 +73,7 @@ pub struct ConnectionConfig {
     pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
     pub inflight_requests_limit: Option<u32>,
     pub otel_endpoint: Option<String>,
-    pub otel_span_flush_interval_ms: Option<u64>,
+    pub otel_flush_interval_ms: Option<u64>,
     */
 }
 
