@@ -45,6 +45,7 @@ impl SpanExporterFile {
     /// - The path points to a directory that doesn't exist
     /// - The user doesn't have write permissions for the target location
     pub fn new(path: PathBuf) -> Result<Self, TraceError> {
+        // TODO: Check if the file exists and has write permissions - https://github.com/valkey-io/valkey-glide/issues/3720
         Ok(Self {
             resource: Resource::default(),
             is_shutdown: atomic::AtomicBool::new(false),

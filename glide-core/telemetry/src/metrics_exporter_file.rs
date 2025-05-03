@@ -41,6 +41,7 @@ impl FileMetricExporter {
     /// - The path points to a directory that doesn't exist
     /// - The user doesn't have write permissions for the target location
     pub fn new(path: PathBuf) -> Result<Self, MetricError> {
+        // TODO: Check if the file exists and has write permissions - https://github.com/valkey-io/valkey-glide/issues/3720
         Ok(Self {
             is_shutdown: AtomicBool::new(false),
             path,
@@ -220,7 +221,10 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
                     data_points.push(Value::Object(dp));
                 }
             } else {
-                return Err(MetricError::Other("Unsupported metric type".to_string()));
+                return Err(MetricError::Other(format!(
+                    "Unsupported metric type: {:?}",
+                    metric.data.as_ref().type_id()
+                )));
             }
             metric_obj.insert("data_points".to_owned(), Value::Array(data_points));
             metrics.push(Value::Object(metric_obj));
