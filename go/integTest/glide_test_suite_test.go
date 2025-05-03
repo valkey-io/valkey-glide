@@ -39,6 +39,7 @@ var (
 	tls             = flag.Bool("tls", false, "one")
 	clusterHosts    = flag.String("cluster-endpoints", "", "two")
 	standaloneHosts = flag.String("standalone-endpoints", "", "three")
+	pubsubtest      = flag.Bool("pubsub", false, "Set to true to run pubsub tests")
 )
 
 func (suite *GlideTestSuite) SetupSuite() {
