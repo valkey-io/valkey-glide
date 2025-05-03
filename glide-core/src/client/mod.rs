@@ -199,10 +199,19 @@ async fn run_with_timeout<T>(
     future: impl futures::Future<Output = RedisResult<T>> + Send,
 ) -> redis::RedisResult<T> {
     match timeout {
-        Some(duration) => tokio::time::timeout(duration, future)
-            .await
-            .map_err(|_| io::Error::from(io::ErrorKind::TimedOut).into())
-            .and_then(|res| res),
+        Some(duration) => match tokio::time::timeout(duration, future).await {
+            Ok(result) => result,
+            Err(_) => {
+                // Record timeout error metric
+                if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                    log_error(
+                        "OpenTelemetry:timeout_error",
+                        format!("Failed to record timeout error: {}", e),
+                    );
+                }
+                Err(io::Error::from(io::ErrorKind::TimedOut).into())
+            }
+        },
         None => future.await,
     }
 }
@@ -1028,7 +1037,7 @@ impl Client {
 
         // initilaize open telemetry traces exporter
         if let Some(endpoint_str) = &request.otel_traces_endpoint {
-            let trace_exporter = GlideOpenTelemetryTraceExporter::from_str(endpoint_str.as_str())
+            let trace_exporter = GlideOpenTelemetrySignalsExporter::from_str(endpoint_str.as_str())
                 .map_err(ConnectionError::IoError)?;
             let config = GlideOpenTelemetryConfigBuilder::default()
                 .with_flush_interval(std::time::Duration::from_millis(
