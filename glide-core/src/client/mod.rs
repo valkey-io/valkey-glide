@@ -184,6 +184,40 @@ pub(super) fn get_connection_info(
 pub enum ClientWrapper {
     Standalone(StandaloneClient),
     Cluster { client: ClusterConnection },
+    Lazy(LazyClient),
+}
+
+/// A client wrapper that defers connection until the first command is executed.
+#[derive(Clone)]
+pub struct LazyClient {
+    config: ConnectionRequest,
+    push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+    inner: Arc<OnceCell<ClientWrapper>>, // Use Arc to share the OnceCell
+}
+
+impl LazyClient {
+    async fn get_or_connect(&self) -> RedisResult<&ClientWrapper> {
+        self.inner
+            .get_or_try_init(|| async {
+                if self.config.cluster_mode_enabled {
+                    create_cluster_client(self.config.clone(), self.push_sender.clone())
+                        .await
+                        .map(|client| ClientWrapper::Cluster { client })
+                } else {
+                    StandaloneClient::create_client(self.config.clone(), self.push_sender.clone())
+                        .await
+                        .map(ClientWrapper::Standalone)
+                        .map_err(|e| {
+                            RedisError::from((
+                                ErrorKind::IoError,
+                                "Lazy standalone connect failed",
+                                format!("{e:?}"),
+                            ))
+                        })
+                }
+            })
+            .await
+    }
 }
 
 #[derive(Clone)]
@@ -314,6 +348,16 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
 }
 
 impl Client {
+    /// Ensures that a lazy client has been connected before proceeding.
+    /// For lazy clients, this triggers connection establishment on the first command.
+    async fn ensure_connected(&mut self) -> RedisResult<()> {
+        if let ClientWrapper::Lazy(ref lazy) = self.internal_client {
+            let real_client = lazy.get_or_connect().await?;
+            // Replace the LazyClient with the actual connected client
+            self.internal_client = real_client.clone();
+        }
+        Ok(())
+    }
     pub fn send_command<'a>(
         &'a mut self,
         cmd: &'a Cmd,
@@ -327,6 +371,7 @@ impl Client {
             }
         };
         run_with_timeout(request_timeout, async move {
+            self.ensure_connected().await?;
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => client.send_command(cmd).await,
                 ClientWrapper::Cluster { ref mut client } => {
@@ -357,6 +402,7 @@ impl Client {
                         };
                     client.route_command(cmd, routing).await
                 }
+                ClientWrapper::Lazy(_) => unreachable!()
             }
             .and_then(|value| convert_to_expected_type(value, expected_type))
         })
@@ -381,6 +427,7 @@ impl Client {
         scan_state_cursor: &'a ScanStateRC,
         cluster_scan_args: ClusterScanArgs,
     ) -> RedisResult<Value> {
+        self.ensure_connected().await?;
         match self.internal_client {
             ClientWrapper::Standalone(_) => {
                 unreachable!("Cluster scan is not supported in standalone mode")
@@ -396,6 +443,7 @@ impl Client {
                 };
                 Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
             }
+            ClientWrapper::Lazy(_) => unreachable!(),
         }
     }
 
@@ -492,6 +540,7 @@ impl Client {
         run_with_timeout(
             Some(to_duration(transaction_timeout, self.request_timeout)),
             async move {
+                self.ensure_connected().await?;
                 let values = match self.internal_client {
                     ClientWrapper::Standalone(ref mut client) => {
                         client.send_pipeline(pipeline, offset, 1).await
@@ -505,6 +554,7 @@ impl Client {
                         }
                         _ => client.req_packed_commands(pipeline, offset, 1, None).await,
                     },
+                    ClientWrapper::Lazy(_) => unreachable!(),
                 }?;
 
                 Self::get_transaction_values(
@@ -530,7 +580,6 @@ impl Client {
     ///     ⚠️ **Caution**: This may lead to commands being executed in a different order than originally sent,
     ///     which could affect operations that rely on strict execution sequence.
     ///   - If `retry_connection_error` is `true`, sub-pipeline requests will be retried on connection errors.
-    ///     ⚠️ **Caution**: Retrying after a connection error may result in duplicate executions, since the server might have already received and processed the request before the error occurred.
     ///     TODO: add wiki link.
     pub fn send_pipeline<'a>(
         &'a mut self,
@@ -554,6 +603,7 @@ impl Client {
         run_with_timeout(
             Some(to_duration(pipeline_timeout, self.request_timeout)),
             async move {
+                self.ensure_connected().await?;
                 let values = match self.internal_client {
                     ClientWrapper::Standalone(ref mut client) => {
                         client.send_pipeline(pipeline, 0, command_count).await
@@ -582,6 +632,7 @@ impl Client {
                                 .await
                         }
                     },
+                    ClientWrapper::Lazy(_) => unreachable!(),
                 }?;
 
                 Self::convert_pipeline_values_to_expected_types(
@@ -602,6 +653,7 @@ impl Client {
         args: &Vec<&[u8]>,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisResult<Value> {
+        self.ensure_connected().await?;
         let eval = eval_cmd(hash, keys, args);
         let result = self.send_command(&eval, routing.clone()).await;
         let Err(err) = result else {
@@ -664,6 +716,7 @@ impl Client {
         // Since the password update operation is not a command that go through the regular command pipeline,
         // it is not have the regular timeout handling, as such we need to handle it separately.
         match tokio::time::timeout(timeout, async {
+            self.ensure_connected().await?;
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => {
                     client.update_connection_password(password.clone()).await
@@ -671,6 +724,7 @@ impl Client {
                 ClientWrapper::Cluster { ref mut client } => {
                     client.update_connection_password(password.clone()).await
                 }
+                ClientWrapper::Lazy(_) => unreachable!(),
             }
         })
         .await
@@ -732,6 +786,7 @@ impl Client {
                 ))),
             },
             ClientWrapper::Standalone(client) => Ok(client.get_username()),
+            ClientWrapper::Lazy(_) => unreachable!(),
         }
     }
 }
@@ -1047,7 +1102,14 @@ impl Client {
         };
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
-            let internal_client = if request.cluster_mode_enabled {
+            let internal_client = if request.lazy_connect {
+                // Do not connect now – create LazyClient wrapper
+                ClientWrapper::Lazy(LazyClient {
+                    config: request,
+                    push_sender,
+                    inner: Arc::new(OnceCell::new()),
+                })
+            } else if request.cluster_mode_enabled {
                 let client = create_cluster_client(request, push_sender)
                     .await
                     .map_err(ConnectionError::Cluster)?;
