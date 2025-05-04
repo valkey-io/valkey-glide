@@ -580,6 +580,7 @@ impl Client {
     ///     ⚠️ **Caution**: This may lead to commands being executed in a different order than originally sent,
     ///     which could affect operations that rely on strict execution sequence.
     ///   - If `retry_connection_error` is `true`, sub-pipeline requests will be retried on connection errors.
+    ///     ⚠️ **Caution**: Retrying after a connection error may result in duplicate executions, since the server might have already received and processed the request before the error occurred.
     ///     TODO: add wiki link.
     pub fn send_pipeline<'a>(
         &'a mut self,
