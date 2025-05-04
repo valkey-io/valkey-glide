@@ -38,6 +38,8 @@ macOS:
 | 3.12           |
 | 3.13           |
 
+Both `asyncio` and `trio` are supported.
+
 ## Installation and Setup
 
 ### Installing via Package Manager (pip)

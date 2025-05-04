@@ -9,7 +9,7 @@ requires-python = ">=3.9"
 dependencies = [
     # Note: If you add a dependency here, make sure to also add it to requirements.txt
     # Once issue https://github.com/aboutcode-org/python-inspector/issues/197 is resolved, the requirements.txt file can be removed.
-    "async-timeout>=4.0.2; python_version < '3.11'",
+    "anyio>=4.9.0",
     "typing-extensions>=4.8.0; python_version < '3.11'",
     "protobuf>=3.20",
 ]
@@ -27,10 +27,8 @@ classifiers = [
 
 [tool.isort]
 profile = "black"
-skip = [
-    ".env",
-    "python/glide/protobuf"
-]
+skip = [".env", "python/glide/protobuf"]
+known_first_party = ["glide", "tests"]
 
 [tool.black]
 target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
