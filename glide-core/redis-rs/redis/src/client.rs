@@ -6,6 +6,7 @@ use crate::aio::DisconnectNotifier;
 use crate::{
     connection::{connect, Connection, ConnectionInfo, ConnectionLike, IntoConnectionInfo},
     push_manager::PushInfo,
+    retry_strategies::RetryStrategy,
     types::{RedisResult, Value},
 };
 #[cfg(feature = "aio")]
@@ -94,6 +95,8 @@ pub struct GlideConnectionOptions {
     /// This optional field sets the maximum duration to wait when attempting to establish
     /// a connection. If `None`, the connection will use `DEFAULT_CONNECTION_TIMEOUT`.
     pub connection_timeout: Option<Duration>,
+    /// Retry strategy configuration for reconnect attempts.
+    pub connection_retry_strategy: Option<RetryStrategy>,
 }
 
 /// To enable async support you need to enable the feature: `tokio-comp`
