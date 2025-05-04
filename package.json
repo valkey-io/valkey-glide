@@ -4,7 +4,7 @@
         "@types/eslint__js": "8",
         "@types/eslint-config-prettier": "6",
         "eslint": "9",
-        "eslint-config-prettier": "9",
+        "eslint-config-prettier": "10",
         "eslint-plugin-jsdoc": "50",
         "prettier": "3",
         "prettier-eslint": "16",
