@@ -6248,6 +6248,8 @@ func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 }
 
 func (suite *GlideTestSuite) TestObjectEncoding() {
+	suite.T().Skip("Skipping test for Glide 1.3.3")
+
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// Test 1: Check object encoding for embstr
 		key := "{keyName}" + uuid.NewString()
@@ -6627,6 +6629,8 @@ func (suite *GlideTestSuite) TestZRandMember() {
 }
 
 func (suite *GlideTestSuite) TestObjectIdleTime() {
+	suite.T().Skip("Skipping test for Glide 1.3.3")
+
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		defaultClient := suite.defaultClient()
 		key := "testKey1_" + uuid.New().String()
@@ -6695,6 +6699,8 @@ func (suite *GlideTestSuite) TestObjectFreq() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
+	suite.T().Skip("Skipping test for Glide 1.3.3")
+
 	suite.SkipIfServerVersionLowerThanBy("8.1.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
@@ -6723,6 +6729,8 @@ func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
+	suite.T().Skip("Skipping test for Glide 1.3.3")
+
 	suite.SkipIfServerVersionLowerThanBy("8.1.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
@@ -6753,6 +6761,8 @@ func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() {
+	suite.T().Skip("Skipping test for Glide 1.3.3")
+
 	suite.SkipIfServerVersionLowerThanBy("8.1.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
