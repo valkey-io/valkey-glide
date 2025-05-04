@@ -91,6 +91,8 @@ func parseInterface(response *C.struct_CommandResponse) (interface{}, error) {
 		return parseMap(response)
 	case C.Sets:
 		return parseSet(response)
+	case C.Ok:
+		return "OK", nil
 	}
 
 	return nil, &errors.RequestError{Msg: "Unexpected return type from Valkey"}
@@ -168,6 +170,27 @@ func handleStringResponse(response *C.struct_CommandResponse) (string, error) {
 
 func handleStringOrNilResponse(response *C.struct_CommandResponse) (Result[string], error) {
 	defer C.free_command_response(response)
+
+	return convertCharArrayToString(response, true)
+}
+
+func handleOkResponse(response *C.struct_CommandResponse) (string, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Ok, false)
+	if typeErr != nil {
+		return DefaultStringResponse, typeErr
+	}
+
+	return "OK", nil
+}
+
+func handleOkOrStringOrNilResponse(response *C.struct_CommandResponse) (Result[string], error) {
+	defer C.free_command_response(response)
+
+	if response.response_type == uint32(C.Ok) {
+		return CreateStringResult("OK"), nil
+	}
 
 	return convertCharArrayToString(response, true)
 }
@@ -1548,4 +1571,135 @@ func handleFunctionStatsResponse(response *C.struct_CommandResponse) (map[string
 	}
 
 	return result, nil
+}
+
+func parseFunctionInfo(items any) []FunctionInfo {
+	result := make([]FunctionInfo, 0, len(items.([]interface{})))
+	for _, item := range items.([]interface{}) {
+		if function, ok := item.(map[string]interface{}); ok {
+			// Handle nullable description
+			var description string
+			if desc, ok := function["description"].(string); ok {
+				description = desc
+			}
+
+			// Handle flags map
+			flags := make([]string, 0)
+			if flagsMap, ok := function["flags"].(map[string]struct{}); ok {
+				for flag := range flagsMap {
+					flags = append(flags, flag)
+				}
+			}
+
+			result = append(result, FunctionInfo{
+				Name:        function["name"].(string),
+				Description: description,
+				Flags:       flags,
+			})
+		}
+	}
+	return result
+}
+
+func parseLibraryInfo(itemMap map[string]interface{}) LibraryInfo {
+	libraryInfo := LibraryInfo{
+		Name:      itemMap["library_name"].(string),
+		Engine:    itemMap["engine"].(string),
+		Functions: parseFunctionInfo(itemMap["functions"]),
+	}
+	// Handle optional library_code field
+	if code, ok := itemMap["library_code"].(string); ok {
+		libraryInfo.Code = code
+	}
+	return libraryInfo
+}
+
+func handleFunctionListResponse(response *C.struct_CommandResponse) ([]LibraryInfo, error) {
+	if err := checkResponseType(response, C.Array, false); err != nil {
+		return nil, err
+	}
+
+	data, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]LibraryInfo, 0, len(data.([]interface{})))
+	for _, item := range data.([]interface{}) {
+		if itemMap, ok := item.(map[string]interface{}); ok {
+			result = append(result, parseLibraryInfo(itemMap))
+		}
+	}
+	return result, nil
+}
+
+func handleFunctionListMultiNodeResponse(response *C.struct_CommandResponse) (map[string][]LibraryInfo, error) {
+	data, err := handleStringToAnyMapResponse(response)
+	if err != nil {
+		return nil, err
+	}
+
+	multiNodeLibs := make(map[string][]LibraryInfo)
+	for node, nodeData := range data {
+		// nodeData is already parsed into a Go array of interfaces
+		if nodeArray, ok := nodeData.([]interface{}); ok {
+			libs := make([]LibraryInfo, 0, len(nodeArray))
+			for _, item := range nodeArray {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					libs = append(libs, parseLibraryInfo(itemMap))
+				}
+			}
+			multiNodeLibs[node] = libs
+		}
+	}
+	return multiNodeLibs, nil
+}
+
+func handleSortedSetWithScoresResponse(response *C.struct_CommandResponse, reverse bool) ([]MemberAndScore, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	aMap := data.(map[string]interface{})
+
+	converted, err := mapConverter[float64]{
+		nil, false,
+	}.convert(aMap)
+	if err != nil {
+		return nil, err
+	}
+	result, ok := converted.(map[string]float64)
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of map: %T", converted)}
+	}
+
+	zRangeResponseArray := make([]MemberAndScore, 0, len(result))
+
+	for k, v := range result {
+		zRangeResponseArray = append(zRangeResponseArray, MemberAndScore{k, v})
+	}
+
+	if !reverse {
+		sort.Slice(zRangeResponseArray, func(i, j int) bool {
+			if zRangeResponseArray[i].Score == zRangeResponseArray[j].Score {
+				return zRangeResponseArray[i].Member < zRangeResponseArray[j].Member
+			}
+			return zRangeResponseArray[i].Score < zRangeResponseArray[j].Score
+		})
+	} else {
+		sort.Slice(zRangeResponseArray, func(i, j int) bool {
+			if zRangeResponseArray[i].Score == zRangeResponseArray[j].Score {
+				return zRangeResponseArray[i].Member > zRangeResponseArray[j].Member
+			}
+			return zRangeResponseArray[i].Score > zRangeResponseArray[j].Score
+		})
+	}
+
+	return zRangeResponseArray, nil
 }

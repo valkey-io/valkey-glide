@@ -947,6 +947,41 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "one", functionResult)
 
+	// Test FunctionList
+	query := api.FunctionListQuery{
+		LibraryName: libName,
+		WithCode:    false,
+	}
+	functionList, err := client.FunctionList(query)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), functionList, 1)
+
+	// Check library info
+	libInfo := functionList[0]
+	assert.Equal(suite.T(), libName, libInfo.Name)
+	assert.Equal(suite.T(), "LUA", libInfo.Engine)
+
+	// Check function info
+	assert.Len(suite.T(), libInfo.Functions, 1)
+	funcInfo := libInfo.Functions[0]
+	assert.Equal(suite.T(), funcName, funcInfo.Name)
+	assert.Empty(suite.T(), funcInfo.Description)
+	assert.Contains(suite.T(), funcInfo.Flags, "no-writes")
+
+	// Test FunctionList with WithCode and query for all libraries
+	query = api.FunctionListQuery{
+		WithCode: true,
+	}
+	functionList, err = client.FunctionList(query)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), functionList, 1)
+
+	// Check library info
+	libInfo = functionList[0]
+	assert.Equal(suite.T(), libName, libInfo.Name)
+	assert.Equal(suite.T(), "LUA", libInfo.Engine)
+	assert.Contains(suite.T(), libInfo.Code, libName) // Code should be present
+
 	// load new lib and delete it - first lib remains loaded
 	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
 	result, err = client.FunctionLoad(anotherLib, true)
@@ -1030,4 +1065,22 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 		assert.Equal(suite.T(), int64(0), nodeStats.Engines["LUA"].LibraryCount)
 		assert.Equal(suite.T(), int64(0), nodeStats.Engines["LUA"].FunctionCount)
 	}
+}
+
+func (suite *GlideTestSuite) TestFunctionKill() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+
+	// Flush all functions
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }

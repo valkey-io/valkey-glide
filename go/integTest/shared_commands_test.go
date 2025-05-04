@@ -178,7 +178,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 }
 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfEquals() {
-	suite.SkipIfServerVersionLowerThanBy("8.1.0")
+	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
@@ -576,7 +576,7 @@ func (suite *GlideTestSuite) TestAppend_existingAndNonExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}" + uuid.New().String()
@@ -596,7 +596,7 @@ func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}" + uuid.New().String()
@@ -616,7 +616,7 @@ func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		_, err := client.Set("{lcs}key1", "ohmytext")
@@ -651,7 +651,7 @@ func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 }
 
 func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		_, err := client.Set("{lcs}key1", "ohmytext")
@@ -683,7 +683,7 @@ func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
 }
 
 func (suite *GlideTestSuite) TestLCS_WithMatchLengthOption() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		_, err := client.Set("{lcs}key1", "ohmytext")
@@ -1402,7 +1402,7 @@ func (suite *GlideTestSuite) TestHScan() {
 }
 
 func (suite *GlideTestSuite) TestHRandField() {
-	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.NewString()
 
@@ -2151,7 +2151,7 @@ func (suite *GlideTestSuite) TestSinterStore() {
 }
 
 func (suite *GlideTestSuite) TestSInterCard() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}-1-" + uuid.NewString()
@@ -2176,7 +2176,7 @@ func (suite *GlideTestSuite) TestSInterCard() {
 }
 
 func (suite *GlideTestSuite) TestSInterCardLimit() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}-1-" + uuid.NewString()
@@ -3261,7 +3261,7 @@ func (suite *GlideTestSuite) TestExpire_KeyDoesNotExist() {
 }
 
 func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3285,7 +3285,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 }
 
 func (suite *GlideTestSuite) TestExpireWithOptions_HasExistingExpiry() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3310,7 +3310,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasExistingExpiry() {
 }
 
 func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryGreaterThanCurrent() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3331,7 +3331,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryGreaterThanCurrent()
 }
 
 func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryLessThanCurrent() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3360,7 +3360,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryLessThanCurrent() {
 }
 
 func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3381,7 +3381,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
 }
 
 func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3399,7 +3399,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 }
 
 func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3423,7 +3423,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent
 }
 
 func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryLessThanCurrent() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3467,7 +3467,7 @@ func (suite *GlideTestSuite) TestPExpire() {
 }
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3493,7 +3493,7 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
 }
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_HasNoExpiry() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3514,7 +3514,7 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasNoExpiry() {
 }
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3540,7 +3540,7 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent(
 }
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryLessThanCurrent() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3586,7 +3586,7 @@ func (suite *GlideTestSuite) TestPExpireAt() {
 }
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasNoExpiry() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3607,7 +3607,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasNoExpiry() {
 }
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasExistingExpiry() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3631,7 +3631,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasExistingExpiry() {
 }
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurrent() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3657,7 +3657,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurren
 }
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3684,7 +3684,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent()
 }
 
 func (suite *GlideTestSuite) TestExpireTime() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3713,7 +3713,7 @@ func (suite *GlideTestSuite) TestExpireTime() {
 }
 
 func (suite *GlideTestSuite) TestExpireTime_KeyDoesNotExist() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 
@@ -3725,7 +3725,7 @@ func (suite *GlideTestSuite) TestExpireTime_KeyDoesNotExist() {
 }
 
 func (suite *GlideTestSuite) TestPExpireTime() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
@@ -3781,7 +3781,7 @@ func (suite *GlideTestSuite) Test_ZCard() {
 }
 
 func (suite *GlideTestSuite) TestPExpireTime_KeyDoesNotExist() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 
@@ -4149,7 +4149,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_Limit() {
 }
 
 func (suite *GlideTestSuite) TestSortReadOnly_SuccessfulSort() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"3", "1", "2"})
@@ -4169,7 +4169,7 @@ func (suite *GlideTestSuite) TestSortReadOnly_SuccessfulSort() {
 }
 
 func (suite *GlideTestSuite) TestSortReadyOnlyWithOptions_DescendingOrder() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"b", "a", "c"})
@@ -5246,26 +5246,38 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		t := suite.T()
 		key := uuid.New().String()
 		memberScoreMap := map[string]float64{
-			"a": 1.0,
-			"b": 2.0,
-			"c": 3.0,
+			"a":  2.0,
+			"ab": 2.0,
+			"b":  4.0,
+			"c":  3.0,
+			"d":  8.0,
+			"e":  5.0,
+			"f":  1.0,
+			"ac": 2.0,
+			"g":  2.0,
 		}
 		_, err := client.ZAdd(key, memberScoreMap)
 		assert.NoError(t, err)
 		// index [0:1]
 		res, err := client.ZRangeWithScores(key, options.NewRangeByIndexQuery(0, 1))
-		expected := map[string]float64{
-			"a": float64(1.0),
-			"b": float64(2.0),
+		expected := []api.MemberAndScore{
+			{Member: "f", Score: float64(1.0)},
+			{Member: "a", Score: float64(2.0)},
 		}
 		assert.NoError(t, err)
 		assert.Equal(t, expected, res)
 		// index [0:-1] (all)
 		res, err = client.ZRangeWithScores(key, options.NewRangeByIndexQuery(0, -1))
-		expected = map[string]float64{
-			"a": float64(1.0),
-			"b": float64(2.0),
-			"c": float64(3.0),
+		expected = []api.MemberAndScore{
+			{Member: "f", Score: float64(1.0)},
+			{Member: "a", Score: float64(2.0)},
+			{Member: "ab", Score: float64(2.0)},
+			{Member: "ac", Score: float64(2.0)},
+			{Member: "g", Score: float64(2.0)},
+			{Member: "c", Score: float64(3.0)},
+			{Member: "b", Score: float64(4.0)},
+			{Member: "e", Score: float64(5.0)},
+			{Member: "d", Score: float64(8.0)},
 		}
 		assert.NoError(t, err)
 		assert.Equal(t, expected, res)
@@ -5278,10 +5290,13 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
 			options.NewScoreBoundary(3, true))
 		res, err = client.ZRangeWithScores(key, query)
-		expected = map[string]float64{
-			"a": float64(1.0),
-			"b": float64(2.0),
-			"c": float64(3.0),
+		expected = []api.MemberAndScore{
+			{Member: "f", Score: float64(1.0)},
+			{Member: "a", Score: float64(2.0)},
+			{Member: "ab", Score: float64(2.0)},
+			{Member: "ac", Score: float64(2.0)},
+			{Member: "g", Score: float64(2.0)},
+			{Member: "c", Score: float64(3.0)},
 		}
 		assert.NoError(t, err)
 		assert.Equal(t, expected, res)
@@ -5290,9 +5305,12 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
 			options.NewScoreBoundary(3, false))
 		res, err = client.ZRangeWithScores(key, query)
-		expected = map[string]float64{
-			"a": float64(1.0),
-			"b": float64(2.0),
+		expected = []api.MemberAndScore{
+			{Member: "f", Score: float64(1.0)},
+			{Member: "a", Score: float64(2.0)},
+			{Member: "ab", Score: float64(2.0)},
+			{Member: "ac", Score: float64(2.0)},
+			{Member: "g", Score: float64(2.0)},
 		}
 		assert.NoError(t, err)
 		assert.Equal(t, expected, res)
@@ -5302,21 +5320,43 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 			options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
 			SetReverse()
 		res, err = client.ZRangeWithScores(key, query)
-		expected = map[string]float64{
-			"b": float64(2.0),
-			"a": float64(1.0),
+		expected = []api.MemberAndScore{
+			{Member: "g", Score: float64(2.0)},
+			{Member: "ac", Score: float64(2.0)},
+			{Member: "ab", Score: float64(2.0)},
+			{Member: "a", Score: float64(2.0)},
+			{Member: "f", Score: float64(1.0)},
 		}
 		assert.NoError(t, err)
 		assert.Equal(t, expected, res)
-		// score [-inf:+inf] limit 1 2
+		// score [inf:-inf] reverse
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+			SetReverse()
+		res, err = client.ZRangeWithScores(key, query)
+		expected = []api.MemberAndScore{
+			{Member: "d", Score: float64(8.0)},
+			{Member: "e", Score: float64(5.0)},
+			{Member: "b", Score: float64(4.0)},
+			{Member: "c", Score: float64(3.0)},
+			{Member: "g", Score: float64(2.0)},
+			{Member: "ac", Score: float64(2.0)},
+			{Member: "ab", Score: float64(2.0)},
+			{Member: "a", Score: float64(2.0)},
+			{Member: "f", Score: float64(1.0)},
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// score [-inf:+inf] limit 4 2
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
 			options.NewInfiniteScoreBoundary(options.PositiveInfinity)).
-			SetLimit(1, 2)
+			SetLimit(4, 2)
 		res, err = client.ZRangeWithScores(key, query)
-		expected = map[string]float64{
-			"b": float64(2.0),
-			"c": float64(3.0),
+		expected = []api.MemberAndScore{
+			{Member: "g", Score: float64(2.0)},
+			{Member: "c", Score: float64(3.0)},
 		}
 		assert.NoError(t, err)
 		assert.Equal(t, expected, res)
@@ -6590,7 +6630,7 @@ func (suite *GlideTestSuite) TestDumpRestore() {
 		assert.Equal(t, int64(1), deletedCount)
 		result_test1, err := client.Restore(key, int64(0), resultDump.Value())
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "OK", result_test1.Value())
+		assert.Equal(suite.T(), "OK", result_test1)
 		resultGetRestoreKey, err := client.Get(key)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGetRestoreKey.Value())
@@ -6621,7 +6661,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		optsReplace := options.NewRestoreOptions().SetReplace()
 		result_test1, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), *optsReplace)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "OK", result_test1.Value())
+		assert.Equal(suite.T(), "OK", result_test1)
 		resultGetRestoreKey, err := client.Get(key)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGetRestoreKey.Value())
@@ -6633,7 +6673,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		opts_test2 := options.NewRestoreOptions().SetABSTTL()
 		result_test2, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), *opts_test2)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "OK", result_test2.Value())
+		assert.Equal(suite.T(), "OK", result_test2)
 		resultGet_test2, err := client.Get(key)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGet_test2.Value())
@@ -6645,7 +6685,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		opts_test3 := options.NewRestoreOptions().SetEviction(options.FREQ, 10)
 		result_test3, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), *opts_test3)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "OK", result_test3.Value())
+		assert.Equal(suite.T(), "OK", result_test3)
 		resultGet_test3, err := client.Get(key)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGet_test3.Value())
@@ -6657,7 +6697,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		opts_test4 := options.NewRestoreOptions().SetEviction(options.IDLETIME, 10)
 		result_test4, err := client.RestoreWithOptions(key, int64(0), resultDump.Value(), *opts_test4)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "OK", result_test4.Value())
+		assert.Equal(suite.T(), "OK", result_test4)
 		resultGet_test4, err := client.Get(key)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGet_test4.Value())
@@ -6824,7 +6864,7 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 }
 
 func (suite *GlideTestSuite) TestZMScore() {
-	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.NewString()
 
@@ -7004,7 +7044,7 @@ func (suite *GlideTestSuite) TestObjectFreq() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
-	suite.SkipIfServerVersionLowerThanBy("8.1.0")
+	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
@@ -7032,7 +7072,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
-	suite.SkipIfServerVersionLowerThanBy("8.1.0")
+	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
@@ -7062,7 +7102,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() {
-	suite.SkipIfServerVersionLowerThanBy("8.1.0")
+	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
@@ -7116,7 +7156,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() 
 }
 
 func (suite *GlideTestSuite) TestSortStoreWithOptions_ByPattern() {
-	suite.SkipIfServerVersionLowerThanBy("8.1.0")
+	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := "{listKey}" + uuid.New().String()
 		sortedKey := "{listKey}" + uuid.New().String()
@@ -7719,7 +7759,7 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEnd() {
 }
 
 func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndByte() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := "TestBitCountWithOptions_StartEnd"
@@ -7738,7 +7778,7 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndByte() {
 }
 
 func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := "TestBitCountWithOptions_StartEnd"
@@ -8566,7 +8606,7 @@ func (suite *GlideTestSuite) TestBitPosWithOptions_StartEnd() {
 }
 
 func (suite *GlideTestSuite) TestBitPosWithOptions_BitmapIndexType() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.Set(key, "\x00\x02\x00")
@@ -8583,7 +8623,7 @@ func (suite *GlideTestSuite) TestBitPosWithOptions_BitmapIndexType() {
 }
 
 func (suite *GlideTestSuite) TestBitPosWithOptions_BitIndexType() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.Set(key, "\x00\x10\x00")
@@ -8714,7 +8754,7 @@ func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
 }
 
 func (suite *GlideTestSuite) TestZInter() {
-	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}-" + uuid.New().String()
 		key2 := "{key}-" + uuid.New().String()
@@ -8747,7 +8787,7 @@ func (suite *GlideTestSuite) TestZInter() {
 			*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithScoresResult)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "two", Score: 5.5}}, zinterWithScoresResult)
 
 		// intersect results with max aggregate
 		zinterWithMaxAggregateResult, err := client.ZInterWithScores(
@@ -8755,7 +8795,7 @@ func (suite *GlideTestSuite) TestZInter() {
 			*options.NewZInterOptions().SetAggregate(options.AggregateMax),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"two": 3.5}, zinterWithMaxAggregateResult)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "two", Score: 3.5}}, zinterWithMaxAggregateResult)
 
 		// intersect results with min aggregate
 		zinterWithMinAggregateResult, err := client.ZInterWithScores(
@@ -8763,7 +8803,7 @@ func (suite *GlideTestSuite) TestZInter() {
 			*options.NewZInterOptions().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"two": 2.0}, zinterWithMinAggregateResult)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "two", Score: 2.0}}, zinterWithMinAggregateResult)
 
 		// intersect results with sum aggregate
 		zinterWithSumAggregateResult, err := client.ZInterWithScores(
@@ -8771,7 +8811,7 @@ func (suite *GlideTestSuite) TestZInter() {
 			*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"two": 5.5}, zinterWithSumAggregateResult)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "two", Score: 5.5}}, zinterWithSumAggregateResult)
 
 		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
 		zinterWithWeightedKeysResult, err := client.ZInterWithScores(
@@ -8784,7 +8824,7 @@ func (suite *GlideTestSuite) TestZInter() {
 			*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"two": 11.0}, zinterWithWeightedKeysResult)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "two", Score: 11.0}}, zinterWithWeightedKeysResult)
 
 		// non-existent key - empty intersection
 		zinterWithNonExistentKeyResult, err := client.ZInterWithScores(
@@ -8852,7 +8892,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result
 		zrangeResult, err := client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": 2.5, "two": 4.5}, zrangeResult)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "one", Score: 2.5}, {Member: "two", Score: 4.5}}, zrangeResult)
 
 		// Store the intersection of key1 and key2 in key4 with max aggregate
 		res, err = client.ZInterStoreWithOptions(key3, options.KeyArray{Keys: []string{key1, key2}},
@@ -8864,7 +8904,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result with max aggregate
 		zrangeResult, err = client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.5, "two": 2.5}, zrangeResult)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "one", Score: 1.5}, {Member: "two", Score: 2.5}}, zrangeResult)
 
 		// Store the intersection of key1 and key2 in key5 with min aggregate
 		res, err = client.ZInterStoreWithOptions(key3, options.KeyArray{Keys: []string{key1, key2}},
@@ -8876,7 +8916,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result with min aggregate
 		zrangeResult, err = client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 2.0}, zrangeResult)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "two", Score: 2.0}}, zrangeResult)
 
 		// Store the intersection of key1 and key2 in key6 with sum aggregate
 		res, err = client.ZInterStoreWithOptions(key3, options.KeyArray{Keys: []string{key1, key2}},
@@ -8888,7 +8928,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result with sum aggregate (same as default aggregate)
 		zrangeResult, err = client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": 2.5, "two": 4.5}, zrangeResult)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "one", Score: 2.5}, {Member: "two", Score: 4.5}}, zrangeResult)
 
 		// Store the intersection of key1 and key2 in key3 with 2.0 weights
 		res, err = client.ZInterStore(key3, options.WeightedKeys{
@@ -8903,7 +8943,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result with weighted keys
 		zrangeResult, err = client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": 5.0, "two": 9.0}, zrangeResult)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "one", Score: 5.0}, {Member: "two", Score: 9.0}}, zrangeResult)
 
 		// Store the intersection of key1 with 1.0 weight and key2 with -2.0 weight in key3 with 2.0 weights
 		// and min aggregate
@@ -8921,7 +8961,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result with weighted keys
 		zrangeResult, err = client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": -3.0, "two": -5.0}, zrangeResult)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "two", Score: -5.0}, {Member: "one", Score: -3.0}}, zrangeResult)
 
 		// key exists but not a set
 		_, err = client.Set(key4, "value")
@@ -8935,7 +8975,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 
 func (suite *GlideTestSuite) TestZDiff() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		suite.SkipIfServerVersionLowerThanBy("6.2.0")
+		suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
 		t := suite.T()
 		key1 := "{testKey}:1-" + uuid.NewString()
 		key2 := "{testKey}:2-" + uuid.NewString()
@@ -8981,13 +9021,17 @@ func (suite *GlideTestSuite) TestZDiff() {
 
 		zDiffResultWithScores, err := client.ZDiffWithScores([]string{key1, key2})
 		assert.NoError(t, err)
-		assert.Equal(t, map[string]float64{"one": 1.0, "three": 3.0}, zDiffResultWithScores)
+		assert.Equal(
+			t,
+			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}},
+			zDiffResultWithScores,
+		)
 		zDiffResultWithScores, err = client.ZDiffWithScores([]string{key1, key3})
 		assert.NoError(t, err)
-		assert.Equal(t, map[string]float64{}, zDiffResultWithScores)
+		assert.Equal(t, []api.MemberAndScore{}, zDiffResultWithScores)
 		zDiffResultWithScores, err = client.ZDiffWithScores([]string{nonExistentKey, key3})
 		assert.NoError(t, err)
-		assert.Equal(t, map[string]float64{}, zDiffResultWithScores)
+		assert.Equal(t, []api.MemberAndScore{}, zDiffResultWithScores)
 
 		// Key exists, but it is not a set
 		setResult, _ := client.Set(nonExistentKey, "bar")
@@ -9005,7 +9049,7 @@ func (suite *GlideTestSuite) TestZDiff() {
 
 func (suite *GlideTestSuite) TestZDiffStore() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		suite.SkipIfServerVersionLowerThanBy("6.2.0")
+		suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
 		t := suite.T()
 		key1 := "{testKey}:1-" + uuid.NewString()
 		key2 := "{testKey}:2-" + uuid.NewString()
@@ -9045,21 +9089,25 @@ func (suite *GlideTestSuite) TestZDiffStore() {
 		assert.Equal(t, zDiffStoreResult, int64(2))
 		zRangeWithScoreResult, err := client.ZRangeWithScores(key4, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(t, err)
-		assert.Equal(t, map[string]float64{"one": 1.0, "three": 3.0}, zRangeWithScoreResult)
+		assert.Equal(
+			t,
+			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}},
+			zRangeWithScoreResult,
+		)
 
 		zDiffStoreResult, err = client.ZDiffStore(key4, []string{key3, key2, key1})
 		assert.NoError(t, err)
 		assert.Equal(t, zDiffStoreResult, int64(1))
 		zRangeWithScoreResult, err = client.ZRangeWithScores(key4, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(t, err)
-		assert.Equal(t, map[string]float64{"four": 4.0}, zRangeWithScoreResult)
+		assert.Equal(t, []api.MemberAndScore{{Member: "four", Score: 4.0}}, zRangeWithScoreResult)
 
 		zDiffStoreResult, err = client.ZDiffStore(key4, []string{key1, key3})
 		assert.NoError(t, err)
 		assert.Equal(t, zDiffStoreResult, int64(0))
 		zRangeWithScoreResult, err = client.ZRangeWithScores(key4, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(t, err)
-		assert.Equal(t, map[string]float64{}, zRangeWithScoreResult)
+		assert.Equal(t, []api.MemberAndScore{}, zRangeWithScoreResult)
 
 		// Non-Existing key
 		zDiffStoreResult, err = client.ZDiffStore(key4, []string{key5, key1})
@@ -9067,7 +9115,7 @@ func (suite *GlideTestSuite) TestZDiffStore() {
 		assert.Equal(t, zDiffStoreResult, int64(0))
 		zRangeWithScoreResult, err = client.ZRangeWithScores(key4, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(t, err)
-		assert.Equal(t, map[string]float64{}, zRangeWithScoreResult)
+		assert.Equal(t, []api.MemberAndScore{}, zRangeWithScoreResult)
 
 		// Key exists, but it is not a set
 		setResult, err := client.Set(key5, "bar")
@@ -9080,7 +9128,7 @@ func (suite *GlideTestSuite) TestZDiffStore() {
 }
 
 func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
-	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}-" + uuid.New().String()
 		key2 := "{key}-" + uuid.New().String()
@@ -9112,7 +9160,11 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 5.5, "three": 3.0}, zUnionWithScoresResult)
+		assert.Equal(
+			suite.T(),
+			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}, {Member: "two", Score: 5.5}},
+			zUnionWithScoresResult,
+		)
 
 		// Union results with max aggregate
 		zUnionWithMaxAggregateResult, err := client.ZUnionWithScores(
@@ -9120,7 +9172,11 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMax),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 3.5, "three": 3.0}, zUnionWithMaxAggregateResult)
+		assert.Equal(
+			suite.T(),
+			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}, {Member: "two", Score: 3.5}},
+			zUnionWithMaxAggregateResult,
+		)
 
 		// Union results with min aggregate
 		zUnionWithMinAggregateResult, err := client.ZUnionWithScores(
@@ -9128,7 +9184,11 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}, zUnionWithMinAggregateResult)
+		assert.Equal(
+			suite.T(),
+			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "two", Score: 2.0}, {Member: "three", Score: 3.0}},
+			zUnionWithMinAggregateResult,
+		)
 
 		// Union results with sum aggregate
 		zUnionWithSumAggregateResult, err := client.ZUnionWithScores(
@@ -9136,7 +9196,11 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 5.5, "three": 3.0}, zUnionWithSumAggregateResult)
+		assert.Equal(
+			suite.T(),
+			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}, {Member: "two", Score: 5.5}},
+			zUnionWithSumAggregateResult,
+		)
 
 		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
 		zUnionWithWeightedKeysResult, err := client.ZUnionWithScores(
@@ -9149,7 +9213,11 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": 3.0, "two": 13.0, "three": 6.0}, zUnionWithWeightedKeysResult)
+		assert.Equal(
+			suite.T(),
+			[]api.MemberAndScore{{Member: "one", Score: 3.0}, {Member: "three", Score: 6.0}, {Member: "two", Score: 13.0}},
+			zUnionWithWeightedKeysResult,
+		)
 
 		// non-existent key - empty union
 		zUnionWithNonExistentKeyResult, err := client.ZUnionWithScores(
@@ -9157,7 +9225,11 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 2.0}, zUnionWithNonExistentKeyResult)
+		assert.Equal(
+			suite.T(),
+			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "two", Score: 2.0}},
+			zUnionWithNonExistentKeyResult,
+		)
 
 		// empty key list - empty union
 		zUnionWithEmptyKeyArray, err := client.ZUnionWithScores(options.KeyArray{Keys: []string{}},
@@ -9184,7 +9256,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 }
 
 func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
-	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}-" + uuid.New().String()
 		key2 := "{key}-" + uuid.New().String()
@@ -9223,7 +9295,11 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zRangeDest, err := client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), zUnionStoreWithScoresResult)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 5.5, "three": 3.0}, zRangeDest)
+		assert.Equal(
+			suite.T(),
+			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}, {Member: "two", Score: 5.5}},
+			zRangeDest,
+		)
 
 		// Union results with max aggregate
 		zUnionStoreWithMaxAggregateResult, err := client.ZUnionStoreWithOptions(
@@ -9235,7 +9311,11 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zRangeDest, err = client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), zUnionStoreWithMaxAggregateResult)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 3.5, "three": 3.0}, zRangeDest)
+		assert.Equal(
+			suite.T(),
+			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}, {Member: "two", Score: 3.5}},
+			zRangeDest,
+		)
 
 		// Union results with min aggregate
 		zUnionStoreWithMinAggregateResult, err := client.ZUnionStoreWithOptions(
@@ -9247,7 +9327,11 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zRangeDest, err = client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), zUnionStoreWithMinAggregateResult)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0}, zRangeDest)
+		assert.Equal(
+			suite.T(),
+			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "two", Score: 2.0}, {Member: "three", Score: 3.0}},
+			zRangeDest,
+		)
 
 		// Union results with sum aggregate
 		zUnionStoreWithSumAggregateResult, err := client.ZUnionStoreWithOptions(
@@ -9259,7 +9343,11 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zRangeDest, err = client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), zUnionStoreWithSumAggregateResult)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 5.5, "three": 3.0}, zRangeDest)
+		assert.Equal(
+			suite.T(),
+			[]api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "three", Score: 3.0}, {Member: "two", Score: 5.5}},
+			zRangeDest,
+		)
 
 		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
 		zUnionStoreWithWeightedKeysResult, err := client.ZUnionStoreWithOptions(
@@ -9276,7 +9364,11 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zRangeDest, err = client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), zUnionStoreWithWeightedKeysResult)
-		assert.Equal(suite.T(), map[string]float64{"one": 3.0, "two": 13.0, "three": 6.0}, zRangeDest)
+		assert.Equal(
+			suite.T(),
+			[]api.MemberAndScore{{Member: "one", Score: 3.0}, {Member: "three", Score: 6.0}, {Member: "two", Score: 13.0}},
+			zRangeDest,
+		)
 
 		// non-existent key - empty union
 		zUnionStoreWithNonExistentKeyResult, err := client.ZUnionStoreWithOptions(
@@ -9288,7 +9380,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zRangeDest, err = client.ZRangeWithScores(dest, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), zUnionStoreWithNonExistentKeyResult)
-		assert.Equal(suite.T(), map[string]float64{"one": 1.0, "two": 2.0}, zRangeDest)
+		assert.Equal(suite.T(), []api.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "two", Score: 2.0}}, zRangeDest)
 
 		// empty key list - empty union
 		_, err = client.ZRem(dest, []string{"one", "two"}) // Flush previous results
@@ -9323,7 +9415,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 }
 
 func (suite *GlideTestSuite) TestZInterCard() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}:1-" + uuid.NewString()
 		key2 := "{key}:2-" + uuid.NewString()
@@ -9380,7 +9472,7 @@ func (suite *GlideTestSuite) TestZInterCard() {
 
 func (suite *GlideTestSuite) TestZLexCount() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		suite.SkipIfServerVersionLowerThanBy("6.2.0")
+		suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
 		t := suite.T()
 		key1 := "{testKey}:1-" + uuid.New().String()
 		key2 := "{testKey}:3-" + uuid.New().String()
@@ -9994,22 +10086,22 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 			"edge2":   {Longitude: 17.241510, Latitude: 38.788135},
 			"edge1":   {Longitude: 12.758489, Latitude: 38.788135},
 		}
-		// Expected results maps
-		expectedMap := map[string]float64{
-			"Catania": 3479447370796909.0,
-			"Palermo": 3479099956230698.0,
-			"edge2":   3481342659049484.0,
-			"edge1":   3479273021651468.0,
+		// Expected results arrays
+		expectedArray := []api.MemberAndScore{
+			{Member: "Palermo", Score: 3479099956230698.0},
+			{Member: "edge1", Score: 3479273021651468.0},
+			{Member: "Catania", Score: 3479447370796909.0},
+			{Member: "edge2", Score: 3481342659049484.0},
 		}
-		expectedMap2 := map[string]float64{
-			"Catania": 56.4412578701582,
-			"Palermo": 190.44242984775784,
-			"edge2":   279.7403417843143,
-			"edge1":   279.7404521356343,
+		expectedArray2 := []api.MemberAndScore{
+			{Member: "Catania", Score: 56.4412578701582},
+			{Member: "Palermo", Score: 190.44242984775784},
+			{Member: "edge2", Score: 279.7403417843143},
+			{Member: "edge1", Score: 279.7404521356343},
 		}
-		expectedMap3 := map[string]float64{
-			"Catania": 3479447370796909.0,
-			"Palermo": 3479099956230698.0,
+		expectedArray3 := []api.MemberAndScore{
+			{Member: "Palermo", Score: 3479099956230698.0},
+			{Member: "Catania", Score: 3479447370796909.0},
 		}
 		// Add geospatial data
 		result, err := client.GeoAdd(sourceKey, membersToCoordinates)
@@ -10029,7 +10121,7 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		// Verify stored results
 		zRangeResult, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), expectedMap, zRangeResult)
+		assert.Equal(suite.T(), expectedArray, zRangeResult)
 
 		// Test storing results of a box search, unit: kilometers, from a geospatial data point, with distance
 		count, err = client.GeoSearchStoreWithInfoOptions(
@@ -10045,7 +10137,9 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		// Verify stored results with distance
 		zRangeResultWithDist, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
-		assert.InDeltaMapValues(suite.T(), expectedMap2, zRangeResultWithDist, 1e-6)
+		for i := range expectedArray2 {
+			assert.InDelta(suite.T(), expectedArray2[i].Score, zRangeResultWithDist[i].Score, 1e-6)
+		}
 
 		// Test storing results of a box search, unit: kilometers, from a geospatial data point, with count
 		count, err = client.GeoSearchStoreWithResultOptions(
@@ -10063,7 +10157,7 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			map[string]float64{"Catania": 3479447370796909, "Palermo": 3479099956230698},
+			[]api.MemberAndScore{{Member: "Palermo", Score: 3479099956230698}, {Member: "Catania", Score: 3479447370796909}},
 			zRangeResultWithCount,
 		)
 
@@ -10082,7 +10176,7 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		// Verify stored results with count
 		zRangeResultWithCount, err = client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), expectedMap3, zRangeResultWithCount)
+		assert.Equal(suite.T(), expectedArray3, zRangeResultWithCount)
 
 		// Test storing results of a search that returns 0 results
 		count, err = client.GeoSearchStore(
@@ -10095,7 +10189,7 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		assert.Equal(suite.T(), int64(0), count)
 		zRangeResultZero, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]float64(map[string]float64{}), zRangeResultZero)
+		assert.Equal(suite.T(), []api.MemberAndScore{}, zRangeResultZero)
 
 		// Test storing results of a search with ANY option
 		count, err = client.GeoSearchStoreWithResultOptions(
@@ -10109,11 +10203,11 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		assert.Equal(suite.T(), int64(4), count)
 		zRangeResultANY, err := client.ZRangeWithScores(destinationKey, options.NewRangeByIndexQuery(0, -1))
 		assert.NoError(suite.T(), err)
-		expectedANYResults := map[string]float64{
-			"Catania": 3479447370796909.0,
-			"Palermo": 3479099956230698.0,
-			"edge1":   3479273021651468.0,
-			"edge2":   3481342659049484.0,
+		expectedANYResults := []api.MemberAndScore{
+			{Member: "Palermo", Score: 3479099956230698.0},
+			{Member: "edge1", Score: 3479273021651468.0},
+			{Member: "Catania", Score: 3479447370796909.0},
+			{Member: "edge2", Score: 3481342659049484.0},
 		}
 		assert.Equal(suite.T(), expectedANYResults, zRangeResultANY)
 
@@ -10129,5 +10223,164 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		_, err = client.GeoSearchStore(destinationKey, key3, searchOrigin, *boxShape)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestBZPopMax() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+
+		res1, err := client.BZPopMax([]string{key1}, float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res1.IsNil())
+
+		membersScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+
+		res2, err := client.ZAdd(key1, membersScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res2)
+
+		res3, err := client.BZPopMax([]string{key1}, float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), api.KeyWithMemberAndScore{Key: key1, Member: "three", Score: 3.0}, res3.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestZMPop() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		key3 := "{key}-3" + uuid.NewString()
+
+		res1, err := client.ZMPop([]string{key1}, options.MIN)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res1.IsNil())
+
+		membersScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		res2, err := client.ZAdd(key1, membersScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res2)
+
+		res3, err := client.ZAdd(key2, map[string]float64{
+			"four": 4.0,
+			"five": 5.0,
+		})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res3)
+
+		// Pop minimum value from key1
+		res4, err := client.ZMPop([]string{key1}, options.MIN)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), key1, res4.Value().Key)
+		assert.ElementsMatch(
+			suite.T(),
+			[]api.MemberAndScore{
+				{Member: "one", Score: 1.0},
+			},
+			res4.Value().MembersAndScores,
+		)
+
+		// Pop maximum value from key2
+		res5, err := client.ZMPop([]string{key2}, options.MAX)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), key2, res5.Value().Key)
+		assert.ElementsMatch(
+			suite.T(),
+			[]api.MemberAndScore{
+				{Member: "five", Score: 5.0},
+			},
+			res5.Value().MembersAndScores,
+		)
+
+		// pop from an empty key3
+		res6, err := client.ZMPop([]string{key3}, options.MIN)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res6.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestZMPopWithOptions() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		key3 := "{key}-3" + uuid.NewString()
+
+		opts := *options.NewZPopOptions().SetCount(2)
+
+		res1, err := client.ZMPopWithOptions([]string{key1}, options.MIN, opts)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res1.IsNil())
+
+		membersScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+			"four":  4.0,
+		}
+		res2, err := client.ZAdd(key1, membersScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2)
+
+		res3, err := client.ZAdd(key2, map[string]float64{
+			"a": 10.0,
+			"b": 20.0,
+		})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res3)
+
+		res4, err := client.ZMPopWithOptions([]string{key1}, options.MIN, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), key1, res4.Value().Key)
+		assert.ElementsMatch(
+			suite.T(),
+			[]api.MemberAndScore{
+				{Member: "one", Score: 1.0},
+				{Member: "two", Score: 2.0},
+			},
+			res4.Value().MembersAndScores,
+		)
+
+		opts10 := *options.NewZPopOptions().SetCount(10)
+		res5, err := client.ZMPopWithOptions([]string{key1}, options.MIN, opts10)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), key1, res5.Value().Key)
+		assert.ElementsMatch(
+			suite.T(),
+			[]api.MemberAndScore{
+				{Member: "three", Score: 3.0},
+				{Member: "four", Score: 4.0},
+			},
+			res5.Value().MembersAndScores,
+		)
+
+		opts1 := *options.NewZPopOptions().SetCount(1)
+		res6, err := client.ZMPopWithOptions([]string{key2}, options.MAX, opts1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), key2, res6.Value().Key)
+		assert.ElementsMatch(
+			suite.T(),
+			[]api.MemberAndScore{
+				{Member: "b", Score: 20.0},
+			},
+			res6.Value().MembersAndScores,
+		)
+
+		res7, err := client.ZMPopWithOptions([]string{key3}, options.MIN, opts1)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res7.IsNil())
 	})
 }

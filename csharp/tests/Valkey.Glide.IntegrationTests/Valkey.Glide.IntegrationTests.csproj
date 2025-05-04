@@ -1,12 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net6.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Valkey.Glide.IntegrationTests</RootNamespace>
     <AssemblyName>Valkey.Glide.IntegrationTests</AssemblyName>
     <Nullable>enable</Nullable>
-    <LangVersion>12.0</LangVersion>
+    <LangVersion>preview</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
@@ -21,7 +21,7 @@
 
   <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
   <PropertyGroup Condition="'$(Configuration)' == 'Lint'">
-    <LangVersion>12.0</LangVersion>
+    <LangVersion>preview</LangVersion>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
@@ -34,7 +34,8 @@
   <!-- Workaround for https://github.com/dotnet/roslyn/issues/41640 -->
   <PropertyGroup>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591;CS1573;CS1587</NoWarn>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS1587;xUnit1014</NoWarn>
+    <!-- xUnit1014 added due to https://github.com/xunit/xunit/issues/3252, could be removed once fixed or we stop supporting .net6 -->
   </PropertyGroup>
 
   <ItemGroup>

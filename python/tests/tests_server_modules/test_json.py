@@ -20,6 +20,7 @@ from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
 from glide.glide_client import GlideClusterClient, TGlideClient
+
 from tests.test_async_client import get_random_string
 
 

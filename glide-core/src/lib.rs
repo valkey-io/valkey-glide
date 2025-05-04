@@ -3,7 +3,6 @@
 #[cfg(feature = "proto")]
 include!("generated/mod.rs");
 pub mod client;
-mod retry_strategies;
 #[cfg(feature = "socket-layer")]
 pub mod rotating_buffer;
 #[cfg(feature = "socket-layer")]

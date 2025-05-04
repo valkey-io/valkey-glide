@@ -29,36 +29,17 @@ java-test: check-redis-server
 ##
 ## Python targets
 ##
-python: .build/python_deps
-	@echo "$(GREEN)Building for Python (release)$(RESET)"
-	@cd python && VIRTUAL_ENV=$(PYENV_DIR) .env/bin/maturin develop --release --strip
+python:
+	@echo "$(GREEN)Building Python async + sync clients (release mode)$(RESET)"
+	@cd python && python3 dev.py build --mode release
 
-python-lint: .build/python_deps
-	@echo "$(GREEN)Building Linters for python$(RESET)"
-	cd python && 																		\
-		export VIRTUAL_ENV=$(PYENV_DIR); 												\
-		export PYTHONPATH=$(PY_PATH):$(PY_GLIDE_PATH); 									\
-		export PATH=$(PYENV_DIR)/bin:$(PATH);		 									\
-		isort . --profile black --skip-glob python/glide/protobuf --skip-glob .env && 	\
-		black . --exclude python/glide/protobuf --exclude .env && 						\
-		flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics      		\
-			--exclude=python/glide/protobuf,.env/* --extend-ignore=E230				&&	\
-		flake8 . --count --max-complexity=12 --max-line-length=127  		\
-			--statistics --exclude=python/glide/protobuf,.env/*             			\
-			--extend-ignore=E230
+python-lint:
+	@echo "$(GREEN)Running linters via dev.py$(RESET)"
+	@cd python && python3 dev.py lint
 
-python-test: .build/python_deps check-redis-server
-	cd python && PYTHONPATH=$(PY_PATH):$(PY_GLIDE_PATH) .env/bin/pytest -v --asyncio-mode=auto
-
-.build/python_deps:
-	@echo "$(GREEN)Generating protobuf files...$(RESET)"
-	@protoc -Iprotobuf=$(ROOT_DIR)/glide-core/src/protobuf/ \
-		--python_out=$(ROOT_DIR)/python/python/glide $(ROOT_DIR)/glide-core/src/protobuf/*.proto
-	@echo "$(GREEN)Building environment...$(RESET)"
-	@cd python && python3 -m venv .env
-	@echo "$(GREEN)Installing requirements...$(RESET)"
-	@cd python && .env/bin/pip install -r requirements.txt
-	@mkdir -p .build/ && touch .build/python_deps
+python-test: check-redis-server
+	@echo "$(GREEN)Running Python tests$(RESET)"
+	@cd python && python3 dev.py test
 
 ##
 ## NodeJS targets

@@ -14,7 +14,7 @@ import (
 )
 
 func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+	suite.SkipIfServerVersionLowerThanBy("8.0.0", suite.T())
 	az := "us-east-1a"
 	const GET_CALLS = 3
 	getCmdStat := "cmdstat_get:calls=" + fmt.Sprint(GET_CALLS)
@@ -75,7 +75,7 @@ func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
 }
 
 func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToAllReplicas() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+	suite.SkipIfServerVersionLowerThanBy("8.0.0", suite.T())
 	az := "us-east-1a"
 
 	clientForConfigSet := suite.clusterClient(suite.defaultClusterClientConfig().WithRequestTimeout(2000))
@@ -156,7 +156,7 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 }
 
 func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+	suite.SkipIfServerVersionLowerThanBy("8.0.0", suite.T())
 
 	const nGetCalls = 3
 	const nReplicaCalls = 1
@@ -202,7 +202,7 @@ func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
 }
 
 func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+	suite.SkipIfServerVersionLowerThanBy("8.0.0", suite.T())
 
 	az := "us-east-1a"
 	otherAz := "us-east-1b"
@@ -234,7 +234,7 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	primaryAzResult, err := clientForConfigSet.CustomCommandWithRoute(
 		[]string{"CONFIG", "GET", "availability-zone"}, config.NewSlotIdRoute(config.SlotTypePrimary, 12182))
 	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), az, primaryAzResult.MultiValue()["availability-zone"])
+	assert.Equal(suite.T(), az, primaryAzResult.SingleValue().(map[string]any)["availability-zone"])
 
 	clientForConfigSet.Close()
 

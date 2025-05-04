@@ -79,6 +79,7 @@ pub struct ConnectionRetryStrategy {
     pub exponent_base: u32,
     pub factor: u32,
     pub number_of_retries: u32,
+    pub jitter_percent: Option<u32>,
 }
 
 #[cfg(feature = "proto")]
@@ -178,6 +179,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                     exponent_base: strategy.exponent_base,
                     factor: strategy.factor,
                     number_of_retries: strategy.number_of_retries,
+                    jitter_percent: strategy.jitter_percent,
                 });
         let periodic_checks = value
             .periodic_checks

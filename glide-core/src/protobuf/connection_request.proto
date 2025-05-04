@@ -86,4 +86,5 @@ message ConnectionRetryStrategy {
     uint32 number_of_retries = 1;
     uint32 factor = 2;
     uint32 exponent_base = 3;
+    optional uint32 jitter_percent = 4;
 }

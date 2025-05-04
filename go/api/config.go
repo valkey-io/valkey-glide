@@ -327,6 +327,9 @@ func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.Connectio
 	if (config.AdvancedGlideClusterClientConfiguration.connectionTimeout) != 0 {
 		request.ConnectionTimeout = uint32(config.AdvancedGlideClusterClientConfiguration.connectionTimeout)
 	}
+	if config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0 {
+		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
+	}
 	return request, nil
 }
 

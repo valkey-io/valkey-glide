@@ -404,6 +404,13 @@ func (opts *ZPopOptions) SetCount(count int64) *ZPopOptions {
 	return opts
 }
 
-func (opts *ZPopOptions) ToArgs() ([]string, error) {
-	return []string{utils.IntToString(opts.count)}, nil
+// `ZPopMax/Min` don't use the COUNT keyword, only ZMPop will use .
+func (opts *ZPopOptions) ToArgs(withKeyword bool) ([]string, error) {
+	if opts.count <= 0 {
+		return []string{}, nil
+	}
+	if withKeyword {
+		return []string{"COUNT", strconv.FormatInt(opts.count, 10)}, nil
+	}
+	return []string{strconv.FormatInt(opts.count, 10)}, nil
 }

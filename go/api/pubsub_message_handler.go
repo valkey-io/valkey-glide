@@ -157,6 +157,14 @@ func (queue *PubSubMessageQueue) RegisterSignalChannel(ch chan struct{}) {
 	queue.mu.Lock()
 	defer queue.mu.Unlock()
 	queue.nextMessageReadySignals = append(queue.nextMessageReadySignals, ch)
+
+	// Add this to signal if there are existing messages
+	if len(queue.messages) > 0 {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func (queue *PubSubMessageQueue) UnregisterSignalChannel(ch chan struct{}) {
