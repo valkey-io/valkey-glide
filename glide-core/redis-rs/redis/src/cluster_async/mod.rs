@@ -1103,6 +1103,7 @@ where
             disconnect_notifier,
             discover_az,
             connection_timeout: Some(cluster_params.connection_timeout),
+            connection_retry_strategy: None,
         };
 
         let connections = Self::create_initial_connections(
