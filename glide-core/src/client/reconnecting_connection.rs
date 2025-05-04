@@ -1,12 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use super::{NodeAddress, TlsMode};
-use crate::retry_strategies::RetryStrategy;
 use async_trait::async_trait;
 use futures_intrusive::sync::ManualResetEvent;
 use logger_core::{log_debug, log_error, log_trace, log_warn};
 use redis::aio::{DisconnectNotifier, MultiplexedConnection};
-use redis::{GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisError, RedisResult};
+use redis::{
+    GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisError, RedisResult, RetryStrategy,
+};
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -138,6 +139,7 @@ async fn create_connection(
         )),
         discover_az,
         connection_timeout: Some(connection_timeout),
+        connection_retry_strategy: Some(retry_strategy),
     };
 
     let action = || async {
@@ -146,7 +148,7 @@ async fn create_connection(
             .map_err(RetryError::transient)
     };
 
-    match Retry::spawn(retry_strategy.get_iterator(), action).await {
+    match Retry::spawn(retry_strategy.get_bounded_backoff_dur_iterator(), action).await {
         Ok(connection) => {
             log_debug(
                 "connection creation",
@@ -202,18 +204,6 @@ fn get_client(
         redis_connection_info,
     ))
     .unwrap() // can unwrap, because [open] fails only on trying to convert input to ConnectionInfo, and we pass ConnectionInfo.
-}
-
-/// This iterator isn't exposed to users, and can't be configured.
-fn internal_retry_iterator() -> impl Iterator<Item = Duration> {
-    const MAX_DURATION: Duration = Duration::from_secs(5);
-    crate::retry_strategies::get_exponential_backoff(
-        crate::retry_strategies::EXPONENT_BASE,
-        crate::retry_strategies::FACTOR,
-        crate::retry_strategies::NUMBER_OF_RETRIES,
-    )
-    .get_iterator()
-    .chain(std::iter::repeat(MAX_DURATION))
 }
 
 impl ConnectionBackend {
@@ -329,7 +319,13 @@ impl ReconnectingConnection {
                 let guard = connection_clone.inner.backend.get_backend_client();
                 guard.clone()
             };
-            for sleep_duration in internal_retry_iterator() {
+
+            let infinite_backoff_dur_iterator = connection_clone
+                .connection_options
+                .connection_retry_strategy
+                .unwrap()
+                .get_infinite_backoff_dur_iterator();
+            for sleep_duration in infinite_backoff_dur_iterator {
                 if connection_clone.is_dropped() {
                     log_debug(
                         "ReconnectingConnection",

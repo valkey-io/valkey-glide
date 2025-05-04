@@ -75,6 +75,11 @@ public abstract class ConnectionConfiguration
         /// The exponent base configured for the strategy.
         /// </summary>
         public uint ExponentBase = exponentBase;
+
+        /// <summary>
+        /// The Jitter precent configured for the strategy.
+        /// </summary>
+        public uint? JitterPrecent = null;
     }
 
     /// <summary>

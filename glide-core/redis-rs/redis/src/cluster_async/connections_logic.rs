@@ -195,6 +195,7 @@ where
             disconnect_notifier,
             discover_az,
             connection_timeout: Some(params.connection_timeout),
+            connection_retry_strategy: None,
         },
     )
     .await

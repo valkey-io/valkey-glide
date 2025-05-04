@@ -5,14 +5,13 @@ use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
 use super::{to_duration, DEFAULT_CONNECTION_TIMEOUT};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
 use crate::client::types::ReadFrom as ClientReadFrom;
-use crate::retry_strategies::RetryStrategy;
 use futures::{future, stream, StreamExt};
 use logger_core::log_debug;
 use logger_core::log_warn;
 use rand::Rng;
 use redis::aio::ConnectionLike;
 use redis::cluster_routing::{self, is_readonly_cmd, ResponsePolicy, Routable, RoutingInfo};
-use redis::{PushInfo, RedisError, RedisResult, Value};
+use redis::{PushInfo, RedisError, RedisResult, RetryStrategy, Value};
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -124,7 +123,15 @@ impl StandaloneClient {
         let mut redis_connection_info = get_redis_connection_info(&connection_request);
         let pubsub_connection_info = redis_connection_info.clone();
         redis_connection_info.pubsub_subscriptions = None;
-        let retry_strategy = RetryStrategy::new(connection_request.connection_retry_strategy);
+        let retry_strategy = match connection_request.connection_retry_strategy {
+            Some(strategy) => RetryStrategy::new(
+                strategy.exponent_base,
+                strategy.factor,
+                strategy.number_of_retries,
+                strategy.jitter_percent,
+            ),
+            None => RetryStrategy::default(),
+        };
 
         let tls_mode = connection_request.tls_mode;
         let node_count = connection_request.addresses.len();
@@ -635,7 +642,7 @@ async fn get_connection_and_replication_info(
 ) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
     let result = ReconnectingConnection::new(
         address,
-        retry_strategy.clone(),
+        *retry_strategy,
         connection_info.clone(),
         tls_mode,
         push_sender.clone(),
