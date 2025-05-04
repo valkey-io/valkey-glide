@@ -6,7 +6,6 @@ import { expect } from "@jest/globals";
 import { exec } from "child_process";
 import { Socket } from "net";
 import { promisify } from "util";
-import { v4 as uuidv4 } from "uuid";
 import {
     BaseClient,
     BaseClientConfiguration,
@@ -44,6 +43,12 @@ import {
 } from "..";
 import ValkeyCluster from "../../utils/TestUtils";
 const execAsync = promisify(exec);
+
+export function getRandomKey() {
+    // generate key without using getRandomKey
+    const randomKey = Math.random().toString(36).substring(2, 9);
+    return randomKey; // return the generated random key
+}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function intoArrayInternal(obj: any, builder: string[]) {
@@ -206,9 +211,9 @@ export async function checkWhichCommandAvailable(
 }
 
 export async function GetAndSetRandomValue(client: Client) {
-    const key = uuidv4();
+    const key = getRandomKey();
     // Adding random repetition, to prevent the inputs from always having the same alignment.
-    const value = uuidv4() + "0".repeat(Math.random() * 7);
+    const value = getRandomKey() + "0".repeat(Math.random() * 7);
     const setResult = await client.set(key, value);
     expect(intoString(setResult)).toEqual("OK");
     const result = await client.get(key);
@@ -683,7 +688,7 @@ export async function encodableTransactionTest(
     baseTransaction: Transaction | ClusterTransaction,
     valueEncodedResponse: GlideReturnType,
 ): Promise<[string, GlideReturnType][]> {
-    const key = "{key}" + uuidv4(); // string
+    const key = "{key}" + getRandomKey(); // string
     const value = "value";
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, GlideReturnType][] = [];
@@ -704,8 +709,8 @@ export async function encodableTransactionTest(
 export async function encodedTransactionTest(
     baseTransaction: Transaction | ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
-    const key1 = "{key}" + uuidv4(); // string
-    const key2 = "{key}" + uuidv4(); // string
+    const key1 = "{key}" + getRandomKey(); // string
+    const key2 = "{key}" + getRandomKey(); // string
     const key = "dumpKey";
     const dumpResult = Buffer.from([
         0, 5, 118, 97, 108, 117, 101, 11, 0, 232, 41, 124, 75, 60, 53, 114, 231,
@@ -794,16 +799,16 @@ export async function transactionTest(
         key26, // sorted set
         key27, // sorted set
     ] = Array.from({ length: 27 }, () =>
-        decodeString("{key}" + uuidv4(), decoder),
+        decodeString("{key}" + getRandomKey(), decoder),
     );
 
     // initialize non-key values
     const [value, groupName1, groupName2, consumer] = Array.from(
         { length: 4 },
-        () => decodeString(uuidv4(), decoder),
+        () => decodeString(getRandomKey(), decoder),
     );
 
-    const fieldStr = uuidv4();
+    const fieldStr = getRandomKey();
     const [
         field,
         field1,
@@ -1856,8 +1861,8 @@ export async function transactionTest(
         ]);
     }
 
-    const libName = "mylib1C" + uuidv4().replaceAll("-", "");
-    const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+    const libName = "mylib1C" + getRandomKey().replaceAll("-", "");
+    const funcName = "myfunc1c" + getRandomKey().replaceAll("-", "");
     const code = generateLuaLibCode(
         libName,
         new Map([[funcName, "return args[1]"]]),
@@ -2000,7 +2005,7 @@ export async function JsonBatchForArrCommands(
     baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
-    const key = "{key}:1" + uuidv4();
+    const key = "{key}:1" + getRandomKey();
     const jsonValue = { a: 1.0, b: 2 };
 
     // JSON.SET
@@ -2087,7 +2092,7 @@ export async function CreateJsonBatchCommands(
     baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
-    const key = "{key}:1" + uuidv4();
+    const key = "{key}:1" + getRandomKey();
     const jsonValue = { a: [1, 2], b: [3, 4], c: "c", d: true };
 
     // JSON.SET to create a key for testing commands.
@@ -2131,8 +2136,8 @@ export async function CreateJsonBatchCommands(
     responseData.push(['type(key, "$.a")', ["array"]]);
 
     // JSON.MGET
-    const key2 = "{key}:2" + uuidv4();
-    const key3 = "{key}:3" + uuidv4();
+    const key2 = "{key}:2" + getRandomKey();
+    const key3 = "{key}:3" + getRandomKey();
     const jsonValue2 = { b: [3, 4], c: "c", d: true };
     JsonBatch.set(baseTransaction, key2, "$", JSON.stringify(jsonValue2));
     responseData.push(['set(key2, "$")', "OK"]);
