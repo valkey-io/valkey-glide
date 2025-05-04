@@ -766,9 +766,10 @@ export interface PubSubMsg {
  * @see {@link ClusterBatchOptions}
  * @see {@link BatchOptions}
  */
+type BaseOptions = RouteOption & DecoderOption;
 export type WritePromiseOptions =
-    | (RouteOption & DecoderOption)
-    | (RouteOption & DecoderOption & (ClusterBatchOptions | BatchOptions));
+    | BaseOptions
+    | (BaseOptions & (ClusterBatchOptions | BatchOptions));
 
 /**
  * Base client interface for GLIDE
@@ -1077,6 +1078,15 @@ export class BaseClient {
 
     /**
      * @internal
+     *
+     * Creates a promise that resolves or rejects based on the result of a command request.
+     *
+     * @template T - The type of the result expected from the promise.
+     * @param command - A single command or an array of commands to be executed, array of commands represents a batch and not a single command.
+     * @param options - Optional settings for the write operation, including route, batch options and decoder.
+     * @param isAtomic - Indicates whether the operation should be executed atomically (AKA as a Transaction, in the case of a batch). Defaults to `false`.
+     * @param raiseOnError - Determines whether to raise an error if any of the commands fails, in the case of a Batch and not a single command. Defaults to `false`.
+     * @returns A promise that resolves with the result of the command(s) or rejects with an error.
      */
     protected createWritePromise<T>(
         command: command_request.Command | command_request.Command[],
@@ -1087,13 +1097,14 @@ export class BaseClient {
         this.ensureClientIsOpen();
 
         const route = this.toProtobufRoute(options?.route);
-        return new Promise<T>((resolve, reject) => {
-            const callbackIndex = this.getCallbackIndex();
+        const callbackIndex = this.getCallbackIndex();
+        const basePromise = new Promise<T>((resolve, reject) => {
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
                 options?.decoder,
             ];
+
             this.writeOrBufferCommandRequest(
                 callbackIndex,
                 command,
@@ -1102,25 +1113,30 @@ export class BaseClient {
                 raiseOnError,
                 options as ClusterBatchOptions,
             );
-        }).then((result: T) => {
-            if (Array.isArray(command) && Array.isArray(result)) {
-                for (const item of result) {
+        });
+
+        if (!Array.isArray(command)) {
+            return basePromise;
+        }
+
+        return basePromise.then((result: T) => {
+            if (Array.isArray(result)) {
+                const loopLen = result.length;
+
+                for (let i = 0; i < loopLen; i++) {
+                    const item = result[i];
+
                     if (
-                        item &&
-                        typeof item === "object" &&
-                        item.constructor?.name === "Error"
+                        item?.constructor?.name === "Error" &&
+                        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+                        (item as any).name === "RequestError"
                     ) {
-                        if (
-                            "name" in item &&
-                            (item as { name: string }).name === "RequestError"
-                        ) {
-                            Object.setPrototypeOf(item, RequestError.prototype);
-                        }
+                        Object.setPrototypeOf(item, RequestError.prototype);
                     }
                 }
             }
 
-            return result as T;
+            return result;
         });
     }
 
@@ -1178,6 +1194,16 @@ export class BaseClient {
         });
     }
 
+    /**
+     * @internal
+     *
+     * @param callbackIdx - The requests callback index.
+     * @param command - A single command or an array of commands to be executed, array of commands represents a batch and not a single command.
+     * @param route - Optional routing information for the command.
+     * @param isAtomic - Indicates whether the operation should be executed atomically (AKA as a Transaction, in the case of a batch). Defaults to `false`.
+     * @param raiseOnError - Determines whether to raise an error if any of the commands fails, in the case of a Batch and not a single command. Defaults to `false`.
+     * @param options - Optional settings for batch requests.
+     */
     protected writeOrBufferCommandRequest(
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
@@ -1186,49 +1212,46 @@ export class BaseClient {
         raiseOnError = false,
         options: ClusterBatchOptions | BatchOptions = {},
     ) {
-        if ("retryStrategy" in options && isAtomic) {
+        if (isAtomic && "retryStrategy" in options) {
             throw new RequestError(
                 "Retry strategy is not supported for atomic batches.",
             );
         }
 
         const isBatch = Array.isArray(command);
+        let batch: command_request.Batch | undefined;
 
-        const isClusterOptions = (
-            opt: ClusterBatchOptions | BatchOptions,
-        ): opt is ClusterBatchOptions =>
-            "retryStrategy" in opt || "route" in opt;
+        if (isBatch) {
+            let retryServerError: boolean | undefined;
+            let retryConnectionError: boolean | undefined;
 
-        const batchOptions = isClusterOptions(options)
-            ? {
-                  retryConnectionError:
-                      options.retryStrategy?.retryConnectionError,
-                  retryServerError: options.retryStrategy?.retryServerError,
-              }
-            : {};
+            if ("retryStrategy" in options) {
+                retryServerError = options.retryStrategy?.retryServerError;
+                retryConnectionError =
+                    options.retryStrategy?.retryConnectionError;
+            }
 
-        const message = isBatch
-            ? command_request.CommandRequest.create({
-                  callbackIdx,
-                  batch: command_request.Batch.create({
-                      isAtomic,
-                      commands: command,
-                      raiseOnError,
-                      timeout: options.timeout,
-                      ...batchOptions,
-                  }),
-                  route,
-              })
-            : command_request.CommandRequest.create({
-                  callbackIdx,
-                  singleCommand: command,
-                  route,
-              });
+            batch = command_request.Batch.create({
+                isAtomic,
+                commands: command,
+                raiseOnError,
+                timeout: options.timeout,
+                retryServerError,
+                retryConnectionError,
+            });
+        }
+
+        const message = command_request.CommandRequest.create({
+            callbackIdx,
+            singleCommand: isBatch ? undefined : command,
+            batch,
+            route,
+        });
 
         this.writeOrBufferRequest(
             message,
-            (message: command_request.CommandRequest, writer: Writer) => {
-                command_request.CommandRequest.encodeDelimited(message, writer);
+            (msg: command_request.CommandRequest, writer: Writer) => {
+                command_request.CommandRequest.encodeDelimited(msg, writer);
             },
         );
     }
@@ -1258,14 +1281,12 @@ export class BaseClient {
             return null;
         }
 
-        for (const index of setCommandsIndexes) {
-            if (result[index] instanceof RequestError) {
-                continue;
+        for (let i = 0, len = setCommandsIndexes.length; i < len; i++) {
+            if (Array.isArray(result[setCommandsIndexes[i]])) {
+                result[setCommandsIndexes[i]] = new Set<GlideReturnType>(
+                    result[setCommandsIndexes[i]] as GlideReturnType[],
+                );
             }
-
-            result[index] = new Set<GlideReturnType>(
-                result[index] as GlideReturnType[],
-            );
         }
 
         return result;

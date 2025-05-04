@@ -4263,7 +4263,7 @@ export type BatchOptions = {} & BaseBatchOptions;
  * - If `retryServerError` is `true`, retriable errors (e.g., `TRYAGAIN`) will trigger a retry.
  * - If `retryConnectionError` is `true`, connection failures will trigger a retry.
  *
- * **Warnings:**
+ * **⚠️ Warnings:**
  *
  * - Retrying server errors may cause commands targeting the same slot to execute out of order.
  * - Retrying connection errors may lead to duplicate executions, as it is unclear which
@@ -4302,7 +4302,7 @@ export type ClusterBatchOptions = {
     route?: SingleNodeRoute;
 
     /**
-     * ⚠️ **Please read {@link ClusterBatchRetryStrategy} carefully before enabling these configurations.**
+     * ⚠️ **Please see {@link ClusterBatchRetryStrategy} and read carefully before enabling these configurations.**
      *
      * Defines the retry strategy for handling batch request failures.
      *
@@ -4312,7 +4312,7 @@ export type ClusterBatchOptions = {
      * - If `retryServerError` is `true`, retriable errors (e.g., `TRYAGAIN`) will trigger a retry.
      * - If `retryConnectionError` is `true`, connection failures will trigger a retry.
      *
-     * **Warnings:**
+     * **⚠️ Warnings:**
      *
      * - Retrying server errors may cause commands targeting the same slot to execute out of order.
      * - Retrying connection errors may lead to duplicate executions, as it is unclear which
@@ -4347,14 +4347,14 @@ export type ClusterBatchOptions = {
  *
  * ### Example Scenario
  *
- * ```javascript
+ * ```
  * MGET key {key}:1
  * SET key "value"
  * ```
  *
  * Expected response when keys are empty:
  *
- * ```javascript
+ * ```
  * [null, null]
  * OK
  * ```
@@ -4364,7 +4364,7 @@ export type ClusterBatchOptions = {
  * the `SET` command succeeds immediately. This can result in an unintended reordering of commands if
  * the first command is retried after the slot stabilizes:
  *
- * ```javascript
+ * ```
  * ["value", null]
  * OK
  * ```

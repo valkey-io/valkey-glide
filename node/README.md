@@ -32,7 +32,7 @@ Alpine:
 
 ## NodeJS supported version
 
-Node.js 16.20 or higher.
+Node.js 16 or higher.
 
 ### Building & Testing
 

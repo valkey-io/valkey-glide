@@ -300,8 +300,8 @@ class BaseBatch<T extends BaseBatch<T>> {
 
     /**
      * @param isAtomic - Determines whether the batch is atomic or non-atomic. If `true`, the
-     *     batch will be executed as an atomic transaction. If `false`, the batch will be
-     *     executed as a non-atomic pipeline.
+     *     batch will be executed as an atomic `transaction`. If `false`, the batch will be
+     *     executed as a non-atomic `pipeline`.
      */
     constructor(public readonly isAtomic: boolean) {}
 
@@ -4072,7 +4072,7 @@ class BaseBatch<T extends BaseBatch<T>> {
  * const transaction = new Batch(true) // Atomic (Transactional)
  *     .set("key", "value")
  *     .get("key");
- * const result = await client.exec(transaction);
+ * const result = await client.exec(transaction, true);
  * // result contains: OK and "value"
  * console.log(result); // ["OK", "value"]
  * ```
@@ -4085,7 +4085,7 @@ class BaseBatch<T extends BaseBatch<T>> {
  *     .set("key2", "value2")
  *     .get("key1")
  *     .get("key2");
- * const result = await client.exec(pipeline);
+ * const result = await client.exec(pipeline, true);
  * // result contains: OK, OK, "value1", "value2"
  * console.log(result); // ["OK", "OK", "value1", "value2"]
  * ```
@@ -4182,10 +4182,8 @@ export class Batch extends BaseBatch<Batch> {
  * const transaction = new ClusterBatch(true) // Atomic (Transactional)
  *     .set("key", "value")
  *     .get("key");
- * const result = await client.exec(transaction);
- * // result contains: OK and "value"
- * console.assert(result[0] === "OK");
- * console.assert(result[1] === "value");
+ * const result = await client.exec(transaction, true);
+ * console.log(result); // ["OK", "value"]
  * ```
  *
  * @example
@@ -4196,12 +4194,8 @@ export class Batch extends BaseBatch<Batch> {
  *     .set("key2", "value2")
  *     .get("key1")
  *     .get("key2");
- * const result = await client.exec(pipeline);
- * // result contains: OK, OK, "value1", "value2"
- * console.assert(result[0] === "OK");
- * console.assert(result[1] === "OK");
- * console.assert(result[2] === "value1");
- * console.assert(result[3] === "value2");
+ * const result = await client.exec(pipeline, true);
+ * console.log(result); // ["OK", "OK", "value1", "value2"]
  * ```
  */
 export class ClusterBatch extends BaseBatch<ClusterBatch> {
