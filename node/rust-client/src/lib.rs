@@ -25,7 +25,6 @@ use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
 #[cfg(feature = "testing_utilities")]
 use std::collections::HashMap;
 use std::ptr::from_mut;
-use std::str;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
 pub enum Level {

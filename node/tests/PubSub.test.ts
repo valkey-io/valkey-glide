@@ -10,7 +10,6 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
     ConfigurationError,
@@ -27,6 +26,7 @@ import {
 import ValkeyCluster from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
+    getRandomKey,
     getServerVersion,
     parseEndpoints,
 } from "./TestUtilities";
@@ -350,8 +350,8 @@ describe("PubSub", () => {
             let publishingClient: TGlideClient;
 
             try {
-                const channel = uuidv4() as GlideString;
-                const message = uuidv4() as GlideString;
+                const channel = getRandomKey() as GlideString;
+                const message = getRandomKey() as GlideString;
                 const options = getOptions(clusterMode);
                 let context: PubSubMsg[] | null = null;
                 let callback;
@@ -436,8 +436,8 @@ describe("PubSub", () => {
             let publishingClient: TGlideClient;
 
             try {
-                const channel = uuidv4() as GlideString;
-                const message = uuidv4() as GlideString;
+                const channel = getRandomKey() as GlideString;
+                const message = getRandomKey() as GlideString;
                 const options = getOptions(clusterMode);
                 let context: PubSubMsg[] | null = null;
                 let callback;
@@ -485,8 +485,12 @@ describe("PubSub", () => {
                     0,
                 );
 
-                expect(pubsubMessage!.message).toEqual(Buffer.from(message));
-                expect(pubsubMessage!.channel).toEqual(Buffer.from(channel));
+                expect(pubsubMessage!.message).toEqual(
+                    Buffer.from(String(message)),
+                );
+                expect(pubsubMessage!.channel).toEqual(
+                    Buffer.from(String(channel)),
+                );
                 expect(pubsubMessage!.pattern).toBeNull();
 
                 await checkNoMessagesLeft(method, listeningClient, context, 1);
@@ -523,9 +527,9 @@ describe("PubSub", () => {
             let publishingClient: TGlideClient | null = null;
 
             try {
-                const channel = uuidv4() as GlideString;
-                const message = uuidv4() as GlideString;
-                const message2 = uuidv4() as GlideString;
+                const channel = getRandomKey() as GlideString;
+                const message = getRandomKey() as GlideString;
+                const message2 = getRandomKey() as GlideString;
 
                 pubSub = createPubSubSubscription(
                     clusterMode,
@@ -614,8 +618,8 @@ describe("PubSub", () => {
                 const channelsAndMessages: [GlideString, GlideString][] = [];
 
                 for (let i = 0; i < NUM_CHANNELS; i++) {
-                    const channel = `${shardPrefix}${uuidv4()}`;
-                    const message = uuidv4();
+                    const channel = `${shardPrefix}${getRandomKey()}`;
+                    const message = getRandomKey();
                     channelsAndMessages.push([channel, message]);
                 }
 
@@ -738,8 +742,8 @@ describe("PubSub", () => {
                 const channelsAndMessages: [GlideString, GlideString][] = [];
 
                 for (let i = 0; i < NUM_CHANNELS; i++) {
-                    const channel = `${shardPrefix}${uuidv4()}`;
-                    const message = uuidv4();
+                    const channel = `${shardPrefix}${getRandomKey()}`;
+                    const message = getRandomKey();
                     channelsAndMessages.push([channel, message]);
                 }
 
@@ -851,8 +855,8 @@ describe("PubSub", () => {
                 | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
-            const channel = uuidv4() as GlideString;
-            const message = uuidv4() as GlideString;
+            const channel = getRandomKey() as GlideString;
+            const message = getRandomKey() as GlideString;
             const publishResponse = 1;
 
             try {
@@ -948,9 +952,9 @@ describe("PubSub", () => {
                 | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
-            const channel = uuidv4() as GlideString;
-            const message = uuidv4() as GlideString;
-            const message2 = uuidv4() as GlideString;
+            const channel = getRandomKey() as GlideString;
+            const message = getRandomKey() as GlideString;
+            const message2 = getRandomKey() as GlideString;
 
             try {
                 // Create PUBSUB subscription for the test
@@ -1053,8 +1057,8 @@ describe("PubSub", () => {
             const channelsAndMessages: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
-                const channel = `${shardPrefix}${uuidv4()}`;
-                const message = uuidv4();
+                const channel = `${shardPrefix}${getRandomKey()}`;
+                const message = getRandomKey();
                 channelsAndMessages.push([channel, message]);
             }
 
@@ -1157,8 +1161,8 @@ describe("PubSub", () => {
         async (clusterMode, method) => {
             const PATTERN = `{{channel}}:*`;
             const channels: [GlideString, GlideString][] = [
-                [`{{channel}}:${uuidv4()}`, uuidv4()],
-                [`{{channel}}:${uuidv4()}`, uuidv4()],
+                [`{{channel}}:${getRandomKey()}`, getRandomKey()],
+                [`{{channel}}:${getRandomKey()}`, getRandomKey()],
             ];
 
             let pubSub:
@@ -1266,8 +1270,8 @@ describe("PubSub", () => {
         async (clusterMode) => {
             const PATTERN = `{{channel}}:*`;
             const channels: [GlideString, GlideString][] = [
-                [`{{channel}}:${uuidv4()}`, uuidv4()],
-                [`{{channel}}:${uuidv4()}`, uuidv4()],
+                [`{{channel}}:${getRandomKey()}`, getRandomKey()],
+                [`{{channel}}:${getRandomKey()}`, getRandomKey()],
             ];
 
             let pubSub:
@@ -1373,8 +1377,8 @@ describe("PubSub", () => {
             const channels: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
-                const channel = `{{channel}}:${uuidv4()}`;
-                const message = uuidv4();
+                const channel = `{{channel}}:${getRandomKey()}`;
+                const message = getRandomKey();
                 channels.push([channel, message]);
             }
 
@@ -1497,10 +1501,10 @@ describe("PubSub", () => {
             const patternChannelsAndMessages: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
-                const exactChannel = `{{channel}}:${uuidv4()}`;
-                const patternChannel = `{{pattern}}:${uuidv4()}`;
-                const exactMessage = uuidv4();
-                const patternMessage = uuidv4();
+                const exactChannel = `{{channel}}:${getRandomKey()}`;
+                const patternChannel = `{{pattern}}:${getRandomKey()}`;
+                const exactMessage = getRandomKey();
+                const patternMessage = getRandomKey();
 
                 exactChannelsAndMessages.push([exactChannel, exactMessage]);
                 patternChannelsAndMessages.push([
@@ -1651,10 +1655,10 @@ describe("PubSub", () => {
             const patternChannelsAndMessages: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
-                const exactChannel = `{{channel}}:${uuidv4()}`;
-                const patternChannel = `{{pattern}}:${uuidv4()}`;
-                const exactMessage = uuidv4();
-                const patternMessage = uuidv4();
+                const exactChannel = `{{channel}}:${getRandomKey()}`;
+                const patternChannel = `{{pattern}}:${getRandomKey()}`;
+                const exactMessage = getRandomKey();
+                const patternMessage = getRandomKey();
 
                 exactChannelsAndMessages.push([exactChannel, exactMessage]);
                 patternChannelsAndMessages.push([
@@ -1873,12 +1877,18 @@ describe("PubSub", () => {
             const shardedChannelsAndMessages: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
-                const exactChannel = `{{channel}}:${uuidv4()}`;
-                const patternChannel = `{{pattern}}:${uuidv4()}`;
-                const shardedChannel = `${SHARD_PREFIX}:${uuidv4()}`;
-                exactChannelsAndMessages.push([exactChannel, uuidv4()]);
-                patternChannelsAndMessages.push([patternChannel, uuidv4()]);
-                shardedChannelsAndMessages.push([shardedChannel, uuidv4()]);
+                const exactChannel = `{{channel}}:${getRandomKey()}`;
+                const patternChannel = `{{pattern}}:${getRandomKey()}`;
+                const shardedChannel = `${SHARD_PREFIX}:${getRandomKey()}`;
+                exactChannelsAndMessages.push([exactChannel, getRandomKey()]);
+                patternChannelsAndMessages.push([
+                    patternChannel,
+                    getRandomKey(),
+                ]);
+                shardedChannelsAndMessages.push([
+                    shardedChannel,
+                    getRandomKey(),
+                ]);
             }
 
             const publishResponse = 1;
@@ -2039,12 +2049,18 @@ describe("PubSub", () => {
             const shardedChannelsAndMessages: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
-                const exactChannel = `{{channel}}:${uuidv4()}`;
-                const patternChannel = `{{pattern}}:${uuidv4()}`;
-                const shardedChannel = `${SHARD_PREFIX}:${uuidv4()}`;
-                exactChannelsAndMessages.push([exactChannel, uuidv4()]);
-                patternChannelsAndMessages.push([patternChannel, uuidv4()]);
-                shardedChannelsAndMessages.push([shardedChannel, uuidv4()]);
+                const exactChannel = `{{channel}}:${getRandomKey()}`;
+                const patternChannel = `{{pattern}}:${getRandomKey()}`;
+                const shardedChannel = `${SHARD_PREFIX}:${getRandomKey()}`;
+                exactChannelsAndMessages.push([exactChannel, getRandomKey()]);
+                patternChannelsAndMessages.push([
+                    patternChannel,
+                    getRandomKey(),
+                ]);
+                shardedChannelsAndMessages.push([
+                    shardedChannel,
+                    getRandomKey(),
+                ]);
             }
 
             const publishResponse = 1;
@@ -2298,9 +2314,9 @@ describe("PubSub", () => {
             if (cmeCluster.checkIfServerVersionLessThan(minVersion)) return;
 
             const CHANNEL_NAME = "same-channel-name";
-            const MESSAGE_EXACT = uuidv4();
-            const MESSAGE_PATTERN = uuidv4();
-            const MESSAGE_SHARDED = uuidv4();
+            const MESSAGE_EXACT = getRandomKey();
+            const MESSAGE_PATTERN = getRandomKey();
+            const MESSAGE_SHARDED = getRandomKey();
 
             let listeningClientExact: TGlideClient | null = null;
             let listeningClientPattern: TGlideClient | null = null;
@@ -2529,8 +2545,8 @@ describe("PubSub", () => {
         "pubsub two publishing clients same name test_%p_%p",
         async (clusterMode, method) => {
             const CHANNEL_NAME = "channel-name";
-            const MESSAGE_EXACT = uuidv4();
-            const MESSAGE_PATTERN = uuidv4();
+            const MESSAGE_EXACT = getRandomKey();
+            const MESSAGE_PATTERN = getRandomKey();
 
             let clientExact: TGlideClient | null = null;
             let clientPattern: TGlideClient | null = null;
@@ -2705,9 +2721,9 @@ describe("PubSub", () => {
             if (cmeCluster.checkIfServerVersionLessThan(minVersion)) return;
 
             const CHANNEL_NAME = "same-channel-name";
-            const MESSAGE_EXACT = uuidv4();
-            const MESSAGE_PATTERN = uuidv4();
-            const MESSAGE_SHARDED = uuidv4();
+            const MESSAGE_EXACT = getRandomKey();
+            const MESSAGE_PATTERN = getRandomKey();
+            const MESSAGE_SHARDED = getRandomKey();
 
             let clientExact: TGlideClient | null = null;
             let clientPattern: TGlideClient | null = null;
@@ -2946,7 +2962,7 @@ describe("PubSub", () => {
                 let listeningClient: TGlideClient | undefined;
                 let publishingClient: TGlideClient | undefined;
 
-                const channel = uuidv4();
+                const channel = getRandomKey();
 
                 const message = generateLargeMessage("1", 512 * 1024 * 1024); // 512MB message
                 const message2 = generateLargeMessage("2", 512 * 1024 * 10);
@@ -3051,7 +3067,7 @@ describe("PubSub", () => {
 
                 let listeningClient: TGlideClient | undefined;
                 let publishingClient: TGlideClient | undefined;
-                const channel = uuidv4();
+                const channel = getRandomKey();
 
                 const message = generateLargeMessage("1", 512 * 1024 * 1024); // 512MB message
                 const message2 = generateLargeMessage("2", 512 * 1024 * 1024); // 512MB message
@@ -3152,7 +3168,7 @@ describe("PubSub", () => {
 
                 let listeningClient: TGlideClient | undefined;
                 let publishingClient: TGlideClient | undefined;
-                const channel = uuidv4();
+                const channel = getRandomKey();
 
                 const message = generateLargeMessage("0", 12 * 1024 * 1024); // 12MB message
 
@@ -3246,7 +3262,7 @@ describe("PubSub", () => {
 
                 let listeningClient: TGlideClient | undefined;
                 let publishingClient: TGlideClient | undefined;
-                const channel = uuidv4();
+                const channel = getRandomKey();
 
                 const message = generateLargeMessage("0", 512 * 1024 * 1024); // 512MB message
 
@@ -3323,7 +3339,7 @@ describe("PubSub", () => {
     it.each([true, false])(
         "test pubsub resp2 raise an error_%p",
         async (clusterMode) => {
-            const channel = uuidv4();
+            const channel = getRandomKey();
 
             const pubSubExact = createPubSubSubscription(
                 clusterMode,
@@ -3359,7 +3375,7 @@ describe("PubSub", () => {
     it.each([true, false])(
         "test pubsub context with no callback raise error_%p",
         async (clusterMode) => {
-            const channel = uuidv4();
+            const channel = getRandomKey();
             const context: PubSubMsg[] = [];
 
             const pubSubExact = createPubSubSubscription(
