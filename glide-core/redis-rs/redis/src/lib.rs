@@ -377,6 +377,7 @@ pub use crate::connection::{
 pub use crate::parser::{parse_redis_value, Parser};
 pub use crate::pipeline::{Pipeline, PipelineRetryStrategy};
 pub use push_manager::{PushInfo, PushManager};
+pub use retry_strategies::RetryStrategy;
 
 #[cfg(feature = "script")]
 #[cfg_attr(docsrs, doc(cfg(feature = "script")))]
@@ -506,5 +507,6 @@ mod commands;
 mod connection;
 mod parser;
 mod push_manager;
+mod retry_strategies;
 mod script;
 mod types;
