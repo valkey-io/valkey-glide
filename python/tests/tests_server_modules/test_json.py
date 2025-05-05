@@ -7,11 +7,11 @@ import typing
 from typing import List, Optional
 
 import pytest
-from glide.async_commands.batch import ClusterBatch
-from glide.async_commands.core import ConditionalChange
-from glide.async_commands.server_modules import glide_json as json
-from glide.async_commands.server_modules import json_batch
-from glide.async_commands.server_modules.glide_json import (
+from glide.commands.batch import ClusterBatch
+from glide.commands.core_options import ConditionalChange
+from glide.commands.server_modules import glide_json as json
+from glide.commands.server_modules import json_batch
+from glide.commands.server_modules.glide_json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
