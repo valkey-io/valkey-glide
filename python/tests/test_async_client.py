@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
+from glide.async_commands.batch import Batch, ClusterBatch
 from glide.async_commands.bitmap import (
     BitFieldGet,
     BitFieldIncrBy,
@@ -69,7 +70,6 @@ from glide.async_commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import BackoffStrategy, ProtocolVersion, ServerCredentials
 from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
@@ -8662,19 +8662,19 @@ class TestCommands:
             == key1.encode()
         )
 
-        transaction = ClusterTransaction()
+        batch = ClusterBatch(is_atomic=True)
 
-        transaction.fcall(func_name, keys=keys, arguments=[])
-        transaction.fcall_ro(func_name, keys=keys, arguments=[])
+        batch.fcall(func_name, keys=keys, arguments=[])
+        batch.fcall_ro(func_name, keys=keys, arguments=[])
 
-        # check response from a routed transaction request
-        result = await glide_client.exec(transaction, route)
+        # check response from a routed batch request
+        result = await glide_client.exec(batch, raise_on_error=True, route=route)
         assert result is not None
         assert result[0] == key1.encode()
         assert result[1] == key1.encode()
 
         # if no route given, GLIDE should detect it automatically
-        result = await glide_client.exec(transaction)
+        result = await glide_client.exec(batch, raise_on_error=True)
         assert result is not None
         assert result[0] == key1.encode()
         assert result[1] == key1.encode()
@@ -9452,22 +9452,22 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_watch(self, glide_client: GlideClient):
-        # watched key didn't change outside of transaction before transaction execution, transaction will execute
+        # watched key didn't change outside of batch before batch execution, batch will execute
         assert await glide_client.set("key1", "original_value") == OK
         assert await glide_client.watch(["key1"]) == OK
-        transaction = Transaction()
-        transaction.set("key1", "transaction_value")
-        transaction.get("key1")
-        assert await glide_client.exec(transaction) is not None
+        batch = Batch(is_atomic=True)
+        batch.set("key1", "batch_value")
+        batch.get("key1")
+        assert await glide_client.exec(batch, raise_on_error=True) is not None
 
-        # watched key changed outside of transaction before transaction execution, transaction will not execute
+        # watched key changed outside of batch before batch execution, batch will not execute
         assert await glide_client.set("key1", "original_value") == OK
         assert await glide_client.watch(["key1"]) == OK
-        transaction = Transaction()
-        transaction.set("key1", "transaction_value")
+        batch = Batch(is_atomic=True)
+        batch.set("key1", "batch_value")
         assert await glide_client.set("key1", "standalone_value") == OK
-        transaction.get("key1")
-        assert await glide_client.exec(transaction) is None
+        batch.get("key1")
+        assert await glide_client.exec(batch, raise_on_error=True) is None
 
         # empty list not supported
         with pytest.raises(RequestError):
@@ -9476,21 +9476,21 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_unwatch(self, glide_client: GlideClient):
-        # watched key unwatched before transaction execution even if changed
-        # outside of transaction, transaction will still execute
+        # watched key unwatched before batch execution even if changed
+        # outside of batch, batch will still execute
         assert await glide_client.set("key1", "original_value") == OK
         assert await glide_client.watch(["key1"]) == OK
-        transaction = Transaction()
-        transaction.set("key1", "transaction_value")
+        batch = Batch(is_atomic=True)
+        batch.set("key1", "batch_value")
         assert await glide_client.set("key1", "standalone_value") == OK
-        transaction.get("key1")
+        batch.get("key1")
         assert await glide_client.unwatch() == OK
-        result = await glide_client.exec(transaction)
+        result = await glide_client.exec(batch, raise_on_error=True)
         assert result is not None
         assert isinstance(result, list)
         assert len(result) == 2
         assert result[0] == "OK"
-        assert result[1] == b"transaction_value"
+        assert result[1] == b"batch_value"
 
         # UNWATCH returns OK when there no watched keys
         assert await glide_client.unwatch() == OK

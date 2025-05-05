@@ -446,10 +446,15 @@ class CoreCommands(Protocol):
         route: Optional[Route] = ...,
     ) -> TResult: ...
 
-    async def _execute_transaction(
+    async def _execute_batch(
         self,
         commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        is_atomic: bool,
+        raise_on_error: bool,
+        retry_server_error: bool = False,
+        retry_connection_error: bool = False,
         route: Optional[Route] = None,
+        timeout: Optional[int] = None,
     ) -> List[TResult]: ...
 
     async def _execute_script(
@@ -6975,8 +6980,8 @@ class CoreCommands(Protocol):
 
     async def watch(self, keys: List[TEncodable]) -> TOK:
         """
-        Marks the given keys to be watched for conditional execution of a transaction. Transactions
-        will only execute commands if the watched keys are not modified before execution of the
+        Marks the given keys to be watched for conditional execution of an atomic batch (Transaction).
+        Transactions will only execute commands if the watched keys are not modified before execution of the
         transaction.
 
         See [valkey.io](https://valkey.io/commands/watch) for more details.

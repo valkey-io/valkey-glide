@@ -1,5 +1,12 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+from glide.async_commands.batch import (
+    Batch,
+    ClusterBatch,
+    ClusterTransaction,
+    TBatch,
+    Transaction,
+)
 from glide.async_commands.bitmap import (
     BitEncoding,
     BitFieldGet,
@@ -106,11 +113,6 @@ from glide.async_commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide.async_commands.transaction import (
-    ClusterTransaction,
-    Transaction,
-    TTransaction,
-)
 from glide.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -174,10 +176,12 @@ __all__ = [
     # Client
     "GlideClient",
     "GlideClusterClient",
-    "Transaction",
+    "Batch",
+    "ClusterBatch",
     "ClusterTransaction",
+    "Transaction",
     "TGlideClient",
-    "TTransaction",
+    "TBatch",
     # Config
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
