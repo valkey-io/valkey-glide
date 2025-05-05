@@ -1,16 +1,16 @@
-#ifndef CLIENT_HPP
-#define CLIENT_HPP
+#ifndef CLIENT_HPP_
+#define CLIENT_HPP_
 
 #include <absl/status/status.h>
 #include <absl/status/statusor.h>
 
-#include <future>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
 
-#include "callback.h"
 #include "config.h"
+#include "glide/future.h"
 #include "glide_base.h"
 
 namespace glide {
@@ -41,30 +41,28 @@ class Client {
    *
    * @param key The key to set.
    * @param value The value to associate with the key.
-   * @return True if the operation is successful, false otherwise.
+   * @return A Future containing the status of the operation.
    */
-  std::future<absl::StatusOr<bool>> set(const std::string &key,
-                                        const std::string &value);
+  Future<absl::Status> set(const std::string &key, const std::string &value);
 
   /**
    * Retrieves the value associated with the given key from the client's
    * configuration.
    *
    * @param key The key whose associated value is to be returned.
-   * @return The value associated with the specified key, or an empty string
-   * if the key is not found or an error occurs.
+   * @return A Future containing the value associated with the specified key,
+   *         or an error status if the key is not found or an error occurs.
    */
-  std::future<absl::StatusOr<std::string>> get(const std::string &key);
+  Future<absl::StatusOr<std::string>> get(const std::string &key);
 
   /**
    * Gets a value associated with the given string `key` and deletes the key.
-   * configuration.
    *
-   * @param key The key whose associated value is to be returned.
-   * @return The value associated with the specified key, or an empty string
-   * if the key is not found or an error occurs.
+   * @param key The key whose associated value is to be returned and deleted.
+   * @return A Future containing the value associated with the specified key,
+   *         or an error status if the key is not found or an error occurs.
    */
-  std::future<absl::StatusOr<std::string>> getdel(const std::string &key);
+  Future<absl::StatusOr<std::string>> getdel(const std::string &key);
 
   /**
    * Sets multiple field-value pairs in a hash stored at the given key.
@@ -72,9 +70,9 @@ class Client {
    * @param key The key where the hash is stored.
    * @param field_values A map containing the field-value pairs to set in the
    * hash.
-   * @return True if the operation is successful, false otherwise.
+   * @return A Future containing the status of the operation.
    */
-  std::future<absl::StatusOr<bool>> hset(
+  Future<absl::Status> hset(
       const std::string &key,
       const std::map<std::string, std::string> &field_values);
 
@@ -84,35 +82,34 @@ class Client {
    *
    * @param key The key where the hash is stored.
    * @param field The field within the hash whose value should be retrieved.
-   * @return The value associated with the specified field, or an empty string
-   * if the key or field is not found or an error occurs.
+   * @return A Future containing the value associated with the specified field,
+   *         or an error status if the key or field is not found or an error
+   * occurs.
    */
-  std::future<absl::StatusOr<std::string>> hget(const std::string &key,
-                                                const std::string &field);
+  Future<absl::StatusOr<std::string>> hget(const std::string &key,
+                                           const std::string &field);
+
+  /**
+   * Destructor for the Client class.
+   */
+  ~Client();
+
+ private:
+  glide::Config config_;
+  const core::ConnectionResponse *connection_;
 
   /**
    * Executes a command with the given request type and arguments.
    *
    * @param type The type of request to execute.
    * @param args A vector of string arguments for the command.
-   * @param channel A reference to a CommandResponseData object to store the
-   * result of the command execution.
+   * @param channel_ptr A pointer to the channel for handling the command
+   * response.
    */
   void exec_command(core::RequestType type, std::vector<std::string> &args,
-                    std::promise<Response> *channel);
-
-  /**
-   * Destructor for the Client class.
-   */
-  // TODO: virtual
-  ~Client();
-
- private:
-  glide::Config config_;
-  const core::ConnectionResponse *connection_;
-  // Command command_;
+                    uintptr_t channel_ptr);
 };
 
 }  // namespace glide
 
-#endif  // CLIENT_HPP
+#endif  // CLIENT_HPP_

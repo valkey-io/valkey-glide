@@ -18,9 +18,9 @@ int main() {
   }
 
   // Set a key-value pair.
-  auto f = c.set("test", "hello-world").get();
-  if (!f.ok()) {
-    std::cout << "set failed!" << f.status().message() << std::endl;
+  auto f1 = c.set("test", "hello-world").get();
+  if (!f1.ok()) {
+    std::cout << "set failed!" << f1 << std::endl;
   }
 
   // Get the value of the key.
@@ -28,7 +28,7 @@ int main() {
   if (f2.ok()) {
     std::cout << "get: " << f2 << std::endl;
   } else {
-    std::cout << "set failed!" << f.status().message() << std::endl;
+    std::cout << "get failed!" << f2.status().message() << std::endl;
   }
 
   // Get the value of the key and delete the key.
@@ -36,7 +36,7 @@ int main() {
   if (f3.ok()) {
     std::cout << "getdel: " << f3 << std::endl;
   } else {
-    std::cout << "set failed!" << f.status().message() << std::endl;
+    std::cout << "set failed!" << f3.status().message() << std::endl;
   }
 
   // Set multiple field-value pairs in a hash.
@@ -44,7 +44,7 @@ int main() {
                                                      {"field2", "value2"}};
   auto f4 = c.hset("test", field_values).get();
   if (!f4.ok()) {
-    std::cout << "hset failed!" << f.status().message() << std::endl;
+    std::cout << "hset failed!" << f4 << std::endl;
   }
 
   // Get the value of a field in a hash.
@@ -52,13 +52,13 @@ int main() {
   if (f5.ok()) {
     std::cout << "hget: " << f5 << std::endl;
   } else {
-    std::cout << "hget failed!" << f.status().message() << std::endl;
+    std::cout << "hget failed!" << f5.status().message() << std::endl;
   }
   auto f6 = c.hget("test", "field2").get();
   if (f6.ok()) {
     std::cout << "hget: " << f6 << std::endl;
   } else {
-    std::cout << "hget failed!" << f.status().message() << std::endl;
+    std::cout << "hget failed!" << f6.status().message() << std::endl;
   }
 
   return 0;

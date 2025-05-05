@@ -1,5 +1,5 @@
-#ifndef CONFIG_HPP
-#define CONFIG_HPP
+#ifndef CONFIG_HPP_
+#define CONFIG_HPP_
 
 #include <chrono>
 #include <cstdint>
@@ -345,4 +345,4 @@ class Config {
 
 }  // namespace glide
 
-#endif  // CONFIG_HPP
+#endif  // CONFIG_HPP_

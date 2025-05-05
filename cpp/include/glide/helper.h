@@ -22,6 +22,7 @@ namespace glide {
  */
 absl::Status ConvertRequestError(core::RequestErrorType type,
                                  const std::string& message);
+
 }  // namespace glide
 
 #endif  // HELPER_HPP_
