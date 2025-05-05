@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional, Union, cast
 
 import pytest
+from glide import RequestError, TimeoutError
 from glide.async_commands.batch import (
     BaseBatch,
     Batch,
@@ -30,6 +31,7 @@ from glide.async_commands.core import (
     ExpiryTypeGetEx,
     FlushMode,
     FunctionRestorePolicy,
+    InfoSection,
     InsertPosition,
 )
 from glide.async_commands.sorted_set import (
@@ -57,9 +59,8 @@ from glide.async_commands.stream import (
 from glide.config import ProtocolVersion
 from glide.constants import OK, TResult, TSingleNodeRoute
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from glide.routes import SlotIdRoute, SlotType
+from glide.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
 
-from glide import RequestError, TimeoutError
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
@@ -1087,8 +1088,10 @@ class TestBatch:
         if is_atomic:
             publish_result_index = 1
             if await check_if_server_version_lt(glide_client, "7.0.0"):
+                assert keyslot is not None
                 batch.publish("test_message", keyslot, False)
             else:
+                assert keyslot is not None
                 batch.publish("test_message", keyslot, True)
 
         expected = await batch_test(batch, glide_client, keyslot)
@@ -1490,6 +1493,7 @@ class TestBatch:
         key = get_random_string(10)
         value = get_random_string(10)
 
+        transaction: Union[Transaction, ClusterTransaction]
         if isinstance(glide_client, GlideClient):
             transaction = Transaction()
         else:
@@ -1604,3 +1608,46 @@ class TestBatch:
             await exec_batch(glide_client, batch, raise_on_error=True)
 
         assert "WRONGTYPE" in str(e.value)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cluster_batch_route(
+        self,
+        glide_client: GlideClusterClient,
+        protocol: ProtocolVersion,
+        is_atomic: bool,
+    ):
+        if await check_if_server_version_lt(glide_client, "6.0.0"):
+            pytest.skip("CONFIG RESETSTAT requires redis >= 6.0")
+
+        assert await glide_client.config_resetstat() == OK
+
+        key = get_random_string(10)
+        value = "value"
+        value_bytes = value.encode()
+
+        batch = ClusterBatch(is_atomic=is_atomic)
+        batch.set(key, value)
+        batch.get(key)
+
+        route = SlotKeyRoute(slot_type=SlotType.PRIMARY, slot_key=key)
+        results = await glide_client.exec(
+            batch, raise_on_error=True, route=route, timeout=2000
+        )
+
+        assert results == [OK, value_bytes]
+
+        # Check that no MOVED error occurred by inspecting errorstats on all nodes
+        error_stats_dict = await glide_client.info(
+            sections=[InfoSection.ERROR_STATS], route=AllNodes()
+        )
+        assert isinstance(error_stats_dict, dict)
+
+        for node_address, node_info in error_stats_dict.items():
+            assert isinstance(node_info, bytes)
+            # Ensure the errorstats section indicates no errors reported for this test
+            # It should only contain the header line.
+            assert (
+                node_info.strip() == b"# Errorstats"
+            ), f"Node {node_address.decode()} reported errors: {node_info.decode()}"
