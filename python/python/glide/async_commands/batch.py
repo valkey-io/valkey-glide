@@ -396,21 +396,23 @@ class BaseBatch:
 
         See [valkey.io](https://valkey.io/commands/mset/) for more details.
 
+        Note:
+            In cluster mode:
+                - If the command is used in an atomic batch (Transaction), all keys in `key_value_map` must map to the same slot.
+                - If this command is used in a non-atomic batch (pipeline) and the keys in `key_value_map` map to different hash slots,
+                  the command will be split across these slots and executed separately for each.
+                  This means the command is atomic only at the slot level.
+                  If one or more slot-specific requests fail, the entire call will return the first encountered error, even
+                  though some requests may have succeeded while others did not.
+                  If this behavior impacts your application logic, consider splitting the
+                  request into sub-requests per slot to ensure atomicity.
+
         Args:
             parameters (Mapping[TEncodable, TEncodable]): A map of key value pairs.
 
         Command response:
             OK: a simple OK response.
 
-            Note:
-                In cluster mode, if this command is used in a non-atomic batch (pipeline)
-                and the keys in `key_value_map` map to different hash slots,
-                the command will be split across these slots and executed separately for each.
-                This means the command is atomic only at the slot level.
-                If one or more slot-specific requests fail, the entire call will return the first encountered error, even
-                though some requests may have succeeded while others did not.
-                If this behavior impacts your application logic, consider splitting the
-                request into sub-requests per slot to ensure atomicity.
         """
         parameters: List[TEncodable] = []
         for pair in key_value_map.items():
