@@ -444,6 +444,17 @@ class BaseBatch:
 
         See [valkey.io](https://valkey.io/commands/mget/) for more details.
 
+        Note:
+            In cluster mode:
+            - If the command is used in an atomic batch (Transaction), all keys must map to the same slot.
+            - If this command is used in a non-atomic batch (pipeline) and the keys map to different hash slots, the
+            command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level.
+            If one or more slot-specific requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
+
         Args:
             keys (List[TEncodable]): A list of keys to retrieve values for.
 
@@ -451,15 +462,6 @@ class BaseBatch:
             List[Optional[bytes]]: A list of values corresponding to the provided keys. If a key is not found,
             its corresponding value in the list will be None.
 
-        Note:
-            If the batch is a transaction (is_atomic=True), then all keys must map to the same slot.
-            In cluster mode, if this command is used in a non-atomic batch (pipeline)
-            and the keys map to different hash slots, the command will be split across these slots
-            and executed separately for each. This means the command is atomic only at the slot level.
-            If one or more slot-specific requests fail, the entire call will return the first encountered error, even
-            though some requests may have succeeded while others did not.
-            If this behavior impacts your application logic, consider splitting the
-            request into sub-requests per slot to ensure atomicity.
         """
         return self.append_command(RequestType.MGet, keys)
 

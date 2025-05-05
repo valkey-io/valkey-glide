@@ -1084,15 +1084,11 @@ class TestBatch:
         keyslot = get_random_string(3) if is_atomic else None
         batch = ClusterBatch(is_atomic=is_atomic)
         batch.info()
-        publish_result_index = -1
-        if is_atomic:
-            publish_result_index = 1
-            if await check_if_server_version_lt(glide_client, "7.0.0"):
-                assert keyslot is not None
-                batch.publish("test_message", keyslot, False)
-            else:
-                assert keyslot is not None
-                batch.publish("test_message", keyslot, True)
+        publish_result_index = 1
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
+            batch.publish("test_message", keyslot or get_random_string(3), False)
+        else:
+            batch.publish("test_message", keyslot or get_random_string(3), True)
 
         expected = await batch_test(batch, glide_client, keyslot)
 
@@ -1116,11 +1112,8 @@ class TestBatch:
                 assert isinstance(node_info, bytes)
                 assert b"# Memory" in node_info
 
-        if is_atomic:
-            assert result[publish_result_index] == 0
-            assert result[2:] == expected
-        else:
-            assert result[1:] == expected
+        assert result[publish_result_index] == 0
+        assert result[2:] == expected
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1624,11 +1617,10 @@ class TestBatch:
         assert await glide_client.config_resetstat() == OK
 
         key = get_random_string(10)
-        value = "value"
-        value_bytes = value.encode()
+        value_bytes = b"value"
 
         batch = ClusterBatch(is_atomic=is_atomic)
-        batch.set(key, value)
+        batch.set(key, value_bytes)
         batch.get(key)
 
         route = SlotKeyRoute(slot_type=SlotType.PRIMARY, slot_key=key)
