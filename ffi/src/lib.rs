@@ -1004,8 +1004,11 @@ pub struct TransactionParam {
 /// `channel` is a pointer to a valid payload buffer which is created in the Go client.
 /// `transaction` must not be null. It contain the consolidated commands
 /// `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
-/// `timeout` When set to true, any error encountered during the transaction will immediately raise an exception
-/// `raise_on_error` This setting allows you to configure the maximum duration (in seconds) a transaction can remain in progress
+/// `timeout` The duration in milliseconds that the client should wait for the batch request to complete.
+///           This duration encompasses sending the request, awaiting for a response from the server, and any
+///           required reconnections or retries
+/// `raise_on_error` When set to false, errors will be included as part of the batch response, allowing the caller to process both successful and failed commands together. In this case, error details
+///                  When set to true, the first encountered error in the batch will be raised as an exception.
 ///
 /// # Safety
 ///
