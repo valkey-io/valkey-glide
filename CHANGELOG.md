@@ -13,7 +13,6 @@
 * Core: Ensure UDS socket filename is truly unique. ([#3596](https://github.com/valkey-io/valkey-glide/pull/3596))
 * Python: Add equality check to `ExpirySet` ([#3554](https://github.com/valkey-io/valkey-glide/issues/3554))
 * Java: replacing map usage in response handling with LinkedHashMap ([#3324](https://github.com/valkey-io/valkey-glide/pull/3324))
-* Go: Fix Rust binary size ([#3508](https://github.com/valkey-io/valkey-glide/pull/3508))
 * JAVA: remove reference to outdated build task in DEVELOPER.md ([#3393](https://github.com/valkey-io/valkey-glide/pull/3393))
 * Python: Add source distribution upload to the PyPi-cd workflow ([#3214](https://github.com/valkey-io/valkey-glide/pull/3214))
 * Core: Move UDS Socket Filename to tmp ([#3615](https://github.com/valkey-io/valkey-glide/pull/3615))
@@ -24,7 +23,6 @@
 * Python: fix PARAMS count in ft.search query ([#3706](https://github.com/valkey-io/valkey-glide/pull/3706))
 * Node: Fix functionLoad examples ([#3710](https://github.com/valkey-io/valkey-glide/pull/3710))
 * Go: Fix ZRangeWithScores Order ([#3694](https://github.com/valkey-io/valkey-glide/pull/3694))
-* Go: Fix response handler for other sorted set with scores commands to return an ordered result ([#3712](https://github.com/valkey-io/valkey-glide/pull/3712))
 
 ## 1.3.2 (2025-04-06)
 

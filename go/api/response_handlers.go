@@ -1254,144 +1254,144 @@ func handleStringIntMapResponse(response *C.struct_CommandResponse) (map[string]
 	return result, nil
 }
 
-func handleFunctionStatsResponse(response *C.struct_CommandResponse) (map[string]FunctionStatsResult, error) {
-	if err := checkResponseType(response, C.Map, false); err != nil {
-		return nil, err
-	}
+// func handleFunctionStatsResponse(response *C.struct_CommandResponse) (map[string]FunctionStatsResult, error) {
+// 	if err := checkResponseType(response, C.Map, false); err != nil {
+// 		return nil, err
+// 	}
 
-	data, err := parseMap(response)
-	if err != nil {
-		return nil, err
-	}
+// 	data, err := parseMap(response)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	result := make(map[string]FunctionStatsResult)
+// 	result := make(map[string]FunctionStatsResult)
 
-	// Process all nodes in the response
-	for nodeAddr, nodeData := range data.(map[string]interface{}) {
-		nodeMap, ok := nodeData.(map[string]interface{})
-		if !ok {
-			continue // Skip if nodeData is not a map, e.g. when there isn't a running script
-		}
+// 	// Process all nodes in the response
+// 	for nodeAddr, nodeData := range data.(map[string]interface{}) {
+// 		nodeMap, ok := nodeData.(map[string]interface{})
+// 		if !ok {
+// 			continue // Skip if nodeData is not a map, e.g. when there isn't a running script
+// 		}
 
-		// Process engines
-		engines := make(map[string]Engine)
-		if enginesMap, ok := nodeMap["engines"].(map[string]interface{}); ok {
-			for engineName, engineData := range enginesMap {
-				if engineMap, ok := engineData.(map[string]interface{}); ok {
-					engine := Engine{
-						Language:      engineName,
-						FunctionCount: engineMap["functions_count"].(int64),
-						LibraryCount:  engineMap["libraries_count"].(int64),
-					}
-					engines[engineName] = engine
-				}
-			}
-		}
+// 		// Process engines
+// 		engines := make(map[string]Engine)
+// 		if enginesMap, ok := nodeMap["engines"].(map[string]interface{}); ok {
+// 			for engineName, engineData := range enginesMap {
+// 				if engineMap, ok := engineData.(map[string]interface{}); ok {
+// 					engine := Engine{
+// 						Language:      engineName,
+// 						FunctionCount: engineMap["functions_count"].(int64),
+// 						LibraryCount:  engineMap["libraries_count"].(int64),
+// 					}
+// 					engines[engineName] = engine
+// 				}
+// 			}
+// 		}
 
-		// Process running script
-		var runningScript RunningScript
-		if scriptData := nodeMap["running_script"]; scriptData != nil {
-			if scriptMap, ok := scriptData.(map[string]interface{}); ok {
-				runningScript = RunningScript{
-					Name:     scriptMap["name"].(string),
-					Cmd:      scriptMap["command"].(string),
-					Args:     scriptMap["arguments"].([]string),
-					Duration: time.Duration(scriptMap["duration_ms"].(int64)) * time.Millisecond,
-				}
-			}
-		}
+// 		// Process running script
+// 		var runningScript RunningScript
+// 		if scriptData := nodeMap["running_script"]; scriptData != nil {
+// 			if scriptMap, ok := scriptData.(map[string]interface{}); ok {
+// 				runningScript = RunningScript{
+// 					Name:     scriptMap["name"].(string),
+// 					Cmd:      scriptMap["command"].(string),
+// 					Args:     scriptMap["arguments"].([]string),
+// 					Duration: time.Duration(scriptMap["duration_ms"].(int64)) * time.Millisecond,
+// 				}
+// 			}
+// 		}
 
-		result[nodeAddr] = FunctionStatsResult{
-			Engines:       engines,
-			RunningScript: runningScript,
-		}
-	}
+// 		result[nodeAddr] = FunctionStatsResult{
+// 			Engines:       engines,
+// 			RunningScript: runningScript,
+// 		}
+// 	}
 
-	return result, nil
-}
+// 	return result, nil
+// }
 
-func parseFunctionInfo(items any) []FunctionInfo {
-	result := make([]FunctionInfo, 0, len(items.([]interface{})))
-	for _, item := range items.([]interface{}) {
-		if function, ok := item.(map[string]interface{}); ok {
-			// Handle nullable description
-			var description string
-			if desc, ok := function["description"].(string); ok {
-				description = desc
-			}
+// func parseFunctionInfo(items any) []FunctionInfo {
+// 	result := make([]FunctionInfo, 0, len(items.([]interface{})))
+// 	for _, item := range items.([]interface{}) {
+// 		if function, ok := item.(map[string]interface{}); ok {
+// 			// Handle nullable description
+// 			var description string
+// 			if desc, ok := function["description"].(string); ok {
+// 				description = desc
+// 			}
 
-			// Handle flags map
-			flags := make([]string, 0)
-			if flagsMap, ok := function["flags"].(map[string]struct{}); ok {
-				for flag := range flagsMap {
-					flags = append(flags, flag)
-				}
-			}
+// 			// Handle flags map
+// 			flags := make([]string, 0)
+// 			if flagsMap, ok := function["flags"].(map[string]struct{}); ok {
+// 				for flag := range flagsMap {
+// 					flags = append(flags, flag)
+// 				}
+// 			}
 
-			result = append(result, FunctionInfo{
-				Name:        function["name"].(string),
-				Description: description,
-				Flags:       flags,
-			})
-		}
-	}
-	return result
-}
+// 			result = append(result, FunctionInfo{
+// 				Name:        function["name"].(string),
+// 				Description: description,
+// 				Flags:       flags,
+// 			})
+// 		}
+// 	}
+// 	return result
+// }
 
-func parseLibraryInfo(itemMap map[string]interface{}) LibraryInfo {
-	libraryInfo := LibraryInfo{
-		Name:      itemMap["library_name"].(string),
-		Engine:    itemMap["engine"].(string),
-		Functions: parseFunctionInfo(itemMap["functions"]),
-	}
-	// Handle optional library_code field
-	if code, ok := itemMap["library_code"].(string); ok {
-		libraryInfo.Code = code
-	}
-	return libraryInfo
-}
+// func parseLibraryInfo(itemMap map[string]interface{}) LibraryInfo {
+// 	libraryInfo := LibraryInfo{
+// 		Name:      itemMap["library_name"].(string),
+// 		Engine:    itemMap["engine"].(string),
+// 		Functions: parseFunctionInfo(itemMap["functions"]),
+// 	}
+// 	// Handle optional library_code field
+// 	if code, ok := itemMap["library_code"].(string); ok {
+// 		libraryInfo.Code = code
+// 	}
+// 	return libraryInfo
+// }
 
-func handleFunctionListResponse(response *C.struct_CommandResponse) ([]LibraryInfo, error) {
-	if err := checkResponseType(response, C.Array, false); err != nil {
-		return nil, err
-	}
+// func handleFunctionListResponse(response *C.struct_CommandResponse) ([]LibraryInfo, error) {
+// 	if err := checkResponseType(response, C.Array, false); err != nil {
+// 		return nil, err
+// 	}
 
-	data, err := parseArray(response)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]LibraryInfo, 0, len(data.([]interface{})))
-	for _, item := range data.([]interface{}) {
-		if itemMap, ok := item.(map[string]interface{}); ok {
-			result = append(result, parseLibraryInfo(itemMap))
-		}
-	}
-	return result, nil
-}
+// 	data, err := parseArray(response)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	result := make([]LibraryInfo, 0, len(data.([]interface{})))
+// 	for _, item := range data.([]interface{}) {
+// 		if itemMap, ok := item.(map[string]interface{}); ok {
+// 			result = append(result, parseLibraryInfo(itemMap))
+// 		}
+// 	}
+// 	return result, nil
+// }
 
-func handleFunctionListMultiNodeResponse(response *C.struct_CommandResponse) (map[string][]LibraryInfo, error) {
-	data, err := handleStringToAnyMapResponse(response)
-	if err != nil {
-		return nil, err
-	}
+// func handleFunctionListMultiNodeResponse(response *C.struct_CommandResponse) (map[string][]LibraryInfo, error) {
+// 	data, err := handleStringToAnyMapResponse(response)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	multiNodeLibs := make(map[string][]LibraryInfo)
-	for node, nodeData := range data {
-		// nodeData is already parsed into a Go array of interfaces
-		if nodeArray, ok := nodeData.([]interface{}); ok {
-			libs := make([]LibraryInfo, 0, len(nodeArray))
-			for _, item := range nodeArray {
-				if itemMap, ok := item.(map[string]interface{}); ok {
-					libs = append(libs, parseLibraryInfo(itemMap))
-				}
-			}
-			multiNodeLibs[node] = libs
-		}
-	}
-	return multiNodeLibs, nil
-}
+// 	multiNodeLibs := make(map[string][]LibraryInfo)
+// 	for node, nodeData := range data {
+// 		// nodeData is already parsed into a Go array of interfaces
+// 		if nodeArray, ok := nodeData.([]interface{}); ok {
+// 			libs := make([]LibraryInfo, 0, len(nodeArray))
+// 			for _, item := range nodeArray {
+// 				if itemMap, ok := item.(map[string]interface{}); ok {
+// 					libs = append(libs, parseLibraryInfo(itemMap))
+// 				}
+// 			}
+// 			multiNodeLibs[node] = libs
+// 		}
+// 	}
+// 	return multiNodeLibs, nil
+// }
 
-func handleSortedSetWithScoresResponse(response *C.struct_CommandResponse, reverse bool) ([]MemberAndScore, error) {
+func handleZRangeWithScoresResponse(response *C.struct_CommandResponse, reverse bool) ([]MemberAndScore, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Map, false)
