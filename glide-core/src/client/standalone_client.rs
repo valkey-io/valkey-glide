@@ -137,7 +137,7 @@ impl StandaloneClient {
         let node_count = connection_request.addresses.len();
         // randomize pubsub nodes, maybe a batter option is to always use the primary
         let pubsub_node_index = rand::thread_rng().gen_range(0..node_count);
-        let pubsub_addr = &connection_request.addresses[pubsub_node_index];
+        let pubsub_addr = connection_request.addresses[pubsub_node_index].clone();
         let discover_az = matches!(
             connection_request.read_from,
             Some(ClientReadFrom::AZAffinity(_))
@@ -149,23 +149,25 @@ impl StandaloneClient {
             DEFAULT_CONNECTION_TIMEOUT,
         );
 
-        let mut stream = stream::iter(connection_request.addresses.iter())
-            .map(|address| async {
-                get_connection_and_replication_info(
-                    address,
-                    &retry_strategy,
-                    if address.to_string() != pubsub_addr.to_string() {
-                        &redis_connection_info
-                    } else {
-                        &pubsub_connection_info
-                    },
-                    tls_mode.unwrap_or(TlsMode::NoTls),
-                    &push_sender,
-                    discover_az,
-                    connection_timeout,
-                )
-                .await
-                .map_err(|err| (format!("{}:{}", address.host, address.port), err))
+        let mut stream = stream::iter(connection_request.addresses.into_iter())
+            .map(move |address| {
+                let info = if address.host != pubsub_addr.host || address.port != pubsub_addr.port {
+                    redis_connection_info.clone()
+                } else {
+                    pubsub_connection_info.clone()
+                };
+                let retry = retry_strategy.clone();
+                let sender = push_sender.clone();
+                let tls = tls_mode.unwrap_or(TlsMode::NoTls);
+                let discover = discover_az;
+                let timeout = connection_timeout;
+                async move {
+                    get_connection_and_replication_info(
+                        &address, &retry, &info, tls, &sender, discover, timeout,
+                    )
+                    .await
+                    .map_err(|err| (format!("{}:{}", address.host, address.port), err))
+                }
             })
             .buffer_unordered(node_count);
 
