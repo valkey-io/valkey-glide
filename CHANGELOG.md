@@ -4,6 +4,7 @@
 * Core: Move UDS Socket Filename to tmp ([#3615](https://github.com/valkey-io/valkey-glide/pull/3615))
 * Node: Added build improvements for rust release ([#3606](https://github.com/valkey-io/valkey-glide/pull/3606))
 * Core: Ensure UDS socket filename is truly unique. ([#3596](https://github.com/valkey-io/valkey-glide/pull/3596))
+* Python: Add Batch support ([#3555](https://github.com/valkey-io/valkey-glide/pull/3555))
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
 * Core: Add `opentelemetry` protocols support ([#3191](https://github.com/valkey-io/valkey-glide/pull/3191))
 * Node: Fix ZADD, enabling `+inf` and `-inf` as score ([#3370](https://github.com/valkey-io/valkey-glide/pull/3370))
@@ -54,7 +55,8 @@
 * Go: Add `PubSubNumPat` ([#3666](https://github.com/valkey-io/valkey-glide/pull/3666))
 * Go: Add `PubSubNumSub` ([#3667](https://github.com/valkey-io/valkey-glide/pull/3667))
 * Go: Add `Sharded Publish` ([#3692](https://github.com/valkey-io/valkey-glide/pull/3692))
-* Go: Add `PubSub ShardChannels` ([#](https://github.com/valkey-io/valkey-glide/pull/))
+* Go: Add `PubSub ShardChannels` ([#3695](https://github.com/valkey-io/valkey-glide/pull/3695))
+* Go: Add `PubSub ShardNumSub` ([#3708](https://github.com/valkey-io/valkey-glide/pull/3708))
 * Go: Add `Config Rewrite` ([#3156](https://github.com/valkey-io/valkey-glide/pull/3156))
 * Go: Add `Random Key` ([#3358](https://github.com/valkey-io/valkey-glide/pull/3358))
 * Go: Add Function Load, Function Flush, FCall and FCall_RO ([#3474](https://github.com/valkey-io/valkey-glide/pull/3474))
@@ -73,6 +75,7 @@
 * Java: Deprecate `Transaction` and `ClusterTransaction` ([#3561](https://github.com/valkey-io/valkey-glide/pull/3561))
 * Go: Fix response handler for `ZRangeWithScores` to return an ordered result ([#3694](https://github.com/valkey-io/valkey-glide/pull/3694))
 * Go: Fix response handler for other sorted set with scores commands to return an ordered result ([#3712](https://github.com/valkey-io/valkey-glide/pull/3712))
+* Java: Change `BZMPOP` and `ZMPOP` to return `Map<String, Object>` and `Map<GlideString, Object>` instead of `Object[]` ([#3733](https://github.com/valkey-io/valkey-glide/pull/3733))
 
 #### Fixes
 

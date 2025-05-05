@@ -5600,10 +5600,11 @@ public class SharedCommandTests {
         assertEquals(2, client.zadd(key1, Map.of("a1", 1., "b1", 2.)).get());
         assertEquals(2, client.zadd(key2, Map.of("a2", .1, "b2", .2)).get());
 
-        assertArrayEquals(
-                new Object[] {key1, Map.of("b1", 2.)}, client.zmpop(new String[] {key1, key2}, MAX).get());
-        assertArrayEquals(
-                new Object[] {key2, Map.of("b2", .2, "a2", .1)},
+        assertEquals(
+                Map.of(key1, Map.of("b1", 2.)), client.zmpop(new String[] {key1, key2}, MAX).get());
+
+        assertEquals(
+                Map.of(key2, Map.of("b2", .2, "a2", .1)),
                 client.zmpop(new String[] {key2, key1}, MAX, 10).get());
 
         // nothing popped out
@@ -5636,7 +5637,7 @@ public class SharedCommandTests {
             entries.put("" + ('a' + i), (double) i);
         }
         assertEquals(10, client.zadd(key2, entries).get());
-        assertEquals(entries, client.zmpop(new String[] {key2}, MIN, 10).get()[1]);
+        assertEquals(entries, client.zmpop(new String[] {key2}, MIN, 10).get().values().toArray()[0]);
     }
 
     @SneakyThrows
@@ -5648,24 +5649,14 @@ public class SharedCommandTests {
         GlideString key2 = gs("{zmpop}-2-" + UUID.randomUUID());
         GlideString key3 = gs("{zmpop}-3-" + UUID.randomUUID());
 
-        assertEquals(
-                2,
-                client
-                        .zadd(key1.toString(), Map.of("a1", 1., "b1", 2.))
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
-        assertEquals(
-                2,
-                client
-                        .zadd(key2.toString(), Map.of("a2", .1, "b2", .2))
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
+        assertEquals(2, client.zadd(key1, Map.of(gs("a1"), 1., gs("b1"), 2.)).get());
+        assertEquals(2, client.zadd(key2, Map.of(gs("a2"), .1, gs("b2"), .2)).get());
 
-        assertArrayEquals(
-                new Object[] {key1, Map.of(gs("b1"), 2.)},
+        assertEquals(
+                Map.of(key1, Map.of(gs("b1"), 2.)),
                 client.zmpop(new GlideString[] {key1, key2}, MAX).get());
-        assertArrayEquals(
-                new Object[] {key2, Map.of(gs("b2"), .2, gs("a2"), .1)},
+        assertEquals(
+                Map.of(key2, Map.of(gs("b2"), .2, gs("a2"), .1)),
                 client.zmpop(new GlideString[] {key2, key1}, MAX, 10).get());
 
         // nothing popped out
@@ -5693,24 +5684,14 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // check that order of entries in the response is preserved
-        var entries =
-                new LinkedHashMap<
-                        String, Double>(); // TODO: remove this once the binary version of zadd() is merged
         var entries_gs = new LinkedHashMap<GlideString, Double>();
         for (int i = 0; i < 10; i++) {
             // a => 1., b => 2. etc
-            entries.put(
-                    "" + ('a' + i),
-                    (double) i); // TODO: remove this once the binary version of zadd() is merged
             entries_gs.put(gs("" + ('a' + i)), (double) i);
         }
+        assertEquals(10, client.zadd(key2, entries_gs).get());
         assertEquals(
-                10,
-                client
-                        .zadd(key2.toString(), entries)
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
-        assertEquals(entries_gs, client.zmpop(new GlideString[] {key2}, MIN, 10).get()[1]);
+                entries_gs, client.zmpop(new GlideString[] {key2}, MIN, 10).get().values().toArray()[0]);
     }
 
     @SneakyThrows
@@ -5725,11 +5706,10 @@ public class SharedCommandTests {
         assertEquals(2, client.zadd(key1, Map.of("a1", 1., "b1", 2.)).get());
         assertEquals(2, client.zadd(key2, Map.of("a2", .1, "b2", .2)).get());
 
-        assertArrayEquals(
-                new Object[] {key1, Map.of("b1", 2.)},
-                client.bzmpop(new String[] {key1, key2}, MAX, 0.1).get());
-        assertArrayEquals(
-                new Object[] {key2, Map.of("b2", .2, "a2", .1)},
+        assertEquals(
+                Map.of(key1, Map.of("b1", 2.)), client.bzmpop(new String[] {key1, key2}, MAX, 0.1).get());
+        assertEquals(
+                Map.of(key2, Map.of("b2", .2, "a2", .1)),
                 client.bzmpop(new String[] {key2, key1}, MAX, 0.1, 10).get());
 
         // nothing popped out
@@ -5760,7 +5740,8 @@ public class SharedCommandTests {
             entries.put("" + ('a' + i), (double) i);
         }
         assertEquals(10, client.zadd(key2, entries).get());
-        assertEquals(entries, client.bzmpop(new String[] {key2}, MIN, .1, 10).get()[1]);
+        assertEquals(
+                entries, client.bzmpop(new String[] {key2}, MIN, .1, 10).get().values().toArray()[0]);
     }
 
     @SneakyThrows
@@ -5772,24 +5753,14 @@ public class SharedCommandTests {
         GlideString key2 = gs("{bzmpop}-2-" + UUID.randomUUID());
         GlideString key3 = gs("{bzmpop}-3-" + UUID.randomUUID());
 
-        assertEquals(
-                2,
-                client
-                        .zadd(key1.toString(), Map.of("a1", 1., "b1", 2.))
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
-        assertEquals(
-                2,
-                client
-                        .zadd(key2.toString(), Map.of("a2", .1, "b2", .2))
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
+        assertEquals(2, client.zadd(key1, Map.of(gs("a1"), 1., gs("b1"), 2.)).get());
+        assertEquals(2, client.zadd(key2, Map.of(gs("a2"), .1, gs("b2"), .2)).get());
 
-        assertArrayEquals(
-                new Object[] {key1, Map.of(gs("b1"), 2.)},
+        assertEquals(
+                Map.of(key1, Map.of(gs("b1"), 2.)),
                 client.bzmpop(new GlideString[] {key1, key2}, MAX, 0.1).get());
-        assertArrayEquals(
-                new Object[] {key2, Map.of(gs("b2"), .2, gs("a2"), .1)},
+        assertEquals(
+                Map.of(key2, Map.of(gs("b2"), .2, gs("a2"), .1)),
                 client.bzmpop(new GlideString[] {key2, key1}, MAX, 0.1, 10).get());
 
         // nothing popped out
@@ -5816,24 +5787,15 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // check that order of entries in the response is preserved
-        var entries =
-                new LinkedHashMap<
-                        String, Double>(); // TODO: remove this line once the binary version of zadd() is merged
         var entries_gs = new LinkedHashMap<GlideString, Double>();
         for (int i = 0; i < 10; i++) {
             // a => 1., b => 2. etc
-            entries.put(
-                    "" + ('a' + i),
-                    (double) i); // TODO: remove this line once the binary version of zadd() is merged
             entries_gs.put(gs("" + ('a' + i)), (double) i);
         }
+        assertEquals(10, client.zadd(key2, entries_gs).get());
         assertEquals(
-                10,
-                client
-                        .zadd(key2.toString(), entries)
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
-        assertEquals(entries_gs, client.bzmpop(new GlideString[] {key2}, MIN, .1, 10).get()[1]);
+                entries_gs,
+                client.bzmpop(new GlideString[] {key2}, MIN, .1, 10).get().values().toArray()[0]);
     }
 
     @SneakyThrows
