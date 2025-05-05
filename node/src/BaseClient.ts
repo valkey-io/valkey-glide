@@ -1126,6 +1126,9 @@ export class BaseClient {
                 for (let i = 0; i < loopLen; i++) {
                     const item = result[i];
 
+                    // Check if the item is an instance of napi Error
+                    // Can be checked by checking if the constructor name is "Error"
+                    // and if there is a name property with the value "RequestError" (that we added in the Rust code)
                     if (
                         item?.constructor?.name === "Error" &&
                         /* eslint-disable-next-line @typescript-eslint/no-explicit-any */

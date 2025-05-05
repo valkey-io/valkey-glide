@@ -12510,8 +12510,8 @@ export function runBaseTests(config: {
         async (protocol, isAtomic) => {
             await runTest(async (client: BaseClient) => {
                 const isCluster = client instanceof GlideClusterClient;
-                const key = uuidv4();
-                const key2 = `{${key}}${uuidv4()}`;
+                const key = getRandomKey();
+                const key2 = `{${key}}${getRandomKey()}`;
 
                 const batch = isCluster
                     ? new ClusterBatch(isAtomic)
@@ -12687,7 +12687,7 @@ export function runCommonTests(config: {
         async () => {
             await runTest(async (client: Client) => {
                 const clusterMode = client instanceof GlideClusterClient;
-                const key = uuidv4();
+                const key = getRandomKey();
                 const batch = clusterMode
                     ? new ClusterTransaction()
                     : new Transaction();

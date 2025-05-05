@@ -2297,6 +2297,7 @@ describe("GlideClusterClient", () => {
 
             try {
                 const pipeline = new ClusterBatch(false);
+                // This are known keys for crosslot
                 pipeline.set("abc", "value");
                 pipeline.get("xyz");
                 const results = await client.exec(pipeline, true);
@@ -2324,7 +2325,7 @@ describe("GlideClusterClient", () => {
 
             try {
                 expect(await client.configResetStat()).toEqual("OK");
-                const key = uuidv4();
+                const key = getRandomKey();
                 const pipeline = new ClusterBatch(isAtomic);
                 pipeline.set(key, "value");
                 pipeline.get(key);
@@ -2360,7 +2361,7 @@ describe("GlideClusterClient", () => {
 
             try {
                 expect(await client.configResetStat()).toEqual("OK");
-                const key = uuidv4();
+                const key = getRandomKey();
                 const transaction = new ClusterBatch(true);
                 transaction.set(key, "value");
                 transaction.get(key);
