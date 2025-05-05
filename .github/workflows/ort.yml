@@ -97,7 +97,7 @@ jobs:
                     analyzer:
                       skip_excluded: true
                       allowDynamicVersions: true
-                      enabledPackageManagers: [Cargo, NPM, PIP, GoMod, GradleInspector]
+                      enabledPackageManagers: [Cargo, NPM, PIP, GradleInspector]
                   EOF
                   cat ~/.ort/config/config.yml
 
