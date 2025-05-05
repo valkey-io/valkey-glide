@@ -10,7 +10,7 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import {BufferReader,BufferWriter} from "protobufjs";
+import { BufferReader, BufferWriter } from "protobufjs";
 import {
     Batch,
     Decoder,
@@ -23,12 +23,11 @@ import {
     ProtocolVersion,
     RequestError,
     Script,
-    convertGlideRecordToRecord
     convertGlideRecordToRecord,
 } from "..";
-import {ValkeyCluster} from "../../utils/TestUtils.js";
-import {command_request} from "../src/ProtobufMessage";
-import {runBaseTests} from "./SharedTests";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
+import { command_request } from "../src/ProtobufMessage";
+import { runBaseTests } from "./SharedTests";
 import {
     batchTest,
     checkFunctionListResponse,
