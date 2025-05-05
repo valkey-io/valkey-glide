@@ -2113,9 +2113,12 @@ class TestJson:
         assert await json.get(glide_client, key2, ".") == b'[[],[],["a"],["a","b"]]'
 
     @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("is_atomic", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_json_batch_array(self, glide_client: GlideClusterClient):
-        transaction = ClusterBatch(is_atomic=True)
+    async def test_json_batch_array(
+        self, glide_client: GlideClusterClient, is_atomic: bool
+    ):
+        transaction = ClusterBatch(is_atomic=is_atomic)
 
         key = get_random_string(5)
         json_value1 = {"a": 1.0, "b": 2}
@@ -2157,9 +2160,10 @@ class TestJson:
         assert OuterJson.loads(result[11]) == {"a": 1.0, "b": [2, 3]}  # get
 
     @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("is_atomic", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_json_batch(self, glide_client: GlideClusterClient):
-        transaction = ClusterBatch(is_atomic=True)
+    async def test_json_batch(self, glide_client: GlideClusterClient, is_atomic: bool):
+        transaction = ClusterBatch(is_atomic=is_atomic)
 
         key = f"{{key}}-1{get_random_string(5)}"
         key2 = f"{{key}}-2{get_random_string(5)}"

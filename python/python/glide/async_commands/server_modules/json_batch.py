@@ -4,7 +4,7 @@
 Examples:
     >>> import json
     >>> from glide import json_batch
-    >>> batch = ClusterBatch()
+    >>> batch = ClusterBatch(is_atomic=True)
     >>> value = {'a': 1.0, 'b': 2}
     >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
     >>> json_batch.set(batch, "doc", "$", json_str)
@@ -118,10 +118,15 @@ def mget(
     Retrieves the JSON values at the specified `path` stored at multiple `keys`.
 
     Note:
-        If the batch is a transaction (is_atomic=True), then all keys must map to the same slot.
-        In cluster mode, if this command is used in a non-atomic batch (pipeline)
-        and the keys map to different hash slots, the command will be split across these slots
-        and executed separately for each. This means the command is atomic only at the slot level.
+        When in cluster mode:
+        - If the batch is an atomic batch (transaction), then all keys must map to the same slot.
+        - If the batch is a non-atomic batch (pipeline), and the keys map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
     Args:
         batch (TBatch): The batch to execute the command.

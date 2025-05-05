@@ -1,7 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import threading
-from abc import ABC
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
 from deprecated import deprecated
@@ -61,26 +60,33 @@ from glide.protobuf.command_request_pb2 import RequestType
 TBatch = TypeVar("TBatch", bound="BaseBatch")
 
 
-class BaseBatch(ABC):
+class BaseBatch:
     """
-    Base class encompassing shared commands for both standalone and cluster mode implementations in batch.
-
-    See [Transactions](https://valkey.io/topics/transactions/) and
-      [Pipelines](https://valkey.io/topics/pipelines/) for details.
+    Base class encompassing shared commands for both standalone and cluster server installations.
+    Batches allow the execution of a group of commands in a single step.
 
     Batch Response:
-        The response for each command depends on the executed command. Specific response types
-        are documented alongside each method.
+        An ``array`` of command responses is returned by the client ``exec`` command, in the order they were given.
+        Each element in the array represents a command given to the batch.
+        The response for each command depends on the executed Valkey command.
+        Specific response types are documented alongside each method.
 
     Args:
         is_atomic (bool): Determines whether the batch is atomic or non-atomic.
-            If `True`, the batch will be executed as an atomic transaction.
-            If `False`, the batch will be executed as a non-atomic pipeline.
-            See [Valkey Transactions](https://valkey.io/topics/transactions/) and
-            [Valkey Pipelines](https://valkey.io/topics/pipelines/) for more details.
+            If ``True``, the batch will be executed as an atomic transaction.
+            If ``False``, the batch will be executed as a non-atomic pipeline.
+
+    See [Transactions](https://valkey.io/topics/transactions/) and [Pipelines](https://valkey.io/topics/pipelines/) for details.
+
     """
 
     def __init__(self, is_atomic: bool) -> None:
+        """
+        Args:
+            is_atomic (bool): Determines whether the batch is atomic or non-atomic.
+                If `True`, the batch will be executed as an atomic transaction.
+                If `False`, the batch will be executed as a non-atomic pipeline.
+        """
         self.commands: List[Tuple[RequestType.ValueType, List[TEncodable]]] = []
         self.lock = threading.Lock()
         self.is_atomic = is_atomic
@@ -278,7 +284,7 @@ class BaseBatch(ABC):
         Example:
             Append a command to list of all pub/sub clients:
 
-            >>> transaction.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
+            >>> batch.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
         """
         return self.append_command(RequestType.CustomCommand, command_args)
 
@@ -366,7 +372,7 @@ class BaseBatch(ABC):
         Command response:
             OK: Returns OK if all configurations have been successfully set.
 
-            Otherwise, the transaction fails with an error.
+            Otherwise, the command fails with an error.
         """
         parameters: List[TEncodable] = []
         for pair in parameters_map.items():
@@ -401,8 +407,10 @@ class BaseBatch(ABC):
                 and the keys in `key_value_map` map to different hash slots,
                 the command will be split across these slots and executed separately for each.
                 This means the command is atomic only at the slot level.
-
-        See [valkey.io](https://valkey.io/commands/mset/) for more details.
+                If one or more slot-specific requests fail, the entire call will return the first encountered error, even
+                though some requests may have succeeded while others did not.
+                If this behavior impacts your application logic, consider splitting the
+                request into sub-requests per slot to ensure atomicity.
         """
         parameters: List[TEncodable] = []
         for pair in key_value_map.items():
@@ -448,6 +456,10 @@ class BaseBatch(ABC):
             In cluster mode, if this command is used in a non-atomic batch (pipeline)
             and the keys map to different hash slots, the command will be split across these slots
             and executed separately for each. This means the command is atomic only at the slot level.
+            If one or more slot-specific requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
         """
         return self.append_command(RequestType.MGet, keys)
 
@@ -473,7 +485,7 @@ class BaseBatch(ABC):
 
         Command response:
             OK: OK is returned when the configuration was rewritten properly.
-            Otherwise, the transaction fails with an error.
+            Otherwise, the command fails with an error.
         """
         return self.append_command(RequestType.ConfigRewrite, [])
 
@@ -752,7 +764,7 @@ class BaseBatch(ABC):
         Command response:
             int: The number of fields in the hash, or 0 when the key does not exist.
 
-            If `key` holds a value that is not a hash, the batch fails with an error.
+            If `key` holds a value that is not a hash, the command fails with an error.
         """
         return self.append_command(RequestType.HLen, [key])
 
@@ -5294,30 +5306,40 @@ class BaseBatch(ABC):
 
 class Batch(BaseBatch):
     """
-    Extends BaseBatch class for standalone commands that are not supported in cluster mode.
+    Batch implementation for standalone GlideClient. Batches allow the execution of a group
+    of commands in a single step.
 
-    Command Response:
-        The response for each command depends on the executed command. Specific response types
-        are documented alongside each method.
+    Batch Response:
+        An ``array`` of command responses is returned by the client ``exec`` command,
+        in the order they were given. Each element in the array represents a command given to the Batch.
+        The response for each command depends on the executed Valkey command.
+        Specific response types are documented alongside each method.
+
+    Args:
+        is_atomic (bool): Determines whether the batch is atomic or non-atomic. If ``True``,
+            the batch will be executed as an atomic transaction. If ``False``,
+            the batch will be executed as a non-atomic pipeline.
+
+    See [Transactions](https://valkey.io/topics/transactions/) and [Pipelines](https://valkey.io/topics/pipelining/) for details.
 
     Note for Standalone Mode (Cluster Mode Disabled):
         Standalone Batches are executed on the primary node.
 
-    Transaction Example:
-        >>> transaction = Batch(is_atomic=True)
+    Example (Atomic Batch - Transaction):
+        >>> transaction = Batch(is_atomic=True)  # Atomic (Transaction)
         >>> transaction.set("key", "value")
-        >>> transaction.select(1)  # Standalone command
         >>> transaction.get("key")
-        >>> await client.exec(transaction)
-        [OK , OK , None]
+        >>> result = await client.exec(transaction)
+        >>> assert result == [OK, b"value"]
 
-    Pipeline Example:
-        >>> pipeline = Batch(is_atomic=True)
-        >>> pipeline.set("key", "value")
-        >>> pipeline.select(1)  # Standalone command
-        >>> pipeline.get("key")
-        >>> await client.exec(pipeline)
-        [OK , OK , None]
+    Example (Non-Atomic Batch - Pipeline):
+        >>> pipeline = Batch(is_atomic=False)  # Non-Atomic (Pipeline)
+        >>> pipeline.set("key1", "value1")
+        >>> pipeline.set("key2", "value2")
+        >>> pipeline.get("key1")
+        >>> pipeline.get("key2")
+        >>> result = await client.exec(pipeline)
+        >>> assert result == [OK, OK, b"value1", b"value2"]
     """
 
     # TODO: add SLAVEOF and all SENTINEL commands
@@ -5408,14 +5430,38 @@ class Batch(BaseBatch):
 
 class ClusterBatch(BaseBatch):
     """
-    Extends BaseBatch class for cluster mode commands that are not supported in standalone.
+    Batch implementation for cluster GlideClusterClient. Batches allow the execution of a group
+    of commands in a single step.
 
-    Command Response:
-        The response for each command depends on the executed command. Specific response types
-        are documented alongside each method.
+    Batch Response:
+        An ``array`` of command responses is returned by the client ``exec`` command,
+        in the order they were given. Each element in the array represents a command given to the ClusterBatch.
+        The response for each command depends on the executed Valkey command.
+        Specific response types are documented alongside each method.
 
-    When the client is configured to read from replicas, read commands
-    in a non-atomic batches will be distributed in a round-robin manner across the replicas.
+    Args:
+        is_atomic (bool): Determines whether the batch is atomic or non-atomic. If ``True``,
+            the batch will be executed as an atomic transaction. If ``False``,
+            the batch will be executed as a non-atomic pipeline.
+
+    See [Transactions](https://valkey.io/topics/transactions/) and [Pipelines](https://valkey.io/topics/pipelining/) for details.
+
+    Example (Atomic Batch - Transaction) in a Cluster:
+        >>> transaction = ClusterBatch(is_atomic=True)  # Atomic (Transaction)
+        >>> transaction.set("key", "value")
+        >>> transaction.get("key")
+        >>> result = await client.exec(transaction)
+        >>> assert result == [OK, b"value"]
+
+    Example (Non-Atomic Batch - Pipeline) in a Cluster:
+        >>> pipeline = ClusterBatch(is_atomic=False)  # Non-Atomic (Pipeline)
+        >>> pipeline.set("key1", "value1")
+        >>> pipeline.set("key2", "value2")
+        >>> pipeline.get("key1")
+        >>> pipeline.get("key2")
+        >>> result = await client.exec(pipeline)
+        >>> assert result == [OK, OK, b"value1", b"value2"]
+
     """
 
     def copy(

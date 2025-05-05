@@ -6980,9 +6980,9 @@ class CoreCommands(Protocol):
 
     async def watch(self, keys: List[TEncodable]) -> TOK:
         """
-        Marks the given keys to be watched for conditional execution of a batch. Batches
-        will only execute commands if the watched keys are not modified before execution of the
-        batch.
+        Marks the given keys to be watched for conditional execution of an atomic batch (Transaction).
+        Transactions will only execute commands if the watched keys are not modified before execution of the
+        transaction.
 
         See [valkey.io](https://valkey.io/commands/watch) for more details.
 
@@ -7004,17 +7004,17 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.watch("sampleKey")
                 'OK'
-            >>> batch.set("sampleKey", "foobar")
-            >>> await client.exec(batch)
+            >>> transaction.set("sampleKey", "foobar")
+            >>> await client.exec(transaction)
                 'OK' # Executes successfully and keys are unwatched.
 
             >>> await client.watch("sampleKey")
                 'OK'
-            >>> batch.set("sampleKey", "foobar")
+            >>> transaction.set("sampleKey", "foobar")
             >>> await client.set("sampleKey", "hello world")
                 'OK'
-            >>> await client.exec(batch)
-                None  # None is returned when the watched key is modified before batch execution.
+            >>> await client.exec(transaction)
+                None  # None is returned when the watched key is modified before transaction execution.
         """
 
         return cast(

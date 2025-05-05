@@ -192,7 +192,7 @@ class ClusterCommands(CoreCommands):
             ...     raise_on_error=False  # Do not raise an error on failure
             ... )
             >>> print(f"Atomic Batch Result: {atomic_result}")
-            # Output: [OK, 2, 2]
+            # Output: Atomic Batch Result: [OK, 2, 2]
 
             # Example 4: Non-atomic batch with retry options
             >>> non_atomic_batch = ClusterBatch(is_atomic=False)
@@ -206,7 +206,7 @@ class ClusterCommands(CoreCommands):
             ...     retry_connection_error=False
             ... )
             >>> print(f"Non-Atomic Batch Result: {non_atomic_result}")
-            # Output: [OK, OK, value1, value2]
+            # Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
         """
         commands = batch.commands[:]
         return await self._execute_batch(

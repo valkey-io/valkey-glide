@@ -56,9 +56,6 @@ excluded_symbol_list = [
     "FtAggregateKeywords",  # ClassDef
     "FtProfileKeywords",  # ClassDef
     "AdvancedBaseClientConfiguration",  # ClassDef
-    # python/python/glide/async_commands/batch.py
-    "Transaction",  # ClassDef
-    "ClusterTransaction",  # ClassDef
 ]
 
 
