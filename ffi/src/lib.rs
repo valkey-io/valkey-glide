@@ -103,6 +103,7 @@ pub enum ResponseType {
     Map = 6,
     Sets = 7,
     Ok = 8,
+    Error = 9,
 }
 
 /// Success callback that is called when a command succeeds.
@@ -674,6 +675,7 @@ pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *cons
         ResponseType::Map => c"Map",
         ResponseType::Sets => c"Sets",
         ResponseType::Ok => c"Ok",
+        ResponseType::Error => c"Error",
     };
     c_str.as_ptr()
 }
@@ -892,15 +894,16 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
         }
 
         Value::ServerError(server_error) => {
-            let error_message = format!("{}", server_error);
-
+            let code = server_error.err_code();
+            let details = server_error.details().unwrap_or("No details");
+            let error_message = format!("{} - {}", code, details);
             // Convert the formatted string to bytes
             let bytes = error_message.into_bytes();
             // Process the bytes as before
             let (vec_ptr, len) = convert_vec_to_pointer(bytes);
             command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
-            command_response.response_type = ResponseType::String;
+            command_response.response_type = ResponseType::Error;
 
             // Return as Ok to continue transaction processing
             Ok(command_response)
