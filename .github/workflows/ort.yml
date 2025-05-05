@@ -173,10 +173,11 @@ jobs:
               uses: ./.github/workflows/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/java"
-            - uses: actions/setup-go@v5
+              ### GO ###
+            - name: Set up GO    
+              uses: actions/setup-go@v5
               with:
                   go-version: 1.22
-              ### GO ###
             - name: Generate protobuf for GO
               working-directory: ./go
               run: |
