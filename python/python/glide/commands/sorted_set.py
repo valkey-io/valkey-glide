@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import List, Optional, Tuple, Union, cast
 
-from glide.async_commands.command_args import Limit, OrderBy
+from glide.commands.command_args import Limit, OrderBy
 from glide.constants import TEncodable
 
 

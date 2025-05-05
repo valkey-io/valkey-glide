@@ -4,14 +4,10 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
-from glide.async_commands.batch import Batch
-from glide.async_commands.command_args import ObjectType
-from glide.async_commands.core import (
-    CoreCommands,
-    FlushMode,
-    FunctionRestorePolicy,
-    InfoSection,
-)
+from glide.commands.async_commands import CoreCommands
+from glide.commands.batch import Batch
+from glide.commands.command_args import ObjectType
+from glide.commands.core_options import FlushMode, FunctionRestorePolicy, InfoSection
 from glide.constants import (
     TOK,
     TEncodable,
@@ -21,7 +17,7 @@ from glide.constants import (
 )
 from glide.protobuf.command_request_pb2 import RequestType
 
-from ..glide import Script
+from ...glide import Script
 
 
 class StandaloneCommands(CoreCommands):

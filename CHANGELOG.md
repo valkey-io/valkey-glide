@@ -1,5 +1,5 @@
 #### Changes
-
+* Python: split python sync module, change python dir structure  ([ #3779](https://github.com/valkey-io/valkey-glide/pull/3779/files))
 * Core: Add an OK response type to FFI ([#3630](https://github.com/valkey-io/valkey-glide/pull/3630))
 * Core: Move UDS Socket Filename to tmp ([#3615](https://github.com/valkey-io/valkey-glide/pull/3615))
 * Node: Added build improvements for rust release ([#3606](https://github.com/valkey-io/valkey-glide/pull/3606))
