@@ -10,7 +10,7 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import {gte} from "semver";
+import { gte } from "semver";
 import {
     BitwiseOperation,
     ClusterBatch,
@@ -36,8 +36,8 @@ import {
     convertGlideRecordToRecord,
     convertRecordToGlideRecord,
 } from "..";
-import {ValkeyCluster} from "../../utils/TestUtils";
-import {runBaseTests} from "./SharedTests";
+import { ValkeyCluster } from "../../utils/TestUtils";
+import { runBaseTests } from "./SharedTests";
 import {
     batchTest,
     checkClusterResponse,
