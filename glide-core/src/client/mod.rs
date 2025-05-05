@@ -28,9 +28,7 @@ use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
 pub use types::*;
 
-use self::value_conversion::{
-    convert_to_expected_type, expected_type_for_cmd, get_value_type,
-};
+use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
@@ -194,7 +192,6 @@ pub enum ClientWrapper {
 pub struct LazyClient {
     config: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
-    inner: Arc<OnceCell<ClientWrapper>>, // Use Arc to share the OnceCell
 }
 
 #[derive(Clone)]
@@ -207,7 +204,7 @@ pub struct Client {
 
 async fn run_with_timeout<T>(
     timeout: Option<Duration>,
-    future: impl futures::Future<Output = RedisResult<T>>,
+    future: impl futures::Future<Output = RedisResult<T>> + Send,
 ) -> redis::RedisResult<T> {
     match timeout {
         Some(duration) => tokio::time::timeout(duration, future)
@@ -334,18 +331,19 @@ impl Client {
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
                 // Create cluster client
-                let client = create_cluster_client(config, push_sender)
-                    .await?;
+                let client = create_cluster_client(config, push_sender).await?;
                 ClientWrapper::Cluster { client }
             } else {
                 // Create standalone client
                 let client = StandaloneClient::create_client(config, push_sender)
                     .await
-                    .map_err(|e| RedisError::from((
-                        ErrorKind::IoError,
-                        "Standalone connect failed",
-                        format!("{e:?}"),
-                    )))?;
+                    .map_err(|e| {
+                        RedisError::from((
+                            ErrorKind::IoError,
+                            "Standalone connect failed",
+                            format!("{e:?}"),
+                        ))
+                    })?;
                 ClientWrapper::Standalone(client)
             };
 
@@ -413,6 +411,54 @@ impl Client {
             Ok(value)
         })
     }
+
+    // Cluster scan is not passed to redis-rs as a regular command, so we need to handle it separately.
+    // We send the command to a specific function in the redis-rs cluster client, which internally handles the
+    // the complication of a command scan, and generate the command base on the logic in the redis-rs library.
+    //
+    // The function returns a tuple with the cursor and the keys found in the scan.
+    // The cursor is not a regular cursor, but an ARC to a struct that contains the cursor and the data needed
+    // to continue the scan called ScanState.
+    // In order to avoid passing Rust GC to clean the ScanState when the cursor (ref) is passed to the wrapper,
+    // which means that Rust layer is not aware of the cursor anymore, we need to keep the ScanState alive.
+    // We do that by storing the ScanState in a global container, and return a cursor-id of the cursor to the wrapper.
+    //
+    // The wrapper create an object contain the cursor-id with a drop function that will remove the cursor from the container.
+    // When the ref is removed from the hash-map, there's no more references to the ScanState, and the GC will clean it.
+    pub async fn cluster_scan<'a>(
+        &'a mut self,
+        scan_state_cursor: &'a ScanStateRC,
+        cluster_scan_args: ClusterScanArgs,
+    ) -> RedisResult<Value> {
+        // Clone arguments before the async block (ScanStateRC is Arc, clone is cheap)
+        let scan_state_cursor_clone = scan_state_cursor.clone();
+        let cluster_scan_args_clone = cluster_scan_args.clone(); // Assuming ClusterScanArgs is Clone
+
+        // Check and initialize if lazy *inside* the async block
+        if let ClientWrapper::Lazy(_) = &mut self.internal_client {
+            self.initialize_lazy_connection().await?;
+        }
+
+        match &mut self.internal_client {
+            ClientWrapper::Standalone(_) => {
+                unreachable!("Cluster scan is not supported in standalone mode")
+            }
+            ClientWrapper::Cluster { client } => {
+                let (cursor, keys) = client
+                    .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone) // Use clones
+                    .await?;
+                let cluster_cursor_id = if cursor.is_finished() {
+                    Value::BulkString(FINISHED_SCAN_CURSOR.into()) // Use constant
+                } else {
+                    Value::BulkString(insert_cluster_scan_cursor(cursor).into())
+                };
+                Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
+            }
+            // Lazy case is now handled by the initial check
+            ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
+        }
+    }
+
     fn get_transaction_values(
         pipeline: &redis::Pipeline,
         mut values: Vec<Value>,
@@ -447,7 +493,7 @@ impl Client {
                     .into());
             }
         };
-        Client::convert_pipeline_values_to_expected_types(
+        Self::convert_pipeline_values_to_expected_types(
             pipeline,
             values,
             command_count,
@@ -502,11 +548,11 @@ impl Client {
             }
 
             let command_count = pipeline.cmd_iter().count();
-        // The offset is set to command_count + 1 to account for:
-        // 1. The first command, which is the "MULTI" command, that returns "OK"
-        // 2. The "QUEUED" responses for each of the commands in the pipeline (before EXEC)
-        // After these initial responses (OK and QUEUED), we expect a single response,
-        // which is an array containing the results of all the commands in the pipeline.
+            // The offset is set to command_count + 1 to account for:
+            // 1. The first command, which is the "MULTI" command, that returns "OK"
+            // 2. The "QUEUED" responses for each of the commands in the pipeline (before EXEC)
+            // After these initial responses (OK and QUEUED), we expect a single response,
+            // which is an array containing the results of all the commands in the pipeline.
             let offset = command_count + 1;
 
             run_with_timeout(
@@ -522,15 +568,19 @@ impl Client {
                                 offset,
                                 raise_on_error,
                             )
-                        },
+                        }
                         ClientWrapper::Cluster { client } => {
                             let values = match routing {
                                 Some(RoutingInfo::SingleNode(route)) => {
                                     client
                                         .route_pipeline(pipeline, offset, 1, Some(route), None)
                                         .await?
-                                },
-                                _ => client.req_packed_commands(pipeline, offset, 1, None).await?,
+                                }
+                                _ => {
+                                    client
+                                        .req_packed_commands(pipeline, offset, 1, None)
+                                        .await?
+                                }
                             };
                             Client::get_transaction_values(
                                 pipeline,
@@ -539,8 +589,10 @@ impl Client {
                                 offset,
                                 raise_on_error,
                             )
-                        },
-                        ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
+                        }
+                        ClientWrapper::Lazy(_) => {
+                            unreachable!("Lazy client should have been initialized")
+                        }
                     }
                 },
             )
@@ -613,7 +665,9 @@ impl Client {
                                     .await
                             }
                         },
-                        ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
+                        ClientWrapper::Lazy(_) => {
+                            unreachable!("Lazy client should have been initialized")
+                        }
                     }?;
 
                     Client::convert_pipeline_values_to_expected_types(
@@ -628,53 +682,6 @@ impl Client {
         })
     }
 
- // Cluster scan is not passed to redis-rs as a regular command, so we need to handle it separately.
-    // We send the command to a specific function in the redis-rs cluster client, which internally handles the
-    // the complication of a command scan, and generate the command base on the logic in the redis-rs library.
-    //
-    // The function returns a tuple with the cursor and the keys found in the scan.
-    // The cursor is not a regular cursor, but an ARC to a struct that contains the cursor and the data needed
-    // to continue the scan called ScanState.
-    // In order to avoid passing Rust GC to clean the ScanState when the cursor (ref) is passed to the wrapper,
-    // which means that Rust layer is not aware of the cursor anymore, we need to keep the ScanState alive.
-    // We do that by storing the ScanState in a global container, and return a cursor-id of the cursor to the wrapper.
-    //
-    // The wrapper create an object contain the cursor-id with a drop function that will remove the cursor from the container.
-    // When the ref is removed from the hash-map, there's no more references to the ScanState, and the GC will clean it.
-    pub async fn cluster_scan<'a>(
-        &'a mut self,
-        scan_state_cursor: &'a ScanStateRC,
-        cluster_scan_args: ClusterScanArgs,
-    ) -> RedisResult<Value> {
-        // Clone arguments before the async block (ScanStateRC is Arc, clone is cheap)
-        let scan_state_cursor_clone = scan_state_cursor.clone();
-        let cluster_scan_args_clone = cluster_scan_args.clone(); // Assuming ClusterScanArgs is Clone
-
-        // Check and initialize if lazy *inside* the async block
-        if let ClientWrapper::Lazy(_) = &mut self.internal_client {
-            self.initialize_lazy_connection().await?;
-        }
-
-        match &mut self.internal_client {
-            ClientWrapper::Standalone(_) => {
-                unreachable!("Cluster scan is not supported in standalone mode")
-            }
-            ClientWrapper::Cluster { client } => {
-                let (cursor, keys) = client
-                    .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone) // Use clones
-                    .await?;
-                let cluster_cursor_id = if cursor.is_finished() {
-                    Value::BulkString(FINISHED_SCAN_CURSOR.into()) // Use constant
-                } else {
-                    Value::BulkString(insert_cluster_scan_cursor(cursor).into())
-                };
-                Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
-            }
-            // Lazy case is now handled by the initial check
-            ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
-        }
-    }
-
     pub async fn invoke_script<'a>(
         &'a mut self,
         hash: &'a str,
@@ -682,31 +689,22 @@ impl Client {
         args: &Vec<&[u8]>,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisResult<Value> {
-        let hash_clone = hash.to_string();
-        let keys_clone: Vec<Vec<u8>> = keys.iter().map(|k| k.to_vec()).collect();
-        let args_clone: Vec<Vec<u8>> = args.iter().map(|a| a.to_vec()).collect();
-        let routing_clone = routing.clone();
-
         if let ClientWrapper::Lazy(_) = &mut self.internal_client {
             self.initialize_lazy_connection().await?;
         }
 
-        let keys_refs: Vec<&[u8]> = keys_clone.iter().map(|k| k.as_slice()).collect();
-        let args_refs: Vec<&[u8]> = args_clone.iter().map(|a| a.as_slice()).collect();
-
-        let eval = eval_cmd(&hash_clone, &keys_refs, &args_refs);
-        let result = self.send_command(&eval, routing_clone.clone()).await;
+        let eval = eval_cmd(hash, keys, args);
+        let result = self.send_command(&eval, routing.clone()).await;
         let Err(err) = result else {
             return result;
         };
         if err.kind() == ErrorKind::NoScriptError {
-            let Some(code) = get_script(&hash_clone) else {
+            let Some(code) = get_script(hash) else {
                 return Err(err);
             };
             let load = load_cmd(&code);
             self.send_command(&load, None).await?;
-            let eval_retry = eval_cmd(&hash_clone, &keys_refs, &args_refs);
-            self.send_command(&eval_retry, routing_clone).await
+            self.send_command(&eval, routing).await
         } else {
             Err(err)
         }
@@ -751,7 +749,6 @@ impl Client {
         password: Option<String>,
         immediate_auth: bool,
     ) -> RedisResult<Value> {
-        let password_clone = password.clone();
         let timeout = self.request_timeout;
         // The password update operation is wrapped in a timeout to prevent it from blocking indefinitely.
         // If the operation times out, an error is returned.
@@ -763,10 +760,10 @@ impl Client {
             }
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => {
-                    client.update_connection_password(password_clone.clone()).await
+                    client.update_connection_password(password.clone()).await
                 }
                 ClientWrapper::Cluster { ref mut client } => {
-                    client.update_connection_password(password_clone.clone()).await
+                    client.update_connection_password(password.clone()).await
                 }
                 ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
             }
@@ -775,7 +772,7 @@ impl Client {
         {
             Ok(result) => {
                 if immediate_auth {
-                    self.send_immediate_auth(password_clone).await
+                    self.send_immediate_auth(password).await
                 } else {
                     result
                 }
@@ -1154,7 +1151,6 @@ impl Client {
                 ClientWrapper::Lazy(LazyClient {
                     config: request,
                     push_sender,
-                    inner: Arc::new(OnceCell::new()),
                 })
             } else if request.cluster_mode_enabled {
                 let client = create_cluster_client(request, push_sender)
