@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
+from glide.async_commands.batch import Batch
 from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import (
     CoreCommands,
@@ -11,7 +12,6 @@ from glide.async_commands.core import (
     FunctionRestorePolicy,
     InfoSection,
 )
-from glide.async_commands.transaction import Transaction
 from glide.constants import (
     TOK,
     TEncodable,
@@ -67,25 +67,90 @@ class StandaloneCommands(CoreCommands):
 
     async def exec(
         self,
-        transaction: Transaction,
+        batch: Batch,
+        raise_on_error: bool,
+        timeout: Optional[int] = None,
     ) -> Optional[List[TResult]]:
         """
-        Execute a transaction by processing the queued commands.
+        Executes a batch by processing the queued commands.
 
-        See [valkey.io](https://valkey.io/docs/topics/transactions/) for details on Transactions.
+        See [Valkey Transactions (Atomic Batches)](https://valkey.io/docs/topics/transactions/) and
+        [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/docs/topics/pipelining/) for details.
+
+        Notes:
+            - Atomic Batches - Transactions: If the transaction fails due to a ``WATCH`` command,
+              ``exec`` will return ``None``.
 
         Args:
-            transaction (Transaction): A `Transaction` object containing a list of commands to be executed.
+            batch (Batch): A ``Batch`` containing the commands to execute.
+            raise_on_error (bool): Determines how errors are handled within the batch response.
+                When set to ``True``, the first encountered error in the batch will be raised as a
+                ``RequestError`` exception after all retries and reconnections have been executed.
+                When set to ``False``, errors will be included as part of the batch response array, allowing
+                the caller to process both successful and failed commands together. In this case, error details
+                will be provided as instances of ``RequestError``.
+            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+                to complete. This duration encompasses sending the request, awaiting a response from the server, and any
+                required reconnections or retries. If the specified timeout is exceeded for the request,
+                a timeout error will be raised. If not explicitly set, the client's default request timeout will be used.
 
         Returns:
-            Optional[List[TResult]]: A list of results corresponding to the execution of each command
-            in the transaction. If a command returns a value, it will be included in the list.
-            If a command doesn't return a value, the list entry will be `None`.
+            Optional[List[TResult]]: An array of results, where each entry corresponds to a command's execution result.
+                If the batch fails due to a ``WATCH`` command, ``exec`` will return ``None``.
 
-            If the transaction failed due to a WATCH command, `exec` will return `None`.
+        Example (Atomic Batch - Transaction):
+            >>> transaction = Batch(is_atomic=True)  # Atomic (Transaction)
+            >>> transaction.set("key", "1")
+            >>> transaction.incr("key")
+            >>> transaction.get("key")
+            >>> result = await client.exec(transaction, raise_on_error=True)
+            >>> print(f"Transaction Batch Result: {result}")
+            # Expected Output: Transaction Batch Result: [OK, 2, b'2']
+
+        Example (Non-Atomic Batch - Pipeline):
+            >>> pipeline = Batch(is_atomic=False)  # Non-Atomic (Pipeline)
+            >>> pipeline.set("key1", "value1")
+            >>> pipeline.set("key2", "value2")
+            >>> pipeline.get("key1")
+            >>> pipeline.get("key2")
+            >>> result = await client.exec(pipeline, raise_on_error=True)
+            >>> print(f"Pipeline Batch Result: {result}")
+            # Expected Output: Pipeline Batch Result: [OK, OK, b'value1', b'value2']
+
+        Example (Atomic Batch - Transaction with options):
+            >>> transaction = Batch(is_atomic=True)
+            >>> transaction.set("key", "1")
+            >>> transaction.incr("key")
+            >>> transaction.custom_command(["get", "key"])
+            >>> result = await client.exec(
+            ...     transaction,
+            ...     raise_on_error=False,  # Do not raise an error on failure
+            ...     timeout=1000  # Set a timeout of 1000 milliseconds
+            ... )
+            >>> print(f"Transaction Result: {result}")
+            # Expected Output: Transaction Result: [OK, 2, b'2']
+
+        Example (Non-Atomic Batch - Pipeline with options):
+            >>> pipeline = Batch(is_atomic=False)
+            >>> pipeline.custom_command(["set", "key1", "value1"])
+            >>> pipeline.custom_command(["set", "key2", "value2"])
+            >>> pipeline.custom_command(["get", "key1"])
+            >>> pipeline.custom_command(["get", "key2"])
+            >>> result = await client.exec(
+            ...     pipeline,
+            ...     raise_on_error=False,  # Do not raise an error on failure
+            ...     timeout=1000  # Set a timeout of 1000 milliseconds
+            ... )
+            >>> print(f"Pipeline Result: {result}")
+            # Expected Output: Pipeline Result: [OK, OK, b'value1', b'value2']
         """
-        commands = transaction.commands[:]
-        return await self._execute_transaction(commands)
+        commands = batch.commands[:]
+        return await self._execute_batch(
+            commands,
+            is_atomic=batch.is_atomic,
+            raise_on_error=raise_on_error,
+            timeout=timeout,
+        )
 
     async def select(self, index: int) -> TOK:
         """
@@ -787,7 +852,7 @@ class StandaloneCommands(CoreCommands):
 
     async def unwatch(self) -> TOK:
         """
-        Flushes all the previously watched keys for a transaction. Executing a transaction will
+        Flushes all the previously watched keys for an atomic batch (Transaction). Executing a transaction will
         automatically flush all previously watched keys.
 
         See [valkey.io](https://valkey.io/commands/unwatch) for more details.

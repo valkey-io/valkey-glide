@@ -331,10 +331,15 @@ class BaseClient(CoreCommands):
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
-    async def _execute_transaction(
+    async def _execute_batch(
         self,
         commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        is_atomic: bool,
+        raise_on_error: bool = False,
+        retry_server_error: bool = False,
+        retry_connection_error: bool = False,
         route: Optional[Route] = None,
+        timeout: Optional[int] = None,
     ) -> List[TResult]:
         if self._is_closed:
             raise ClosingError(
@@ -342,7 +347,7 @@ class BaseClient(CoreCommands):
             )
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
-        transaction_commands = []
+        batch_commands = []
         for requst_type, args in commands:
             command = Command()
             command.request_type = requst_type
@@ -353,10 +358,14 @@ class BaseClient(CoreCommands):
                 command.args_array.args[:] = encoded_args
             else:
                 command.args_vec_pointer = create_leaked_bytes_vec(encoded_args)
-            transaction_commands.append(command)
-        request.batch.commands.extend(transaction_commands)
-        request.batch.is_atomic = True
-        # TODO: add support for timeout, raise on error and retry strategy
+            batch_commands.append(command)
+        request.batch.commands.extend(batch_commands)
+        request.batch.is_atomic = is_atomic
+        request.batch.raise_on_error = raise_on_error
+        if timeout is not None:
+            request.batch.timeout = timeout
+        request.batch.retry_server_error = retry_server_error
+        request.batch.retry_connection_error = retry_connection_error
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
