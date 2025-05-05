@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List, Optional
 
-from glide.async_commands.server_modules.ft_options.ft_constants import FtCreateKeywords
+from glide.commands.server_modules.ft_options.ft_constants import FtCreateKeywords
 from glide.constants import TEncodable
 
 
