@@ -14676,7 +14676,12 @@ public class SharedCommandTests {
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             result =
-                    client.zscan(key1, initialCursor, ZScanOptions.builder().noScores(true).build()).get();
+                    client
+                            .zscan(
+                                    key1,
+                                    initialCursor,
+                                    ZScanOptions.builder().matchPattern("member*").noScores(true).build())
+                            .get();
             assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
             // Cast the result collection to a String array
             Object[] fieldsArray = (Object[]) result[resultCollectionIndex];
@@ -14885,7 +14890,10 @@ public class SharedCommandTests {
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             result =
                     client
-                            .zscan(key1, initialCursor, ZScanOptionsBinary.builder().noScores(true).build())
+                            .zscan(
+                                    key1,
+                                    initialCursor,
+                                    ZScanOptionsBinary.builder().matchPattern(gs("member*")).noScores(true).build())
                             .get();
             assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
             // Cast the result collection to a String array
