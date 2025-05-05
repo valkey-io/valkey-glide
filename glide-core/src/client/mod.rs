@@ -194,7 +194,7 @@ pub enum ClientWrapper {
 pub struct LazyClient {
     config: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
-    _inner: Arc<OnceCell<ClientWrapper>>, // Use Arc to share the OnceCell
+    inner: Arc<OnceCell<ClientWrapper>>, // Use Arc to share the OnceCell
 }
 
 #[derive(Clone)]
@@ -1154,7 +1154,7 @@ impl Client {
                 ClientWrapper::Lazy(LazyClient {
                     config: request,
                     push_sender,
-                    _inner: Arc::new(OnceCell::new()),
+                    inner: Arc::new(OnceCell::new()),
                 })
             } else if request.cluster_mode_enabled {
                 let client = create_cluster_client(request, push_sender)
