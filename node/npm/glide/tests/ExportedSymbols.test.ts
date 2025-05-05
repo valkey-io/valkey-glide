@@ -19,6 +19,7 @@ const skippedListForExports: string[] = [
     "command_request",
     "connection_request",
     "response",
+    "WritePromiseOptions",
 ];
 
 const glideRsKeyWords: string[] = [
