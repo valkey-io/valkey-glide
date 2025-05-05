@@ -64,15 +64,15 @@ func ExampleTransaction_ExecWithOptions() {
 	var tx *Transaction = getExampleTransactionGlideClient() // example helper function
 	cmd := tx.GlideClient
 	tx.Discard()
-	
+
 	cmd.Set("testkey", "hello")
-	
+
 	// First, test with RaiseOnError=false
 	cmd.Set("testkey", "hello")
-	cmd.LPop("testkey") 
+	cmd.LPop("testkey")
 	cmd.Del([]string{"testkey"})
 	cmd.Rename("testkey", "newkey")
-	
+
 	options := &TransactionOption{
 		RaiseOnError: false,
 	}
@@ -81,7 +81,7 @@ func ExampleTransaction_ExecWithOptions() {
 		fmt.Println("RaiseOnError=false should not have failed:", err)
 		return
 	}
-	
+
 	fmt.Println("RaiseOnError=false results:")
 	fmt.Println("Number of results:", len(results))
 	fmt.Println("First result:", results[0])
@@ -90,11 +90,11 @@ func ExampleTransaction_ExecWithOptions() {
 	fmt.Println("Fourth result (as string):", results[3])
 	fmt.Println("Fifth result (as string):", results[4])
 	fmt.Println(results)
-	
+
 	// Now, demonstrate RaiseOnError=true behavior
 	fmt.Println("\nWith RaiseOnError=true, the transaction would fail at the LPOP command with:")
 	fmt.Println("RaiseOnError=true error: WRONGTYPE: Operation against a key holding the wrong kind of value")
-	
+
 	// Output:
 	// RaiseOnError=false results:
 	// Number of results: 5
@@ -104,7 +104,7 @@ func ExampleTransaction_ExecWithOptions() {
 	// Fourth result (as string): 1
 	// Fifth result (as string): KnownError
 	// [OK OK ExtensionError 1 KnownError]
-	// 
+	//
 	// With RaiseOnError=true, the transaction would fail at the LPOP command with:
 	// RaiseOnError=true error: WRONGTYPE: Operation against a key holding the wrong kind of value
 }
