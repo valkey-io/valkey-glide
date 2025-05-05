@@ -177,6 +177,7 @@ jobs:
             - name: Generate protobuf for GO
               working-directory: ./go
               run: |
+                  make install-tools
                   make generate-protobuf
             - name: Run ORT tools for Go
               uses: ./.github/workflows/run-ort-tools
