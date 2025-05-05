@@ -1145,7 +1145,7 @@ func ExampleGlideClient_ZInterWithScores() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	// Output: map[b:3.5 c:5.5 d:7]
+	// Output: [{b 3.5} {c 5.5} {d 7}]
 }
 
 func ExampleGlideClusterClient_ZInterWithScores() {
@@ -1164,7 +1164,7 @@ func ExampleGlideClusterClient_ZInterWithScores() {
 	}
 	fmt.Println(result)
 
-	// Output: map[b:3.5 c:5.5 d:7]
+	// Output: [{b 3.5} {c 5.5} {d 7}]
 }
 
 func ExampleGlideClient_ZInterStore() {
@@ -1276,7 +1276,7 @@ func ExampleGlideClient_ZDiffWithScores() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	// Output: map[a:1]
+	// Output: [{a 1}]
 }
 
 func ExampleGlideClusterClient_ZDiffWithScores() {
@@ -1290,7 +1290,7 @@ func ExampleGlideClusterClient_ZDiffWithScores() {
 	}
 	fmt.Println(result)
 
-	// Output: map[a:1]
+	// Output: [{a 1}]
 }
 
 func ExampleGlideClient_ZDiffStore() {
@@ -1386,8 +1386,7 @@ func ExampleGlideClient_ZUnionWithScores() {
 	)
 	fmt.Println(zUnionResult)
 
-	// Output:
-	// map[one:1 three:3 two:5.5]
+	// Output: [{one 1} {three 3} {two 5.5}]
 }
 
 func ExampleGlideClusterClient_ZUnionWithScores() {
@@ -1411,8 +1410,7 @@ func ExampleGlideClusterClient_ZUnionWithScores() {
 	)
 	fmt.Println(zUnionResult)
 
-	// Output:
-	// map[one:1 three:3 two:5.5]
+	// Output: [{one 1} {three 3} {two 5.5}]
 }
 
 func ExampleGlideClient_ZUnionStore() {
