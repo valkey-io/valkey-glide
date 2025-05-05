@@ -84,7 +84,7 @@ class BackoffStrategy:
             retries will remain constant until a reconnect attempt is succesful.
         factor (int): The multiplier that will be applied to the waiting time between each retry.
         exponent_base (int): The exponent base configured for the strategy.
-        jitter_percent (Optional[int]): The Jitter percent on the calculated duration, optional value, if not set, using deafult.
+        jitter_percent (Optional[int]): The Jitter percent on the calculated duration. If not set, a default value will be used.
     """
 
     def __init__(

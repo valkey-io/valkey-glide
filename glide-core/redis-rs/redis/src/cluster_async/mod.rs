@@ -1462,7 +1462,7 @@ where
                 let infinite_backoff_iter = inner_clone
                     .glide_connection_options
                     .connection_retry_strategy
-                    .unwrap()
+                    .unwrap_or_default()
                     .get_infinite_backoff_dur_iterator();
 
                 let mut node_result = Err(RedisError::from((

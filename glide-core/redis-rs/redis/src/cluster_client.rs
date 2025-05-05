@@ -424,12 +424,12 @@ impl ClusterClientBuilder {
     /// Set reconnect retry strategy configuration for this client
     ///
     /// # Parameters
-    /// - `reconnect_retry_strategy_config`: Use the `reconnect_retry_strategy_config` to set the reconnect backoff with jitter params.
-    pub fn reconnect_retry_strategy_config(
+    /// - `reconnect_retry_strategy`: Use the `reconnect_retry_strategy` to set the reconnect backoff with jitter params.
+    pub fn reconnect_retry_strategy(
         mut self,
-        reconnect_retry_strategy_config: RetryStrategy,
+        reconnect_retry_strategy: RetryStrategy,
     ) -> ClusterClientBuilder {
-        self.builder_params.reconnect_retry_strategy = Some(reconnect_retry_strategy_config);
+        self.builder_params.reconnect_retry_strategy = Some(reconnect_retry_strategy);
         self
     }
 

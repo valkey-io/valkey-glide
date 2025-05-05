@@ -754,7 +754,7 @@ async fn create_cluster_client(
         ),
         None => RetryStrategy::default(),
     };
-    builder = builder.reconnect_retry_strategy_config(retry_strategy);
+    builder = builder.reconnect_retry_strategy(retry_strategy);
 
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
