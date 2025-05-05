@@ -1,16 +1,16 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-"""Glide module for `JSON` commands in transaction.
+"""Glide module for `JSON` commands in batch.
 
 Examples:
     >>> import json
     >>> from glide import json_batch
-    >>> transaction = ClusterTransaction()
+    >>> batch = ClusterBatch(is_atomic=True)
     >>> value = {'a': 1.0, 'b': 2}
     >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
-    >>> json_batch.set(transaction, "doc", "$", json_str)
-    >>> json_batch.get(transaction, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as
+    >>> json_batch.set(batch, "doc", "$", json_str)
+    >>> json_batch.get(batch, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as
                                                 # JSON string.
-    >>> result = await glide_client.exec(transaction)
+    >>> result = await glide_client.exec(batch)
     >>> print result[0] # set result
         'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
     >>> print result[1] # get result
@@ -22,28 +22,28 @@ Examples:
 
 from typing import List, Optional, Union
 
+from glide.async_commands.batch import TBatch
 from glide.async_commands.core import ConditionalChange
 from glide.async_commands.server_modules.glide_json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide.async_commands.transaction import TTransaction
 from glide.constants import TEncodable
 
 
 def set(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: TEncodable,
     value: TEncodable,
     set_condition: Optional[ConditionalChange] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Sets the JSON value at the specified `path` stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): Represents the path within the JSON document where the value will be set.
             The key will be modified only if `value` is added as the last child in the specified `path`, or if the specified
@@ -60,20 +60,20 @@ def set(
     if set_condition:
         args.append(set_condition.value)
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def get(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     paths: Optional[Union[TEncodable, List[TEncodable]]] = None,
     options: Optional[JsonGetOptions] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves the JSON value at the specified `paths` stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         paths (Optional[Union[TEncodable, List[TEncodable]]]): The path or list of paths within the JSON document.
             Default to None.
@@ -106,22 +106,30 @@ def get(
             paths = [paths]
         args.extend(paths)
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def mget(
-    transaction: TTransaction,
+    batch: TBatch,
     keys: List[TEncodable],
     path: TEncodable,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves the JSON values at the specified `path` stored at multiple `keys`.
 
     Note:
-        When in cluster mode, all keys in the transaction must be mapped to the same slot.
+        When in cluster mode:
+        - If the batch is an atomic batch (transaction), then all keys must map to the same slot.
+        - If the batch is a non-atomic batch (pipeline), and the keys map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         keys (List[TEncodable]): A list of keys for the JSON documents.
         path (TEncodable): The path within the JSON documents.
 
@@ -136,20 +144,20 @@ def mget(
             If a key doesn't exist, the corresponding list element will be None.
     """
     args = ["JSON.MGET"] + keys + [path]
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def arrappend(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: TEncodable,
     values: List[TEncodable],
-) -> TTransaction:
+) -> TBatch:
     """
     Appends one or more `values` to the JSON array at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): Represents the path within the JSON document where the `values` will be appended.
         values (TEncodable): The values to append to the JSON array at the specified path.
@@ -169,16 +177,16 @@ def arrappend(
         For more information about the returned type, see `TJsonResponse`.
     """
     args = ["JSON.ARRAPPEND", key, path] + values
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def arrindex(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: TEncodable,
     value: TEncodable,
     options: Optional[JsonArrIndexOptions] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Searches for the first occurrence of a scalar JSON value (i.e., a value that is neither an object nor an array) within
     arrays at the specified `path` in the JSON document stored at `key`.
@@ -194,7 +202,7 @@ def arrindex(
     If `options.start` exceeds `options.end`, `-1` is returned, indicating that the value was not found.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document.
         value (TEncodable): The value to search for within the arrays.
@@ -222,22 +230,22 @@ def arrindex(
     if options:
         args.extend(options.to_args())
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def arrinsert(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: TEncodable,
     index: int,
     values: List[TEncodable],
-) -> TTransaction:
+) -> TBatch:
     """
     Inserts one or more values into the array at the specified `path` within the JSON document stored at `key`, before the
     given `index`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document.
         index (int): The array index before which values are inserted.
@@ -258,19 +266,19 @@ def arrinsert(
             If `key` doesn't exist, an error is raised.
     """
     args = ["JSON.ARRINSERT", key, path, str(index)] + values
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def arrlen(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves the length of the array at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Defaults to None.
 
@@ -289,20 +297,20 @@ def arrlen(
     args = ["JSON.ARRLEN", key]
     if path:
         args.append(path)
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def arrpop(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     options: Optional[JsonArrPopOptions] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Pops an element from the array located at the specified path within the JSON document stored at `key`.
     If `options.index` is provided, it pops the element at that index instead of the last element.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         options (Optional[JsonArrPopOptions]): Options including the path and optional index. See `JsonArrPopOptions`.
             Default to None.
@@ -325,16 +333,16 @@ def arrpop(
     if options:
         args.extend(options.to_args())
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def arrtrim(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: TEncodable,
     start: int,
     end: int,
-) -> TTransaction:
+) -> TBatch:
     """
     Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray
     [start, end], both inclusive.
@@ -343,7 +351,7 @@ def arrtrim(
     If `start` >= size or `start` > `end`, the array is emptied and 0 is returned.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document.
         start (int): The start index, inclusive.
@@ -364,20 +372,20 @@ def arrtrim(
             If `key` doesn't exist, an error is raised.
     """
 
-    return transaction.custom_command(["JSON.ARRTRIM", key, path, str(start), str(end)])
+    return batch.custom_command(["JSON.ARRTRIM", key, path, str(start), str(end)])
 
 
 def clear(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: Optional[str] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Clears arrays or objects at the specified JSON path in the document stored at `key`.
     Numeric values are set to `0`, and boolean values are set to `False`, and string values are converted to empty strings.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[str]): The path within the JSON document. Default to None.
 
@@ -392,14 +400,14 @@ def clear(
     if path:
         args.append(path)
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def debug_fields(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Returns the number of fields of the JSON value at the specified `path` within the JSON document stored at `key`.
     - **Primitive Values**: Each non-container JSON value (e.g., strings, numbers, booleans, and null) counts as one field.
@@ -412,7 +420,7 @@ def debug_fields(
             - Total: 2 (top-level) + 3 (from array) + 1 (from nested object) = 6 fields.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Defaults to root if not provided.
 
@@ -432,19 +440,19 @@ def debug_fields(
     if path:
         args.append(path)
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def debug_memory(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Reports memory usage in bytes of a JSON value at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Defaults to None.
 
@@ -464,19 +472,19 @@ def debug_memory(
     if path:
         args.append(path)
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def delete(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document.
             If None, deletes the entire JSON document at `key`. Defaults to None.
@@ -486,19 +494,19 @@ def delete(
         If `key` or `path` doesn't exist, returns 0.
     """
 
-    return transaction.custom_command(["JSON.DEL", key] + ([path] if path else []))
+    return batch.custom_command(["JSON.DEL", key] + ([path] if path else []))
 
 
 def forget(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document.
             If None, deletes the entire JSON document at `key`. Defaults to None.
@@ -508,20 +516,20 @@ def forget(
         If `key` or `path` doesn't exist, returns 0.
     """
 
-    return transaction.custom_command(["JSON.FORGET", key] + ([path] if path else []))
+    return batch.custom_command(["JSON.FORGET", key] + ([path] if path else []))
 
 
 def numincrby(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: TEncodable,
     number: Union[int, float],
-) -> TTransaction:
+) -> TBatch:
     """
     Increments or decrements the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document.
         number (Union[int, float]): The number to increment or decrement by.
@@ -542,20 +550,20 @@ def numincrby(
     """
     args = ["JSON.NUMINCRBY", key, path, str(number)]
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def nummultby(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: TEncodable,
     number: Union[int, float],
-) -> TTransaction:
+) -> TBatch:
     """
     Multiplies the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document.
         number (Union[int, float]): The number to multiply by.
@@ -576,20 +584,20 @@ def nummultby(
     """
     args = ["JSON.NUMMULTBY", key, path, str(number)]
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def objlen(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves the number of key-value pairs in the object stored at the specified `path` within the JSON document stored at
     `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Defaults to None.
 
@@ -609,19 +617,19 @@ def objlen(
     if path:
         args.append(path)
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def objkeys(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves key names in the object values at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): Represents the path within the JSON document where the key names will be retrieved.
             Defaults to None.
@@ -643,14 +651,14 @@ def objkeys(
     if path:
         args.append(path)
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def resp(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieve the JSON value at the specified `path` within the JSON document stored at `key`.
     The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).\n
@@ -665,7 +673,7 @@ def resp(
     each of which is a RESP bulk string.\n
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Default to None.
 
@@ -685,20 +693,20 @@ def resp(
     if path:
         args.append(path)
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
 
 
 def strappend(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     value: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Appends the specified `value` to the string stored at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         value (TEncodable): The value to append to the string. Must be wrapped with single quotes. For example,
             to append "foo", pass '"foo"'.
@@ -718,21 +726,21 @@ def strappend(
                 If `key` doesn't exist, an error is raised.
         For more information about the returned type, see `TJsonResponse`.
     """
-    return transaction.custom_command(
+    return batch.custom_command(
         ["JSON.STRAPPEND", key] + ([path, value] if path else [value])
     )
 
 
 def strlen(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Returns the length of the JSON string value stored at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Default to None.
 
@@ -748,21 +756,21 @@ def strlen(
             If `key` doesn't exist, None is returned.
         For more information about the returned type, see `TJsonResponse`.
     """
-    return transaction.custom_command(
+    return batch.custom_command(
         ["JSON.STRLEN", key, path] if path else ["JSON.STRLEN", key]
     )
 
 
 def toggle(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: TEncodable,
-) -> TTransaction:
+) -> TBatch:
     """
     Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document. Default to None.
 
@@ -778,19 +786,19 @@ def toggle(
                 If `key` doesn't exist, an error is raised.
         For more information about the returned type, see `TJsonResponse`.
     """
-    return transaction.custom_command(["JSON.TOGGLE", key, path])
+    return batch.custom_command(["JSON.TOGGLE", key, path])
 
 
 def type(
-    transaction: TTransaction,
+    batch: TBatch,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> TTransaction:
+) -> TBatch:
     """
     Retrieves the type of the JSON value at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        transaction (TTransaction): The transaction to execute the command.
+        batch (TBatch): The batch to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Default to None.
 
@@ -809,4 +817,4 @@ def type(
     if path:
         args.append(path)
 
-    return transaction.custom_command(args)
+    return batch.custom_command(args)
