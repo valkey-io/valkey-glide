@@ -302,7 +302,16 @@ export enum Decoder {
     String,
 }
 
-/** An extension to command option types with {@link Decoder}. */
+/**
+ * An extension to command option types with {@link Decoder}.
+ *
+ * WARNING:
+ *
+ * Be aware that if decoding fails during a command execution (due to
+ * invalid inputs, incorrect decoder), data COULD BE UNRECOVERABLY LOST.
+ *
+ * Use with caution.
+ */
 export interface DecoderOption {
     /**
      * {@link Decoder} type which defines how to handle the response.
@@ -962,7 +971,9 @@ export class BaseClient {
                 reject(
                     err instanceof ValkeyError
                         ? err
-                        : new Error(`Decoding error: '${err}'`),
+                        : new Error(
+                              `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
+                          ),
                 );
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
