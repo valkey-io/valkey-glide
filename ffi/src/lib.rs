@@ -1058,17 +1058,17 @@ pub unsafe extern "C" fn execute_transaction(
         );
     }
 
-    // Check if route_bytes is valid
-    let route = if !transaction_param.route_bytes.is_null() {
+    let route: Option<RoutingInfo> = if !transaction_param.route_bytes.is_null() {
         let r_bytes: &[u8] = unsafe {
             std::slice::from_raw_parts(
                 transaction_param.route_bytes,
                 transaction_param.route_bytes_len,
             )
         };
-        Routes::parse_from_bytes(r_bytes).unwrap()
+        let route = Routes::parse_from_bytes(r_bytes).unwrap();
+        get_route(route, None)
     } else {
-        Routes::default()
+        None
     };
 
     let client_adapter = unsafe {
@@ -1078,7 +1078,7 @@ pub unsafe extern "C" fn execute_transaction(
 
     let mut client = client_adapter.core.client.clone();
 
-    let timeout_ms = if transaction_param.timeout > 0 {
+    let timeout_ms: Option<u32> = if transaction_param.timeout > 0 {
         Some(transaction_param.timeout)
     } else {
         None
@@ -1088,7 +1088,7 @@ pub unsafe extern "C" fn execute_transaction(
         client
             .send_transaction(
                 &pipeline,
-                get_route(route, None),
+                route,
                 timeout_ms,
                 transaction_param.raise_on_error,
             )
