@@ -5,8 +5,8 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * Defines a retry strategy for batch requests, allowing control over retries in case of server or
- * connection errors.
+ * Defines a retry strategy for cluster batch requests, allowing control over retries in case of
+ * server or connection errors.
  *
  * <p>This strategy determines whether failed commands should be retried, impacting execution order
  * and potential side effects.

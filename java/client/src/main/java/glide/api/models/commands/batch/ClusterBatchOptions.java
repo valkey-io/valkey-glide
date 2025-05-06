@@ -29,7 +29,7 @@ public class ClusterBatchOptions extends BaseBatchOptions {
      * ⚠️ <b>Please see {@link ClusterBatchRetryStrategy} and read carefully before enabling these
      * options.</b>
      *
-     * <p>Defines the retry strategy for handling batch request failures.
+     * <p>Defines the retry strategy for handling cluster batch request failures.
      *
      * <p>This strategy determines whether failed commands should be retried, potentially impacting
      * execution order.
