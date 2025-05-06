@@ -212,7 +212,7 @@ func (suite *GlideTestSuite) TestExecWithOptions_Timeout() {
 		Timeout: 1000,
 	}
 
-	time.Sleep(5 * time.second)
+	time.Sleep(5 * time.Second)
 
 	results, err := tx.ExecWithOptions(options)
 	assert.NoError(suite.T(), err)
@@ -335,7 +335,7 @@ func (suite *GlideTestSuite) TestExecWithOptions_Cluster_Timeout() {
 		Timeout: 1000,
 	}
 
-	time.Sleep(5 * time.second)
+	time.Sleep(5 * time.Second)
 
 	results, err := tx.ExecWithOptions(options)
 	assert.NoError(suite.T(), err)
