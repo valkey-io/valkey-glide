@@ -1084,3 +1084,92 @@ func (suite *GlideTestSuite) TestFunctionKill() {
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
+
+func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+	libName := "functionKill_no_write"
+	funcName := "deadlock"
+	key := libName
+	code := createLuaLibWithLongRunningFunction(libName, funcName, 6, readOnly)
+
+	// Flush all functions
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Load the lib
+	result, err = client.FunctionLoad(code, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	testConfig := suite.defaultClientConfig().WithRequestTimeout(10000)
+	testClient := suite.client(testConfig)
+	defer testClient.Close()
+
+	// Channel to signal when function is killed
+	killed := make(chan bool)
+
+	// Start a goroutine to kill the function
+	go func() {
+		defer close(killed)
+		timeout := time.After(4 * time.Second)
+		killTicker := time.NewTicker(100 * time.Millisecond) // interval of 100ms for kill attempts
+		defer killTicker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				killed <- false
+				return
+			case <-killTicker.C:
+				if readOnly {
+					result, err = client.FunctionKill()
+					if err == nil {
+						return
+					}
+				} else {
+					result, err = client.FunctionKill()
+					if err != nil && strings.Contains(strings.ToLower(err.Error()), "unkillable") {
+						return
+					}
+				}
+
+			}
+		}
+	}()
+
+	// Call the function - this should block until killed and return a script kill error
+	_, err = testClient.FCallWithKeysAndArgs(funcName, []string{key}, []string{})
+	if readOnly {
+		assert.Error(suite.T(), err)
+		assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "script killed"))
+	} else {
+		assert.NoError(suite.T(), err)
+	}
+
+	// Wait for the function to complete
+	time.Sleep(6 * time.Second)
+}
+
+func (suite *GlideTestSuite) TestFunctionKillNoWrite() {
+	if !*longTimeoutTests {
+		suite.T().Skip("Timeout tests are disabled")
+	}
+	suite.testFunctionKill(true)
+}
+
+func (suite *GlideTestSuite) TestFunctionKillWrite() {
+	if !*longTimeoutTests {
+		suite.T().Skip("Timeout tests are disabled")
+	}
+	suite.testFunctionKill(false)
+}
