@@ -894,9 +894,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
         }
 
         Value::ServerError(server_error) => {
-            let code = server_error.err_code();
-            let details = server_error.details().unwrap_or("No details");
-            let error_message = format!("{} - {}", code, details);
+            let error_message: String = error_message();
             // Convert the formatted string to bytes
             let bytes = error_message.into_bytes();
             // Process the bytes as before
@@ -1010,7 +1008,8 @@ pub struct TransactionParam {
 /// `timeout` The duration in milliseconds that the client should wait for the batch request to complete.
 ///           This duration encompasses sending the request, awaiting for a response from the server, and any
 ///           required reconnections or retries
-/// `raise_on_error` When set to false, errors will be included as part of the batch response, allowing the caller to process both successful and failed commands together. In this case, error details
+/// `raise_on_error` When set to false, errors will be included as part of the batch response, allowing the caller to process both successful and failed commands together.
+///                  In this case, error details will be provided as instances of `RequestError`.
 ///                  When set to true, the first encountered error in the batch will be raised as an exception.
 ///
 /// # Safety

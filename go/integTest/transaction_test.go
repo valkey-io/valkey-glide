@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -211,6 +212,8 @@ func (suite *GlideTestSuite) TestExecWithOptions_Timeout() {
 		Timeout: 1000,
 	}
 
+	time.Sleep(5 * time.second)
+
 	results, err := tx.ExecWithOptions(options)
 	assert.NoError(suite.T(), err)
 
@@ -324,6 +327,8 @@ func (suite *GlideTestSuite) TestExecWithOptions_Cluster_Timeout() {
 		Timeout: 100,
 	}
 
+d)
+
 	_, err := tx.ExecWithOptions(options)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "timed out")
@@ -331,6 +336,8 @@ func (suite *GlideTestSuite) TestExecWithOptions_Cluster_Timeout() {
 	options = &api.TransactionOption{
 		Timeout: 1000,
 	}
+
+	time.Sleep(5 * time.second)
 
 	results, err := tx.ExecWithOptions(options)
 	assert.NoError(suite.T(), err)
