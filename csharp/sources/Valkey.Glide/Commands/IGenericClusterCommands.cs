@@ -149,7 +149,7 @@ public interface IGenericClusterCommands
     ///     <list type="bullet">
     ///       <item>
     ///         <b>Atomic batches (Transactions):</b> Routed to the slot owner of the
-    ///         first key in the batch.If no key is found, the request is sent to a random node.
+    ///         first key in the batch. If no key is found, the request is sent to a random node.
     ///       </item>
     ///       <item>
     ///         <b>Non-atomic batches (Pipelines):</b> Each command is routed to the node
@@ -183,7 +183,7 @@ public interface IGenericClusterCommands
     ///     </list>
     ///   </item>
     ///   <item>
-    ///     Retries for failures will be handled according to the configured <see cref="BatchRetryStrategy" />.
+    ///     Retries for failures will be handled according to the configured <see cref="ClusterBatchRetryStrategy" />.
     ///   </item>
     /// </list>
     /// <example>

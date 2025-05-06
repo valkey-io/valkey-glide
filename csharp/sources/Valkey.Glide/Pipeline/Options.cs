@@ -30,7 +30,8 @@ public class Options
     ///     <b>Server Errors:</b> Retrying may cause commands targeting the same slot to be executed out of order.
     ///   </item>
     ///   <item>
-    ///     <b>Connection Errors:</b> Retrying may lead to duplicate executions, as it is unclear which commands have already succeeded.
+    ///     <b>Connection Errors:</b> Retrying may lead to duplicate executions, since the server might
+    ///     have already received and processed the request before the error occurred.
     ///   </item>
     /// </list>
     /// <para />
@@ -46,7 +47,7 @@ public class Options
     /// </code>
     /// However, if the slot is migrating, both commands may return an <c>ASK</c> error and be redirected.
     /// Upon <c>ASK</c> redirection, a multi-key command may return a <c>TRYAGAIN</c> error (triggering a retry),
-    /// while the <c>SET</c> command succeeds immediately.This can result in an unintended reordering of commands
+    /// while the <c>SET</c> command succeeds immediately. This can result in an unintended reordering of commands
     /// if the first command is retried after the slot stabilizes:
     /// <code>
     /// ["value", null]
@@ -58,14 +59,18 @@ public class Options
     /// If <see langword="true" />, failed commands with a retriable error(e.g., <c>TRYAGAIN</c>) will be automatically retried.
     /// <para />
     /// ⚠️<b>Warning:</b> Enabling this flag may cause commands targeting the same slot to execute out of order.
+    /// <para />
+    /// By default, this is set to <see langword="false" />.
     /// </param>
     /// <param name="retryConnectionError">
     /// If <see langword="true" />, batch requests will be retried in case of connection errors.
     /// <para />
     /// ⚠️<b>Warning:</b> Retrying after a connection error may lead to duplicate executions, since
     /// the server might have already received and processed the request before the error occurred.
+    /// <para />
+    /// By default, this is set to <see langword="false" />.
     /// </param>
-    public class BatchRetryStrategy(bool? retryServerError = null, bool? retryConnectionError = null)
+    public class ClusterBatchRetryStrategy(bool? retryServerError = null, bool? retryConnectionError = null)
     {
         internal readonly bool? RetryServerError = retryServerError;
         internal readonly bool? RetryConnectionError = retryConnectionError;
@@ -126,15 +131,18 @@ public class Options
     /// </list>
     /// </param>
     /// <param name="retryStrategy">
+    /// ⚠️ <b>Please see <see cref="ClusterBatchRetryStrategy"/> and read carefully before enabling these
+    /// options.</b>
+    /// <para />
     /// Defines the retry strategy for handling batch request failures.
     /// <para />
     /// This strategy determines whether failed commands should be retried, potentially impacting execution order.
     /// <list type="bullet">
     ///   <item>
-    ///     If <see cref="BatchRetryStrategy.RetryServerError" /> is <see langword="true" />, retriable errors (e.g., <c>TRYAGAIN</c>) will trigger a retry.
+    ///     If <see cref="ClusterBatchRetryStrategy.RetryServerError" /> is <see langword="true" />, retriable errors (e.g., <c>TRYAGAIN</c>) will trigger a retry.
     ///   </item>
     ///   <item>
-    ///     If <see cref="BatchRetryStrategy.RetryConnectionError" /> is {@code true}, connection failures will trigger a retry.
+    ///     If <see cref="ClusterBatchRetryStrategy.RetryConnectionError" /> is {@code true}, connection failures will trigger a retry.
     ///   </item>
     /// </list>
     /// <para />
@@ -147,8 +155,6 @@ public class Options
     ///     Retrying connection errors may lead to duplicate executions, as it is unclear which commands have already been processed.
     ///   </item>
     /// </list>
-    /// <b>Please see <see cref="BatchRetryStrategy" /> and read carefully before enabling these options.</b>
-    /// <para />
     /// <b>Note:</b> Currently, retry strategies are supported only for non-atomic batches.
     /// <para />
     /// <b>Recommendation:</b> It is recommended to increase the <paramref name="timeout" /> when enabling these strategies.
@@ -157,10 +163,10 @@ public class Options
         uint? timeout = null,
         bool? raiseOnError = null,
         SingleNodeRoute? route = null,
-        BatchRetryStrategy? retryStrategy = null) : BaseBatchOptions(timeout, raiseOnError)
+        ClusterBatchRetryStrategy? retryStrategy = null) : BaseBatchOptions(timeout, raiseOnError)
     {
         internal SingleNodeRoute? Route { get; private set; } = route;
-        internal BatchRetryStrategy? RetryStrategy { get; private set; } = retryStrategy;
+        internal ClusterBatchRetryStrategy? RetryStrategy { get; private set; } = retryStrategy;
 
         internal override FFI.BatchOptions ToFfi() => new(
                 RetryStrategy?.RetryServerError,
