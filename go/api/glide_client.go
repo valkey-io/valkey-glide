@@ -21,6 +21,7 @@ type GlideClientCommands interface {
 	BitmapCommands
 	ConnectionManagementCommands
 	ScriptingAndFunctionStandaloneCommands
+	PubSubStandaloneCommands
 }
 
 // Client used for connection to standalone servers.
