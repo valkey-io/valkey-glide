@@ -167,7 +167,7 @@ class ClusterCommands(CoreCommands):
             >>> atomic_batch.set("key", "1")
             >>> atomic_batch.incr("key")
             >>> atomic_batch.get("key")
-            >>> atomic_result = await cluster_client.exec(atomic_batch)
+            >>> atomic_result = await cluster_client.exec(atomic_batch, false)
             >>> print(f"Atomic Batch Result: {atomic_result}")
             # Expected Output: Atomic Batch Result: [OK, 2, 2]
 
@@ -177,7 +177,7 @@ class ClusterCommands(CoreCommands):
             >>> non_atomic_batch.set("key2", "value2")
             >>> non_atomic_batch.get("key1")
             >>> non_atomic_batch.get("key2")
-            >>> non_atomic_result = await cluster_client.exec(non_atomic_batch)
+            >>> non_atomic_result = await cluster_client.exec(non_atomic_batch, false)
             >>> print(f"Non-Atomic Batch Result: {non_atomic_result}")
             # Expected Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
 
@@ -202,6 +202,7 @@ class ClusterCommands(CoreCommands):
             >>> non_atomic_batch.get("key2")
             >>> non_atomic_result = await cluster_client.exec(
             ...     non_atomic_batch,
+            ...     raise_on_error=False,
             ...     retry_server_error=True,
             ...     retry_connection_error=False
             ... )
