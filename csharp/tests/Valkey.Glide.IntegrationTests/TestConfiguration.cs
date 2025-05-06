@@ -1,7 +1,6 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 
 using Valkey.Glide.IntegrationTests;
 
@@ -25,11 +24,17 @@ public class TestConfiguration : IDisposable
         new ClusterClientConfigurationBuilder()
             .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port);
 
+    public static GlideClient DefaultStandaloneClientWithExtraTimeout()
+    => GlideClient.CreateClient(DefaultClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
+
+    public static GlideClusterClient DefaultClusterClientWithExtraTimeout()
+        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
+
     public static GlideClient DefaultStandaloneClient()
-        => GlideClient.CreateClient(DefaultClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
+        => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
 
     public static GlideClusterClient DefaultClusterClient()
-        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
+        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().Build()).GetAwaiter().GetResult();
 
     public static TheoryData<BaseClient> TestClients
     {
@@ -37,7 +42,7 @@ public class TestConfiguration : IDisposable
         {
             if (field.Count == 0)
             {
-                field = [(BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient()];
+                field = [(BaseClient)DefaultStandaloneClientWithExtraTimeout(), (BaseClient)DefaultClusterClientWithExtraTimeout()];
             }
             return field;
         }
