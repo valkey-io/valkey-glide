@@ -161,7 +161,6 @@ public interface GenericCommands {
      * // Example 1: Atomic Batch (Transaction) with BatchOptions
      *  BatchOptions options = BatchOptions.builder()
      *     .timeout(1000) // Set a timeout of 1000 milliseconds
-     *     .raiseOnError(false) // Do not raise an error on failure
      *     .build();
      *
      * Batch transaction = new Batch(true) // Atomic (Transactional)

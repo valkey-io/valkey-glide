@@ -322,7 +322,7 @@ public class GlideClusterClientTest {
         SingleNodeRoute route = RANDOM;
 
         ClusterBatchOptions.ClusterBatchOptionsBuilder builder =
-                ClusterBatchOptions.builder().raiseOnError(true).timeout(1000).route(route);
+                ClusterBatchOptions.builder().timeout(1000).route(route);
         if (!isAtomic) {
             ClusterBatchRetryStrategy strategy =
                     ClusterBatchRetryStrategy.builder()

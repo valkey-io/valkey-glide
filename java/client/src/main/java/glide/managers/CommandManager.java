@@ -330,7 +330,7 @@ public class CommandManager {
 
             builder.setBatch(batchBuilder.build());
         } else {
-            builder.setBatch(batch.getProtobufBatch().build()).setRaiseOnError(raiseOnError);
+            builder.setBatch(batch.getProtobufBatch().setRaiseOnError(raiseOnError).build());
         }
 
         return builder;
@@ -429,7 +429,7 @@ public class CommandManager {
                 return prepareCommandRequestRoute(builder, opts.getRoute());
             }
         } else {
-            builder.setBatch(batch.getProtobufBatch().build()).setRaiseOnError(raiseOnError);
+            builder.setBatch(batch.getProtobufBatch().setRaiseOnError(raiseOnError).build());
         }
 
         return builder;

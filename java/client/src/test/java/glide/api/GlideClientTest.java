@@ -485,7 +485,7 @@ public class GlideClientTest {
         // setup
         Object[] value = new Object[] {"PONG", "PONG"};
         Batch batch = new Batch(isAtomic).ping().ping();
-        BatchOptions options = BatchOptions.builder().raiseOnError(true).timeout(1000).build();
+        BatchOptions options = BatchOptions.builder().timeout(1000).build();
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);

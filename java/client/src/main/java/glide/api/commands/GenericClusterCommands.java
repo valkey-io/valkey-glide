@@ -288,7 +288,6 @@ public interface GenericClusterCommands {
      * // Atomic batch (transaction): all keys must share the same hash slot
      * ClusterBatchOptions options = ClusterBatchOptions.builder()
      *     .timeout(1000) // Set a timeout of 1000 milliseconds
-     *     .raiseOnError(false) // Do not raise an error on failure
      *     .build();
      *
      * ClusterBatch atomicBatch = new ClusterBatch(true)
