@@ -2412,26 +2412,26 @@ class BaseBatch:
 
         Args:
             key (TEncodable): The key of the stream.
-            start (StreamRangeBound): The starting stream ID bound for the range.
+            start (StreamRangeBound): The starting stream entry ID bound for the range.
 
-                - Use `IdBound` to specify a stream ID.
-                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `IdBound` to specify a stream entry ID.
+                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MinId` to start with the minimum available ID.
 
-            end (StreamRangeBound): The ending stream ID bound for the range.
+            end (StreamRangeBound): The ending stream entry ID bound for the range.
 
-                - Use `IdBound` to specify a stream ID.
-                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `IdBound` to specify a stream entry ID.
+                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MaxId` to end with the maximum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
                 If `count` is not provided, all stream entries in the range will be returned.
 
         Command response:
-            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream entry IDs to stream entry data, where entry data is a
             list of pairings with format `[[field, entry], [field, entry], ...]`.
 
-            Returns None if the range arguments are not applicable.
+            Returns None if the range arguments are not applicable. Or if count is non-positive.
         """
         args = [key, start.to_arg(), end.to_arg()]
         if count is not None:
@@ -2454,26 +2454,26 @@ class BaseBatch:
 
         Args:
             key (TEncodable): The key of the stream.
-            end (StreamRangeBound): The ending stream ID bound for the range.
+            end (StreamRangeBound): The ending stream entry ID bound for the range.
 
-                - Use `IdBound` to specify a stream ID.
-                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `IdBound` to specify a stream entry ID.
+                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MaxId` to end with the maximum available ID.
 
-            start (StreamRangeBound): The starting stream ID bound for the range.
+            start (StreamRangeBound): The starting stream entry ID bound for the range.
 
-                - Use `IdBound` to specify a stream ID.
-                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `IdBound` to specify a stream entry ID.
+                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MinId` to start with the minimum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
                 If `count` is not provided, all stream entries in the range will be returned.
 
         Command response:
-            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream entry IDs to stream entry data, where entry data is a
             list of pairings with format `[[field, entry], [field, entry], ...]`.
 
-            Returns None if the range arguments are not applicable.
+            Returns None if the range arguments are not applicable. Or if count is non-positive.
         """
         args = [key, end.to_arg(), start.to_arg()]
         if count is not None:
