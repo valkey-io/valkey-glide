@@ -12,7 +12,7 @@
     "napi": {
         "name": "glide-rs",
         "triples": {
-            "defaults": true,
+            "defaults": false,
             "additional": [
                 "x86_64-unknown-linux-musl",
                 "x86_64-unknown-linux-gnu",

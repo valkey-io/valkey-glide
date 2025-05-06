@@ -17,7 +17,9 @@ Linux:
 
 macOS:
 
--   macOS 14.7 (Apple silicon/aarch_64)
+-   macOS 14.7 (Apple silicon/aarch_64 and Intel/x86_64)
+    
+    Testing is performed primarily on Apple silicon (arm64). Intel (x86_64) support is only covered by minimal CD checks — to use on Intel macOS, ensure you have JDK 11+ installed and include the `osx-x86_64` classifier below.
 
 ## Layout of Java code
 The Java client contains the following parts:
@@ -56,20 +58,27 @@ Once set up, you can run the basic examples.
 Additionally, consider installing the Gradle plugin, [OS Detector](https://github.com/google/osdetector-gradle-plugin) to help you determine what classifier to use.
 
 ## Classifiers
-There are 4 types of classifiers for Valkey GLIDE which are
+There are 4 types of classifiers for Valkey GLIDE which are:
+
 ```
 osx-aarch_64
+osx-x86_64
 linux-aarch_64
 linux-x86_64
 ```
 
-Gradle:
+### Gradle
 - Copy the snippet and paste it in the `build.gradle` dependencies section.
 - **IMPORTANT** must include a `classifier` to specify your platform.
 ```groovy
 // osx-aarch_64
 dependencies {
     implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'osx-aarch_64'
+}
+
+// osx-x86_64
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'osx-x86_64'
 }
 
 // linux-aarch_64
@@ -91,7 +100,7 @@ dependencies {
 }
 ```
 
-Maven:
+### Maven
 - **IMPORTANT** must include a `classifier`. Please use this dependency block, or both the dependency and the extension blocks if you're using `os-maven-plugin`, and add it to the pom.xml file.
 ```xml
 
@@ -100,6 +109,14 @@ Maven:
    <groupId>io.valkey</groupId>
    <artifactId>valkey-glide</artifactId>
    <classifier>osx-aarch_64</classifier>
+   <version>[1.0.0,2.0.0)</version>
+</dependency>
+
+<!--osx-x86_64-->
+<dependency>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
+   <classifier>osx-x86_64</classifier>
    <version>[1.0.0,2.0.0)</version>
 </dependency>
 
@@ -138,11 +155,14 @@ Maven:
 </dependencies>
 ```
 
-SBT:
+### SBT
 - **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the build.sbt file.
 ```scala
 // osx-aarch_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "osx-aarch_64"
+
+// osx-x86_64
+libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "osx-x86_64"
 
 // linux-aarch_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux-aarch_64"

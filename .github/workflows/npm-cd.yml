@@ -67,17 +67,16 @@ jobs:
             matrix:
                 build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
         steps:
-            - name: Install git for musl
-              if: ${{ contains(matrix.build.TARGET, 'musl')}}
-              run: |
-                  apk update
-                  apk add git
-
             - name: Checkout
               if: ${{ !contains(matrix.build.TARGET, 'aarch64-unknown-linux-musl')}}
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
+            - name: Install git for musl
+              if: ${{ contains(matrix.build.TARGET, 'musl')}}
+              run: |
+                  apk update
+                  apk add git
 
             - name: Manual Checkout
               if: contains(matrix.build.TARGET, 'aarch64-unknown-linux-musl')
@@ -295,7 +294,7 @@ jobs:
               if: ${{ contains(matrix.build.TARGET, 'musl')}}
               run: |
                   apk update
-                  apk add git valkey valkey-cli python3
+                  apk add git redis python3
 
             - name: Checkout
               if: ${{ !contains(matrix.build.TARGET, 'aarch64-unknown-linux-musl')}}
@@ -321,10 +320,6 @@ jobs:
               run: |
                   sudo apt update
                   sudo apt install python3
-
-            - name: Checkout
-              if: ${{ contains(matrix.build.TARGET, 'aarch64-unknown-linux-musl')}}
-              uses: actions/checkout@v4
 
             - name: Setup for musl
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
@@ -365,7 +360,7 @@ jobs:
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
-                  if [[ "${RELEASE_VERSION}" == *"rc"* ]]
+                  if [[ ${{ env.RELEASE_VERSION }} == *"rc"* ]]
                   then
                     echo "This is a release candidate"
                     export npm_tag="next"
@@ -379,7 +374,6 @@ jobs:
               shell: bash
               working-directory: ./utils/release-candidate-testing/node
               run: |
-                  npm install
                   npm install --no-save @valkey/valkey-glide@${{ env.NPM_TAG }}
                   npm run test
 
