@@ -13,24 +13,23 @@ namespace Valkey.Glide.IntegrationTests;
 
 public class TestConfiguration : IDisposable
 {
-    public static bool IsMacOs => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
-
     public static List<(string host, ushort port)> STANDALONE_HOSTS { get; internal set; } = [];
     public static List<(string host, ushort port)> CLUSTER_HOSTS { get; internal set; } = [];
     public static Version SERVER_VERSION { get; internal set; } = new();
 
     public static StandaloneClientConfigurationBuilder DefaultClientConfig() =>
         new StandaloneClientConfigurationBuilder()
-            .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port)
-            .WithRequestTimeout(1000);
+            .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port);
 
     public static ClusterClientConfigurationBuilder DefaultClusterClientConfig() =>
         new ClusterClientConfigurationBuilder()
-            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
-            .WithRequestTimeout(1000);
+            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port);
 
-    public static GlideClient DefaultStandaloneClient() => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
-    public static GlideClusterClient DefaultClusterClient() => GlideClusterClient.CreateClient(DefaultClusterClientConfig().Build()).GetAwaiter().GetResult();
+    public static GlideClient DefaultStandaloneClient()
+        => GlideClient.CreateClient(DefaultClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
+
+    public static GlideClusterClient DefaultClusterClient()
+        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
 
     public static TheoryData<BaseClient> TestClients
     {
