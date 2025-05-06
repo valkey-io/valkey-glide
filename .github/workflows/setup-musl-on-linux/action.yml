@@ -21,11 +21,6 @@ inputs:
             - "arm64"
             - "x64"
         default: "arm64"
-    action:
-        description: is it a cd action
-        required: false
-        type: string
-        options: release
 
 runs:
     using: "composite"
@@ -38,7 +33,7 @@ runs:
 
         - name: Skip all steps if not on ARM64
           shell: bash
-          if: ${{ inputs.arch != 'arm64' || inputs.action == 'release' }}
+          if: ${{ inputs.arch != 'arm64' }}
           run: exit 0
 
         # Currently "Checkout" action is not supported for musl on ARM64, so the checkout is happening on the runner and
