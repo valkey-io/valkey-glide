@@ -161,12 +161,13 @@ func (suite *GlideTestSuite) TestExecWithOptions_RaiseOnErrorFalse() {
 	assert.Equal(suite.T(), "OK", results[0])
 	assert.Equal(
 		suite.T(),
-		&errors.RequestError{Msg: "WRONGTYPE - Operation against a key holding the wrong kind of value"},
+		&errors.RequestError{Msg: "WRONGTYPE: Operation against a key holding the wrong kind of value"},
 		results[1],
 	)
 
 	assert.Equal(suite.T(), int64(1), results[2])
-	assert.Equal(suite.T(), &errors.RequestError{Msg: "ERR - no such key"}, results[3])
+	assert.Equal(suite.T(), &errors.RequestError{Msg: "An error was signalled by the server: - ResponseError: no such key"}, results[3])
+
 }
 
 func (suite *GlideTestSuite) TestExecWithOptions_RaiseOnErrorTrue() {
@@ -260,7 +261,7 @@ func (suite *GlideTestSuite) TestExecWithOptions_Cluster_RaiseOnErrorFalse() {
 	assert.Equal(suite.T(), "test", results[0])
 	assert.Equal(
 		suite.T(),
-		&errors.RequestError{Msg: "WRONGTYPE - Operation against a key holding the wrong kind of value"},
+		&errors.RequestError{Msg: "WRONGTYPE: Operation against a key holding the wrong kind of value"},
 		results[1],
 	)
 
