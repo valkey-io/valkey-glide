@@ -14,9 +14,9 @@ nav:
           - Core Commands: python/core.md
           - Cluster Commands: python/cluster_commands.md
           - Standalone Commands: python/standalone_commands.md
-          - Base Transaction: python/base_transaction.md
-          - Standalone Transaction: python/standalone_transaction.md
-          - Cluster Transaction: python/cluster_transaction.md
+          - Base Batch: python/base_batch.md
+          - Standalone Batch: python/standalone_batch.md
+          - Cluster Batch: python/cluster_batch.md
       - Exceptions: python/exceptions.md
       - Logger: python/logger.md
   - TypeScript:
