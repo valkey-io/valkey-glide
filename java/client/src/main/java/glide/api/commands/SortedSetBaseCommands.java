@@ -1925,18 +1925,18 @@ public interface SortedSetBaseCommands {
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
-     * @return A two-element <code>array</code> containing the key name of the set from which the
-     *     element was popped, and a member-score <code>Map</code> of the popped element.<br>
+     * @return A <code>map</code> containing the key name of the set from which the element was
+     *     popped, and a member-score <code>Map</code> of the popped element.<br>
      *     If no member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.zmpop(new String[] { "zSet1", "zSet2" }, MAX).get();
-     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * Map<String, Object> result = client.zmpop(new String[] { "zSet1", "zSet2" }, MAX).get();
+     * Map<String, Double> data = (Map<String, Double>)result.values().toArray()[0];
      * String element = data.keySet().toArray(String[]::new)[0];
      * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
      * }</pre>
      */
-    CompletableFuture<Object[]> zmpop(String[] keys, ScoreFilter modifier);
+    CompletableFuture<Map<String, Object>> zmpop(String[] keys, ScoreFilter modifier);
 
     /**
      * Pops a member-score pair from the first non-empty sorted set, with the given <code>keys</code>
@@ -1948,18 +1948,18 @@ public interface SortedSetBaseCommands {
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
-     * @return A two-element <code>array</code> containing the key name of the set from which the
-     *     element was popped, and a member-score <code>Map</code> of the popped element.<br>
+     * @return A <code>map</code> containing the key name of the set from which the element was
+     *     popped, and a member-score <code>Map</code> of the popped element.<br>
      *     If no member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.zmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX).get();
-     * Map<GlideString, Double> data = (Map<GlideString, Double>)result[1];
+     * Map<GlideString, Object> result = client.zmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX).get();
+     * Map<GlideString, Double> data = (Map<GlideString, Double>)result.values().toArray()[0];
      * GlideString element = data.keySet().toArray(GlideString[]::new)[0];
      * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
      * }</pre>
      */
-    CompletableFuture<Object[]> zmpop(GlideString[] keys, ScoreFilter modifier);
+    CompletableFuture<Map<GlideString, Object>> zmpop(GlideString[] keys, ScoreFilter modifier);
 
     /**
      * Pops multiple member-score pairs from the first non-empty sorted set, with the given <code>keys
@@ -1972,19 +1972,19 @@ public interface SortedSetBaseCommands {
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
      * @param count The number of elements to pop.
-     * @return A two-element <code>array</code> containing the key name of the set from which elements
-     *     were popped, and a member-score <code>Map</code> of the popped elements.<br>
+     * @return A <code>map</code> containing the key name of the set from which elements were popped,
+     *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.zmpop(new String[] { "zSet1", "zSet2" }, MAX, 2).get();
-     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * Map<String, Object> result = client.zmpop(new String[] { "zSet1", "zSet2" }, MAX, 2).get();
+     * Map<String, Double> data = (Map<String, Double>)result.values().toArray()[0];
      * for (Map.Entry<String, Double> entry : data.entrySet()) {
      *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
      * }
      * }</pre>
      */
-    CompletableFuture<Object[]> zmpop(String[] keys, ScoreFilter modifier, long count);
+    CompletableFuture<Map<String, Object>> zmpop(String[] keys, ScoreFilter modifier, long count);
 
     /**
      * Pops multiple member-score pairs from the first non-empty sorted set, with the given <code>keys
@@ -1997,19 +1997,20 @@ public interface SortedSetBaseCommands {
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
      * @param count The number of elements to pop.
-     * @return A two-element <code>array</code> containing the key name of the set from which elements
-     *     were popped, and a member-score <code>Map</code> of the popped elements.<br>
+     * @return A <code>map</code> containing the key name of the set from which elements were popped,
+     *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.zmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 2).get();
-     * Map<GlideString, Double> data = (Map<GlideString, Double>)result[1];
+     * Map<GlideString, Object> result = client.zmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 2).get();
+     * Map<GlideString, Double> data = (Map<GlideString, Double>)result.values().toArray()[0];
      * for (Map.Entry<GlideString, Double> entry : data.entrySet()) {
      *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
      * }
      * }</pre>
      */
-    CompletableFuture<Object[]> zmpop(GlideString[] keys, ScoreFilter modifier, long count);
+    CompletableFuture<Map<GlideString, Object>> zmpop(
+            GlideString[] keys, ScoreFilter modifier, long count);
 
     /**
      * Blocks the connection until it pops and returns a member-score pair from the first non-empty
@@ -2031,18 +2032,19 @@ public interface SortedSetBaseCommands {
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
-     * @return A two-element <code>array</code> containing the key name of the set from which an
-     *     element was popped, and a member-score <code>Map</code> of the popped elements.<br>
+     * @return A <code>Map</code> containing the key name of the set from which an element was popped,
+     *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1).get();
-     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * Map<String, Object> result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1).get();
+     * Map<String, Double> data = (Map<String, Double>)result.values().toArray()[0];
      * String element = data.keySet().toArray(String[]::new)[0];
      * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
      * }</pre>
      */
-    CompletableFuture<Object[]> bzmpop(String[] keys, ScoreFilter modifier, double timeout);
+    CompletableFuture<Map<String, Object>> bzmpop(
+            String[] keys, ScoreFilter modifier, double timeout);
 
     /**
      * Blocks the connection until it pops and returns a member-score pair from the first non-empty
@@ -2064,18 +2066,19 @@ public interface SortedSetBaseCommands {
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
-     * @return A two-element <code>array</code> containing the key name of the set from which an
-     *     element was popped, and a member-score <code>Map</code> of the popped elements.<br>
+     * @return A <code>map</code> containing the key name of the set from which an element was popped,
+     *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.bzmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 0.1).get();
-     * Map<GlideString, Double> data = (Map<GlideString, Double>)result[1];
+     * Map<GlideString, Object> result = client.bzmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 0.1).get();
+     * Map<GlideString, Double> data = (Map<GlideString, Double>)result.values().toArray()[0];
      * GlideString element = data.keySet().toArray(GlideString[]::new)[0];
      * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
      * }</pre>
      */
-    CompletableFuture<Object[]> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout);
+    CompletableFuture<Map<GlideString, Object>> bzmpop(
+            GlideString[] keys, ScoreFilter modifier, double timeout);
 
     /**
      * Blocks the connection until it pops and returns multiple member-score pairs from the first
@@ -2099,19 +2102,19 @@ public interface SortedSetBaseCommands {
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
      * @param count The number of elements to pop.
-     * @return A two-element <code>array</code> containing the key name of the set from which elements
-     *     were popped, and a member-score <code>Map</code> of the popped elements.<br>
+     * @return A <code>map</code> containing the key name of the set from which elements were popped,
+     *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no members could be popped and the timeout expired, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1, 2).get();
-     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * Map<String, Object> result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1, 2).get();
+     * Map<String, Double> data = (Map<String, Double>)result.values().toArray()[0];
      * for (Map.Entry<String, Double> entry : data.entrySet()) {
      *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
      * }
      * }</pre>
      */
-    CompletableFuture<Object[]> bzmpop(
+    CompletableFuture<Map<String, Object>> bzmpop(
             String[] keys, ScoreFilter modifier, double timeout, long count);
 
     /**
@@ -2136,19 +2139,19 @@ public interface SortedSetBaseCommands {
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
      * @param count The number of elements to pop.
-     * @return A two-element <code>array</code> containing the key name of the set from which elements
-     *     were popped, and a member-score <code>Map</code> of the popped elements.<br>
+     * @return A <code>map</code> containing the key name of the set from which elements were popped,
+     *     and a member-score <code>Map</code> of the popped elements.<br>
      *     If no members could be popped and the timeout expired, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.bzmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 0.1, 2).get();
-     * Map<GlideString, Double> data = (Map<GlideString, Double>)result[1];
+     * Map<GlideString, Object> result = client.bzmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 0.1, 2).get();
+     * Map<GlideString, Double> data = (Map<GlideString, Double>)result.values().toArray()[0];
      * for (Map.Entry<GlideString, Double> entry : data.entrySet()) {
      *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
      * }
      * }</pre>
      */
-    CompletableFuture<Object[]> bzmpop(
+    CompletableFuture<Map<GlideString, Object>> bzmpop(
             GlideString[] keys, ScoreFilter modifier, double timeout, long count);
 
     /**

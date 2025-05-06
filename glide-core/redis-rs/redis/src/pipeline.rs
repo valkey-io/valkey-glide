@@ -8,7 +8,7 @@ use crate::types::{
 use std::sync::Arc;
 
 /// Represents a redis command pipeline.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Pipeline {
     commands: Vec<Arc<Cmd>>,
     transaction_mode: bool,

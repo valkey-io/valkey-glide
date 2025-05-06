@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
+from glide.async_commands.batch import Batch
 from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import (
     CoreCommands,
@@ -11,7 +12,6 @@ from glide.async_commands.core import (
     FunctionRestorePolicy,
     InfoSection,
 )
-from glide.async_commands.transaction import Transaction
 from glide.constants import (
     TOK,
     TEncodable,
@@ -28,7 +28,7 @@ class StandaloneCommands(CoreCommands):
     async def custom_command(self, command_args: List[TEncodable]) -> TResult:
         """
         Executes a single command, without checking inputs.
-        See the `Valkey GLIDE Wiki <https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command>`_
+        See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
         Args:
@@ -51,7 +51,7 @@ class StandaloneCommands(CoreCommands):
         """
         Get information and statistics about the server.
 
-        See https://valkey.io/commands/info/ for details.
+        See [valkey.io](https://valkey.io/commands/info/) for details.
 
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
@@ -67,31 +67,96 @@ class StandaloneCommands(CoreCommands):
 
     async def exec(
         self,
-        transaction: Transaction,
+        batch: Batch,
+        raise_on_error: bool,
+        timeout: Optional[int] = None,
     ) -> Optional[List[TResult]]:
         """
-        Execute a transaction by processing the queued commands.
+        Executes a batch by processing the queued commands.
 
-        See https://valkey.io/docs/topics/transactions/ for details on Transactions.
+        See [Valkey Transactions (Atomic Batches)](https://valkey.io/docs/topics/transactions/) and
+        [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/docs/topics/pipelining/) for details.
+
+        Notes:
+            - Atomic Batches - Transactions: If the transaction fails due to a ``WATCH`` command,
+              ``exec`` will return ``None``.
 
         Args:
-            transaction (Transaction): A `Transaction` object containing a list of commands to be executed.
+            batch (Batch): A ``Batch`` containing the commands to execute.
+            raise_on_error (bool): Determines how errors are handled within the batch response.
+                When set to ``True``, the first encountered error in the batch will be raised as a
+                ``RequestError`` exception after all retries and reconnections have been executed.
+                When set to ``False``, errors will be included as part of the batch response array, allowing
+                the caller to process both successful and failed commands together. In this case, error details
+                will be provided as instances of ``RequestError``.
+            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+                to complete. This duration encompasses sending the request, awaiting a response from the server, and any
+                required reconnections or retries. If the specified timeout is exceeded for the request,
+                a timeout error will be raised. If not explicitly set, the client's default request timeout will be used.
 
         Returns:
-            Optional[List[TResult]]: A list of results corresponding to the execution of each command
-            in the transaction. If a command returns a value, it will be included in the list.
-            If a command doesn't return a value, the list entry will be `None`.
+            Optional[List[TResult]]: An array of results, where each entry corresponds to a command's execution result.
+                If the batch fails due to a ``WATCH`` command, ``exec`` will return ``None``.
 
-            If the transaction failed due to a WATCH command, `exec` will return `None`.
+        Example (Atomic Batch - Transaction):
+            >>> transaction = Batch(is_atomic=True)  # Atomic (Transaction)
+            >>> transaction.set("key", "1")
+            >>> transaction.incr("key")
+            >>> transaction.get("key")
+            >>> result = await client.exec(transaction, raise_on_error=True)
+            >>> print(f"Transaction Batch Result: {result}")
+            # Expected Output: Transaction Batch Result: [OK, 2, b'2']
+
+        Example (Non-Atomic Batch - Pipeline):
+            >>> pipeline = Batch(is_atomic=False)  # Non-Atomic (Pipeline)
+            >>> pipeline.set("key1", "value1")
+            >>> pipeline.set("key2", "value2")
+            >>> pipeline.get("key1")
+            >>> pipeline.get("key2")
+            >>> result = await client.exec(pipeline, raise_on_error=True)
+            >>> print(f"Pipeline Batch Result: {result}")
+            # Expected Output: Pipeline Batch Result: [OK, OK, b'value1', b'value2']
+
+        Example (Atomic Batch - Transaction with options):
+            >>> transaction = Batch(is_atomic=True)
+            >>> transaction.set("key", "1")
+            >>> transaction.incr("key")
+            >>> transaction.custom_command(["get", "key"])
+            >>> result = await client.exec(
+            ...     transaction,
+            ...     raise_on_error=False,  # Do not raise an error on failure
+            ...     timeout=1000  # Set a timeout of 1000 milliseconds
+            ... )
+            >>> print(f"Transaction Result: {result}")
+            # Expected Output: Transaction Result: [OK, 2, b'2']
+
+        Example (Non-Atomic Batch - Pipeline with options):
+            >>> pipeline = Batch(is_atomic=False)
+            >>> pipeline.custom_command(["set", "key1", "value1"])
+            >>> pipeline.custom_command(["set", "key2", "value2"])
+            >>> pipeline.custom_command(["get", "key1"])
+            >>> pipeline.custom_command(["get", "key2"])
+            >>> result = await client.exec(
+            ...     pipeline,
+            ...     raise_on_error=False,  # Do not raise an error on failure
+            ...     timeout=1000  # Set a timeout of 1000 milliseconds
+            ... )
+            >>> print(f"Pipeline Result: {result}")
+            # Expected Output: Pipeline Result: [OK, OK, b'value1', b'value2']
         """
-        commands = transaction.commands[:]
-        return await self._execute_transaction(commands)
+        commands = batch.commands[:]
+        return await self._execute_batch(
+            commands,
+            is_atomic=batch.is_atomic,
+            raise_on_error=raise_on_error,
+            timeout=timeout,
+        )
 
     async def select(self, index: int) -> TOK:
         """
         Change the currently selected database.
 
-        See https://valkey.io/commands/select/ for details.
+        See [valkey.io](https://valkey.io/commands/select/) for details.
 
         Args:
             index (int): The index of the database to select.
@@ -105,7 +170,7 @@ class StandaloneCommands(CoreCommands):
         """
         Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
 
-        See https://valkey.io/commands/config-resetstat/ for details.
+        See [valkey.io](https://valkey.io/commands/config-resetstat/) for details.
 
         Returns:
             OK: Returns "OK" to confirm that the statistics were successfully reset.
@@ -116,7 +181,7 @@ class StandaloneCommands(CoreCommands):
         """
         Rewrite the configuration file with the current configuration.
 
-        See https://valkey.io/commands/config-rewrite/ for details.
+        See [valkey.io](https://valkey.io/commands/config-rewrite/) for details.
 
         Returns:
             OK: OK is returned when the configuration was rewritten properly.
@@ -131,7 +196,7 @@ class StandaloneCommands(CoreCommands):
         """
         Returns the current connection id.
 
-        See https://valkey.io/commands/client-id/ for more information.
+        See [valkey.io](https://valkey.io/commands/client-id/) for more information.
 
         Returns:
             int: the id of the client.
@@ -142,7 +207,7 @@ class StandaloneCommands(CoreCommands):
         """
         Ping the server.
 
-        See https://valkey.io/commands/ping/ for more details.
+        See [valkey.io](https://valkey.io/commands/ping/) for more details.
 
         Args:
             message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
@@ -167,7 +232,7 @@ class StandaloneCommands(CoreCommands):
         Get the values of configuration parameters.
         Starting from server version 7, command supports multiple parameters
 
-        See https://valkey.io/commands/config-get/ for details.
+        See [valkey.io](https://valkey.io/commands/config-get/) for details.
 
         Args:
             parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
@@ -191,7 +256,7 @@ class StandaloneCommands(CoreCommands):
         Set configuration parameters to the specified values.
         Starting from server version 7, command supports multiple parameters.
 
-        See https://valkey.io/commands/config-set/ for details.
+        See [valkey.io](https://valkey.io/commands/config-set/) for details.
 
         Args:
             parameters_map (Mapping[TEncodable, TEncodable]): A map consisting of configuration
@@ -215,7 +280,7 @@ class StandaloneCommands(CoreCommands):
         """
         Get the name of the primary's connection.
 
-        See https://valkey.io/commands/client-getname/ for more details.
+        See [valkey.io](https://valkey.io/commands/client-getname/) for more details.
 
         Returns:
             Optional[bytes]: Returns the name of the client connection as a byte string if a name is set.
@@ -234,7 +299,7 @@ class StandaloneCommands(CoreCommands):
         """
         Returns the number of keys in the currently selected database.
 
-        See https://valkey.io/commands/dbsize for more details.
+        See [valkey.io](https://valkey.io/commands/dbsize) for more details.
 
         Returns:
             int: The number of keys in the currently selected database.
@@ -249,7 +314,7 @@ class StandaloneCommands(CoreCommands):
         """
         Echoes the provided `message` back.
 
-        See https://valkey.io/commands/echo for more details.
+        See [valkey.io](https://valkey.io/commands/echo) for more details.
 
         Args:
             message (TEncodable): The message to be echoed back.
@@ -269,7 +334,7 @@ class StandaloneCommands(CoreCommands):
         """
         Loads a library to Valkey.
 
-        See https://valkey.io/commands/function-load/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-load/) for more details.
 
         Args:
             library_code (TEncodable): The source code that implements the library.
@@ -300,7 +365,7 @@ class StandaloneCommands(CoreCommands):
         """
         Returns information about the functions and libraries.
 
-        See https://valkey.io/commands/function-list/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-list/) for more details.
 
         Args:
             library_name_pattern (Optional[TEncodable]):  A wildcard pattern for matching library names.
@@ -343,7 +408,7 @@ class StandaloneCommands(CoreCommands):
         """
         Deletes all function libraries.
 
-        See https://valkey.io/commands/function-flush/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-flush/) for more details.
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -369,7 +434,7 @@ class StandaloneCommands(CoreCommands):
         """
         Deletes a library and all its functions.
 
-        See https://valkey.io/commands/function-delete/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-delete/) for more details.
 
         Args:
             library_code (TEncodable): The library name to delete
@@ -398,7 +463,7 @@ class StandaloneCommands(CoreCommands):
 
         FUNCTION KILL runs on all nodes of the server, including primary and replicas.
 
-        See https://valkey.io/commands/function-kill/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-kill/) for more details.
 
         Returns:
             TOK: A simple `OK`.
@@ -422,7 +487,7 @@ class StandaloneCommands(CoreCommands):
         FUNCTION STATS runs on all nodes of the server, including primary and replicas.
         The response includes a mapping from node address to the command response for that node.
 
-        See https://valkey.io/commands/function-stats/ for more details
+        See [valkey.io](https://valkey.io/commands/function-stats/) for more details
 
         Returns:
             TFunctionStatsFullResponse: A Map where the key is the node address and the value is a Map of two keys:
@@ -468,7 +533,7 @@ class StandaloneCommands(CoreCommands):
         """
         Returns the serialized payload of all loaded libraries.
 
-        See https://valkey.io/docs/latest/commands/function-dump/ for more details.
+        See [valkey.io](https://valkey.io/docs/latest/commands/function-dump/) for more details.
 
         Returns:
             bytes: The serialized payload of all loaded libraries.
@@ -490,7 +555,7 @@ class StandaloneCommands(CoreCommands):
         """
         Restores libraries from the serialized payload returned by the `function_dump` command.
 
-        See https://valkey.io/docs/latest/commands/function-restore/ for more details.
+        See [valkey.io](https://valkey.io/docs/latest/commands/function-restore/) for more details.
 
         Args:
             payload (TEncodable): The serialized data from the `function_dump` command.
@@ -520,7 +585,7 @@ class StandaloneCommands(CoreCommands):
         """
         Returns the server time.
 
-        See https://valkey.io/commands/time/ for more details.
+        See [valkey.io](https://valkey.io/commands/time/) for more details.
 
         Returns:
             List[bytes]:  The current server time as a two items `array`:
@@ -540,7 +605,7 @@ class StandaloneCommands(CoreCommands):
         """
         Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
 
-        See https://valkey.io/commands/lastsave for more details.
+        See [valkey.io](https://valkey.io/commands/lastsave) for more details.
 
         Returns:
             int: The Unix time of the last successful DB save.
@@ -558,7 +623,7 @@ class StandaloneCommands(CoreCommands):
         """
         Move `key` from the currently selected database to the database specified by `db_index`.
 
-        See https://valkey.io/commands/move/ for more details.
+        See [valkey.io](https://valkey.io/commands/move/) for more details.
 
         Args:
             key (TEncodable): The key to move.
@@ -583,7 +648,7 @@ class StandaloneCommands(CoreCommands):
         """
         Publish a message on pubsub channel.
 
-        See https://valkey.io/commands/publish for more details.
+        See [valkey.io](https://valkey.io/commands/publish) for more details.
 
         Args:
             message (TEncodable): Message to publish
@@ -606,7 +671,7 @@ class StandaloneCommands(CoreCommands):
         """
         Deletes all the keys of all the existing databases. This command never fails.
 
-        See https://valkey.io/commands/flushall for more details.
+        See [valkey.io](https://valkey.io/commands/flushall) for more details.
 
         Args:
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -631,7 +696,7 @@ class StandaloneCommands(CoreCommands):
         """
         Deletes all the keys of the currently selected database. This command never fails.
 
-        See https://valkey.io/commands/flushdb for more details.
+        See [valkey.io](https://valkey.io/commands/flushdb) for more details.
 
         Args:
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -667,7 +732,7 @@ class StandaloneCommands(CoreCommands):
         otherwise the current database will be used. When `replace` is True, removes the
         `destination` key first if it already exists, otherwise performs no action.
 
-        See https://valkey.io/commands/copy for more details.
+        See [valkey.io](https://valkey.io/commands/copy) for more details.
 
         Args:
             source (TEncodable): The key to the source value.
@@ -708,7 +773,7 @@ class StandaloneCommands(CoreCommands):
         """
         Displays a piece of generative computer art and the Valkey version.
 
-        See https://valkey.io/commands/lolwut for more details.
+        See [valkey.io](https://valkey.io/commands/lolwut) for more details.
 
         Args:
             version (Optional[int]): Version of computer art to generate.
@@ -741,7 +806,7 @@ class StandaloneCommands(CoreCommands):
         """
         Returns a random existing key name from the currently selected database.
 
-        See https://valkey.io/commands/randomkey for more details.
+        See [valkey.io](https://valkey.io/commands/randomkey) for more details.
 
         Returns:
             Optional[bytes]: A random existing key name from the currently selected database.
@@ -765,7 +830,7 @@ class StandaloneCommands(CoreCommands):
         and acknowledged by at least `numreplicas` of replicas. If `timeout` is
         reached, the command returns even if the specified number of replicas were not yet reached.
 
-        See https://valkey.io/commands/wait for more details.
+        See [valkey.io](https://valkey.io/commands/wait) for more details.
 
         Args:
             numreplicas (int): The number of replicas to reach.
@@ -787,10 +852,10 @@ class StandaloneCommands(CoreCommands):
 
     async def unwatch(self) -> TOK:
         """
-        Flushes all the previously watched keys for a transaction. Executing a transaction will
+        Flushes all the previously watched keys for an atomic batch (Transaction). Executing a transaction will
         automatically flush all previously watched keys.
 
-        See https://valkey.io/commands/unwatch for more details.
+        See [valkey.io](https://valkey.io/commands/unwatch) for more details.
 
         Returns:
             TOK: A simple "OK" response.
@@ -823,7 +888,7 @@ class StandaloneCommands(CoreCommands):
         in the collection from the start to the end of a full iteration.
         Elements that were not constantly present in the collection during a full iteration, may be returned or not.
 
-        See https://valkey.io/commands/scan for more details.
+        See [valkey.io](https://valkey.io/commands/scan) for more details.
 
         Args:
             cursor (TResult): The cursor used for iteration. For the first iteration, the cursor should be set to "0".
@@ -877,7 +942,7 @@ class StandaloneCommands(CoreCommands):
         """
         Check existence of scripts in the script cache by their SHA1 digest.
 
-        See https://valkey.io/commands/script-exists for more details.
+        See [valkey.io](https://valkey.io/commands/script-exists) for more details.
 
         Args:
             sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
@@ -897,7 +962,7 @@ class StandaloneCommands(CoreCommands):
         """
         Flush the Lua scripts cache.
 
-        See https://valkey.io/commands/script-flush for more details.
+        See [valkey.io](https://valkey.io/commands/script-flush) for more details.
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -924,7 +989,7 @@ class StandaloneCommands(CoreCommands):
         """
         Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
 
-        See https://valkey.io/commands/script-kill for more details.
+        See [valkey.io](https://valkey.io/commands/script-kill) for more details.
 
         Returns:
             TOK: A simple `OK` response.
@@ -948,7 +1013,8 @@ class StandaloneCommands(CoreCommands):
         If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
         After that, it will be invoked using the `EVALSHA` command.
 
-        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+        See [SCRIPT LOAD](https://valkey.io/commands/script-load/) and [EVALSHA](https://valkey.io/commands/evalsha/)
+        for more details.
 
         Args:
             script (Script): The Lua script to execute.

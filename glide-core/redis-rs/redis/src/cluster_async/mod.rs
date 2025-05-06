@@ -1098,11 +1098,14 @@ where
                 | crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_)
         );
 
+        let connection_retry_strategy = cluster_params.reconnect_retry_strategy.unwrap_or_default();
+
         let glide_connection_options = GlideConnectionOptions {
             push_sender,
             disconnect_notifier,
             discover_az,
             connection_timeout: Some(cluster_params.connection_timeout),
+            connection_retry_strategy: Some(connection_retry_strategy),
         };
 
         let connections = Self::create_initial_connections(
@@ -1455,24 +1458,65 @@ where
                     address_clone_for_task
                 );
 
-                let mut cluster_params = inner_clone
-                    .cluster_params
-                    .read()
-                    .expect(MUTEX_READ_ERR)
-                    .clone();
-                let subs_guard = inner_clone.subscriptions_by_address.read().await;
-                cluster_params.pubsub_subscriptions =
-                    subs_guard.get(&address_clone_for_task).cloned();
-                drop(subs_guard);
+                // We run infinite retries to reconnect until it succeeds or it's aborted from outside.
+                let infinite_backoff_iter = inner_clone
+                    .glide_connection_options
+                    .connection_retry_strategy
+                    .unwrap_or_default()
+                    .get_infinite_backoff_dur_iterator();
 
-                let node_result = get_or_create_conn(
-                    &address_clone_for_task,
-                    node_option,
-                    &cluster_params,
-                    conn_type,
-                    inner_clone.glide_connection_options.clone(),
-                )
-                .await;
+                let mut node_result = Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "No attempts performed",
+                )));
+                let mut first_attempt = true;
+                for backoff_duration in infinite_backoff_iter {
+                    let mut cluster_params = inner_clone
+                        .cluster_params
+                        .read()
+                        .expect(MUTEX_READ_ERR)
+                        .clone();
+                    let subs_guard = inner_clone.subscriptions_by_address.read().await;
+                    cluster_params.pubsub_subscriptions =
+                        subs_guard.get(&address_clone_for_task).cloned();
+                    drop(subs_guard);
+
+                    node_result = get_or_create_conn(
+                        &address_clone_for_task,
+                        node_option.clone(),
+                        &cluster_params,
+                        conn_type,
+                        inner_clone.glide_connection_options.clone(),
+                    )
+                    .await;
+
+                    match node_result {
+                        Ok(_) => {
+                            break;
+                        }
+                        Err(ref err) => {
+                            if first_attempt {
+                                if let Some(ref mut conn_state) = inner_clone
+                                    .conn_lock
+                                    .write()
+                                    .expect(MUTEX_WRITE_ERR)
+                                    .refresh_conn_state
+                                    .refresh_address_in_progress
+                                    .get_mut(&address_clone_for_task)
+                                {
+                                    conn_state.status.flip_status_to_too_long();
+                                }
+
+                                first_attempt = false;
+                            }
+                            debug!(
+                                "Failed to refresh connection for node {}. Error: `{:?}`. Retrying in {:?}",
+                                address_clone_for_task, err, backoff_duration
+                            );
+                            tokio::time::sleep(backoff_duration).await;
+                        }
+                    }
+                }
 
                 match node_result {
                     Ok(node) => {
@@ -1494,10 +1538,6 @@ where
                     }
                 }
 
-                // Note!! - TODO
-                // Need to notify here the awaiting requests inorder to awake the context of the poll_flush as
-                // it awaits on this notifier inside the get_connection in the poll_next inside poll_complete.
-                // Otherwise poll_flush won't be polled until the next start_send or other requests I/O.
                 inner_clone
                     .conn_lock
                     .write()

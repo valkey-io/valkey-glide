@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
+from glide.async_commands.batch import ClusterBatch
 from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import (
     CoreCommands,
@@ -11,7 +12,6 @@ from glide.async_commands.core import (
     FunctionRestorePolicy,
     InfoSection,
 )
-from glide.async_commands.transaction import ClusterTransaction
 from glide.constants import (
     TOK,
     TClusterResponse,
@@ -33,7 +33,7 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[TResult]:
         """
         Executes a single command, without checking inputs.
-        See the `Valkey GLIDE Wiki <https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command>`_
+        See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
             For example - Return a list of all pub/sub clients from all nodes::
@@ -63,7 +63,7 @@ class ClusterCommands(CoreCommands):
         """
         Get information and statistics about the server.
 
-        See https://valkey.io/commands/info/ for details.
+        See [valkey.io](https://valkey.io/commands/info/) for details.
 
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
@@ -86,29 +86,139 @@ class ClusterCommands(CoreCommands):
 
     async def exec(
         self,
-        transaction: ClusterTransaction,
+        batch: ClusterBatch,
+        raise_on_error: bool,
         route: Optional[TSingleNodeRoute] = None,
+        timeout: Optional[int] = None,
+        retry_server_error: bool = False,
+        retry_connection_error: bool = False,
     ) -> Optional[List[TResult]]:
         """
-        Execute a transaction by processing the queued commands.
+        Executes a batch by processing the queued commands.
 
-        See https://valkey.io/docs/topics/transactions/ for details on Transactions.
+        See [Valkey Transactions (Atomic Batches)](https://valkey.io/docs/topics/transactions/) for details.
+        See [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/docs/topics/pipelining/) for details.
+
+        #### Routing Behavior:
+
+        - If a `route` is specified:
+            - The entire batch is sent to the specified node.
+
+        - If no `route` is specified:
+            - Atomic batches (Transactions): Routed to the slot owner of the first key in the batch.
+              If no key is found, the request is sent to a random node.
+            - Non-atomic batches (Pipelines): Each command is routed to the node owning the corresponding
+              key's slot. If no key is present, routing follows the command's default request policy.
+              Multi-node commands are automatically split and dispatched to the appropriate nodes.
+
+        #### Behavior notes:
+
+        - Atomic Batches (Transactions): All key-based commands must map to the same hash slot.
+          If keys span different slots, the transaction will fail. If the transaction fails due to a
+          `WATCH` command, `exec` will return `None`.
+
+        #### Retry and Redirection:
+
+        - If a redirection error occurs:
+            - Atomic batches (Transactions): The entire transaction will be redirected.
+            - Non-atomic batches (Pipelines): Only commands that encountered redirection errors will be redirected.
+
+        - Retries for failures will be handled according to the `retry_server_error` and
+          `retry_connection_error` parameters.
 
         Args:
-            transaction (ClusterTransaction): A `ClusterTransaction` object containing a list of commands to be executed.
-            route (Optional[TSingleNodeRoute]): If `route` is not provided, the transaction will be routed to the slot owner
-                of the first key found in the transaction. If no key is found, the command will be sent to a random node.
-                If `route` is provided, the client will route the command to the nodes defined by `route`.
+            batch (ClusterBatch): A `ClusterBatch` object containing a list of commands to be executed.
+            raise_on_error (bool): Determines how errors are handled within the batch response. When set to
+                `True`, the first encountered error in the batch will be raised as a `RequestError`
+                exception after all retries and reconnections have been executed. When set to `False`,
+                errors will be included as part of the batch response array, allowing the caller to process both
+                successful and failed commands together. In this case, error details will be provided as
+                instances of `RequestError`.
+            route (Optional[TSingleNodeRoute]): Configures single-node routing for the batch request. The client
+                will send the batch to the specified node defined by `route`.
+
+                If a redirection error occurs:
+                - For Atomic Batches (Transactions), the entire transaction will be redirected.
+                - For Non-Atomic Batches (Pipelines), only the commands that encountered redirection errors
+                will be redirected.
+            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+                to complete. This duration encompasses sending the request, awaiting a response from the server,
+                and any required reconnections or retries.
+
+                If the specified timeout is exceeded, a timeout error will be raised. If not explicitly set,
+                the client's default request timeout will be used.
+            retry_server_error (bool): If `True`, retriable server errors (e.g., `TRYAGAIN`) will trigger a retry.
+                Warning: Retrying server errors may cause commands targeting the same slot to execute out of order.
+                Note: Currently supported only for non-atomic batches. Recommended to increase timeout when enabled.
+            retry_connection_error (bool): If `True`, connection failures will trigger a retry. Warning:
+                Retrying connection errors may lead to duplicate executions, as it is unclear which commands have
+                already been processed. Note: Currently supported only for non-atomic batches. Recommended to increase
+                timeout when enabled.
 
         Returns:
-            Optional[List[TResult]]: A list of results corresponding to the execution of each command
-            in the transaction. If a command returns a value, it will be included in the list. If a command
-            doesn't return a value, the list entry will be `None`.
+            Optional[List[TResult]]: A list of results corresponding to the execution of each command in the batch.
+                If a command returns a value, it will be included in the list. If a command doesn't return a value,
+                the list entry will be `None`. If the batch failed due to a `WATCH` command, `exec` will return
+                `None`.
 
-            If the transaction failed due to a WATCH command, `exec` will return `None`.
+        Examples:
+            # Example 1: Atomic Batch (Transaction)
+            >>> atomic_batch = ClusterBatch(is_atomic=True)  # Atomic (Transaction)
+            >>> atomic_batch.set("key", "1")
+            >>> atomic_batch.incr("key")
+            >>> atomic_batch.get("key")
+            >>> atomic_result = await cluster_client.exec(atomic_batch, false)
+            >>> print(f"Atomic Batch Result: {atomic_result}")
+            # Expected Output: Atomic Batch Result: [OK, 2, 2]
+
+            # Example 2: Non-Atomic Batch (Pipeline)
+            >>> non_atomic_batch = ClusterBatch(is_atomic=False)  # Non-Atomic (Pipeline)
+            >>> non_atomic_batch.set("key1", "value1")
+            >>> non_atomic_batch.set("key2", "value2")
+            >>> non_atomic_batch.get("key1")
+            >>> non_atomic_batch.get("key2")
+            >>> non_atomic_result = await cluster_client.exec(non_atomic_batch, false)
+            >>> print(f"Non-Atomic Batch Result: {non_atomic_result}")
+            # Expected Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
+
+            # Example 3: Atomic batch with options
+            >>> atomic_batch = ClusterBatch(is_atomic=True)
+            >>> atomic_batch.set("key", "1")
+            >>> atomic_batch.incr("key")
+            >>> atomic_batch.get("key")
+            >>> atomic_result = await cluster_client.exec(
+            ...     atomic_batch,
+            ...     timeout=1000,  # Set a timeout of 1000 milliseconds
+            ...     raise_on_error=False  # Do not raise an error on failure
+            ... )
+            >>> print(f"Atomic Batch Result: {atomic_result}")
+            # Output: Atomic Batch Result: [OK, 2, 2]
+
+            # Example 4: Non-atomic batch with retry options
+            >>> non_atomic_batch = ClusterBatch(is_atomic=False)
+            >>> non_atomic_batch.set("key1", "value1")
+            >>> non_atomic_batch.set("key2", "value2")
+            >>> non_atomic_batch.get("key1")
+            >>> non_atomic_batch.get("key2")
+            >>> non_atomic_result = await cluster_client.exec(
+            ...     non_atomic_batch,
+            ...     raise_on_error=False,
+            ...     retry_server_error=True,
+            ...     retry_connection_error=False
+            ... )
+            >>> print(f"Non-Atomic Batch Result: {non_atomic_result}")
+            # Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
         """
-        commands = transaction.commands[:]
-        return await self._execute_transaction(commands, route)
+        commands = batch.commands[:]
+        return await self._execute_batch(
+            commands,
+            batch.is_atomic,
+            raise_on_error,
+            retry_server_error,
+            retry_connection_error,
+            route,
+            timeout,
+        )
 
     async def config_resetstat(
         self,
@@ -117,7 +227,7 @@ class ClusterCommands(CoreCommands):
         """
         Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
 
-        See https://valkey.io/commands/config-resetstat/ for details.
+        See [valkey.io](https://valkey.io/commands/config-resetstat/) for details.
 
         Args:
             route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
@@ -137,7 +247,7 @@ class ClusterCommands(CoreCommands):
         """
         Rewrite the configuration file with the current configuration.
 
-        See https://valkey.io/commands/config-rewrite/ for details.
+        See [valkey.io](https://valkey.io/commands/config-rewrite/) for details.
 
         Args:
             route (Optional[TRoute]): The command will be routed automatically to all nodes, unless `route` is provided, in
@@ -161,7 +271,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns the current connection id.
 
-        See https://valkey.io/commands/client-id/ for more information.
+        See [valkey.io](https://valkey.io/commands/client-id/) for more information.
 
         Args:
             route (Optional[Route]): The command will be sent to a random node, unless `route` is provided, in which
@@ -186,7 +296,7 @@ class ClusterCommands(CoreCommands):
         """
         Ping the server.
 
-        See https://valkey.io/commands/ping/ for more details.
+        See [valkey.io](https://valkey.io/commands/ping/) for more details.
 
         Args:
             message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
@@ -215,7 +325,7 @@ class ClusterCommands(CoreCommands):
         Get the values of configuration parameters.
         Starting from server version 7, command supports multiple parameters.
 
-        See https://valkey.io/commands/config-get/ for details.
+        See [valkey.io](https://valkey.io/commands/config-get/) for details.
 
         Args:
             parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
@@ -251,7 +361,7 @@ class ClusterCommands(CoreCommands):
         Set configuration parameters to the specified values.
         Starting from server version 7, command supports multiple parameters.
 
-        See https://valkey.io/commands/config-set/ for details.
+        See [valkey.io](https://valkey.io/commands/config-set/) for details.
 
         Args:
             parameters_map (Mapping[TEncodable, TEncodable]): A map consisting of configuration
@@ -280,7 +390,7 @@ class ClusterCommands(CoreCommands):
         """
         Get the name of the connection to which the request is routed.
 
-        See https://valkey.io/commands/client-getname/ for more details.
+        See [valkey.io](https://valkey.io/commands/client-getname/) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
@@ -311,7 +421,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns the number of keys in the database.
 
-        See https://valkey.io/commands/dbsize for more details.
+        See [valkey.io](https://valkey.io/commands/dbsize) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
@@ -335,7 +445,7 @@ class ClusterCommands(CoreCommands):
         """
         Echoes the provided `message` back.
 
-        See https://valkey.io/commands/echo for more details.
+        See [valkey.io](https://valkey.io/commands/echo) for more details.
 
         Args:
             message (TEncodable): The message to be echoed back.
@@ -371,7 +481,7 @@ class ClusterCommands(CoreCommands):
         """
         Loads a library to Valkey.
 
-        See https://valkey.io/commands/function-load/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-load/) for more details.
 
         Args:
             library_code (TEncodable): The source code that implements the library.
@@ -408,7 +518,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns information about the functions and libraries.
 
-        See https://valkey.io/commands/function-list/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-list/) for more details.
 
         Args:
             library_name_pattern (Optional[TEncodable]):  A wildcard pattern for matching library names.
@@ -457,7 +567,7 @@ class ClusterCommands(CoreCommands):
         """
         Deletes all function libraries.
 
-        See https://valkey.io/commands/function-flush/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-flush/) for more details.
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -488,7 +598,7 @@ class ClusterCommands(CoreCommands):
         """
         Deletes a library and all its functions.
 
-        See https://valkey.io/commands/function-delete/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-delete/) for more details.
 
         Args:
             library_name (TEncodable): The library name to delete
@@ -518,7 +628,7 @@ class ClusterCommands(CoreCommands):
         Kills a function that is currently executing.
         This command only terminates read-only functions.
 
-        See https://valkey.io/commands/function-kill/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-kill/) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to all nodes, unless `route` is provided,
@@ -551,7 +661,7 @@ class ClusterCommands(CoreCommands):
         """
         Invokes a previously loaded function.
 
-        See https://valkey.io/commands/fcall/ for more details.
+        See [valkey.io](https://valkey.io/commands/fcall/) for more details.
 
         Args:
             function (TEncodable): The function name.
@@ -594,7 +704,7 @@ class ClusterCommands(CoreCommands):
         """
         Invokes a previously loaded read-only function.
 
-        See https://valkey.io/commands/fcall_ro for more details.
+        See [valkey.io](https://valkey.io/commands/fcall_ro) for more details.
 
         Args:
             function (TEncodable): The function name.
@@ -627,7 +737,7 @@ class ClusterCommands(CoreCommands):
         Returns information about the function that's currently running and information about the
         available execution engines.
 
-        See https://valkey.io/commands/function-stats/ for more details
+        See [valkey.io](https://valkey.io/commands/function-stats/) for more details
 
         Args:
             route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
@@ -670,7 +780,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns the serialized payload of all loaded libraries.
 
-        See https://valkey.io/commands/function-dump/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-dump/) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless
@@ -703,7 +813,7 @@ class ClusterCommands(CoreCommands):
         """
         Restores libraries from the serialized payload returned by the `function_dump` command.
 
-        See https://valkey.io/commands/function-restore/ for more details.
+        See [valkey.io](https://valkey.io/commands/function-restore/) for more details.
 
         Args:
             payload (bytes): The serialized data from the `function_dump` command.
@@ -740,7 +850,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns the server time.
 
-        See https://valkey.io/commands/time/ for more details.
+        See [valkey.io](https://valkey.io/commands/time/) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
@@ -776,7 +886,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
 
-        See https://valkey.io/commands/lastsave for more details.
+        See [valkey.io](https://valkey.io/commands/lastsave) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
@@ -815,7 +925,8 @@ class ClusterCommands(CoreCommands):
         The mode is selected using the 'sharded' parameter.
         For both sharded and non-sharded mode, request is routed using hashed channel as key.
 
-        See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
+        See [PUBLISH](https://valkey.io/commands/publish) and [SPUBLISH](https://valkey.io/commands/spublish)
+        for more details.
 
         Args:
             message (TEncodable): Message to publish.
@@ -843,7 +954,7 @@ class ClusterCommands(CoreCommands):
         Lists the currently active shard channels.
         The command is routed to all nodes, and aggregates the response to a single array.
 
-        See https://valkey.io/commands/pubsub-shardchannels for more details.
+        See [valkey.io](https://valkey.io/commands/pubsub-shardchannels) for more details.
 
         Args:
             pattern (Optional[TEncodable]): A glob-style pattern to match active shard channels.
@@ -876,7 +987,7 @@ class ClusterCommands(CoreCommands):
         The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of
         subscriptions.
 
-        See https://valkey.io/commands/pubsub-shardnumsub for more details.
+        See [valkey.io](https://valkey.io/commands/pubsub-shardnumsub) for more details.
 
         Args:
             channels (Optional[List[TEncodable]]): The list of shard channels to query for the number of subscribers.
@@ -905,7 +1016,7 @@ class ClusterCommands(CoreCommands):
         """
         Deletes all the keys of all the existing databases. This command never fails.
 
-        See https://valkey.io/commands/flushall for more details.
+        See [valkey.io](https://valkey.io/commands/flushall) for more details.
 
         Args:
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -936,7 +1047,7 @@ class ClusterCommands(CoreCommands):
         """
         Deletes all the keys of the currently selected database. This command never fails.
 
-        See https://valkey.io/commands/flushdb for more details.
+        See [valkey.io](https://valkey.io/commands/flushdb) for more details.
 
         Args:
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -973,7 +1084,7 @@ class ClusterCommands(CoreCommands):
         Copies the value stored at the `source` to the `destination` key. When `replace` is True,
         removes the `destination` key first if it already exists, otherwise performs no action.
 
-        See https://valkey.io/commands/copy for more details.
+        See [valkey.io](https://valkey.io/commands/copy) for more details.
 
         Note:
             Both `source` and `destination` must map to the same hash slot.
@@ -1012,7 +1123,7 @@ class ClusterCommands(CoreCommands):
         """
         Displays a piece of generative computer art and the Valkey version.
 
-        See https://valkey.io/commands/lolwut for more details.
+        See [valkey.io](https://valkey.io/commands/lolwut) for more details.
 
         Args:
             version (Optional[int]): Version of computer art to generate.
@@ -1052,7 +1163,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns a random existing key name.
 
-        See https://valkey.io/commands/randomkey for more details.
+        See [valkey.io](https://valkey.io/commands/randomkey) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
@@ -1081,7 +1192,7 @@ class ClusterCommands(CoreCommands):
         and acknowledged by at least `numreplicas` of replicas. If `timeout` is
         reached, the command returns even if the specified number of replicas were not yet reached.
 
-        See https://valkey.io/commands/wait for more details.
+        See [valkey.io](https://valkey.io/commands/wait) for more details.
 
         Args:
             numreplicas (int): The number of replicas to reach.
@@ -1108,7 +1219,7 @@ class ClusterCommands(CoreCommands):
         Flushes all the previously watched keys for a transaction. Executing a transaction will
         automatically flush all previously watched keys.
 
-        See https://valkey.io/commands/unwatch for more details.
+        See [valkey.io](https://valkey.io/commands/unwatch) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
@@ -1142,13 +1253,13 @@ class ClusterCommands(CoreCommands):
         For each iteration, the new cursor object should be used to continue the scan.
         Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
         For more information about the Cluster Scan implementation, see
-        `Cluster Scan <https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan>`_.
+        [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan).
 
         Like the SCAN command, the method can be used to iterate over the keys in the database,
         returning all keys the database has from when the scan started until the scan ends.
         The same key can be returned in multiple scan iterations.
 
-        See https://valkey.io/commands/scan/ for more details.
+        See [valkey.io](https://valkey.io/commands/scan/) for more details.
 
         Args:
             cursor (ClusterScanCursor): The cursor object that wraps the scan state.
@@ -1221,7 +1332,7 @@ class ClusterCommands(CoreCommands):
         """
         Check existence of scripts in the script cache by their SHA1 digest.
 
-        See https://valkey.io/commands/script-exists for more details.
+        See [valkey.io](https://valkey.io/commands/script-exists) for more details.
 
         Args:
             sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
@@ -1247,7 +1358,7 @@ class ClusterCommands(CoreCommands):
         """
         Flush the Lua scripts cache.
 
-        See https://valkey.io/commands/script-flush for more details.
+        See [valkey.io](https://valkey.io/commands/script-flush) for more details.
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -1277,7 +1388,7 @@ class ClusterCommands(CoreCommands):
         Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
         The command is routed to all nodes, and aggregates the response to a single array.
 
-        See https://valkey.io/commands/script-kill for more details.
+        See [valkey.io](https://valkey.io/commands/script-kill) for more details.
 
         Args:
             route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
@@ -1308,7 +1419,8 @@ class ClusterCommands(CoreCommands):
         Note:
             When in cluster mode, each `key` must map to the same hash slot.
 
-        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+        See [SCRIPT LOAD](https://valkey.io/commands/script-load/) and [EVALSHA](https://valkey.io/commands/evalsha/)
+        for more details.
 
         Args:
             script (Script): The Lua script to execute.
@@ -1339,7 +1451,8 @@ class ClusterCommands(CoreCommands):
         If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
         After that, it will be invoked using the `EVALSHA` command.
 
-        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+        See [SCRIPT LOAD](https://valkey.io/commands/script-load/) and [EVALSHA](https://valkey.io/commands/evalsha/)
+        for more details.
 
         Args:
             script (Script): The Lua script to execute.
