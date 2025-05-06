@@ -3117,13 +3117,13 @@ class CoreCommands(Protocol):
             start (StreamRangeBound): The starting stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MinId` to start with the minimum available ID.
 
             end (StreamRangeBound): The ending stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MaxId` to end with the maximum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
@@ -3171,13 +3171,13 @@ class CoreCommands(Protocol):
             end (StreamRangeBound): The ending stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MaxId` to end with the maximum available ID.
 
             start (StreamRangeBound): The starting stream entry ID bound for the range.
 
                 - Use `IdBound` to specify a stream entry ID.
-                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
+                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MinId` to start with the minimum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.

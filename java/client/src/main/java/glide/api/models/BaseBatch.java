@@ -3539,7 +3539,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Redis 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
      *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
@@ -3547,7 +3547,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Redis 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
      *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
@@ -3574,7 +3574,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Redis 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
      *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
@@ -3582,7 +3582,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Redis 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
      *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
@@ -3612,7 +3612,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Redis 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
      *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
@@ -3620,7 +3620,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Redis 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
      *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
@@ -3649,7 +3649,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Redis 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
      *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
@@ -3657,7 +3657,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Redis 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
      *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
