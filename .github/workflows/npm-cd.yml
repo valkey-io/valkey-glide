@@ -67,7 +67,6 @@ jobs:
             matrix:
                 build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
         steps:
-            # For MUSL on X64 we need to install git since we use the checkout action
             - name: Install git for musl
               if: ${{ contains(matrix.build.TARGET, 'musl')}}
               run: |
@@ -292,20 +291,39 @@ jobs:
             matrix:
                 build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
         steps:
-            - name: install valkey and git for alpine
-              if: ${{ contains(matrix.build.TARGET, 'musl') }}
+            - name: Install git for musl
+              if: ${{ contains(matrix.build.TARGET, 'musl')}}
               run: |
                   apk update
-                  apk add git valkey
-                  node -v
+                  apk add git valkey valkey-cli python
+
+            - name: Checkout
+              if: ${{ !contains(matrix.build.TARGET, 'aarch64-unknown-linux-musl')}}
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Manual Checkout
+              if: contains(matrix.build.TARGET, 'aarch64-unknown-linux-musl')
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  # mark this workspace as safe so git commands will run
+                  git config --global --add safe.directory $GITHUB_WORKSPACE
+
+                  git init .
+                  git remote add origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+                  git fetch --depth=1 origin ${{ github.sha }}
+                  git checkout -f ${{ github.sha }}
 
             - name: install Python for ubuntu
               if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
               run: |
-                  sudo apt-get update
-                  sudo apt-get install python3
+                  sudo apt update
+                  sudo apt install python3
 
             - name: Checkout
+              if: ${{ contains(matrix.build.TARGET, 'aarch64-unknown-linux-musl')}}
               uses: actions/checkout@v4
 
             - name: Setup for musl
