@@ -22,9 +22,7 @@ Linux:
 
 macOS:
 
-- macOS (Apple silicon/aarch_64 and Intel/x86_64)
-Testing are being done on macOS arm64 platforms. 
-Please note that the package is not tested on macOS intel platforms, only minimal testing is done during CD.
+- macOS (Apple silicon/aarch_64)
 
 ## GO supported versions
 
