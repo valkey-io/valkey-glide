@@ -1161,14 +1161,14 @@ func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
 }
 
 func (suite *GlideTestSuite) TestFunctionKillNoWrite() {
-	if !*timeoutTests {
+	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
 	suite.testFunctionKill(true)
 }
 
 func (suite *GlideTestSuite) TestFunctionKillWrite() {
-	if !*timeoutTests {
+	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
 	suite.testFunctionKill(false)

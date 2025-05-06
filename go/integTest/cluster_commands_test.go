@@ -1940,14 +1940,14 @@ func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKillNoWriteWithoutRoute() {
-	if !*timeoutTests {
+	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
 	suite.testFunctionKillNoWrite(false)
 }
 
 func (suite *GlideTestSuite) TestFunctionKillNoWriteWithRoute() {
-	if !*timeoutTests {
+	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
 	suite.testFunctionKillNoWrite(true)
@@ -2068,7 +2068,7 @@ func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
 }
 
 func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
-	if !*timeoutTests {
+	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
 
