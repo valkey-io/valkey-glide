@@ -119,7 +119,6 @@ jobs:
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
 
             - name: Setup node for publishing
-              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
               working-directory: ./node
               run: |
                   npm config set registry https://registry.npmjs.org/
