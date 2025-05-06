@@ -89,7 +89,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         // All memory allocated is auto-freed by `using` operator
     }
 
-    protected async Task<object?[]?> Batch<T>(BaseBatch<T> batch, BaseBatchOptions? options = null) where T : BaseBatch<T>
+    protected async Task<object?[]?> Batch<T>(BaseBatch<T> batch, bool raiseOnError, BaseBatchOptions? options = null) where T : BaseBatch<T>
     {
         // 1. Allocate memory for batch, which allocates all nested Cmds
         using FFI.Batch ffiBatch = batch.ToFFI();
@@ -99,7 +99,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
         // 3. Sumbit request to the rust part
         Message message = _messageContainer.GetMessageForCall();
-        BatchFfi(_clientPointer, (ulong)message.Index, ffiBatch.ToPtr(), ffiOptions?.ToPtr() ?? IntPtr.Zero);
+        BatchFfi(_clientPointer, (ulong)message.Index, ffiBatch.ToPtr(), raiseOnError, ffiOptions?.ToPtr() ?? IntPtr.Zero);
 
         // 4. Get a response and Handle it
         return HandleServerResponse<object?[]?>(await message, true);
@@ -219,7 +219,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     private static extern void CommandFfi(IntPtr client, ulong index, IntPtr cmdInfo, IntPtr routeInfo);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "batch")]
-    private static extern void BatchFfi(IntPtr client, ulong index, IntPtr batch, IntPtr opts);
+    private static extern void BatchFfi(IntPtr client, ulong index, IntPtr batch, [MarshalAs(UnmanagedType.U1)] bool raiseOnError, IntPtr opts);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "free_respose")]
     private static extern void FreeResponse(IntPtr response);

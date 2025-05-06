@@ -171,7 +171,6 @@ internal class FFI
         public BatchOptions(
             bool? retryServerError = false,
             bool? retryConnectionError = false,
-            bool? raiseOnError = false,
             uint? timeout = null,
             Route? route = null
             )
@@ -181,7 +180,6 @@ internal class FFI
             {
                 RetryServerError = retryServerError ?? false,
                 RetryConnectionError = retryConnectionError ?? false,
-                RaiseOnError = raiseOnError ?? false,
                 HasTimeout = timeout is not null,
                 Timeout = timeout ?? 0,
                 Route = IntPtr.Zero,

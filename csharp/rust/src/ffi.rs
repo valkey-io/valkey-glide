@@ -510,7 +510,6 @@ pub struct BatchOptionsInfo {
     // two params from PipelineRetryStrategy
     pub retry_server_error: bool,
     pub retry_connection_error: bool,
-    pub raise_on_error: bool,
     pub has_timeout: bool,
     pub timeout: u32,
     pub route_info: *const RouteInfo,
@@ -571,12 +570,11 @@ pub(crate) unsafe fn get_pipeline_options(
     ptr: *const BatchOptionsInfo,
 ) -> (
     Option<RoutingInfo>,
-    bool,
     Option<u32>,
     PipelineRetryStrategy,
 ) {
     if ptr.is_null() {
-        return (None, false, None, PipelineRetryStrategy::new(false, false));
+        return (None, None, PipelineRetryStrategy::new(false, false));
     }
     let timeout = if (*ptr).has_timeout {
         Some((*ptr).timeout)
@@ -587,7 +585,6 @@ pub(crate) unsafe fn get_pipeline_options(
 
     (
         route,
-        (*ptr).raise_on_error,
         timeout,
         PipelineRetryStrategy::new((*ptr).retry_server_error, (*ptr).retry_connection_error),
     )

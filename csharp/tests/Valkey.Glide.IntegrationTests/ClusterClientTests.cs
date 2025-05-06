@@ -92,7 +92,7 @@ public class ClusterClientTests
     {
         using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
 
-        _ = await Assert.ThrowsAsync<RequestException>(async () => _ = await client.Exec(new(true), new(retryStrategy: new())));
+        _ = await Assert.ThrowsAsync<RequestException>(async () => _ = await client.Exec(new(true), true, new(retryStrategy: new())));
     }
 
     [Theory]
@@ -104,19 +104,19 @@ public class ClusterClientTests
 
         ClusterBatch batch = new ClusterBatch(isAtomic).Info([Section.REPLICATION]);
 
-        object?[]? res = await client.Exec(batch, new(route: new SlotKeyRoute("abc", SlotType.Primary)));
+        object?[]? res = await client.Exec(batch, true, new(route: new SlotKeyRoute("abc", SlotType.Primary)));
         Assert.Contains("role:master", res![0] as gs);
 
-        res = await client.Exec(batch, new(route: new SlotKeyRoute("abc", SlotType.Replica)));
+        res = await client.Exec(batch, true, new(route: new SlotKeyRoute("abc", SlotType.Replica)));
         Assert.Contains("role:slave", res![0] as gs);
 
-        res = await client.Exec(batch, new(route: new SlotIdRoute(42, SlotType.Primary)));
+        res = await client.Exec(batch, true, new(route: new SlotIdRoute(42, SlotType.Primary)));
         Assert.Contains("role:master", res![0] as gs);
 
-        res = await client.Exec(batch, new(route: new SlotIdRoute(42, SlotType.Replica)));
+        res = await client.Exec(batch, true, new(route: new SlotIdRoute(42, SlotType.Replica)));
         Assert.Contains("role:slave", res![0] as gs);
 
-        res = await client.Exec(batch, new(route: new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port)));
+        res = await client.Exec(batch, true, new(route: new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port)));
         Assert.Contains("# Replication", res![0] as gs);
     }
 

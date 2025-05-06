@@ -277,6 +277,7 @@ pub unsafe extern "C" fn batch(
     client_ptr: *const c_void,
     callback_index: usize,
     batch_ptr: *const BatchInfo,
+    raise_on_error: bool,
     options_ptr: *const BatchOptionsInfo,
 ) {
     let client = unsafe {
@@ -307,7 +308,7 @@ pub unsafe extern "C" fn batch(
         }
     };
 
-    let (route, raise_on_error, pipeline_timeout, pipeline_retry_strategy) =
+    let (routing, pipeline_timeout, pipeline_retry_strategy) =
         unsafe { get_pipeline_options(options_ptr) };
 
     client.runtime.spawn(async move {
@@ -320,14 +321,14 @@ pub unsafe extern "C" fn batch(
         let result = if pipeline.is_atomic() {
             core.client
                 .clone()
-                .send_transaction(&pipeline, route, pipeline_timeout, raise_on_error)
+                .send_transaction(&pipeline, routing, pipeline_timeout, raise_on_error)
                 .await
         } else {
             core.client
                 .clone()
                 .send_pipeline(
                     &pipeline,
-                    route,
+                    routing,
                     raise_on_error,
                     pipeline_timeout,
                     pipeline_retry_strategy,

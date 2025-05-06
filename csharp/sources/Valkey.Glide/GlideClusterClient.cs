@@ -57,12 +57,13 @@ public sealed class GlideClusterClient : BaseClient, IGenericClusterCommands, IS
     public static async Task<GlideClusterClient> CreateClient(ClusterClientConfiguration config)
         => await CreateClient(config, () => new GlideClusterClient());
 
-    public async Task<object?[]?> Exec(ClusterBatch batch) => await Batch(batch);
+    public async Task<object?[]?> Exec(ClusterBatch batch, bool raiseOnError)
+        => await Batch(batch, raiseOnError);
 
-    public async Task<object?[]?> Exec(ClusterBatch batch, ClusterBatchOptions options)
+    public async Task<object?[]?> Exec(ClusterBatch batch, bool raiseOnError, ClusterBatchOptions options)
         => batch.IsAtomic && options.RetryStrategy is not null
             ? throw new RequestException("Retry strategy is not supported for atomic batches (transactions).")
-            : await Batch(batch, options);
+            : await Batch(batch, raiseOnError, options);
 
     public async Task<ClusterValue<object?>> CustomCommand(GlideString[] args)
         => await Command(RequestType.CustomCommand, args, resp => HandleCustomCommandClusterResponse(resp));

@@ -3,7 +3,6 @@
 using Valkey.Glide.Internals;
 
 using static Valkey.Glide.ConnectionConfiguration;
-using static Valkey.Glide.Errors;
 using static Valkey.Glide.Route;
 
 namespace Valkey.Glide.Pipeline;
@@ -86,30 +85,18 @@ public class Options
     /// it will result in a timeout error.If not explicitly set, the client's
     /// <see cref="ClientConfigurationBuilder{T}.RequestTimeout" />  will be used.
     /// </param>
-    /// <param name="raiseOnError">
-    /// Determines how errors are handled within the batch response.
-    /// <para />
-    /// When set to <see langword="true" />, the first encountered error in the batch will be raised as an
-    /// exception of type <see cref="RequestException" /> after all retries and reconnections have been
-    /// executed.
-    /// <para />
-    /// When set to <see langword="false" />, errors will be included as part of the batch response, allowing
-    /// the caller to process both successful and failed commands together. In this case, error details
-    /// will be provided as instances of <see cref="RequestException" />.
-    /// </param>
-    public abstract class BaseBatchOptions(uint? timeout = null, bool? raiseOnError = null)
+    public abstract class BaseBatchOptions(uint? timeout = null)
     {
         protected readonly uint? _timeout = timeout;
-        protected readonly bool? _raiseOnError = raiseOnError;
 
-        internal virtual FFI.BatchOptions ToFfi() => new(timeout: _timeout, raiseOnError: _raiseOnError);
+        internal virtual FFI.BatchOptions ToFfi() => new(timeout: _timeout);
     }
 
     /// <summary>
     /// Options for a batch request for a standalone client.
     /// </summary>
     /// <inheritdoc cref="BaseBatchOptions" path="/param" />
-    public class BatchOptions(uint? timeout = null, bool? raiseOnError = null) : BaseBatchOptions(timeout, raiseOnError)
+    public class BatchOptions(uint? timeout = null) : BaseBatchOptions(timeout)
     { }
 
     /// <summary>
@@ -161,9 +148,8 @@ public class Options
     /// </param>
     public class ClusterBatchOptions(
         uint? timeout = null,
-        bool? raiseOnError = null,
         SingleNodeRoute? route = null,
-        ClusterBatchRetryStrategy? retryStrategy = null) : BaseBatchOptions(timeout, raiseOnError)
+        ClusterBatchRetryStrategy? retryStrategy = null) : BaseBatchOptions(timeout)
     {
         internal SingleNodeRoute? Route { get; private set; } = route;
         internal ClusterBatchRetryStrategy? RetryStrategy { get; private set; } = retryStrategy;
@@ -171,7 +157,6 @@ public class Options
         internal override FFI.BatchOptions ToFfi() => new(
                 RetryStrategy?.RetryServerError,
                 RetryStrategy?.RetryConnectionError,
-                _raiseOnError,
                 _timeout,
                 Route?.ToFfi()
             );

@@ -2,6 +2,7 @@
 
 using Valkey.Glide.Pipeline;
 
+using static Valkey.Glide.Errors;
 using static Valkey.Glide.Pipeline.Options;
 
 namespace Valkey.Glide.Commands;
@@ -48,7 +49,7 @@ public interface IGenericCommands
     ///     .Incr("key")
     ///     .Get("key");
     ///
-    /// var result = await client.Exec(batch);
+    /// var result = await client.Exec(batch, true);
     /// // Expected result: ["OK", 2, 2]
     /// </code>
     /// </example>
@@ -61,14 +62,25 @@ public interface IGenericCommands
     ///     .Get("key1")
     ///     .Get("key2");
     ///
-    /// var result = await client.Exec(batch);
+    /// var result = await client.Exec(batch, true);
     /// // Expected result: ["OK", "OK", "value1", "value2"]
     /// </code>
     /// </example>
     /// </remarks>
     /// <param name="batch">A <see cref="Batch" /> object containing a list of commands to be executed.</param>
+    /// <param name="raiseOnError">
+    /// Determines how errors are handled within the batch response.
+    /// <para />
+    /// When set to <see langword="true" />, the first encountered error in the batch will be raised as an
+    /// exception of type <see cref="RequestException" /> after all retries and reconnections have been
+    /// executed.
+    /// <para />
+    /// When set to <see langword="false" />, errors will be included as part of the batch response, allowing
+    /// the caller to process both successful and failed commands together. In this case, error details
+    /// will be provided as instances of <see cref="RequestException" />.
+    /// </param>
     /// <returns>An array of results, where each entry corresponds to a command’s execution result.</returns>
-    Task<object?[]?> Exec(Batch batch);
+    Task<object?[]?> Exec(Batch batch, bool raiseOnError);
 
     /// <summary>
     /// Executes a batch by processing the queued commands.
@@ -114,7 +126,7 @@ public interface IGenericCommands
     ///     .Incr("key")
     ///     .Get("key");
     ///
-    /// var result = await client.Exec(batch, options);
+    /// var result = await client.Exec(batch, false, options);
     /// // Expected result: ["OK", 2, 2]
     /// </code>
     /// </example>
@@ -131,13 +143,24 @@ public interface IGenericCommands
     ///     .Get("key1")
     ///     .Get("key2");
     ///
-    /// var result = await client.Exec(batch, options);
+    /// var result = await client.Exec(batch, false, options);
     /// // Expected result: ["OK", "OK", "value1", "value2"]
     /// </code>
     /// </example>
     /// </remarks>
     /// <param name="batch">A <see cref="Batch" /> object containing a list of commands to be executed.</param>
+    /// <param name="raiseOnError">
+    /// Determines how errors are handled within the batch response.
+    /// <para />
+    /// When set to <see langword="true" />, the first encountered error in the batch will be raised as an
+    /// exception of type <see cref="RequestException" /> after all retries and reconnections have been
+    /// executed.
+    /// <para />
+    /// When set to <see langword="false" />, errors will be included as part of the batch response, allowing
+    /// the caller to process both successful and failed commands together. In this case, error details
+    /// will be provided as instances of <see cref="RequestException" />.
+    /// </param>
     /// <param name="options">A <see cref="BatchOptions" /> object containing execution options.</param>
     /// <returns>An array of results, where each entry corresponds to a command’s execution result.</returns>
-    Task<object?[]?> Exec(Batch batch, BatchOptions options);
+    Task<object?[]?> Exec(Batch batch, bool raiseOnError, BatchOptions options);
 }

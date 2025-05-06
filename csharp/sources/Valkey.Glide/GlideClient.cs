@@ -60,13 +60,15 @@ public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGe
     public static async Task<GlideClient> CreateClient(StandaloneClientConfiguration config)
         => await CreateClient(config, () => new GlideClient());
 
-    public async Task<object?[]?> Exec(Batch batch) => await Batch(batch);
+    public async Task<object?[]?> Exec(Batch batch, bool raiseOnError)
+        => await Batch(batch, raiseOnError);
 
-    public async Task<object?[]?> Exec(Batch batch, BatchOptions options) => await Batch(batch, options);
+    public async Task<object?[]?> Exec(Batch batch, bool raiseOnError, BatchOptions options)
+        => await Batch(batch, raiseOnError, options);
 
     public async Task<object?> CustomCommand(GlideString[] args)
-    => await Command(RequestType.CustomCommand, args, resp
-        => HandleServerResponse<object?>(resp, true));
+        => await Command(RequestType.CustomCommand, args, resp
+            => HandleServerResponse<object?>(resp, true));
 
     public async Task<string> Info() => await Info([]);
 

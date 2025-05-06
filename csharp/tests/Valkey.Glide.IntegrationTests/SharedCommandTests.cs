@@ -69,14 +69,14 @@ public class SharedCommandTests(TestConfiguration config)
 
         // Expect a timeout exception on short timeout
         _ = await Assert.ThrowsAsync<TimeoutException>(() => isCluster
-                ? ((GlideClusterClient)client).Exec((ClusterBatch)batch, (ClusterBatchOptions)options)
-                : ((GlideClient)client).Exec((Batch)batch, (BatchOptions)options));
+                ? ((GlideClusterClient)client).Exec((ClusterBatch)batch, true, (ClusterBatchOptions)options)
+                : ((GlideClient)client).Exec((Batch)batch, true, (BatchOptions)options));
 
         // Retry with a longer timeout and expect [OK]
         options = isCluster ? new ClusterBatchOptions(timeout: 1000, route: Route.Random) : new BatchOptions(timeout: 1000);
         object?[]? res = isCluster
-            ? await ((GlideClusterClient)client).Exec((ClusterBatch)batch, (ClusterBatchOptions)options)
-            : await ((GlideClient)client).Exec((Batch)batch, (BatchOptions)options);
+            ? await ((GlideClusterClient)client).Exec((ClusterBatch)batch, true, (ClusterBatchOptions)options)
+            : await ((GlideClient)client).Exec((Batch)batch, true, (BatchOptions)options);
         Assert.Equal(["OK"], res);
 
     }
@@ -91,11 +91,10 @@ public class SharedCommandTests(TestConfiguration config)
 
         IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
         _ = batch.Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
-        BaseBatchOptions options = isCluster ? new ClusterBatchOptions(raiseOnError: false) : new BatchOptions(raiseOnError: false);
 
         object?[] res = isCluster
-            ? (await ((GlideClusterClient)client).Exec((ClusterBatch)batch, (ClusterBatchOptions)options))!
-            : (await ((GlideClient)client).Exec((Batch)batch, (BatchOptions)options))!;
+            ? (await ((GlideClusterClient)client).Exec((ClusterBatch)batch, false))!
+            : (await ((GlideClient)client).Exec((Batch)batch, false))!;
 
         // Exceptions aren't raised, but stored in the result set
         Assert.Multiple(
@@ -109,10 +108,9 @@ public class SharedCommandTests(TestConfiguration config)
         );
 
         // First exception is raised, all data lost
-        options = isCluster ? new ClusterBatchOptions(raiseOnError: true) : new BatchOptions(raiseOnError: true);
         Exception err = await Assert.ThrowsAsync<RequestException>(async () => _ = isCluster
-                ? await ((GlideClusterClient)client).Exec((ClusterBatch)batch, (ClusterBatchOptions)options)
-                : await ((GlideClient)client).Exec((Batch)batch, (BatchOptions)options));
+                ? await ((GlideClusterClient)client).Exec((ClusterBatch)batch, true)
+                : await ((GlideClient)client).Exec((Batch)batch, true));
         Assert.Contains("wrong kind of value", err.Message);
     }
 }
