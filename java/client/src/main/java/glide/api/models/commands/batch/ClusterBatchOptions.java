@@ -26,7 +26,10 @@ public class ClusterBatchOptions extends BaseBatchOptions {
     private final SingleNodeRoute route;
 
     /**
-     * Defines the retry strategy for handling batch request failures.
+     * ⚠️ <b>Please see {@link ClusterBatchRetryStrategy} and read carefully before enabling these
+     * options.</b>
+     *
+     * <p>Defines the retry strategy for handling cluster batch request failures.
      *
      * <p>This strategy determines whether failed commands should be retried, potentially impacting
      * execution order.
@@ -47,13 +50,13 @@ public class ClusterBatchOptions extends BaseBatchOptions {
      *       commands have already been processed.
      * </ul>
      *
-     * * <b>Please see {@link BatchRetryStrategy} and read carefully before enabling these
-     * options.</b>
-     *
      * <p><b>Note:</b> Currently, retry strategies are supported only for non-atomic batches.
      *
-     * <p><b>Recommendation:</b> It is recommended to increase the timeout in {@code BaseBatchOptions}
-     * when enabling these strategies.
+     * <p><b>Recommendation:</b> It is recommended to increase the timeout in {@code
+     * BaseBatchOptions#timeout} when enabling these strategies.
+     *
+     * <p><b>Default:</b> Both {@code retryServerError} and {@code retryConnectionError} are set to
+     * {@code false}.
      */
-    private final BatchRetryStrategy retryStrategy;
+    private final ClusterBatchRetryStrategy retryStrategy;
 }

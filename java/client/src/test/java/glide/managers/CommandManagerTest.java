@@ -25,8 +25,8 @@ import command_request.CommandRequestOuterClass.SlotTypes;
 import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
 import glide.api.models.commands.batch.BatchOptions;
-import glide.api.models.commands.batch.BatchRetryStrategy;
 import glide.api.models.commands.batch.ClusterBatchOptions;
+import glide.api.models.commands.batch.ClusterBatchRetryStrategy;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
@@ -338,8 +338,11 @@ public class CommandManagerTest {
         ClusterBatchOptions.ClusterBatchOptionsBuilder optionsBuilder =
                 ClusterBatchOptions.builder().raiseOnError(false).timeout(1000).route(RANDOM);
         if (!isAtomic) {
-            BatchRetryStrategy strategy =
-                    BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
+            ClusterBatchRetryStrategy strategy =
+                    ClusterBatchRetryStrategy.builder()
+                            .retryServerError(true)
+                            .retryConnectionError(true)
+                            .build();
             optionsBuilder.retryStrategy(strategy);
         }
         ClusterBatchOptions options = optionsBuilder.build();
@@ -394,8 +397,11 @@ public class CommandManagerTest {
         ClusterBatch batch =
                 new ClusterBatch(true).customCommand(arg1).customCommand(arg2).customCommand(arg3);
 
-        BatchRetryStrategy strategy =
-                BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
+        ClusterBatchRetryStrategy strategy =
+                ClusterBatchRetryStrategy.builder()
+                        .retryServerError(true)
+                        .retryConnectionError(true)
+                        .build();
 
         ClusterBatchOptions.ClusterBatchOptionsBuilder optionsBuilder =
                 ClusterBatchOptions.builder()

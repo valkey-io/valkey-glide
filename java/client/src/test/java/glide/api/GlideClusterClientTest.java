@@ -73,8 +73,8 @@ import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SortBaseOptions.Limit;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
-import glide.api.models.commands.batch.BatchRetryStrategy;
 import glide.api.models.commands.batch.ClusterBatchOptions;
+import glide.api.models.commands.batch.ClusterBatchRetryStrategy;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
@@ -324,8 +324,11 @@ public class GlideClusterClientTest {
         ClusterBatchOptions.ClusterBatchOptionsBuilder builder =
                 ClusterBatchOptions.builder().raiseOnError(true).timeout(1000).route(route);
         if (!isAtomic) {
-            BatchRetryStrategy strategy =
-                    BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
+            ClusterBatchRetryStrategy strategy =
+                    ClusterBatchRetryStrategy.builder()
+                            .retryServerError(true)
+                            .retryConnectionError(true)
+                            .build();
             builder.retryStrategy(strategy);
         }
         ClusterBatchOptions options = builder.build();

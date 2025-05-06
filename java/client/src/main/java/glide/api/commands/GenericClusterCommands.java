@@ -257,7 +257,7 @@ public interface GenericClusterCommands {
      *             errors will be redirected.
      *       </ul>
      *   <li>Retries for failures will be handled according to the configured {@link
-     *       BatchRetryStrategy}.
+     *       ClusterBatchRetryStrategy}.
      * </ul>
      *
      * @param batch A {@link ClusterBatch} containing the commands to execute.
@@ -287,7 +287,7 @@ public interface GenericClusterCommands {
      *
      * // Non-atomic batch (pipeline): keys may span different hash slots
      * ClusterBatchOptions pipelineOptions = ClusterBatchOptions.builder()
-     *     .retryStrategy(BatchRetryStrategy.builder()
+     *     .retryStrategy(ClusterBatchRetryStrategy.builder()
      *         .retryServerError(true)
      *         .retryConnectionError(false)
      *         .build())
