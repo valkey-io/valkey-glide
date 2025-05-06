@@ -14,7 +14,7 @@ use redis::cluster_routing::{
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{
     ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy, PushInfo, RedisError,
-    RedisResult, ScanStateRC, Value,
+    RedisResult, RetryStrategy, ScanStateRC, Value,
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
@@ -745,6 +745,17 @@ async fn create_cluster_client(
         builder = builder.pubsub_subscriptions(pubsub_subscriptions);
     }
 
+    let retry_strategy = match request.connection_retry_strategy {
+        Some(strategy) => RetryStrategy::new(
+            strategy.exponent_base,
+            strategy.factor,
+            strategy.number_of_retries,
+            strategy.jitter_percent,
+        ),
+        None => RetryStrategy::default(),
+    };
+    builder = builder.reconnect_retry_strategy(retry_strategy);
+
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
@@ -887,8 +898,8 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         })
         .unwrap_or_default();
     let connection_retry_strategy = request.connection_retry_strategy.as_ref().map(|strategy|
-            format!("\nreconnect backoff strategy: number of increasing duration retries: {}, base: {}, factor: {}",
-        strategy.number_of_retries, strategy.exponent_base, strategy.factor)).unwrap_or_default();
+            format!("\nreconnect backoff strategy: number of increasing duration retries: {}, base: {}, factor: {}, jitter: {:?}",
+        strategy.number_of_retries, strategy.exponent_base, strategy.factor, strategy.jitter_percent)).unwrap_or_default();
     let protocol = request
         .protocol
         .map(|protocol| format!("\nProtocol: {protocol:?}"))

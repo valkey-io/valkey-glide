@@ -3,6 +3,7 @@
 from glide.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
+    BackoffStrategy,
     BaseClientConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
@@ -106,3 +107,48 @@ def test_connection_timeout_in_protobuf_request():
 
     assert isinstance(request, ConnectionRequest)
     assert request.connection_timeout == connection_timeout
+
+
+def test_reconnect_strategy_in_protobuf_request():
+    reconnect_strategy = BackoffStrategy(7, 69, 3, 18)
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        reconnect_strategy=reconnect_strategy,
+    )
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert (
+        request.connection_retry_strategy.number_of_retries
+        == reconnect_strategy.num_of_retries
+    )
+    assert request.connection_retry_strategy.factor == reconnect_strategy.factor
+    assert (
+        request.connection_retry_strategy.exponent_base
+        == reconnect_strategy.exponent_base
+    )
+    assert (
+        request.connection_retry_strategy.jitter_percent
+        == reconnect_strategy.jitter_percent
+    )
+
+    config = GlideClusterClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        reconnect_strategy=reconnect_strategy,
+    )
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
+
+    assert isinstance(request, ConnectionRequest)
+    assert (
+        request.connection_retry_strategy.number_of_retries
+        == reconnect_strategy.num_of_retries
+    )
+    assert request.connection_retry_strategy.factor == reconnect_strategy.factor
+    assert (
+        request.connection_retry_strategy.exponent_base
+        == reconnect_strategy.exponent_base
+    )
+    assert (
+        request.connection_retry_strategy.jitter_percent
+        == reconnect_strategy.jitter_percent
+    )

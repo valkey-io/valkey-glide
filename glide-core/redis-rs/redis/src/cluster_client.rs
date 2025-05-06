@@ -6,7 +6,7 @@ use crate::cluster_topology::{
 use crate::connection::{ConnectionAddr, ConnectionInfo, IntoConnectionInfo};
 use crate::types::{ErrorKind, ProtocolVersion, RedisError, RedisResult};
 use crate::{cluster, cluster::TlsMode};
-use crate::{PubSubSubscriptionInfo, PushInfo};
+use crate::{PubSubSubscriptionInfo, PushInfo, RetryStrategy};
 use rand::Rng;
 #[cfg(feature = "cluster-async")]
 use std::ops::Add;
@@ -51,6 +51,7 @@ struct BuilderParams {
     protocol: ProtocolVersion,
     pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     open_telemetry_config: Option<GlideOpenTelemetryConfig>,
+    reconnect_retry_strategy: Option<RetryStrategy>,
 }
 
 #[derive(Clone)]
@@ -150,6 +151,7 @@ pub struct ClusterParams {
     pub(crate) response_timeout: Duration,
     pub(crate) protocol: ProtocolVersion,
     pub(crate) pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
+    pub(crate) reconnect_retry_strategy: Option<RetryStrategy>,
 }
 
 impl ClusterParams {
@@ -182,6 +184,7 @@ impl ClusterParams {
             response_timeout: value.response_timeout.unwrap_or(Duration::MAX),
             protocol: value.protocol,
             pubsub_subscriptions: value.pubsub_subscriptions,
+            reconnect_retry_strategy: value.reconnect_retry_strategy,
         })
     }
 }
@@ -415,6 +418,18 @@ impl ClusterClientBuilder {
         open_telemetry_config: GlideOpenTelemetryConfig,
     ) -> ClusterClientBuilder {
         self.builder_params.open_telemetry_config = Some(open_telemetry_config);
+        self
+    }
+
+    /// Set reconnect retry strategy configuration for this client
+    ///
+    /// # Parameters
+    /// - `reconnect_retry_strategy`: Use the `reconnect_retry_strategy` to set the reconnect backoff with jitter params.
+    pub fn reconnect_retry_strategy(
+        mut self,
+        reconnect_retry_strategy: RetryStrategy,
+    ) -> ClusterClientBuilder {
+        self.builder_params.reconnect_retry_strategy = Some(reconnect_retry_strategy);
         self
     }
 

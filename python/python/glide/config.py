@@ -84,12 +84,20 @@ class BackoffStrategy:
             retries will remain constant until a reconnect attempt is succesful.
         factor (int): The multiplier that will be applied to the waiting time between each retry.
         exponent_base (int): The exponent base configured for the strategy.
+        jitter_percent (Optional[int]): The Jitter percent on the calculated duration. If not set, a default value will be used.
     """
 
-    def __init__(self, num_of_retries: int, factor: int, exponent_base: int):
+    def __init__(
+        self,
+        num_of_retries: int,
+        factor: int,
+        exponent_base: int,
+        jitter_percent: Optional[int] = None,
+    ):
         self.num_of_retries = num_of_retries
         self.factor = factor
         self.exponent_base = exponent_base
+        self.jitter_percent = jitter_percent
 
 
 class ServerCredentials:
@@ -189,6 +197,9 @@ class BaseClientConfiguration:
             reconnections or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not
             explicitly set, a default value of 250 milliseconds will be used.
+        reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
+            connection failures.
+            If not set, a default backoff strategy will be used.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command
             during connection establishment.
         protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
@@ -212,6 +223,7 @@ class BaseClientConfiguration:
         credentials: Optional[ServerCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
+        reconnect_strategy: Optional[BackoffStrategy] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         inflight_requests_limit: Optional[int] = None,
@@ -223,6 +235,7 @@ class BaseClientConfiguration:
         self.credentials = credentials
         self.read_from = read_from
         self.request_timeout = request_timeout
+        self.reconnect_strategy = reconnect_strategy
         self.client_name = client_name
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
@@ -260,6 +273,19 @@ class BaseClientConfiguration:
         request.read_from = self.read_from.value
         if self.request_timeout:
             request.request_timeout = self.request_timeout
+        if self.reconnect_strategy:
+            request.connection_retry_strategy.number_of_retries = (
+                self.reconnect_strategy.num_of_retries
+            )
+            request.connection_retry_strategy.factor = self.reconnect_strategy.factor
+            request.connection_retry_strategy.exponent_base = (
+                self.reconnect_strategy.exponent_base
+            )
+            if self.reconnect_strategy.jitter_percent is not None:
+                request.connection_retry_strategy.jitter_percent = (
+                    self.reconnect_strategy.jitter_percent
+                )
+
         request.cluster_mode_enabled = True if cluster_mode else False
         if self.credentials:
             if self.credentials.username:
@@ -395,13 +421,13 @@ class GlideClientConfiguration(BaseClientConfiguration):
             credentials=credentials,
             read_from=read_from,
             request_timeout=request_timeout,
+            reconnect_strategy=reconnect_strategy,
             client_name=client_name,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
             advanced_config=advanced_config,
         )
-        self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
         self.pubsub_subscriptions = pubsub_subscriptions
 
@@ -410,14 +436,6 @@ class GlideClientConfiguration(BaseClientConfiguration):
     ) -> ConnectionRequest:
         assert cluster_mode is False
         request = super()._create_a_protobuf_conn_request(cluster_mode)
-        if self.reconnect_strategy:
-            request.connection_retry_strategy.number_of_retries = (
-                self.reconnect_strategy.num_of_retries
-            )
-            request.connection_retry_strategy.factor = self.reconnect_strategy.factor
-            request.connection_retry_strategy.exponent_base = (
-                self.reconnect_strategy.exponent_base
-            )
         if self.database_id:
             request.database_id = self.database_id
 
@@ -487,6 +505,9 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             reconnections or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not explicitly
             set, a default value of 250 milliseconds will be used.
+        reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
+            connection failures.
+            If not set, a default backoff strategy will be used.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
@@ -555,6 +576,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         credentials: Optional[ServerCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
+        reconnect_strategy: Optional[BackoffStrategy] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         periodic_checks: Union[
@@ -571,6 +593,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             credentials=credentials,
             read_from=read_from,
             request_timeout=request_timeout,
+            reconnect_strategy=reconnect_strategy,
             client_name=client_name,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
