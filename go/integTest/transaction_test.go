@@ -284,7 +284,6 @@ func (suite *GlideTestSuite) TestExecWithOptions_Cluster_RaiseOnErrorTrue() {
 
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "WRONGTYPE")
-
 }
 
 func (suite *GlideTestSuite) TestExecWithOptions_Cluster_Timeout() {
