@@ -85,6 +85,9 @@ jobs:
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
+                  # mark this workspace as safe so git commands will run
+                  git config --global --add safe.directory $GITHUB_WORKSPACE
+
                   git init .
                   git remote add origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
                   git fetch --depth=1 origin ${{ github.sha }}
