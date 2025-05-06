@@ -71,10 +71,10 @@ jobs:
                   ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     publish-binaries:
-        needs: [start-self-hosted-runner, load-platform-matrix]
+        needs: [load-platform-matrix]
         if: github.repository_owner == 'valkey-io'
         name: Publish packages to PyPi
-        runs-on: ${{ matrix.build.RUNNER }}
+        runs-on: ${{ matrix.build.RUNNER_CD || matrix.build.RUNNER }}
         timeout-minutes: 35
         strategy:
             fail-fast: false
@@ -83,10 +83,6 @@ jobs:
         outputs:
             release_version: ${{ steps.set_version.outputs.RELEASE_VERSION }}
         steps:
-            - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
             - name: Checkout
               uses: actions/checkout@v4
               with:
@@ -125,7 +121,6 @@ jobs:
                   cat Cargo.toml
 
             - name: Set up Python
-              if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
               uses: actions/setup-python@v5
               with:
                   python-version: "3.13"
@@ -246,17 +241,13 @@ jobs:
     test-release:
         if: github.event_name != 'pull_request'
         name: Test the release
-        runs-on: ${{ matrix.build.RUNNER }}
+        runs-on: ${{ matrix.build.RUNNER_CD || matrix.build.RUNNER }}
         needs: [build-source-dist-and-publish-to-pypi, load-platform-matrix]
         strategy:
             fail-fast: false
             matrix:
                 build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         steps:
-            - name: Setup self-hosted runner access
-              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
             - name: checkout
               uses: actions/checkout@v4
 
@@ -296,12 +287,3 @@ jobs:
                     pip install valkey-glide
                   fi
                   python rc_test.py
-
-            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
-            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
-            - name: Reset repository
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
-              shell: bash
-              run: |
-                  git reset --hard
-                  git clean -xdf

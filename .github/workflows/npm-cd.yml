@@ -72,10 +72,10 @@ jobs:
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     publish-binaries:
-        needs: [start-self-hosted-runner, load-platform-matrix]
+        needs: [load-platform-matrix]
         if: github.repository_owner == 'valkey-io'
         name: Publish packages to NPM
-        runs-on: ${{ matrix.build.RUNNER }}
+        runs-on: ${{ matrix.build.RUNNER_CD || matrix.build.RUNNER }}
         container:
             image: ${{ matrix.build.IMAGE || '' }}
             options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
@@ -84,22 +84,16 @@ jobs:
             matrix:
                 build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
         steps:
-            - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
             # For MUSL on X64 we need to install git since we use the checkout action
             - name: Install git for musl
-              if: ${{ contains(matrix.build.TARGET, 'x86_64-unknown-linux-musl')}}
+              if: ${{ contains(matrix.build.TARGET, 'musl')}}
               run: |
                   apk update
                   apk add git
 
             - name: Checkout
-              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
               uses: actions/checkout@v4
               with:
-                  submodules: "true"
                   fetch-depth: 0
 
             - name: Setup for musl
@@ -110,6 +104,7 @@ jobs:
                   npm-scope: ${{ vars.NPM_SCOPE }}
                   npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
                   arch: ${{ matrix.build.ARCH }}
+                  action: "release"
 
             - name: Set the release version
               shell: bash
@@ -303,7 +298,7 @@ jobs:
         if: github.event_name != 'pull_request'
         name: Test the release
         needs: [publish-base-to-npm, load-platform-matrix]
-        runs-on: ${{ matrix.build.RUNNER }}
+        runs-on: ${{matrix.build.RUNNER_CD || matrix.build.RUNNER }}
         container:
             image: ${{ matrix.build.IMAGE || '' }}
             options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
@@ -312,15 +307,11 @@ jobs:
             matrix:
                 build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
         steps:
-            - name: Setup self-hosted runner access
-              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
-            - name: install redis and git for alpine
+            - name: install valkey and git for alpine
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
               run: |
                   apk update
-                  apk add git redis
+                  apk add git valkey
                   node -v
 
             - name: install Python for ubuntu
@@ -330,7 +321,6 @@ jobs:
                   sudo apt-get install python3
 
             - name: Checkout
-              if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
               uses: actions/checkout@v4
 
             - name: Setup for musl
@@ -341,6 +331,7 @@ jobs:
                   npm-scope: ${{ vars.NPM_SCOPE }}
                   npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
                   arch: ${{ matrix.build.ARCH }}
+                  action: "release"
 
             - name: Install engine
               if: ${{ !contains(matrix.build.TARGET, 'musl') }}
@@ -434,12 +425,3 @@ jobs:
                       echo "Deprecating ${package_name}@${RELEASE_VERSION}"
                       npm deprecate "${package_name}@${RELEASE_VERSION}" "This version has been deprecated" --force || true
                   done < <(jq -r '.[] | "\(.NAMED_OS)\(.TARGET | test("musl") | if . then "-musl" else "" end)-\(.ARCH)"' platform_matrix.json)
-
-            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
-            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
-            - name: Reset repository
-              if: ${{ always() }} && ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
-              shell: bash
-              run: |
-                  git reset --hard
-                  git clean -xdf

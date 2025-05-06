@@ -83,18 +83,8 @@ jobs:
             fail-fast: false
             matrix:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
-        runs-on: ${{ matrix.host.RUNNER }}
+        runs-on: ${{ matrix.host.RUNNER_CD || matrix.host.RUNNER }}
         steps:
-            - name: Setup self-hosted runner access
-              run: |
-                  GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
-                  if [ -d $GHA_HOME ]; then
-                    sudo chown -R $USER:$USER $GHA_HOME
-                    sudo rm -rf $GHA_HOME
-                    mkdir -p $GHA_HOME/valkey-glide
-                  else
-                    echo "No cleaning needed"
-                  fi
             - uses: actions/checkout@v4
             - uses: actions/setup-go@v5
               with:
@@ -168,18 +158,8 @@ jobs:
             fail-fast: false
             matrix:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
-        runs-on: ${{ matrix.host.RUNNER }}
+        runs-on: ${{ matrix.host.RUNNER_CD || matrix.host.RUNNER }}
         steps:
-            - name: Setup self-hosted runner access
-              run: |
-                  GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
-                  if [ -d $GHA_HOME ]; then
-                    sudo chown -R $USER:$USER $GHA_HOME
-                    sudo rm -rf $GHA_HOME
-                    mkdir -p $GHA_HOME/valkey-glide
-                  else
-                    echo "No cleaning needed"
-                  fi
             - uses: actions/checkout@v4
               with:
                   ref: "go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}"
