@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 use tokio_retry2::strategy::{jitter_range, ExponentialBackoff};
+use tracing::debug;
 
 /// This struct represents the exponential backoff parameters for reconnection attempts.
 #[derive(Clone, Debug, Copy)]
@@ -16,18 +17,7 @@ pub struct RetryStrategy {
 pub(crate) const EXPONENT_BASE: u32 = 2;
 pub(crate) const FACTOR: u32 = 100;
 pub(crate) const NUMBER_OF_RETRIES: u32 = 5;
-pub(crate) const DEFAULT_JITTER_PERCENT: u32 = 20; // Default jitter +/- 20%
-
-impl Default for RetryStrategy {
-    fn default() -> Self {
-        Self {
-            factor: FACTOR,
-            exponent_base: EXPONENT_BASE,
-            number_of_retries: NUMBER_OF_RETRIES,
-            jitter_percent: DEFAULT_JITTER_PERCENT,
-        }
-    }
-}
+pub(crate) const DEFAULT_JITTER_PERCENT: u32 = 20; // Default jitter ±20%
 
 impl RetryStrategy {
     /// Create RetryStrategy from given parameters
@@ -37,16 +27,31 @@ impl RetryStrategy {
         number_of_retries: u32,
         jitter_percent: Option<u32>,
     ) -> Self {
-        RetryStrategy {
-            exponent_base: if exponent_base > 0 {
-                exponent_base
-            } else {
-                EXPONENT_BASE
-            },
-            factor: if factor > 0 { factor } else { FACTOR },
+        let exponent_base = if exponent_base > 0 {
+            exponent_base
+        } else {
+            EXPONENT_BASE
+        };
+        let factor = if factor > 0 { factor } else { FACTOR };
+        let jitter = jitter_percent.unwrap_or(DEFAULT_JITTER_PERCENT);
+        Self::with_params(exponent_base, factor, number_of_retries, jitter)
+    }
+
+    /// Internal constructor used by `new` and `default`, emits a debug log.
+    fn with_params(
+        exponent_base: u32,
+        factor: u32,
+        number_of_retries: u32,
+        jitter_percent: u32,
+    ) -> Self {
+        let strategy = RetryStrategy {
+            factor,
+            exponent_base,
             number_of_retries,
-            jitter_percent: jitter_percent.unwrap_or(DEFAULT_JITTER_PERCENT),
-        }
+            jitter_percent,
+        };
+        debug!("Starting RetryStrategy with values: {:?}", strategy);
+        strategy
     }
 
     /// Return a bounded iterator: stops after number_of_retries attempts
@@ -91,6 +96,17 @@ impl RetryStrategy {
         let jitter = self.jitter_percent;
         let jitter_fraction = jitter as f64 / 100.0;
         (1.0 - jitter_fraction, 1.0 + jitter_fraction)
+    }
+}
+
+impl Default for RetryStrategy {
+    fn default() -> Self {
+        Self::with_params(
+            EXPONENT_BASE,
+            FACTOR,
+            NUMBER_OF_RETRIES,
+            DEFAULT_JITTER_PERCENT,
+        )
     }
 }
 
