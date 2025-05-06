@@ -103,4 +103,4 @@ Currently, the package is tested on:
 | Operation systems | C lib                | Architecture      |
 | ----------------- | -------------------- | ----------------- |
 | `Linux`           | `glibc`, `musl libc` | `x86_64`, `arm64` |
-| `macOS`           | `Darwin`             | `arm64`           |
+| `macOS`           | `Darwin`            | `arm64`, `x86_64` |
