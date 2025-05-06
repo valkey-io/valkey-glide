@@ -89,7 +89,7 @@ func ExampleTransaction_ExecWithOptions() {
 	fmt.Println("Third result:", results[2])
 	fmt.Println("Fourth result (as string):", results[3])
 	fmt.Println("Fifth result (as string):", results[4])
-	fmt.Println(results)
+	fmt.Println("[", results[0], results[1], results[2], results[3], "\n", results[4], "]")
 
 	// Now, demonstrate RaiseOnError=true behavior
 	fmt.Println("\nWith RaiseOnError=true, the transaction would fail at the LPOP command with:")
@@ -103,7 +103,8 @@ func ExampleTransaction_ExecWithOptions() {
 	// Third result: WRONGTYPE: Operation against a key holding the wrong kind of value
 	// Fourth result (as string): 1
 	// Fifth result (as string): An error was signalled by the server: - ResponseError: no such key
-	// [OK OK WRONGTYPE: Operation against a key holding the wrong kind of value 1 An error was signalled by the server: - ResponseError: no such key]
+	// [ OK OK WRONGTYPE: Operation against a key holding the wrong kind of value 1
+	//  An error was signalled by the server: - ResponseError: no such key ]
 	//
 	// With RaiseOnError=true, the transaction would fail at the LPOP command with:
 	// RaiseOnError=true error: WRONGTYPE: Operation against a key holding the wrong kind of value
