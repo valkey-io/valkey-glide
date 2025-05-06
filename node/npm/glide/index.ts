@@ -56,6 +56,9 @@ function loadNativeBinding() {
                 case "arm64":
                     nativeBinding = require("@scope/valkey-glide-darwin-arm64");
                     break;
+                case "x64":
+                    nativeBinding = require("@scope/valkey-glide-darwin-x64");
+                    break;
                 default:
                     throw new Error(
                         `Unsupported OS: ${platform}, architecture: ${arch}`,

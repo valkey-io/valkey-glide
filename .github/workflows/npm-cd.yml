@@ -295,7 +295,7 @@ jobs:
               if: ${{ contains(matrix.build.TARGET, 'musl')}}
               run: |
                   apk update
-                  apk add git valkey valkey-cli python
+                  apk add git valkey valkey-cli python3
 
             - name: Checkout
               if: ${{ !contains(matrix.build.TARGET, 'aarch64-unknown-linux-musl')}}
