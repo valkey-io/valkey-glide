@@ -33,7 +33,7 @@ import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.ffi.resolvers.GlideValueResolver;
-import glide.telemetry.SpanManager;
+import glide.ffi.resolvers.OpenTelemetryResolver;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -263,7 +263,7 @@ public class CommandManager {
         // TODO: Only create spans if OpenTelemetry config exists
         // TODO: Add a condition to create a span statistic, such as only 1% of the requests
         String commandName = determineCommandName(command);
-        long spanPtr = SpanManager.createSpan(commandName);
+        long spanPtr = OpenTelemetryResolver.createOtelSpan(commandName);
 
         // Add the span pointer to the command
         command.setRootSpanPtr(spanPtr);

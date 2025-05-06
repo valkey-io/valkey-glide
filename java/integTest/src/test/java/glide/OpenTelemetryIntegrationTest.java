@@ -20,7 +20,6 @@ import java.util.List;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -130,7 +129,6 @@ public class OpenTelemetryIntegrationTest {
     @EnumSource(
             value = ProtocolVersion.class,
             names = {"RESP3"})
-    @Order(1)
     void testSpanExportToFile(ProtocolVersion protocol, @TempDir Path tempDir) throws Exception {
         // The commonClientConfig() method will handle connection details
         String tracesPath = "file://" + tempDir.toAbsolutePath() + "/";
