@@ -76,7 +76,7 @@ class BaseBatch:
             If ``True``, the batch will be executed as an atomic transaction.
             If ``False``, the batch will be executed as a non-atomic pipeline.
 
-        See [Valkey Transactions (Atomic Batches)](https://valkey.io/topics/transactions/) and [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/topics/pipelining/) for details.
+    See [Valkey Transactions (Atomic Batches)](https://valkey.io/topics/transactions/) and [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/topics/pipelining/) for details.
 
     """
 
@@ -5452,7 +5452,7 @@ class ClusterBatch(BaseBatch):
             the batch will be executed as an atomic transaction. If ``False``,
             the batch will be executed as a non-atomic pipeline.
 
-        See [Valkey Transactions (Atomic Batches)](https://valkey.io/topics/transactions/) and [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/topics/pipelining/) for details.
+    See [Valkey Transactions (Atomic Batches)](https://valkey.io/topics/transactions/) and [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/topics/pipelining/) for details.
 
     Examples:
         ### Atomic Batch - Transaction in a Cluster:
