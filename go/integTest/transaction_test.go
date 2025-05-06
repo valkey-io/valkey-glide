@@ -327,8 +327,6 @@ func (suite *GlideTestSuite) TestExecWithOptions_Cluster_Timeout() {
 		Timeout: 100,
 	}
 
-d)
-
 	_, err := tx.ExecWithOptions(options)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "timed out")
