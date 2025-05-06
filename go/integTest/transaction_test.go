@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -166,8 +167,11 @@ func (suite *GlideTestSuite) TestExecWithOptions_RaiseOnErrorFalse() {
 	)
 
 	assert.Equal(suite.T(), int64(1), results[2])
-	assert.Equal(suite.T(), &errors.RequestError{Msg: "An error was signalled by the server: - ResponseError: no such key"}, results[3])
-
+	assert.Equal(
+		suite.T(),
+		&errors.RequestError{Msg: "An error was signalled by the server: - ResponseError: no such key"},
+		results[3],
+	)
 }
 
 func (suite *GlideTestSuite) TestExecWithOptions_RaiseOnErrorTrue() {
@@ -211,6 +215,8 @@ func (suite *GlideTestSuite) TestExecWithOptions_Timeout() {
 	options = &api.TransactionOption{
 		Timeout: 1000,
 	}
+
+	time.Sleep(500 * time.Millisecond)
 
 	results, err := tx.ExecWithOptions(options)
 	assert.NoError(suite.T(), err)
@@ -332,6 +338,8 @@ func (suite *GlideTestSuite) TestExecWithOptions_Cluster_Timeout() {
 	options = &api.TransactionOption{
 		Timeout: 1000,
 	}
+
+	time.Sleep(500 * time.Millisecond)
 
 	results, err := tx.ExecWithOptions(options)
 	assert.NoError(suite.T(), err)
