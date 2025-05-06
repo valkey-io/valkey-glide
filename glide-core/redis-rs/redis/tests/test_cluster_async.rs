@@ -127,12 +127,12 @@ mod cluster_async {
     async fn test_async_open_telemetry_config() {
         let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
             .with_flush_interval(std::time::Duration::from_millis(400))
-            .with_trace_exporter(
+            .with_trace_exporter(Some(
                 GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
-            )
-            .with_metrics_exporter(
+            ))
+            .with_metrics_exporter(Some(
                 GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
-            )
+            ))
             .build();
         let result = GlideOpenTelemetry::initialise(glide_ot_config.clone());
         assert!(result.is_ok(), "Expected Ok(()), but got Err: {:?}", result);
