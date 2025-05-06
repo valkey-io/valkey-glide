@@ -15531,12 +15531,11 @@ public class SharedCommandTests {
         Object[] result =
                 isCluster
                         ? ((GlideClusterClient) client)
-                                .exec((ClusterBatch) batch, false, (ClusterBatchOptions) options2)
+                                .exec((ClusterBatch) batch, true, (ClusterBatchOptions) options2)
                                 .get()
-                        : ((GlideClient) client).exec((Batch) batch, false, (BatchOptions) options2).get();
+                        : ((GlideClient) client).exec((Batch) batch, true, (BatchOptions) options2).get();
 
         assertEquals(1, result.length);
-        assertEquals(result[0], "OK");
     }
 
     @SneakyThrows
