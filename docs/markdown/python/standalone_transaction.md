@@ -1,1 +1,1 @@
-::: glide.async_commands.transaction.Transaction
+::: glide.async_commands.batch.Transaction
