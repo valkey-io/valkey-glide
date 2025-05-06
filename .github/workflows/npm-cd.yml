@@ -349,7 +349,7 @@ jobs:
                   fi
                   echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
               env:
-                  INPUT_VERSION: ${{ github.event.inputs.version }}
+                  INPUT_VERSION: ${{ github.event.inputs.version || github.event.ref }}
 
             - name: Run the tests
               shell: bash
