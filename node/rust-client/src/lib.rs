@@ -1,8 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use glide_core::{
-    GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder, GlideOpenTelemetryTraceExporter,
-    GlideSpan, Telemetry, DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_REQUESTS_PRESCENTAGE,
+    GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter,
+    GlideSpan, Telemetry, DEFAULT_FLUSH_SIGNAL_INTERVAL_MS,
 };
 use redis::GlideConnectionOptions;
 
@@ -31,6 +31,7 @@ use std::ptr::from_mut;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
 pub enum Level {
@@ -81,7 +82,7 @@ pub struct OpenTelemetryMetricsConfig {
 pub struct OpenTelemetryConfig {
     pub traces: Option<OpenTelemetryTracesConfig>,
     pub metrics: Option<OpenTelemetryMetricsConfig>,
-    pub flush_interval_ms: Option<u32>,
+    pub flush_interval_ms: Option<i64>,
 }
 
 fn to_js_error(err: impl std::error::Error) -> Error {
@@ -163,33 +164,65 @@ pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
     Ok(promise)
 }
 
+fn ensure_tokio_runtime() -> &'static Runtime {
+    static TOKIO: OnceLock<Runtime> = OnceLock::new();
+    TOKIO.get_or_init(|| Runtime::new().expect("Failed to create Tokio runtime"))
+}
+
 #[napi(js_name = "InitOpenTelemetry")]
 pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result<()> {
-    let mut config = GlideOpenTelemetryConfigBuilder::get_instance().clone();
+    let mut config = GlideOpenTelemetryConfigBuilder::default();
     // initilaize open telemetry traces exporter
     if let Some(traces) = open_telemetry_config.traces {
         if let Some(endpoint_str) = traces.endpoint {
             config = config.with_trace_exporter(Some(
-                GlideOpenTelemetryTraceExporter::from_str(&endpoint_str)
+                GlideOpenTelemetrySignalsExporter::from_str(&endpoint_str)
                     .map_err(ConnectionError::IoError)
-                    .unwrap(),
+                    .map_err(|e| napi::Error::new(Status::Unknown, format!("{}", e)))?,
             ));
         }
         if let Some(requests_percentage) = traces.requests_percentage {
             config = config.with_trace_requests_precentage(requests_percentage);
         }
     }
-    config = config.with_flush_interval(std::time::Duration::from_millis(
-        open_telemetry_config
-            .flush_interval_ms
-            .unwrap_or(DEFAULT_FLUSH_SIGNAL_INTERVAL_MS) as u64,
-    ));
 
-    GlideOpenTelemetry::initialise(config.build()).map_err(|e| {
-        napi::Error::new(
+    if let Some(metrics) = open_telemetry_config.metrics {
+        if let Some(endpoint_str) = metrics.endpoint {
+            config = config.with_metrics_exporter(Some(
+                GlideOpenTelemetrySignalsExporter::from_str(&endpoint_str)
+                    .map_err(ConnectionError::IoError)
+                    .map_err(|e| napi::Error::new(Status::Unknown, format!("{}", e)))?,
+            ));
+        }
+    }
+
+    let flush_interval_ms = open_telemetry_config
+        .flush_interval_ms
+        .unwrap_or(DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as i64);
+
+    if flush_interval_ms <= 0 {
+        return Err(napi::Error::new(
             Status::Unknown,
-            format!("OpenTelemetry initialization failed: {}", e),
-        )
+            "InvalidInput: flushIntervalMs must be a positive integer".to_owned(),
+        ));
+    }
+
+    config = config.with_flush_interval(std::time::Duration::from_millis(flush_interval_ms as u64));
+
+    // Initialize OpenTelemetry synchronously
+    ensure_tokio_runtime().block_on(async {
+        if let Err(e) = GlideOpenTelemetry::initialise(config.build()) {
+            log(
+                Level::Error,
+                "OpenTelemetry".to_string(),
+                format!("Failed to initialize OpenTelemetry: {}", e),
+            );
+            return Err(napi::Error::new(
+                Status::Unknown,
+                format!("Failed to initialize OpenTelemetry: {}", e),
+            ));
+        }
+        Ok(())
     })?;
 
     Ok(())
