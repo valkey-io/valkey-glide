@@ -19,4 +19,7 @@ logger_core = {path = "../../logger_core"}
 
 [profile.release]
 lto = true
+
+[profile.dev]
+lto = true
 debug = true

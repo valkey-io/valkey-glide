@@ -7,6 +7,8 @@ using TimeoutException = Valkey.Glide.Errors.TimeoutException;
 
 namespace Valkey.Glide.IntegrationTests;
 
+[Collection(typeof(ErrorHandlingTests))]
+[CollectionDefinition(DisableParallelization = true)]
 public class ErrorHandlingTests
 {
     [Fact]
@@ -15,15 +17,22 @@ public class ErrorHandlingTests
             await GlideClient.CreateClient(new StandaloneClientConfigurationBuilder().WithAddress(null, 42).Build())
         );
 
-    [Fact(Skip = "Deactivated until #3395 merged")]
-    public async Task ErrorIfTimedOut() =>
-        await Assert.ThrowsAsync<TimeoutException>(async () =>
-            await TestConfiguration.DefaultClusterClient().CustomCommand(["debug", "sleep", "1"])
+    [Fact]
+    public async Task ErrorIfTimedOut()
+    {
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        _ = await Assert.ThrowsAsync<TimeoutException>(async () =>
+            _ = await client.CustomCommand(["debug", "sleep", "0.5"])
         );
+        client.Dispose();
+    }
 
     [Fact]
-    public async Task ErrorIfIncorrectArgs() =>
-        await Assert.ThrowsAsync<RequestException>(async () =>
-            await TestConfiguration.DefaultStandaloneClient().CustomCommand(["ping", "pong", "pang"])
+    public async Task ErrorIfIncorrectArgs()
+    {
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        _ = await Assert.ThrowsAsync<RequestException>(()
+            => client.CustomCommand(["ping", "pong", "pang"])
         );
+    }
 }
