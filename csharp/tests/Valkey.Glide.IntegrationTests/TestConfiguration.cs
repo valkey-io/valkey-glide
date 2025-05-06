@@ -1,7 +1,6 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 
 using Valkey.Glide.IntegrationTests;
 
@@ -13,8 +12,6 @@ namespace Valkey.Glide.IntegrationTests;
 
 public class TestConfiguration : IDisposable
 {
-    public static bool IsMacOs => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
-
     public static List<(string host, ushort port)> STANDALONE_HOSTS { get; internal set; } = [];
     public static List<(string host, ushort port)> CLUSTER_HOSTS { get; internal set; } = [];
     public static Version SERVER_VERSION { get; internal set; } = new();
@@ -25,11 +22,19 @@ public class TestConfiguration : IDisposable
 
     public static ClusterClientConfigurationBuilder DefaultClusterClientConfig() =>
         new ClusterClientConfigurationBuilder()
-            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
-            .WithRequestTimeout(10000);
+            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port);
 
-    public static GlideClient DefaultStandaloneClient() => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
-    public static GlideClusterClient DefaultClusterClient() => GlideClusterClient.CreateClient(DefaultClusterClientConfig().Build()).GetAwaiter().GetResult();
+    public static GlideClient DefaultStandaloneClientWithExtraTimeout()
+    => GlideClient.CreateClient(DefaultClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
+
+    public static GlideClusterClient DefaultClusterClientWithExtraTimeout()
+        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
+
+    public static GlideClient DefaultStandaloneClient()
+        => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
+
+    public static GlideClusterClient DefaultClusterClient()
+        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().Build()).GetAwaiter().GetResult();
 
     public static TheoryData<BaseClient> TestClients
     {
@@ -37,7 +42,7 @@ public class TestConfiguration : IDisposable
         {
             if (field.Count == 0)
             {
-                field = [(BaseClient)DefaultStandaloneClient(), (BaseClient)DefaultClusterClient()];
+                field = [(BaseClient)DefaultStandaloneClientWithExtraTimeout(), (BaseClient)DefaultClusterClientWithExtraTimeout()];
             }
             return field;
         }
