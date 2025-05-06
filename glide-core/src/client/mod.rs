@@ -325,8 +325,12 @@ impl Client {
     async fn initialize_lazy_connection(&mut self) -> RedisResult<()> {
         if let ClientWrapper::Lazy(lazy_client) = &mut self.internal_client {
             // Extract connection configuration and push sender
-            let config = lazy_client.config.clone();
+            let mut config = lazy_client.config.clone();
             let push_sender = lazy_client.push_sender.clone();
+
+            // When initializing the actual connection from a lazy client,
+            // the underlying connection attempt itself should not be lazy.
+            config.lazy_connect = false;
 
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
