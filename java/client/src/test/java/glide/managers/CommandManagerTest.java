@@ -411,7 +411,7 @@ public class CommandManagerTest {
 
         assertThrows(
                 RequestException.class,
-                () -> service.submitNewBatch(batch, Optional.of(options), r -> null),
+                () -> service.submitNewBatch(batch, true, Optional.of(options), r -> null),
                 "Retry strategy should not be used with atomic batches");
     }
 }
