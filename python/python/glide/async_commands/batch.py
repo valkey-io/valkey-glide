@@ -2415,13 +2415,13 @@ class BaseBatch:
             start (StreamRangeBound): The starting stream ID bound for the range.
 
                 - Use `IdBound` to specify a stream ID.
-                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
                 - Use `MinId` to start with the minimum available ID.
 
             end (StreamRangeBound): The ending stream ID bound for the range.
 
                 - Use `IdBound` to specify a stream ID.
-                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
                 - Use `MaxId` to end with the maximum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
@@ -2457,13 +2457,13 @@ class BaseBatch:
             end (StreamRangeBound): The ending stream ID bound for the range.
 
                 - Use `IdBound` to specify a stream ID.
-                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
                 - Use `MaxId` to end with the maximum available ID.
 
             start (StreamRangeBound): The starting stream ID bound for the range.
 
                 - Use `IdBound` to specify a stream ID.
-                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Since Redis 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
                 - Use `MinId` to start with the minimum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
