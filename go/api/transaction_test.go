@@ -100,10 +100,10 @@ func ExampleTransaction_ExecWithOptions() {
 	// Number of results: 5
 	// First result: OK
 	// Second result (as string): OK
-	// Third result: WRONGTYPE - Operation against a key holding the wrong kind of value
+	// Third result: WRONGTYPE: Operation against a key holding the wrong kind of value
 	// Fourth result (as string): 1
-	// Fifth result (as string): ERR - no such key
-	// [OK OK WRONGTYPE - Operation against a key holding the wrong kind of value 1 ERR - no such key]
+	// Fifth result (as string): An error was signalled by the server: - ResponseError: no such key
+	// [OK OK WRONGTYPE: Operation against a key holding the wrong kind of value 1 An error was signalled by the server: - ResponseError: no such key]
 	//
 	// With RaiseOnError=true, the transaction would fail at the LPOP command with:
 	// RaiseOnError=true error: WRONGTYPE: Operation against a key holding the wrong kind of value
