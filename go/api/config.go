@@ -5,6 +5,7 @@ package api
 import (
 	"errors"
 
+	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/protobuf"
 )
 
@@ -97,6 +98,15 @@ type baseClientConfiguration struct {
 	requestTimeout int
 	clientName     string
 	clientAZ       string
+}
+
+// Advanced configuration settings class for creating a client. Shared settings for standalone and
+// cluster clients.
+type AdvancedBaseClientConfiguration struct {
+	connectionTimeout int
+	// OpenTelemetryConfig provides configuration options for OpenTelemetry integration.
+	// If not set, OpenTelemetry integration will be disabled.
+	openTelemetryConfig *config.OpenTelemetryConfig
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -205,6 +215,16 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 
 	if config.AdvancedGlideClientConfiguration.connectionTimeout != 0 {
 		request.ConnectionTimeout = uint32(config.AdvancedGlideClientConfiguration.connectionTimeout)
+	}
+
+	if config.AdvancedGlideClientConfiguration.openTelemetryConfig != nil {
+		request.OpentelemetryConfig = &protobuf.OpenTelemetryConfig{
+			CollectorEndPoint: config.AdvancedGlideClientConfiguration.openTelemetryConfig.TracesCollectorEndPoint,
+		}
+		if config.AdvancedGlideClientConfiguration.openTelemetryConfig.FlushIntervalMs > 0 {
+			flushInterval := uint64(config.AdvancedGlideClientConfiguration.openTelemetryConfig.FlushIntervalMs)
+			request.OpentelemetryConfig.SpanFlushInterval = &flushInterval
+		}
 	}
 
 	return request, nil
@@ -327,6 +347,17 @@ func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.Connectio
 	if (config.AdvancedGlideClusterClientConfiguration.connectionTimeout) != 0 {
 		request.ConnectionTimeout = uint32(config.AdvancedGlideClusterClientConfiguration.connectionTimeout)
 	}
+
+	if config.AdvancedGlideClusterClientConfiguration.openTelemetryConfig != nil {
+		request.OpentelemetryConfig = &protobuf.OpenTelemetryConfig{
+			CollectorEndPoint: config.AdvancedGlideClusterClientConfiguration.openTelemetryConfig.TracesCollectorEndPoint,
+		}
+		if config.AdvancedGlideClusterClientConfiguration.openTelemetryConfig.FlushIntervalMs > 0 {
+			flushInterval := uint64(config.AdvancedGlideClusterClientConfiguration.openTelemetryConfig.FlushIntervalMs)
+			request.OpentelemetryConfig.SpanFlushInterval = &flushInterval
+		}
+	}
+
 	return request, nil
 }
 
@@ -406,12 +437,6 @@ func (config *GlideClusterClientConfiguration) WithSubscriptionConfig(
 ) *GlideClusterClientConfiguration {
 	config.subscriptionConfig = subscriptionConfig
 	return config
-}
-
-// Advanced configuration settings class for creating a client. Shared settings for standalone and
-// cluster clients.
-type AdvancedBaseClientConfiguration struct {
-	connectionTimeout int
 }
 
 // Represents advanced configuration settings for a Standalone [GlideClient] used in [GlideClientConfiguration].
