@@ -470,7 +470,7 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(batch);
+        CompletableFuture<Object[]> response = service.exec(batch, false);
         Object[] payload = response.get();
 
         // verify
@@ -495,7 +495,7 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(batch, options);
+        CompletableFuture<Object[]> response = service.exec(batch, false, options);
         Object[] payload = response.get();
 
         // verify
