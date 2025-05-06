@@ -1581,3 +1581,155 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 	}
 	return handleOkResponse(result)
 }
+
+// Returns information about the functions and libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	query - The query to use to filter the functions and libraries.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	A [ClusterValue] containing a list of info about queried libraries and their functions.
+//
+// [valkey.io]: https://valkey.io/commands/function-list/
+func (client *GlideClusterClient) FunctionListWithRoute(
+	query FunctionListQuery,
+	route options.RouteOption,
+) (ClusterValue[[]LibraryInfo], error) {
+	response, err := client.executeCommandWithRoute(C.FunctionList, query.ToArgs(), route.Route)
+	if err != nil {
+		return createEmptyClusterValue[[]LibraryInfo](), err
+	}
+
+	if route.Route != nil && route.Route.IsMultiNode() {
+		multiNodeLibs, err := handleFunctionListMultiNodeResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[[]LibraryInfo](), err
+		}
+		return createClusterMultiValue[[]LibraryInfo](multiNodeLibs), nil
+	}
+
+	libs, err := handleFunctionListResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[[]LibraryInfo](), err
+	}
+	return createClusterSingleValue[[]LibraryInfo](libs), nil
+}
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channel - The channel to publish the message to.
+//	message - The message to publish.
+//	sharded - Whether the channel is sharded.
+//
+// Return value:
+//
+//	The number of clients that received the message.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *GlideClusterClient) Publish(channel string, message string, sharded bool) (int64, error) {
+	args := []string{channel, message}
+
+	var requestType C.RequestType
+	if sharded {
+		requestType = C.SPublish
+	} else {
+		requestType = C.Publish
+	}
+	result, err := client.executeCommand(requestType, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// Returns a list of all sharded channels.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	A list of shard channels.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-channels
+func (client *GlideClusterClient) PubSubShardChannels() ([]string, error) {
+	result, err := client.executeCommand(C.PubSubShardChannels, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// Returns a list of all sharded channels that match the given pattern.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	pattern - A glob-style pattern to match active shard channels.
+//
+// Return value:
+//
+//	A list of shard channels that match the given pattern.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-channels-with-pattern
+func (client *GlideClusterClient) PubSubShardChannelsWithPattern(pattern string) ([]string, error) {
+	result, err := client.executeCommand(C.PubSubShardChannels, []string{pattern})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// Returns the number of subscribers for a sharded channel.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channels - The channel to get the number of subscribers for.
+//
+// Return value:
+//
+//	The number of subscribers for the sharded channel.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-numsub
+func (client *GlideClusterClient) PubSubShardNumSub(channels ...string) (map[string]int64, error) {
+	result, err := client.executeCommand(C.PubSubShardNumSub, channels)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringIntMapResponse(result)
+}

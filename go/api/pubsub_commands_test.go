@@ -55,7 +55,7 @@ func ExampleGlideClusterClient_Publish() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Publish a message
-	result, err := publisher.Publish("my_channel", "Hello, World!")
+	result, err := publisher.Publish("my_channel", "Hello, World!", false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -155,6 +155,48 @@ func ExampleGlideClusterClient_PubSubChannelsWithPattern() {
 	// Output: [news.sports news.weather]
 }
 
+func ExampleGlideClusterClient_PubSubShardChannels() {
+	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	defer closeAllClients()
+
+	// Create subscribers with subscriptions
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "channel1")
+
+	// Allow subscriptions to establish
+	time.Sleep(100 * time.Millisecond)
+
+	result, err := publisher.PubSubShardChannels()
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: [channel1]
+}
+
+func ExampleGlideClusterClient_PubSubShardChannelsWithPattern() {
+	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	defer closeAllClients()
+
+	// Create subscribers with subscriptions to different channels
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.sports")
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.weather")
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "events.local")
+	// Allow subscriptions to establish
+	time.Sleep(100 * time.Millisecond)
+
+	// Get channels matching the "news.*" pattern
+	result, err := publisher.PubSubShardChannelsWithPattern("news.*")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	sort.Strings(result)
+	fmt.Println(result)
+
+	// Output: [news.sports news.weather]
+}
+
 func ExampleGlideClient_PubSubNumPat() {
 	var publisher *GlideClient = getExampleGlideClient() // example helper function
 	defer closeAllClients()
@@ -193,4 +235,118 @@ func ExampleGlideClusterClient_PubSubNumPat() {
 	fmt.Println(result)
 
 	// Output: 2
+}
+
+func ExampleGlideClient_PubSubNumSub() {
+	var publisher *GlideClient = getExampleGlideClient() // example helper function
+	defer closeAllClients()
+
+	// Create subscribers with subscriptions to different channels
+	getExampleGlideClientWithSubscription(ExactChannelMode, "news.sports")
+	getExampleGlideClientWithSubscription(ExactChannelMode, "news.weather")
+	// Second subscriber to same channel
+	getExampleGlideClientWithSubscription(ExactChannelMode, "news.weather")
+	getExampleGlideClientWithSubscription(ExactChannelMode, "events.local")
+
+	// Allow subscriptions to establish
+	time.Sleep(100 * time.Millisecond)
+
+	// Get subscriber counts for specific channels
+	result, err := publisher.PubSubNumSub("news.sports", "news.weather", "events.local")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// Sort the channels for consistent output
+	channels := make([]string, 0, len(result))
+	for channel := range result {
+		channels = append(channels, channel)
+	}
+	sort.Strings(channels)
+
+	// Print results in sorted order
+	for _, channel := range channels {
+		fmt.Printf("%s: %d\n", channel, result[channel])
+	}
+
+	// Output:
+	// events.local: 1
+	// news.sports: 1
+	// news.weather: 2
+}
+
+func ExampleGlideClusterClient_PubSubNumSub() {
+	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	defer closeAllClients()
+
+	// Create subscribers with subscriptions to different channels
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.sports")
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.weather")
+	// Second subscriber to same channel
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.weather")
+	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "events.local")
+
+	// Allow subscriptions to establish
+	time.Sleep(100 * time.Millisecond)
+
+	// Get subscriber counts for specific channels
+	result, err := publisher.PubSubNumSub("news.sports", "news.weather", "events.local")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// Sort the channels for consistent output
+	channels := make([]string, 0, len(result))
+	for channel := range result {
+		channels = append(channels, channel)
+	}
+	sort.Strings(channels)
+
+	// Print results in sorted order
+	for _, channel := range channels {
+		fmt.Printf("%s: %d\n", channel, result[channel])
+	}
+
+	// Output:
+	// events.local: 1
+	// news.sports: 1
+	// news.weather: 2
+}
+
+func ExampleGlideClusterClient_PubSubShardNumSub() {
+	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+	defer closeAllClients()
+
+	// Create subscribers with subscriptions to different channels
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.sports")
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.weather")
+	// Second subscriber to same channel
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.weather")
+	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "events.local")
+
+	// Allow subscriptions to establish
+	time.Sleep(100 * time.Millisecond)
+
+	// Get subscriber counts for specific channels
+	result, err := publisher.PubSubShardNumSub("news.sports", "news.weather", "events.local")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	// Sort the channels for consistent output
+	channels := make([]string, 0, len(result))
+	for channel := range result {
+		channels = append(channels, channel)
+	}
+	sort.Strings(channels)
+
+	// Print results in sorted order
+	for _, channel := range channels {
+		fmt.Printf("%s: %d\n", channel, result[channel])
+	}
+
+	// Output:
+	// events.local: 1
+	// news.sports: 1
+	// news.weather: 2
 }

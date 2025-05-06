@@ -11,7 +11,6 @@ import {
     it,
 } from "@jest/globals";
 import { gte } from "semver";
-import { v4 as uuidv4 } from "uuid";
 import {
     BitwiseOperation,
     ClusterTransaction,
@@ -49,6 +48,7 @@ import {
     generateLuaLibCode,
     getClientConfigurationOption,
     getFirstResult,
+    getRandomKey,
     getServerVersion,
     intoArray,
     intoString,
@@ -277,7 +277,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = uuidv4();
+            const key = getRandomKey();
             const value = "value";
             const valueEncoded = Buffer.from(value);
             expect(await client.set(key, value)).toEqual("OK");
@@ -456,7 +456,7 @@ describe("GlideClusterClient", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const message = uuidv4();
+            const message = getRandomKey();
             const echoDict = await client.echo(message, { route: "allNodes" });
 
             expect(typeof echoDict).toBe("object");
@@ -584,7 +584,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = uuidv4();
+            const key = getRandomKey();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
             const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
@@ -625,7 +625,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = uuidv4();
+            const key = getRandomKey();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
             const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
@@ -670,7 +670,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = uuidv4();
+            const key = getRandomKey();
             const transaction = new ClusterTransaction();
             transaction.set(key, "foo");
             transaction.objectRefcount(key);
@@ -757,10 +757,10 @@ describe("GlideClusterClient", () => {
 
             if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
 
-            const source = `{key}-${uuidv4()}`;
-            const destination = `{key}-${uuidv4()}`;
-            const value1 = uuidv4();
-            const value2 = uuidv4();
+            const source = `{key}-${getRandomKey()}`;
+            const destination = `{key}-${getRandomKey()}`;
+            const value1 = getRandomKey();
+            const value2 = getRandomKey();
 
             // neither key exists
             expect(
@@ -823,20 +823,26 @@ describe("GlideClusterClient", () => {
             );
 
             expect(await client.dbsize()).toBeGreaterThanOrEqual(0);
-            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(getRandomKey(), getRandomKey())).toEqual(
+                "OK",
+            );
             expect(await client.dbsize()).toBeGreaterThan(0);
 
             expect(await client.flushall()).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
-            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(getRandomKey(), getRandomKey())).toEqual(
+                "OK",
+            );
             expect(await client.dbsize()).toEqual(1);
             expect(await client.flushdb({ mode: FlushMode.ASYNC })).toEqual(
                 "OK",
             );
             expect(await client.dbsize()).toEqual(0);
 
-            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(getRandomKey(), getRandomKey())).toEqual(
+                "OK",
+            );
             expect(await client.dbsize()).toEqual(1);
             expect(await client.flushdb({ mode: FlushMode.SYNC })).toEqual(
                 "OK",
@@ -853,11 +859,11 @@ describe("GlideClusterClient", () => {
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const key1 = "{sort}" + uuidv4();
-            const key2 = "{sort}" + uuidv4();
-            const key3 = "{sort}" + uuidv4();
-            const key4 = "{sort}" + uuidv4();
-            const key5 = "{sort}" + uuidv4();
+            const key1 = "{sort}" + getRandomKey();
+            const key2 = "{sort}" + getRandomKey();
+            const key3 = "{sort}" + getRandomKey();
+            const key4 = "{sort}" + getRandomKey();
+            const key5 = "{sort}" + getRandomKey();
 
             expect(await client.sort(key3)).toEqual([]);
             expect(await client.lpush(key1, ["2", "1", "4", "3"])).toEqual(4);
@@ -976,9 +982,11 @@ describe("GlideClusterClient", () => {
 
                             try {
                                 const libName =
-                                    "mylib1C" + uuidv4().replaceAll("-", "");
+                                    "mylib1C" +
+                                    getRandomKey().replaceAll("-", "");
                                 const funcName =
-                                    "myfunc1c" + uuidv4().replaceAll("-", "");
+                                    "myfunc1c" +
+                                    getRandomKey().replaceAll("-", "");
                                 const code = generateLuaLibCode(
                                     libName,
                                     new Map([[funcName, "return args[1]"]]),
@@ -1094,7 +1102,8 @@ describe("GlideClusterClient", () => {
 
                                 // overwrite lib with new code
                                 const func2Name =
-                                    "myfunc2c" + uuidv4().replaceAll("-", "");
+                                    "myfunc2c" +
+                                    getRandomKey().replaceAll("-", "");
                                 const newCode = generateLuaLibCode(
                                     libName,
                                     new Map([
@@ -1199,9 +1208,11 @@ describe("GlideClusterClient", () => {
 
                             try {
                                 const libName =
-                                    "mylib1C" + uuidv4().replaceAll("-", "");
+                                    "mylib1C" +
+                                    getRandomKey().replaceAll("-", "");
                                 const funcName =
-                                    "myfunc1c" + uuidv4().replaceAll("-", "");
+                                    "myfunc1c" +
+                                    getRandomKey().replaceAll("-", "");
                                 const code = generateLuaLibCode(
                                     libName,
                                     new Map([[funcName, "return args[1]"]]),
@@ -1280,9 +1291,11 @@ describe("GlideClusterClient", () => {
 
                             try {
                                 const libName =
-                                    "mylib1C" + uuidv4().replaceAll("-", "");
+                                    "mylib1C" +
+                                    getRandomKey().replaceAll("-", "");
                                 const funcName =
-                                    "myfunc1c" + uuidv4().replaceAll("-", "");
+                                    "myfunc1c" +
+                                    getRandomKey().replaceAll("-", "");
                                 const code = generateLuaLibCode(
                                     libName,
                                     new Map([[funcName, "return args[1]"]]),
@@ -1625,7 +1638,7 @@ describe("GlideClusterClient", () => {
                                 : "allPrimaries";
 
                             try {
-                                const arg = uuidv4();
+                                const arg = getRandomKey();
                                 const script = new Script(
                                     Buffer.from("return {ARGV[1]}"),
                                 );
@@ -1778,7 +1791,7 @@ describe("GlideClusterClient", () => {
                 );
                 const client = await GlideClusterClient.createClient(config);
                 const route: SlotKeyTypes = {
-                    key: uuidv4(),
+                    key: getRandomKey(),
                     type: "primarySlotKey",
                 };
                 expect(await client.functionFlush()).toEqual("OK");
@@ -1834,7 +1847,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = uuidv4();
+            const key = getRandomKey();
 
             // setup: delete all keys
             expect(await client.flushall({ mode: FlushMode.SYNC })).toEqual(
@@ -1865,10 +1878,10 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key1 = "{key}-1" + uuidv4();
-            const key2 = "{key}-2" + uuidv4();
-            const key3 = "{key}-3" + uuidv4();
-            const key4 = "{key}-4" + uuidv4();
+            const key1 = "{key}-1" + getRandomKey();
+            const key2 = "{key}-2" + getRandomKey();
+            const key3 = "{key}-3" + getRandomKey();
+            const key4 = "{key}-4" + getRandomKey();
             const setFoobarTransaction = new ClusterTransaction();
             const setHelloTransaction = new ClusterTransaction();
 
@@ -1938,8 +1951,8 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key1 = "{key}-1" + uuidv4();
-            const key2 = "{key}-2" + uuidv4();
+            const key1 = "{key}-1" + getRandomKey();
+            const key2 = "{key}-2" + getRandomKey();
             const setFoobarTransaction = new ClusterTransaction();
 
             // UNWATCH returns OK when there no watched keys
@@ -1987,7 +2000,7 @@ describe("GlideClusterClient", () => {
             try {
                 // call the script without await
                 promise = client2.invokeScript(longScript, {
-                    keys: ["{key}-" + uuidv4()],
+                    keys: ["{key}-" + getRandomKey()],
                 });
 
                 let foundUnkillable = false;
@@ -2014,7 +2027,7 @@ describe("GlideClusterClient", () => {
                                 .includes("no scripts in execution right now")
                         ) {
                             promise = client2.invokeScript(longScript, {
-                                keys: ["{key}-" + uuidv4()],
+                                keys: ["{key}-" + getRandomKey()],
                             });
                             await new Promise((resolve) =>
                                 setTimeout(resolve, 1000),
@@ -2050,7 +2063,7 @@ describe("GlideClusterClient", () => {
                                 .includes("no scripts in execution right now")
                         ) {
                             promise = client2.invokeScript(longScript, {
-                                keys: ["{key}-" + uuidv4()],
+                                keys: ["{key}-" + getRandomKey()],
                             });
                             await new Promise((resolve) =>
                                 setTimeout(resolve, 2000),
@@ -2154,7 +2167,7 @@ describe("GlideClusterClient", () => {
             const client = await GlideClusterClient.createClient(config);
 
             try {
-                const key1 = `{nonexistinglist}:1-${uuidv4()}`;
+                const key1 = `{nonexistinglist}:1-${getRandomKey()}`;
                 const tasks: Promise<[GlideString, GlideString] | null>[] = [];
 
                 // Start inflightRequestsLimit blocking tasks

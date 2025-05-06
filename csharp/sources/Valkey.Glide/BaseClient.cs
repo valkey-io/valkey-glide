@@ -66,6 +66,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     {
         _successCallbackDelegate = SuccessCallback;
         _failureCallbackDelegate = FailureCallback;
+        _messageContainer = new(this);
     }
 
     protected internal delegate T ResponseHandler<T>(IntPtr response);
@@ -204,7 +205,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     /// Raw pointer to the underlying native client.
     private IntPtr _clientPointer;
-    private readonly MessageContainer _messageContainer = new();
+    private readonly MessageContainer _messageContainer;
     private readonly object _lock = new();
 
     #endregion private fields
