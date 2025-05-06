@@ -466,7 +466,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.empty()), any()))
+        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(false), eq(Optional.empty()), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -491,7 +491,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.of(options)), any()))
+        when(commandManager.<Object[]>submitNewBatch(
+                        eq(batch), eq(false), eq(Optional.of(options)), any()))
                 .thenReturn(testResponse);
 
         // exercise
