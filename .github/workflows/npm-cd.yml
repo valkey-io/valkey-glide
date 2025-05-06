@@ -55,7 +55,7 @@ jobs:
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     publish-binaries:
-        needs: [load-platform-matrix]
+        needs: load-platform-matrix
         if: github.repository_owner == 'valkey-io'
         name: Publish packages to NPM
         runs-on: ${{ matrix.build.RUNNER_CD || matrix.build.RUNNER }}
@@ -75,9 +75,20 @@ jobs:
                   apk add git
 
             - name: Checkout
+              if: ${{ !contains(matrix.build.TARGET, 'aarch64-unknown-linux-musl')}}
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
+
+            - name: Manual Checkout
+              if: contains(matrix.build.TARGET, 'aarch64-unknown-linux-musl')
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  git init .
+                  git remote add origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+                  git fetch --depth=1 origin ${{ github.sha }}
+                  git checkout -f ${{ github.sha }}
 
             - name: Setup for musl
               if: ${{ contains(matrix.build.TARGET, 'musl')}}
@@ -186,18 +197,6 @@ jobs:
                   fi
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
-            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
-            - name: Reset repository
-              if: ${{ matrix.build.ARCH == 'arm64' }}
-              shell: bash
-              run: |
-                  echo "Resetting repository"
-                  git clean -xdf
-                  git reset --hard
-                  git fetch
-                  git checkout ${{ github.sha }}
 
     publish-base-to-npm:
         if: github.event_name != 'pull_request'

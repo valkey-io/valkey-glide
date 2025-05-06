@@ -38,7 +38,7 @@ runs:
 
         - name: Skip all steps if not on ARM64
           shell: bash
-          if: ${{ inputs.arch != 'arm64' && inputs.action == 'release' }}
+          if: ${{ inputs.arch != 'arm64' || inputs.action == 'release' }}
           run: exit 0
 
         # Currently "Checkout" action is not supported for musl on ARM64, so the checkout is happening on the runner and
