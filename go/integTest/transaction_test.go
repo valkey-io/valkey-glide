@@ -13,7 +13,6 @@ import (
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/errors"
-	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
 func anyToString(value interface{}) string {
@@ -229,31 +228,16 @@ func (suite *GlideTestSuite) TestExecWithOptions_Timeout() {
 func (suite *GlideTestSuite) TestExecWithOptions_Cluster_RaiseOnErrorFalse() {
 	client := suite.defaultClusterClient()
 	key := uuid.New().String()
+	key2 := "{" + key + "}" + uuid.New().String()
 
 	suite.verifyOK(client.Set(key, "hello"))
 
 	tx := api.NewClusterTransaction(client)
 	cmd := tx.GlideClusterClient
-
-	var simpleRoute config.Route = config.RandomRoute
-
-	cmd.PingWithOptions(options.ClusterPingOptions{
-		PingOptions: &options.PingOptions{Message: "test"},
-		RouteOption: &options.RouteOption{Route: simpleRoute},
-	})
-
+	cmd.Set(key, "hello")
 	cmd.LPop(key)
-
-	opts := options.ClusterInfoOptions{
-		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Cluster}},
-		RouteOption: &options.RouteOption{
-			Route: simpleRoute,
-		},
-	}
-
-	cmd.InfoWithOptions(opts)
-
-	cmd.ClientGetName()
+	cmd.Del([]string{key})
+	cmd.Rename(key, key2)
 
 	// Test with RaiseOnError=false
 	options := &api.TransactionOption{
@@ -264,54 +248,43 @@ func (suite *GlideTestSuite) TestExecWithOptions_Cluster_RaiseOnErrorFalse() {
 
 	assert.Equal(suite.T(), 4, len(results))
 
-	assert.Equal(suite.T(), "test", results[0])
+	assert.Equal(suite.T(), "OK", results[0])
 	assert.Equal(
 		suite.T(),
 		&errors.RequestError{Msg: "WRONGTYPE: Operation against a key holding the wrong kind of value"},
 		results[1],
 	)
 
-	infoResult, ok := results[2].(string)
-	assert.True(suite.T(), ok, "Expected string for INFO command result with RandomRoute")
-	assert.Contains(suite.T(), infoResult, "cluster")
-
-	assert.Contains(suite.T(), results, results[3])
+	assert.Equal(suite.T(), int64(1), results[2])
+	assert.Equal(
+		suite.T(),
+		&errors.RequestError{Msg: "An error was signalled by the server: - ResponseError: no such key"},
+		results[3],
+	)
 }
 
 func (suite *GlideTestSuite) TestExecWithOptions_Cluster_RaiseOnErrorTrue() {
 	client := suite.defaultClusterClient()
 	key := uuid.New().String()
+	key2 := "{" + key + "}" + uuid.New().String()
 
 	suite.verifyOK(client.Set(key, "hello"))
 
 	tx := api.NewClusterTransaction(client)
 	cmd := tx.GlideClusterClient
-
-	var simpleRoute config.Route = config.RandomRoute
-
-	cmd.PingWithOptions(options.ClusterPingOptions{
-		PingOptions: &options.PingOptions{Message: "test"},
-		RouteOption: &options.RouteOption{Route: simpleRoute},
-	})
-
+	cmd.Set(key, "hello")
 	cmd.LPop(key)
-
-	opts := options.ClusterInfoOptions{
-		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Cluster}},
-		RouteOption: &options.RouteOption{
-			Route: simpleRoute,
-		},
-	}
-	cmd.InfoWithOptions(opts)
-	cmd.ClientGetName()
+	cmd.Del([]string{key})
+	cmd.Rename(key, key2)
 
 	options := &api.TransactionOption{
 		RaiseOnError: true,
 	}
-
 	_, err := tx.ExecWithOptions(options)
+
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "WRONGTYPE")
+
 }
 
 func (suite *GlideTestSuite) TestExecWithOptions_Cluster_Timeout() {
