@@ -328,7 +328,7 @@ public class CommandManager {
             BatchOptions opts = options.get();
             var batchBuilder = prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
 
-            builder.setBatch(batchBuilder.build());
+            builder.setBatch(batchBuilder.setRaiseOnError(raiseOnError).build());
         } else {
             builder.setBatch(batch.getProtobufBatch().setRaiseOnError(raiseOnError).build());
         }
@@ -423,7 +423,7 @@ public class CommandManager {
                 batchBuilder.setRetryConnectionError(opts.getRetryStrategy().isRetryConnectionError());
             }
 
-            builder.setBatch(batchBuilder.build());
+            builder.setBatch(batchBuilder.setRaiseOnError(raiseOnError).build());
 
             if (opts.getRoute() != null) {
                 return prepareCommandRequestRoute(builder, opts.getRoute());
