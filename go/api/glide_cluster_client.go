@@ -24,6 +24,7 @@ type GlideClusterClientCommands interface {
 	ServerManagementClusterCommands
 	ConnectionManagementClusterCommands
 	ScriptingAndFunctionClusterCommands
+	PubSubClusterCommands
 }
 
 // Client used for connection to cluster servers.
