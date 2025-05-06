@@ -7,6 +7,7 @@ use glide_core::command_request::SimpleRoutes;
 use glide_core::command_request::{Routes, SlotTypes};
 use glide_core::connection_request;
 use glide_core::errors;
+use glide_core::errors::error_message;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
 use glide_core::ConnectionRequest;
@@ -894,7 +895,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
         }
 
         Value::ServerError(server_error) => {
-            let error_message: String = error_message();
+            let error_message: String = error_message(&server_error.into());
             // Convert the formatted string to bytes
             let bytes = error_message.into_bytes();
             // Process the bytes as before
