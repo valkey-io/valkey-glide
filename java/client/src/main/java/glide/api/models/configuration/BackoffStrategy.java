@@ -20,6 +20,7 @@ import lombok.ToString;
  *     .numOfRetries(5)
  *     .exponentBase(2)
  *     .factor(3)
+ *     .jitterPercent(20)
  *     .build()
  * }</pre>
  */
@@ -39,4 +40,7 @@ public class BackoffStrategy {
 
     /** The exponent base configured for the strategy. */
     @NonNull private final Integer exponentBase;
+
+    /** The Jitter percent on the calculated duration. If not set, a default value will be used. */
+    private final Integer jitterPercent;
 }
