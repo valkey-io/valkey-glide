@@ -256,6 +256,7 @@ import {
     Routes,
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
+import { OpenTelemetry } from "./OpenTelemetry";
 import {
     command_request,
     connection_request,
@@ -688,33 +689,10 @@ export interface BaseClientConfiguration {
  *
  * - **Connection Timeout**: The `connectionTimeout` property specifies the duration (in milliseconds) the client should wait for a connection to be established.
  *
- * ### OpenTelemetry
- *
- * - **openTelemetryConfig**: Use the `openTelemetryConfig` property to specify the endpoint of the collector to export the measurments.
- *   - **Traces Collector Endpoint**: Set `tracesCollectorEndpoint` to specify the endpoint path of the collector to export the traces measurments.
- *   - **Metrics Collector Endpoint**: Set `metricsCollectorEndpoint` to specify the endpoint path of the collector to export the metrics data.
- *   - **Flush Interval Ms**: Set `flushIntervalMs` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 5000ms will be used.
- *
- * The collector endpoints support multiple protocols:
- * - HTTP: Use `http://` prefix (e.g., `http://localhost:4318`)
- * - HTTPS: Use `https://` prefix (e.g., `https://collector.example.com:4318`)
- * - gRPC: Use `grpc://` prefix (e.g., `grpc://localhost:4317`)
- * - File: Use file:// followed by a full path to export the signals to a local file.
- *   - The file:// endpoint supports both directory paths and explicit file paths:
- *     - If the path is a directory or lacks a file extension (e.g., file:///tmp/otel), it will default to writing to a file named signals.json in that directory (e.g., /tmp/otel/signals.json).
- *     - If the path includes a filename with an extension (e.g., file:///tmp/otel/traces.json), the specified file will be used as-is.
- *     - The parent directory must already exist. If it does not, the client will fail to initialize with an InvalidInput error.
- *     - If the target file already exists, new data will be appended to it (the file will not be overwritten).
- *
  * @example
  * ```typescript
  * const config: AdvancedBaseClientConfiguration = {
  *   connectionTimeout: 5000, // 5 seconds
- *   openTelemetryConfig: {
- *      tracesCollectorEndpoint: 'https://127.0.0.1/v1/traces.json',
- *      metricsCollectorEndpoint: 'https://127.0.0.1/v1/metrics.json',
- *      flushIntervalMs: 5000, // 5 seconds
- *   },
  * };
  * ```
  */
@@ -726,24 +704,6 @@ export interface AdvancedBaseClientConfiguration {
      * If not explicitly set, a default value of 250 milliseconds will be used.
      */
     connectionTimeout?: number;
-    /**
-     * Configartion for OpenTelemetry if exits.
-     */
-    openTelemetryConfig?: {
-        /**
-         * The client collector address to export the traces measurments.
-         */
-        tracesCollectorEndpoint: string;
-        /**
-         * The client collector address to export the metrics.
-         */
-        metricsCollectorEndpoint: string;
-        /**
-         * The duration in milliseconds the data will exported to the collector.
-         * If interval is not specified, 5000 will be used.
-         */
-        flushIntervalMs?: number;
-    };
 }
 
 /**
@@ -1127,15 +1087,21 @@ export class BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
 
-            //TODO: creates the span only if the otel config exits - https://github.com/valkey-io/valkey-glide/issues/3309
-            //TODO: Add a condition to create a span statistic,
-            // such as only 1% of the requests. This will be configurable - https://github.com/valkey-io/valkey-glide/issues/3452
-            const commandObj =
-                command instanceof command_request.Command
-                    ? command_request.RequestType[command.requestType]
-                    : "Batch";
-            const pair = createLeakedOtelSpan(commandObj);
-            const spanPtr = new Long(pair[0], pair[1]);
+            // create a span only if the otel config exits and measure statistics only according to the requests percentage configuration
+            let spanPtr: Long | null = null;
+            const percentage = OpenTelemetry.getRequestsPercentage();
+            if (
+                OpenTelemetry.isInitialized() &&
+                percentage !== undefined &&
+                percentage >= Math.random() * 100
+            ) {
+                const commandObj =
+                    command instanceof command_request.Command
+                        ? command_request.RequestType[command.requestType]
+                        : "Batch";
+                const pair = createLeakedOtelSpan(commandObj);
+                spanPtr = new Long(pair[0], pair[1]);
+            }
 
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
@@ -7772,26 +7738,6 @@ export class BaseClient {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
-
-        if (options.openTelemetryConfig) {
-            // Validate flushIntervalMs is not negative
-            if (
-                options.openTelemetryConfig.flushIntervalMs !== undefined &&
-                options.openTelemetryConfig.flushIntervalMs < 0
-            ) {
-                throw new ConfigurationError(
-                    "InvalidInput: flushIntervalMs cannot be negative",
-                );
-            }
-
-            request.opentelemetryConfig = {
-                tracesCollectorEndpoint:
-                    options.openTelemetryConfig.tracesCollectorEndpoint,
-                metricsCollectorEndpoint:
-                    options.openTelemetryConfig.metricsCollectorEndpoint,
-                flushIntervalMs: options.openTelemetryConfig.flushIntervalMs,
-            };
-        }
     }
 
     /**
