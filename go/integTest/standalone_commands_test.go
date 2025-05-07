@@ -1160,14 +1160,14 @@ func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
 	time.Sleep(6 * time.Second)
 }
 
-func (suite *GlideTestSuite) TestFunctionKillNoWrite() {
+func (suite *GlideTestSuite) TestLongTimeoutFunctionKillNoWrite() {
 	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
 	suite.testFunctionKill(true)
 }
 
-func (suite *GlideTestSuite) TestFunctionKillWrite() {
+func (suite *GlideTestSuite) TestLongTimeoutFunctionKillWrite() {
 	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}

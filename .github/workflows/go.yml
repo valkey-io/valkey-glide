@@ -300,3 +300,127 @@ jobs:
                   name: test-reports-modules
                   path: |
                       go/reports/**
+
+    test-pubsub:
+        runs-on: ${{ matrix.host.RUNNER }}
+        needs: [get-containers]
+        timeout-minutes: 25
+        strategy:
+            fail-fast: false
+            matrix:
+                go: ${{ fromJson(needs.get-containers.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-containers.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
+        container:
+            image: ${{ matrix.host.IMAGE }}
+            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
+        steps:
+            - name: Install git
+              run: |
+                  yum update
+                  yum install -y git tar
+                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+            # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Set up Go ${{ matrix.go }}
+              uses: actions/setup-go@v5
+              with:
+                  go-version: ${{ matrix.go }}
+                  cache-dependency-path: go/go.sum
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.IMAGE }}-go
+                  restore-keys: ${{ matrix.host.IMAGE }}
+
+            - name: Install & build & test
+              working-directory: go
+              run: |
+                  make install-tools build
+                  make -k unit-test integ-test
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-pubsub
+                  path: |
+                      go/reports/**
+
+    test-long-timeout:
+        runs-on: ${{ matrix.host.RUNNER }}
+        needs: [get-containers]
+        timeout-minutes: 25
+        strategy:
+            fail-fast: false
+            matrix:
+                go: ${{ fromJson(needs.get-containers.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-containers.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
+        container:
+            image: ${{ matrix.host.IMAGE }}
+            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
+        steps:
+            - name: Install git
+              run: |
+                  yum update
+                  yum install -y git tar
+                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+            # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Set up Go ${{ matrix.go }}
+              uses: actions/setup-go@v5
+              with:
+                  go-version: ${{ matrix.go }}
+                  cache-dependency-path: go/go.sum
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.IMAGE }}-go
+                  restore-keys: ${{ matrix.host.IMAGE }}
+
+            - name: Install & build & test
+              working-directory: go
+              run: |
+                  make install-tools build
+                  make -k long-timeout-test test-filter=TestLongTimeout
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-long-timeout
+                  path: |
+                      go/reports/**
