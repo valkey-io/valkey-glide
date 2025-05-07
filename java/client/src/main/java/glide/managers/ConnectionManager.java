@@ -158,14 +158,6 @@ public class ConnectionManager {
         ConnectionRequest.Builder connectionRequestBuilder =
                 setupConnectionRequestBuilderBaseConfiguration(configuration);
         connectionRequestBuilder.setClusterModeEnabled(false);
-        if (configuration.getReconnectStrategy() != null) {
-            connectionRequestBuilder.setConnectionRetryStrategy(
-                    ConnectionRequestOuterClass.ConnectionRetryStrategy.newBuilder()
-                            .setNumberOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
-                            .setFactor(configuration.getReconnectStrategy().getFactor())
-                            .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
-                            .build());
-        }
 
         if (configuration.getDatabaseId() != null) {
             connectionRequestBuilder.setDatabaseId(configuration.getDatabaseId());
@@ -247,6 +239,19 @@ public class ConnectionManager {
             connectionRequestBuilder =
                     setupConnectionRequestBuilderAdvancedBaseConfiguration(
                             connectionRequestBuilder, configuration.getAdvancedConfiguration());
+        }
+
+        if (configuration.getReconnectStrategy() != null) {
+            var reconnectionStrategyBuilder =
+                    ConnectionRequestOuterClass.BackoffStrategy.newBuilder()
+                            .setNumOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
+                            .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
+                            .setFactor(configuration.getReconnectStrategy().getFactor());
+            if (configuration.getReconnectStrategy().getJitterPercent() != null) {
+                reconnectionStrategyBuilder.setJitterPercent(
+                        configuration.getReconnectStrategy().getJitterPercent());
+            }
+            connectionRequestBuilder.setBackoffStrategy(reconnectionStrategyBuilder.build());
         }
 
         return connectionRequestBuilder;
