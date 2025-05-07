@@ -47,7 +47,7 @@ export class OpenTelemetry {
      * OpenTelemetry.init({
      *   traces: {
      *     endpoint: "http://localhost:4318/v1/traces",
-     *     samplePercentage: 10, // Optional, defaults to 1
+     *     requestsPercentage: 10, // Optional, defaults to 1. Can also be changed at runtime via setRequestsPercentage().
      *   },
      *   metrics: {
      *     endpoint: "http://localhost:4318/v1/metrics",
@@ -82,5 +82,40 @@ export class OpenTelemetry {
         this.openTelemetryConfig = openTelemetryConfig;
         InitOpenTelemetry(openTelemetryConfig);
         this._instance = new OpenTelemetry();
+    }
+
+    /**
+     * Check if the OpenTelemetry instance is initialized
+     * @returns True if the OpenTelemetry instance is initialized, false otherwise
+     */
+    public static isInitialized() {
+        return this._instance != null;
+    }
+
+    /**
+     * Get the requests percentage
+     * @returns The requests percentage
+     */
+    public static getRequestsPercentage() {
+        const percentage = this.openTelemetryConfig?.traces?.requestsPercentage;
+        return percentage;
+    }
+
+    /**
+     * Set the percentage of requests to be sampled and traced. Must be a value between 0 and 100
+     * @param percentage - The requests percentage 0-100
+     * @remarks
+     * This method can be called at runtime to change the sampling percentage without reinitializing OpenTelemetry.
+     */
+    public static setRequestsPercentage(percentage: number) {
+        if (this.openTelemetryConfig && this.openTelemetryConfig.traces) {
+            this.openTelemetryConfig.traces.requestsPercentage = percentage;
+        } else {
+            Logger.log(
+                "error",
+                "GlideOpenTelemetry",
+                "OpenTelemetry config traces not initialized",
+            );
+        }
     }
 }

@@ -256,6 +256,7 @@ import {
     Routes,
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
+import { OpenTelemetry } from "./OpenTelemetry";
 import {
     command_request,
     connection_request,
@@ -1086,15 +1087,21 @@ export class BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
 
-            //TODO: creates the span only if the otel config exits - https://github.com/valkey-io/valkey-glide/issues/3309
-            //TODO: Add a condition to create a span statistic,
-            // such as only 1% of the requests. This will be configurable - https://github.com/valkey-io/valkey-glide/issues/3452
-            const commandObj =
-                command instanceof command_request.Command
-                    ? command_request.RequestType[command.requestType]
-                    : "Batch";
-            const pair = createLeakedOtelSpan(commandObj);
-            const spanPtr = new Long(pair[0], pair[1]);
+            // create a span only if the otel config exits and measure statistics only according to the requests percentage configuration
+            let spanPtr: Long | null = null;
+            const percentage = OpenTelemetry.getRequestsPercentage();
+            if (
+                OpenTelemetry.isInitialized() &&
+                percentage !== undefined &&
+                percentage >= Math.random() * 100
+            ) {
+                const commandObj =
+                    command instanceof command_request.Command
+                        ? command_request.RequestType[command.requestType]
+                        : "Batch";
+                const pair = createLeakedOtelSpan(commandObj);
+                spanPtr = new Long(pair[0], pair[1]);
+            }
 
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
