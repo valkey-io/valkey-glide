@@ -277,7 +277,7 @@ mod cluster_client_tests {
                             connection_request.pubsub_subscriptions =
                                 protobuf::MessageField::from_option(Some(subs.clone()));
 
-                            let _client = Client::new(connection_request.clone().into(), None)
+                            let _client = GlideClient::new(connection_request.clone().into(), None)
                                 .await
                                 .unwrap();
 
@@ -287,8 +287,9 @@ mod cluster_client_tests {
                             connection_request.pubsub_subscriptions =
                                 protobuf::MessageField::from_option(Some(subs));
 
-                            let client = Client::new(connection_request.into(), None).await;
-                            assert!(client.is_err());
+                            let client_result =
+                                GlideClient::new(connection_request.into(), None).await;
+                            assert!(client_result.is_err());
                         }
                     }
                     _ => {
@@ -299,6 +300,47 @@ mod cluster_client_tests {
                     panic!("Could not determine engine version from INFO result");
                 }
             }
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_async_open_telemetry_config() {
+        block_on_all(async {
+            let test_basics = setup_cluster_with_replicas(
+                TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    shared_server: false,
+                    ..Default::default()
+                },
+                0,
+                3,
+            )
+            .await;
+
+            let cluster = test_basics.cluster.unwrap();
+            let mut addresses = cluster.get_server_addresses();
+            addresses.truncate(1);
+
+            let mut connection_request = connection_request::ConnectionRequest::new();
+            connection_request.addresses = addresses.iter().map(get_address_info).collect();
+
+            let mut op = OpenTelemetryConfig::new();
+            op.collector_end_point = "http://valid-url.com".into();
+            op.span_flush_interval = Some(300);
+
+            connection_request.opentelemetry_config = protobuf::MessageField::from_option(Some(op));
+
+            let result = std::panic::catch_unwind(|| {
+                tokio::task::block_in_place(|| {
+                    futures::executor::block_on(async {
+                        let _client = Client::new(connection_request.clone().into(), None)
+                            .await
+                            .unwrap();
+                    });
+                });
+            });
+            assert!(result.is_err(), "Expected a panic but no panic occurred");
         });
     }
 }
