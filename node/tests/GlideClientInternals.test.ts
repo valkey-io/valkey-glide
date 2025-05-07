@@ -21,6 +21,7 @@ import { Reader } from "protobufjs";
 import {
     BaseClientConfiguration,
     ClosingError,
+    ClusterBatch,
     ClusterTransaction,
     convertGlideRecordToRecord,
     Decoder,
@@ -388,7 +389,7 @@ describe("SocketConnectionInternals", () => {
         });
     });
 
-    it("should pass transaction with SlotKeyType", async () => {
+    it("should pass transaction (deprecated) with SlotKeyType", async () => {
         await testWithClusterResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
@@ -400,6 +401,8 @@ describe("SocketConnectionInternals", () => {
                 expect(
                     request.batch?.commands?.at(0)?.argsArray?.args?.length,
                 ).toEqual(2);
+                expect(request.batch?.isAtomic).toBe(true);
+                expect(request.batch?.raiseOnError).toBe(false);
                 expect(request.route?.slotKeyRoute?.slotKey).toEqual("key");
                 expect(request.route?.slotKeyRoute?.slotType).toEqual(0); // Primary = 0
 
@@ -411,14 +414,14 @@ describe("SocketConnectionInternals", () => {
                 type: "primarySlotKey",
                 key: "key",
             };
-            const result = await connection.exec(transaction, {
+            const result = await connection.exec(transaction, false, {
                 route: slotKey,
             });
             expect(result).toBe("OK");
         });
     });
 
-    it("should pass transaction with random node", async () => {
+    it("should pass transaction (deprecated) with random node", async () => {
         await testWithClusterResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
@@ -430,6 +433,7 @@ describe("SocketConnectionInternals", () => {
                 expect(
                     request.batch?.commands?.at(0)?.argsArray?.args?.length,
                 ).toEqual(1);
+                expect(request.batch?.isAtomic).toBe(true);
                 expect(request.route?.simpleRoutes).toEqual(
                     command_request.SimpleRoutes.Random,
                 );
@@ -440,10 +444,47 @@ describe("SocketConnectionInternals", () => {
             });
             const transaction = new ClusterTransaction();
             transaction.info([InfoOptions.Server]);
-            const result = await connection.exec(transaction, {
+            const result = await connection.exec(transaction, true, {
                 route: "randomNode",
             });
             expect(result).toEqual(expect.stringContaining("# Server"));
+        });
+    });
+
+    it("should pass batch with all params", async () => {
+        await testWithClusterResources(async (connection, socket) => {
+            socket.once("data", (data) => {
+                const reader = Reader.create(data);
+                const request = CommandRequest.decodeDelimited(reader);
+
+                expect(request.batch?.commands?.at(0)?.requestType).toEqual(
+                    RequestType.Set,
+                );
+                expect(
+                    request.batch?.commands?.at(0)?.argsArray?.args?.length,
+                ).toEqual(2);
+                expect(request.batch?.isAtomic).toBe(false);
+                expect(request.batch?.raiseOnError).toBe(true);
+                expect(request.batch?.retryServerError).toBe(true);
+                expect(request.batch?.retryConnectionError).toBe(false);
+                expect(request.batch?.timeout).toBe(3333);
+                expect(request.route?.simpleRoutes).toEqual(
+                    command_request.SimpleRoutes.Random,
+                );
+
+                sendResponse(socket, ResponseType.OK, request.callbackIdx);
+            });
+            const batch = new ClusterBatch(false);
+            batch.set("key", "value");
+            const result = await connection.exec(batch, true, {
+                timeout: 3333,
+                route: "randomNode",
+                retryStrategy: {
+                    retryConnectionError: false,
+                    retryServerError: true,
+                },
+            });
+            expect(result).toBe("OK");
         });
     });
 
