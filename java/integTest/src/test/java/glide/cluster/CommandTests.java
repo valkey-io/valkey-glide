@@ -1718,11 +1718,11 @@ public class CommandTests {
         // check response from a routed transaction request
         assertDeepEquals(
                 new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-                clusterClient.exec(transaction, options).get());
+                clusterClient.exec(transaction, true, options).get());
         // if no route given, GLIDE should detect it automatically
         assertDeepEquals(
                 new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-                clusterClient.exec(transaction).get());
+                clusterClient.exec(transaction, true).get());
 
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
@@ -1767,10 +1767,11 @@ public class CommandTests {
         // check response from a routed transaction request
         assertDeepEquals(
                 new Object[][] {{binaryString}, {binaryString}},
-                clusterClient.exec(transaction, options).get());
+                clusterClient.exec(transaction, true, options).get());
         // if no route given, GLIDE should detect it automatically
         assertDeepEquals(
-                new Object[][] {{binaryString}, {binaryString}}, clusterClient.exec(transaction).get());
+                new Object[][] {{binaryString}, {binaryString}},
+                clusterClient.exec(transaction, true).get());
 
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }

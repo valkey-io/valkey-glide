@@ -17,7 +17,9 @@ import {
     PubSubMsg,
     convertGlideRecordToRecord,
 } from "./BaseClient";
+import { ClusterBatch } from "./Batch";
 import {
+    ClusterBatchOptions,
     ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
@@ -63,7 +65,6 @@ import {
     createUnWatch,
 } from "./Commands";
 import { command_request, connection_request } from "./ProtobufMessage";
-import { ClusterTransaction } from "./Transaction";
 
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
@@ -774,36 +775,78 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-     * Execute a transaction by processing the queued commands.
+     * Executes a batch by processing the queued commands.
+     *
+     * **Routing Behavior:**
+     *
+     * - If a `route` is specified in {@link ClusterBatchOptions}, the entire batch is sent to the specified node.
+     * - If no `route` is specified:
+     *   - **Atomic batches (Transactions):** Routed to the slot owner of the first key in the batch. If no key is found, the request is sent to a random node.
+     *   - **Non-atomic batches (Pipelines):** Each command is routed to the node owning the corresponding key's slot. If no key is present, routing follows the command's request policy. Multi-node commands are automatically split and dispatched to the appropriate nodes.
+     *
+     * **Behavior Notes:**
+     *
+     * - **Atomic Batches (Transactions):** All key-based commands must map to the same hash slot. If keys span different slots, the transaction will fail. If the transaction fails due to a `WATCH` command, `exec` will return `null`.
      *
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
      *
-     * @param transaction - A {@link ClusterTransaction} object containing a list of commands to be executed.
+     * **Retry and Redirection:**
      *
-     *  @param options - (Optional) Additional parameters:
-     * - (Optional) `route`: If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.
-     *     If no key is found, the command will be sent to a random node.
-     *     If `route` is provided, the client will route the command to the nodes defined by `route`.
-     * - (Optional) `decoder`: See {@link DecoderOption}.
-     * @returns A list of results corresponding to the execution of each command in the transaction.
-     *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
-     *     the list entry will be `null`.
-     *     If the transaction failed due to a `WATCH` command, `exec` will return `null`.
+     * - If a redirection error occurs:
+     *   - **Atomic batches (Transactions):** The entire transaction will be redirected.
+     *   - **Non-atomic batches (Pipelines):** Only commands that encountered redirection errors will be retried.
+     * - Retries for failures will be handled according to the configured {@link BatchRetryStrategy}.
+     *
+     * @param batch - A {@link ClusterBatch} containing the commands to execute.
+     * @param raiseOnError - Determines how errors are handled within the batch response.
+     *   - If `true`, the first encountered error in the batch will be raised as an exception of type {@link RequestError}
+     *     after all retries and reconnections have been exhausted.
+     *   - If `false`, errors will be included as part of the batch response, allowing the caller to process both successful and failed commands together.
+     *     In this case, error details will be provided as instances of {@link RequestError} in the response list.
+     * @param options - (Optional) {@link ClusterBatchOptions} and {@link DecoderOption} specifying execution and decoding behavior.
+     * @returns A Promise resolving to an array of results, where each entry corresponds to a command’s execution result.
+     *   - If the transaction fails due to a `WATCH` command, the promise resolves to `null`.
+     *
+     * @see {@link https://valkey.io/docs/topics/transactions/|Valkey Transactions (Atomic Batches)}
+     * @see {@link https://valkey.io/docs/topics/pipelining/|Valkey Pipelines (Non-Atomic Batches)}
+     * @example
+     * ```typescript
+     * // Atomic batch (transaction): all keys must share the same hash slot
+     * const atomicBatch = new ClusterBatch(true)
+     *   .set('key', '1')
+     *   .incr('key')
+     *   .get('key');
+     *
+     * const atomicOptions = {timeout: 1000};
+     * const atomicResult = await clusterClient.exec(atomicBatch, false, atomicOptions);
+     * console.log('Atomic Batch Result:', atomicResult);
+     * // Output: ['OK', 2, '2']
+     *
+     * // Non-atomic batch (pipeline): keys may span different hash slots
+     * const nonAtomicBatch = new ClusterBatch(false)
+     *   .set('key1', 'value1')
+     *   .set('key2', 'value2')
+     *   .get('key1')
+     *   .get('key2');
+     *
+     * const pipelineOptions = { retryStrategy: { retryServerError: true, retryConnectionError: false } };
+     * const nonAtomicResult = await clusterClient.exec(nonAtomicBatch, false, pipelineOptions);
+     * console.log(nonAtomicResult);
+     * // Output: ['OK', 'OK', 'value1', 'value2']
+     * ```
      */
     public async exec(
-        transaction: ClusterTransaction,
-        options?: {
-            route?: SingleNodeRoute;
-        } & DecoderOption,
+        batch: ClusterBatch,
+        raiseOnError: boolean,
+        options?: ClusterBatchOptions & DecoderOption,
     ): Promise<GlideReturnType[] | null> {
         return this.createWritePromise<GlideReturnType[] | null>(
-            transaction.commands,
+            batch.commands,
             options,
+            batch.isAtomic,
+            raiseOnError,
         ).then((result) =>
-            this.processResultWithSetCommands(
-                result,
-                transaction.setCommandsIndexes,
-            ),
+            this.processResultWithSetCommands(result, batch.setCommandsIndexes),
         );
     }
 
