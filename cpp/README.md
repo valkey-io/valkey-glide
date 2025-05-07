@@ -42,4 +42,3 @@ Development instructions for local building & testing the package are in the [DE
 - - [ ] https://github.com/valkey-io/valkey/blame/unstable/cmake/Modules/ValkeySetup.cmake#L278
 - [ ] Cluster_manager
 - [ ] Expose rust logging
-- [ ] GTest

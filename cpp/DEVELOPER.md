@@ -124,6 +124,7 @@ python benchmarks.py
 
 ```bash
 cd docs
+git clone https://github.com/jothepro/doxygen-awesome-css.git
 doxygen Doxyfile
 ```
 
