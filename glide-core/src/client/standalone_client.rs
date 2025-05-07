@@ -156,7 +156,7 @@ impl StandaloneClient {
                 } else {
                     pubsub_connection_info.clone()
                 };
-                let retry = retry_strategy.clone();
+                let retry = retry_strategy;
                 let sender = push_sender.clone();
                 let tls = tls_mode.unwrap_or(TlsMode::NoTls);
                 let discover = discover_az;
