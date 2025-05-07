@@ -9,10 +9,10 @@ import {
     ClusterTransaction,
     GlideClient,
     GlideClusterClient,
+    OpenTelemetry,
     ProtocolVersion,
 } from "..";
 import ValkeyCluster from "../../utils/TestUtils";
-import { OpenTelemetry } from "../src/OpenTelemetry";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
@@ -166,11 +166,13 @@ describe("OpenTelemetry GlideClusterClient", () => {
         // check wrong open telemetry config before initilise it
         await wrongOpenTelemetryConfig();
 
+        await testsBeforeInitOtel();
+
         // init open telemetry. The init can be called once per process.
         const openTelemetryConfig: OpenTelemetryConfig = {
             traces: {
                 endpoint: VALID_FILE_ENDPOINT_TRACES,
-                requestsPercentage: 1,
+                requestsPercentage: 100,
             },
             metrics: {
                 endpoint: VALID_ENDPOINT_METRICS,
@@ -195,6 +197,27 @@ describe("OpenTelemetry GlideClusterClient", () => {
             await cluster.close(true);
         }
     });
+
+    async function testsBeforeInitOtel() {
+        if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+            fs.unlinkSync(VALID_ENDPOINT_TRACES);
+        }
+
+        const client = await GlideClusterClient.createClient({
+            ...getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP3,
+            ),
+        });
+
+        await client.set("test_key", "value");
+        await client.get("test_key");
+
+        // check that the spans not exporter to the file before initilise otel
+        expect(fs.existsSync(VALID_ENDPOINT_TRACES)).toBe(false);
+
+        client.close();
+    }
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient test span memory leak_%p`,
@@ -227,6 +250,52 @@ describe("OpenTelemetry GlideClusterClient", () => {
             const endMemory = process.memoryUsage().heapUsed;
 
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow 10% growth
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClusterClient test percentage requests config_%p`,
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+            OpenTelemetry.setRequestsPercentage(0);
+            // wait for the spans to be flushed and removed the file
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+                fs.unlinkSync(VALID_ENDPOINT_TRACES);
+            }
+
+            await client.set("test_key", "value");
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            // check that the spans not exporter to the file due to the requests percentage is 0
+            expect(fs.existsSync(VALID_ENDPOINT_TRACES)).toBe(false);
+
+            OpenTelemetry.setRequestsPercentage(100);
+
+            // Execute a series of commands sequentially
+            for (let i = 0; i < 50; i++) {
+                const key = `test_key_${i}`;
+                await client.set(key, `value_${i}`);
+                await client.get(key);
+            }
+
+            // Wait for spans to be flushed to file
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+            // Read the span file and check span name
+            const { spanNames } = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
+
+            expect(spanNames).toContain("Set");
+            expect(spanNames).toContain("Get");
+
+            if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+                fs.unlinkSync(VALID_ENDPOINT_TRACES);
+            }
         },
         TIMEOUT,
     );
