@@ -32,7 +32,7 @@ import lombok.NonNull;
  * ClusterBatch transaction = new ClusterBatch(true) // Atomic (Transactional)
  *     .set("key", "value")
  *     .get("key");
- * Object[] result = client.exec(transaction).get();
+ * Object[] result = client.exec(transaction, false).get();
  * // result contains: OK and "value"
  * assert result[0].equals("OK");
  * assert result[1].equals("value");
@@ -46,7 +46,7 @@ import lombok.NonNull;
  *     .set("key2", "value2")
  *     .get("key1")
  *     .get("key2");
- * Object[] result = client.exec(pipeline).get();
+ * Object[] result = client.exec(pipeline, false).get();
  * // result contains: OK, OK, "value1", "value2"
  * assert result[0].equals("OK");
  * assert result[1].equals("OK");

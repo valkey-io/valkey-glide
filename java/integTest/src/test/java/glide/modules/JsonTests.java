@@ -1422,7 +1422,7 @@ public class JsonTests {
         JsonBatch.mget(batch, new String[] {key5, key6}, "$.c");
         expectedResult.add(new String[] {"[]", "[false]"});
 
-        Object[] results = client.exec(batch).get();
+        Object[] results = client.exec(batch, true).get();
         assertDeepEquals(expectedResult.toArray(), results);
     }
 }

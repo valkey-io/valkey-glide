@@ -287,7 +287,7 @@ public class CommandManagerTest {
         String[] arg2 = new String[] {"GETSTRING", "two"};
         String[] arg3 = new String[] {"GETSTRING", "three"};
         Batch batch = new Batch(isAtomic);
-        BatchOptions options = BatchOptions.builder().timeout(1000).raiseOnError(false).build();
+        BatchOptions options = BatchOptions.builder().timeout(1000).build();
         batch.customCommand(arg1).customCommand(arg2).customCommand(arg3);
 
         CompletableFuture<Response> future = new CompletableFuture<>();
@@ -298,7 +298,7 @@ public class CommandManagerTest {
                 ArgumentCaptor.forClass(CommandRequest.Builder.class);
 
         // exercise
-        service.submitNewBatch(batch, Optional.of(options), r -> null);
+        service.submitNewBatch(batch, true, Optional.of(options), r -> null);
 
         // verify
         verify(channelHandler).write(captor.capture(), anyBoolean());
@@ -309,7 +309,7 @@ public class CommandManagerTest {
         assertEquals(3, requestBuilder.getBatch().getCommandsCount());
         assertEquals(isAtomic, requestBuilder.getBatch().getIsAtomic());
         assertEquals(options.getTimeout(), requestBuilder.getBatch().getTimeout());
-        assertEquals(options.getRaiseOnError(), requestBuilder.getBatch().getRaiseOnError());
+        assertEquals(true, requestBuilder.getBatch().getRaiseOnError());
 
         LinkedList<ByteString> resultPayloads = new LinkedList<>();
         resultPayloads.add(ByteString.copyFromUtf8("one"));
@@ -336,7 +336,7 @@ public class CommandManagerTest {
                 new ClusterBatch(isAtomic).customCommand(arg1).customCommand(arg2).customCommand(arg3);
 
         ClusterBatchOptions.ClusterBatchOptionsBuilder optionsBuilder =
-                ClusterBatchOptions.builder().raiseOnError(false).timeout(1000).route(RANDOM);
+                ClusterBatchOptions.builder().timeout(1000).route(RANDOM);
         if (!isAtomic) {
             ClusterBatchRetryStrategy strategy =
                     ClusterBatchRetryStrategy.builder()
@@ -354,7 +354,7 @@ public class CommandManagerTest {
         ArgumentCaptor<CommandRequest.Builder> captor =
                 ArgumentCaptor.forClass(CommandRequest.Builder.class);
 
-        service.submitNewBatch(batch, Optional.of(options), r -> null);
+        service.submitNewBatch(batch, false, Optional.of(options), r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
@@ -363,7 +363,7 @@ public class CommandManagerTest {
         assertEquals(3, requestBuilder.getBatch().getCommandsCount());
         assertEquals(isAtomic, requestBuilder.getBatch().getIsAtomic());
         assertEquals(options.getTimeout(), requestBuilder.getBatch().getTimeout());
-        assertEquals(options.getRaiseOnError(), requestBuilder.getBatch().getRaiseOnError());
+        assertEquals(false, requestBuilder.getBatch().getRaiseOnError());
         assertTrue(requestBuilder.hasRoute());
         assertTrue(requestBuilder.getRoute().hasSimpleRoutes());
         assertEquals(requestBuilder.getRoute().getSimpleRoutes(), SimpleRoutes.Random);
@@ -411,7 +411,7 @@ public class CommandManagerTest {
 
         assertThrows(
                 RequestException.class,
-                () -> service.submitNewBatch(batch, Optional.of(options), r -> null),
+                () -> service.submitNewBatch(batch, true, Optional.of(options), r -> null),
                 "Retry strategy should not be used with atomic batches");
     }
 }
