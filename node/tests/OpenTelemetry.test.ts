@@ -9,10 +9,10 @@ import {
     ClusterTransaction,
     GlideClient,
     GlideClusterClient,
+    OpenTelemetry,
     ProtocolVersion,
 } from "..";
 import ValkeyCluster from "../../utils/TestUtils";
-import { OpenTelemetry } from "../src/OpenTelemetry";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
@@ -185,6 +185,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
         if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
             fs.unlinkSync(VALID_ENDPOINT_TRACES);
         }
+
         await flushAndCloseClient(true, cluster.getAddresses(), client);
     });
 
@@ -414,6 +415,7 @@ describe("OpenTelemetry GlideClient", () => {
         if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
             fs.unlinkSync(VALID_ENDPOINT_TRACES);
         }
+
         await flushAndCloseClient(false, cluster.getAddresses(), client);
     });
 

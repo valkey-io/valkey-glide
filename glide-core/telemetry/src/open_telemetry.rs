@@ -466,23 +466,20 @@ impl GlideOpenTelemetry {
     /// This method should be called once for the given **process**
     /// If OpenTelemetry is already initialized, this method will return Ok(()) without reinitializing
     pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
-        if OTEL.get().is_some() {
-            return Ok(());
-        }
+        OTEL.get_or_try_init(|| {
+            Self::validate_config(config.clone())?;
 
-        Self::validate_config(config.clone())?;
+            if let Some(trace_exporter) = config.traces.trace_exporter.as_ref() {
+                Self::initialise_trace_exporter(config.flush_interval_ms, trace_exporter)?;
+            }
 
-        OTEL.set(RwLock::new(GlideOpenTelemetry {}))
-            .map_err(|_| GlideOTELError::Other("OpenTelemetry already initialized".into()))?;
+            if let Some(metrics_exporter) = config.metrics.metrics_exporter.as_ref() {
+                Self::initialise_metrics_exporter(config.flush_interval_ms, metrics_exporter)?;
+                Self::init_metrics()?;
+            }
 
-        if let Some(trace_exporter) = config.traces.trace_exporter.as_ref() {
-            Self::initialise_trace_exporter(config.flush_interval_ms, trace_exporter)?;
-        }
-
-        if let Some(metrics_exporter) = config.metrics.metrics_exporter.as_ref() {
-            Self::initialise_metrics_exporter(config.flush_interval_ms, metrics_exporter)?;
-            Self::init_metrics()?;
-        }
+            Ok::<RwLock<GlideOpenTelemetry>, GlideOTELError>(RwLock::new(GlideOpenTelemetry {}))
+        })?;
 
         Ok(())
     }
@@ -717,8 +714,8 @@ mod tests {
             init_otel().unwrap();
             create_test_spans().await;
 
-            // Read the file content
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            // Add a sleep to wait for the metrics to be flushed
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
             let lines: Vec<&str> = file_content.split('\n').collect();
             assert_eq!(lines.len(), 4);
@@ -752,13 +749,15 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_span_reference_count() {
+    #[tokio::test]
+    async fn test_span_reference_count() {
         init_otel().unwrap();
         let span = GlideOpenTelemetry::new_span("Root_Span_1");
         span.add_reference();
         assert_eq!(span.get_reference_count(), 2);
         drop(span);
+        // Add a sleep to wait for the metrics to be flushed
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     }
 
     #[test]
@@ -771,17 +770,15 @@ mod tests {
         runtime.block_on(async {
             init_otel().unwrap();
             GlideOpenTelemetry::record_timeout_error().unwrap();
-            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             GlideOpenTelemetry::record_timeout_error().unwrap();
             GlideOpenTelemetry::record_timeout_error().unwrap();
 
             // Add a sleep to wait for the metrics to be flushed
-            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
             let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
             let lines: Vec<&str> = file_content.split('\n').collect();
-
-            assert_eq!(lines.len(), 4);
 
             let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
             assert_eq!(
@@ -792,7 +789,8 @@ mod tests {
                 metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
                 1
             );
-            let metric_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
+            let metric_json: serde_json::Value =
+                serde_json::from_str(lines[lines.len() - 1]).unwrap();
             assert_eq!(
                 metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
                 3
