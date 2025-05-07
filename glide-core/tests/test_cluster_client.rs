@@ -277,7 +277,7 @@ mod cluster_client_tests {
                             connection_request.pubsub_subscriptions =
                                 protobuf::MessageField::from_option(Some(subs.clone()));
 
-                            let _client = Client::new(connection_request.clone().into(), None)
+                            let _client = GlideClient::new(connection_request.clone().into(), None)
                                 .await
                                 .unwrap();
 
@@ -287,8 +287,9 @@ mod cluster_client_tests {
                             connection_request.pubsub_subscriptions =
                                 protobuf::MessageField::from_option(Some(subs));
 
-                            let client = Client::new(connection_request.into(), None).await;
-                            assert!(client.is_err());
+                            let client_result =
+                                GlideClient::new(connection_request.into(), None).await;
+                            assert!(client_result.is_err());
                         }
                     }
                     _ => {
@@ -333,13 +334,162 @@ mod cluster_client_tests {
             let result = std::panic::catch_unwind(|| {
                 tokio::task::block_in_place(|| {
                     futures::executor::block_on(async {
-                        let _client = Client::new(connection_request.clone().into(), None)
+                        let _client = GlideClient::new(connection_request.clone().into(), None)
                             .await
                             .unwrap();
                     });
                 });
             });
             assert!(result.is_err(), "Expected a panic but no panic occurred");
+        });
+    }
+
+    // Helper function to get client count on shared cluster primaries using AllMasters routing
+    async fn get_total_clients_on_shared_cluster_primaries(client: &mut GlideClient) -> usize {
+        let mut cmd = redis::Cmd::new();
+        cmd.arg("CLIENT").arg("LIST");
+
+        let routing_info = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, None));
+        let mut total_clients = 0;
+
+        logger_core::log_info(
+            "TestClusterLazyHelper",
+            "Querying CLIENT LIST on all shared cluster primaries via AllMasters routing.",
+        );
+
+        match client.send_command(&cmd, Some(routing_info)).await {
+            Ok(Value::Map(node_results_map)) => {
+                for (_node_addr_value, node_result_value) in node_results_map {
+                    match node_result_value {
+                        Value::BulkString(bytes) => {
+                            let s = String::from_utf8_lossy(&bytes);
+                            total_clients += s.lines().count();
+                        }
+                        _ => {
+                            logger_core::log_warn(
+                                "TestClusterLazyHelper",
+                                format!(
+                                    "CLIENT LIST from a primary (AllMasters) returned unexpected inner type for a node's result: {:?}",
+                                    node_result_value
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+            Ok(other_type) => {
+                // Logging if returned type is not a map as we expect
+                logger_core::log_warn(
+                    "TestClusterLazyHelper",
+                    format!(
+                        "CLIENT LIST with AllMasters routing returned an unexpected type (expected Map): {:?}",
+                        other_type
+                    ),
+                );
+            }
+            Err(e) => {
+                logger_core::log_warn(
+                    "TestClusterLazyHelper",
+                    format!("CLIENT LIST with AllMasters routing failed: {:?}", e),
+                );
+            }
+        }
+
+        logger_core::log_info(
+            "TestClusterLazyHelper",
+            format!(
+                "Total clients found on shared primaries (AllMasters): {}",
+                total_clients
+            ),
+        );
+        total_clients
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_lazy_cluster_connection_establishes_on_first_command(
+        #[values(ProtocolVersion::RESP2, ProtocolVersion::RESP3)] protocol: ProtocolVersion,
+    ) {
+        block_on_all(async move {
+            const USE_TLS: bool = false;
+            let base_client_config = TestConfiguration {
+                use_tls: USE_TLS,
+                protocol,
+                shared_server: true,
+                cluster_mode: ClusterMode::Enabled,
+                ..Default::default()
+            };
+            let monitoring_test_basics =
+                setup_test_basics_internal(base_client_config.clone()).await;
+            let mut monitoring_client = monitoring_test_basics.client;
+
+            let clients_before_lazy_init =
+                get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
+            logger_core::log_info(
+                "TestClusterLazy",
+                format!(
+                    "Clients before lazy client init (protocol={:?}): {}",
+                    protocol, clients_before_lazy_init
+                ),
+            );
+            let mut lazy_client_config = base_client_config.clone();
+            lazy_client_config.lazy_connect = true;
+            let lazy_test_basics = setup_test_basics_internal(lazy_client_config).await;
+            let mut lazy_glide_client = lazy_test_basics.client;
+            // Assert that no new connections were made yet by the lazy client
+            let clients_after_lazy_init =
+                get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
+            logger_core::log_info(
+                "TestClusterLazy",
+                format!(
+                    "Clients after lazy client init (protocol={:?}): {}",
+                    protocol, clients_after_lazy_init
+                ),
+            );
+            assert_eq!(
+                clients_after_lazy_init, clients_before_lazy_init,
+                "Lazy client should not establish new connections before the first command. Before: {}, After: {}. protocol={:?}",
+                clients_before_lazy_init, clients_after_lazy_init, protocol
+            );
+            // Send the first command using the lazy client
+            logger_core::log_info(
+                "TestClusterLazy",
+                format!(
+                    "Sending first command to lazy client (PING) (protocol={:?})",
+                    protocol
+                ),
+            );
+            let ping_response = lazy_glide_client
+                .send_command(&redis::cmd("PING"), None) // redis::cmd("PING") returns a Cmd
+                .await;
+            assert!(
+                ping_response.is_ok(),
+                "PING command failed: {:?}. protocol={:?}",
+                ping_response.err(),
+                protocol
+            );
+            assert_eq!(
+                ping_response.unwrap(),
+                redis::Value::SimpleString("PONG".to_string())
+            );
+            // Assert that new connections were made by the lazy client
+            let clients_after_first_command =
+                get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
+            logger_core::log_info(
+                "TestClusterLazy",
+                format!(
+                    "Clients after first command (protocol={:?}): {}",
+                    protocol, clients_after_first_command
+                ),
+            );
+            assert!(
+                clients_after_first_command > clients_before_lazy_init,
+                "Lazy client should establish new connections after the first command. Before: {}, After: {}. protocol={:?}",
+                clients_before_lazy_init,
+                clients_after_first_command,
+                protocol
+            );
         });
     }
 }
