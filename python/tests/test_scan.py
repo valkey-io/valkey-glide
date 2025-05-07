@@ -3,7 +3,7 @@ from typing import AsyncGenerator, List, cast
 
 import pytest
 from glide import ByAddressRoute
-from glide.async_commands.command_args import ObjectType
+from glide.commands.command_args import ObjectType
 from glide.config import ProtocolVersion
 from glide.exceptions import RequestError
 from glide.glide import ClusterScanCursor

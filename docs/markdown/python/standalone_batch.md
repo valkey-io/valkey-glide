@@ -1,1 +1,1 @@
-::: glide.async_commands.batch.Batch
+::: glide.commands.batch.Batch

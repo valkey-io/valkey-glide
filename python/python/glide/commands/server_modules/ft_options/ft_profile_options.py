@@ -2,15 +2,11 @@
 from enum import Enum
 from typing import List, Optional, Union, cast
 
-from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
+from glide.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateOptions,
 )
-from glide.async_commands.server_modules.ft_options.ft_constants import (
-    FtProfileKeywords,
-)
-from glide.async_commands.server_modules.ft_options.ft_search_options import (
-    FtSearchOptions,
-)
+from glide.commands.server_modules.ft_options.ft_constants import FtProfileKeywords
+from glide.commands.server_modules.ft_options.ft_search_options import FtSearchOptions
 from glide.constants import TEncodable
 
 

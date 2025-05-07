@@ -31,6 +31,8 @@ excluded_symbol_list = [
     # python/python/glide/glide_client.py
     "get_request_error_class",  # FunctionDef
     "BaseClient",  # ClassDef
+    # python/python/glide/sync/glide_client.py
+    "FFIClientTypeEnum",  # ClassDef
     # python/python/glide/routes.py
     "to_protobuf_slot_type",  # FunctionDef
     "set_protobuf_route",  # FunctionDef
@@ -43,13 +45,13 @@ excluded_symbol_list = [
     "BaseBatch",  # ClassDef
     # python/python/glide/async_commands/standalone_commands.py
     "StandaloneCommands",  # ClassDef
-    # python/python/glide/async_commands/cluster_commands.py
+    # python/python/glide/commands/async_commands/cluster_commands.py
     "ClusterCommands",  # ClassDef
-    # python/python/glide/async_commands/core.py
+    # python/python/glide/commands/async_commands/core.py
     "CoreCommands",  # ClassDef
-    # python/python/glide/async_commands/sorted_set.py
+    # python/python/glide/commands/async_commands/sorted_set.py
     "separate_keys",  # FunctionDef
-    # python/python/glide/async_commands/server_modules/ft_options/ft_constants.py
+    # python/python/glide/commands/async_commands/server_modules/ft_options/ft_constants.py
     "CommandNames",  # ClassDef
     "FtCreateKeywords",  # ClassDef
     "FtSearchKeywords",  # ClassDef
