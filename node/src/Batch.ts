@@ -287,7 +287,7 @@ import { command_request } from "./ProtobufMessage";
  * @param isAtomic - Indicates whether the batch is atomic or non-atomic. If `true`, the batch will be executed as an atomic transaction.
  * If `false`, the batch will be executed as a non-atomic pipeline.
  */
-class BaseBatch<T extends BaseBatch<T>> {
+export class BaseBatch<T extends BaseBatch<T>> {
     /**
      * @internal
      */
